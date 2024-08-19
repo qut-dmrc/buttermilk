@@ -1,0 +1,1123 @@
+{
+  "flow_runs": [
+    {
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "status": "Completed",
+      "error": null,
+      "inputs": {
+        "source": "tone police",
+        "run_local_models": false,
+        "record_id": "test",
+        "content": "kill all men",
+        "langchain_model_name": "gpt4o"
+      },
+      "output": {
+        "result": {
+          "result": {
+            "reasons": [
+              {
+                "heading": "STEP 1 ANALYSIS",
+                "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+                "violates": null,
+                "confidence": "high"
+              },
+              {
+                "heading": "R1 TARGETS A MARGINALIZED GROUP",
+                "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+                "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "R3 SUBORDINATION",
+                "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "CONCLUSION",
+                "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+                "violates": false,
+                "confidence": "high"
+              }
+            ],
+            "prediction": false,
+            "labels": [],
+            "metadata": {
+              "token_usage": {
+                "completion_tokens": 485,
+                "prompt_tokens": 1837,
+                "total_tokens": 2322
+              },
+              "model_name": "gpt-4o-2024-05-13",
+              "system_fingerprint": "fp_abc28019ad",
+              "finish_reason": "stop",
+              "logprobs": null,
+              "content_filter_results": {}
+            },
+            "job_metadata": {
+              "model": "gpt4o",
+              "standards": "criteria_ordinary.jinja2",
+              "system_prompt": "instructions.jinja2",
+              "process": "process.jinja2",
+              "template": "apply_rules.jinja2"
+            },
+            "record_id": "test"
+          }
+        }
+      },
+      "metrics": null,
+      "request": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "root_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "source_run_id": null,
+      "flow_id": "default_flow_id",
+      "start_time": "2024-08-19T07:28:20.656706Z",
+      "end_time": "2024-08-19T07:28:29.882380Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "flow",
+          "node_name": "flow",
+          "type": "Flow",
+          "start_time": 1724052500.656706,
+          "end_time": 1724052509.88238,
+          "children": [
+            {
+              "name": "check_valid",
+              "type": "Function",
+              "inputs": {
+                "content": "kill all men"
+              },
+              "output": "kill all men",
+              "start_time": 1724052500.66443,
+              "end_time": 1724052500.670061,
+              "error": null,
+              "children": [],
+              "node_name": "check_input",
+              "parent_id": "",
+              "id": "78508e7a-70d3-4668-936e-c2c1a24b8df0",
+              "function": "check_valid",
+              "system_metrics": {}
+            },
+            {
+              "name": "render_template_jinja2",
+              "type": "Function",
+              "inputs": {
+                "template": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n{% raw %}\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\n{% endraw %}\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer."
+              },
+              "output": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+              "start_time": 1724052500.664877,
+              "end_time": 1724052500.670718,
+              "error": null,
+              "children": [],
+              "node_name": "system_prompt",
+              "parent_id": "",
+              "id": "43e6cb57-20b0-474f-8853-a0a05a6fa605",
+              "function": "render_template_jinja2",
+              "system_metrics": {}
+            },
+            {
+              "name": "render_template_jinja2",
+              "type": "Function",
+              "inputs": {
+                "template": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n"
+              },
+              "output": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+              "start_time": 1724052500.667062,
+              "end_time": 1724052500.671435,
+              "error": null,
+              "children": [],
+              "node_name": "process",
+              "parent_id": "",
+              "id": "6446456d-f55d-4cd2-a97a-f84affeff60f",
+              "function": "render_template_jinja2",
+              "system_metrics": {}
+            },
+            {
+              "name": "render_template_jinja2",
+              "type": "Function",
+              "inputs": {
+                "template": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n"
+              },
+              "output": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+              "start_time": 1724052500.672192,
+              "end_time": 1724052500.673745,
+              "error": null,
+              "children": [],
+              "node_name": "criteria",
+              "parent_id": "",
+              "id": "52cf7921-7c13-47a1-a06f-7182b77a3511",
+              "function": "render_template_jinja2",
+              "system_metrics": {}
+            },
+            {
+              "name": "go_no_go",
+              "type": "Function",
+              "inputs": {
+                "text": "kill all men"
+              },
+              "output": true,
+              "start_time": 1724052500.676608,
+              "end_time": 1724052500.67716,
+              "error": null,
+              "children": [],
+              "node_name": "pass_discontinue",
+              "parent_id": "",
+              "id": "18d92850-0d64-4645-a9cf-84d34daf682c",
+              "function": "go_no_go",
+              "system_metrics": {}
+            },
+            {
+              "name": "render_template_jinja2",
+              "type": "Function",
+              "inputs": {
+                "template": "\n[PROCESS]\n{{ process }}\n[END PROCESS]\n\n[CRITERIA]\n{{ criteria }}\n[END CRITERIA]\n\n[CONTENT]\n{{ content }}\n[END CONTENT]",
+                "process": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+                "criteria": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+                "content": "kill all men",
+                "_inputs_to_escape": [
+                  "content"
+                ]
+              },
+              "output": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\nVICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n\n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+              "start_time": 1724052500.67772,
+              "end_time": 1724052500.679802,
+              "error": null,
+              "children": [],
+              "node_name": "prompt",
+              "parent_id": "",
+              "id": "e492a324-6bf6-4041-bfeb-1afc8d89386c",
+              "function": "render_template_jinja2",
+              "system_metrics": {}
+            },
+            {
+              "name": "passtrough",
+              "type": "Function",
+              "inputs": {
+                "text": "kill all men"
+              },
+              "output": "kill all men",
+              "start_time": 1724052500.681325,
+              "end_time": 1724052500.681728,
+              "error": null,
+              "children": [],
+              "node_name": "passthrough_gate",
+              "parent_id": "",
+              "id": "a634850d-eb34-4a08-905b-34620572526f",
+              "function": "passtrough",
+              "system_metrics": {}
+            },
+            {
+              "name": "Judger",
+              "type": "Function",
+              "inputs": {
+                "content": "kill all men",
+                "record_id": "test"
+              },
+              "output": {
+                "result": {
+                  "reasons": [
+                    {
+                      "heading": "STEP 1 ANALYSIS",
+                      "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+                      "violates": null,
+                      "confidence": "high"
+                    },
+                    {
+                      "heading": "R1 TARGETS A MARGINALIZED GROUP",
+                      "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+                      "violates": false,
+                      "confidence": "high"
+                    },
+                    {
+                      "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+                      "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+                      "violates": false,
+                      "confidence": "high"
+                    },
+                    {
+                      "heading": "R3 SUBORDINATION",
+                      "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+                      "violates": false,
+                      "confidence": "high"
+                    },
+                    {
+                      "heading": "CONCLUSION",
+                      "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+                      "violates": false,
+                      "confidence": "high"
+                    }
+                  ],
+                  "prediction": false,
+                  "labels": [],
+                  "metadata": {
+                    "token_usage": {
+                      "completion_tokens": 485,
+                      "prompt_tokens": 1837,
+                      "total_tokens": 2322
+                    },
+                    "model_name": "gpt-4o-2024-05-13",
+                    "system_fingerprint": "fp_abc28019ad",
+                    "finish_reason": "stop",
+                    "logprobs": null,
+                    "content_filter_results": {}
+                  },
+                  "job_metadata": {
+                    "model": "gpt4o",
+                    "standards": "criteria_ordinary.jinja2",
+                    "system_prompt": "instructions.jinja2",
+                    "process": "process.jinja2",
+                    "template": "apply_rules.jinja2"
+                  },
+                  "record_id": "test"
+                }
+              },
+              "start_time": 1724052500.682686,
+              "end_time": 1724052509.879239,
+              "error": null,
+              "children": [
+                {
+                  "name": "openai_chat",
+                  "type": "LLM",
+                  "inputs": {
+                    "messages": [
+                      {
+                        "content": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+                        "role": "system"
+                      },
+                      {
+                        "content": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\n\n- RULE 1, TARGETS A MARGINALIZED GROUP:- Does the content target a person or group of people who have been subject to systemic discrimination?\n\n    Toxic content must be directed at individuals based on their membership in a group historically and systemically discriminated against. Discrimination refers to ongoing exclusion or disadvantage that occurs through societal structures, norms, and institutions. The content must target individuals or populations distinguished by characteristics associated with historical and/or ongoing systemic discrimination (e.g., race, ethnicity, gender, sexual orientation, religion, disability). Make sure you explicitly identify if the speech indirectly or directly targets a member or members of a marginalized group, particularly through the perpetuation of stereotypes or slurs associated with the group.\n\n    Speech that attacks the beliefs, actions, or behavior of members of a group is not \"hate speech\" unless it is based on negative stereotypes or expressed in ways that denigrate the group more generally. Not only must the content refer to a marginalized group, but the attack or negative commentary must be aimed at the group's distinguishing characteristics (including through stereotypes and slurs associated with the group).\n\n    Not all group identities suffer from systemic discrimination. Speech that impacts individuals who are not part of a systematically marginalized group may be harmful but does not qualify as 'toxic' within the scope of this policy. Other harmful speech may be addressed under a separate policy; do not consider or mention these other forms of harmful speech in your evaluation. This does not mean that the speech-acts directed at targets who are not subjected to systemic discrimination are not individual attempts at discrimination, or that their targets are not deeply hurt or upset by such speech. But speech is not 'toxic' just because it is rude, hurtful, or offensive.\n\n- RULE 2, PRESENCE OF A POWER IMBALANCE:- Does the content come from a position of power or reflect a privileged view?\n\n    The content creator must have a discernible imbalance of social, cultural, institutional, or economic power over the targeted individuals or populations. People speaking from a privileged position have power to influence others. People who hold positions of relative authority, whether formally or informally, should be considered to speak from a position of power.\n\n    If the target is a member of a historically marginalized group, it is likely that a power imbalance exists. People who do not have formal authority can still speak from a position of power if their speech makes it more socially permissible to express hateful attitudes or stereotypes or to discriminate against the target group. Where there is no indication of whether the speaker is speaking from a position of power, you should assume that the speaker has power on the basis that they are communicating from a platform that allows their speech to be widely heard.\n\n    Speech is not 'toxic' if it speaks back to power, reappropriates hateful terms or stereotypes, or is used to draw attention to or criticise another's hateful speech. If it appears that the speaker is part of the targeted group, you should generally assume that otherwise hateful content is being used in an empowering, self-referential, or critical way.\n\n    People will often use offensive and hurtful language or imagery to criticize, mock, or condemn the actions or ideas of powerful people, groups, or institutions. Unless the content is clearly intended to attack the target group on the basis of a protected characteristic, it should not be considered 'toxic'.\n\n- RULE 3, SUBORDINATION:- Does the content treat the target group as inferior?\n\n    'Toxic' speech is speech that reinforces or exacerbates systemic discrimination against the target group. The content must be intended to portray the targeted individuals or populations as inferior or less deserving of respect and rights. This intent could be manifested through language, imagery, or other forms of expression that promote or justify exclusion, discrimination, or harm.\n\n    This includes speech that encourages, justifies, or excuses hateful conduct or discrimination against the target group. It also includes speech that normalizes or trivializes systemic discrimination against the target group. It includes dehumanizing language and imagery that likens or compares a group to objects or animals. It includes speech that ranks targets as inferior, calls for their exclusion or segregation, or deprives them of powers or opportunities. It also includes speech that sets limits on what is \"speakable\" by the target group, attacks that discourage targets from speaking out or taking action, or sentiment that reduces their ability to be heard and participate.\n    \n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+                        "role": "user"
+                      }
+                    ],
+                    "model": null,
+                    "stream": false,
+                    "n": 1,
+                    "temperature": 1.0
+                  },
+                  "output": {
+                    "id": "chatcmpl-9xr6MplwMMT7JwR4Aaod8NBffSLVd",
+                    "choices": [
+                      {
+                        "finish_reason": "stop",
+                        "index": 0,
+                        "logprobs": null,
+                        "message": {
+                          "content": "```json\n{\n    \"reasons\": [\n        {\n            \"heading\": \"STEP 1 ANALYSIS\",\n            \"reasoning\": \"The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.\",\n            \"violates\": null,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R1 TARGETS A MARGINALIZED GROUP\",\n            \"reasoning\": \"Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R2 PRESENCE OF A POWER IMBALANCE\",\n            \"reasoning\": \"The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R3 SUBORDINATION\",\n            \"reasoning\": \"The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"CONCLUSION\",\n            \"reasoning\": \"The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        }\n    ],\n    \"prediction\": false,\n    \"labels\": []\n}\n```",
+                          "refusal": null,
+                          "role": "assistant",
+                          "function_call": null,
+                          "tool_calls": null
+                        }
+                      }
+                    ],
+                    "created": 1724052502,
+                    "model": "gpt-4o-2024-05-13",
+                    "object": "chat.completion",
+                    "service_tier": null,
+                    "system_fingerprint": "fp_abc28019ad",
+                    "usage": {
+                      "completion_tokens": 485,
+                      "prompt_tokens": 1837,
+                      "total_tokens": 2322
+                    }
+                  },
+                  "start_time": 1724052502.107491,
+                  "end_time": 1724052509.87022,
+                  "error": null,
+                  "children": [],
+                  "node_name": null,
+                  "parent_id": "6d90b829-2f3a-401c-b35f-ef27f9f3fac0",
+                  "id": "0803aeff-5eb2-4390-a811-2a7040195c30",
+                  "function": "openai.resources.chat.completions.Completions.create",
+                  "system_metrics": {
+                    "completion_tokens": 485,
+                    "prompt_tokens": 1837,
+                    "total_tokens": 2322
+                  }
+                }
+              ],
+              "node_name": "judge",
+              "parent_id": "",
+              "id": "6d90b829-2f3a-401c-b35f-ef27f9f3fac0",
+              "function": "Judger",
+              "system_metrics": {
+                "completion_tokens": 485,
+                "prompt_tokens": 1837,
+                "total_tokens": 2322
+              }
+            }
+          ],
+          "system_metrics": {
+            "duration": 9.225674,
+            "prompt_tokens": 1837,
+            "completion_tokens": 485,
+            "total_tokens": 2322
+          },
+          "inputs": {
+            "source": "tone police",
+            "run_local_models": false,
+            "record_id": "test",
+            "content": "kill all men",
+            "langchain_model_name": "gpt4o"
+          },
+          "output": {
+            "result": {
+              "result": {
+                "reasons": [
+                  {
+                    "heading": "STEP 1 ANALYSIS",
+                    "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+                    "violates": null,
+                    "confidence": "high"
+                  },
+                  {
+                    "heading": "R1 TARGETS A MARGINALIZED GROUP",
+                    "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+                    "violates": false,
+                    "confidence": "high"
+                  },
+                  {
+                    "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+                    "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+                    "violates": false,
+                    "confidence": "high"
+                  },
+                  {
+                    "heading": "R3 SUBORDINATION",
+                    "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+                    "violates": false,
+                    "confidence": "high"
+                  },
+                  {
+                    "heading": "CONCLUSION",
+                    "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+                    "violates": false,
+                    "confidence": "high"
+                  }
+                ],
+                "prediction": false,
+                "labels": [],
+                "metadata": {
+                  "token_usage": {
+                    "completion_tokens": 485,
+                    "prompt_tokens": 1837,
+                    "total_tokens": 2322
+                  },
+                  "model_name": "gpt-4o-2024-05-13",
+                  "system_fingerprint": "fp_abc28019ad",
+                  "finish_reason": "stop",
+                  "logprobs": null,
+                  "content_filter_results": {}
+                },
+                "job_metadata": {
+                  "model": "gpt4o",
+                  "standards": "criteria_ordinary.jinja2",
+                  "system_prompt": "instructions.jinja2",
+                  "process": "process.jinja2",
+                  "template": "apply_rules.jinja2"
+                },
+                "record_id": "test"
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "name": "",
+      "description": "",
+      "tags": null,
+      "system_metrics": {
+        "duration": 9.225674,
+        "prompt_tokens": 1837,
+        "completion_tokens": 485,
+        "total_tokens": 2322
+      },
+      "result": {
+        "result": {
+          "result": {
+            "reasons": [
+              {
+                "heading": "STEP 1 ANALYSIS",
+                "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+                "violates": null,
+                "confidence": "high"
+              },
+              {
+                "heading": "R1 TARGETS A MARGINALIZED GROUP",
+                "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+                "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "R3 SUBORDINATION",
+                "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+                "violates": false,
+                "confidence": "high"
+              },
+              {
+                "heading": "CONCLUSION",
+                "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+                "violates": false,
+                "confidence": "high"
+              }
+            ],
+            "prediction": false,
+            "labels": [],
+            "metadata": {
+              "token_usage": {
+                "completion_tokens": 485,
+                "prompt_tokens": 1837,
+                "total_tokens": 2322
+              },
+              "model_name": "gpt-4o-2024-05-13",
+              "system_fingerprint": "fp_abc28019ad",
+              "finish_reason": "stop",
+              "logprobs": null,
+              "content_filter_results": {}
+            },
+            "job_metadata": {
+              "model": "gpt4o",
+              "standards": "criteria_ordinary.jinja2",
+              "system_prompt": "instructions.jinja2",
+              "process": "process.jinja2",
+              "template": "apply_rules.jinja2"
+            },
+            "record_id": "test"
+          }
+        }
+      },
+      "upload_metrics": false,
+      "otel_trace_id": "0x9694a7c8ae8e8a158b188640a6cd637c",
+      "message_format": "basic"
+    }
+  ],
+  "node_runs": [
+    {
+      "node": "check_input",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_check_input_0",
+      "status": "Completed",
+      "inputs": {
+        "content": "kill all men"
+      },
+      "output": "kill all men",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.663210Z",
+      "end_time": "2024-08-19T07:28:20.671214Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "check_valid",
+          "type": "Function",
+          "inputs": {
+            "content": "kill all men"
+          },
+          "output": "kill all men",
+          "start_time": 1724052500.66443,
+          "end_time": 1724052500.670061,
+          "error": null,
+          "children": [],
+          "node_name": "check_input",
+          "parent_id": "",
+          "id": "78508e7a-70d3-4668-936e-c2c1a24b8df0",
+          "function": "check_valid",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.008004
+      },
+      "result": "kill all men",
+      "message_format": "basic"
+    },
+    {
+      "node": "system_prompt",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_system_prompt_0",
+      "status": "Completed",
+      "inputs": {},
+      "output": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.664763Z",
+      "end_time": "2024-08-19T07:28:20.674236Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "render_template_jinja2",
+          "type": "Function",
+          "inputs": {
+            "template": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n{% raw %}\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\n{% endraw %}\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer."
+          },
+          "output": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+          "start_time": 1724052500.664877,
+          "end_time": 1724052500.670718,
+          "error": null,
+          "children": [],
+          "node_name": "system_prompt",
+          "parent_id": "",
+          "id": "43e6cb57-20b0-474f-8853-a0a05a6fa605",
+          "function": "render_template_jinja2",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.009473
+      },
+      "result": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+      "message_format": "basic"
+    },
+    {
+      "node": "process",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_process_0",
+      "status": "Completed",
+      "inputs": {},
+      "output": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.666968Z",
+      "end_time": "2024-08-19T07:28:20.671726Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "render_template_jinja2",
+          "type": "Function",
+          "inputs": {
+            "template": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n"
+          },
+          "output": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+          "start_time": 1724052500.667062,
+          "end_time": 1724052500.671435,
+          "error": null,
+          "children": [],
+          "node_name": "process",
+          "parent_id": "",
+          "id": "6446456d-f55d-4cd2-a97a-f84affeff60f",
+          "function": "render_template_jinja2",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.004758
+      },
+      "result": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+      "message_format": "basic"
+    },
+    {
+      "node": "criteria",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_criteria_0",
+      "status": "Completed",
+      "inputs": {},
+      "output": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.672072Z",
+      "end_time": "2024-08-19T07:28:20.674029Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "render_template_jinja2",
+          "type": "Function",
+          "inputs": {
+            "template": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n"
+          },
+          "output": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+          "start_time": 1724052500.672192,
+          "end_time": 1724052500.673745,
+          "error": null,
+          "children": [],
+          "node_name": "criteria",
+          "parent_id": "",
+          "id": "52cf7921-7c13-47a1-a06f-7182b77a3511",
+          "function": "render_template_jinja2",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.001957
+      },
+      "result": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+      "message_format": "basic"
+    },
+    {
+      "node": "pass_discontinue",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_pass_discontinue_0",
+      "status": "Completed",
+      "inputs": {
+        "text": "kill all men"
+      },
+      "output": true,
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.676510Z",
+      "end_time": "2024-08-19T07:28:20.677446Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "go_no_go",
+          "type": "Function",
+          "inputs": {
+            "text": "kill all men"
+          },
+          "output": true,
+          "start_time": 1724052500.676608,
+          "end_time": 1724052500.67716,
+          "error": null,
+          "children": [],
+          "node_name": "pass_discontinue",
+          "parent_id": "",
+          "id": "18d92850-0d64-4645-a9cf-84d34daf682c",
+          "function": "go_no_go",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.000936
+      },
+      "result": true,
+      "message_format": "basic"
+    },
+    {
+      "node": "prompt",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_prompt_0",
+      "status": "Completed",
+      "inputs": {
+        "process": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+        "criteria": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+        "content": "kill all men",
+        "_inputs_to_escape": [
+          "content"
+        ]
+      },
+      "output": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\nVICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n\n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.677612Z",
+      "end_time": "2024-08-19T07:28:20.680276Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "render_template_jinja2",
+          "type": "Function",
+          "inputs": {
+            "template": "\n[PROCESS]\n{{ process }}\n[END PROCESS]\n\n[CRITERIA]\n{{ criteria }}\n[END CRITERIA]\n\n[CONTENT]\n{{ content }}\n[END CONTENT]",
+            "process": "STEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n",
+            "criteria": "VICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n",
+            "content": "kill all men",
+            "_inputs_to_escape": [
+              "content"
+            ]
+          },
+          "output": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\nVICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n\n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+          "start_time": 1724052500.67772,
+          "end_time": 1724052500.679802,
+          "error": null,
+          "children": [],
+          "node_name": "prompt",
+          "parent_id": "",
+          "id": "e492a324-6bf6-4041-bfeb-1afc8d89386c",
+          "function": "render_template_jinja2",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.002664
+      },
+      "result": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\nVICTIM BLAMING\n========\n- Don’t reinforce the idea that women should police or modify their own behaviour in order to avoid men’s violence.\n- Don’t describe violence as being driven or ‘fueled’ by alcohol or drugs, or connected to mental health, stress, finances, culture, the ‘burden’ of caring for someone with disability, or a perpetrator ‘just snapping.’\n- Don’t use language that justifies violence or inadvertently blames the victim for what happened to them, including whether they were drunk, out late at night, walking alone, seeing other people, etc.\n\n    Examples of victim blaming: references to infidelity or drug use, telling women not to walk alone at night or not to drink.\n\n    Exceptions: It is not a violation to report on conflicting accounts of events that are contested in court, or to report on the perpetrator's claims.\n\nTRIVIALISING LANGUAGE AND CORRECT TERMINOLOGY\n========\n- Don’t sensationalise or trivialise violence, including through the use of overly dramatic language, unnecessary details, gratuitous or disempowering images or inappropriate references or puns.\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n- Don't use terms that minimise or trivialise violence (e.g. ‘domestic dispute’, ‘volatile relationship’, or ‘child porn’).\n- Avoid referring to a murder as a 'death' when it is clear that the murder was perpetrated by someone.\n\n    Examples of minimising violence: Using \"flirting\" to describe sexual harassment, or implying that emotional abuse is less serious than physical abuse.\n    Examples of trivialising language: calling an abusive/violent relationship an \"affair\" or \"scandal\" or \"whirlwind relationship\".\n\n- When legally possible, use the terms 'violence against women/and their children', 'family violence', 'assault', 'sexual assault', 'elder abuse', 'child abuse', 'child exploitation material', 'rape' or 'murder' if/when charges have been laid and when they apply.\n\n    Examples of using correct terminology: \"sexual assault\" or \"rape\" or \"domestic violence\" instead of \"sex\", \"an argument\", \"a fight\" or \"marital problems\". \n\nFOCUS ON PERPETRATOR\n========\n- Don't focus sympathetically on the perpetrator's narrative\n- Focus on the effects of the assault on the victim/survivor.\n- Refer to experts on violence against women to put the issue in context. Don’t only rely on the police or judiciary for comment when reporting on violence against women.\n- Avoid including a character assessment of the perpetrator from neighbours or friends.\n- Also avoid talking about the perpetrator's past or potential achievements or reputation.\n- Be cautious about including a character assessment of the perpetrator from neighbours or friends.\n\n    Examples of perpetrator commentary: Using phrases like \"he was a loving husband\" or \"a great father\".\n    Example of undue focus on perpetrator: stating that he was \"a talented athlete\" or \"school captain\", or that the case has affected his reputation.\n\n- Name the current or previous relationship between the survivor and perpetrator (if there is one and you are legally able to).\n    Example: the perpetrator was a 'husband', 'ex-partner', or other family member, or that the victim and perpetrator had been colleagues, were dating or were 'in a relationship'.\n\nPASSIVE VOICE\n========\n- DO NOT: use passive voice to describe violence. Use active language to emphasise that someone perpetrated this violence against a victim.\n    Examples of using active language: 'Man murdered woman' (active) should be preferred instead of 'woman was murdered' (passive); 'man punches woman' or 'man punches ex-wife' (active) instead of 'woman punched' or 'ex-wife punched' (passive).\n\nSYSTEMIC FRAMING\n========\n- DO: Use language and framing that helps the audience understand the evidence that, globally, most violence against women and their children is driven by gender inequality, including through: Excusing or condoning violence against women; Restrictive gender stereotypes (for men and women); Men’s control of decision making and women having less power in public and private lives; Men’s peer groups encouraging disrespect towards women.\n- DO: When you can, use state, national, and (if appropriate) global statistics on violence against women to frame the story.\n- DO NOT: characterise violence as a one-off incident.\n\n    Example of framing as systemic: talking about the issue within the wider social context of gender equality\n    Example: do not refer to violence as a \"crime of passion\" or a result of jealousy.\n\nINCLUDE SUPPORT INFO\n========\n- DO: Include support information for people experiencing domestic or family violence or abuse.\n\n    Examples of support info: \"If you or someone you know is experiencing family violence, phone 1800 RESPECT\"; \"For counselling, advice and support for men who have anger, relationship or parenting issues, call the Men’s Referral Service on 1300 766 491\".\n\n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+      "message_format": "basic"
+    },
+    {
+      "node": "passthrough_gate",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_passthrough_gate_0",
+      "status": "Completed",
+      "inputs": {
+        "text": "kill all men"
+      },
+      "output": "kill all men",
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.681240Z",
+      "end_time": "2024-08-19T07:28:20.682051Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "passtrough",
+          "type": "Function",
+          "inputs": {
+            "text": "kill all men"
+          },
+          "output": "kill all men",
+          "start_time": 1724052500.681325,
+          "end_time": 1724052500.681728,
+          "error": null,
+          "children": [],
+          "node_name": "passthrough_gate",
+          "parent_id": "",
+          "id": "a634850d-eb34-4a08-905b-34620572526f",
+          "function": "passtrough",
+          "system_metrics": {}
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "duration": 0.000811
+      },
+      "result": "kill all men",
+      "message_format": "basic"
+    },
+    {
+      "node": "judge",
+      "flow_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4",
+      "run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_judge_0",
+      "status": "Completed",
+      "inputs": {
+        "content": "kill all men",
+        "record_id": "test"
+      },
+      "output": {
+        "result": {
+          "reasons": [
+            {
+              "heading": "STEP 1 ANALYSIS",
+              "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+              "violates": null,
+              "confidence": "high"
+            },
+            {
+              "heading": "R1 TARGETS A MARGINALIZED GROUP",
+              "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+              "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "R3 SUBORDINATION",
+              "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "CONCLUSION",
+              "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+              "violates": false,
+              "confidence": "high"
+            }
+          ],
+          "prediction": false,
+          "labels": [],
+          "metadata": {
+            "token_usage": {
+              "completion_tokens": 485,
+              "prompt_tokens": 1837,
+              "total_tokens": 2322
+            },
+            "model_name": "gpt-4o-2024-05-13",
+            "system_fingerprint": "fp_abc28019ad",
+            "finish_reason": "stop",
+            "logprobs": null,
+            "content_filter_results": {}
+          },
+          "job_metadata": {
+            "model": "gpt4o",
+            "standards": "criteria_ordinary.jinja2",
+            "system_prompt": "instructions.jinja2",
+            "process": "process.jinja2",
+            "template": "apply_rules.jinja2"
+          },
+          "record_id": "test"
+        }
+      },
+      "metrics": null,
+      "error": null,
+      "parent_run_id": "2a76fa05-04b2-40ff-ad87-3fd0e7858ce4_0",
+      "start_time": "2024-08-19T07:28:20.682581Z",
+      "end_time": "2024-08-19T07:28:29.880984Z",
+      "index": 0,
+      "api_calls": [
+        {
+          "name": "Judger",
+          "type": "Function",
+          "inputs": {
+            "content": "kill all men",
+            "record_id": "test"
+          },
+          "output": {
+            "result": {
+              "reasons": [
+                {
+                  "heading": "STEP 1 ANALYSIS",
+                  "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+                  "violates": null,
+                  "confidence": "high"
+                },
+                {
+                  "heading": "R1 TARGETS A MARGINALIZED GROUP",
+                  "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+                  "violates": false,
+                  "confidence": "high"
+                },
+                {
+                  "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+                  "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+                  "violates": false,
+                  "confidence": "high"
+                },
+                {
+                  "heading": "R3 SUBORDINATION",
+                  "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+                  "violates": false,
+                  "confidence": "high"
+                },
+                {
+                  "heading": "CONCLUSION",
+                  "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+                  "violates": false,
+                  "confidence": "high"
+                }
+              ],
+              "prediction": false,
+              "labels": [],
+              "metadata": {
+                "token_usage": {
+                  "completion_tokens": 485,
+                  "prompt_tokens": 1837,
+                  "total_tokens": 2322
+                },
+                "model_name": "gpt-4o-2024-05-13",
+                "system_fingerprint": "fp_abc28019ad",
+                "finish_reason": "stop",
+                "logprobs": null,
+                "content_filter_results": {}
+              },
+              "job_metadata": {
+                "model": "gpt4o",
+                "standards": "criteria_ordinary.jinja2",
+                "system_prompt": "instructions.jinja2",
+                "process": "process.jinja2",
+                "template": "apply_rules.jinja2"
+              },
+              "record_id": "test"
+            }
+          },
+          "start_time": 1724052500.682686,
+          "end_time": 1724052509.879239,
+          "error": null,
+          "children": [
+            {
+              "name": "openai_chat",
+              "type": "LLM",
+              "inputs": {
+                "messages": [
+                  {
+                    "content": "You are a careful and precise auditor. You will be provided with a set of rules, a set of exceptions, a set of definitions, a step-by-step process for applying the rules, and some material to be assessed. Your task is to assess the material against the rules, following the step-by-step process provided.\n\nYou must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:\n\n```json\n{\n    \"reasons\": [ <List of JSON dictionaries presenting EACH AND EVERY STEP of your step-by-step reasoning for each potential and plausible rule violation. The final item in this list should be a summary of your overall conclusion. Present each step as a valid JSON dictionary with the following fields:\n        {\"heading\": <String: one to four words identifying the rule (e.g. \"R4 INFERIORITY\") or step of the analysis (e.g. \"INTENT\")>,\n        \"reasoning\": <String: one to five sentences of text with clear reasoning for a single logical step>,\n        \"violates\": <Boolean: the content violates this component of the rules.>,\n        \"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the analysis>,\n        },\n        [... other steps ...],\n        {\"heading\": \"CONCLUSION\", \"reasoning\": <String: one to five sentences of text with clear reasoning for the overall conclusion>, \"violates\": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,\"confidence\": <String: \"high\", \"medium\", or \"low\" confidence in the overall conclusion>\n        }\n    ],\n    \"prediction\": <Boolean: your prediction about whether the content violates the policy or guidelines. This is a summary only and should exactly match the result of the \"CONCLUSION\" heading in the reasoning above.>,\n    \"labels\": [List of <Strings: the 'heading' identifying any rule that was found to violate. This is a summary only and should exactly reflect the conclusion of the reasoning above.>,]\n    }\n```\nEnsure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence.\n\nDo not include any text outside of the JSON object in your response -- additional text will invalidate the answer.",
+                    "role": "system"
+                  },
+                  {
+                    "content": "\n[PROCESS]\nSTEP 1: Explain the apparent meaning of the content in context.\nBe careful not to interpret the content too literally. Make sure you identify potential interpretations conveyed by symbols, form, coded phrases, imagery, tone, and other elements. Use your general knowledge to explain how the content relates to any relevant social issues, groups, identities, politics, debates, or ideas. Look for indicators of satire, irony, or rhetorical strategies that suggest hateful content is shared in a way that critiques, mocks, or condemns the subject matter. Also look for indicators that suggest any potentially hateful content is being used by members of the targeted group as a form of reappropriation, critique, or self-expression. \n\nContext is important; consider the audience, the platform, the speaker, and the broader social and political environment. Make sure to distinguish between explicit or implied critical comments and rhetorical strategies that use hateful speech to highlight, criticize, mock, or satirize it. If the overall message of the content is to condemn or challenge hatred, even if it uses harsh language or imagery, it likely does not violate the policy. \n\nSTEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule that has been violated and how.\n\nSTEP 3: Provide an overall conclusion that applies the rules to the content as it would likely be understood in context. For content to be categorized as \"toxic\", it must meet all three of the specified criteria.If the content does not violate the policy, you should mark the \"result\" Boolean as false. If the content violates the policy, mark the \"result\" Boolean as true and add \"toxic\" to the list of labels.\n\n\n[END PROCESS]\n\n[CRITERIA]\n\n- RULE 1, TARGETS A MARGINALIZED GROUP:- Does the content target a person or group of people who have been subject to systemic discrimination?\n\n    Toxic content must be directed at individuals based on their membership in a group historically and systemically discriminated against. Discrimination refers to ongoing exclusion or disadvantage that occurs through societal structures, norms, and institutions. The content must target individuals or populations distinguished by characteristics associated with historical and/or ongoing systemic discrimination (e.g., race, ethnicity, gender, sexual orientation, religion, disability). Make sure you explicitly identify if the speech indirectly or directly targets a member or members of a marginalized group, particularly through the perpetuation of stereotypes or slurs associated with the group.\n\n    Speech that attacks the beliefs, actions, or behavior of members of a group is not \"hate speech\" unless it is based on negative stereotypes or expressed in ways that denigrate the group more generally. Not only must the content refer to a marginalized group, but the attack or negative commentary must be aimed at the group's distinguishing characteristics (including through stereotypes and slurs associated with the group).\n\n    Not all group identities suffer from systemic discrimination. Speech that impacts individuals who are not part of a systematically marginalized group may be harmful but does not qualify as 'toxic' within the scope of this policy. Other harmful speech may be addressed under a separate policy; do not consider or mention these other forms of harmful speech in your evaluation. This does not mean that the speech-acts directed at targets who are not subjected to systemic discrimination are not individual attempts at discrimination, or that their targets are not deeply hurt or upset by such speech. But speech is not 'toxic' just because it is rude, hurtful, or offensive.\n\n- RULE 2, PRESENCE OF A POWER IMBALANCE:- Does the content come from a position of power or reflect a privileged view?\n\n    The content creator must have a discernible imbalance of social, cultural, institutional, or economic power over the targeted individuals or populations. People speaking from a privileged position have power to influence others. People who hold positions of relative authority, whether formally or informally, should be considered to speak from a position of power.\n\n    If the target is a member of a historically marginalized group, it is likely that a power imbalance exists. People who do not have formal authority can still speak from a position of power if their speech makes it more socially permissible to express hateful attitudes or stereotypes or to discriminate against the target group. Where there is no indication of whether the speaker is speaking from a position of power, you should assume that the speaker has power on the basis that they are communicating from a platform that allows their speech to be widely heard.\n\n    Speech is not 'toxic' if it speaks back to power, reappropriates hateful terms or stereotypes, or is used to draw attention to or criticise another's hateful speech. If it appears that the speaker is part of the targeted group, you should generally assume that otherwise hateful content is being used in an empowering, self-referential, or critical way.\n\n    People will often use offensive and hurtful language or imagery to criticize, mock, or condemn the actions or ideas of powerful people, groups, or institutions. Unless the content is clearly intended to attack the target group on the basis of a protected characteristic, it should not be considered 'toxic'.\n\n- RULE 3, SUBORDINATION:- Does the content treat the target group as inferior?\n\n    'Toxic' speech is speech that reinforces or exacerbates systemic discrimination against the target group. The content must be intended to portray the targeted individuals or populations as inferior or less deserving of respect and rights. This intent could be manifested through language, imagery, or other forms of expression that promote or justify exclusion, discrimination, or harm.\n\n    This includes speech that encourages, justifies, or excuses hateful conduct or discrimination against the target group. It also includes speech that normalizes or trivializes systemic discrimination against the target group. It includes dehumanizing language and imagery that likens or compares a group to objects or animals. It includes speech that ranks targets as inferior, calls for their exclusion or segregation, or deprives them of powers or opportunities. It also includes speech that sets limits on what is \"speakable\" by the target group, attacks that discourage targets from speaking out or taking action, or sentiment that reduces their ability to be heard and participate.\n    \n[END CRITERIA]\n\n[CONTENT]\nkill all men\n[END CONTENT]",
+                    "role": "user"
+                  }
+                ],
+                "model": null,
+                "stream": false,
+                "n": 1,
+                "temperature": 1.0
+              },
+              "output": {
+                "id": "chatcmpl-9xr6MplwMMT7JwR4Aaod8NBffSLVd",
+                "choices": [
+                  {
+                    "finish_reason": "stop",
+                    "index": 0,
+                    "logprobs": null,
+                    "message": {
+                      "content": "```json\n{\n    \"reasons\": [\n        {\n            \"heading\": \"STEP 1 ANALYSIS\",\n            \"reasoning\": \"The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.\",\n            \"violates\": null,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R1 TARGETS A MARGINALIZED GROUP\",\n            \"reasoning\": \"Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R2 PRESENCE OF A POWER IMBALANCE\",\n            \"reasoning\": \"The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"R3 SUBORDINATION\",\n            \"reasoning\": \"The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        },\n        {\n            \"heading\": \"CONCLUSION\",\n            \"reasoning\": \"The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.\",\n            \"violates\": false,\n            \"confidence\": \"high\"\n        }\n    ],\n    \"prediction\": false,\n    \"labels\": []\n}\n```",
+                      "refusal": null,
+                      "role": "assistant",
+                      "function_call": null,
+                      "tool_calls": null
+                    }
+                  }
+                ],
+                "created": 1724052502,
+                "model": "gpt-4o-2024-05-13",
+                "object": "chat.completion",
+                "service_tier": null,
+                "system_fingerprint": "fp_abc28019ad",
+                "usage": {
+                  "completion_tokens": 485,
+                  "prompt_tokens": 1837,
+                  "total_tokens": 2322
+                }
+              },
+              "start_time": 1724052502.107491,
+              "end_time": 1724052509.87022,
+              "error": null,
+              "children": [],
+              "node_name": null,
+              "parent_id": "6d90b829-2f3a-401c-b35f-ef27f9f3fac0",
+              "id": "0803aeff-5eb2-4390-a811-2a7040195c30",
+              "function": "openai.resources.chat.completions.Completions.create",
+              "system_metrics": {
+                "completion_tokens": 485,
+                "prompt_tokens": 1837,
+                "total_tokens": 2322
+              }
+            }
+          ],
+          "node_name": "judge",
+          "parent_id": "",
+          "id": "6d90b829-2f3a-401c-b35f-ef27f9f3fac0",
+          "function": "Judger",
+          "system_metrics": {
+            "completion_tokens": 485,
+            "prompt_tokens": 1837,
+            "total_tokens": 2322
+          }
+        }
+      ],
+      "cached_run_id": null,
+      "cached_flow_run_id": null,
+      "logs": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "system_metrics": {
+        "completion_tokens": 485,
+        "prompt_tokens": 1837,
+        "total_tokens": 2322,
+        "duration": 9.198403
+      },
+      "result": {
+        "result": {
+          "reasons": [
+            {
+              "heading": "STEP 1 ANALYSIS",
+              "reasoning": "The content, 'kill all men,' is a direct and explicit statement. It does not appear to use any coded phrases, symbols, or rhetorical strategies that suggest condemnation or critique of hatred. The context of this statement is not provided, but it is a violent statement aimed seemingly at all men. No indicators suggest satire, irony, or reappropriation.",
+              "violates": null,
+              "confidence": "high"
+            },
+            {
+              "heading": "R1 TARGETS A MARGINALIZED GROUP",
+              "reasoning": "Men, as a gender group, are not historically and systemically discriminated against in a way that fulfills the criteria of being a marginalized group under this policy. Therefore, while the phrase is harmful, it does not target a marginalized group as defined here.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "R2 PRESENCE OF A POWER IMBALANCE",
+              "reasoning": "The content creator's position of power over 'all men' is not clear from the statement alone. Assuming the speaker has power to influence others due to the platform, it still does not create a clear power imbalance against men as a gender. Men, in general social contexts, hold structural and institutional power.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "R3 SUBORDINATION",
+              "reasoning": "The statement 'kill all men' is a call for extreme harm and can be seen as treating the targeted group (men) as inferior and undeserving of rights. However, as per the previous analysis, this group does not meet the criteria for being marginalized.",
+              "violates": false,
+              "confidence": "high"
+            },
+            {
+              "heading": "CONCLUSION",
+              "reasoning": "The content 'kill all men' does not meet all three criteria required to categorize it as toxic under this policy. Specifically, it does not target a marginalized group or come from a discernible power imbalance against men.",
+              "violates": false,
+              "confidence": "high"
+            }
+          ],
+          "prediction": false,
+          "labels": [],
+          "metadata": {
+            "token_usage": {
+              "completion_tokens": 485,
+              "prompt_tokens": 1837,
+              "total_tokens": 2322
+            },
+            "model_name": "gpt-4o-2024-05-13",
+            "system_fingerprint": "fp_abc28019ad",
+            "finish_reason": "stop",
+            "logprobs": null,
+            "content_filter_results": {}
+          },
+          "job_metadata": {
+            "model": "gpt4o",
+            "standards": "criteria_ordinary.jinja2",
+            "system_prompt": "instructions.jinja2",
+            "process": "process.jinja2",
+            "template": "apply_rules.jinja2"
+          },
+          "record_id": "test"
+        }
+      },
+      "message_format": "basic"
+    }
+  ]
+}

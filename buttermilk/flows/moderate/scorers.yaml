@@ -1,0 +1,17 @@
+standards.tools.scorers.Moderator.moderate:
+  class_name: Moderator
+  function: moderate
+  inputs:
+    input_text:
+      type:
+        - list
+      dynamic_list:
+        func_path: select_model.tox_scorers
+      # allow user to enter input value manually, default false.
+      allow_manual_entry: true
+      # allow user to select multiple values, default false.
+      is_multi_select: true
+  module: tox_scorers
+  name: Moderate
+  description: Moderate text
+  type: python

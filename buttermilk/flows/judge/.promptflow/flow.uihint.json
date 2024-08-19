@@ -1,0 +1,12 @@
+{
+  "nodes": {
+    "judge": {
+      "variant_0": {
+        "inputs": {
+          "system_prompt": [],
+          "user_prompt": []
+        }
+      }
+    }
+  }
+}

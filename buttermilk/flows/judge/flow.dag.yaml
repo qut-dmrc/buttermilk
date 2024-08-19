@@ -1,0 +1,125 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+environment:
+  python_requirements_txt: requirements.txt
+environment_variables:
+  PF_BATCH_METHOD: spawn
+additional_includes:
+- ../common/passthrough_gate.py
+- ../common/requirements.txt
+- ../common/criteria_gelber.jinja2
+- ../common/criteria_ordinary.jinja2
+- ../common/criteria_vaw.jinja2
+- ../common/instructions.jinja2
+- ../common/process.jinja2
+inputs:
+  source:
+    type: string
+    default: tone police
+  run_local_models:
+    type: bool
+    default: false
+  record_id:
+    type: string
+    default: test
+  content:
+    type: string
+    default: kill all men
+  langchain_model_name:
+    type: string
+    default: gpt4o
+outputs:
+  result:
+    type: string
+    reference: ${judge.output}
+nodes:
+- name: check_input
+  type: python
+  source:
+    type: code
+    path: check_input.py
+  inputs:
+    content: ${inputs.content}
+- name: pass_discontinue
+  type: python
+  source:
+    type: code
+    path: go_no_go.py
+  inputs:
+    text: ${check_input.output}
+- name: passthrough_gate
+  type: python
+  source:
+    type: code
+    path: passthrough_gate.py
+  inputs:
+    text: ${check_input.output}
+  activate:
+    when: ${pass_discontinue.output}
+    is: true
+- name: system_prompt
+  type: prompt
+  source:
+    type: code
+    path: instructions.jinja2
+  inputs: {}
+- name: process
+  type: prompt
+  source:
+    type: code
+    path: process.jinja2
+  inputs: {}
+- name: criteria
+  use_variants: true
+- name: prompt
+  type: prompt
+  source:
+    type: code
+    path: apply_rules.jinja2
+  inputs:
+    process: ${process.output}
+    criteria: ${criteria.output}
+    content: ${inputs.content}
+- name: judge
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    content: ${passthrough_gate.output}
+    record_id: ${inputs.record_id}
+    template_path: apply_rules.jinja2
+    system_prompt: ""
+    user_prompt: ""
+    langchain_model_name: gpt4o
+    standards_path: criteria_ordinary.jinja2
+    system_prompt_path: instructions.jinja2
+    process_path: process.jinja2
+  init:
+    langchain_model_name: gpt4o_instruct_azure
+    system_prompt: ${system_prompt.output}
+    user_prompt: ${prompt.output}
+node_variants:
+  criteria:
+    default_variant_id: vaw
+    variants:
+      vaw:
+        node:
+          type: prompt
+          source:
+            type: code
+            path: criteria_vaw.jinja2
+          inputs: {}
+      gelber:
+        node:
+          type: prompt
+          source:
+            type: code
+            path: criteria_gelber.jinja2
+          inputs: {}
+      ordinary:
+        node:
+          type: prompt
+          source:
+            type: code
+            path: criteria_ordinary.jinja2
+          inputs: {}

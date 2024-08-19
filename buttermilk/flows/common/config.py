@@ -1,0 +1,1 @@
+COL_PREDICTION='prediction'

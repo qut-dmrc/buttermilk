@@ -1,0 +1,304 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+environment:
+  python_requirements_txt: requirements.txt
+additional_includes:
+- ../common/passthrough_gate.py
+- ../common
+inputs:
+  source:
+    type: string
+    default: unconfigured
+  content:
+    type: string
+    default: ""
+  models:
+    type: list
+    default:
+    - perspective
+    - openaimoderator
+  run_local_models:
+    type: bool
+    default: false
+  record_id:
+    type: string
+    default: ""
+outputs:
+  result:
+    type: object
+    reference: ${prepare_result.output}
+nodes:
+- name: check_input
+  type: python
+  source:
+    type: code
+    path: check_input.py
+  inputs:
+    content: ${inputs.content}
+- name: pass_discontinue
+  type: python
+  source:
+    type: code
+    path: go_no_go.py
+  inputs:
+    text: ${check_input.output}
+- name: passthrough_gate
+  type: python
+  source:
+    type: code
+    path: passthrough_gate.py
+  inputs:
+    text: ${check_input.output}
+  activate:
+    when: ${pass_discontinue.output}
+    is: true
+- name: select_model
+  type: python
+  source:
+    type: code
+    path: select_model.py
+  inputs:
+    models:
+    - Perspective
+    - Comprehend
+    - HONEST
+    - LFTW
+    - REGARD
+    - AzureContentSafety
+    - AzureModerator
+    - OpenAIModerator
+    - LlamaGuard1ReplicateAWQ
+    - LlamaGuard1Together
+    - LlamaGuard2Replicate
+    - LlamaGuard2Together
+    - LlamaGuard3Together
+    - LlamaGuard3HF
+    - LlamaGuard3HFInt8
+    - LlamaGuard3Octo
+- name: moderate
+  use_variants: true
+- name: prepare_result
+  type: python
+  source:
+    type: code
+    path: prepare_result.py
+  inputs:
+    source: ${inputs.source}
+    record_id: ${inputs.record_id}
+    result: ${moderate.output}
+node_variants:
+  moderate:
+    default_variant_id: perspective
+    variants:
+      perspective:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: Perspective
+            input_text: ${passthrough_gate.output}
+      comprehend:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: Comprehend
+            input_text: ${passthrough_gate.output}
+      honest:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: HONEST
+            input_text: ${passthrough_gate.output}
+      lftw:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LFTW
+            input_text: ${passthrough_gate.output}
+      regard:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: REGARD
+            input_text: ${passthrough_gate.output}
+      azurecontentsafety:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: AzureContentSafety
+            input_text: ${passthrough_gate.output}
+      azuremoderator:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: AzureModerator
+            input_text: ${passthrough_gate.output}
+      openaimoderator:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: OpenAIModerator
+            input_text: ${passthrough_gate.output}
+      llamaguard1replicate:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard1ReplicateAWQ
+            input_text: ${passthrough_gate.output}
+      llamaguard1together:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard1Together
+            input_text: ${passthrough_gate.output}
+      llamaguard2replicate:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard2Replicate
+            input_text: ${passthrough_gate.output}
+      llamaguard2together:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard2Together
+            input_text: ${passthrough_gate.output}
+      llamaguard3together:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3Together
+            input_text: ${passthrough_gate.output}
+      llamaguard3hf:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3HF
+            input_text: ${passthrough_gate.output}
+      llamaguard3hfint8:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3HFInt8
+            input_text: ${passthrough_gate.output}
+      llamaguard3octo:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3Octo
+            input_text: ${passthrough_gate.output}
+      gptjt:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: GPTJT
+            input_text: ${passthrough_gate.output}
+      llamaguard3local:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3Local
+            input_text: ${passthrough_gate.output}
+          activate:
+            when: ${inputs.run_local_models}
+            is: true
+      mdjudgelocaldomain:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: MDJudgeLocalDomain
+            input_text: ${passthrough_gate.output}
+          activate:
+            when: ${inputs.run_local_models}
+            is: true
+      mdjudgelocaltask:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: MDJudgeLocalTask
+            input_text: ${passthrough_gate.output}
+          activate:
+            when: ${inputs.run_local_models}
+            is: true
+      llamaguard2local:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard2Local
+            input_text: ${passthrough_gate.output}
+          activate:
+            when: ${inputs.run_local_models}
+            is: true
+      llamaguard3localint8:
+        node:
+          type: python
+          source:
+            type: code
+            path: scorers.py
+          inputs:
+            client_name: LlamaGuard3LocalInt8
+            input_text: ${passthrough_gate.output}
+          activate:
+            when: ${inputs.run_local_models}
+            is: true

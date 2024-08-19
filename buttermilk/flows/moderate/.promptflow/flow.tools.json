@@ -1,0 +1,99 @@
+{
+  "package": {},
+  "code": {
+    "check_input.py": {
+      "type": "python",
+      "inputs": {
+        "content": {
+          "type": [
+            "object"
+          ]
+        }
+      },
+      "source": "check_input.py",
+      "function": "check_valid"
+    },
+    "go_no_go.py": {
+      "type": "python",
+      "inputs": {
+        "text": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "go_no_go.py",
+      "function": "go_no_go"
+    },
+    "passthrough_gate.py": {
+      "type": "python",
+      "inputs": {
+        "text": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "../common/passthrough_gate.py",
+      "function": "passtrough"
+    },
+    "select_model.py": {
+      "type": "python",
+      "inputs": {
+        "models": {
+          "type": [
+            "list"
+          ],
+          "is_multi_select": true,
+          "allow_manual_entry": true,
+          "dynamic_list": {
+            "func_path": "/tmp/tmpn6ttya9b/select_model.py:tox_scorers"
+          }
+        }
+      },
+      "description": "A list of available moderation and standards models",
+      "source": "select_model.py",
+      "function": "moderation_models"
+    },
+    "scorers.py": {
+      "type": "python",
+      "inputs": {
+        "client_name": {
+          "type": [
+            "string"
+          ]
+        },
+        "input_text": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "class_name": "Moderator",
+      "source": "scorers.py",
+      "function": "moderate"
+    },
+    "prepare_result.py": {
+      "type": "python",
+      "inputs": {
+        "source": {
+          "type": [
+            "string"
+          ]
+        },
+        "result": {
+          "type": [
+            "object"
+          ]
+        },
+        "record_id": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "prepare_result.py",
+      "function": "prepare_result"
+    }
+  }
+}

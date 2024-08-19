@@ -1,0 +1,15 @@
+tests:
+  - name: moderate_${variant_id}_${timestamp}
+    display_name: moderate_${variant_id}_${timestamp}
+    flow: /workspaces/dev/automod/flows/moderate
+    data: /tmp/drag_train.jsonl
+    column_mapping:
+      source: ${data.source}
+      content: ${data.text}
+      record_id: ${data.id}
+      datasets:
+        - drag queens
+      models:
+        - openaimoderator
+      run_local_models: false
+      langchain_model_name:

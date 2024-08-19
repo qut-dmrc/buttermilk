@@ -1,0 +1,45 @@
+{
+  "nodeLayouts": {
+    "inputs": {
+      "x": 290,
+      "y": 42,
+      "index": -1
+    },
+    "outputs": {
+      "x": 220,
+      "y": 846,
+      "index": -1
+    },
+    "check_input": {
+      "x": 227.5,
+      "y": 176,
+      "index": 0
+    },
+    "pass_discontinue": {
+      "x": 315,
+      "y": 310,
+      "index": 1
+    },
+    "passthrough_gate": {
+      "x": 227.5,
+      "y": 444,
+      "index": 2
+    },
+    "select_model": {
+      "x": 470,
+      "y": 42,
+      "index": 3
+    },
+    "moderate": {
+      "x": 227.5,
+      "y": 578,
+      "index": 4
+    },
+    "prepare_result": {
+      "x": 140,
+      "y": 712,
+      "index": 5
+    }
+  },
+  "orientation": "Vertical"
+}
