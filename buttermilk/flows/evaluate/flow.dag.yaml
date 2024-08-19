@@ -9,7 +9,7 @@ inputs:
   result:
     type: object
 outputs:
-  results:
+  summary:
     type: string
     reference: ${line_process.output}
 nodes:

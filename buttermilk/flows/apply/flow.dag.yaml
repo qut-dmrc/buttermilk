@@ -1,0 +1,41 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+entry: judge:Judger
+environment:
+  # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
+  python_requirements_txt: requirements.txt
+environment_variables:
+  PF_BATCH_METHOD: spawn
+additional_includes:
+- ../common/requirements.txt
+- ../common/criteria_gelber.jinja2
+- ../common/criteria_ordinary.jinja2
+- ../common/criteria_vaw.jinja2
+- ../common/instructions.jinja2
+- ../common/process.jinja2
+inputs:
+  content:
+    type: string
+  record_id:
+    type: string
+init:
+  template_path:
+    type: string
+    default: apply_rules.jinja2
+  langchain_model_name:
+    type: string
+    default: gpt4o
+  standards_path:
+    type: string
+    default: criteria_ordinary.jinja2
+  system_prompt_path:
+    type: string
+    default: instructions.jinja2
+  process_path:
+    type: string
+    default: process.jinja2
+  system_prompt:
+    type: string
+    default: ''
+  user_prompt:
+    type: string
+    default: ''

@@ -3,10 +3,12 @@ from multiprocessing import Process
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import cloudpathlib
+import pandas as pd
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 from promptflow.tracing import start_trace, trace
 
+from buttermilk.utils import make_run_id
 from flows.judge.judge import Judger
 from datatools.chains.llm import CHATMODELS, LLMs
 from datatools.gcloud import GCloud
@@ -47,9 +49,11 @@ def run() -> None:
     credential = auth()
     azclient = AzurePFClient.from_config(credential=credential, path="/workspaces/dev/.azureml/config.json")
     mlclient = azclient.ml_client
+    run_id = make_run_id()
 
     localclient = LocalPFClient()
     runs = []
+    results = pd.DataFrame()
 
     start_trace()
 
@@ -57,8 +61,7 @@ def run() -> None:
     try:
         for i, (standards_name, standards_path) in enumerate(standards):
             for j, model in enumerate(CHATMODELS):
-                columns = {'source': r'${data.source}',
-                        'record_id': r'${data.id}',
+                columns = { 'record_id': r'${data.id}',
                         'content': r'${data.alt_text}',}
                 init_vars={
                         'langchain_model_name': model,
@@ -66,7 +69,7 @@ def run() -> None:
                         'run_local_models': False,
                         "system_prompt_path": system_prompt_path,
                         "process_path": process_path}
-                run_name = f"{gc.run_id}_{standards_name}_{model}"
+                run_name = f"{run_id}_{standards_name}_{model}"
                 run_info = {}
                 run_info["run_name"] = run_name
 
@@ -81,6 +84,7 @@ def run() -> None:
                 moderate_run = localclient.run(flow=judger, data=dataset, init_vars=init_vars,column_mapping=columns, stream=False, name=run_name)
 
                 run_info['moderate'] = moderate_run._to_dict(exclude_additional_info=True, exclude_debug_info=True)
+                details = localclient.get_details(moderate_run.name)
 
                 logger.info(f"Run {moderate_run.name} completed with status {moderate_run.status}. URL: {moderate_run._portal_url}.")
 
@@ -94,13 +98,21 @@ def run() -> None:
 
                 run_info['evaluate'] = evaluation_run._to_dict(exclude_additional_info=True, exclude_debug_info=True)
                 logger.info(f"Evaluation run {evaluation_run.name} completed with status {evaluation_run.status}. URL: {evaluation_run._portal_url}.")
-
+                evals = localclient.get_details(evaluation_run.name)
+                details = details.merge(evals, how='outer', on='inputs.line_number')
+                details.loc[:, 'run_name'] = run_name
+                details.loc[:, 'standards'] = standards_name
+                details.loc[:, 'model'] = model
+                details.loc[:, 'eval_run_name'] = evaluation_run.name
+                details.loc[:, 'moderation_run_name'] = moderate_run.name
                 runs.append(run_info)
+                results = pd.concat([results, details], ignore_index=True)
     except Exception as e:
         logger.error(f"Unhandled error in our flow: {e}")
         raise e
     finally:
-        gc.save(data=runs)
+        uri = gc.save(data=runs)
+        logger.info(f"Runs saved to {uri}")
 
 
 if __name__ == "__main__":
