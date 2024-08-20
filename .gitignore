@@ -177,21 +177,5 @@ dmypy.json
 cython_debug/
 
 *.pickle
-<<<<<<< HEAD
-platforms/explore/climate_files/article_001.txt
-platforms/explore/climate_files/article_002.txt
-platforms/explore/climate_files/article_003.txt
-platforms/explore/climate_files/article_004.txt
-platforms/explore/climate_files/article_005.txt
-platforms/explore/climate_files/article_006.txt
-platforms/explore/climate_files/article_007.txt
-platforms/explore/climate_files/article_008.txt
-platforms/explore/climate_files/article_009.txt
-platforms/explore/climate_files/article_010.txt
-platforms/explore/climate_files/article_011.txt
-platforms/explore/climate_files/article_012.txt
-platforms.code-workspace
-=======
 .runs/
 
->>>>>>> 15b4579cb36f1a237a08e2ada7fc78357745f1c2

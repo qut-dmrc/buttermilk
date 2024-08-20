@@ -3,8 +3,6 @@ entry: judge:Judger
 environment:
   # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
   python_requirements_txt: requirements.txt
-environment_variables:
-  PF_BATCH_METHOD: spawn
 additional_includes:
 - ../common/requirements.txt
 - ../common/criteria_gelber.jinja2
@@ -15,8 +13,7 @@ additional_includes:
 inputs:
   content:
     type: string
-  record_id:
-    type: string
+    default: ''
 init:
   template_path:
     type: string

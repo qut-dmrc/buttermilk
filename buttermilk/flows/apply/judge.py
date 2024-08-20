@@ -24,7 +24,9 @@ class KeepUndefined(Undefined):
 
 class LLMOutput(TypedDict):
     result: dict
-    job_metadata: dict
+    reasons: list
+    labels: list
+    metadata: dict
     record_id: str
 
 class Judger():
@@ -32,7 +34,6 @@ class Judger():
     def template_from_files(self,*, template_path, standards_path,system_prompt_path,process_path) -> ChatPromptTemplate:
 
         env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-        self.job_metadata.update(dict(standards=standards_path, system_prompt=system_prompt_path, process=process_path, template=template_path))
         criteria = env.get_template(standards_path).render()
         system_prompt = env.get_template(system_prompt_path).render()
         process = env.get_template(process_path).render()
@@ -48,9 +49,8 @@ class Judger():
 
 
     def __init__(self, *, langchain_model_name: str,
-                 system_prompt: str = None, user_prompt: str =None,standards_path: str = None, template_path: str = None, system_prompt_path: str = None, process_path: str =None) -> None:
+                 system_prompt: str = None, user_prompt: str =None, standards_path: str = None, template_path: str = None, system_prompt_path: str = None, process_path: str =None) -> None:
 
-        self.job_metadata = {"model": langchain_model_name}
         self.langchain_model_name = langchain_model_name
 
         if standards_path:
@@ -61,7 +61,7 @@ class Judger():
 
     @tool
     def __call__(
-        self, *, content: str, record_id: str = '',**kwargs) -> LLMOutput:
+        self, *, content: str,**kwargs) -> LLMOutput:
 
         llm = LLMs()[self.langchain_model_name]
 
@@ -71,9 +71,6 @@ class Judger():
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
         output = chain.invoke(input=input_vars, **kwargs)
-
-        output['job_metadata'] = self.job_metadata
-        output['record_id'] = record_id
 
         return dict(result=output)
 
