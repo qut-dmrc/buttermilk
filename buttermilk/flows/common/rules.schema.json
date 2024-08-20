@@ -1,0 +1,42 @@
+[
+    {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "run_name",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "run_info",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "inputs",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "summary",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "result",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "response",
+        "type": "STRING",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "error",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    }
+]
