@@ -1,7 +1,6 @@
 from promptflow.core import tool
 
-from flows.common import COL_PREDICTION
-
+COL_PREDICTION='prediction'
 @tool
 def validate_inputs(groundtruth: dict, prediction: dict) -> bool:
     try:

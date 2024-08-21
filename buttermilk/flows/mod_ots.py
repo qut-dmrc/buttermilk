@@ -6,11 +6,11 @@ import pandas as pd
 from promptflow.client import PFClient as LocalPFClient
 from promptflow.tracing import start_trace, trace
 
-from flows.common import COL_PREDICTION
 from datatools.chains.toxicity import TOXCLIENTS
 from datatools.gcloud import GCloud
 import gc
 
+COL_PREDICTION='prediction'
 BASE_DIR = Path(__file__).absolute().parent
 DATASET = "gs://dmrc-platforms/data/osb_drag_toxic_train.jsonl"
 

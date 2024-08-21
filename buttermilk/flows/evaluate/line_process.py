@@ -1,9 +1,8 @@
 from promptflow.core import tool
 
-from flows.common import COL_PREDICTION
 from datatools.utils import scrub_serializable
 
-
+COL_PREDICTION='prediction'
 @tool
 def eval_answer(groundtruth: dict, result: dict) -> dict:
     """

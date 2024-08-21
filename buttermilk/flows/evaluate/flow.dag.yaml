@@ -1,6 +1,9 @@
 $schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
 environment:
   python_requirements_txt: requirements.txt
+additional_includes:
+- ../common/config.py
+- ../common/__init__.py
 inputs:
   groundtruth:
     type: object
