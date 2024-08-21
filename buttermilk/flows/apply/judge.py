@@ -30,6 +30,7 @@ class LLMOutput(TypedDict):
     labels: list
     metadata: dict
     record_id: str
+    scores: dict
 
 class Judger():
 
@@ -78,7 +79,12 @@ class Judger():
         t1 = time.time()
         logger.info(f"Judger invoked chain with {self.langchain_model_name} and record: {record_id} in {t1-t0:.2f} seconds")
 
-        return dict(record_id=record_id, result=output) # type: ignore
+        output['record_id'] = record_id
+        for k in LLMOutput.__required_keys__:
+            if k not in output:
+                output[k] = None
+
+        return  output
 
 
 

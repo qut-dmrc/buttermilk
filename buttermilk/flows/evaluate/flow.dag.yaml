@@ -9,21 +9,19 @@ inputs:
     type: object
     default:
       answer: false
-  result:
+  prediction:
+    type: object
+  reasons:
+    type: object
+  scores:
+    type: object
+  labels:
     type: object
 outputs:
   summary:
     type: string
     reference: ${line_process.output}
 nodes:
-- name: validate_inputs
-  type: python
-  source:
-    type: code
-    path: validate_inputs.py
-  inputs:
-    groundtruth: ${inputs.groundtruth}
-    prediction: ${inputs.result}
 - name: line_process
   type: python
   source:
@@ -31,7 +29,10 @@ nodes:
     path: line_process.py
   inputs:
     groundtruth: ${inputs.groundtruth}
-    result: ${inputs.result}
+    prediction: ${inputs.prediction}
+    reasons: ${inputs.reasons}
+    scores: ${inputs.scores}
+    labels: ${inputs.labels}
 - name: aggregate
   type: python
   source:

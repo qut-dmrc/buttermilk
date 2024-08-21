@@ -53,6 +53,7 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         "init": init_vars,
         "standards": standards_name,
         "model": model,
+        "dataset": dataset,
     }
     # Execute the run
     logger.info(
@@ -110,7 +111,10 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     eval_columns = {
         "record_id": r"${data.id}",
         "groundtruth": r"${data.expected}",
-        "result": r"${run.outputs.result}",
+        "prediction": r"${run.outputs.prediction}",
+        "reasons": r"${run.outputs.reasons}",
+        "scores": r"${run.outputs.scores}",
+        "labels": r"${run.outputs.labels}",
     }
     evaluation_run = localclient.run(
         flow="flows/evaluate",
@@ -125,7 +129,7 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         f"Evaluation run {evaluation_run.name} completed with status {evaluation_run.status}. URL: {evaluation_run._portal_url}."
     )
     evals = localclient.get_details(evaluation_run.name)
-    evals = evals.drop(columns=["inputs.result", "inputs.groundtruth"])
+    evals = evals.drop(columns=["inputs.groundtruth"])
 
     evals = evals.rename(
         columns={"outputs.summary": "summary", "outputs.result": "result", "inputs.line_number":"line_number"}
