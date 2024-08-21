@@ -80,18 +80,12 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     )
     run_meta["moderation_run_name"] = moderate_run.name
 
-    if moderate_run.status != "Completed":
-        logger.error(
-            f"Run {moderate_run.name} did not complete successfully. Skipping evaluation."
-        )
-        if details.shape[0] == 0:
-            logger.error(f"No rows processed in run {moderate_run.name}.")
-            return
-        # duplicate run_meta for each row
-        details.loc[:, "run_info"] = [run_meta for _ in range(details.shape[0])]
-        results_uri = gc.save(data=details, schema=rules_schema, dataset=bq_results)
-        logger.info(f"Failed run results saved to {results_uri}, metrics not run.")
+    if details.shape[0] == 0:
+        logger.error(f"No rows processed in run {moderate_run.name}.")
         return
+
+    details.loc[:, "run_name"] = run_name
+    details.loc[:, "timestamp"] = run_time
 
     # stack inputs into dicts
     cols = [c for c in details.columns if c.lower().startswith("inputs.")]
@@ -100,8 +94,31 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     details.loc[:, "inputs"] = details[cols].apply(dict, axis=1)
     details = details.drop(columns=cols)
 
-    details.loc[:, "run_name"] = run_name
-    details.loc[:, "timestamp"] = run_time
+    # for outputs, keep some results and stack the results
+    cols_to_keep = ['outputs.reasons', 'outputs.prediction',
+       'outputs.labels', 'outputs.metadata', 'outputs.record_id',
+       'outputs.scores', 'outputs.result']
+    cols_to_stack = []
+    for c in details.columns:
+        if c.lower().startswith("outputs.") and c not in cols_to_keep:
+            cols_to_stack.append(c)
+
+    df_tmp = details[cols_to_stack]
+    df_tmp.columns = [c.replace("outputs.", "") for c in cols_to_stack]
+    details.loc[:, "moderate"] = details[cols_to_stack].apply(dict, axis=1)
+    details = details.drop(columns=cols_to_stack)
+    details.columns = [c.replace("outputs.", "") for c in details.columns]
+
+    # duplicate run_info metadata for each row
+    details.loc[:, "run_info"] = [run_meta for _ in range(details.shape[0])]
+
+    if moderate_run.status != "Completed":
+        logger.error(
+            f"Run {moderate_run.name} did not complete successfully. Skipping evaluation."
+        )
+        results_uri = gc.save(data=details, schema=rules_schema, dataset=bq_results)
+        logger.info(f"Failed run results saved to {results_uri}, metrics not run.")
+        return
 
     # Execute the eval run
     eval_run_name = f"eval_{moderate_run.name}"
@@ -135,14 +152,14 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         columns={"outputs.summary": "summary", "outputs.result": "result", "inputs.line_number":"line_number"}
     )
 
-    details = details.merge(evals, how="outer", on="line_number")
+    results = details.merge(evals, how="outer", on="line_number")
 
     run_meta["eval_run_name"] = evaluation_run.name
 
     # duplicate run_meta for each row
-    details.loc[:, "run_info"] = [run_meta for _ in range(details.shape[0])]
+    results.loc[:, "run_info"] = [run_meta for _ in range(results.shape[0])]
 
-    results_uri = gc.save(data=details, schema=rules_schema, dataset=bq_results)
+    results_uri = gc.save(data=results, schema=rules_schema, dataset=bq_results)
 
     metrics = localclient.get_metrics(evaluation_run.name)
     metrics_info = {}
