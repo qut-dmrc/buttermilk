@@ -1,5 +1,7 @@
 
+from logging import getLogger
 from pathlib import Path
+import time
 
 from promptflow.core import (
     ToolProvider,
@@ -17,7 +19,7 @@ from jinja2 import Environment, BaseLoader, Undefined
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common"]
 
-
+logger = getLogger()
 class KeepUndefined(Undefined):
     def __str__(self):
         return '{{ ' + self._undefined_name + ' }}'
@@ -49,7 +51,7 @@ class Judger():
 
 
     def __init__(self, *, langchain_model_name: str,
-                 system_prompt: str = None, user_prompt: str =None, standards_path: str = None, template_path: str = None, system_prompt_path: str = None, process_path: str =None) -> None:
+                 system_prompt: str = None, user_prompt: str = None, standards_path: str = None, template_path: str = None, system_prompt_path: str = None, process_path: str =None) -> None:
 
         self.langchain_model_name = langchain_model_name
 
@@ -61,7 +63,7 @@ class Judger():
 
     @tool
     def __call__(
-        self, *, content: str,**kwargs) -> LLMOutput:
+        self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
 
         llm = LLMs()[self.langchain_model_name]
 
@@ -70,9 +72,13 @@ class Judger():
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
+        logger.info(f"Judger invoking chain with {self.langchain_model_name} for record: {record_id}")
+        t0 = time.time()
         output = chain.invoke(input=input_vars, **kwargs)
+        t1 = time.time()
+        logger.info(f"Judger invoked chain with {self.langchain_model_name} and record: {record_id} in {t1-t0:.2f} seconds")
 
-        return dict(result=output)
+        return dict(record_id=record_id, result=output) # type: ignore
 
 
 

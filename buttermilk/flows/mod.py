@@ -1,6 +1,7 @@
 import datetime
 from multiprocessing import Process
 from pathlib import Path
+from random import shuffle
 import resource
 from tempfile import NamedTemporaryFile
 import cloudpathlib
@@ -10,7 +11,7 @@ from promptflow.client import PFClient as LocalPFClient
 from promptflow.tracing import start_trace, trace
 
 from buttermilk.utils import make_run_id, read_json
-from buttermilk.flows.judge.judge import Judger
+from buttermilk.flows.apply.judge import Judger
 from datatools.chains.llm import CHATMODELS, LLMs
 from datatools.gcloud import GCloud
 from datatools.log import getLogger
@@ -58,15 +59,15 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         f"Starting run '{run_name}' in Azure ML. This can take time.",
     )
 
-    # judger = Judger(**init_vars)
+    judger = Judger(**init_vars)
 
     moderate_run = localclient.run(
-        flow="flows/apply",
+        flow=judger,
         data=dataset,
         init_vars=init_vars,
         column_mapping=columns,
         stream=False,
-        name=run_name,
+        name=run_name,display_name="Automod",timeout=150,
     )
 
     details = localclient.get_details(moderate_run.name)
@@ -107,6 +108,7 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         f"Starting evaluation run '{eval_run_name}' in Azure ML. This can take time.",
     )
     eval_columns = {
+        "record_id": r"${data.id}",
         "groundtruth": r"${data.expected}",
         "result": r"${run.outputs.result}",
     }
@@ -116,7 +118,7 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
         run=moderate_run.name,
         column_mapping=eval_columns,
         stream=False,
-        name=eval_run_name,
+        name=eval_run_name,display_name="Automod",timeout=150,
     )
 
     logger.info(
@@ -173,8 +175,8 @@ def run() -> None:
     template_path = "apply_rules.jinja2"
 
     run_id = make_run_id()
-    start_trace(resource_attributes={"run_id": run_id})
-
+    start_trace(resource_attributes={"run_id": run_id}, collection="automod")
+    shuffle(CHATMODELS)
     for i, (standards_name, standards_path) in enumerate(standards):
         for j, model in enumerate(CHATMODELS):
             try:

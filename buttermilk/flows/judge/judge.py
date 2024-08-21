@@ -29,7 +29,7 @@ class LLMOutput(TypedDict):
     metadata: dict
     record_id: str
 
-class Judger():
+class JudgerDisabled():
 
     def template_from_files(self,*, template_path, standards_path,system_prompt_path,process_path) -> ChatPromptTemplate:
 

@@ -16,10 +16,12 @@ def eval_answer(groundtruth: dict, result: dict) -> dict:
         raise ValueError("Prediction not found in result")
 
     pred = result[COL_PREDICTION]
+    record_id = result.get('record_id', "not found")
     expected = groundtruth['answer']
     overall_answer = (pred == expected)
 
-    scored_result = dict(predicted=pred,
+    scored_result = dict(record_id=record_id,
+                         predicted=pred,
                          expected=expected,
                          correct=overall_answer)
     try:
