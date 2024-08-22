@@ -45,11 +45,6 @@
         "mode": "NULLABLE"
     },
     {
-        "name": "result",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
         "name": "summary",
         "type": "JSON",
         "mode": "NULLABLE"

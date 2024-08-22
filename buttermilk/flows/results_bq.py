@@ -9,12 +9,14 @@ from promptflow.client import PFClient as LocalPFClient
 logger = getLogger()
 
 class SaveResultsBQ(pydantic.BaseModel):
-    pflocal: Any = pydantic.Field(default_factory=LocalPFClient)
+    pflocal: LocalPFClient = pydantic.Field(default_factory=LocalPFClient)
 
     def process_batch(self, runs) -> pd.DataFrame:
-        df = pd.DataFarme()
+        df = pd.DataFrame()
         for run in runs:
             df = pd.concat([df, self.process(run_name=run)])
+
+        return df
 
     def process(self, run_name: str, eval_run_name: str='', run_meta: dict = {}) -> pd.DataFrame:
         details = self.pflocal.get_details(run_name)
@@ -52,11 +54,10 @@ class SaveResultsBQ(pydantic.BaseModel):
         # duplicate run_info metadata for each row
         details.loc[:, "run_info"] = [run_meta for _ in range(details.shape[0])]
 
-
         evals = self.pflocal.get_details(eval_run_name)
 
         # drop evaluation inputs; we already have them
-        cols = [c for c in details.columns if c.lower().startswith("inputs.")]
+        cols = [c for c in evals.columns if c.lower().startswith("inputs.")]
         evals = evals.drop(columns=cols)
 
         evals = evals.rename(
@@ -64,7 +65,7 @@ class SaveResultsBQ(pydantic.BaseModel):
         )
 
         results = details.merge(evals, how="outer", on="line_number")
-
+        results = results.replace("(Failed)", None).dropna(subset='record_id')
         # duplicate run_meta for each row
         results.loc[:, "run_info"] = [run_meta for _ in range(results.shape[0])]
 
