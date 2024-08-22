@@ -10,6 +10,11 @@
         "mode": "REQUIRED"
     },
     {
+        "name": "record_id",
+        "type": "STRING",
+        "mode": "NULLABLE"
+    },
+    {
         "name": "run_info",
         "type": "JSON",
         "mode": "REQUIRED"
@@ -20,12 +25,37 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "summary",
+        "name": "reasons",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "prediction",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "labels",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "scores",
         "type": "JSON",
         "mode": "NULLABLE"
     },
     {
         "name": "result",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "summary",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "metadata",
         "type": "JSON",
         "mode": "NULLABLE"
     },
