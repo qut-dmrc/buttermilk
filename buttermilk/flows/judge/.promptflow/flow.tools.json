@@ -1,83 +1,83 @@
 {
-    "package": {},
-    "code": {
-        "check_input.py": {
-            "type": "python",
-            "inputs": {
-                "content": {
-                    "type": [
-                        "object"
-                    ]
-                }
-            },
-            "source": "check_input.py",
-            "function": "check_valid"
-        },
-        "go_no_go.py": {
-            "type": "python",
-            "inputs": {
-                "text": {
-                    "type": [
-                        "string"
-                    ]
-                }
-            },
-            "source": "go_no_go.py",
-            "function": "go_no_go"
-        },
-        "passthrough_gate.py": {
-            "type": "python",
-            "inputs": {
-                "text": {
-                    "type": [
-                        "string"
-                    ]
-                }
-            },
-            "source": "../common/passthrough_gate.py",
-            "function": "passtrough"
-        },
-        "instructions.jinja2": {
-            "type": "prompt",
-            "source": "../common/instructions.jinja2"
-        },
-        "process.jinja2": {
-            "type": "prompt",
-            "source": "../common/process.jinja2"
-        },
-        "criteria_vaw.jinja2": {
-            "type": "prompt",
-            "source": "../common/criteria_vaw.jinja2"
-        },
-        "criteria_gelber.jinja2": {
-            "type": "prompt",
-            "source": "../common/criteria_gelber.jinja2"
-        },
-        "criteria_ordinary.jinja2": {
-            "type": "prompt",
-            "description": "Prompt is a jinja2 template that generates prompt for LLM",
-            "source": "../common/criteria_ordinary.jinja2"
-        },
-        "apply_rules.jinja2": {
-            "type": "prompt",
-            "inputs": {
-                "process": {
-                    "type": [
-                        "string"
-                    ]
-                },
-                "criteria": {
-                    "type": [
-                        "string"
-                    ]
-                },
-                "content": {
-                    "type": [
-                        "string"
-                    ]
-                }
-            },
-            "source": "apply_rules.jinja2"
+  "package": {},
+  "code": {
+    "check_input.py": {
+      "type": "python",
+      "inputs": {
+        "content": {
+          "type": [
+            "object"
+          ]
         }
+      },
+      "source": "check_input.py",
+      "function": "check_valid"
+    },
+    "go_no_go.py": {
+      "type": "python",
+      "inputs": {
+        "text": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "go_no_go.py",
+      "function": "go_no_go"
+    },
+    "passthrough_gate.py": {
+      "type": "python",
+      "inputs": {
+        "text": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "../common/passthrough_gate.py",
+      "function": "passtrough"
+    },
+    "instructions.jinja2": {
+      "type": "prompt",
+      "source": "../common/instructions.jinja2"
+    },
+    "process.jinja2": {
+      "type": "prompt",
+      "source": "../common/process.jinja2"
+    },
+    "criteria_vaw.jinja2": {
+      "type": "prompt",
+      "source": "../common/criteria_vaw.jinja2"
+    },
+    "criteria_gelber.jinja2": {
+      "type": "prompt",
+      "source": "../common/criteria_gelber.jinja2"
+    },
+    "criteria_ordinary.jinja2": {
+      "type": "prompt",
+      "description": "Prompt is a jinja2 template that generates prompt for LLM",
+      "source": "../common/criteria_ordinary.jinja2"
+    },
+    "apply_rules.jinja2": {
+      "type": "prompt",
+      "inputs": {
+        "process": {
+          "type": [
+            "string"
+          ]
+        },
+        "criteria": {
+          "type": [
+            "string"
+          ]
+        },
+        "content": {
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "source": "apply_rules.jinja2"
     }
+  }
 }

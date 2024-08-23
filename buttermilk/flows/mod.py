@@ -37,9 +37,9 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     logger = gc.logger
 
     columns = {
-                    "record_id": r"${data.id}",
-                    "content": r"${data.alt_text}",
-                }
+        "record_id": r"${data.id}",
+        "content": r"${data.text}",
+    }
     init_vars = {
         "langchain_model_name": model,
         "standards_path": standards_path,
@@ -78,7 +78,7 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     run_meta["moderation_run_name"] = moderate_run.name
 
     saver = SaveResultsBQ()
-    
+
     if moderate_run.status != "Completed":
         results = saver.process(run_name=moderate_run.name)
         results["timestamp"] = run_time
@@ -137,11 +137,12 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     logger.info(f"Run results saved to {results_uri}, metrics saved to {metrics_uri}")
 
 def run() -> None:
-    gc = GCloud(name="automod", job="drag")
+    gc = GCloud(name="automod", job="vaw")
     logger = gc.logger
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="w") as f:
         dataset = f.name
-    cloudpathlib.CloudPath(DATASET_DRAG).download_to(dataset)
+    #cloudpathlib.CloudPath(DATASET_DRAG).download_to(dataset)
+    cloudpathlib.CloudPath(DATASET_VAW).download_to(dataset)
     bq_results = "dmrc-analysis.toxicity.standards"
     rules_schema = read_json("flows/common/rules.schema.json")
     metrics_schema= read_json("flows/common/metrics.schema.json")
@@ -150,7 +151,7 @@ def run() -> None:
         ("ordinary", "criteria_ordinary.jinja2"),
         ("gelber", "criteria_gelber.jinja2"),
     ]
-    # standards = [('vaw', 'criteria_vaw.jinja2')]
+    standards = [('vaw', 'criteria_vaw.jinja2')]
     system_prompt_path = "instructions.jinja2"
     process_path = "process.jinja2"
     template_path = "apply_rules.jinja2"
@@ -159,7 +160,7 @@ def run() -> None:
     start_trace(resource_attributes={"run_id": run_id}, collection="automod")
     shuffle(CHATMODELS)
     for i, (standards_name, standards_path) in enumerate(standards):
-        for j, model in enumerate(CHATMODELS[:1]):
+        for j, model in enumerate(CHATMODELS):
             try:
                 run_batch(gc, standards_name, standards_path, model, system_prompt_path, process_path, template_path, run_id, dataset, bq_results, rules_schema, metrics_schema, bq_metrics)
             except Exception as e:

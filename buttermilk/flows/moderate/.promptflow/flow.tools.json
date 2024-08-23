@@ -47,7 +47,7 @@
           "is_multi_select": true,
           "allow_manual_entry": true,
           "dynamic_list": {
-            "func_path": "/tmp/tmpn6ttya9b/select_model.py:tox_scorers"
+            "func_path": "/tmp/tmpdhb0hb69/select_model.py:tox_scorers"
           }
         }
       },
