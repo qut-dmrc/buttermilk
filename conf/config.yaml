@@ -1,0 +1,12 @@
+project:
+  secret_provider: gcp
+  secret_name: config
+  gcp:
+    project: project
+    region: us-central1
+  azure:
+    vault_name: vault
+    resource_group: resource-group
+  aws:
+    secret_name: secret
+    region: us-east-1
