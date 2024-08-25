@@ -1,7 +1,8 @@
+from typing import Any, Generator
 import pytest
 
-from buttermilk.config import Config
+from buttermilk.buttermilk import BM
 
 @pytest.fixture(scope="session")
-def config():
-    yield Config()
+def bm() -> Generator[BM, Any, None]:
+    yield BM()
