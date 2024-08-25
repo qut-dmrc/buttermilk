@@ -1,11 +1,11 @@
 project:
-  secret_provider: gcp
-  secret_name: config
+  secret_provider: azure
+  models_secret: models
   gcp:
     project: dmrc-analysis
     region: us-central1
   azure:
-    vault_name: https://suzorvault.vault.azure.net/
+    vault: https://suzorvault.vault.azure.net/
     resource_group: rg-suzor_ai
   aws:
     secret_name: secret

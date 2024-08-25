@@ -1,7 +1,15 @@
 from langchain.prompts import ChatPromptTemplate
+import pytest
 
+from buttermilk.llms import CHEAP_CHAT_MODELS
 
-def test_cheap_llm(llms, cheapchatmodel):
+@pytest.fixture(scope="session")
+def llms(config):
+    from buttermilk.llms import LLMs
+    yield LLMs(connections=config._connections_azure)
+
+@pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
+def test_cheap_llm(llms, cheapchatmodel: str     ):
     llm = llms[cheapchatmodel]
     assert llm
 
@@ -9,31 +17,3 @@ def test_cheap_llm(llms, cheapchatmodel):
     chain = ChatPromptTemplate.from_messages([("human", q)]) | llm
     answer = chain.invoke({})
     assert answer
-
-def test_openai_key():
-    import os
-
-    import openai
-
-    # Set your OpenAI API key
-    assert os.environ['OPENAI_API_KEY'] is not None
-    openai.api_key = os.environ['OPENAI_API_KEY']  # This is redundant, but let's be explicit
-    openai.api_type = 'openai'
-
-    # Define the prompt
-    prompt = "Write a short story about a cat who goes on an adventure."
-
-    # Call the OpenAI Chat API
-    response = openai.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "user", "content": prompt}
-    ]
-    )
-    text = response.choices[0].message.content
-    assert text 
-
-    # Print the generated text
-    print(text)
-    
-    assert len(text) > 1000  # Short story should be longer than 100ish words

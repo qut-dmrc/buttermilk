@@ -31,8 +31,8 @@ from promptflow.client import PFClient as LocalPFClient
 from promptflow.connections import CustomConnection
 from pydantic import BaseModel, Field, RootModel
 
-from ..apis.hf import Llama2ChatMod
-from ..apis.replicate import replicatellama3
+# from ..apis.hf import Llama2ChatMod
+# from ..apis.replicate import replicatellama3
 
 class LLMTypes(Enum):
     openai = "openai"
@@ -65,7 +65,7 @@ GEMINI_SAFETY_SETTINGS_NONE = {
 }
 
 CHATMODELS = ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus","haiku", "sonnet", "gemini15pro"]
-CHEAP_CHAT_MODELS = ["gpt35turbo", "haiku",  "llama31_8b",]
+CHEAP_CHAT_MODELS = ["haiku",  "llama31_8b",]
 
 def _Gemini(*args, **kwargs):
     return ChatVertexAI(*args, **kwargs, safety_settings=VERTEX_SAFETY_SETTINGS, _raise_on_blocked=False, response_mime_type="application/json")
