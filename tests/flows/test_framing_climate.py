@@ -10,8 +10,14 @@ def test_framing_climate(bm, example_coal):
     flow = Analyst(langchain_model_name="haiku", prompt_template_path="frames.prompty")
     output = flow(content=example_coal)
     pass
-    assert output 
+    assert output
 
+def test_framing_generic(bm):
+    from buttermilk.flows.extract import Analyst
+    flow = Analyst(prompt_template_path="generic.prompty", langchain_model_name="haiku", system_prompt="system_frames.jinja2", instructions="instructions_frames.jinja2", output_format="json_frames.jinja2")
+    output = flow(content=example_coal)
+    pass
+    assert len(output) > 4
 
 @pytest.fixture(scope="session")
 def example_coal():

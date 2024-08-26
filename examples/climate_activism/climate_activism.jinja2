@@ -1,42 +1,7 @@
----
-name: Frame analysis of articles around climate activism.
-description: Identification of frame elements after Entman (1993) at the level of statements. This prompt draws from Entman's (1993) conceptualisation of framing to identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
-model:
-  api: chat
-  configuration:
-    type: azure_openai
-    azure_deployment: gpt4o
-  parameters:
-    max_tokens: 128
-    temperature: 0.2
-inputs:
-  content:
-    type: string
----
-system:
-You are a researcher that analyses news articles and identifies how a text is framed. Frames identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
 
-You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the guideline details, and include a rationale that supports your assessment by referencing specific content and guidelines. Your response should include these fields:
+        task: 
 
-```json
-"analysis": [List of JSON dictionaries, ensuring that each statement has its own dictionary:
-            {
-                "statement": "<STRING>",
-                "problem_definition": "<STRING>",
-                "speaker_name": "<STRING>",
-                "speaker_affiliation": "<STRING>",
-                "cause_of_problem": "<STRING>",
-                "blame_attribution": "<STRING>",
-                "solution_to_problem": "<STRING>",
-                "solution_adressee": "<STRING>"
-            },
-            ... other statements ...
-        }
 
-}
-```
-Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance.
-user:
 Your task is to read the following article and analyse the framing of the text.
 First, identify each statement and identify all climate-related problem definitions in the article.
 Then, for each problem definition, identify the following frame elements: the speaker and their affilation, as well as the cause, blame attribution, solution and solution addressee, as defined by the speaker. If you are unable to provide an answer, state 'None found'.
@@ -44,6 +9,7 @@ Then, for each problem definition, identify the following frame elements: the sp
 
 Frame elements:
 ```
+
 'statement':
     Task: Identify the statements in the text that contain a clear problem statement. A problem statement is a concise and clear description of an issue or challenge that needs to be addressed. A statement constitutes an idea or argument, conveyed through one or more sentences, so include entire paragraphs if appropriate. Make sure to analyse every statement, but ignore statements that are unrelated to climate. Also ignore statements for which there is no clearly-defined problem statement, such as 'The march, which began at the city's Town Hall, was organised by Extinction Rebellion and student groups'. I expect you to identify over ten statements.
     Example 1: Mr Morrison has not yet struck a deal with the Nationals over the climate and energy policy Australia will bring to Glasgow, including whether Australia will commit to achieving net zero emissions by 2050 — a target the majority of Australians support
@@ -136,5 +102,26 @@ Frame elements:
 
 Here is the text of the article:
 ```
-{{content}}
+{article}
 ```
+
+You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the guideline details, and include a rationale that supports your assessment by referencing specific content and guidelines. Your response should include these fields:
+
+```json
+"analysis": [List of JSON dictionaries, ensuring that each statement has its own dictionary:
+            {
+                "statement": "<STRING>",
+                "problem_definition": "<STRING>",
+                "speaker_name": "<STRING>",
+                "speaker_affiliation": "<STRING>",
+                "cause_of_problem": "<STRING>",
+                "blame_attribution": "<STRING>",
+                "solution_to_problem": "<STRING>",
+                "solution_adressee": "<STRING>"
+            },
+            ... other statements ...
+        }
+
+}
+```
+Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance.

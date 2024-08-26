@@ -1,0 +1,36 @@
+---
+name: Generic prompty
+description: A generic prompt format with modular includes for custom analysis.
+model:
+    api: chat
+    configuration:
+        type: azure_openai
+        azure_deployment: gpt4o
+    parameters:
+        max_tokens: 4000
+        temperature: 0.2
+inputs:
+    content:
+        type: string
+    system_prompt:
+        type: string
+        default: system_frames.jinja2
+    output_format:
+        type: string
+        default: json_frames.jinja2
+    instructions:
+        type: string
+        default: instructions_frames.jinja2
+---
+system:
+{{system_prompt}}
+
+{{output_format}}
+
+user:
+{{instructions}}
+
+Here is the content:
+```
+{{content}}
+```

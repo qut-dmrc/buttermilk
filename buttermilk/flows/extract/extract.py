@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
-
+from langchain_core.messages import SystemMessage
 from buttermilk import BM
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -36,12 +36,24 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Analyst():
-    def __init__(self, *, langchain_model_name: str, prompt_template_path: str) -> None:
+    def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='') -> None:
 
         bm = BM()
 
         self.langchain_model_name = langchain_model_name
         self.llm = LLMs(connections=bm._connections_azure)[langchain_model_name]
+
+        # This is a bit of a hack to allow Prompty to interpret the template first, but then
+        # leave the actual input variables for us to fill later with langchain.
+        self.tpl_variables = {"content":r"{{content}}"}
+        if system_prompt or instructions or output_format:
+            # Load sub-templates ourselves, since Promptflow's prompty won't do it for us.
+            env = Environment(loader=FileSystemLoader(searchpath=[BASE_DIR, TEMPLATE_PATH]), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+            system_tpl = env.get_template(system_prompt).render()
+            instructions_tpl = env.get_template(instructions).render()
+            output_format_tpl = env.get_template(output_format).render()
+
+            self.tpl_variables.update(dict(system_prompt=system_tpl, instructions=instructions_tpl, output_format=output_format_tpl))
 
         # Load the template from a prompty file
         from promptflow.core import Prompty
@@ -49,7 +61,7 @@ class Analyst():
 
         # load prompty as a flow
         prompty = Prompty.load(BASE_DIR / prompt_template_path)
-        self.template = convert_prompt_template(prompty._template, api="chat", inputs={})
+        self.template = convert_prompt_template(prompty._template, api="chat", inputs=self.tpl_variables)
 
         # convert to a list of messages and roles expected by langchain
         self.langchain_template = [(m['role'], m['content']) for m in self.template]
@@ -60,7 +72,8 @@ class Analyst():
     def __call__(
         self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
 
-        chain = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2") | self.llm | ChatParser()
+        tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
+        chain = tpl | self.llm | ChatParser()
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 

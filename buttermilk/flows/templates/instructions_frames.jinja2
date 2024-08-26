@@ -1,42 +1,3 @@
----
-name: Frame analysis of articles around climate activism.
-description: Identification of frame elements after Entman (1993) at the level of statements. This prompt draws from Entman's (1993) conceptualisation of framing to identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
-model:
-  api: chat
-  configuration:
-    type: azure_openai
-    azure_deployment: gpt4o
-  parameters:
-    max_tokens: 128
-    temperature: 0.2
-inputs:
-  content:
-    type: string
----
-system:
-You are a researcher that analyses news articles and identifies how a text is framed. Frames identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
-
-You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the guideline details, and include a rationale that supports your assessment by referencing specific content and guidelines. Your response should include these fields:
-
-```json
-"analysis": [List of JSON dictionaries, ensuring that each statement has its own dictionary:
-            {
-                "statement": "<STRING>",
-                "problem_definition": "<STRING>",
-                "speaker_name": "<STRING>",
-                "speaker_affiliation": "<STRING>",
-                "cause_of_problem": "<STRING>",
-                "blame_attribution": "<STRING>",
-                "solution_to_problem": "<STRING>",
-                "solution_adressee": "<STRING>"
-            },
-            ... other statements ...
-        }
-
-}
-```
-Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance.
-user:
 Your task is to read the following article and analyse the framing of the text.
 First, identify each statement and identify all climate-related problem definitions in the article.
 Then, for each problem definition, identify the following frame elements: the speaker and their affilation, as well as the cause, blame attribution, solution and solution addressee, as defined by the speaker. If you are unable to provide an answer, state 'None found'.
@@ -132,9 +93,4 @@ Frame elements:
     Example 7: None found
     Example 8: Educators
 
-```
-
-Here is the text of the article:
-```
-{{content}}
 ```
