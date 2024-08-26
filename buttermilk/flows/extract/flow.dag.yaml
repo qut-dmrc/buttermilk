@@ -12,9 +12,9 @@ inputs:
     type: string
     default: ""
 outputs:
-  result:
+  analysis:
     type: object
-    reference: ${extract.output}
+    reference: ${extract.analysis}
 nodes:
 - name: extract
   type: python

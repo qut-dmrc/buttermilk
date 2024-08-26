@@ -29,12 +29,9 @@ class KeepUndefined(Undefined):
         return '{{ ' + self._undefined_name + ' }}'
 
 class LLMOutput(TypedDict):
-    result: dict
-    reasons: list
-    labels: list
     metadata: dict
     record_id: str
-    scores: dict
+    analysis: str
 
 class Analyst():
     def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
@@ -82,7 +79,7 @@ class Analyst():
 
         logger.info(f"Invoking chain with {self.langchain_model_name} for record: {record_id}")
         t0 = time.time()
-        output = chain.invoke(input=input_vars, **kwargs)
+        output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
         t1 = time.time()
         logger.info(f"Invoked chain with {self.langchain_model_name} and record: {record_id} in {t1-t0:.2f} seconds")
 
@@ -93,3 +90,6 @@ class Analyst():
         output["metadata"] = self.metadata
         return  output
 
+    @trace
+    def invoke_langchain(self, *, chain, input_vars, **kwargs):
+        return chain.invoke(input=input_vars, **kwargs)
