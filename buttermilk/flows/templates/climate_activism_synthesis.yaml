@@ -1,0 +1,78 @@
+prompts:
+    frames:
+        description: Synthesis of news frames around climate activism.
+        summary: Synthesis of frame elements in the provided dataset.
+        comments: This prompt asks the LLM to synthesise and summarise the primary, secondary and counter frames present in the provided dataset. 
+        task: You are a researcher that analyses news articles and identifies how a text is framed. The provided dataset contains a set of frames, derived from a news article. Your job is to analyse these frames and synthesise similar frames into broader frames that capture the overarching problem definition, speaker(s), speaker affiliations(s), cause of the problem, attribution(s) of blame, solution to problem and solution addresse(s).
+        instructions: |
+            Your task is to read the following json, containing data relating to framing in news articles about climate activism. Group all identical strings from the 'problem_definition' field. 
+
+            DO NOT synthesise the problem definitions any further.
+
+            ONLY combine problem definitions that relate to exactly the same thing.
+
+            The combined problem definitions should form a synthesis of all the problem definitions, and should be a broader sentence that captures the overarching problem definition. For example, do not say 'Lack of government action' - instead, say 'Lack of government action on climate change'
+        
+
+            I expect around 15 combined problem definitions.
+
+
+
+
+            Then, for each combined problem definition, tell me the following:
+
+            'article_ids':
+                Task: List ALL the articles that contain this frame by their ids. Frames may me shared across multiple articles, and articles can have multiple frames.
+
+            'problems':
+                Task: List ALL the problem definitons that comprise this frame.
+
+            'speaker_name':
+                Task: List ALL the speakers who present this problem.
+
+            'speaker_affiliation:
+                Task: List ALL the speakers' affiliations.
+
+            'cause_of_problem':
+                Task: List ALL the causes belonging to the problem definition
+
+            'blame_attribution':
+                Task: List ALL the entities that are blamed for this problem.
+
+            'solution_to_problem':
+                Task: List ALL the solutions to the problem.
+
+            'solution_addressee':
+                Task: List ALL the solution addressees.
+
+            ```
+
+            
+
+            Here is the data:
+            ```
+            {output}
+            ```
+
+        output_format: |
+            You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the guideline details, and include a rationale that supports your assessment by referencing specific content and guidelines. Your response should include these fields:
+
+            ```json
+            "analysis": List of JSON dictionaries, ensuring that each frame has its own dictionary:                        
+                        {
+                            "combined_problem_definition": "<STRING>"
+                            "article_ids": "<LIST>"
+                            "problem_definition": "<LIST>",
+                            "speaker_name": "<LIST>",
+                            "speaker_affiliation": "<LIST>",
+                            "cause_of_problem": "<STRING>",
+                            "blame_attribution": "<LIST>",
+                            "solution_to_problem": "<STRING>",
+                            "solution_adressee": "<LIST>"
+                        },
+                        ... other frames ...
+                    }
+                
+            }
+            ```
+            Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance.

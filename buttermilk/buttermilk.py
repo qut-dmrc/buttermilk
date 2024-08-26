@@ -53,7 +53,7 @@ class BM(BaseModel):
 
     _cfg: Any = PrivateAttr(default_factory=lambda: BM.get_config())
 
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
 
     # # Make sure the save directory is a valid path
     # try:
@@ -129,7 +129,7 @@ class BM(BaseModel):
 
 
     @cached_property
-    def _connections_azure(self) -> Any:
+    def _connections_azure(self) -> dict:
         # Model definitions are stored in Azure Secrets, and loaded here.
 
         try:

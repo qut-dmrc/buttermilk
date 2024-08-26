@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
-from buttermilk.flows.apply.judge import Judger
+from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 from buttermilk.utils.utils import make_run_id, read_json
 from datatools.azcloud import auth
