@@ -7,6 +7,7 @@ from promptflow.core import (
     ToolProvider,
     tool,
 )
+from promptflow.tracing import trace
 from pathlib import Path
 from typing import Optional, Self, TypedDict
 from jinja2 import Environment, FileSystemLoader
@@ -36,12 +37,13 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Analyst():
-    def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='') -> None:
+    def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
 
         bm = BM()
 
         self.langchain_model_name = langchain_model_name
         self.llm = LLMs(connections=bm._connections_azure)[langchain_model_name]
+        self.metadata = kwargs
 
         # This is a bit of a hack to allow Prompty to interpret the template first, but then
         # leave the actual input variables for us to fill later with langchain.
@@ -69,6 +71,7 @@ class Analyst():
 
 
     @tool
+    @trace
     def __call__(
         self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
 
@@ -87,6 +90,6 @@ class Analyst():
         for k in LLMOutput.__required_keys__:
             if k not in output:
                 output[k] = None
-
+        output["metadata"] = self.metadata
         return  output
 

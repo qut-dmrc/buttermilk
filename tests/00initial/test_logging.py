@@ -11,11 +11,8 @@ LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
 
 @pytest.fixture(scope="function")
-def logger_new(gc):
-    logger = gc.logger.setup_logging(
-        gCloud=gc,
-        reinit=True,
-    )
+def logger_new(bm):
+    logger = bm.setup_logging()
     yield logger
 
     logger.info("Tearing test logger_new down.")

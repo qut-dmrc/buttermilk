@@ -1097,6 +1097,17 @@ marshmallow = ">=3.18.0,<4.0.0"
 typing-inspect = ">=0.4.0,<1"
 
 [[package]]
+name = "decorator"
+version = "5.1.1"
+description = "Decorators for Humans"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
+    {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
+]
+
+[[package]]
 name = "defusedxml"
 version = "0.7.1"
 description = "XML bomb protection for Python stdlib modules"
@@ -1413,6 +1424,30 @@ test-full = ["adlfs", "aiohttp (!=4.0.0a0,!=4.0.0a1)", "cloudpickle", "dask", "d
 tqdm = ["tqdm"]
 
 [[package]]
+name = "gcsfs"
+version = "2024.6.1"
+description = "Convenient Filesystem interface over GCS"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "gcsfs-2024.6.1-py2.py3-none-any.whl", hash = "sha256:13fd18095425e54e248870594fd155812723966b1bda3b102b3a5c44ec436a03"},
+    {file = "gcsfs-2024.6.1.tar.gz", hash = "sha256:e8858c7a893b2265e9bfce2fe270a024a2e348c74c23528801db388fc0224ed7"},
+]
+
+[package.dependencies]
+aiohttp = "<4.0.0a0 || >4.0.0a0,<4.0.0a1 || >4.0.0a1"
+decorator = ">4.1.2"
+fsspec = "2024.6.1"
+google-auth = ">=1.2"
+google-auth-oauthlib = "*"
+google-cloud-storage = "*"
+requests = "*"
+
+[package.extras]
+crc = ["crcmod"]
+gcsfuse = ["fusepy"]
+
+[[package]]
 name = "gitdb"
 version = "4.0.11"
 description = "Git Object Database"
@@ -1541,6 +1576,24 @@ files = [
 [package.dependencies]
 google-auth = "*"
 httplib2 = ">=0.19.0"
+
+[[package]]
+name = "google-auth-oauthlib"
+version = "1.2.1"
+description = "Google Authentication Library"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "google_auth_oauthlib-1.2.1-py2.py3-none-any.whl", hash = "sha256:2d58a27262d55aa1b87678c3ba7142a080098cbc2024f903c62355deb235d91f"},
+    {file = "google_auth_oauthlib-1.2.1.tar.gz", hash = "sha256:afd0cad092a2eaa53cd8e8298557d6de1034c6cb4a740500b5357b648af97263"},
+]
+
+[package.dependencies]
+google-auth = ">=2.15.0"
+requests-oauthlib = ">=0.7.0"
+
+[package.extras]
+tool = ["click (>=6.0.0)"]
 
 [[package]]
 name = "google-cloud-aiplatform"
@@ -5410,4 +5463,4 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "1629292157c2c6d346f0f35be5fd45c00c416957a54eff35acf1c20e1fc33791"
+content-hash = "344de9accd440433c2ba6a2c12610bef0f19bfc34b3e3c62493bd07cae417a1b"

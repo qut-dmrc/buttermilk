@@ -53,34 +53,31 @@ class BM(BaseModel):
 
     _cfg: Any = PrivateAttr(default_factory=lambda: BM.get_config())
 
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
+    save_dir: Optional[str] = None
 
-    # # Make sure the save directory is a valid path
-    # try:
-    #     _ = cloudpathlib.AnyPath(gCloud.save_dir)
-    # except Exception as e:
-    #     raise ValueError(f"Invalid cloud save directory: {gc.save_dir}. Error: {e}")
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Create the singleton instance."""
-        if cls.__qualname__ not in _REGISTRY:
+        if cls.__name__ not in _REGISTRY:
             super().__init_subclass__(**kwargs)
-            _REGISTRY[cls.__qualname__] = cls
+            _REGISTRY[cls.__name__] = cls
 
     @model_validator(mode="before")
     @classmethod
     def instance(cls: Type[T], data: Any) -> T:
         """Get the singleton instance."""
-        if cls.__qualname__ in _REGISTRY:
-            return _REGISTRY[cls.__qualname__]
+        if cls.__name__ in _REGISTRY:
+            return _REGISTRY[cls.__name__]
         else:
             return data
 
     def __repr__(self):
         return f"Singleton(name={self._cfg['name']}, job={self._cfg['job']}, run_id={self._run_id})"
 
-    def __post_init__(self) -> None:
-        _REGISTRY[self.__qualname__] = self
+    def model_post_init(self, __context: Any) -> None:
+        #_REGISTRY[self.__name__] = self
+        self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
 
     @classmethod
@@ -154,6 +151,10 @@ class BM(BaseModel):
 
         return connections
 
+    @property
+    def logger(self) -> logging.Logger:
+        return getLogger(_LOGGER_NAME)
+
     def setup_logging(
         self,
         verbose=False,
@@ -189,7 +190,7 @@ class BM(BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.name, labels=self.metadata
+            client=client, resource=resource, name=self._cfg['name'], labels=self.metadata
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -207,11 +208,30 @@ class BM(BaseModel):
         except:
             pass
 
-    @property
-    def save_dir(self) -> str:
+    def _get_save_dir(self, value=None) -> str:
         # Get the save directory from the configuration
-        save_dir = self._cfg["project"]["save_dir"]
-        save_dir = (
-            f"gs://{self._cfg['gcp']['bucket_name']}/runs/{self._cfg['name']}/{self._cfg['job']}/{self._run_id}"
-        )
+        if value:
+            if isinstance(value, str):
+                save_dir = value
+            elif isinstance(value, (Path)):
+                save_dir = value.as_posix()
+            elif isinstance(value, (CloudPath)):
+                save_dir = value.as_uri()
+            else:
+                raise ValueError(
+                    f"save_path must be a string, Path, or CloudPath, got {type(value)}"
+                )
+        else:
+            save_dir = self._cfg["project"]["save_dir"]
+            if not save_dir:
+                save_dir = (
+                    f"gs://{self._cfg['project']['gcp']['bucket']}/runs/{self._cfg['name']}/{self._cfg['job']}/{self._run_id}"
+                )
+
+        # # Make sure the save directory is a valid path
+        try:
+            _ = cloudpathlib.AnyPath(save_dir)
+        except Exception as e:
+            raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
+
         return save_dir
