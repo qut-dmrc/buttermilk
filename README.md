@@ -16,11 +16,16 @@ A: It's cultured and flows...
 
 # Installation
 
-Create a new environment and install using  poetry:
+Create a new environment and install using poetry:
 ```shell
 conda create --name bm -y -c conda-forge -c pytorch python==3.11 poetry ipykernel google-crc32c
 conda activate bm
 poetry install --with dev
 ```
 
+Authenticate to cloud providers, where all your secrets are stored.
 
+```shell
+gcloud auth login --update-adc --force
+az login
+```
