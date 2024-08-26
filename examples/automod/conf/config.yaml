@@ -1,0 +1,36 @@
+project:
+  secret_provider: azure
+  logger: gcp
+  models_secret: models
+  save_dest: gcp
+  save_dir:
+  gcp:
+    project: dmrc-analysis
+    region: us-central1
+    bucket: dmrc-analysis
+  azure:
+    vault: https://suzorvault.vault.azure.net/
+    resource_group: rg-suzor_ai
+  aws:
+    secret_name: secret
+    region: us-east-1
+run:
+  name: automod
+  job: judge
+  dataset:
+    uri:
+    columns:
+  tasks:
+    judge:
+      standards:
+      system_prompt_path: instructions.jinja2
+      process_path: process.jinja2
+      template_path: apply_rules.jinja2
+      results:
+        dest: bq
+        dataset: dmrc-analysis.toxicity.standards
+        schema: flows/common/rules.schema.json
+    metrics:
+      dest: bq
+      dataset: dmrc-analysis.toxicity.metrics
+      schema: flows/common/metrics.schema.json

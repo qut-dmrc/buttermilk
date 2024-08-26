@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, Self, TypedDict
 from jinja2 import Environment, FileSystemLoader
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
 from langchain_core.messages import SystemMessage
@@ -32,6 +33,32 @@ class LLMOutput(TypedDict):
     metadata: dict
     record_id: str
     analysis: str
+
+
+def prompt_with_media(
+    *, uri=None, image_b64: Optional[str] = None, text: Optional[str] = None, detail="auto"
+) -> HumanMessage:
+    text_message = {"type": "text", "text": text}
+
+    if uri:
+        media_message = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": uri,
+                        },
+                    }
+    elif image_b64:
+        media_message = {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{image_b64}",
+                    "detail": detail,
+                },
+            }
+    else:
+        return HumanMessage(content=text or '')
+
+    return HumanMessage(content=[media_message, text_message])
 
 class Analyst():
     def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
@@ -70,9 +97,17 @@ class Analyst():
     @tool
     @trace
     def __call__(
-        self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
+        self, *, content: str, media_attachment_uri=None, record_id: str = 'not given', **kwargs) -> LLMOutput:
         llm = LLMs(connections=self.connections)[self.langchain_model_name]
-        tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
+
+        if media_attachment_uri:
+            message = self.langchain_template[-1][1]
+            message = prompt_with_media(uri=media_attachment_uri, text=message)
+            messages = self.langchain_template[:-1] + [message]
+            tpl = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
+        else:
+            tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
+
         chain = tpl | llm | ChatParser()
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})

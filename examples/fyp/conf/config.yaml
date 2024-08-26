@@ -1,0 +1,27 @@
+name: fyp
+job: test
+project:
+  secret_provider: azure
+  logger: gcp
+  models_secret: models
+  save_dest: gcp
+  save_dir:
+  gcp:
+    project: dmrc-analysis
+    region: us-central1
+    bucket: dmrc-analysis
+  azure:
+    vault: https://suzorvault.vault.azure.net/
+    resource_group: rg-suzor_ai
+  aws:
+    secret_name: secret
+    region: us-east-1
+run:
+  dataset:
+    uri: gs://dmrc-analysis/test/fyp/*
+  frame:
+    prompt_template_path: generic.prompty
+    system_prompt: system_frames.jinja2
+    output_format: json_frames.jinja2
+    instructions: instructions_frames.jinja2
+    langchain_model_name: gemini15pro

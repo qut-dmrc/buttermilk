@@ -7,51 +7,27 @@ from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
+from buttermilk import BM
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
-from buttermilk.utils.utils import make_run_id, read_json
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 from promptflow.tracing import start_trace, trace
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 BASE_DIR = Path(__file__).absolute().parent
 FLOW_DIR = BASE_DIR / "judge"
 
 
-logger = getLogger()
-
 BASE_DIR = Path(__file__).absolute().parent
 
-DATASET_OSB = "gs://dmrc-platforms/data/osb_train.jsonl"
-DATASET_DRAG = "gs://dmrc-platforms/data/drag_train.jsonl"
-DATASET_TONEPOLICE = "gs://dmrc-platforms/data/tonepolice_test.jsonl"
-DATASET_VAW = "gs://dmrc-platforms/data/vaw_train.jsonl"
 
-def run_batch(gc, standards_name, standards_path, model, system_prompt_path, process_path, template_path, run_id, dataset, bq_results, rules_schema, metrics_schema, bq_metrics ) -> None:
+def run_batch(bm, langchain_model) -> None:
 
     pflocal = LocalPFClient()
-    logger = gc.logger
+    logger = bm.logger
 
-    columns = {
-        "record_id": r"${data.id}",
-        "content": r"${data.text}",
-    }
-    init_vars = {
-        "langchain_model_name": model,
-        "standards_path": standards_path,
-        "system_prompt_path": system_prompt_path,
-        "process_path": process_path,
-        "template_path": template_path,
-    }
-
-    run_name = f"{run_id}_{standards_name}_{model}"
-    run_time = datetime.datetime.now().isoformat()
-    run_meta = {
-        "init": init_vars,
-        "standards": standards_name,
-        "model": model,
-        "dataset": dataset,
-    }
     # Execute the run
     logger.info(
         f"Starting run '{run_name}' in Azure ML. This can take time.",
@@ -132,28 +108,15 @@ def run_batch(gc, standards_name, standards_path, model, system_prompt_path, pro
     metrics_uri = gc.save(data=[metrics_info], schema=metrics_schema, dataset=bq_metrics)
     logger.info(f"Run results saved to {results_uri}, metrics saved to {metrics_uri}")
 
-def run() -> None:
-    gc = GCloud(name="automod", job="vaw")
-    logger = gc.logger
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+def run(cfg: DictConfig) -> None:
+    bm = BM(cfg=cfg)
+    logger = bm.logger
+
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="w") as f:
         dataset = f.name
-    #cloudpathlib.CloudPath(DATASET_DRAG).download_to(dataset)
-    cloudpathlib.CloudPath(DATASET_VAW).download_to(dataset)
-    bq_results = "dmrc-analysis.toxicity.standards"
-    rules_schema = read_json("flows/common/rules.schema.json")
-    metrics_schema= read_json("flows/common/metrics.schema.json")
-    bq_metrics = "dmrc-analysis.toxicity.metrics"
-    standards = [
-        ("ordinary", "criteria_ordinary.jinja2"),
-        ("gelber", "criteria_gelber.jinja2"),
-    ]
-    standards = [('vaw', 'criteria_vaw.jinja2')]
-    system_prompt_path = "instructions.jinja2"
-    process_path = "process.jinja2"
-    template_path = "apply_rules.jinja2"
+    cloudpathlib.CloudPath(cfg['dataset']['uri']).download_to(dataset)
 
-    run_id = make_run_id()
-    start_trace(resource_attributes={"run_id": run_id}, collection="automod")
     shuffle(CHATMODELS)
     for i, (standards_name, standards_path) in enumerate(standards):
         for j, model in enumerate(CHATMODELS):

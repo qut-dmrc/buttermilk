@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - tonepolice
+run:
+  job: tonepolice_noalttext
+  dataset:
+    columns:
+      - content: "${data.text}"

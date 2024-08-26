@@ -38,6 +38,7 @@ from hydra import compose, initialize
 from omegaconf import DictConfig, OmegaConf
 from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr,
                       model_validator, root_validator)
+from promptflow.tracing import start_trace, trace
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
@@ -51,7 +52,7 @@ class BM(BaseModel):
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     _instance: ClassVar[Dict[str, "BM"]] = {}
 
-    _cfg: Any = PrivateAttr(default_factory=lambda: BM.get_config())
+    cfg: Any = Field(default_factory=lambda: BM.get_config())
 
     save_dir: Optional[str] = None
 
@@ -73,12 +74,13 @@ class BM(BaseModel):
             return data
 
     def __repr__(self):
-        return f"Singleton(name={self._cfg['name']}, job={self._cfg['job']}, run_id={self._run_id})"
+        return f"Singleton(name={self.cfg['name']}, job={self.cfg['job']}, run_id={self._run_id})"
 
     def model_post_init(self, __context: Any) -> None:
         #_REGISTRY[self.__name__] = self
         self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
+        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
 
     @classmethod
     def make_run_id(cls) -> str:
@@ -116,8 +118,8 @@ class BM(BaseModel):
     @cached_property
     def metadata(self):# -> dict[str, Any]:
         labels = {
-            "function_name": self._cfg['name'],
-            "job": self._cfg['job'],
+            "function_name": self.cfg['name'],
+            "job": self.cfg['job'],
             "logs": self._run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
@@ -134,8 +136,8 @@ class BM(BaseModel):
         except Exception as e:
             pass
         auth = DefaultAzureCredential()
-        vault_uri = self._cfg["project"]["azure"]["vault"]
-        models_secret = self._cfg["project"]["models_secret"]
+        vault_uri = self.cfg["project"]["azure"]["vault"]
+        models_secret = self.cfg["project"]["models_secret"]
         secrets = SecretClient(vault_uri, credential=auth)
         contents = secrets.get_secret(models_secret).value
         if not contents:
@@ -177,8 +179,8 @@ class BM(BaseModel):
             labels={
                 "project_id": "dmrc-platforms",
                 "location": "us-central1",
-                "namespace": self._cfg['name'],
-                "job": self._cfg['job'],
+                "namespace": self.cfg['name'],
+                "job": self.cfg['job'],
                 "task_id": self._run_id,
             },
         )
@@ -190,7 +192,7 @@ class BM(BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self._cfg['name'], labels=self.metadata
+            client=client, resource=resource, name=self.cfg['name'], labels=self.metadata
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -222,10 +224,10 @@ class BM(BaseModel):
                     f"save_path must be a string, Path, or CloudPath, got {type(value)}"
                 )
         else:
-            save_dir = self._cfg["project"]["save_dir"]
+            save_dir = self.cfg["project"]["save_dir"]
             if not save_dir:
                 save_dir = (
-                    f"gs://{self._cfg['project']['gcp']['bucket']}/runs/{self._cfg['name']}/{self._cfg['job']}/{self._run_id}"
+                    f"gs://{self.cfg['project']['gcp']['bucket']}/runs/{self.cfg['name']}/{self.cfg['job']}/{self._run_id}"
                 )
 
         # # Make sure the save directory is a valid path

@@ -1,0 +1,13 @@
+# @package _global_
+run:
+  job: vaw
+  dataset:
+    uri: gs://dmrc-platforms/data/vaw_train.jsonl
+    columns:
+      - record_id: "${data.id}"
+      - content: "${data.text}"
+  tasks:
+    judge:
+      standards:
+        - name: vaw
+          template: criteria_vaw.jinja2
