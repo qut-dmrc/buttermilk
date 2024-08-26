@@ -14,3 +14,13 @@ Q: Why 'buttermilk'??
 A: It's cultured and flows...
 ```
 
+# Installation
+
+Create a new environment and install using  poetry:
+```shell
+conda create --name bm -y -c conda-forge -c pytorch python==3.11 poetry ipykernel google-crc32c
+conda activate bm
+poetry install --with dev
+```
+
+

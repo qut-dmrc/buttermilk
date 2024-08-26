@@ -48,7 +48,7 @@ _REGISTRY = {}
 
 class BM(BaseModel):
 
-    _run_id: ClassVar = PrivateAttr(default_factory=lambda: BM.make_run_id())
+    _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     _instance: ClassVar[Dict[str, "BM"]] = {}
 
     _cfg: Any = PrivateAttr(default_factory=lambda: BM.get_config())

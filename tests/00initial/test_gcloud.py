@@ -1,5 +1,3 @@
-from datatools.gcloud import GCloud
-
 
 def test_singleton():
     obj1 = GCloud()
@@ -19,12 +17,12 @@ def test_time_to_instantiate_gc():
     end = time.time()
     assert (end - start) < 1, "Took too long to instantiate GCloud"
 
-def test_has_test_info(gc: GCloud):
+def test_has_test_info(gc):
     assert gc.name == "testing"
     assert gc.job == "testing"
 
 
-def test_save_binary(gc: GCloud):
+def test_save_binary(gc):
     with open("datatools/tests/data/sample_image.png", "rb") as img:
         uri = gc.upload_binary(img)
         assert uri is not None
@@ -33,7 +31,7 @@ def test_save_binary(gc: GCloud):
     pass
 
 
-def test_logger_initialised(gc: GCloud):
+def test_logger_initialised(gc):
     obj = gc.logger
     assert obj is not None
     assert obj.already_setup

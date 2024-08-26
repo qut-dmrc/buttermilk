@@ -5,15 +5,13 @@ import uuid
 import google.cloud.logging  # Don't conflict with standard logging
 import pytest
 
-from datatools.gcloud import GCloud
-from datatools.log import CountsHandler
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
 
 @pytest.fixture(scope="function")
-def logger_new(gc: GCloud):
+def logger_new(gc):
     logger = gc.logger.setup_logging(
         gCloud=gc,
         reinit=True,
@@ -112,4 +110,3 @@ def test_stdout_pause(capsys, logger_new):
     print('test_stdout_pause')
     captured = capsys.readouterr()
     assert captured.out == ''
-    

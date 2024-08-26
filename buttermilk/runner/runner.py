@@ -79,11 +79,6 @@ from promptflow.tracing import start_trace, trace
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 from tqdm.asyncio import tqdm as atqdm
 
-from datatools import cache
-from datatools.exceptions import Delay, FatalError
-from datatools.gcloud import GC_DEFAULT_LOCATION, GCloud
-from datatools.types import EvalRecord, InputRecord, Job, JobResultBase, Score
-from datatools.utils import check_schema, fetch, split
 
 from .errors import extract_error_info
 

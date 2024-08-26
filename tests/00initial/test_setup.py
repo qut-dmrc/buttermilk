@@ -12,9 +12,6 @@ from google.auth.credentials import TokenState
 from numpy import isin
 from pytest import CaptureFixture
 
-from datatools.gcloud import GCloud
-from datatools.log import DMRCLogger
-from datatools.utils import read_yaml
 
 
 class Test00Setup:
@@ -29,11 +26,8 @@ class Test00Setup:
         credentials, project_id = google.auth.default()
         assert credentials.token_state == TokenState.FRESH
 
-    def test_gc(self, gc: GCloud):
-        assert gc.job == "testing"
-        assert gc.name == "datatools"
 
-    def test_gc_logger(self, logger: DMRCLogger):
+    def test_gc_logger(self, logger):
         assert isinstance(logger, DMRCLogger)
         assert logger.name == "datatools"
         assert logger.already_setup
@@ -67,7 +61,7 @@ class Test00Setup:
         ["table", "schema"],
         [("dmrc-analysis.tests.indicator", "datatools/chains/schemas/indicator.json")],
     )
-    def test_database(self, gc: GCloud, table, schema):
+    def test_database(self, gc, table, schema):
         """Delete and recreate the test table"""
         from google.cloud.bigquery.table import Table, TableReference
 
@@ -78,15 +72,15 @@ class Test00Setup:
 
         assert gc.bq.create_table(table=new_table, exists_ok=True)
 
-    def test_save_dir(self, gc: GCloud):
+    def test_save_dir(self, gc):
         assert "/runs/testing/" in gc.save_dir
         assert CloudPath(gc.save_dir)
 
-    def test_initialised_save_dir(self, gc: GCloud):
+    def test_initialised_save_dir(self, gc):
         assert isinstance(gc.logger, DMRCLogger)
         assert "/runs/testing/" in gc.save_dir
         assert CloudPath(gc.save_dir)
-        
+
         uri = gc.upload_text(data="test data", extension=".txt")
         assert uri.startswith("gs://")
         assert uri.startswith(gc.save_dir)
