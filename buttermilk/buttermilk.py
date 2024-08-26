@@ -112,7 +112,7 @@ class BM(BaseModel):
         Returns:
             The configuration dictionary.
         """
-        with initialize(config_path=config_dir):
+        with initialize(config_path=config_dir, version_base="1.3"):
             cfg = compose(config_name=config_name)
         return cfg
 

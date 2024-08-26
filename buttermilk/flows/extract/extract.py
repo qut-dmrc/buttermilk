@@ -19,7 +19,7 @@ from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 
 BASE_DIR = Path(__file__).absolute().parent
-TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "templates"]
+TEMPLATE_PATH = BASE_DIR.parent / "templates"
 
 logger = getLogger()
 
@@ -36,27 +36,31 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Analyst():
-    def __init__(self, *, langchain_model_name: str, prompt_template_path: str = None) -> None:
+    def __init__(self, *, langchain_model_name: str, prompt_template_path: str) -> None:
 
         bm = BM()
 
         self.langchain_model_name = langchain_model_name
         self.llm = LLMs(connections=bm._connections_azure)[langchain_model_name]
 
-        # Load the template from a prompty file using langchain's library
-        from langchain_prompty import create_chat_prompt
+        # Load the template from a prompty file
+        from promptflow.core import Prompty
+        from promptflow.core._prompty_utils import convert_prompt_template
 
-        self.template = create_chat_prompt(prompt_template_path)
+        # load prompty as a flow
+        prompty = Prompty.load(BASE_DIR / prompt_template_path)
+        self.template = convert_prompt_template(prompty._template, api="chat", inputs={})
+
+        # convert to a list of messages and roles expected by langchain
+        self.langchain_template = [(m['role'], m['content']) for m in self.template]
+        pass
 
 
     @tool
     def __call__(
         self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
 
-        llm = LLMs()[self.langchain_model_name]
-
-        chain = self.template.copy() | llm | ChatParser()
-
+        chain = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2") | self.llm | ChatParser()
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 

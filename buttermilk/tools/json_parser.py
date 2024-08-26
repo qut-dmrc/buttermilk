@@ -63,3 +63,31 @@ class ChatParser(JsonOutputParser):
         output = convert_dict_types(output)
 
         return output
+
+
+
+def convert_dict_types(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = convert_dict_types(v)
+        return obj
+    elif isinstance(obj, list):
+        return [convert_dict_types(item) for item in obj]
+    elif isinstance(obj, str):
+        if str.lower(obj) == "true":
+            return True
+        elif str.lower(obj) == "false":
+            return False
+        elif obj.isdigit():
+            return int(obj)
+        else:
+            try:
+                float_v = float(obj)
+                if int(float_v) == float_v:
+                    return int(float_v)
+                else:
+                    return float_v
+            except ValueError:
+                pass
+
+    return obj

@@ -1,6 +1,14 @@
 ---
 name: Frame analysis of articles around climate activism.
 description: Identification of frame elements after Entman (1993) at the level of statements. This prompt draws from Entman's (1993) conceptualisation of framing to identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
+model:
+  api: chat
+  configuration:
+    type: azure_openai
+    azure_deployment: gpt4o
+  parameters:
+    max_tokens: 128
+    temperature: 0.2
 inputs:
   content:
     type: string
