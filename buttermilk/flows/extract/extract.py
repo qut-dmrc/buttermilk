@@ -40,9 +40,9 @@ class Analyst():
     def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
 
         bm = BM()
+        self.connections = bm._connections_azure
 
         self.langchain_model_name = langchain_model_name
-        self.llm = LLMs(connections=bm._connections_azure)[langchain_model_name]
         self.metadata = kwargs
 
         # This is a bit of a hack to allow Prompty to interpret the template first, but then
@@ -63,10 +63,10 @@ class Analyst():
 
         # load prompty as a flow
         prompty = Prompty.load(BASE_DIR / prompt_template_path)
-        self.template = convert_prompt_template(prompty._template, api="chat", inputs=self.tpl_variables)
+        template = convert_prompt_template(prompty._template, api="chat", inputs=self.tpl_variables)
 
         # convert to a list of messages and roles expected by langchain
-        self.langchain_template = [(m['role'], m['content']) for m in self.template]
+        self.langchain_template = [(m['role'], m['content']) for m in template]
         pass
 
 
@@ -74,9 +74,9 @@ class Analyst():
     @trace
     def __call__(
         self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
-
+        llm = LLMs(connections=self.connections)[self.langchain_model_name]
         tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
-        chain = tpl | self.llm | ChatParser()
+        chain = tpl | llm | ChatParser()
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
