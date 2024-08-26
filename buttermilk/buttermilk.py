@@ -39,6 +39,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr,
                       model_validator, root_validator)
 from promptflow.tracing import start_trace, trace
+from  typing import  Self
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
@@ -49,35 +50,31 @@ _REGISTRY = {}
 
 class BM(BaseModel):
 
-    _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     _instance: ClassVar[Dict[str, "BM"]] = {}
 
-    cfg: Any = Field(default_factory=lambda: BM.get_config())
+    cfg: Optional[Any] = {}  #Field(default_factory=lambda: BM.get_config())
+    _run_id: str = None  #PrivateAttr(default_factory=lambda: BM.make_run_id())
 
     save_dir: Optional[str] = None
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Create the singleton instance."""
-        if cls.__name__ not in _REGISTRY:
-            super().__init_subclass__(**kwargs)
-            _REGISTRY[cls.__name__] = cls
-
-    @model_validator(mode="before")
-    @classmethod
-    def instance(cls: Type[T], data: Any) -> T:
-        """Get the singleton instance."""
-        if cls.__name__ in _REGISTRY:
-            return _REGISTRY[cls.__name__]
-        else:
-            return data
+    # @model_validator(mode="before")
+    # @classmethod
+    # def instance(cls: Type[T], data: Any) -> Any:
+    #     """Get the singleton instance."""
+    #     if cls.__name__ in _REGISTRY:
+    #         return _REGISTRY[cls.__name__]
+    #     else:
+    #         return data
 
     def __repr__(self):
-        return f"Singleton(name={self.cfg['name']}, job={self.cfg['job']}, run_id={self._run_id})"
+        return f"Singleton(name={self.cfg.name}, job={self.cfg.job}, run_id={self._run_id})"
 
     def model_post_init(self, __context: Any) -> None:
-        #_REGISTRY[self.__name__] = self
+        """Register the singleton instance."""
+        _REGISTRY[self.__class__.__name__] = self
+        self.cfg = self.get_config()
         self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
         start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
@@ -224,10 +221,10 @@ class BM(BaseModel):
                     f"save_path must be a string, Path, or CloudPath, got {type(value)}"
                 )
         else:
-            save_dir = self.cfg["project"]["save_dir"]
+            save_dir = self.cfg.project.get('save_dir')
             if not save_dir:
                 save_dir = (
-                    f"gs://{self.cfg['project']['gcp']['bucket']}/runs/{self.cfg['name']}/{self.cfg['job']}/{self._run_id}"
+                    f"gs://{self.cfg.project.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self._run_id}"
                 )
 
         # # Make sure the save directory is a valid path

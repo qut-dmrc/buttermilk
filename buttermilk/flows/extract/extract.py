@@ -61,12 +61,11 @@ def prompt_with_media(
     return HumanMessage(content=[media_message, text_message])
 
 class Analyst():
-    def __init__(self, *, langchain_model_name: str, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
+    def __init__(self, *, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
 
         bm = BM()
         self.connections = bm._connections_azure
 
-        self.langchain_model_name = langchain_model_name
         self.metadata = kwargs
 
         # This is a bit of a hack to allow Prompty to interpret the template first, but then
@@ -95,28 +94,32 @@ class Analyst():
 
 
     @tool
-    @trace
     def __call__(
-        self, *, content: str, media_attachment_uri=None, record_id: str = 'not given', **kwargs) -> LLMOutput:
-        llm = LLMs(connections=self.connections)[self.langchain_model_name]
+        self, *, content: str, model: str, media_attachment_uri=None, record_id='not given', **kwargs) -> LLMOutput:
+        llm = LLMs(connections=self.connections)[model]
+
+        tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
 
         if media_attachment_uri:
-            message = self.langchain_template[-1][1]
-            message = prompt_with_media(uri=media_attachment_uri, text=message)
-            messages = self.langchain_template[:-1] + [message]
-            tpl = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
-        else:
-            tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
+            media_message = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": media_attachment_uri,
+                        },
+                    }
+
+            msg = HumanMessage(content=[media_message])
+            tpl.messages.append(msg)
 
         chain = tpl | llm | ChatParser()
         input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        logger.info(f"Invoking chain with {self.langchain_model_name} for record: {record_id}")
+        logger.info(f"Invoking chain with {model} for record: {record_id}")
         t0 = time.time()
         output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
         t1 = time.time()
-        logger.info(f"Invoked chain with {self.langchain_model_name} and record: {record_id} in {t1-t0:.2f} seconds")
+        logger.info(f"Invoked chain with {model} and record: {record_id} in {t1-t0:.2f} seconds")
 
         output['record_id'] = record_id
         for k in LLMOutput.__required_keys__:
