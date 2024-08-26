@@ -36,6 +36,7 @@ langchain-google-genai = "^1.0.10"
 langchain-together = "^0.1.5"
 langchain-experimental = "^0.0.64"
 gcsfs = "^2024.6.1"
+azure-ai-ml = "1.18.0"
 
 
 [tool.poetry.group.dev.dependencies]
