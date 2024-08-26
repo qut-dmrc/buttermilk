@@ -15,7 +15,7 @@ from promptflow.tracing import start_trace, trace
 from azure.ai.ml import dsl, Input, Output
 from azure.identity import DefaultAzureCredential
 
-from buttermilk.utils import make_run_id
+from buttermilk.utils.utils import make_run_id
 BASE_DIR = Path(__file__).absolute().parent
 FLOW_DIR = BASE_DIR / "judge"
 

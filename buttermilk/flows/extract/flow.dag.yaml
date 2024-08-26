@@ -1,0 +1,49 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+environment:
+  python_requirements_txt: requirements.txt
+additional_includes:
+- ../common/requirements.txt
+- ../templates/frames.jinja2
+- ../templates/frames_climate.jinja2
+- ../templates/instructions.jinja2
+- ../templates/process.jinja2
+inputs:
+  content:
+    type: string
+    default: ""
+outputs:
+  result:
+    type: object
+    reference: ${extract.output}
+nodes:
+- name: extract
+  type: python
+  source:
+    type: code
+    path: extract.py
+  inputs:
+    content: ${inputs.content}
+    system_prompt: ${system_prompt.output}
+    user_prompt: ${prompt.output}
+  init:
+    template_path:
+      type: string
+      default: apply_rules.jinja2
+    langchain_model_name:
+      type: string
+      default: gpt4o
+    standards_path:
+      type: string
+      default: criteria_ordinary.jinja2
+    system_prompt_path:
+      type: string
+      default: instructions.jinja2
+    process_path:
+      type: string
+      default: process.jinja2
+- name: frames
+  type: prompt
+  source:
+    type: code
+    path: frames.jinja2
+  inputs: {}

@@ -1,0 +1,130 @@
+prompts:
+    frames:
+        description: Frame analysis of articles around climate activism.
+        summary: Identification of frame elements after Entman (1993) at the level of statements.
+        comments: This prompt draws from Entman's (1993) conceptualisation of framing to identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
+        task: You are a researcher that analyses news articles and identifies how a text is framed. Frames identify a speaker and their affiliation, a problem definition, cause of the problem, attribution of blame, a solution and a solution addressees from each statement in a news article, if they are present.
+        instructions: |
+            Your task is to read the following article and analyse the framing of the text. 
+            First, identify each statement and identify all climate-related problem definitions in the article. 
+            Then, for each problem definition, identify the following frame elements: the speaker and their affilation, as well as the cause, blame attribution, solution and solution addressee, as defined by the speaker. If you are unable to provide an answer, state 'None found'.
+
+
+            Frame elements:
+            ```
+
+            'statement':
+                Task: Identify the statements in the text that contain a clear problem statement. A problem statement is a concise and clear description of an issue or challenge that needs to be addressed. A statement constitutes an idea or argument, conveyed through one or more sentences, so include entire paragraphs if appropriate. Make sure to analyse every statement, but ignore statements that are unrelated to climate. Also ignore statements for which there is no clearly-defined problem statement, such as 'The march, which began at the city's Town Hall, was organised by Extinction Rebellion and student groups'. I expect you to identify over ten statements.
+                Example 1: Mr Morrison has not yet struck a deal with the Nationals over the climate and energy policy Australia will bring to Glasgow, including whether Australia will commit to achieving net zero emissions by 2050 — a target the majority of Australians support
+                Example 2: We still haven't seen any representation from our parliament come down [to the protests],"" she said. t's still really focused by us and we are feeling ignored, but I am also hopeful for the future
+                Example 3: Why was climate change hysteria one of the main reasons the teal fake independents and the Greens did so well in the recent election and the Morrison Coalition government so soundly defeated?
+                Example 4: The report points to the government's cases against multiple whistleblowers and journalists, as well as bail conditions placed on climate change protesters, including former Greens senator Scott Ludlam
+                Example 5: A report produced by advocacy group Human Rights Watch this week also found Australia's national security laws may have been used to target journalists and whistleblowers, including protesters
+                Example 6: Last week, England's Counter Terror Police listed it as an extremist ideology, deeming it a threat to national security alongside the likes of neo-Nazi terrorism and Islamic extremism. 
+                Example 7: “I won’t be threatened by an email from an anonymous numpty from an organisation who are off on some ideological witch hunt with no real solutions,” Mr. Pitt told The Australian.
+                Example 8: Notwithstanding their praise, the woke national curriculum is criticised for not going far enough.
+
+            'problem_definition':
+                Task: If a statement in the article concerns climate change, climate activism, or climate protest and protestors, identify any stated or implied problems within the statement. I am particularly interested in problems related to climate activist groups such as Extinction Rebellion, Fridays for Future and School Strike for Climate.
+                Example 1: Lack of commitment to climate targets despite public support
+                Example 2: Lack of representation from parliament regarding the protests
+                Example 3: Fake teal independents and Greens doing so well in the recent election
+                Example 4: Australia's national security laws may have been used to target journalists and whistleblowers, including protesters
+                Example 5: Australia's national security laws being used to target journalists and whistleblowers
+                Example 6: Extinction Rebellion being listed as an extremist ideology
+                Example 7: Extinction Rebellion's tactics
+                Example 8: Inadequate climate change education in the national curriculum
+
+            'speaker_name':
+                Task: Identify the speaker. Who presents the problem, directly or indirectly? This can be either the author or a quoted source.
+                Example 1: Author
+                Example 2: Gemma Price-Quintner
+                Example 3: Author
+                Example 4: Human Rights Watch
+                Example 5: Human Rights Watch
+                Example 6: Author
+                Example 7: Keith Pill
+                Example 8: Five academics
+
+            'speaker_affiliation:
+                Task: Concisely identify the speaker's role in the text.
+                Example 1: Journalist
+                Example 2: Year 12 student and NT rally organiser 
+                Example 3: Journalist
+                Example 4: Advocacy group
+                Example 5: Advocacy group
+                Example 6: Journalist
+                Example 7: LNP MP
+                Example 8: Academics specialising in school pedagogy, geography, journalism and marine studies
+
+            'cause_of_problem':
+                Task: Tell me what the speaker indicates is the cause of the problem. Not every problem will have a cause. Sometimes, the cause is directly stated and sometimes the cause is an implied systemic or structural issue, such as climate change. Only provide a cause where there is enough evidence to do so.
+                Example 1: Failure to strike a deal, despite the will of the constituents
+                Example 2: Young people being ignored by the NT government/those in power, despite their efforts
+                Example 3: Climate change hysteria
+                Example 4: Australia's national security laws being used to target journalists and whistleblowers
+                Example 5: Australia's national security laws being used to target journalists and whistleblowers
+                Example 6: Extinction Rebellion's past actions
+                Example 7: None found
+                Example 8: The national curriculum not providing adequate education on climate change
+
+            'blame_attribution':
+                Task: Identify the person or thing that the speaker directly or indirectly blames for the problem. Not every problem will have a blame attribution; only include if the recipient of blame is clear.
+                Example 1: Scott Morrison
+                Example 2: The Government
+                Example 3: What is taught in Australian schools
+                Example 4: The Australian government
+                Example 5: The Australian government
+                Example 6: Extinction Rebellion
+                Example 7: None found
+                Example 8: The national curriculum
+
+            'solution_to_problem':
+                Task: Identify the solution that the speaker promotes to address the problem. Provide quotes from the text that support your answer. Not every problem will have a solution; only include if the cause of the solution to the problem is clear.
+                Example 1: Commit to a climate target
+                Example 2: The government to change position, and engage with youth
+                Example 3: None found
+                Example 4: None found
+                Example 5: None found
+                Example 6: None found
+                Example 7: None found
+                Example 8: Infuse climate science into all areas of education
+
+            'solution_addressee':
+                Task: Identify the direct or indirect target audience or intended recipient of the solution. Not every problem will have a solution addressee; only include if the solution addressee is clear.
+                Example 1: Scott Morrison
+                Example 2: The Government
+                Example 3: None found
+                Example 4: None found
+                Example 5: None found
+                Example 6: None found
+                Example 7: None found
+                Example 8: Educators
+
+            ```
+
+            Here is the text of the article:
+            ```
+            {article}
+            ```
+        output_format: |
+            You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the guideline details, and include a rationale that supports your assessment by referencing specific content and guidelines. Your response should include these fields:
+
+            ```json
+            "analysis": [List of JSON dictionaries, ensuring that each statement has its own dictionary:                        
+                        {
+                            "statement": "<STRING>",
+                            "problem_definition": "<STRING>",
+                            "speaker_name": "<STRING>",
+                            "speaker_affiliation": "<STRING>",
+                            "cause_of_problem": "<STRING>",
+                            "blame_attribution": "<STRING>",
+                            "solution_to_problem": "<STRING>",
+                            "solution_adressee": "<STRING>"
+                        },
+                        ... other statements ...
+                    }
+                
+            }
+            ```
+            Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance.
