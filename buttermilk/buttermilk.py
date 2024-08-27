@@ -41,19 +41,38 @@ from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr,
 from promptflow.tracing import start_trace, trace
 from  typing import  Self, MutableMapping
 from .utils import save
-
+import types
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
 _LOGGER_NAME = "buttermilk"
+_REGISTRY = {}
 
 logger=getLogger(_LOGGER_NAME)
 
 T = TypeVar("T", bound="BM")
-_REGISTRY = {}
 
-class BM(BaseModel):
+def _convert_to_hashable_type(element: Any) -> Any:
+    if isinstance(element, dict):
+        return tuple((_convert_to_hashable_type(k), _convert_to_hashable_type(v)) for k, v in element.items())
+    elif isinstance(element, list):
+        return tuple(map(_convert_to_hashable_type, element))
+    return element
 
-    _instance: ClassVar[Dict[str, "BM"]] = {}
+class Singleton:
+    ## From https://py.iceberg.apache.org/reference/pyiceberg/utils/singleton/
+    _instances: ClassVar[Dict] = {}  # type: ignore
+
+    def __new__(cls, *args, **kwargs):  # type: ignore
+        key = (cls, tuple(args), _convert_to_hashable_type(kwargs))
+        if key not in cls._instances:
+            cls._instances[key] = super().__new__(cls)
+        return cls._instances[key]
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> Any:
+        """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
+        return self
+
+class BM(Singleton, BaseModel):
 
     cfg: Optional[MutableMapping[Any, Any]] = Field(default_factory=lambda: BM.get_config())
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
@@ -62,21 +81,10 @@ class BM(BaseModel):
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
 
-    # @model_validator(mode="before")
-    # @classmethod
-    # def instance(cls: Type[T], data: Any) -> Any:
-    #     """Get the singleton instance."""
-    #     if cls.__name__ in _REGISTRY:
-    #         return _REGISTRY[cls.__name__]
-    #     else:
-    #         return data
-
     def __repr__(self):
-        return f"Singleton(name={self.cfg.name}, job={self.cfg.job}, run_id={self._run_id})"
+        return f"BMSingleton(name={self.cfg.name}, job={self.cfg.job}, run_id={self._run_id})"
 
     def model_post_init(self, __context: Any) -> None:
-        """Register the singleton instance."""
-        _REGISTRY[self.__class__.__name__] = self
         self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
         start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg.name, job=self.cfg.job)

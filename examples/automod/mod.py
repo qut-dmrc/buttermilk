@@ -78,7 +78,7 @@ def run(cfg: DictConfig) -> None:
             batch_name = f"{bm._run_id}_{model}"
             columns = OmegaConf.to_object(cfg.run.dataset.columns)
             init_vars = OmegaConf.to_object(cfg.run.tasks.judge.init)
-            df = run_batch(model=model, dataset=dataset, column_mapping=columns, init_vars=init_vars, batch_name=batch_name)
+            df = run_batch(model=model, dataset=dataset, column_mapping=columns, init_vars=init _vars, batch_name=batch_name)
             results = pd.concat([results, df])
         except Exception as e:
             logger.error(f"Unhandled error in our flow: {e}")
