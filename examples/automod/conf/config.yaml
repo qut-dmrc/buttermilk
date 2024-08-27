@@ -1,3 +1,5 @@
+name: automod
+job: judge
 project:
   secret_provider: azure
   logger: gcp
@@ -15,21 +17,25 @@ project:
     secret_name: secret
     region: us-east-1
 run:
-  name: automod
-  job: judge
   dataset:
     uri:
     columns:
   tasks:
     judge:
-      standards:
-      system_prompt_path: instructions.jinja2
-      process_path: process.jinja2
-      template_path: apply_rules.jinja2
+      init:
+        standards_path:
+        system_prompt_path: instructions.jinja2
+        process_path: process.jinja2
+        template_path: apply_rules.jinja2
       results:
         dest: bq
         dataset: dmrc-analysis.toxicity.standards
         schema: flows/common/rules.schema.json
+      models:
+      - gpt4o
+      - llama31_70b
+      - sonnet
+      - gemini15pro
     metrics:
       dest: bq
       dataset: dmrc-analysis.toxicity.metrics

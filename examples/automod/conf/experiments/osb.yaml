@@ -7,11 +7,9 @@ run:
       - record_id: "${data.id}"
       - content: "${data.text}"
   tasks:
-    judge:
-      standards:
-      - name: ordinary
-        template: criteria_ordinary.jinja2
-      - name: gelber
-        template: criteria_gelber.jinja2
-      - name: facebook_hate
-        template: criteria_fb_hate.jinja2
+    ordinary:
+      standards_path: criteria_ordinary.jinja2
+    gelber:
+      standards_path: criteria_gelber.jinja2
+    facebook_hate:
+      standards_path: criteria_fb_hate.jinja2

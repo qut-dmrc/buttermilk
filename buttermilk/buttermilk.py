@@ -39,11 +39,14 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr,
                       model_validator, root_validator)
 from promptflow.tracing import start_trace, trace
-from  typing import  Self
+from  typing import  Self, MutableMapping
+from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
 _LOGGER_NAME = "buttermilk"
+
+logger=getLogger(_LOGGER_NAME)
 
 T = TypeVar("T", bound="BM")
 _REGISTRY = {}
@@ -52,8 +55,8 @@ class BM(BaseModel):
 
     _instance: ClassVar[Dict[str, "BM"]] = {}
 
-    cfg: Optional[Any] = {}  #Field(default_factory=lambda: BM.get_config())
-    _run_id: str = None  #PrivateAttr(default_factory=lambda: BM.make_run_id())
+    cfg: Optional[MutableMapping[Any, Any]] = Field(default_factory=lambda: BM.get_config())
+    _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
 
     save_dir: Optional[str] = None
 
@@ -74,10 +77,9 @@ class BM(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Register the singleton instance."""
         _REGISTRY[self.__class__.__name__] = self
-        self.cfg = self.get_config()
         self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
-        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
+        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg.name, job=self.cfg.job)
 
     @classmethod
     def make_run_id(cls) -> str:
@@ -108,15 +110,18 @@ class BM(BaseModel):
         Returns:
             The configuration dictionary.
         """
-        with initialize(config_path=config_dir, version_base="1.3"):
+        try:
             cfg = compose(config_name=config_name)
+        except AssertionError:
+            with initialize(config_path=config_dir, version_base="1.3"):
+                cfg = compose(config_name=config_name)
         return cfg
 
     @cached_property
     def metadata(self):# -> dict[str, Any]:
         labels = {
-            "function_name": self.cfg['name'],
-            "job": self.cfg['job'],
+            "function_name": self.cfg.name,
+            "job": self.cfg.job,
             "logs": self._run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
@@ -160,6 +165,16 @@ class BM(BaseModel):
     ) -> None:
         logger = getLogger(_LOGGER_NAME)
 
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
+
+        # Quieten other loggers down a bit (particularly requests and google api client)
+        for logger_str in list(logging.Logger.manager.loggerDict.keys()):
+            try:
+                logging.getLogger(logger_str).setLevel(logging.WARNING)
+            except:
+                pass
+            
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
             coloredlogs.install(
@@ -176,8 +191,8 @@ class BM(BaseModel):
             labels={
                 "project_id": "dmrc-platforms",
                 "location": "us-central1",
-                "namespace": self.cfg['name'],
-                "job": self.cfg['job'],
+                "namespace": self.cfg.name,
+                "job": self.cfg.job,
                 "task_id": self._run_id,
             },
         )
@@ -189,7 +204,7 @@ class BM(BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.cfg['name'], labels=self.metadata
+            client=client, resource=resource, name=self.cfg.name, labels=self.metadata
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -234,3 +249,8 @@ class BM(BaseModel):
             raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
 
         return save_dir
+
+    def save(self, data, **kwargs):
+        """ Failsafe save method."""
+        result = save.save(data=data, save_dir=self.save_dir, **kwargs)
+        logger.info("Saved data to: {result}")

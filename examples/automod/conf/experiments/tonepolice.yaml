@@ -8,7 +8,7 @@ run:
       - content: "${data.alt_text}"
   tasks:
     judge:
-      standards:
+      standards_path:
       - name: ordinary
         template: criteria_ordinary.jinja2
       - name: gelber
