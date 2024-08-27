@@ -1,6 +1,8 @@
 
+from cgitb import text
 from logging import getLogger
 from pathlib import Path
+import sys
 import time
 
 from promptflow.core import (
@@ -34,19 +36,28 @@ class LLMOutput(TypedDict):
     record_id: str
     analysis: str
 
-
 def prompt_with_media(
-    *, uri=None, image_b64: Optional[str] = None, text: Optional[str] = None, detail="auto"
+    *, uri=None, mime_type: Optional[str] = None, image_b64: Optional[str] = None, text: Optional[str] = None, detail="auto"
 ) -> HumanMessage:
-    text_message = {"type": "text", "text": text}
+    # Prepare input for model consumption
 
-    if uri:
+
+    text_message = {
+        "type": "text",
+        "text": text,
+    }
+
+    if uri and not mime_type:
         media_message = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": uri,
-                        },
-                    }
+        "type": "image_url",
+        "image_url": {
+            "url": uri,
+        },
+        }
+
+    elif uri:
+        media_message = {"type": "media", 'mime_type': 'video/mp4',
+                              'file_uri': uri}
     elif image_b64:
         media_message = {
                 "type": "image_url",
@@ -58,38 +69,50 @@ def prompt_with_media(
     else:
         return HumanMessage(content=text or '')
 
-    return HumanMessage(content=[media_message, text_message])
+    message = HumanMessage(content=[media_message, text_message])
+    return message
 
 class Analyst():
-    def __init__(self, *, prompt_template_path: str, system_prompt: str = '', instructions: str = '', output_format: str='',  **kwargs) -> None:
+    def __init__(self, *, prompt_template_path: str = '', system_prompt: str = '', user_template: str = '',  **kwargs) -> None:
 
         bm = BM()
         self.connections = bm._connections_azure
 
         self.metadata = kwargs
 
-        # This is a bit of a hack to allow Prompty to interpret the template first, but then
-        # leave the actual input variables for us to fill later with langchain.
-        self.tpl_variables = {"content":r"{{content}}"}
-        if system_prompt or instructions or output_format:
-            # Load sub-templates ourselves, since Promptflow's prompty won't do it for us.
-            env = Environment(loader=FileSystemLoader(searchpath=[BASE_DIR, TEMPLATE_PATH]), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-            system_tpl = env.get_template(system_prompt).render()
-            instructions_tpl = env.get_template(instructions).render()
-            output_format_tpl = env.get_template(output_format).render()
+        if prompt_template_path:
 
-            self.tpl_variables.update(dict(system_prompt=system_tpl, instructions=instructions_tpl, output_format=output_format_tpl))
+            # # This is a bit of a hack to allow Prompty to interpret the template first, but then
+            # # leave the actual input variables for us to fill later with langchain.
+            # self.tpl_variables = {"content":r"{{content}}"}
+            # if system_prompt or instructions or output_format:
+            #     # Load sub-templates ourselves, since Promptflow's prompty won't do it for us.
+            #     env = Environment(loader=FileSystemLoader(searchpath=[BASE_DIR, TEMPLATE_PATH]), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+            #     system_tpl = env.get_template(system_prompt).render()
+            #     instructions_tpl = env.get_template(instructions).render()
+            #     output_format_tpl = env.get_template(output_format).render()
 
-        # Load the template from a prompty file
-        from promptflow.core import Prompty
-        from promptflow.core._prompty_utils import convert_prompt_template
+            #     self.tpl_variables.update(dict(system_prompt=system_tpl, instructions=instructions_tpl, output_format=output_format_tpl))
 
-        # load prompty as a flow
-        prompty = Prompty.load(BASE_DIR / prompt_template_path)
-        template = convert_prompt_template(prompty._template, api="chat", inputs=self.tpl_variables)
+            # Load the template from a prompty file
+            from promptflow.core import Prompty
+            from promptflow.core._prompty_utils import convert_prompt_template
 
-        # convert to a list of messages and roles expected by langchain
-        self.langchain_template = [(m['role'], m['content']) for m in template]
+            # load prompty as a flow
+            prompty = Prompty.load(BASE_DIR / prompt_template_path)
+            template = convert_prompt_template(prompty._template, api="chat", inputs=kwargs)
+
+            # convert to a list of messages and roles expected by langchain
+            self.langchain_template = [(m['role'], m['content']) for m in template]
+
+        # elif system_prompt:
+        #     self.langchain_template = [('system', system_prompt)]
+        #     if user_template:
+        #         self.langchain_template.append(('user', user_template))
+        # else:
+        #     raise ValueError("Either prompt_template_path or system_prompt must be provided")
+
+        # self.langchain_template.append(("placeholder", "{prompt}"))
         pass
 
 
@@ -98,21 +121,15 @@ class Analyst():
         self, *, content: str, model: str, media_attachment_uri=None, record_id='not given', **kwargs) -> LLMOutput:
         llm = LLMs(connections=self.connections)[model]
 
-        tpl = ChatPromptTemplate.from_messages(self.langchain_template, template_format="jinja2")
+        # prompt = prompt_with_media(uri=media_attachment_uri, mime_type='video/mp4', text=content)
+        prompt = prompt_with_media(uri=media_attachment_uri, text=content)
 
-        if media_attachment_uri:
-            media_message = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": media_attachment_uri,
-                        },
-                    }
-
-            msg = HumanMessage(content=[media_message])
-            tpl.messages.append(msg)
+        tpl = [self.langchain_template[0], prompt]
+        tpl = ChatPromptTemplate.from_messages(tpl, template_format="jinja2")
 
         chain = tpl | llm | ChatParser()
-        input_vars = dict(content=content)
+        input_vars = dict()
+        #input_vars = dict(prompt=[prompt])
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
         logger.info(f"Invoking chain with {model} for record: {record_id}")

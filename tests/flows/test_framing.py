@@ -5,6 +5,13 @@ import pytest
 def bm():
     return buttermilk.BM()
 
+def test_frames_text(bm, example_coal):
+    from buttermilk.flows.extract import Analyst
+    flow = Analyst(prompt_template_path="frames.prompty")
+    output = flow(content=example_coal)
+    pass
+    assert output
+
 def test_framing_climate(bm, example_coal):
     from buttermilk.flows.extract import Analyst
     flow = Analyst(prompt_template_path="frames.prompty")
@@ -12,17 +19,10 @@ def test_framing_climate(bm, example_coal):
     pass
     assert output
 
-def test_framing_generic(bm):
+def test_framing_video():
     from buttermilk.flows.extract import Analyst
-    flow = Analyst(prompt_template_path="generic.prompty", system_prompt="system_frames.jinja2", instructions="instructions_frames.jinja2", output_format="json_frames.jinja2")
-    output = flow(content=example_coal, model='haiku')
-    pass
-    assert len(output) > 4
-
-def test_framing_video(bm):
-    from buttermilk.flows.extract import Analyst
-    flow = Analyst(prompt_template_path="generic.prompty", system_prompt="system_frames.jinja2", instructions="instructions_frames.jinja2", output_format="json_frames.jinja2")
-    output = flow(content='', media_attachment_uri='gs://dmrc-analysis/test/fyp/tiktok-imane-01.mp4', model='gemini15pro')
+    flow = Analyst(prompt_template_path="frames.prompty")
+    output = flow(content='see video', media_attachment_uri='gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4', model='gemini15pro')
     pass
     assert len(output) > 4
 
