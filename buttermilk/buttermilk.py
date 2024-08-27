@@ -174,7 +174,7 @@ class BM(BaseModel):
                 logging.getLogger(logger_str).setLevel(logging.WARNING)
             except:
                 pass
-            
+
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
             coloredlogs.install(
@@ -253,4 +253,4 @@ class BM(BaseModel):
     def save(self, data, **kwargs):
         """ Failsafe save method."""
         result = save.save(data=data, save_dir=self.save_dir, **kwargs)
-        logger.info("Saved data to: {result}")
+        logger.info(f"Saved data to: {result}")
