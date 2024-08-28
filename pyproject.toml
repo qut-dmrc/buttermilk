@@ -37,6 +37,13 @@ langchain-together = "^0.1.5"
 langchain-experimental = "^0.0.64"
 gcsfs = "^2024.6.1"
 azure-ai-ml = "1.18.0"
+boto3 = "^1.35.7"
+evaluate = "^0.4.2"
+torch = "^2.4.0"
+transformers = "^4.44.2"
+azure-ai-contentsafety = "^1.0.0"
+azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
+octoai = "^1.6.0"
 
 
 [tool.poetry.group.dev.dependencies]
