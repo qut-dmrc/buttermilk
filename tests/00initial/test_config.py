@@ -32,7 +32,9 @@ def test_time_to_instantiate():
     start = time.time()
     obj = BM()
     end = time.time()
-    assert (end - start) < 1, "Took too long to instantiate BM"
+    time_taken = end - start
+    print(f"Time taken: {time_taken:.2f} seconds")
+    assert time_taken < 1, "Took too long to instantiate BM"
 
 def test_has_test_info(bm: BM):
     assert bm.cfg.name == "buttermilk"

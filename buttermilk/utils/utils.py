@@ -59,6 +59,10 @@ def read_json(filename: Union[Path, str]) -> dict:
     file = read_file(filename)
     return json.loads(file)
 
+def read_text(filename: Union[Path, str]) -> str:
+    file = read_file(filename)
+    return file.decode()
+
 
 def make_serialisable( rows):
     """Prepare dataframe for export"""

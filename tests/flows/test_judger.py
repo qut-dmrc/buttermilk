@@ -1,23 +1,32 @@
 import buttermilk
 import pytest
 from buttermilk.flows.judge.judge import Judger
-
+from buttermilk.utils.utils import read_text
 
 @pytest.fixture(scope="session")
 def bm():
     return buttermilk.BM()
 
 def test_judger_ordinary(bm, fight_no_more_forever):
-    judger = Judger(standards_path="criteria_ordinary.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2")
-    output = judger(content="Hello, world!", model="gpt4o")
+    judger = Judger(standards_path="criteria_ordinary.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2", model="haiku")
+    output = judger(content=fight_no_more_forever)
     assert output
     pass
 
 def test_judger_vaw(bm,  fight_no_more_forever):
-    judger = Judger(standards_path="buttermilk/examples/automod/prompts/criteria_vaw.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2")
-    output = judger(content=fight_no_more_forever, model="haiku")
+    judger = Judger(standards_path="buttermilk/examples/automod/prompts/criteria_vaw.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2", model="haiku")
+    output = judger(content=fight_no_more_forever)
     assert output
     pass
+
+def test_analyse_template(bm, fight_no_more_forever):
+    from buttermilk.flows.extract import Analyst
+    standards = read_text("buttermilk/flows/templates/criteria_vaw.jinja2")
+    flow = Analyst(prompt_template_path="judge.prompty", criteria=standards)
+    output = flow(content=fight_no_more_forever, model="haiku")
+    pass
+    assert output
+
 
 @pytest.fixture
 def fight_no_more_forever() -> str:
