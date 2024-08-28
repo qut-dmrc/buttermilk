@@ -12,7 +12,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "run batch automod: VAW",
+            "name": "run batch automod: drag",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.mod",
@@ -23,7 +23,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=vaw",
+                "+experiments=drag_gelber",
             ],
             "console": "integratedTerminal"
         },

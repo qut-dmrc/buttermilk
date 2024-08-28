@@ -22,11 +22,8 @@ run:
     columns:
   tasks:
     judge:
-      init:
-        standards_path:
-        system_prompt_path: instructions.jinja2
-        process_path: process.jinja2
-        template_path: apply_rules.jinja2
+      standards:
+      template: judge.prompty
       results:
         dest: bq
         dataset: dmrc-analysis.toxicity.standards
@@ -36,6 +33,10 @@ run:
       - llama31_70b
       - sonnet
       - gemini15pro
+      - opus
+      - llama31_405b
+      - llama31_8b
+      - haiku
     metrics:
       dest: bq
       dataset: dmrc-analysis.toxicity.metrics

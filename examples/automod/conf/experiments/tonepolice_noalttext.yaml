@@ -5,4 +5,4 @@ run:
   job: tonepolice_noalttext
   dataset:
     columns:
-      - content: "${data.text}"
+      - content: \${data.text}

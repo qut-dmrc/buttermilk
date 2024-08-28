@@ -1,15 +1,12 @@
 # @package _global_
+job: tonepolice
 run:
-  job: tonepolice
   dataset:
     uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
     columns:
-      - record_id: "${data.id}"
-      - content: "${data.alt_text}"
+      record_id: \${data.id}
+      content: \${data.alt_text}
   tasks:
     judge:
-      standards_path:
-      - name: ordinary
-        template: criteria_ordinary.jinja2
-      - name: gelber
-        template: criteria_gelber.jinja2
+      experiment_name: gelber
+      standards: buttermilk/flows/templates/criteria_gelber.jinja2

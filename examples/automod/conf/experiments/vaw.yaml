@@ -8,5 +8,5 @@ run:
       content: \${data.text}
   tasks:
     judge:
-      init:
-        standards_path: criteria_vaw.jinja2
+      experiment_name: vaw
+      standards: criteria_vaw.jinja2

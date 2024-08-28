@@ -4,8 +4,8 @@ run:
   dataset:
     uri: gs://dmrc-platforms/data/osb_train.jsonl
     columns:
-      - record_id: "${data.id}"
-      - content: "${data.text}"
+      - record_id: \${data.id}
+      - content: \${data.text}
   tasks:
     ordinary:
       standards_path: criteria_ordinary.jinja2

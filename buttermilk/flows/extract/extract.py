@@ -73,14 +73,14 @@ def prompt_with_media(
     return message
 
 class Analyst():
-    def __init__(self, *, prompt_template_path: str = '', system_prompt_path: str = '', user_template_path: str = '', system_prompt: str = '', user_template: str = '',  **kwargs) -> None:
+    def __init__(self, *, model: str, template: str = '', system_prompt_path: str = '', user_template_path: str = '', system_prompt: str = '', user_template: str = '',  **kwargs) -> None:
 
         bm = BM()
         self.connections = bm._connections_azure
         self.batch_info = kwargs
         self.tpl_variables = kwargs
-
-        if prompt_template_path:
+        self.model = model
+        if template:
 
             # This is a bit of a hack to allow Prompty to interpret the template first, but then
             # leave the actual input variables for us to fill later with langchain.
@@ -97,7 +97,7 @@ class Analyst():
             from promptflow.core._prompty_utils import convert_prompt_template
 
             # load prompty as a flow
-            prompty = Prompty.load(BASE_DIR / prompt_template_path)
+            prompty = Prompty.load(BASE_DIR / template)
             template = convert_prompt_template(prompty._template, api="chat", inputs=self.tpl_variables)
 
             # convert to a list of messages and roles expected by langchain
@@ -115,8 +115,8 @@ class Analyst():
 
     @tool
     def __call__(
-        self, *, content: str, model: str, media_attachment_uri=None, record_id='not given', **kwargs) -> LLMOutput:
-        llm = LLMs(connections=self.connections)[model]
+        self, *, content: str, media_attachment_uri=None, record_id='not given', **kwargs) -> LLMOutput:
+        llm = LLMs(connections=self.connections)[self.model]
 
         # Add a human message to the end of the prompt
         messages = self.langchain_template + [prompt_with_media(uri=media_attachment_uri, text=content)]
@@ -127,11 +127,11 @@ class Analyst():
         input_vars = dict()
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        logger.info(f"Invoking chain with {model} for record: {record_id}")
+        logger.info(f"Invoking chain with {self.model} for record: {record_id}")
         t0 = time.time()
         output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
         t1 = time.time()
-        logger.info(f"Invoked chain with {model} and record: {record_id} in {t1-t0:.2f} seconds")
+        logger.info(f"Invoked chain with {self.model} and record: {record_id} in {t1-t0:.2f} seconds")
 
         output['record_id'] = record_id
         for k in LLMOutput.__required_keys__:

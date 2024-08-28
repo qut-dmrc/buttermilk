@@ -7,21 +7,21 @@ def bm():
 
 def test_frames_text(bm, example_coal):
     from buttermilk.flows.extract import Analyst
-    flow = Analyst(prompt_template_path="frames.prompty")
+    flow = Analyst(template="frames.prompty")
     output = flow(content=example_coal, model="haiku")
     pass
     assert output
 
 def test_framing_climate(bm, example_coal):
     from buttermilk.flows.extract import Analyst
-    flow = Analyst(prompt_template_path="frames.prompty", model="haiku")
+    flow = Analyst(template="frames.prompty", model="haiku")
     output = flow(content=example_coal)
     pass
     assert output
 
 def test_framing_video():
     from buttermilk.flows.extract import Analyst
-    flow = Analyst(prompt_template_path="frames.prompty")
+    flow = Analyst(template="frames.prompty")
     output = flow(content='see video', media_attachment_uri='gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4', model='gemini15pro')
     pass
     assert len(output) > 4

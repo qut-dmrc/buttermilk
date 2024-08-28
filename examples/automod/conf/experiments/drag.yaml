@@ -1,0 +1,12 @@
+# @package _global_
+job: drag
+run:
+  dataset:
+    uri: gs://dmrc-platforms/data/drag_train.jsonl
+    columns:
+      record_id: \${data.id}
+      content: \${data.alt_text}
+  tasks:
+    judge:
+      experiment_name: ordinary
+      standards: buttermilk/flows/templates/criteria_ordinary.jinja2

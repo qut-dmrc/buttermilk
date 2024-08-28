@@ -171,22 +171,27 @@ class BM(Singleton, BaseModel):
         self,
         verbose=False,
     ) -> None:
-        logger = getLogger(_LOGGER_NAME)
-
-        for handler in logger.handlers:
-            logger.removeHandler(handler)
 
         # Quieten other loggers down a bit (particularly requests and google api client)
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.WARNING)
+
         for logger_str in list(logging.Logger.manager.loggerDict.keys()):
             try:
                 logging.getLogger(logger_str).setLevel(logging.WARNING)
             except:
                 pass
 
+
+        logger = getLogger(_LOGGER_NAME)
+
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
+
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
             coloredlogs.install(
-                level="INFO", logger=logger, fmt=console_format, stream=sys.stdout
+                level="INFO", logger=root_logger, fmt=console_format, stream=sys.stdout
             )
         else:
             coloredlogs.install(

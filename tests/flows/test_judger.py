@@ -22,7 +22,7 @@ def test_judger_vaw(bm,  fight_no_more_forever):
 def test_analyse_template(bm, fight_no_more_forever):
     from buttermilk.flows.extract import Analyst
     standards = read_text("buttermilk/flows/templates/criteria_vaw.jinja2")
-    flow = Analyst(prompt_template_path="judge.prompty", criteria=standards)
+    flow = Analyst(template="judge.prompty", criteria=standards)
     output = flow(content=fight_no_more_forever, model="haiku")
     pass
     assert output
