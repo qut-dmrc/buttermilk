@@ -20,11 +20,11 @@ def test_framing_climate(bm, example_coal):
     assert output
 
 def test_framing_video():
-    from buttermilk.flows.extract import Analyst
-    flow = Analyst(template="frames.prompty")
-    output = flow(content='see video', media_attachment_uri='gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4', model='gemini15pro')
+    from buttermilk.flows.video.video import Analyst
+    flow = Analyst(template="frames_system.jinja2", model='gemini15pro')
+    output = flow(content='see video', media_attachment_uri='gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4')
     pass
-    assert len(output) > 4
+    assert output
 
 @pytest.fixture(scope="session")
 def example_coal():

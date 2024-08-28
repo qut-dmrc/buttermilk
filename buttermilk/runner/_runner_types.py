@@ -22,7 +22,7 @@ class InputRecord(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     source: str
     text: Optional[str] = ""
-    image: Optional["ImageRecord"] = None
+    image: Optional[object] = None
     alt_text: Optional[str] = ""
     expected: Union[bool, None] = False
     labels: list[str] = Field(default=[], validation_alias="label")

@@ -9,10 +9,11 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
+            "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
         },
         {
-            "name": "run batch automod: drag",
+            "name": "run batch automod: drag ots",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.mod",
@@ -23,8 +24,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=drag_gelber",
+                "+experiments=drag_ots",
             ],
+            "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
         },
         {
@@ -41,6 +43,7 @@
             "purpose": [
                 "debug-test"
             ],
+            "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
         }
     ]

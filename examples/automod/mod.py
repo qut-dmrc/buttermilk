@@ -10,13 +10,14 @@ import pandas as pd
 from sqlalchemy import column
 from buttermilk import BM
 from buttermilk.flows.extract import Analyst
+from buttermilk.flows.moderate.scorers import Moderator
 from buttermilk.flows.results_bq import SaveResultsBQ
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 import hydra
 from buttermilk.utils.utils import read_text
 from omegaconf import DictConfig, OmegaConf
-
+from buttermilk.apis import Llama2ChatMod, replicatellama2, replicatellama3, HFInferenceClient, HFLlama270bn, HFPipeline
 BASE_DIR = Path(__file__).absolute().parent
 
 import datetime
@@ -25,10 +26,31 @@ import datetime
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 
-def run_batch(*, model: str, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
-    bm = BM()
-    logger = bm.logger
-    results = pd.DataFrame()
+def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], batch_name: str) -> pd.DataFrame:
+
+    from buttermilk.toxicity.toxicity  import TOXCLIENTS
+    pflocal = LocalPFClient()
+    init_vars = dict(model = model)
+
+    flow = Moderator(**init_vars)
+
+    run = pflocal.run(
+            flow=flow,
+            data=dataset,
+            init_vars=init_vars,
+            column_mapping=column_mapping,
+            stream=False,
+            name=batch_name,
+            timeout=150,
+        )
+    logger.info(
+        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
+    )
+
+    details = pflocal.get_details(run.name)
+    return details
+
+def run_flow(*, logger, model: str, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
     pflocal = LocalPFClient()
 
     standards = read_text(standards_path)
@@ -36,7 +58,6 @@ def run_batch(*, model: str, dataset: str, column_mapping: dict[str,str], standa
 
     flow = Analyst(**init_vars)
 
-    run_meta = {"name": batch_name, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
     run = pflocal.run(
             flow=flow,
             data=dataset,
@@ -52,6 +73,19 @@ def run_batch(*, model: str, dataset: str, column_mapping: dict[str,str], standa
     )
 
     details = pflocal.get_details(run.name)
+    return details
+
+def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
+    bm = BM()
+    logger = bm.logger
+    results = pd.DataFrame()
+    run_meta = {"name": batch_name, "model_type": model_type, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
+
+    if model_type == 'ots':
+        details = run_ots(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, batch_name=batch_name)
+    elif model_type == 'flow':
+        details = run_flow(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, standards_path=standards_path, template_path=template_path, batch_name=batch_name)
+
 
     # duplicate run_info metadata for each row
     run_meta = pd.DataFrame.from_records([run_meta for _ in range(details.shape[0])])
@@ -61,7 +95,6 @@ def run_batch(*, model: str, dataset: str, column_mapping: dict[str,str], standa
     results = pd.concat([results, details], axis='index')
 
     return results
-
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name
@@ -89,7 +122,8 @@ def run(cfg: DictConfig) -> None:
         try:
             batch_name = f"{bm._run_id}_{model}_{cfg.run.tasks.judge.experiment_name}"
             columns = OmegaConf.to_object(cfg.run.dataset.columns)
-            df = run_batch(model=model,
+            model_type = cfg.run.tasks.judge.model_type
+            df = run_batch(model=model,model_type=model_type,
                            dataset=dataset,
                            column_mapping=columns,
                            standards_path=cfg.run.tasks.judge.standards,

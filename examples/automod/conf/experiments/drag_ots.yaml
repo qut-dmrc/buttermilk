@@ -1,0 +1,30 @@
+# @package _global_
+job: drag
+run:
+  dataset:
+    uri: gs://dmrc-platforms/data/drag_train.jsonl
+    columns:
+      record_id: \${data.id}
+      content: \${data.alt_text}
+  tasks:
+    judge:
+      experiment_name: ots
+      model_type: ots
+      models:
+      - Comprehend
+      - Perspective
+      - HONEST
+      - LFTW
+      - REGARD
+      - AzureContentSafety
+      - AzureModerator
+      - OpenAIModerator
+      - LlamaGuard1ReplicateAWQ
+      - LlamaGuard1Together
+      - LlamaGuard2Replicate
+      - LlamaGuard2Together
+      - LlamaGuard3Together
+      - LlamaGuard3HF
+      - LlamaGuard3HFInt8
+      - LlamaGuard3Octo
+      - ShieldGemma

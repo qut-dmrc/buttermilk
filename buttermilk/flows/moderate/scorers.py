@@ -10,32 +10,34 @@ from promptflow.tracing import trace
 from dotenv import load_dotenv
 from promptflow.entities import InputSetting, DynamicList
 
-from datatools.chains.toxicity import *
-from datatools.chains.toxicity import TOXCLIENTS
-
+from buttermilk.toxicity.toxicity import *
+from buttermilk.toxicity.toxicity import ToxicityModel, TOXCLIENTS
 
 class Moderator(ToolProvider):
     """
     Doc reference :
     """
 
-    def __init__(self, client_name: str):
+    def __init__(self, model: str):
         load_dotenv()
-        self.client_name = client_name
+        self.model = model
         super().__init__()
 
-        # TODO: can we put this here?
-        # Get and instantiate the class from its string name
-        cls = globals()[self.client_name]
-        self.client: ToxicityModel = cls()
+
+    def __call__(self, content: str, **kwargs):
+        return self.moderate(content=content, **kwargs)
 
     @tool
-    def moderate(self, input_text: str) -> object:
-        response = self.client(input_text)
+    def moderate(self, content: str, **kwargs) -> object:
+        # TODO: can we put this here?
+        # Get and instantiate the class from its string name
+        cls = globals()[self.model]
+        client: ToxicityModel = cls()
+        response = client(content)
 
         return response
 
 if __name__ == '__main__':
-    moderator = Moderator(client_name="Perspective")
+    moderator = Moderator(model="Perspective")
     result = moderator.moderate("This is a test input.")
     print(result)

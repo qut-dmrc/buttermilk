@@ -1,7 +1,7 @@
 import datetime
 import json
 from cloudpathlib import AnyPath, CloudPath
-from pathlib import Path
+import pathlib
 import fsspec
 import requests
 import yaml
@@ -9,6 +9,7 @@ import re
 import pandas as pd
 import numpy as np
 import pydantic
+import uuid
 
 from typing import Any, List, Optional, TypeVar, Union
 
@@ -51,15 +52,15 @@ def read_file(path, auth_token: Optional[str] = None, allow_arbitrarily_large_do
         pass
     return download_limited(path, token=auth_token,allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads)
 
-def read_yaml(filename: Union[Path, str]) -> dict:
+def read_yaml(filename: Union[pathlib.Path, str]) -> dict:
     file = read_file(filename)
     return yaml.load(file, Loader=yaml.FullLoader)
 
-def read_json(filename: Union[Path, str]) -> dict:
+def read_json(filename: Union[pathlib.Path, str]) -> dict:
     file = read_file(filename)
     return json.loads(file)
 
-def read_text(filename: Union[Path, str]) -> str:
+def read_text(filename: Union[pathlib.Path, str]) -> str:
     file = read_file(filename)
     return file.decode()
 

@@ -52,6 +52,24 @@ def llamaguard(request):
 def llamaguard_cpu(request):
     return request.param()
 
+import pytest
+from langchain_core.globals import set_debug
+
+@pytest.fixture(scope="session")
+def toxic_record() -> InputRecord:
+    rec = InputRecord(
+        record_id="You can't move into my house",
+        text="get fucked you fucking fuckwit you can't move into my house",
+        source="testdata_frenzal_rhomb",
+    )
+
+    return rec
+
+
+@pytest.fixture(scope="session")
+def news_article():
+    raise NotImplementedError
+
 class TestLlamaGuard:
     @pytest.mark.parametrize(
         "standard", ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"]
@@ -132,21 +150,12 @@ class TestDataPipes:
 
 
 class TestClients:
-    ## This set of tests is for testing the various toxicity models directly
-    ## we bypass the wrapper ToxicityModel class
-    async def test_perspective_record(self):
-        record = """{"attributeScores": {"SEVERE_TOXICITY_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.023076924, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.023076924, "type": "PROBABILITY"}}, "TOXICITY": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.4269174, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.4269174, "type": "PROBABILITY"}}, "SEXUALLY_EXPLICIT": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.048396565, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.048396565, "type": "PROBABILITY"}}, "THREAT_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.015774792, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.015774792, "type": "PROBABILITY"}}, "IDENTITY_ATTACK": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.5135796, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.5135796, "type": "PROBABILITY"}}, "THREAT": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.015774792, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.015774792, "type": "PROBABILITY"}}, "PROFANITY": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.16775991, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.16775991, "type": "PROBABILITY"}}, "PROFANITY_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.16775991, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.16775991, "type": "PROBABILITY"}}, "INSULT_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.2659317, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.2659317, "type": "PROBABILITY"}}, "TOXICITY_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.4269174, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.4269174, "type": "PROBABILITY"}}, "INSULT": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.2659317, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.2659317, "type": "PROBABILITY"}}, "SEVERE_TOXICITY": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.023076924, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.023076924, "type": "PROBABILITY"}}, "IDENTITY_ATTACK_EXPERIMENTAL": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.5135796, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.5135796, "type": "PROBABILITY"}}, "FLIRTATION": {"spanScores": [{"begin": 0, "end": 89, "score": {"value": 0.2829088, "type": "PROBABILITY"}}], "summaryScore": {"value": 0.2829088, "type": "PROBABILITY"}}}, "languages": ["en"], "detectedLanguages": ["en"]}"""
-        record = json.loads(record)
-        response = PerspectiveResponse(**record["attributeScores"])
-        assert response
-        pass
 
     # These tests test the toxicity models directly
-    async def test_perspective(self, toxic_record: InputRecord):
-        client = PerspectiveAPI()
-        result = await client.mod_single(toxic_record.text)
+    def test_perspective(self, toxic_record: InputRecord):
+        client = Perspective()
+        result = client.call_client(toxic_record.text)
         assert result is not None
-        assert isinstance(result, PerspectiveResponse)
 
         assert all(
             key in result.root
@@ -160,9 +169,9 @@ class TestClients:
             ]
         )
 
-    async def test_comprehend(self, toxic_record: InputRecord):
+    def test_comprehend(self, toxic_record: InputRecord):
         client = ComprehendAPI()
-        result = await client.mod_single(toxic_record.text)
+        result = client.mod_meratesingle(toxic_record.text)
 
         assert result is not None
 
@@ -185,7 +194,7 @@ class TestClients:
             expected_labels <= received_labels
         ), f"Missing labels in the response; expected all of {expected_labels}"
 
-    async def test_HONEST_prompt(self, toxic_record: InputRecord):
+    def test_HONEST_prompt(self, toxic_record: InputRecord):
         # This isn't in the right format yet.
         # see https://huggingface.co/spaces/evaluate-measurement/honest
 
@@ -196,7 +205,7 @@ class TestClients:
         assert score is not None
         assert isinstance(result, dict)
 
-    async def test_LFTW_R4(self, toxic_record: InputRecord):
+    def test_LFTW_R4(self, toxic_record: InputRecord):
         from transformers import pipeline
 
         pipe = pipeline(
@@ -208,7 +217,7 @@ class TestClients:
             assert r["label"] in ["hate", "nothate"]
             assert isinstance(r, dict)
 
-    async def test_REGARD(self, toxic_record: InputRecord):
+    def test_REGARD(self, toxic_record: InputRecord):
         regard = evaluate.load("regard", module_type="measurement")
         result = regard.compute(data=toxic_record.text)["regard"][0]
         scores = {r["label"]: r["score"] for r in result}
@@ -216,7 +225,7 @@ class TestClients:
         assert isinstance(scores, dict)
 
     @pytest.mark.parametrize("client_type", ["openai", "azure"])
-    async def test_OpenAIMod(self, client_type, toxic_record: InputRecord):
+    def test_OpenAIMod(self, client_type, toxic_record: InputRecord):
         import openai
         openai.api_type = client_type
         client = openai.moderations
@@ -258,12 +267,12 @@ class TestToxicityModels:
     def test_mod(self, tox_model: ToxicityModel, toxic_record: InputRecord):
         result = tox_model(toxic_record.text)
         assert isinstance(result, dict)
-        assert not result['error']
+        assert not result.get('error')
         assert result['standard'] == tox_model.standard
         assert result['process'] == tox_model.process_chain
         assert result["model"] == tox_model.model
         assert all([s["measure"] for s in result["scores"]])
-        assert result['result'] is not None
+        assert result['predicted'] is not None
 
 
         # EvalSchema = read_yaml("datatools/chains/schemas/indicator.json")

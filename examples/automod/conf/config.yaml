@@ -27,6 +27,7 @@ run:
     columns:
   tasks:
     judge:
+      model_type: flow
       standards:
       template: judge.prompty
       results:
