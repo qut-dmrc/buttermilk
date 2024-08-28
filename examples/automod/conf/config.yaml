@@ -1,5 +1,10 @@
 name: automod
 job: judge
+hydra:
+  job:
+    env_set:
+      PF_WORKER_COUNT: 24
+      PF_BATCH_METHOD: fork
 project:
   secret_provider: azure
   logger: gcp

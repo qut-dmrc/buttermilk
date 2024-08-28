@@ -80,8 +80,8 @@ class Analyst():
         self.batch_info = kwargs
         self.tpl_variables = kwargs
         self.model = model
-        if template:
 
+        if template:
             # This is a bit of a hack to allow Prompty to interpret the template first, but then
             # leave the actual input variables for us to fill later with langchain.
             #self.tpl_variables = {"content":r"{{content}}"}
