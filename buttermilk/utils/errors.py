@@ -11,7 +11,6 @@ from vertexai.generative_models._generative_models import (
     ResponseValidationError,
 )
 
-from .exceptions import RateLimit
 from .log import getLogger
 
 logger = getLogger()
@@ -42,7 +41,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
                     ),
                     "code": e.body.get("innererror", {}).get("code"),
                 })
-            
+
             else:
                 error_dict.update(e.body)
         elif isinstance(e, (IndexError, StopCandidateException)):
@@ -53,7 +52,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             additional = try_extract_vertex_error(e)
             if "rate limit" in str(e).lower() or "quota" in str(e).lower():
                 raise RateLimit(str(e))
-            
+
             error_dict.update({"error": f"Prompt blocked by LLM", "error_info": additional})
 
         elif isinstance(e, BlockedPromptException):
@@ -65,7 +64,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
         elif isinstance(e, ValueError):
             if e.args and "filter" in e.args[0]:
                 error_dict.update({"error": "Prompt blocked by LLM"})
-                
+
         elif isinstance(e, HTTPError) and (e.code == 400 or e.code == 429):
             raise RateLimit(*e.args)
 

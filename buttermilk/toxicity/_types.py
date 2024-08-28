@@ -76,6 +76,7 @@ class EvalRecord(BaseModel):
     standard: Optional[str] = None  # The standard used for the evaluation
     source: Optional[str] = None
 
+    reasons: list[str] = Field(default=[], validation_alias="reason")
     predicted: Optional[Union[bool, None]] = Field(default=None, validation_alias="result")
     scores: list[Score] = []
     labels: list[str] = Field(default=[], validation_alias="label")

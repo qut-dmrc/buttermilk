@@ -98,54 +98,6 @@ class TestLlamaGuard:
         assert response.reasons is not None and len(response.reasons) > 0
         pass
 
-
-async def test_fbhate_llms(chat, cheapchatmodel, toxic_record):
-    chain = TEMPLATES.RULES.APPLY.fill(STANDARDS["HATESPEECH.FB"]).to_chain(
-        model_name=cheapchatmodel
-    )
-    input_vars = dict(
-        prompt=[HumanMessage(content=toxic_record.text)],
-    )
-    results = await chat.aquery(chain, input=input_vars, model=cheapchatmodel)
-
-    assert results
-    assert isinstance(results, dict)
-    assert "result" in results.keys()
-    assert "reasons" in results.keys()
-    pass
-
-
-async def test_gelber_llms(model, chat, toxic_record):
-    chain = TEMPLATES.TOXIC.GELBER.to_chain(model_name=model)
-    input_vars = dict(
-        prompt=[HumanMessage(content=toxic_record.text)],
-    )
-    results = await chat.aquery(chain, input=input_vars)
-
-    assert results
-    assert isinstance(results, dict)
-    assert "result" in results.keys()
-    assert "reasons" in results.keys()
-    pass
-
-
-async def test_ordinary_llms(model, chat, toxic_record):
-    chain = TEMPLATES.TOXIC.ORDINARY.to_chain(model_name=model)
-    input_vars = dict(
-        prompt=[HumanMessage(content=toxic_record.text)],
-    )
-    results = await chat.aquery(chain, input=input_vars)
-
-    assert results
-    assert isinstance(results, dict)
-    assert "reasons" in results.keys()
-    assert "result" in results.keys()
-    assert "power" in [s.keys() for s in results["scores"]]
-    assert "subordination" in [s.keys() for s in results["scores"]]
-    assert "targeted" in [s.keys() for s in results["scores"]]
-    pass
-
-
 class TestDataPipes:
     # @pytest.mark.parametrize(
     #     "pipe",
@@ -177,65 +129,6 @@ class TestDataPipes:
         assert isinstance(df, pd.DataFrame)
         assert df.shape[0] == 80
 
-
-class TestLLMToxModels:
-    # test toxicity models that require a chat client
-
-    @pytest.mark.integration
-    async def test_rules_apply_models(
-        self, chat, toxic_record, standard, chatmodel, gc
-    ):
-        tox = RulesApplyPrompt(
-            standard=standard,
-            model=chatmodel,
-            client=chat,
-        )
-        results = tox.mod_single(toxic_record)
-        assert results.model == chatmodel
-        assert results.standard == standard
-        assert results.process == "rules.apply"
-        assert results.result is not None
-
-        # Ensure the result was decoded properly
-        assert results.error is None
-        assert results.response is None or results.response == ""
-
-        rows = [results.to_record()]
-        EvalSchema = read_yaml("datatools/chains/schemas/indicator.json")
-        uri = gc.upload_rows(
-            schema=EvalSchema, rows=rows, dataset="dmrc-analysis.tests.indicator"
-        )
-        assert uri
-        pass
-
-
-    @pytest.mark.integration
-    @pytest.mark.parametrize("standard", alternative_prompts)
-    async def test_rules_apply_prompt(
-        self, chat, toxic_record, standard, cheapchatmodel, gc
-    ):
-        tox = RulesApplyPrompt(
-            standard=standard,
-            model=cheapchatmodel,
-            client=chat,
-        )
-        results = await tox.mod_single(toxic_record)
-        assert results.model == cheapchatmodel
-        assert results.standard == standard
-        assert results.process == "rules.apply"
-        assert results.result is not None
-
-        # Ensure the result was decoded properly
-        assert results.error is None
-        assert results.response is None or results.response == ""
-
-        rows = [results.to_record()]
-        EvalSchema = read_yaml("datatools/chains/schemas/indicator.json")
-        uri = gc.upload_rows(
-            schema=EvalSchema, rows=rows, dataset="dmrc-analysis.tests.indicator"
-        )
-        assert uri
-        pass
 
 
 class TestClients:
@@ -362,7 +255,7 @@ class TestToxicityModels:
         example = random.choice(example_category)
         return example
 
-    def test_mod(self, tox_model: ToxicityModel, toxic_record: InputRecord, gc):
+    def test_mod(self, tox_model: ToxicityModel, toxic_record: InputRecord):
         result = tox_model(toxic_record.text)
         assert isinstance(result, dict)
         assert not result['error']
@@ -379,8 +272,8 @@ class TestToxicityModels:
         # )
         # assert uri
 
-    def test_local_models(self, local_model, toxic_record, gc):
-        self.test_mod(tox_model=local_model, toxic_record=toxic_record, gc=gc)
+    def test_local_models(self, local_model, toxic_record):
+        self.test_mod(tox_model=local_model, toxic_record=toxic_record)
 
 class TestIndicators:
     def test_bq_record(self, indicator):

@@ -80,7 +80,8 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 from tqdm.asyncio import tqdm as atqdm
 
 
-from .errors import extract_error_info
+from buttermilk.runner._runner_types import Job
+from buttermilk.utils.errors import extract_error_info
 
 # The schema for the "runs" table in a BigQuery dataset
 RUNS_SCHEMA = """
@@ -92,9 +93,6 @@ RUNS_SCHEMA = json.loads(RUNS_SCHEMA)
 RUNS_TABLE = "dmrc-platforms.scrapers.runs"
 
 runner_ip: str | None = None
-
-gc = GCloud()
-logger = gc.logger
 
 
 ################################
