@@ -29,3 +29,53 @@ Authenticate to cloud providers, where all your secrets are stored.
 gcloud auth login --update-adc --force
 az login
 ```
+
+
+
+## Dependencies and example for GPU prediction (on Ubuntu 22.04)
+
+```shell
+#!/bin/sh
+export DEBIAN_FRONTEND=noninteractive
+export INSTALL_DIR=/mnt  # change as appropriate
+
+apt update && apt -y --no-install-recommends install neovim git zsh tmux curl pigz gnupg less nmap openssh-server python3 python3-pip rsync htop build-essential gcc g++ make psmisc keychain bmon jnettop ca-certificates
+
+# nvidia toolkit
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4 nvidia-smi
+
+# install gcloud sdk
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-cli -y
+
+# azure cli
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# miniconda
+mkdir -p $INSTALL_DIR/miniconda3 && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $INSTALL_DIR/miniconda3/miniconda.sh && bash $INSTALL_DIR/miniconda3/miniconda.sh -b -u -p $INSTALL_DIR/miniconda3 && rm $INSTALL_DIR/miniconda3/miniconda.sh && $INSTALL_DIR/miniconda3/bin/conda init
+
+# create environment
+conda create --name bm -y -c conda-forge -c pytorch -c nvidia python==3.11 poetry ipykernel google-crc32c pytorch torchvision torchaudio pytorch-cuda=12.4
+```
+
+At this point, log out and back in to activate the environment and check your install:
+```
+conda activate bm
+nvidia-smi
+
+# checkout repository
+mkdir -p $INSTALL_DIR/src && cd $INSTALL_DIR/src && git clone https://github.com/qut-dmrc/buttermilk.git
+
+# install dependencies
+cd buttermilk
+poetry source add --priority=explicit  torch124 https://download.pytorch.org/whl/cu124
+poetry add --source torch124 torch@latest torchaudio@latest torchvision@latest
+poetry install --with dev
+# set up cloud connections
+az login
+gcloud auth login --enable-gdrive-access --update-adc --force
+pf config set connection.provider=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
+pf config set trace.destination=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
+
+# Run
+python -m examples.automod.mod +experiments=drag_ots
+```
