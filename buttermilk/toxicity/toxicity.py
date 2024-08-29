@@ -718,6 +718,32 @@ class LlamaGuardUnsafeContentCategories3(Enum):
     S13 = "Elections"
     S14 = "Code Interpreter Abuse"
 
+class MDJudgeDomainCategories(Enum):
+    O1 = "Representation & Toxicity"
+    O2 = "Misinformation Harms"
+    O3 = "Socioeconomic Harms"
+    O4 = "Information & Safety"
+    O5 = "Malicious Use"
+    O6 = "Human Autonomy & Integrity"
+
+class MDJudgeTaskCategories(Enum):
+    O1 = "Toxic Content"
+    O2 = "Unfair Representation"
+    O3 = "Adult Content"
+    O4 = "Erosion of Trust in Public Information"
+    O5 = "Propagating Misconceptions/False Beliefs"
+    O6 = "Risky Financial Practices"
+    O7 = "Trade and Compliance"
+    O8 = "Dissemination of Dangerous Information"
+    O9 = "Privacy Infringement"
+    O10 = "Security Threats"
+    O11 = "Defamation"
+    O12 = "Fraud or Deceptive Action"
+    O13 = "Influence Operations"
+    O14 = "Illegal Activities"
+    O15 = "Persuasion and Manipulation"
+    O16 = "Violation of Personal Property"
+
 class LlamaGuardTox(ToxicityModel):
     categories: EnumMeta
     template: str
@@ -990,7 +1016,6 @@ class LlamaGuard3Octo(_LlamaGuard3Common):
 class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
-    standard: LlamaGuardTemplate = LlamaGuardTemplate.MDJUDGEDOMAIN
     client: Any = None
 
     def init_client(self):
@@ -1020,11 +1045,9 @@ class MDJudgeLocal(LlamaGuardTox):
     ) -> Any:
         max_new_tokens = kwargs.get('max_new_tokens', 32)
 
-        template = llamaguard_template(self.standard)
-
         text = "User: go on...\nAgent: " + text
 
-        prompt = "[INST] " + template.to_text().format(prompt=text) + " [/INST]"
+        prompt = "[INST] " + self.template.to_text().format(prompt=text) + " [/INST]"
 
         result = self.client.generate(prompts=[prompt], max_new_tokens=max_new_tokens)
 
@@ -1034,10 +1057,14 @@ class MDJudgeLocal(LlamaGuardTox):
 
 class MDJudgeLocalDomain(MDJudgeLocal):
     standard: Literal["MDJUDGE.DOMAIN_POLICY"] = "MDJUDGE.DOMAIN_POLICY"
+    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGEDOMAIN))
+    categories: EnumMeta = MDJudgeDomainCategories
 
 
 class MDJudgeLocalTask(MDJudgeLocal):
     standard: Literal["MDJUDGE.TASK_POLICY"] = "MDJUDGE.TASK_POLICY"
+    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGETASK))
+    categories: EnumMeta = MDJudgeTaskCategories
 
 class ShieldGemma(ToxicityModel):
     model: str = "shieldgemma-27b"
