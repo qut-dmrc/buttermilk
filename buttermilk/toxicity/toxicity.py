@@ -1154,7 +1154,6 @@ TOXCLIENTS = [
     LlamaGuard3HFInt8,
     LlamaGuard3Octo,
     GPTJT,
-    ShieldGemma
 ]
 
 TOXCLIENTS_NOT_AVAILABLE = [
@@ -1168,4 +1167,5 @@ TOXCLIENTS_LOCAL = [
     MDJudgeLocalTask,
     LlamaGuard2Local,
     LlamaGuard3LocalInt8,
+    ShieldGemma
 ]
