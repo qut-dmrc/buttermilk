@@ -1,11 +1,12 @@
 # @package _global_
 job: drag
 run:
+  style: local
   dataset:
     uri: gs://dmrc-platforms/data/drag_train.jsonl
     columns:
-      record_id: \${data.id}
-      content: \${data.alt_text}
+      record_id: id
+      content: alt_text
   tasks:
     judge:
       experiment_name: ots
@@ -17,3 +18,7 @@ run:
       - MDJudgeLocalTask
       - LlamaGuard2Local
       - LlamaGuard3LocalInt8
+      - HONEST
+      - LFTW
+      - REGARD
+      - GPTJT

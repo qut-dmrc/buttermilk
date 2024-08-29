@@ -58,7 +58,7 @@ conda create --name bm -y -c conda-forge -c pytorch -c nvidia python==3.11 poetr
 ```
 
 At this point, log out and back in to activate the environment and check your install:
-```
+```shell
 conda activate bm
 nvidia-smi
 
@@ -75,6 +75,9 @@ az login
 gcloud auth login --enable-gdrive-access --update-adc --force
 pf config set connection.provider=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
 pf config set trace.destination=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
+
+# probably need to set some environment variables
+echo "POETRY_CACHE_DIR=/mnt/cache/poetry\nHF_HOME=/mnt/cache/hf\nPF_WORKER_COUNT=24\nPF_BATCH_METHOD=fork" | tee -a /mnt/src/buttermilk/.env
 
 # Run
 python -m examples.automod.mod +experiments=drag_ots
