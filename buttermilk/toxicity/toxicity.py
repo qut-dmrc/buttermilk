@@ -171,6 +171,7 @@ class ToxicityModel(BaseModel):
             # Retry up to five times before giving up
             stop=stop_after_attempt(5),
     )
+    @trace
     def __call__(self, text: str, record_id: Optional[str] = None) -> dict:
         if not text or text.strip() == '':
             response = EvalRecord(
@@ -751,7 +752,6 @@ class LlamaGuardTox(ToxicityModel):
     def make_prompt(self, content):
         # Load the message info into the output
         agent_type = "Agent"
-        content = f"{agent_type}: {content}"
         content = (
             "[INST] "
             + self.template.format(prompt=content, agent_type=agent_type)
@@ -1047,7 +1047,7 @@ class MDJudgeLocal(LlamaGuardTox):
 
         text = "User: go on...\nAgent: " + text
 
-        prompt = "[INST] " + self.template.to_text().format(prompt=text) + " [/INST]"
+        prompt = "[INST] " + self.template.format(prompt=text) + " [/INST]"
 
         result = self.client.generate(prompts=[prompt], max_new_tokens=max_new_tokens)
 
@@ -1071,6 +1071,7 @@ class ShieldGemma(ToxicityModel):
     process_chain: str = "hftransformers"
     standard: str = "shieldgemma-27b"
     client: Any = None
+    tokenizer: Any = None
 
     def init_client(self):
         from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -1083,6 +1084,7 @@ class ShieldGemma(ToxicityModel):
         )
         self.tokenizer = tokenizer
         self.client = model
+        return self.client
 
     @trace
     def call_client(
@@ -1165,37 +1167,3 @@ class ToxicChat(ToxicityModel):
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)
-
-TOXCLIENTS = [
-    Comprehend,
-    Perspective,
-    HONEST,
-    LFTW,
-    REGARD,
-    AzureContentSafety,
-    AzureModerator,
-    OpenAIModerator,
-    LlamaGuard1ReplicateAWQ,
-    LlamaGuard1Together,
-    LlamaGuard2Replicate,
-    LlamaGuard2Together,
-    LlamaGuard3Together,
-    LlamaGuard3HF,
-    LlamaGuard3HFInt8,
-    LlamaGuard3Octo,
-    GPTJT,
-]
-
-TOXCLIENTS_NOT_AVAILABLE = [
-    LlamaGuard2HF,
-]
-BAD_MODELS = []
-
-TOXCLIENTS_LOCAL = [
-    LlamaGuard3Local,
-    MDJudgeLocalDomain,
-    MDJudgeLocalTask,
-    LlamaGuard2Local,
-    LlamaGuard3LocalInt8,
-    ShieldGemma
-]
