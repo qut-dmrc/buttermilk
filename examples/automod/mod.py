@@ -22,13 +22,13 @@ BASE_DIR = Path(__file__).absolute().parent
 import torch
 import datetime
 
+from buttermilk.toxicity  import *
 
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 
 def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], batch_name: str) -> pd.DataFrame:
 
-    from buttermilk.toxicity.toxicity  import TOXCLIENTS, TOXCLIENTS_LOCAL
     pflocal = LocalPFClient()
     init_vars = dict(model = model)
 

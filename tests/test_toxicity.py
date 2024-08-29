@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from buttermilk.toxicity.toxicity import *
+from buttermilk.toxicity import *
+from buttermilk.toxicity import TOXCLIENTS
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
