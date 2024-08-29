@@ -11,13 +11,7 @@ from pydantic.v1 import validator
 from pyexpat import model
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
-from datatools.gcloud import GCloud
-
 MODIFIED_SYSTEM_PROMPT = """You are a helpful, accurate, and honest assistant. Always answer as helpfully as possible. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""  # noqa: E501
-
-gc = GCloud()
-logger = gc.logger
-
 
 class Llama2ChatMod(Llama2Chat):
     system_message: SystemMessage = SystemMessage(content=MODIFIED_SYSTEM_PROMPT)
@@ -123,8 +117,7 @@ class HFTransformer(LLM):
 
         result = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
         if not isinstance(result, str):
-            logger.warning(
-                f"DEBUG TODO: LLM Result for {self.name} is not a string: {result}"
+            raise ValueError(f"DEBUG TODO: LLM Result for {self.name} is not a string: {result}"
             )
         else:
             result = result.lower().strip()
