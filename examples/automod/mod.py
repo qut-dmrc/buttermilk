@@ -75,6 +75,30 @@ def run_flow(*, logger, model: str, dataset: str, column_mapping: dict[str,str],
     details = pflocal.get_details(run.name)
     return details
 
+def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
+    bm = BM()
+    logger = bm.logger
+    results = []
+    run_meta = {"name": batch_name, "model_type": model_type, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
+
+    init_vars = dict(model = model)
+    if model_type == 'ots':
+        flow = Moderator(**init_vars)
+    else:
+        flow = Analyst(**init_vars)
+
+    for _, row in pd.read_json(dataset, orient='records', lines=True).sample(frac=1).iterrows():
+        input_vars = {key: row[mapped] for key, mapped in bm.cfg.run.dataset.columns}
+        details = flow(**input_vars)
+        details['run_meta'] = run_meta.copy()
+        results.append(details)
+
+    logger.info(
+        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
+    )
+    results = pd.DataFrame(results)
+    return results
+
 def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
     bm = BM()
     logger = bm.logger
@@ -86,7 +110,6 @@ def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,
     elif model_type == 'flow':
         details = run_flow(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, standards_path=standards_path, template_path=template_path, batch_name=batch_name)
 
-
     # duplicate run_info metadata for each row
     run_meta = pd.DataFrame.from_records([run_meta for _ in range(details.shape[0])])
     details = pd.concat([details, run_meta], axis='columns')
@@ -95,6 +118,7 @@ def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,
     results = pd.concat([results, details], axis='index')
 
     return results
+
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name
@@ -109,10 +133,6 @@ def run(cfg: DictConfig) -> None:
     logger = bm.logger
     results = pd.DataFrame()
 
-    #Set to Fork instead of Spawn
-    import os
-    os.environ['PF_BATCH_METHOD']='fork'
-
     dataset = cache_data(cfg.run.dataset.uri)
     logger.info(f"Caching local copy of dataset from {cfg.run.dataset.uri} to {dataset}")
 
@@ -123,12 +143,21 @@ def run(cfg: DictConfig) -> None:
             batch_name = f"{bm._run_id}_{model}_{cfg.run.tasks.judge.experiment_name}"
             columns = OmegaConf.to_object(cfg.run.dataset.columns)
             model_type = cfg.run.tasks.judge.model_type
-            df = run_batch(model=model,model_type=model_type,
-                           dataset=dataset,
-                           column_mapping=columns,
-                           standards_path=cfg.run.tasks.judge.standards,
-                           template_path=cfg.run.tasks.judge.template,
-                           batch_name=batch_name)
+            logger.info(f"Running {batch_name} with {model_type} on cfg.run.get('style', 'pf batch')")
+            if cfg.run.get("style") == 'local':
+                df = run_local(model=model,model_type=model_type,
+                            dataset=dataset,
+                            column_mapping=columns,
+                            standards_path=cfg.run.tasks.judge.standards,
+                            template_path=cfg.run.tasks.judge.template,
+                            batch_name=batch_name)
+            else:
+                df = run_batch(model=model,model_type=model_type,
+                            dataset=dataset,
+                            column_mapping=columns,
+                            standards_path=cfg.run.tasks.judge.standards,
+                            template_path=cfg.run.tasks.judge.template,
+                            batch_name=batch_name)
             results = pd.concat([results, df])
         except Exception as e:
             logger.error(f"Unhandled error in our flow: {e}")
