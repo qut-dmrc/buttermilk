@@ -19,7 +19,7 @@ from buttermilk.utils.utils import read_text
 from omegaconf import DictConfig, OmegaConf
 from buttermilk.apis import Llama2ChatMod, replicatellama2, replicatellama3, HFInferenceClient, HFLlama270bn, HFPipeline
 BASE_DIR = Path(__file__).absolute().parent
-
+import torch
 import datetime
 
 
@@ -98,6 +98,7 @@ def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,
     )
     results = pd.DataFrame(results)
     del flow
+    torch.cuda.empty_cache()
     gc.collect()
     return results
 
