@@ -74,12 +74,12 @@ class Singleton:
 
 class BM(Singleton, BaseModel):
 
-    cfg: Optional[MutableMapping[Any, Any]] = Field(default_factory=lambda: BM.get_config())
+    cfg: Any
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
 
     save_dir: Optional[str] = None
 
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self._get_save_dir(self.save_dir)
@@ -101,26 +101,6 @@ class BM(Singleton, BaseModel):
         run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
 
         return run_id
-
-    @classmethod
-    def get_config(
-        cls, config_dir: str = "conf", config_name: str = "config"
-    ) -> DictConfig:
-        """Load the configuration from the given directory and file.
-
-        Args:
-            config_dir: The directory containing the configuration file.
-            config_name: The name of the configuration file.
-
-        Returns:
-            The configuration dictionary.
-        """
-        try:
-            cfg = compose(config_name=config_name)
-        except AssertionError:
-            with initialize(config_path=config_dir, version_base="1.3"):
-                cfg = compose(config_name=config_name)
-        return cfg
 
     @cached_property
     def metadata(self):# -> dict[str, Any]:
