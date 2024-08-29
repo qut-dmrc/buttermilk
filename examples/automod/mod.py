@@ -4,7 +4,7 @@ from multiprocessing import Process
 from pathlib import Path
 from random import shuffle
 from tempfile import NamedTemporaryFile
-
+import gc
 import cloudpathlib
 import pandas as pd
 from sqlalchemy import column
@@ -97,6 +97,8 @@ def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,
         f"Run {batch_name} completed."
     )
     results = pd.DataFrame(results)
+    del flow
+    gc.collect()
     return results
 
 def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
