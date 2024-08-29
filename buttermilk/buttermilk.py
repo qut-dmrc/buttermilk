@@ -35,8 +35,8 @@ from cloudpathlib import AnyPath, CloudPath
 from google.cloud.logging.handlers import CloudLoggingHandler
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from hydra import compose, initialize
-from omegaconf import DictConfig, OmegaConf
-from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr,
+from omegaconf import DictConfig, OmegaConf, SCMode
+from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
                       model_validator, root_validator)
 from promptflow.tracing import start_trace, trace
 from  typing import  Self, MutableMapping
@@ -81,13 +81,10 @@ class BM(Singleton, BaseModel):
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=False)
 
-    def __repr__(self):
-        return f"BMSingleton(name={self.cfg.name}, job={self.cfg.job}, run_id={self._run_id})"
-
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self._get_save_dir(self.save_dir)
         self.setup_logging()
-        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg.name, job=self.cfg.job)
+        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
 
     @classmethod
     def make_run_id(cls) -> str:
@@ -128,8 +125,8 @@ class BM(Singleton, BaseModel):
     @cached_property
     def metadata(self):# -> dict[str, Any]:
         labels = {
-            "function_name": self.cfg.name,
-            "job": self.cfg.job,
+            "function_name": self.cfg['name'],
+            "job": self.cfg['job'],
             "logs": self._run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
@@ -204,8 +201,8 @@ class BM(Singleton, BaseModel):
             labels={
                 "project_id": "dmrc-platforms",
                 "location": "us-central1",
-                "namespace": self.cfg.name,
-                "job": self.cfg.job,
+                "namespace": self.cfg['name'],
+                "job": self.cfg['job'],
                 "task_id": self._run_id,
             },
         )
@@ -217,7 +214,7 @@ class BM(Singleton, BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.cfg.name, labels=self.metadata
+            client=client, resource=resource, name=self.cfg['name'], labels=self.metadata
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -249,10 +246,10 @@ class BM(Singleton, BaseModel):
                     f"save_path must be a string, Path, or CloudPath, got {type(value)}"
                 )
         else:
-            save_dir = self.cfg.project.get('save_dir')
+            save_dir = self.cfg['project'].get('save_dir')
             if not save_dir:
                 save_dir = (
-                    f"gs://{self.cfg.project.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self._run_id}"
+                    f"gs://{self.cfg['project']['gcp']['bucket']}/runs/{self.cfg['name']}/{self.cfg['job']}/{self._run_id}"
                 )
 
         # # Make sure the save directory is a valid path

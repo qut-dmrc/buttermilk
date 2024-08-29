@@ -1,0 +1,35 @@
+# @package _global_
+name: climateframes
+job: interactive_compare_instructions
+project:
+  secret_provider: azure
+  logger: gcp
+  models_secret: models
+  save_dest: gcp
+  save_dir:
+  gcp:
+    project: dmrc-analysis
+    region: us-central1
+    bucket: dmrc-analysis
+  azure:
+    vault: https://suzorvault.vault.azure.net/
+    resource_group: rg-suzor_ai
+run:
+  frames:
+    dataset:
+      uri: gs://dmrc-platforms/data/climate_articles.jsonl
+    init:
+      prompt_template_path: generic.prompty
+      system_prompt: system_frames.jinja2
+      output_format: json_frames.jinja2
+      instructions: climate_activism.jinja2
+      name: climate_activism
+      model: sonnet
+    models: ["sonnet", "gemini15pro", "gpt4o", "llama31_70b"]
+    variants:
+    - name: alt_output
+      instructions: climate_activism_speakerfirst_alt_output.jinja2
+    - name: speakerfirst
+      instructions: climate_activism_speakerfirst_alt.jinja2
+    - name: climate_activism
+      instructions: climate_activism.jinja2
