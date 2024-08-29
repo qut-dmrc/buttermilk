@@ -88,7 +88,7 @@ def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,
         flow = Analyst(**init_vars)
 
     for _, row in pd.read_json(dataset, orient='records', lines=True).sample(frac=1).iterrows():
-        input_vars = {key: row[mapped] for key, mapped in bm.cfg.run.dataset.columns}
+        input_vars = {key: row[mapped] for key, mapped in bm.cfg.run.dataset.columns.items()}
         details = flow(**input_vars)
         details['run_meta'] = run_meta.copy()
         results.append(details)
@@ -143,7 +143,7 @@ def run(cfg: DictConfig) -> None:
             batch_name = f"{bm._run_id}_{model}_{cfg.run.tasks.judge.experiment_name}"
             columns = OmegaConf.to_object(cfg.run.dataset.columns)
             model_type = cfg.run.tasks.judge.model_type
-            logger.info(f"Running {batch_name} with {model_type} on cfg.run.get('style', 'pf batch')")
+            logger.info(f"Running {batch_name} with {model_type} on {cfg.run.get('style', 'pf batch')}")
             if cfg.run.get("style") == 'local':
                 df = run_local(model=model,model_type=model_type,
                             dataset=dataset,

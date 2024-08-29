@@ -1,26 +1,4 @@
 # @package _global_
-name: automod
-hydra:
-  job:
-    env_set:
-      PF_WORKER_COUNT: 24
-      PF_BATCH_METHOD: fork
-project:
-  secret_provider: azure
-  logger: gcp
-  models_secret: models
-  save_dest: gcp
-  save_dir:
-  gcp:
-    project: dmrc-analysis
-    region: us-central1
-    bucket: dmrc-analysis
-  azure:
-    vault: https://suzorvault.vault.azure.net/
-    resource_group: rg-suzor_ai
-  aws:
-    secret_name: secret
-    region: us-east-1
 job: drag
 run:
   style: local
