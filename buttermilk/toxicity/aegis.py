@@ -12,6 +12,7 @@ from typing import (
     Tuple,
     Union,
 )
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -51,7 +52,7 @@ class Aegis(LlamaGuardTox):
     process_chain: str = "transformers_peft"
     standard: str = "aegis"
     client: Any = None
-    template: str = Field(default_factory=lambda: read_text("templates/aegis.txt"))
+    template: str = Field(default_factory=lambda: read_text(Path(__file__).parent / "templates/aegis.txt"))
     categories: EnumMeta = AegisCategories
 
     def init_client(self):
