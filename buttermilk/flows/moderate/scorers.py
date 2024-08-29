@@ -4,8 +4,8 @@ from typing import List, Union, Dict
 from promptflow.tracing import trace
 from dotenv import load_dotenv
 
-from buttermilk.toxicity.toxicity import *
-from buttermilk.toxicity.toxicity import ToxicityModel
+from buttermilk.toxicity import *
+from buttermilk.toxicity import ToxicityModel
 
 class Moderator():
     """
