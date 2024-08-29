@@ -63,28 +63,42 @@ class Singleton:
     _instances: ClassVar[Dict] = {}  # type: ignore
 
     def __new__(cls, *args, **kwargs):  # type: ignore
-        key = (cls, tuple(args), _convert_to_hashable_type(kwargs))
-        if key not in cls._instances:
-            cls._instances[key] = super().__new__(cls)
-        return cls._instances[key]
+        key = cls.__qualname__
+        if key not in _REGISTRY:
+            _REGISTRY[key] = super().__new__(cls)
+        return _REGISTRY[key]
 
     def __deepcopy__(self, memo: Dict[int, Any]) -> Any:
         """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
         return self
 
 class BM(Singleton, BaseModel):
-
-    cfg: Any
+    cfg: Optional[Any] = Field(default_factory=lambda: _REGISTRY.get('cfg'))
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
-
     save_dir: Optional[str] = None
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
+    @field_validator('cfg', mode='before')
+    def get_config(cls, v):
+        if _REGISTRY.get('cfg'):
+            if v:
+                raise ValueError("Config passed in but we already have one loaded.")
+            else:
+                return _REGISTRY['cfg']
+        elif v:
+            _REGISTRY['cfg'] = v
+            return v
+        else:
+            raise ValueError("No config passed in on first initialisation.")
+
     def model_post_init(self, __context: Any) -> None:
-        self.save_dir = self._get_save_dir(self.save_dir)
-        self.setup_logging()
-        start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
+        if not _REGISTRY.get('init'):
+            self.save_dir = self._get_save_dir(self.save_dir)
+            self.setup_logging()
+            start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
+            _REGISTRY['init'] = True
+
 
     @classmethod
     def make_run_id(cls) -> str:
