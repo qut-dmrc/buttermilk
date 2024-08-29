@@ -94,7 +94,7 @@ def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,
         results.append(details)
 
     logger.info(
-        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
+        f"Run {batch_name} completed."
     )
     results = pd.DataFrame(results)
     return results
