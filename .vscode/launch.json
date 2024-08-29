@@ -24,7 +24,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=drag_ots",
+                "+experiments=gpu",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

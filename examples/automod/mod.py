@@ -138,7 +138,7 @@ def run(cfg: DictConfig) -> None:
 
     models = OmegaConf.to_object(cfg.run.tasks.judge.models)
     shuffle(list(models))
-    for model in cfg.run.tasks.judge.models:
+    for model in models:
         try:
             batch_name = f"{bm._run_id}_{model}_{cfg.run.tasks.judge.experiment_name}"
             columns = OmegaConf.to_object(cfg.run.dataset.columns)
