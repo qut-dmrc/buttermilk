@@ -129,7 +129,7 @@ def cache_data(uri: str) -> str:
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def run(cfg: DictConfig) -> None:
     pass
-    bm = BM()
+    bm = BM(cfg=cfg)
     logger = bm.logger
     results = pd.DataFrame()
 
