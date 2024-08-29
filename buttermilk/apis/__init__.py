@@ -1,4 +1,4 @@
-from .hf import HFInferenceClient, HFLlama270bn, HFPipeline, Llama2ChatMod
+from .hf import HFInferenceClient, HFLlama270bn, HFPipeline, Llama2ChatMod, HFTransformer
 from .replicate import replicatellama2, replicatellama3
 
 __all__ = [
@@ -8,4 +8,5 @@ __all__ = [
     "HFInferenceClient",
     "HFLlama270bn",
     "HFPipeline",
+    "HFTransformer"
 ]

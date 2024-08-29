@@ -75,6 +75,7 @@ from tenacity import (
 
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import read_yaml, scrub_serializable
+from buttermilk.apis import HFTransformer, HFInferenceClient
 
 PerspectiveAttributes = Literal[
     "TOXICITY",
@@ -562,9 +563,11 @@ class LFTW(ToxicityModel):
     client: Any = None
 
     def init_client(self):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         return transformers.pipeline(
             "text-classification",
             model="facebook/roberta-hate-speech-dynabench-r4-target",
+                device=device
         )
     @trace
     def call_client(
