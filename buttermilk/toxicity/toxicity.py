@@ -614,7 +614,7 @@ class GPTJT(ToxicityModel):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         return pipeline(
             "text-generation", model="togethercomputer/GPT-JT-Moderation-6B",
-                device=device
+                device=device,max_new_tokens=1000
         )
     @trace
     def call_client(
