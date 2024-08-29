@@ -166,7 +166,7 @@ def run(cfg: DictConfig) -> None:
             logger.error(f"Unhandled error in our flow: {e}")
             break
 
-    bm.save(results)
+    bm.save(results.reset_index())
     Path(dataset).unlink(missing_ok=True)
 
 
