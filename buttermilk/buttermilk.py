@@ -105,6 +105,10 @@ class BM(Singleton, BaseModel):
 
     @classmethod
     def make_run_id(cls) -> str:
+        global _REGISTRY
+        if run_id := _REGISTRY.get("run_id"):
+            return run_id
+
         # Create a unique identifier for this run
         node_name = platform.uname().node
         username = psutil.Process().username()
@@ -116,7 +120,7 @@ class BM(Singleton, BaseModel):
             datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
 
         run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-
+        _REGISTRY["run_id"] = run_id
         return run_id
 
     @cached_property

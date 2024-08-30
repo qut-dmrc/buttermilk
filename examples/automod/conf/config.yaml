@@ -21,29 +21,10 @@ project:
   aws:
     secret_name: secret
     region: us-east-1
-run:
-  dataset:
-    uri:
-    columns:
-  tasks:
-    judge:
-      model_type: flow
-      standards:
-      template: judge.prompty
-      results:
-        dest: bq
-        dataset: dmrc-analysis.toxicity.standards
-        schema: flows/common/rules.schema.json
-      models:
-      - gpt4o
-      - llama31_70b
-      - sonnet
-      - gemini15pro
-      - opus
-      - llama31_405b
-      - llama31_8b
-      - haiku
-    metrics:
-      dest: bq
-      dataset: dmrc-analysis.toxicity.metrics
-      schema: flows/common/metrics.schema.json
+dataset:
+  name:
+  uri:
+  columns:
+experiments:
+  judge:
+  moderate:

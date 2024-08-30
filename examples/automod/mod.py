@@ -21,107 +21,35 @@ from buttermilk.apis import Llama2ChatMod, replicatellama2, replicatellama3, HFI
 BASE_DIR = Path(__file__).absolute().parent
 import torch
 import datetime
-
+import tqdm
+from itertools import cycle
 from buttermilk.toxicity  import *
 
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 
-def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], batch_name: str, worker_count: int = 10) -> pd.DataFrame:
-
-    pflocal = LocalPFClient()
-    init_vars = dict(model = model)
-
-    flow = Moderator(**init_vars)
-
-    run = pflocal.run(
-            flow=flow,
-            data=dataset,
-            init_vars=init_vars,
-            column_mapping=column_mapping,
-            stream=False,
-            name=batch_name,
-            timeout=150,
-            worker_count=worker_count
-        )
-    logger.info(
-        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
-    )
-
-    details = pflocal.get_details(run.name)
-    return details
-
-def run_flow(*, logger, model: str, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
-    pflocal = LocalPFClient()
-
-    standards = read_text(standards_path)
-    init_vars = dict(model = model, criteria=standards, template=template_path)
-
-    flow = Analyst(**init_vars)
-
-    run = pflocal.run(
-            flow=flow,
-            data=dataset,
-            init_vars=init_vars,
-            column_mapping=column_mapping,
-            stream=False,
-            name=batch_name,
-            timeout=150,
-        )
-
-    logger.info(
-        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
-    )
-
-    details = pflocal.get_details(run.name)
-    return details
-
-def run_local(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
-    bm = BM()
-    logger = bm.logger
+def run_local(*, target: str, model: str, colour:str='magenta', dataset: str, column_mapping: dict[str,str], init: dict, batch_id: dict) -> pd.DataFrame:
     results = []
-    run_meta = {"name": batch_name, "model_type": model_type, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
+    run_meta = {"timestamp": pd.to_datetime(datetime.datetime.now())}
+    run_meta.update(batch_id)
 
-    init_vars = dict(model = model)
-    if model_type == 'ots':
-        flow = Moderator(**init_vars)
+    if target == 'moderate':
+        flow = Moderator(**init)
     else:
-        flow = Analyst(**init_vars)
-
-    for _, row in pd.read_json(dataset, orient='records', lines=True).sample(frac=1).iterrows():
-        input_vars = {key: row[mapped] for key, mapped in bm.cfg.run.dataset.columns.items()}
+        flow = Analyst(**init)
+    df = pd.read_json(dataset, orient='records', lines=True).sample(frac=1)
+    for _, row in tqdm.tqdm(df.iterrows(),colour=colour):
+        input_vars = {key: row[mapped] for key, mapped in column_mapping.items()}
         details = flow(**input_vars)
         details['run_meta'] = run_meta.copy()
         results.append(details)
 
-    logger.info(
-        f"Run {batch_name} completed."
-    )
     results = pd.DataFrame(results)
     del flow
     torch.cuda.empty_cache()
     gc.collect()
     return results
 
-def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,str], standards_path: str, template_path: str, batch_name: str) -> pd.DataFrame:
-    bm = BM()
-    logger = bm.logger
-    results = pd.DataFrame()
-    run_meta = {"name": batch_name, "model_type": model_type, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
-
-    if model_type == 'ots':
-        details = run_ots(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, batch_name=batch_name, worker_count=bm.cfg.run.get('worker_count', 4))
-    elif model_type == 'flow':
-        details = run_flow(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, standards_path=standards_path, template_path=template_path, batch_name=batch_name)
-
-    # duplicate run_info metadata for each row
-    run_meta = pd.DataFrame.from_records([run_meta for _ in range(details.shape[0])])
-    details = pd.concat([details, run_meta], axis='columns')
-
-    # Add to any other results we have
-    results = pd.concat([results, details], axis='index')
-
-    return results
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -137,38 +65,40 @@ def run(cfg: DictConfig) -> None:
     logger = bm.logger
     results = pd.DataFrame()
 
-    dataset = cache_data(cfg.run.dataset.uri)
-    logger.info(f"Caching local copy of dataset from {cfg.run.dataset.uri} to {dataset}")
 
-    models = OmegaConf.to_object(cfg.run.tasks.judge.models)
-    shuffle(list(models))
-    for model in models:
-        try:
-            batch_name = f"{bm._run_id}_{model}_{cfg.run.tasks.judge.experiment_name}"
-            columns = OmegaConf.to_object(cfg.run.dataset.columns)
-            model_type = cfg.run.tasks.judge.model_type
-            logger.info(f"Running {batch_name} with {model_type} on {cfg.run.get('style', 'pf batch')}")
-            if cfg.run.get("style") == 'local':
-                df = run_local(model=model,model_type=model_type,
-                            dataset=dataset,
-                            column_mapping=columns,
-                            standards_path=cfg.run.tasks.judge.standards,
-                            template_path=cfg.run.tasks.judge.template,
-                            batch_name=batch_name)
-            else:
-                df = run_batch(model=model,model_type=model_type,
-                            dataset=dataset,
-                            column_mapping=columns,
-                            standards_path=cfg.run.tasks.judge.standards,
-                            template_path=cfg.run.tasks.judge.template,
-                            batch_name=batch_name)
-            results = pd.concat([results, df])
-        except Exception as e:
-            logger.error(f"Unhandled error in our flow: {e}")
-            break
+    data_file = cache_data(cfg.dataset.uri)
+    logger.info(f"Cached local copy of dataset {cfg.dataset.name} from {cfg.run.dataset.uri} to {data_file}")
+
+    # Create a cycle iterator for the progress bar colours
+    bar_colours =  ["cyan", "yellow","magent","green", "blue"]
+    colour_cycle = cycle(bar_colours)
+
+    for step, step_config in cfg.experiments.keys():
+        logger.debug(f"Running {step} {step_config.name}")
+        models: list = OmegaConf.to_object(step_config.get('models', []))
+        shuffle(models)
+        for model in models:
+            try:
+                batch_id = dict(run_id=bm._run_id,
+                                experiment=step_config.name,
+                                model=model,
+                                dataset=cfg.dataset.name)
+
+                logger.info(f"Running batch: {batch_id}")
+                df = run_local(model=model, target=step,
+                                dataset=data_file,
+                                column_mapping=cfg.dataset.columns,
+                                batch_id=batch_id,
+                                colour=next(colour_cycle),
+                                init=step_config.init)
+                logger.info(f"Successfully  completed batch: {batch_id}  with {df.shape[0]} results.")
+                results = pd.concat([results, df])
+            except Exception as e:
+                logger.error(f"Unhandled error in our flow: {e}")
+                break
 
     bm.save(results.reset_index())
-    Path(dataset).unlink(missing_ok=True)
+    Path(data_file).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
