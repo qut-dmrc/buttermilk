@@ -77,7 +77,7 @@ def save(data, **params):
     for method in upload_methods:
         try:
             logger.debug(f"Trying to save data using {method.__name__}.")
-            destination = method(data=data, uri=uri)
+            destination = method(data=data, uri=uri, save_dir=save_dir)
             logger.info(
                 f"Saved data using {method.__name__} to: {destination}."
             )

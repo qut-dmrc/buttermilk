@@ -1,3 +1,3 @@
 from logging import getLogger
-
-logger = getLogger("buttermilk")
+_LOGGER_NAME = "buttermilk"
+logger = getLogger(_LOGGER_NAME)

@@ -45,10 +45,10 @@ from .utils import save
 import types
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
-_LOGGER_NAME = "buttermilk"
+from .utils.log import logger
+
 _REGISTRY = {}
 
-logger=getLogger(_LOGGER_NAME)
 
 T = TypeVar("T", bound="BM")
 
@@ -158,12 +158,14 @@ class BM(Singleton, BaseModel):
 
     @property
     def logger(self) -> logging.Logger:
-        return getLogger(_LOGGER_NAME)
+        global logger
+        return logger
 
     def setup_logging(
         self,
         verbose=False,
     ) -> None:
+        global logger
 
         # Quieten other loggers down a bit (particularly requests and google api client)
         root_logger = logging.getLogger()
@@ -174,9 +176,6 @@ class BM(Singleton, BaseModel):
                 logging.getLogger(logger_str).setLevel(logging.WARNING)
             except:
                 pass
-
-
-        logger = getLogger(_LOGGER_NAME)
 
         for handler in logger.handlers:
             logger.removeHandler(handler)
