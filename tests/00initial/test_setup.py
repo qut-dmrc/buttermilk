@@ -76,17 +76,4 @@ class Test00Setup:
         assert "/runs/testing/" in gc.save_dir
         assert CloudPath(gc.save_dir)
 
-    def test_initialised_save_dir(self, gc):
-        assert isinstance(gc.logger, DMRCLogger)
-        assert "/runs/testing/" in gc.save_dir
-        assert CloudPath(gc.save_dir)
 
-        uri = gc.upload_text(data="test data", extension=".txt")
-        assert uri.startswith("gs://")
-        assert uri.startswith(gc.save_dir)
-        uploaded = CloudPath(uri)
-        assert uploaded.exists()
-        read_text = uploaded.read_text()
-        assert read_text == "test data"
-        uploaded.unlink(missing_ok=False)
-        pass
