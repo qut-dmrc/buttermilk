@@ -789,12 +789,16 @@ class LlamaGuardTox(ToxicityModel):
     @trace
     def interpret(self, response: Any) -> EvalRecord:
         reasons = []
-
+        explanation = ''
         try:
-            answer, labels = response.strip().split("\n")
+            answer, labels, explanation = response.strip().split("\n")
         except ValueError:
-            answer = response
-            labels = ""
+            try:
+                answer, labels = response.strip().split("\n")
+            except ValueError:
+                answer = response
+                labels = ""
+
 
         try:
             for r in labels.split(','):
@@ -812,16 +816,17 @@ class LlamaGuardTox(ToxicityModel):
         if answer[:4] == "safe":
             outcome.predicted = False
             outcome.labels = ["safe"] + reasons
-
+            explanation = explanation or 'safe'
             for reason in reasons:
                 outcome.scores.append(
                     Score(measure=str(reason).upper(),
-                        reasons=["safe"], score=0.0, result=False
+                        reasons=[explanation], score=0.0, result=False
                     )
                 )
 
         elif answer[:6] == "unsafe":
             outcome.predicted = True
+            explanation = explanation or 'unsafe'
             if not reasons:
                 reasons = ["unknown"]
                 outcome.error = f"Invalid reasons returned from LLM: {answer}"
@@ -829,7 +834,7 @@ class LlamaGuardTox(ToxicityModel):
             for reason in reasons:
                 outcome.scores.append(
                     Score(measure=str(reason).upper(),
-                        reasons=["unsafe"], score=1.0, result=True,
+                        reasons=[explanation], score=1.0, result=True,
                     )
                 )
             outcome.labels = ["unsafe"] + reasons

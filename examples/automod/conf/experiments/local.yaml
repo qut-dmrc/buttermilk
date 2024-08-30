@@ -1,0 +1,11 @@
+models:
+- ShieldGemma
+- LlamaGuard3Local
+- MDJudgeLocalDomain
+- MDJudgeLocalTask
+- LlamaGuard2Local
+- LlamaGuard3LocalInt8
+- HONEST
+- LFTW
+- REGARD
+- GPTJT

@@ -101,7 +101,7 @@ def save(data, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_dataframe_json(data: pd.DataFrame, uri):
+def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
 
@@ -167,6 +167,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
 )
 def upload_binary(*, save_dir, data=None, uri=None, extension=None):
     assert data is not None
+    gcs = storage.Client()
 
     if uri is None:
         uri = f"{save_dir}/{shortuuid.uuid()}"
@@ -223,7 +224,8 @@ def read_pickle(filename):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_text(data, save_dir, uri=None, base_name=None, extension="html"):
+def upload_text(data, *, save_dir=None, uri=None, base_name=None, extension="html"):
+    gcs = storage.Client()
     if not uri:
         # Create a random URI in our GCS directory
         if base_name:
@@ -241,7 +243,7 @@ def upload_text(data, save_dir, uri=None, base_name=None, extension="html"):
 
     return uri
 
-def upload_json(data, save_dir, uri=None, id=None):
+def upload_json(data, *, save_dir=None, uri=None, id=None):
     id = id or shortuuid.uuid()
     uri = uri or f"{save_dir}/{id}.json"
 
@@ -257,4 +259,4 @@ def upload_json(data, save_dir, uri=None, id=None):
     if uri[-5:] != ".json":
         uri = uri + ".json"
 
-    return upload_text(rows, uri, extension="json")
+    return upload_text(rows, uri, extension="jsonl")

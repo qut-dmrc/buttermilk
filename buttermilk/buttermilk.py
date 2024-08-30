@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union
 
+from google.cloud import bigquery, storage
 import cloudpathlib
 import coloredlogs
 import fsspec
@@ -76,6 +77,7 @@ class BM(Singleton, BaseModel):
     cfg: Optional[Any] = Field(default_factory=lambda: _REGISTRY.get('cfg'))
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     save_dir: Optional[str] = None
+    _clients: dict[str, Any] = {}
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -225,6 +227,12 @@ class BM(Singleton, BaseModel):
             logger.debug(f"Buttermilk version is: {version('buttermilk')}")
         except:
             pass
+
+    @property
+    def gcs(self) -> storage.Client:
+        if self._clients.get('gcs') is None:
+            self._clients['gcs'] = storage.Client(project=self.cfg.project.gcp.project)
+        return self._clients['gcs']
 
     def _get_save_dir(self, value=None) -> str:
         # Get the save directory from the configuration

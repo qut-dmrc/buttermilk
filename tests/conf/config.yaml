@@ -1,0 +1,15 @@
+name: buttermilk
+job: testing
+project:
+  secret_provider: azure
+  logger: gcp
+  models_secret: models
+  save_dest: gcp
+  save_dir:
+  gcp:
+    project: dmrc-analysis
+    region: us-central1
+    bucket: dmrc-analysis
+  azure:
+    vault: https://suzorvault.vault.azure.net/
+    resource_group: rg-suzor_ai
