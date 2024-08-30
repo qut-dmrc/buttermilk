@@ -1,11 +1,5 @@
 # @package _global_
-job: drag
 run:
-  dataset:
-    uri: gs://dmrc-platforms/data/drag_train.jsonl
-    columns:
-      record_id: \${data.id}
-      content: \${data.alt_text}
   tasks:
     judge:
       experiment_name: ots
@@ -13,6 +7,8 @@ run:
       models:
       - Comprehend
       - Perspective
+      - GPTJT
+      - Aegis
       - HONEST
       - LFTW
       - REGARD
