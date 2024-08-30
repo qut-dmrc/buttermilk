@@ -25,6 +25,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+import torch
 
 class AegisCategories(Enum):
      O1 = "Violence"
@@ -43,7 +44,7 @@ class AegisCategories(Enum):
 
 from peft.peft_model import PeftModel
 from peft.config import PeftConfig
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
 from buttermilk.utils import read_text
 
@@ -54,11 +55,34 @@ class Aegis(LlamaGuardTox):
     client: Any = None
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "aegis.txt"))
     categories: EnumMeta = AegisCategories
+    tokenizer: Any = None
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
 
     def init_client(self):
         config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
-        #tokenizer = AutoTokenizer.from_pretrained(model_id)
-        base_model = AutoModelForCausalLM.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e")
-        model = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
+        self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e")
+        base_model = AutoModelForCausalLM.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e", device_map=self.device)
+        model = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0", torch_device=self.device)
 
         return model
+
+    @trace
+    def call_client(
+        self, text: str, **kwargs
+    ) -> Any:
+        content = self.make_prompt(text)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        inputs = self.tokenizer(
+            content, return_tensors="pt", add_special_tokens=True
+        ).to(device)
+
+        prompt_len = inputs["input_ids"].shape[-1]
+        output = self.client.generate(
+            **inputs, max_new_tokens=kwargs.get("max_new_tokens", 1000)
+        )
+
+        result = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
+        return str(result)
