@@ -15,12 +15,15 @@ from .toxicity import (Comprehend,
     LlamaGuard3HF,
     LlamaGuard3HFInt8,
     LlamaGuard3Octo,
-    GPTJT, LlamaGuard2HF,     LlamaGuard3Local,
+    GPTJT,
+    LlamaGuard2HF,
+    LlamaGuard3Local,
     MDJudgeLocalDomain,
     MDJudgeLocalTask,
     LlamaGuard2Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma, ToxicityModel)
+    ShieldGemma,
+    ToxicityModel)
 
 TOXCLIENTS = [
     Comprehend,
