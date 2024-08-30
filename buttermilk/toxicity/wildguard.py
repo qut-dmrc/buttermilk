@@ -14,7 +14,7 @@ class Wildguard(ToxicityModel):
     client: Any = None
 
     def init_client(self):
-        return pipeline("text-generation", model="allenai/wildguard")
+        return pipeline("text-generation", model="allenai/wildguard", max_new_tokens=1000)
 
     @trace
     def call_client(
