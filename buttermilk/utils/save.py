@@ -10,7 +10,7 @@ from tenacity import retry, wait_exponential_jitter,  retry_if_exception_type, s
 import google.cloud.storage
 import tempfile
 from google.api_core.exceptions import AlreadyExists, ClientError, GoogleAPICallError
-
+from cloudpathlib import CloudPath
 from google.cloud import bigquery, storage
 from .utils import reset_index_and_dedup_columns
 from .utils import construct_dict_from_schema, make_serialisable
@@ -40,31 +40,41 @@ def save(data, **params):
         )
         pass
 
+
+
+    if not (uri := params.get("uri")):
+        try:
+            save_dir = CloudPath(params.get("save_dir"))
+            if filename := params.get("filename"):
+                if id := params.get("uuid"):
+                    filename = f"{filename}_{id}"
+            else:
+                filename = params.get("uuid", shortuuid.uuid())
+            uri = save_dir / filename
+        except Exception as e:
+            logger.warning(
+            f"Error saving data to {save_dir} using upload_dataframe_json: {e} {e.args=}"
+        )
+
     upload_methods = []
-
-    if filename := params.get("filename"):
-        if id := params.get("uuid"):
-            filename = f"{filename}_{id}"
-    else:
-        filename = params.get("uuid", shortuuid.uuid())
-
-    if save_dir :=  params.get("save_dir"):
+    if uri:
         # Try to upload to GCS
-
-        uri = params.get("uri", f"{save_dir}/{filename}")
-        upload_methods = []
-
         if isinstance(data, pd.DataFrame):
-            upload_methods.append(upload_dataframe_json)
+            return upload_dataframe_json(data=data, uri=uri)
+        else:
+            try:
+                df = pd.DataFrame(data)
+                return upload_dataframe_json(data=df, uri=uri)
+            except Exception as e:
+                logger.warning(
+                f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}"
+            )
 
-        upload_methods.extend([
-            upload_json,
-            upload_binary,
-        ])
+        upload_methods = [
+                upload_json,
+                upload_binary,
+            ]
 
-
-    else:
-        uri = filename
 
     # save to disk as a last resort
     upload_methods.extend(
@@ -77,7 +87,7 @@ def save(data, **params):
     for method in upload_methods:
         try:
             logger.debug(f"Trying to save data using {method.__name__}.")
-            destination = method(data=data, uri=uri, save_dir=save_dir)
+            destination = method(data=data, uri=uri)
             logger.info(
                 f"Saved data using {method.__name__} to: {destination}."
             )
