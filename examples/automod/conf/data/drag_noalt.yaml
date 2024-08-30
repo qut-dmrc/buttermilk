@@ -1,0 +1,9 @@
+# @package _global_
+job: drag_noalt
+run:
+  dataset:
+    name: drag_noalt
+    uri: gs://dmrc-platforms/data/drag_train.jsonl
+    columns:
+      record_id: id
+      content: text

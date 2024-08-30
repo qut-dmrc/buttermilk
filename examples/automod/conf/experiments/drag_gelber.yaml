@@ -1,8 +1,0 @@
-# @package _global_
-defaults:
-  - tonepolice
-run:
-  tasks:
-    judge:
-      experiment_name: gelber
-      standards: buttermilk/flows/templates/criteria_gelber.jinja2

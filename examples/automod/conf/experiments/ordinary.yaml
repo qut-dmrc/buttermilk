@@ -1,0 +1,8 @@
+# @package _global_
+run:
+  tasks:
+    judge:
+      experiment_name: ordinary
+      standards: buttermilk/flows/templates/criteria_ordinary.jinja2
+      model_type: llm
+      models: ["haiku",  "llama31_8b",]

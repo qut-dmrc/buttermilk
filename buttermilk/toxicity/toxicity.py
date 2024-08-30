@@ -187,7 +187,7 @@ class ToxicityModel(BaseModel):
 
             except Exception as e:
                 response = EvalRecord(
-                    error=f'{e}, {e.args=}',
+                    error=f'{e}',
                     metadata=extract_error_info(e=e)
                 )
 
