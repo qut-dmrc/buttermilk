@@ -14,6 +14,12 @@ from typing import (
 )
 from pathlib import Path
 
+from peft.peft_model import PeftModel
+from peft.config import PeftConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
+from buttermilk.utils import read_text
+
 import numpy as np
 import pandas as pd
 from promptflow.tracing import trace
@@ -41,12 +47,6 @@ class AegisCategories(Enum):
      O11 = "Threat"
      O12 = "Profanity"
      O13 = "Needs Caution"
-
-from peft.peft_model import PeftModel
-from peft.config import PeftConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
-from buttermilk.utils import read_text
 
 class Aegis(LlamaGuardTox):
     model: str = "aegis"
