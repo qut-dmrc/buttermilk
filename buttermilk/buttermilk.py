@@ -96,8 +96,8 @@ class BM(Singleton, BaseModel):
             raise ValueError("No config passed in on first initialisation.")
 
     def model_post_init(self, __context: Any) -> None:
+        self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
-            self.save_dir = self._get_save_dir(self.save_dir)
             self.setup_logging()
             start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
             _REGISTRY['init'] = True

@@ -16,7 +16,7 @@ from .utils import reset_index_and_dedup_columns
 from .utils import construct_dict_from_schema, make_serialisable
 from .log import logger
 
-def save(data, **params):
+def save(data, save_dir='', uri='', filename='', **params):
     from .utils import reset_index_and_dedup_columns
 
     # Failsafe save routine. We should be able to find some way of dumping the data.
