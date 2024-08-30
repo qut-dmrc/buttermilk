@@ -74,8 +74,10 @@ from tenacity import (
 )
 
 from buttermilk.utils.errors import extract_error_info
-from buttermilk.utils.utils import read_yaml, scrub_serializable
+from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from buttermilk.apis import HFTransformer, HFInferenceClient
+
+TEMPLATE_DIR = Path(__file__).parent / 'templates'
 
 PerspectiveAttributes = Literal[
     "TOXICITY",
@@ -501,7 +503,10 @@ class REGARD(ToxicityModel):
     client: Any = None
 
     def init_client(self):
-        return evaluate.load("regard", module_type="measurement")
+        if torch.cuda.is_available():
+            return evaluate.load("regard", module_type="measurement",device = "cuda")
+        else:
+            return evaluate.load("regard", module_type="measurement")
 
     @trace
     def call_client(
@@ -596,7 +601,8 @@ class GPTJT(ToxicityModel):
     # Load model directly
     model: str = "togethercomputer/GPT-JT-Moderation-6B"
     process_chain: str = "hf_transformers"
-    standard: str = "gpt-jt-v1"
+    standard: str = "gpt-jt-mod-v1"
+    template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "gpt-jt-mod-v1.txt"))
 
     client: Any = None
 
@@ -614,31 +620,42 @@ class GPTJT(ToxicityModel):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         return pipeline(
             "text-generation", model="togethercomputer/GPT-JT-Moderation-6B",
-                device=device,max_new_tokens=1000
+                device=device,max_new_tokens=3
         )
     @trace
     def call_client(
         self, text: str, **kwargs
     ) -> Any:
-        return self.client(text)
+        prompt = self.template.format(content=text)
+
+        response = self.client(prompt)
+
+        if len(response) > 1:
+            raise ValueError("Expected only one result from model")
+        result = response[0]['generated_text']
+        if result.startswith(prompt):
+            result = result[len(prompt):]
+
+        return result
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
-        if len(response) > 1:
-            raise ValueError("Expected only one result from model")
-        result = response[0]
 
         # Load the message info into the output
         outcome = EvalRecord(
         )
-        outcome.labels = [result]
-        outcome.scores = [
-            Score(
-                measure=self.standard, score=self.ResponseMap[result], labels=[result]
-            )
-        ]
-        outcome.predicted = self.ResponseMap[result] >= 2
-        outcome.labels = [result["label"]]
+        outcome.response = response
+        try:
+            outcome.scores = [
+                Score(
+                    measure=self.standard, score=self.ResponseMap[response], labels=[response]
+                )
+            ]
+
+            outcome.predicted = self.ResponseMap[response] >= 2
+            outcome.labels = [response]
+        except (TypeError, ValueError) as e:
+            outcome.error = f"Unable to extract scores. Hit error: {e} {e.args}"
 
         return outcome
 
