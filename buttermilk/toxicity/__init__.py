@@ -1,4 +1,5 @@
 from .aegis import Aegis
+from .wildguard import Wildguard
 from .toxicity import (Comprehend,
     Perspective,
     HONEST,
