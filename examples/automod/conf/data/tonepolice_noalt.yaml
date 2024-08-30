@@ -1,8 +1,6 @@
-# @package _global_
 defaults:
   - tonepolice
-run:
-  job: tonepolice_noalt
-  dataset:
-    columns:
-      content: text
+dataset:
+  name: tonepolice_noalt
+  columns:
+    content: text

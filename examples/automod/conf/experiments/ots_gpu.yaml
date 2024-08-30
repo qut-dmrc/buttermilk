@@ -1,0 +1,12 @@
+moderate:
+  name: ots
+  models:
+  - GPTJT
+  - Aegis
+  - ShieldGemma
+  - LlamaGuard3Local
+  - MDJudgeLocalDomain
+  - MDJudgeLocalTask
+  - LlamaGuard2Local
+  - LlamaGuard3LocalInt8
+  - Wildguard

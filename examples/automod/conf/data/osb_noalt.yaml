@@ -1,9 +1,0 @@
-# @package _global_
-job: osb
-run:
-  dataset:
-    name: osb
-    uri: gs://dmrc-platforms/data/osb_train.jsonl
-    columns:
-      - record_id: id
-      - content: text
