@@ -27,7 +27,7 @@ from buttermilk.toxicity  import *
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 
-def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], batch_name: str) -> pd.DataFrame:
+def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], batch_name: str, worker_count: int = 10) -> pd.DataFrame:
 
     pflocal = LocalPFClient()
     init_vars = dict(model = model)
@@ -42,6 +42,7 @@ def run_ots(*, logger, model: str, dataset: str, column_mapping: dict[str,str], 
             stream=False,
             name=batch_name,
             timeout=150,
+            worker_count=worker_count
         )
     logger.info(
         f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
@@ -109,7 +110,7 @@ def run_batch(*, model: str, model_type, dataset: str, column_mapping: dict[str,
     run_meta = {"name": batch_name, "model_type": model_type, "model": model, "timestamp": pd.to_datetime(datetime.datetime.now())}
 
     if model_type == 'ots':
-        details = run_ots(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, batch_name=batch_name)
+        details = run_ots(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, batch_name=batch_name, worker_count=bm.cfg.run.get('worker_count', 4))
     elif model_type == 'flow':
         details = run_flow(logger=logger, model=model, dataset=dataset, column_mapping=column_mapping, standards_path=standards_path, template_path=template_path, batch_name=batch_name)
 
