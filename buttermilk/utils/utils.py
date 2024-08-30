@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 import pydantic
 import uuid
+import validators
+
 
 from typing import Any, List, Optional, TypeVar, Union
 
@@ -39,18 +41,22 @@ def download_limited(url, *, allow_arbitrarily_large_downloads=False,
 
 def read_file(path, auth_token: Optional[str] = None, allow_arbitrarily_large_downloads: bool = False) -> bytes:
     try:
+        uri = AnyPath(path)
+    except Exception as e:
+        uri = path
+
+    if isinstance(uri, CloudPath):
+        return uri.read_bytes()
+    elif isinstance(uri, pathlib.Path):
         with fsspec.open(path, "rb") as f:
             # For local files
             return f.read()
-    except Exception:
-        pass
-    try:
-        # this will work for local and cloud storage paths
-        uri = AnyPath(path)
-        return uri.read_bytes()
-    except Exception:
-        pass
-    return download_limited(path, token=auth_token,allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads)
+    elif validators.url(uri):
+        return download_limited(path, token=auth_token,allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads)
+    else:
+        raise ValueError(f"Did not recognise {path} as valid path type or url.")
+
+
 
 def read_yaml(filename: Union[pathlib.Path, str]) -> dict:
     file = read_file(filename)

@@ -25,9 +25,6 @@ from .toxicity import (Comprehend,
 TOXCLIENTS = [
     Comprehend,
     Perspective,
-    HONEST,
-    LFTW,
-    REGARD,
     AzureContentSafety,
     AzureModerator,
     OpenAIModerator,
@@ -39,8 +36,6 @@ TOXCLIENTS = [
     LlamaGuard3HF,
     LlamaGuard3HFInt8,
     LlamaGuard3Octo,
-    GPTJT,
-    Aegis
 ]
 
 TOXCLIENTS_NOT_AVAILABLE = [
@@ -49,10 +44,15 @@ TOXCLIENTS_NOT_AVAILABLE = [
 BAD_MODELS = []
 
 TOXCLIENTS_LOCAL = [
+    REGARD,
+    LFTW,
+    HONEST,
+    LlamaGuard2Local,
     LlamaGuard3Local,
+    LlamaGuard3LocalInt8,
+    ShieldGemma,
     MDJudgeLocalDomain,
     MDJudgeLocalTask,
-    LlamaGuard2Local,
-    LlamaGuard3LocalInt8,
-    ShieldGemma
+    GPTJT,
+    Aegis,
 ]

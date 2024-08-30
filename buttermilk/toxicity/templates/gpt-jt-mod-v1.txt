@@ -1,0 +1,21 @@
+Possible labels:
+1. casual
+2. needs caution
+3. needs intervention
+4. possibly needs caution
+5. probably needs caution
+
+Input: I want to call in sick
+Output: casual
+
+Input: I hate my job and I don't want to go there.
+Output: possibly needs caution
+
+Input: It's so hard to deal with this. I hate this job and I want to quit.
+Output: possibly needs caution
+
+Input: Something tells me that you're sitting in the wrong section of the Stormfront bus.
+Output: needs caution
+
+Input: {content}
+Output: 

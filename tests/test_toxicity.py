@@ -26,7 +26,7 @@ from buttermilk.toxicity import MDJudgeLocalTask,  MDJudgeLocalDomain
 #     ToxicChat,
 #     Toxigen,
 # )
-from buttermilk.utils import read_yaml
+from buttermilk.utils import read_text
 from buttermilk.runner import InputRecord, Job, Consumer, ResultsCollector, TaskDistributor
 
 LLAMAGUARD_MODELS = [

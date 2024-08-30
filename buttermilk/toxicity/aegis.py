@@ -44,20 +44,21 @@ class AegisCategories(Enum):
 from peft.peft_model import PeftModel
 from peft.config import PeftConfig
 from transformers import AutoModelForCausalLM
-from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate
+from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
 from buttermilk.utils import read_text
 
 class Aegis(LlamaGuardTox):
     model: str = "aegis"
     process_chain: str = "transformers_peft"
-    standard: str = "aegis"
+    standard: str = "aegis-defensive-1.0"
     client: Any = None
-    template: str = Field(default_factory=lambda: read_text(Path(__file__).parent / "templates/aegis.txt"))
+    template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "aegis.txt"))
     categories: EnumMeta = AegisCategories
 
     def init_client(self):
         config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
-        base_model = AutoModelForCausalLM.from_pretrained("/workspace/hugging_face/hub/models--meta-llama--LlamaGuard-7b/snapshots/3e764390d6b39028ddea5b20603c89476107b41e/")
+        #tokenizer = AutoTokenizer.from_pretrained(model_id)
+        base_model = AutoModelForCausalLM.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e")
         model = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
 
         return model
