@@ -41,7 +41,8 @@ def save(data, **params):
         pass
 
 
-
+    uri = ''
+    save_dir = ''
     if not (uri := params.get("uri")):
         try:
             save_dir = CloudPath(params.get("save_dir"))
@@ -53,7 +54,7 @@ def save(data, **params):
             uri = save_dir / filename
         except Exception as e:
             logger.warning(
-            f"Error saving data to {save_dir} using upload_dataframe_json: {e} {e.args=}"
+            f"Error saving data to using upload_dataframe_json: {e} {e.args=}, {params}"
         )
 
     upload_methods = []
