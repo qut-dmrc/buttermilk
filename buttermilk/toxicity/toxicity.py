@@ -794,10 +794,16 @@ class LlamaGuardTox(ToxicityModel):
             answer, labels, explanation = response.strip().split("\n")
         except ValueError:
             try:
-                answer, labels = response.strip().split("\n")
+                answer, labels = response.strip().split(" ", 3)
             except ValueError:
-                answer = response
-                labels = ""
+                try:
+                    answer, labels = response.strip().split("\n")
+                except ValueError:
+                    try:
+                        answer, labels = response.strip().split(" ")
+                    except ValueError:
+                        answer = response
+                        labels = ""
 
 
         try:

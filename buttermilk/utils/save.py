@@ -165,7 +165,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_binary(*, save_dir, data=None, uri=None, extension=None):
+def upload_binary(*, save_dir=None, data=None, uri=None, extension=None):
     assert data is not None
     gcs = storage.Client()
 
@@ -259,4 +259,4 @@ def upload_json(data, *, save_dir=None, uri=None, id=None):
     if uri[-5:] != ".json":
         uri = uri + ".json"
 
-    return upload_text(rows, uri, extension="jsonl")
+    return upload_text(rows, uri=uri, extension="jsonl")

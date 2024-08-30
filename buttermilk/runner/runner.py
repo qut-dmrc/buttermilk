@@ -379,7 +379,7 @@ class TaskDistributor(BaseModel):
         t0 = time.perf_counter()
         try:
             # Set up tracing using promptflow
-            start_trace(collection=gc.name, resource_attributes=dict(job=gc.job))
+            start_trace(collection=bm.name, resource_attributes=dict(job=bm.job))
 
             global_pbar = atqdm(
                 total=self.total_tasks,

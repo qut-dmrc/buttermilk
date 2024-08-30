@@ -266,3 +266,4 @@ class BM(Singleton, BaseModel):
         """ Failsafe save method."""
         result = save.save(data=data, save_dir=self.save_dir, **kwargs)
         logger.info(f"Saved data to: {result}")
+        return result
