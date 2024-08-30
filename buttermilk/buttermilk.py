@@ -85,9 +85,10 @@ class BM(Singleton, BaseModel):
     def get_config(cls, v):
         if _REGISTRY.get('cfg'):
             if v:
-                raise ValueError("Config passed in but we already have one loaded.")
-            else:
-                return _REGISTRY['cfg']
+                logger.warning("Config passed in but we already have one loaded. Overwriting.")
+                _REGISTRY['cfg'] = v
+
+            return _REGISTRY['cfg']
         elif v:
             _REGISTRY['cfg'] = v
             return v
