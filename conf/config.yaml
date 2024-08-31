@@ -3,6 +3,7 @@ job: development
 project:
   secret_provider: azure
   logger: gcp
+  verbose: true
   models_secret: models
   save_dest: gcp
   save_dir:

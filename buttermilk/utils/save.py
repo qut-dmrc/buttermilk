@@ -41,11 +41,9 @@ def save(data, save_dir='', uri='', filename='', **params):
         pass
 
 
-    uri = ''
-    save_dir = ''
     if not (uri := params.get("uri")):
         try:
-            save_dir = CloudPath(params.get("save_dir"))
+            save_dir = CloudPath(save_dir)
             if filename := params.get("filename"):
                 if id := params.get("uuid"):
                     filename = f"{filename}_{id}"
@@ -61,11 +59,11 @@ def save(data, save_dir='', uri='', filename='', **params):
     if uri:
         # Try to upload to GCS
         if isinstance(data, pd.DataFrame):
-            return upload_dataframe_json(data=data, uri=uri)
+            return upload_dataframe_json(data=data, uri=uri.as_uri())
         else:
             try:
                 df = pd.DataFrame(data)
-                return upload_dataframe_json(data=df, uri=uri)
+                return upload_dataframe_json(data=df, uri=uri.as_uri())
             except Exception as e:
                 logger.warning(
                 f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}"
