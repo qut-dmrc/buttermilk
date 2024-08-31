@@ -1,6 +1,5 @@
-dataset:
-  name: osb
-  uri: gs://dmrc-platforms/data/osb_train.jsonl
-  columns:
-    - record_id: id
-    - content: alt_text
+name: osb
+uri: gs://dmrc-platforms/data/osb_train.jsonl
+columns:
+  - record_id: id
+  - content: alt_text

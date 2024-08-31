@@ -2,4 +2,5 @@ judge:
   name: gelber
   models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus","haiku", "sonnet", "gemini15pro"]
   init:
-    standards: buttermilk/flows/templates/criteria_gelber.jinja2
+    template: buttermilk/flows/extract/judge.prompty
+    standard: buttermilk/flows/templates/criteria_gelber.jinja2

@@ -34,9 +34,9 @@ def run_local(*, target: str, model: str, colour:str='magenta', dataset: str, co
     run_meta.update(batch_id)
 
     if target == 'moderate':
-        flow = Moderator(**init)
+        flow = Moderator(model=model, **init)
     else:
-        flow = Analyst(**init)
+        flow = Analyst(model=model, **init)
     df = pd.read_json(dataset, orient='records', lines=True).sample(frac=1)
     for _, row in tqdm.tqdm(df.iterrows(),colour=colour):
         input_vars = {key: row[mapped] for key, mapped in column_mapping.items()}
@@ -66,8 +66,8 @@ def run(cfg: DictConfig) -> None:
     results = pd.DataFrame()
 
 
-    data_file = cache_data(cfg.dataset.uri)
-    logger.info(f"Cached local copy of dataset {cfg.dataset.name} from {cfg.run.dataset.uri} to {data_file}")
+    data_file = cache_data(cfg.data.uri)
+    logger.info(f"Cached local copy of dataset {cfg.data.name} from {cfg.run.data.uri} to {data_file}")
 
     # Create a cycle iterator for the progress bar colours
     bar_colours =  ["cyan", "yellow","magent","green", "blue"]
@@ -82,12 +82,12 @@ def run(cfg: DictConfig) -> None:
                 batch_id = dict(run_id=bm._run_id,
                                 experiment=step_config.name,
                                 model=model,
-                                dataset=cfg.dataset.name)
+                                dataset=cfg.data.name)
 
                 logger.info(f"Running batch: {batch_id}")
                 df = run_local(model=model, target=step,
                                 dataset=data_file,
-                                column_mapping=cfg.dataset.columns,
+                                column_mapping=cfg.data.columns,
                                 batch_id=batch_id,
                                 colour=next(colour_cycle),
                                 init=step_config.init)

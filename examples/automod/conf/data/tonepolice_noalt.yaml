@@ -1,6 +1,5 @@
 defaults:
   - tonepolice
-dataset:
-  name: tonepolice_noalt
-  columns:
-    content: text
+name: tonepolice_noalt
+columns:
+  content: text

@@ -17,7 +17,6 @@ class Moderator():
         self.model = model
         super().__init__()
 
-        # TODO: can we put this here?
         # Get and instantiate the class from its string name
         cls = globals()[self.model]
         self.client: ToxicityModel = cls()

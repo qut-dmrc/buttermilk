@@ -21,10 +21,3 @@ project:
   aws:
     secret_name: secret
     region: us-east-1
-dataset:
-  name:
-  uri:
-  columns:
-experiments:
-  judge:
-  moderate:
