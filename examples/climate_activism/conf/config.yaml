@@ -14,7 +14,7 @@ project:
   azure:
     vault: https://suzorvault.vault.azure.net/
     resource_group: rg-suzor_ai
-run:
+experiments:
   frames:
     dataset:
       uri: gs://dmrc-platforms/data/climate_articles.jsonl

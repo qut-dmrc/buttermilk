@@ -24,21 +24,27 @@ import datetime
 import tqdm
 from itertools import cycle
 from buttermilk.toxicity  import *
+from buttermilk.utils.log import getLogger
 
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 
-def run_local(*, target: str, model: str, colour:str='magenta', dataset: str, column_mapping: dict[str,str], init: dict, batch_id: dict) -> pd.DataFrame:
+def run_local(*, target: str, model: str, colour:str='magenta', dataset: str, column_mapping: dict[str,str], init: dict={}, batch_id: dict) -> pd.DataFrame:
+    logger = getLogger()
     results = []
     run_meta = {"timestamp": pd.to_datetime(datetime.datetime.now())}
     run_meta.update(batch_id)
+    init = init or {}
 
     if target == 'moderate':
         flow = Moderator(model=model, **init)
     else:
         flow = Analyst(model=model, **init)
     df = pd.read_json(dataset, orient='records', lines=True).sample(frac=1)
-    for _, row in tqdm.tqdm(df.iterrows(),colour=colour):
+    logger.info(f"Starting run for {batch_id} running {target} with {model}")
+    for _, row in tqdm.tqdm(df.iterrows(),colour=colour,
+                desc=str(batch_id),
+                bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",):
         input_vars = {key: row[mapped] for key, mapped in column_mapping.items()}
         details = flow(**input_vars)
         details['run_meta'] = run_meta.copy()
@@ -66,14 +72,14 @@ def run(cfg: DictConfig) -> None:
     results = pd.DataFrame()
 
 
-    data_file = cache_data(cfg.data.uri)
-    logger.info(f"Cached local copy of dataset {cfg.data.name} from {cfg.run.data.uri} to {data_file}")
-
     # Create a cycle iterator for the progress bar colours
-    bar_colours =  ["cyan", "yellow","magent","green", "blue"]
+    bar_colours =  ["cyan", "yellow","magenta","green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    for step, step_config in cfg.experiments.keys():
+    for step, step_config in cfg.experiments.items():
+        data_file = cache_data(cfg.data.uri)
+        logger.info(f"Cached local copy of dataset {cfg.data.name} from {cfg.data.uri} to {data_file}")
+
         logger.debug(f"Running {step} {step_config.name}")
         models: list = OmegaConf.to_object(step_config.get('models', []))
         shuffle(models)
@@ -90,16 +96,16 @@ def run(cfg: DictConfig) -> None:
                                 column_mapping=cfg.data.columns,
                                 batch_id=batch_id,
                                 colour=next(colour_cycle),
-                                init=step_config.init)
+                                init=step_config.get("init",{}))
                 logger.info(f"Successfully  completed batch: {batch_id}  with {df.shape[0]} results.")
                 results = pd.concat([results, df])
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
                 break
+        Path(data_file).unlink(missing_ok=True)
 
-    bm.save(results.reset_index())
-    Path(data_file).unlink(missing_ok=True)
-
+    uri = bm.save(results.reset_index())
+    logger.info(f"Saved {results.shape[0]} results to {uri}")
 
 if __name__ == "__main__":
     run()

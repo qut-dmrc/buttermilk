@@ -164,12 +164,12 @@ class ToxicityModel(BaseModel):
             exception_types=(
                 RateLimit,
                 requests.exceptions.ConnectionError,
-                urllib3.exceptions.HTTPError,
+                urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
                 OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
             ),
         ),
-            # Wait interval:  10 seconds first, increasing exponentially up to a max of two minutes between retries
-            wait=wait_exponential_jitter(initial=1, max=120, jitter=5),
+            # Wait interval: increasing exponentially up to a max of 30s between retries
+            wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
             # Retry up to five times before giving up
             stop=stop_after_attempt(5),
     )

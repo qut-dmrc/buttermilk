@@ -98,7 +98,7 @@ class BM(Singleton, BaseModel):
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
-            self.setup_logging()
+            self.setup_logging(verbose=self.cfg.project.get('verbose', False))
             start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
             _REGISTRY['init'] = True
 

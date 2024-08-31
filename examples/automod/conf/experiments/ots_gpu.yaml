@@ -1,5 +1,6 @@
 moderate:
   name: ots
+  init:
   models:
   - GPTJT
   - Aegis

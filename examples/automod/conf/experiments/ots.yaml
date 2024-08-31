@@ -1,10 +1,9 @@
 moderate:
   name: ots
+  init:
   models:
   - Comprehend
   - Perspective
-  - GPTJT
-  - Aegis
   - HONEST
   - LFTW
   - REGARD
