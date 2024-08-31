@@ -1,6 +1,5 @@
 defaults:
   - drag
-dataset:
-  name: drag_noalt
-  columns:
-    content: text
+name: drag_noalt
+columns:
+  content: text

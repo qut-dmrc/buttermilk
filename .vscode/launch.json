@@ -13,7 +13,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "run batch automod: drag ots",
+            "name": "batch automod: drag ots",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.mod",
@@ -24,7 +24,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=gpu",
+                "--multirun",
+                "+experiments=ots,gelber,ordinary",
+                "+data=drag,drag_noalt,tonepolice,tonepolice_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
