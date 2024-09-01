@@ -8,6 +8,6 @@ from buttermilk.buttermilk import BM
 def bm() -> Generator[BM, Any, None]:
     with initialize(version_base=None, config_path="conf", ):
         cfg = compose(config_name="config")
-        yield BM(cfg=cfg)
+    yield BM(cfg=cfg)
 
 

@@ -1,6 +1,6 @@
 judge:
   name: ordinary
   init:
-    template: buttermilk/flows/extract/judge.prompty
-    standard: buttermilk/flows/templates/criteria_ordinary.jinja2
+    template: judge.prompty
+    standard: criteria_ordinary.jinja2
   models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus","haiku", "sonnet", "gemini15pro"]

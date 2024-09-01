@@ -25,8 +25,8 @@
             "justMyCode": false,
             "args": [
                 "--multirun",
-                "+experiments=ots,gelber,ordinary",
-                "+data=drag,drag_noalt,tonepolice,tonepolice_noalt",
+                "+experiments=gelber,ordinary,ots",
+                "+data=drag,drag_noalt,tonepolice",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

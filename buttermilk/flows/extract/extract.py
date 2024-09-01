@@ -78,7 +78,7 @@ class Analyst():
         self.model = model
         self.llm = LLMs(connections=bm._connections_azure)[self.model]
 
-        self.batch_id = dict(flow=self.__name_, model=self.model,template=template)
+        self.batch_id = dict(flow="Analyst", model=self.model,template=template)
         if template:
             self.tpl_variables['system'] = system_prompt
             self.tpl_variables['system'] = user_prompt
@@ -127,7 +127,7 @@ class Analyst():
         input_vars = dict()
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        output = self.invoke_langchain(chain=chain, input_vars=input_vars, _id = record_id or content, **kwargs)
+        output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
 
         if record_id:
             output['record_id'] = record_id
@@ -139,9 +139,9 @@ class Analyst():
 
     @trace
     def invoke_langchain(self, *, chain, input_vars, call_details: dict = {}, **kwargs):
-        logger.info(f"Invoking chain with {self.model} with params: {call_details}")
+        logger.debug(f"Invoking chain with {self.model} with params: {call_details}")
         t0 = time.time()
         response = chain.invoke(input=input_vars, **kwargs)
         t1 = time.time()
-        logger.info(f"Finished chain with {self.model} in {t1-t0:.2f} seconds with params: {call_details} ")
+        logger.debug(f"Finished chain with {self.model} in {t1-t0:.2f} seconds with params: {call_details} ")
         return response

@@ -66,6 +66,7 @@ GEMINI_SAFETY_SETTINGS_NONE = {
 
 CHATMODELS = ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus","haiku", "sonnet", "gemini15pro"]
 CHEAP_CHAT_MODELS = ["haiku",  "llama31_8b",]
+MULTIMODAL_MODELS = ["gemini15pro, gpt4o"]
 
 def _Gemini(*args, **kwargs):
     return ChatVertexAI(*args, **kwargs, safety_settings=VERTEX_SAFETY_SETTINGS, _raise_on_blocked=False, response_mime_type="application/json")

@@ -113,6 +113,7 @@ def run(cfg: DictConfig) -> None:
                     run_id=bm._run_id,
                     experiment=step_config.name,
                     dataset=cfg.data.name,
+                    model=model,
                 )
 
                 logger.info(f"Running batch: {batch_id}")
@@ -126,7 +127,10 @@ def run(cfg: DictConfig) -> None:
                     init=step_config.get("init", {}),
                 )
                 logger.info(
-                    f"Successfully  completed batch: {batch_id}  with {df.shape[0]} results."
+                    dict(
+                        message=f"Successfully  completed batch: {batch_id} with {df.shape[0]} results.",
+                        **batch_id,
+                    )
                 )
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
@@ -137,7 +141,7 @@ def run(cfg: DictConfig) -> None:
                 results = pd.concat([results, df])
         Path(data_file).unlink(missing_ok=True)
 
-    uri = bm.save(results.reset_index())
+    uri = bm.save(results.reset_index(), filename="results")
     logger.info(f"Saved {results.shape[0]} run batch results to {uri}")
 
 
