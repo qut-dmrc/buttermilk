@@ -64,7 +64,7 @@ class Singleton:
     _instances: ClassVar[Dict] = {}  # type: ignore
 
     def __new__(cls, *args, **kwargs):  # type: ignore
-        key = cls.__qualname__
+        key = cls.__name__
         if key not in _REGISTRY:
             _REGISTRY[key] = super().__new__(cls)
         return _REGISTRY[key]

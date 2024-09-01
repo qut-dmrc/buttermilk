@@ -21,7 +21,7 @@ from langchain_core.messages import SystemMessage
 from buttermilk import BM
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
-
+from pydantic import basemodel
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATH = BASE_DIR.parent / "templates"
 
@@ -74,13 +74,12 @@ def prompt_with_media(
 
 class Analyst():
     def __init__(self, *, model: str, template: str = '', system_prompt: str = '', user_prompt: str = '', **kwargs) -> None:
-
         bm = BM()
         self.tpl_variables = kwargs
         self.model = model
         self.llm = LLMs(connections=bm._connections_azure)[self.model]
 
-        self.batch_id = dict(flow=self.__qualname__, model=self.model,template=template)
+        self.batch_id = dict(flow=self.__name_, model=self.model,template=template)
         if template:
             self.tpl_variables['system'] = system_prompt
             self.tpl_variables['system'] = user_prompt
