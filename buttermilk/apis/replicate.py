@@ -14,7 +14,7 @@ def replicatellama2(**kwargs):
 def replicatellama3(**kwargs):
     options = dict(
         model="meta/meta-llama-3-70b-instruct",
-        input={"temperature": 1.0, "max_length": 4000, "top_p": 1},
+        model_kwargs={"temperature": 1.0, "max_length": 4000, "top_p": 1},
     )
     options.update(**kwargs)
     return Replicate(**options)
