@@ -21,7 +21,6 @@ from langchain_core.messages import SystemMessage
 from buttermilk import BM
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
-from pydantic import basemodel
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATH = BASE_DIR.parent / "templates"
 

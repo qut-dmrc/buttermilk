@@ -182,17 +182,14 @@ class BM(Singleton, BaseModel):
             except:
                 pass
 
-        for handler in logger.handlers:
-            logger.removeHandler(handler)
-
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
             coloredlogs.install(
-                level="INFO", logger=root_logger, fmt=console_format, stream=sys.stdout
+                level="INFO", logger=logger, fmt=console_format
             )
         else:
             coloredlogs.install(
-                level="DEBUG", logger=logger, fmt=console_format, stream=sys.stdout
+                level="DEBUG", logger=logger, fmt=console_format
             )
 
         # Labels for cloud logger
@@ -222,7 +219,7 @@ class BM(Singleton, BaseModel):
         logger.addHandler(cloudHandler)
 
         logger.info(
-            f"Logging setup for: {self.metadata}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}"
+            f"Logging setup for: {self.metadata}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",json_fields=dict(metadata=self.metadata, save_dir=self.save_dir)
         )
 
         try:
@@ -269,5 +266,5 @@ class BM(Singleton, BaseModel):
     def save(self, data, **kwargs):
         """ Failsafe save method."""
         result = save.save(data=data, save_dir=self.save_dir, **kwargs)
-        logger.info(f"Saved data to: {result}")
+        logger.info(f"Saved data to: {result}", json_fields=dict(uri=result, run_id=self._run_id))
         return result
