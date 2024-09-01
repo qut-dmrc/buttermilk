@@ -128,14 +128,17 @@ def run(cfg: DictConfig) -> None:
                 logger.info(
                     f"Successfully  completed batch: {batch_id}  with {df.shape[0]} results."
                 )
-                results = pd.concat([results, df])
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
                 break
+            finally:
+                uri = bm.save(df.reset_index())
+                logger.info(f"Saved {df.shape[0]} step results to {uri}")
+                results = pd.concat([results, df])
         Path(data_file).unlink(missing_ok=True)
 
     uri = bm.save(results.reset_index())
-    logger.info(f"Saved {results.shape[0]} results to {uri}")
+    logger.info(f"Saved {results.shape[0]} run batch results to {uri}")
 
 
 if __name__ == "__main__":
