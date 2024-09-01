@@ -116,8 +116,8 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
 
 
     # use pandas to upload to GCS
-    if not uri[-5:] == ".json":
-        uri = uri + ".json"
+    if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
+        uri = uri + ".jsonl"
 
     if any(data.columns.duplicated()):
         data = reset_index_and_dedup_columns(data)
@@ -203,7 +203,7 @@ def upload_binary(*, save_dir=None, data=None, uri=None, extension=None):
                 return uri
 
 def dump_to_disk(data, **kwargs):
-    with tempfile.NamedTemporaryFile(delete=False, mode="w") as out:
+    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".jsonl") as out:
         if isinstance(data, pd.DataFrame):
             data.to_json(out)
         else:
@@ -254,7 +254,9 @@ def upload_text(data, *, save_dir=None, uri=None, base_name=None, extension="htm
 
 def upload_json(data, *, save_dir=None, uri=None, id=None):
     id = id or shortuuid.uuid()
-    uri = uri or f"{save_dir}/{id}.json"
+    uri = uri or f"{save_dir}/{id}.jsonl"
+    if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
+        uri = uri + ".jsonl"
 
     # make sure the data is serializable first
     if isinstance(data, pd.DataFrame):
@@ -264,8 +266,5 @@ def upload_json(data, *, save_dir=None, uri=None, id=None):
 
     # Try to upload as newline delimited json
     rows = "\n".join([json.dumps(row) for row in rows])
-
-    if uri[-5:] != ".json":
-        uri = uri + ".json"
 
     return upload_text(rows, uri=uri, extension="jsonl")
