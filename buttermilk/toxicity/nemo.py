@@ -26,9 +26,9 @@ class Nemo(ToxicityModel):
         prompt_name = "nemo_self_check"
         criteria = str(self.standard).replace(prompt_name + ".", "")
         messages = [("human", template_text[prompt_name][criteria])]
-        self.langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
+        langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
-        chain = self.langchain_template | llm | StrOutputParser
+        chain = langchain_template | llm | StrOutputParser()
         return chain
 
     @trace
@@ -45,7 +45,7 @@ class Nemo(ToxicityModel):
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
-        outcome.response = response['response']
+        outcome.response = response
         if "yes" in str(response).lower()[:6]:
             outcome.scores.append(
                         Score(measure=str(self.standard), score=1.0, result=True)
