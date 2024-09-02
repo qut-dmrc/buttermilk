@@ -18,3 +18,4 @@ moderate:
   - LlamaGuard3HF
   - LlamaGuard3HFInt8
   - LlamaGuard3Octo
+  - Nemo

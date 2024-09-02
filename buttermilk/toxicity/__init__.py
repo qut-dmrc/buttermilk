@@ -1,5 +1,6 @@
 from .aegis import Aegis
 from .wildguard import Wildguard
+from .nemo import NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 from .toxicity import (Comprehend,
     Perspective,
     HONEST,
@@ -38,6 +39,7 @@ TOXCLIENTS = [
     LlamaGuard2Together,
     LlamaGuard3Together,
     LlamaGuard3Octo,
+    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 ]
 
 TOXCLIENTS_NOT_AVAILABLE = [
