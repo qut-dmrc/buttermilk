@@ -250,7 +250,7 @@ class TestToxicityModels:
         scope="session",
         params=TOXCLIENTS,
     )
-    def tox_model(self, request):
+    def tox_model(self, bm, request):
         yield request.param()
 
     @pytest.fixture(

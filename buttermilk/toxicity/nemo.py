@@ -10,6 +10,7 @@ from buttermilk.tools.json_parser import ChatParser
 from pathlib import Path
 from typing import Literal
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
+from langchain_core.output_parsers import StrOutputParser
 
 class Nemo(ToxicityModel):
     model: str
@@ -22,12 +23,12 @@ class Nemo(ToxicityModel):
         bm = BM()
         llm = LLMs(connections=bm._connections_azure)[self.model]
         template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
-        prompt_name = "nemo_self_check."
-        criteria = str(self.standard).replace(prompt_name, "")
+        prompt_name = "nemo_self_check"
+        criteria = str(self.standard).replace(prompt_name + ".", "")
         messages = [("human", template_text[prompt_name][criteria])]
         self.langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
-        chain = self.langchain_template | llm | ChatParser()
+        chain = self.langchain_template | llm | StrOutputParser
         return chain
 
     @trace
@@ -44,7 +45,7 @@ class Nemo(ToxicityModel):
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
-        outcome.response = response
+        outcome.response = response['response']
         if "yes" in str(response).lower()[:6]:
             outcome.scores.append(
                         Score(measure=str(self.standard), score=1.0, result=True)
