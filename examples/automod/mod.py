@@ -107,6 +107,9 @@ def run(cfg: DictConfig) -> None:
         logger.debug(f"Running {step} {step_config.name}")
         models: list = OmegaConf.to_object(step_config.get("models", []))
         shuffle(models)
+
+        df = pd.DataFrame()
+
         for model in models:
             try:
                 batch_id = dict(
