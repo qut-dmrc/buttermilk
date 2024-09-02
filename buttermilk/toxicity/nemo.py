@@ -77,13 +77,13 @@ class NemoOutputComplexGPT4o(Nemo):
 
 class NemoInputSimpleLlama31_70b(Nemo):
     standard: str = "nemo_self_check.input_simple"
-    model: str = "Llama31_70b"
+    model: str = "llama31_70b"
 class NemoInputComplexLlama31_70b(Nemo):
     standard: str = "nemo_self_check.input"
-    model: str = "Llama31_70b"
+    model: str = "llama31_70b"
 class NemoOutputSimpleLlama31_70b(Nemo):
     standard: str = "nemo_self_check.output_simple"
-    model: str = "Llama31_70b"
+    model: str = "llama31_70b"
 class NemoOutputComplexLlama31_70b(Nemo):
     standard: str = "nemo_self_check.output"
-    model: str = "Llama31_70b"
+    model: str = "llama31_70b"
