@@ -35,29 +35,31 @@ class LLMOutput(TypedDict):
     record_id: str
     scores: dict
 
-class Judger():
-    def __init__(self, *, model: str, prompt: str = None, standards_path: str = None, template_path: str = None) -> None:
+class Judger(ToolProvider):
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'apply.jinja2') -> None:
 
         bm = BM()
         self.connections = bm._connections_azure
 
-        if template_path:
-            env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-            partial_variables={}
-            if standards_path:
-                criteria = env.get_template(standards_path).render()
-                partial_variables=dict(criteria=criteria)
+        env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
-            tpl = env.get_template(template_path).render(**partial_variables)
-            self.template = ChatPromptTemplate.from_messages([("system",tpl), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
-
+        partial_variables={}
+        if standards_path and not criteria:
+            standards = env.get_template(standards_path).render()
+            partial_variables=dict(criteria=standards)
+        elif criteria:
+            partial_variables=dict(criteria=criteria)
         else:
-            self.template = ChatPromptTemplate.from_messages([("system", prompt), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+            raise ValueError("You must provide criteria either as a string `criteria` or a filename `standards_path`, but not both.")
+
+        tpl = env.get_template(template_path).render(**partial_variables)
+        self.template = ChatPromptTemplate.from_messages([("system",tpl), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+
         self.model = model
 
     @tool
     def __call__(
-        self, *, content: str, record_id: str = 'not given', **kwargs) -> LLMOutput:
+        self, *, content: str, **kwargs) -> LLMOutput:
 
         llm = LLMs(connections=self.connections)[self.model]
 
@@ -66,13 +68,11 @@ class Judger():
         input_vars = {"content": [HumanMessage(content=content)]}
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        logger.info(f"Judger invoking chain with {self.model} for record: {record_id}")
         t0 = time.time()
         output = chain.invoke(input=input_vars, **kwargs)
         t1 = time.time()
-        logger.info(f"Judger invoked chain with {self.model} and record: {record_id} in {t1-t0:.2f} seconds")
+        logger.info(f"Judger invoked chain with {self.model} in {t1-t0:.2f} seconds")
 
-        output['record_id'] = record_id
         for k in LLMOutput.__required_keys__:
             if k not in output:
                 output[k] = None

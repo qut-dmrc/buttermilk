@@ -19,6 +19,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union
 
+from hydra import initialize, initialize_config_dir, compose
+
 from google.cloud import bigquery, storage
 import cloudpathlib
 import coloredlogs
@@ -74,7 +76,7 @@ class Singleton:
         return self
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Any] = Field(default_factory=lambda: _REGISTRY.get('cfg'))
+    cfg: Optional[Any] = Field(default_factory=dict, validate_default=True)
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     save_dir: Optional[str] = None
     _clients: dict[str, Any] = {}
@@ -93,7 +95,11 @@ class BM(Singleton, BaseModel):
             _REGISTRY['cfg'] = v
             return v
         else:
-            raise ValueError("No config passed in on first initialisation.")
+            with initialize(version_base=None, config_path="conf"):
+                v = compose(config_name="config")
+            _REGISTRY['cfg'] = v
+            return v
+
 
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
