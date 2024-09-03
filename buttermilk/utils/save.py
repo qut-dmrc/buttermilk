@@ -174,15 +174,19 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_binary(*, save_dir=None, data=None, uri=None, extension=None):
+def upload_binary(*, save_dir=None, data=None, uri=None, filename=None, extension=None):
     assert data is not None
     gcs = storage.Client()
 
-    if uri is None:
-        uri = f"{save_dir}/{shortuuid.uuid()}"
+    uri = uri or save_dir
+
+    if filename:
+        uri = f"{uri}/{filename}"
+    else:
+        uri = f"{uri}/{shortuuid.uuid()}"
     if extension:
         uri = f"{uri}.{extension}"
-
+        
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 
@@ -252,9 +256,9 @@ def upload_text(data, *, save_dir=None, uri=None, base_name=None, extension="htm
 
     return uri
 
-def upload_json(data, *, save_dir=None, uri=None, id=None):
-    id = id or shortuuid.uuid()
-    uri = uri or f"{save_dir}/{id}.jsonl"
+def upload_json(data, *, save_dir=None, uri=None, filename=None):
+    filename = filename or shortuuid.uuid()
+    uri = uri or f"{save_dir}/{filename}.jsonl"
     if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
         uri = uri + ".jsonl"
 

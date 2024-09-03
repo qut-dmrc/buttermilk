@@ -25,7 +25,7 @@ Your response should include these fields:
             {
                 "speaker_name": "<STRING>",
                 "speaker_affiliation": "<STRING>",
-                "solution_adressee": "<STRING>"
+                "solution_adressee": "<STRING>",
                 "statement": "<STRING>",
                 "problem_definition": "<STRING>",
                 "blame_attribution": "<STRING>",

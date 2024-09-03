@@ -4,12 +4,7 @@ environment:
   # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
   python_requirements_txt: requirements.txt
 additional_includes:
-- ../common/requirements.txt
-- ../common/criteria_gelber.jinja2
-- ../common/criteria_ordinary.jinja2
-- ../common/criteria_vaw.jinja2
-- ../common/instructions.jinja2
-- ../common/process.jinja2
+- ../templates
 inputs:
   content:
     type: string

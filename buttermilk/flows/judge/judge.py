@@ -17,6 +17,7 @@ from buttermilk.llms import LLMs
 
 from buttermilk import BM
 from buttermilk.tools.json_parser import ChatParser
+from langchain_core.prompts import MessagesPlaceholder
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
@@ -34,34 +35,23 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger():
-
-    def template_from_files(self,*, template_path, standards_path,system_prompt_path,process_path) -> ChatPromptTemplate:
-
-        env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-        criteria = env.get_template(standards_path).render()
-        system_prompt = env.get_template(system_prompt_path).render()
-        process = env.get_template(process_path).render()
-
-        partial_variables=dict(criteria=criteria, system_prompt=system_prompt, process=process)
-
-        user_prompt = env.get_template(template_path).render(**partial_variables)
-
-        template = ChatPromptTemplate.from_messages([("system",system_prompt), ("human",user_prompt)], template_format="jinja2")
-
-
-        return template
-
-
-    def __init__(self, *,model: str,
-                 system_prompt: str = None, user_prompt: str = None, standards_path: str = None, template_path: str = None, system_prompt_path: str = None, process_path: str = None) -> None:
+    def __init__(self, *, model: str, prompt: str = None, standards_path: str = None, template_path: str = None) -> None:
 
         bm = BM()
         self.connections = bm._connections_azure
 
-        if standards_path:
-            self.template = self.template_from_files(template_path=template_path, standards_path=standards_path, system_prompt_path=system_prompt_path, process_path=process_path)
+        if template_path:
+            env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+            partial_variables={}
+            if standards_path:
+                criteria = env.get_template(standards_path).render()
+                partial_variables=dict(criteria=criteria)
+
+            tpl = env.get_template(template_path).render(**partial_variables)
+            self.template = ChatPromptTemplate.from_messages([("system",tpl), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+
         else:
-            self.template = ChatPromptTemplate.from_messages([("system",system_prompt), ("human",user_prompt)], template_format="jinja2")
+            self.template = ChatPromptTemplate.from_messages([("system", prompt), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
         self.model = model
 
     @tool
@@ -91,6 +81,6 @@ class Judger():
 
 
 if __name__ == "__main__":
-    judger = Judger(standards_path="criteria_ordinary.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2", model="gpt4o")
+    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="system.jinja2",  model="gpt4o")
     output = judger(content="Hello, world!")
     print(output)
