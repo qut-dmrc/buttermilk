@@ -1,4 +1,5 @@
 outputs
+multirun
 connections.json*
 __pycache__/
 .promptflow
