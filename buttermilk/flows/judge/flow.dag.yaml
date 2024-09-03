@@ -1,0 +1,85 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+environment:
+  python_requirements_txt: requirements.txt
+additional_includes:
+- ../common/requirements.txt
+- ../templates
+inputs:
+  content:
+    type: string
+    default: ""
+outputs:
+  result:
+    type: object
+    reference: ${judge.analysis}
+nodes:
+- name: criteria
+  use_variants: true
+- name: judge
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    content: ${inputs.content}
+    system_prompt: ${system_prompt.output}
+    user_prompt: ${prompt.output}
+  init:
+    template_path:
+      type: string
+      default: apply_rules.jinja2
+- name: frames
+  type: prompt
+  source:
+    type: code
+    path: frames.jinja2
+  inputs: {}
+node_variants:
+  criteria:
+    default_variant_id: simplified
+    variants:
+      simplified:
+        node:
+          name: criteria
+          type: prompt
+          source:
+            type: code
+            path: get_criteria.py
+          inputs:
+            filename: "trans_simplified.txt"
+      cte:
+        node:
+          name: criteria
+          type: prompt
+          source:
+            type: code
+            path: get_criteria.py
+          inputs:
+            filename: "Center for Trans Equality Tips for Journalists September 2024.txt"
+      glaad:
+        node:
+          name: criteria
+          type: prompt
+          source:
+            type: code
+            path: get_criteria.py
+          inputs:
+            filename: "GLAAD Media Reference Guide September 2024.txt"
+      tja:
+        node:
+          name: criteria
+          type: prompt
+          source:
+            type: code
+            path: get_criteria.py
+          inputs:
+            filename: "Trans Journalist Association Guidelines September 2024.txt"
+      hrc:
+        node:
+          name: criteria
+          type: prompt
+          source:
+            type: code
+            path: get_criteria.py
+          inputs:
+            filename: "Human Rights Campaign Guide to Reporting on Transgender Individuals.txt"

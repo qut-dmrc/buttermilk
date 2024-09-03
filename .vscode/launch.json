@@ -25,7 +25,7 @@
             "justMyCode": false,
             "args": [
                 "--multirun",
-                "+experiments=gelber,ordinary,ots",
+                "+experiments=ots",
                 "+data=drag",
             ],
             "envFile": "${workspaceFolder}/.env",

@@ -1,0 +1,26 @@
+---
+name: Judger
+description: Apply a set of criteria to a single piece of content.
+model:
+  api: chat
+  configuration:
+    type: azure_openai
+    azure_deployment: gpt4o
+  parameters:
+    max_tokens: 128
+    temperature: 0.2
+inputs:
+  content:
+    type: string
+  criteria:
+    type: string
+---
+system:
+{% include system.jinja2 %}
+
+[CRITERIA]
+{{ criteria }}
+[END CRITERIA]
+
+user:
+{{ content }}
