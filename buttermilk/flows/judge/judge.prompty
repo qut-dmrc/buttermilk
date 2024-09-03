@@ -16,7 +16,7 @@ inputs:
     type: string
 ---
 system:
-{% include system.jinja2 %}
+{% include apply.jinja2 %}
 
 [CRITERIA]
 {{ criteria }}

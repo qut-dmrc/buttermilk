@@ -7,6 +7,7 @@ from promptflow.core import (
     ToolProvider,
     tool,
 )
+from langchain_core.messages import HumanMessage
 from pathlib import Path
 from typing import Optional, Self, TypedDict
 from jinja2 import Environment, FileSystemLoader
@@ -62,7 +63,7 @@ class Judger():
 
         chain = self.template.copy() | llm | ChatParser()
 
-        input_vars = dict(content=content)
+        input_vars = {"content": [HumanMessage(content=content)]}
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
         logger.info(f"Judger invoking chain with {self.model} for record: {record_id}")
@@ -81,6 +82,6 @@ class Judger():
 
 
 if __name__ == "__main__":
-    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="system.jinja2",  model="gpt4o")
+    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="apply.jinja2",  model="gpt4o")
     output = judger(content="Hello, world!")
     print(output)

@@ -4,20 +4,16 @@ from buttermilk.flows.judge.judge import Judger
 from buttermilk.llms import CHEAP_CHAT_MODELS
 from buttermilk.utils.utils import read_text
 
-@pytest.fixture(scope="session")
-def bm():
-    return buttermilk.BM()
-
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 def test_judger_ordinary(bm, fight_no_more_forever, model):
-    judger = Judger(standards_path="criteria_ordinary.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2", model=model)
+    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="apply.jinja2", model=model)
     output = judger(content=fight_no_more_forever)
     assert output
     pass
 
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 def test_judger_vaw(bm,  fight_no_more_forever, model):
-    judger = Judger(standards_path="criteria_vaw.jinja2", system_prompt_path="instructions.jinja2", process_path="process.jinja2", template_path="apply_rules.jinja2", model=model)
+    judger = Judger(standards_path="criteria_vaw.jinja2", template_path="apply.jinja2",model=model)
     output = judger(content=fight_no_more_forever)
     assert output
     pass
@@ -26,7 +22,7 @@ def test_judger_vaw(bm,  fight_no_more_forever, model):
 def test_analyse_template(bm, fight_no_more_forever, model):
     from buttermilk.flows.extract import Analyst
     standards = read_text("buttermilk/flows/templates/criteria_vaw.jinja2")
-    flow = Analyst(template="judge.prompty", criteria=standards, model=model)
+    flow = Analyst(template="generic.prompty", criteria=standards, model=model)
     output = flow(content=fight_no_more_forever)
     pass
     assert output
