@@ -23,7 +23,6 @@ nodes:
   inputs:
     content: ${inputs.content}
     model: haiku
-    standards_path: '"Center for Trans Equality Tips for Journalists September 2024.txt"'
     template_path: apply.jinja2
     prompt: ${criteria.output}
   init:
@@ -48,32 +47,47 @@ node_variants:
           source:
             type: code
             path: get_criteria.py
-          inputs: {}
+          inputs:
+            filename:
+              type: string
+              default: trans_simplified.yaml
       cte:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs: {}
+          inputs:
+            filename:
+              type: string
+              default: trans_cte.yaml
       glaad:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs: {}
+          inputs:
+            filename:
+              type: string
+              default: trans_glaad.yaml
       tja:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs: {}
+          inputs:
+            filename:
+              type: string
+              default: trans_tja.yaml
       hrc:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs: {}
+          inputs:
+            filename:
+              type: string
+              default: trans_hrc.yaml
