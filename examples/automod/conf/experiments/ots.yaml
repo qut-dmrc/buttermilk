@@ -1,6 +1,6 @@
 moderate:
   name: ots
-  x: range(2)
+  num_runs: 8
   init:
   models:
   - Comprehend

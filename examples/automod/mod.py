@@ -125,6 +125,7 @@ def run(cfg: DictConfig) -> None:
                 logger.info(f"Running batch: {batch_id}")
                 df = run_local(
                     model=model,
+                    num_runs=step_config.get('num_runs', 1),
                     target=step,
                     dataset=data_file,
                     batch_id=batch_id,

@@ -1,5 +1,6 @@
 moderate:
   name: ots
+  num_runs: 32
   init:
   models:
   - GPTJT
