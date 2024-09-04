@@ -45,6 +45,8 @@ from promptflow.tracing import start_trace, trace
 from  typing import  Self, MutableMapping
 from .utils import save
 import types
+from dotenv import load_dotenv
+
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
 from .utils.log import logger
@@ -102,6 +104,7 @@ class BM(Singleton, BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
+        load_dotenv()
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.project.get('verbose', False))
