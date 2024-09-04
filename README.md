@@ -42,8 +42,10 @@ export INSTALL_DIR=/mnt  # change as appropriate
 
 apt update && apt -y --no-install-recommends install neovim git zsh tmux curl pigz gnupg less nmap openssh-server python3 python3-pip rsync htop build-essential gcc g++ make psmisc keychain bmon jnettop ca-certificates ncdu
 
-# nvidia toolkit
-wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4 nvidia-smi
+# nvidia toolkit and nvidia driver
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4
+sudo apt install -y cuda-drivers
+
 
 # install gcloud sdk
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-cli -y
