@@ -40,11 +40,12 @@ export USER=ubuntu
 export DEBIAN_FRONTEND=noninteractive
 export INSTALL_DIR=/mnt  # change as appropriate
 
-apt update && apt -y --no-install-recommends install neovim git zsh tmux curl pigz gnupg less nmap openssh-server python3 python3-pip rsync htop build-essential gcc g++ make psmisc keychain bmon jnettop ca-certificates ncdu
+apt update && apt -y --no-install-recommends install neovim git zsh tmux curl pigz gnupg less nmap openssh-server python3 python3-pip rsync htop build-essential gcc g++ make psmisc keychain bmon jnettop ca-certificates ncdu software-properties-common
 
 # nvidia toolkit and nvidia driver
-wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4
-sudo apt install -y cuda-drivers
+# Use an image with this preinstalled, lots easier.
+#wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4
+#sudo apt install -y cuda-drivers
 
 
 # install gcloud sdk
@@ -76,9 +77,7 @@ mkdir -p $INSTALL_DIR/src && cd $INSTALL_DIR/src && git clone https://github.com
 
 # install dependencies
 cd buttermilk
-poetry source add --priority=explicit  torch124 https://download.pytorch.org/whl/cu124
-poetry add --source torch124 torch@latest torchaudio@latest torchvision@latest
-poetry install --with dev
+POETRY_CACHE_DIR=/mnt/cache/poetry poetry install --with dev
 # set up cloud connections
 az login
 gcloud auth login --enable-gdrive-access --update-adc --force
