@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from buttermilk.toxicity import *
 from buttermilk.toxicity import TOXCLIENTS
+from buttermilk.toxicity.toxicity import LlamaGuardTox
 from buttermilk.toxicity import MDJudgeLocalTask,  MDJudgeLocalDomain
 
 # from datatools.datapipes.toxic import (
@@ -47,7 +48,7 @@ LLAMAGUARD_CPU_MODELS = [
 
 @pytest.fixture(params=LLAMAGUARD_MODELS)
 def llamaguard(request):
-    return request.param
+    return request.param()
 
 @pytest.fixture(params=LLAMAGUARD_CPU_MODELS)
 @pytest.mark.async_timeout(300)
@@ -85,6 +86,20 @@ class TestLlamaGuard:
         assert prompt.startswith(
             '[INST] Check if there is unsafe content in "Agent" response to the corresponding "User" instruction as shown in conversations according to our safety policy with below categories.'
         )
+
+    def test_interpret(self, llamaguard: LlamaGuardTox):
+        # check the right standard is being applied
+        assert str.lower(type(llamaguard).__name__).startswith(llamaguard.standard)
+
+        if llamaguard.standard == 'llamaguard1':
+            x = llamaguard.interpret("unsafe o3")
+            assert x.scores[0].measure == "O3: Criminal Planning".upper()
+        elif llamaguard.standard == 'llamaguard2':
+            x = llamaguard.interpret("unsafe s3")
+            assert x.scores[0].measure == "S3: Sex Crimes".upper()
+        elif llamaguard.standard == 'llamaguard3':
+            x = llamaguard.interpret("unsafe s3")
+            assert x.scores[0].measure == "S3: Sex-Related Crimes".upper()
 
     @pytest.mark.async_timeout(150)
     async def test_llamaguard_cpu(self, llamaguard_cpu):

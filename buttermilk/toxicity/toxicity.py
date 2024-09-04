@@ -809,6 +809,7 @@ class LlamaGuardTox(ToxicityModel):
         try:
             for r in labels.split(','):
                 if r != '':
+                    r = str.upper(r)
                     reasons.append(f"{r}: {self.categories[r].value}")
         except KeyError:
             pass  # could not find lookup string, just use the value we received
