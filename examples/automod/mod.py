@@ -36,10 +36,11 @@ from buttermilk.utils.log import getLogger
 
 import cloudpathlib
 from tempfile import NamedTemporaryFile
-
+import itertools
 
 def run_local(
     *,
+    num_runs=1,
     target: str,
     model: str,
     batch_id: dict,
@@ -56,8 +57,10 @@ def run_local(
     else:
         flow = Analyst(model=model, **init)
     df = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
-    for _, row in tqdm.tqdm(
-        df.iterrows(),
+    runs = itertools.product(range(num_runs), df.iterrows())
+    for i, (_, row) in tqdm.tqdm(
+        runs,
+        total=num_runs*df.shape[0],
         colour=colour,
         desc=f"{target}-{model}",
         bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
@@ -131,7 +134,7 @@ def run(cfg: DictConfig) -> None:
                 )
                 logger.info(
                     dict(
-                        message=f"Successfully  completed batch: {batch_id} with {df.shape[0]} results.",
+                        message=f"Successfully completed batch: {batch_id} with {df.shape[0]} results.",
                         **batch_id,
                     )
                 )

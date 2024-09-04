@@ -1,24 +1,26 @@
 from promptflow.core import tool
 
-from datatools.utils import scrub_serializable
+from buttermilk.utils.utils import scrub_serializable
 
 COL_PREDICTION='prediction'
 @tool
-def eval_answer(groundtruth: dict, prediction, reasons: dict = {}, scores: dict = {}, labels: list[str] = []) -> dict:
+def eval_answer(groundtruth: dict, response: dict[str, str] ) -> dict:
     """
     This tool processes the prediction of a single line and returns the processed result.
 
     :param groundtruth: the groundtruth of a single line.
-    :param prediction: the prediction of a single line.
+    :param response: the prediction of a single line.
+    :param expected_reasons: a list of key points of correct reasoning
     """
-
     expected = groundtruth['answer']
+    prediction = response['prediction']
     overall_answer = (prediction == expected)
 
     scored_result = dict(predicted=prediction,
                          expected=expected,
                          correct=overall_answer)
     try:
+        scores = response['scores']
         scored_scores = {}
         pred_measures = {score['measure']: int(score['score']) for score in scores}
         expected_measures = {score['measure']: int(score['score']) for score in groundtruth.get('scores', [])}
@@ -30,11 +32,12 @@ def eval_answer(groundtruth: dict, prediction, reasons: dict = {}, scores: dict 
                 scored_scores[measure] = False
         if scored_scores:
             scored_result['scores'] = scored_scores
-    except (TypeError,ValueError) as e:
+    except (TypeError,ValueError,KeyError) as e:
         # detailed scores not available
         pass
 
     try:
+        reasons = response['reasons']
         scored_reasons = {}
         pred_criteria = {reason['heading']: int(reason['violates']) for reason in reasons}
         expected_criteria = {k: int(v) for k, v in groundtruth.get('criteria', {}).items()}
@@ -46,11 +49,12 @@ def eval_answer(groundtruth: dict, prediction, reasons: dict = {}, scores: dict 
                 scored_reasons[measure] = False
         if scored_reasons:
             scored_result['criteria'] = scored_reasons
-    except (TypeError,ValueError) as e:
+    except (TypeError,ValueError,KeyError) as e:
         # detailed scores not available
         pass
 
     try:
+        labels = response['labels']
         labels_expected = set([str.lower(l) for l in groundtruth.get('labels', [])])
         if labels_expected:
             labels_pred = set([str.lower(l) for l in labels])
@@ -62,7 +66,7 @@ def eval_answer(groundtruth: dict, prediction, reasons: dict = {}, scores: dict 
                     missing_labels=missing_labels,
                     extra_labels=wrong_labels))
 
-    except (TypeError,ValueError):
+    except (TypeError,ValueError,KeyError):
         # labels not available
         pass
 

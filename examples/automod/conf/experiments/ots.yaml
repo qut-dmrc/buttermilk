@@ -1,5 +1,6 @@
 moderate:
   name: ots
+  x: range(2)
   init:
   models:
   - Comprehend
@@ -10,7 +11,7 @@ moderate:
   - AzureContentSafety
   - AzureModerator
   - OpenAIModerator
-  - LlamaGuard1ReplicateAWQ
+  - LlamaGuard1Replicate
   - LlamaGuard1Together
   - LlamaGuard2Replicate
   - LlamaGuard2Together

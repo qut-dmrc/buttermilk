@@ -47,47 +47,32 @@ node_variants:
           source:
             type: code
             path: get_criteria.py
-          inputs:
-            filename:
-              type: string
-              default: trans_simplified.yaml
+          inputs: {}
       cte:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs:
-            filename:
-              type: string
-              default: trans_cte.yaml
+          inputs: {}
       glaad:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs:
-            filename:
-              type: string
-              default: trans_glaad.yaml
+          inputs: {}
       tja:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs:
-            filename:
-              type: string
-              default: trans_tja.yaml
+          inputs: {}
       hrc:
         node:
           type: prompt
           source:
             type: code
             path: get_criteria.py
-          inputs:
-            filename:
-              type: string
-              default: trans_hrc.yaml
+          inputs: {}

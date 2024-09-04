@@ -1,26 +1,73 @@
 $schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
 environment:
   python_requirements_txt: requirements.txt
-additional_includes:
-- ../common/config.py
-- ../common/__init__.py
 inputs:
   groundtruth:
     type: object
     default:
       answer: false
-  prediction:
+      reasoning:
+      - Nonbinary status was relevant to the story
+  response:
     type: object
-  reasons:
-    type: object
-  scores:
-    type: object
-  labels:
-    type: object
+    default:
+      interpretation: The article reports on the circumstances surrounding the death
+        of Nex Benedict, a nonbinary youth, highlighting the details from the
+        autopsy and reactions from various individuals and advocacy groups.
+      reasons:
+      - heading: R1 Names and Pronouns
+        reasoning: The article correctly refers to Nex Benedict by their chosen name
+          throughout the piece. The chosen name is consistently used without any
+          qualifying language that would cast doubt on their gender identity.
+        violates: false
+        confidence: high
+      - heading: R1 Names and Pronouns
+        reasoning: The article correctly uses they/them pronouns in reference to Nex
+          Benedict, respecting their gender identity.
+        violates: false
+        confidence: high
+      - heading: R4 Accuracy and Respect
+        reasoning: The article uses respectful and accurate language regarding Nex’s
+          gender identity, not resorting to offensive terms or sensationalized
+          language.
+        violates: false
+        confidence: high
+      - heading: R4 Avoid Focus on Medical Transition
+        reasoning: The article does not focus on any aspect of medical transition or
+          physical alterations, adhering to guidelines to avoid prurient
+          curiosity.
+        violates: false
+        confidence: high
+      - heading: R4 Avoid Sensationalized Images or Headlines
+        reasoning: The headline is straightforward and does not include sensational
+          language about Nex Benedict’s identity or death.
+        violates: false
+        confidence: high
+      - heading: R4 Avoid sensationalism
+        reasoning: The article discusses the autopsy and the social circumstances
+          surrounding Nex's death without resorting to sensationalism, instead
+          focusing on the factual details and reactions.
+        violates: false
+        confidence: high
+      - heading: R3 Expert Opinion
+        reasoning: The article includes voices from Nex's family, a legal expert, and
+          advocacy groups, ensuring that the perspectives of those directly
+          affected are part of the narrative.
+        violates: false
+        confidence: high
+      conclusion: The article respectfully and accurately reports on the death of Nex
+        Benedict, complying with guidelines on names, pronouns, avoiding
+        sensationalism, and using correct expert opinions.
+      prediction: false
+      confidence: high
+      labels: []
 outputs:
-  summary:
+  measure:
     type: string
     reference: ${line_process.output}
+  score:
+    type: string
+    reference: ${score.output}
 nodes:
 - name: line_process
   type: python
@@ -29,10 +76,23 @@ nodes:
     path: line_process.py
   inputs:
     groundtruth: ${inputs.groundtruth}
-    prediction: ${inputs.prediction}
-    reasons: ${inputs.reasons}
-    scores: ${inputs.scores}
-    labels: ${inputs.labels}
+    response: ${inputs.response}
+- name: score
+  type: python
+  source:
+    type: code
+    path: score.py
+  inputs:
+    groundtruth: ${inputs.groundtruth}
+    response: ${inputs.response}
+    model: sonnet
+  init:
+    template_path:
+      type: string
+      default: score.jinja2
+    model:
+      type: string
+      default: sonnet
 - name: aggregate
   type: python
   source:

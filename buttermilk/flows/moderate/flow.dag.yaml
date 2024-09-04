@@ -66,7 +66,7 @@ nodes:
     - AzureContentSafety
     - AzureModerator
     - OpenAIModerator
-    - LlamaGuard1ReplicateAWQ
+    - LlamaGuard1Replicate
     - LlamaGuard1Together
     - LlamaGuard2Replicate
     - LlamaGuard2Together
@@ -168,7 +168,7 @@ node_variants:
             type: code
             path: scorers.py
           inputs:
-            client_name: LlamaGuard1ReplicateAWQ
+            client_name: LlamaGuard1Replicate
             input_text: ${passthrough_gate.output}
       llamaguard1together:
         node:

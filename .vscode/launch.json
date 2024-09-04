@@ -24,9 +24,10 @@
             ],
             "justMyCode": false,
             "args": [
+                "hydra/launcher=joblib",
                 "--multirun",
                 "+experiments=ots",
-                "+data=drag",
+                "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

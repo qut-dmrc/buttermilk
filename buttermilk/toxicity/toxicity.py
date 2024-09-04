@@ -862,11 +862,11 @@ class LlamaGuard1Together(LlamaGuardTox):
     def init_client(self):
         return Together(model=self.model, **self.options)
 
-class LlamaGuard1ReplicateAWQ(LlamaGuardTox):
+class LlamaGuard1Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories1
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD1))
     model: str = "tomasmcm/llamaguard-7b:86a2d8b7"
-    standard: str = "LlamaGuard2-7B-AWQ"
+    standard: str = "llamaguard1"
     process_chain: str = "replicate"
     options: dict = {
         "model": "tomasmcm/llamaguard-7b:86a2d8b79335b1557fc5709d237113aa34e3ae391ee46a68cc8440180151903d",

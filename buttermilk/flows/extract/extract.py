@@ -81,7 +81,7 @@ class Analyst():
         self.batch_id = dict(flow="Analyst", model=self.model,template=template)
         if template:
             self.tpl_variables['system'] = system_prompt
-            self.tpl_variables['system'] = user_prompt
+            self.tpl_variables['user'] = user_prompt
             # This is a bit of a hack to allow Prompty to interpret the template first, but then
             # leave the actual input variables for us to fill later with langchain.
             #self.tpl_variables = {"content":r"{{content}}"}
@@ -127,7 +127,7 @@ class Analyst():
         input_vars = dict()
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
+        output = self.invoke_langchain(chain=chain, input_vars=input_vars, call_details=call_details, **kwargs)
 
         if record_id:
             output['record_id'] = record_id

@@ -2,7 +2,7 @@ from typing import List
 import numpy as np
 from promptflow.core import log_metric, tool
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, log_loss,precision_recall_fscore_support
-from datatools.utils import scrub_serializable
+from buttermilk.utils.utils import scrub_serializable
 
 @tool
 def aggregate(processed_results: List[dict]):
@@ -27,6 +27,12 @@ def aggregate(processed_results: List[dict]):
     # Calculate classification results from scikit-learn stats
     pred = np.array([x.get('predicted') for x in results])
     expected = np.array([x.get('expected') for x in results])
+
+    try:
+        alignment = np.mean([x.get('alignment') for x in results if x.get('alignment')])
+        metrics['mean_alignment']=alignment
+    except ValueError:
+        alignment = None
 
     #accuracy = round((sum([1 for x in results if x.get('correct')]) / len(results)), 2)
     try:

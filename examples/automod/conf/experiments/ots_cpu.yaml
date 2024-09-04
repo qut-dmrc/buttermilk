@@ -1,0 +1,8 @@
+moderate:
+  name: ots
+  x: range(32)
+  init:
+  models:
+  - HONEST
+  - LFTW
+  - REGARD
