@@ -46,7 +46,7 @@ def run_local(
     model: str,
     batch_id: dict,
     colour: str = "magenta",
-    dataset: str,
+    dataset: str|pd.DataFrame,
     column_mapping: dict[str, str],
     init: dict = {},
 ) -> pd.DataFrame:
@@ -59,11 +59,12 @@ def run_local(
         flow = Evaluator(model=model, **init)
     else:
         flow = Analyst(model=model, **init)
-    df = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
-    runs = itertools.product(range(num_runs), df.iterrows())
+    if isinstance(dataset, str):
+        dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
+    runs = itertools.product(range(num_runs), dataset.iterrows())
     for i, (_, row) in tqdm.tqdm(
         runs,
-        total=num_runs*df.shape[0],
+        total=num_runs*dataset.shape[0],
         colour=colour,
         desc=f"{target}-{model}",
         bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
@@ -71,6 +72,7 @@ def run_local(
         input_vars = {key: row[mapped] for key, mapped in column_mapping.items()}
         details = flow(**input_vars)
         details["init_vars"] = init
+        details["expected"] = row.pop('expected', None)
         details["record"] = row.to_dict()
         details["timestamp"] = pd.to_datetime(datetime.datetime.now())
         for k, v in batch_id.items():
@@ -142,7 +144,7 @@ def run(cfg: DictConfig) -> None:
                         **batch_id,
                     )
                 )
-                
+
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
                 break
@@ -150,7 +152,38 @@ def run(cfg: DictConfig) -> None:
                 uri = bm.save(df.reset_index())
                 logger.info(f"Saved {df.shape[0]} step results to {uri}")
                 results = pd.concat([results, df])
+
         Path(data_file).unlink(missing_ok=True)
+
+    for step, step_config in cfg.get('eval', {}).items():
+        models: list = OmegaConf.to_object(step_config.get("models", []))
+        for model in models:
+            if step_config.get('aggregate'):
+                aggregated = run_local(
+                    model=model,
+                    num_runs=step_config.get('num_runs', 1),
+                    target=step,
+                    dataset=results,
+                    column_mapping=step_config.get('columns'),
+                    batch_id=batch_id,
+                    colour=next(colour_cycle),
+                    init=step_config.get("init", {}),
+                )
+                uri = bm.save(aggregated.reset_index())
+                logger.info(f"Saved {aggregated.shape[0]} aggregated scored results to {uri}")
+            else:
+                scored = run_local(
+                    model=model,
+                    num_runs=step_config.get('num_runs', 1),
+                    target=step,
+                    dataset=results,
+                    column_mapping=step_config.get('columns'),
+                    batch_id=batch_id,
+                    colour=next(colour_cycle),
+                    init=step_config.get("init", {}),
+                )
+                uri = bm.save(scored.reset_index())
+                logger.info(f"Saved {scored.shape[0]} scored results to {uri}")
 
     uri = bm.save(results.reset_index(), filename="results")
     logger.info(f"Saved {results.shape[0]} run batch results to {uri}")

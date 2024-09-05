@@ -1,0 +1,10 @@
+evaluator:
+  name: evaluator
+  aggregate: false
+  levels:
+  - experiment
+  - dataset
+  - model
+  init:
+  columns:
+  models: ["sonnet", "gemini15pro"]
