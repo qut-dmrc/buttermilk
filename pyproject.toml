@@ -4,6 +4,13 @@ version = "0.1.0"
 description = ""
 authors = ["Nicolas Suzor <nic@suzor.com>"]
 readme = "README.md"
+license = "GPL-3.0-or-later"
+packages = [
+    { include = "buttermilk", from = "." },
+]
+
+[tool.poetry.plugins.package_tools]
+buttermilk = "buttermilk.tools.utils:list_package_tools"
 
 [tool.poetry.dependencies]
 python = "^3.11"
