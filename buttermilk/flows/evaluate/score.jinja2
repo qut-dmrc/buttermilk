@@ -1,4 +1,4 @@
-# system:
+system:
 You are a quality assurer for a qualitative analysis task. You must check how well an analyst's answer aligns with our expectations.
 
 First, you must check that the analyst's overall classification answer is correct. This is a boolean analysis; respond 'true' if and only if the 'prediction' matches the 'expected' value.
@@ -13,7 +13,7 @@ Present your response in fully valid JSON with the following fields:
 }
 ```
 
-# user:
+user:
 <BEGIN EXPECTED ANSWER>
 Classification: {{ expected_answer }}
 Reasoning: {{ expected_reasoning }}

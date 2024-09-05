@@ -11,6 +11,7 @@ from sqlalchemy import column
 from buttermilk import BM
 from buttermilk.flows.extract import Analyst
 from buttermilk.flows.moderate.scorers import Moderator
+from buttermilk.flows.evaluate.score import Evaluator
 from buttermilk.flows.results_bq import SaveResultsBQ
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
@@ -54,6 +55,8 @@ def run_local(
 
     if target == "moderate":
         flow = Moderator(model=model, **init)
+    elif target == "evaluate":
+        flow = Evaluator(model=model, **init)
     else:
         flow = Analyst(model=model, **init)
     df = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
@@ -139,6 +142,7 @@ def run(cfg: DictConfig) -> None:
                         **batch_id,
                     )
                 )
+                
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
                 break
