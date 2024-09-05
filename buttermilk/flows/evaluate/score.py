@@ -20,7 +20,7 @@ from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
 
 from buttermilk import BM
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 from promptflow.core import Prompty
 from promptflow.core._prompty_utils import convert_prompt_template

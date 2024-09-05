@@ -6,7 +6,7 @@ from promptflow.tracing import trace
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from buttermilk import BM
 from buttermilk.llms import LLMs
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.json_parser import ChatParser
 from pathlib import Path
 from typing import Literal
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable

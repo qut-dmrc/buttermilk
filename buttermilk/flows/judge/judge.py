@@ -17,7 +17,7 @@ from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
 
 from buttermilk import BM
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]

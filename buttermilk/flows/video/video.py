@@ -19,7 +19,7 @@ from buttermilk import BM
 from vertexai.generative_models import GenerativeModel, Part, SafetySetting, FinishReason
 import vertexai.generative_models as generative_models
 
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.json_parser import ChatParser
 import vertexai
 
 BASE_DIR = Path(__file__).absolute().parent
