@@ -1,32 +1,25 @@
 from pathlib import Path
-import time
 
 from promptflow.core import (
     ToolProvider,
     tool,
 )
-from langchain_core.messages import HumanMessage
 from pathlib import Path
 from typing import Optional, Self, TypedDict
 from jinja2 import Environment, FileSystemLoader
 from langchain_core.prompts import (
-    ChatMessagePromptTemplate,
     ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    SystemMessagePromptTemplate,
 )
-from langchain_core.runnables import Runnable
-from jinja2 import Environment, BaseLoader, Undefined
+from jinja2 import Environment, Undefined
 from buttermilk.llms import LLMs
 
 from buttermilk import BM
 from buttermilk.utils.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
-from promptflow.core import Prompty
 from promptflow.core._prompty_utils import convert_prompt_template
 
 BASE_DIR = Path(__file__).absolute().parent
-TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
+TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "include"]
 
 
 class LLMOutput(TypedDict):
@@ -67,7 +60,7 @@ class Evaluator(ToolProvider):
         self.model = model
 
     @tool
-    def __call__(self, *, groundtruth: dict, response: dict[str, str], **kwargs) -> LLMOutput:
+    def run(self, *, groundtruth: dict, response: dict[str, str]) -> LLMOutput:
         llm = LLMs(connections=self.connections)[self.model]
 
         chain = self.template.copy() | llm | ChatParser()
@@ -83,3 +76,8 @@ class Evaluator(ToolProvider):
                 output[k] = None
 
         return output
+
+
+    @tool
+    def __call__(self, *, groundtruth: dict, response: dict[str, str]) -> LLMOutput:
+        return self.run(groundtruth=groundtruth, response=response)

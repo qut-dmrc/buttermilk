@@ -1,0 +1,13 @@
+buttermilk.tools.score_tool.Evaluator:
+  class_name: Evaluator
+  inputs:
+    groundtruth:
+      type: object
+    prediction:
+      type: object
+  init:
+  module: buttermilk.tools.score_tool
+  name: Evaluator
+  description: Prompts a LLM to rate the quality of an answer against a groundtruth value
+  type: python
+  function: run

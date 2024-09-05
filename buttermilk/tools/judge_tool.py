@@ -59,7 +59,7 @@ class Judger(ToolProvider):
         self.model = model
 
     @tool
-    def run(self, *, content: str, **kwargs) -> LLMOutput:
+    def run(self, *, content: str) -> LLMOutput:
 
         llm = LLMs(connections=self.connections)[self.model]
 
@@ -69,7 +69,7 @@ class Judger(ToolProvider):
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
         t0 = time.time()
-        output = chain.invoke(input=input_vars, **kwargs)
+        output = chain.invoke(input=input_vars)
         t1 = time.time()
         logger.debug(f"Judger invoked chain with {self.model} in {t1-t0:.2f} seconds")
 
@@ -80,5 +80,5 @@ class Judger(ToolProvider):
         return  output
 
 
-    def __call__(        self, *, content: str, **kwargs) -> LLMOutput:
-        return self.run(content=content, **kwargs)
+    def __call__(        self, *, content: str) -> LLMOutput:
+        return self.run(content=content)

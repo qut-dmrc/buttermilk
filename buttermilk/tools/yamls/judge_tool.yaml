@@ -3,14 +3,11 @@ buttermilk.tools.judge_tool.Judger:
   inputs:
     content:
       type: string
-  init:
     standards_path:
       type: string
-    template_path:
-      type: string
-      default: apply.jinja2
   module: buttermilk.tools.judge_tool
   name: Judger
   description: Applies a set of rules to a single piece of content
   type: python
   function: run
+  category: uknown

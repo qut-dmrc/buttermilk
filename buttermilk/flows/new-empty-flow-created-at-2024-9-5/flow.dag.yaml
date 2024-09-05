@@ -1,0 +1,21 @@
+inputs: {}
+outputs: {}
+nodes:
+- name: Serp_API_2yh6
+  type: python
+  source:
+    type: package
+    tool: promptflow.tools.serpapi.SerpAPI.search
+  inputs: {}
+- name: Evaluator_81nw
+  type: python
+  source:
+    type: package
+    tool: buttermilk.tools.score_tool.Evaluator.run
+  inputs: {}
+- name: Judger_mylx
+  type: python
+  source:
+    type: package
+    tool: buttermilk.tools.judge_tool.Judger
+  inputs: {}
