@@ -1,0 +1,80 @@
+name: factored
+info: Interpreted and factored guidelines drawn from TJA guidelines (https://styleguide.transjournalists.org/)
+author: K, L
+template: |
+    UNNECESSARY IDENTIFICATION
+    ========
+    - Only mention a person's transgender identity if it's essential to the story's content or clarity.
+    - Treat transgender individuals as you would cisgender people in reporting, avoiding unnecessary identification or "outing".
+    - Obtain the explicit consent of transgender individuals before disclosing any information about their gender identity, including names and pronouns.
+    - Respect the individual's wishes regarding how they are represented in the media.
+
+        Examples of unnecessary identification: "The actress Hunter Schafer, who is a transgender woman and raised as a boy, has been cast in a new role in an upcoming horror film".
+
+    Exception: It is not a violation to identify a person's transgender identity if it is pertinent to the story, or they are discussing their experience as a transgender person; this could be the case in interviews with trans activists, for example.
+
+    USES INCORRECT NAME OR PRONOUNS
+    ========
+    - Always use a transgender person's chosen name and pronouns, avoiding their deadname (former name) unless explicitly given permission.
+    - Don't use phrases that cast doubt on a person's gender identity - for example, "she calls herself..." or "she wants to be called...".
+    - Don't put quotation marks around their chosen name or pronouns. If unsure about pronoun preferences, use pronouns consistent with how the person lives publicly.
+    - The goal is to respect the individual's identity and avoid language that could delegitimize or question their gender expression. The exception to this rule is when the article is breaking news about a celebrity coming out as transgender, in which case it may be necessary to utilise their former name to identify them to readers. Their preferred pronouns should always be retained, even during this exception.
+
+        Examples of using incorrect names or pronouns: "The actress Ellen Page, or "Elliot" as she calls herself now, has been case in a new role in an upcoming film".
+
+    Exception: It is acceptable for a breaking news article where a celebrity comes out as trans to be identified by their former name for the purpose of identifying them to the readers. This name should only be used once and it is never acceptable to not use their chosen pronouns.
+
+    USES INACCURATE PHRASES / DESCRIPTORS
+    ========
+    - When reporting on transgender individuals, it's crucial to use respectful and accurate language. Use "assigned sex/gender at birth" instead of phrases like "born female/male," and opt for terms like "transgender" or "being transgender" rather than outdated expressions. - Avoid potentially offensive terms such as "homosexual" or "gay lifestyle", instead using "being gay" or "sexual orientation".
+    - Don't use "identifies as" language; simply state a person's gender or sexual orientation directly.
+    - It's important to understand the distinctions between gender identity, gender expression, and sexual orientation.
+    - Avoid comparing transgender people to "real" or "biological" men/women, as this implies transgender identities are not authentic in their gender identity.
+    - Overall, use language that affirms transgender individuals' authentic selves and avoids delegitimizing their identities or experiences.
+
+        Examples of using inaccurate phrases: John was born female but identifies as a trans homosexual man.
+
+    USES POLITICISED PHRASES
+    ========
+    When reporting on transgender issues, it's important to avoid using politically charged, innacurate and potentially harmful framings that have been politicised by anti-trans groups. Journalists should strive to use neutral, respectful language that accurately represents transgender individuals and their experiences.
+    - DO NOT use terms like 'gender ideology', 'trans ideology', or 'trans agenda' as these imply that being transgender is a political choice rather than a genuine identity.
+    - DO NOT use other problematic phrases include 'detransitioner', 'mutilation', 'sterilization', 'social contagion', 'stealthing', 'passing', 'male-bodied', and 'female-bodied'. These terms can be used to delegitimize transgender experiences or promote harmful stereotypes. - Additionally, DO NOT to transgender rights or activism as an 'ideology', 'dogma', or 'radical' concept.
+    - DO NOT suggest that being transgender is a mental disorder
+
+    USES HARMFUL NARRATIVES
+    ========
+    Journalists should avoid perpetuating harmful narratives about transgender people in their reporting.
+    - It's crucial to refrain from using terms like "grooming" in relation to LGBTQ+ people, as this baselessly associates them with child abuse. The phrase "accused of being transgender" should be avoided, as it implies being transgender is negative.
+    - Reporters should not suggest that being transgender is solely a response to trauma, a new "trend," or caused by external factors, as these narratives are inaccurate and harmful. Importantly, there is no evidence that legislation promoting transgender rights, such as "bathroom bills," leads to increased violence or safety threats. Overall, the goal is to provide accurate, respectful coverage that doesn't reinforce damaging stereotypes or unfounded fears about transgender individuals and their rights.
+    - There is no evidence that legislation promoting transgender rights, such as "bathroom bills", leads to increased violence or safety concerns.
+    - Overall, the goal is to provide accurate, respectful coverage that doesn't reinforce damaging stereotypes of unfounded fears about transgender individuals.
+
+
+    ASSUMES GENDER IDENTITY
+    ========
+    - When reporting on breaking news stories that may involve LGBTQ+ individuals, journalists should avoid making assumptions about gender identity.
+    - Treat uncertain information about someone's gender identity as you would any other unconfirmed detail in a story.
+    - If a person's gender identity has been misidentified, simply state that they were misidentified or wrongly identified, rather than using phrases like "allegedly" or "accused" of being transgender or cisgender.
+    - This approach ensures respectful and accurate reporting while avoiding language that could stigmatize or delegitimize transgender identities.
+
+        Example of assuming gender identity: "The perpetrator is allegedly a man, and she is reportedly transgender".
+        Example of correct reporting on gender identity: "The perpetrator is yet to be identified, and details on the suspect will be released when they are available".
+
+    INAPPROPRIATE MEDICALISATION
+    ========
+    - When reporting on transgender individuals in medical contexts, it's important to avoid unnecessarily equating gender with anatomy.
+    - Using terms like "women," "men," "female," or "male" is acceptable, often more inclusive terms like "patients" or "people" are sufficient.
+    - Journalists should refrain from gratuitously focusing on a transgender person's body, surgery, or medical treatments, as this can be sensationalistic and dehumanizing.
+    - Instead, reporters should aim to tell more comprehensive stories about transgender individuals' experiences, struggles, and achievements.
+    - It's crucial to respect privacy regarding transition processes and recognize that not all transgender people undergo medical transition due to various factors.
+    - The focus should not be solely on medical aspects of transition, as this can overshadow social transition and other important aspects of a person's life.
+    - Overall, the goal is to present transgender individuals as whole people, rather than reducing them to their medical experiences or physical characteristics.
+
+        Example of inappropriate medeicalisation: EXAMPLE HERE.
+
+    NOT FRAMED AS SYSTEMIC
+    ========
+    When reporting on transgender issues, it's crucial to acknowledge the systemic violence, discrimination, and disadvantages facing this community.
+    - Journalists should highlight the higher rates of poverty, homelessness, and vulnerability to hate crimes among transgender individuals, while avoiding harmful stereotypes or sensationalism.
+    - It's important to recognize the intersectionality of these issues, particularly for transgender people of colour, and to address barriers in healthcare, employment, and housing.
+    - Reporters should strive to include transgender voices and perspectives, focus on human aspects of stories, and provide context through statistics and expert opinions, ultimately offering a comprehensive and accurate portrayal of the challenges and resilience within the transgender community.

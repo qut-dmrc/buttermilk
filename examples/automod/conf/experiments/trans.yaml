@@ -1,0 +1,28 @@
+judge:
+  name: tja
+  num_runs: 1
+  standards:
+  - trans_tja.yaml
+  - trans_cte.yaml
+  - trans_hrc.yaml
+  - trans_glaad.yaml
+  - trans_simplified.yaml
+  - trans_factored.yaml
+  models: ["haiku"]
+data:
+  name: trans_train
+  uri: gs://dmrc-platforms/data/tja_train.jsonl
+  columns:
+  - record_id: id
+  - content: text
+  - groundtruth: expected_answer
+  - expected_reasons: expected_reasoning
+  - prediction: prediction
+evals:
+  score:
+    aggregate: false
+  evaluator:
+    aggregate: false
+    models: ["haiku"]
+  metrics:
+    aggregate: true

@@ -1,6 +1,6 @@
 from pathlib import Path
 import time
-
+import pandas as pd
 from promptflow.core import (
     ToolProvider,
     tool,
@@ -15,6 +15,8 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
     SystemMessagePromptTemplate,
 )
+import datetime
+import tqdm
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
@@ -48,11 +50,7 @@ class Evaluator(ToolProvider):
         env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         tpl = env.get_template(template_path).render({})
-        template_vars = {"expected_answer": "{{expected_answer}}", "expected_reasoning": r"{{expected_reasoning}}", "prediction":r"{{prediction}}"}
-        # tpl = env.get_template((BASE_DIR / template_path).as_posix()).render({})
-
-        # load prompty as a flow
-        # prompty = Prompty.load(BASE_DIR / template_path)
+        template_vars = {"groundtruth": "{{groundtruth}}", "prediction":r"{{prediction}}"}
         template = convert_prompt_template(tpl, api="chat", inputs=template_vars)
 
         # convert to a list of messages and roles expected by langchain
@@ -67,14 +65,13 @@ class Evaluator(ToolProvider):
         self.model = model
 
     @tool
-    def __call__(self, *, groundtruth: dict, response: dict[str, str], **kwargs) -> LLMOutput:
+    def __call__(self, *, groundtruth: dict, prediction: dict[str, str], **kwargs) -> LLMOutput:
         llm = LLMs(connections=self.connections)[self.model]
 
         chain = self.template.copy() | llm | ChatParser()
         input_vars = dict(
-            expected_answer=groundtruth["answer"],
-            expected_reasoning=groundtruth["reasoning"],
-            prediction=response,
+            expected=groundtruth,
+            prediction=prediction,
         )
         output = chain.invoke(input=input_vars)
 
@@ -83,3 +80,18 @@ class Evaluator(ToolProvider):
                 output[k] = None
 
         return output
+
+    def batch(self, dataset: pd.DataFrame, groundtruth: str = 'expected', prediction: str = 'prediction', **kwargs) -> list:
+        results = []
+        for _, row in tqdm.tqdm(
+            dataset.iterrows(),
+            total=dataset.shape[0],
+            desc=f'evaluator-{self.model}',
+            bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        ):
+            details = self.__call__(groundtruth=row[groundtruth], prediction=row[prediction], **kwargs)
+            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+
+            results.append(details)
+
+        return results

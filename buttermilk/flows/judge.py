@@ -20,7 +20,7 @@ from buttermilk import BM
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 BASE_DIR = Path(__file__).absolute().parent
-TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
+TEMPLATE_PATHS = [BASE_DIR, BASE_DIR / "common", BASE_DIR / "templates"]
 
 logger = getLogger()
 class KeepUndefined(Undefined):
@@ -36,7 +36,7 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger(ToolProvider):
-    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'apply.jinja2') -> None:
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2') -> None:
 
         bm = BM()
         self.connections = bm._connections_azure

@@ -12,10 +12,10 @@ from buttermilk import BM
 from buttermilk.flows.extract import Analyst
 from buttermilk.flows.moderate.scorers import Moderator
 from buttermilk.flows.evaluate.score import Evaluator
+from buttermilk.flows.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
-from promptflow.azure import PFClient as AzurePFClient
-from promptflow.client import PFClient as LocalPFClient
 import hydra
+from buttermilk.tools.metrics import Scorer, Metriciser
 from buttermilk.utils.utils import read_text
 from omegaconf import DictConfig, OmegaConf
 from buttermilk.apis import (
@@ -106,87 +106,76 @@ def run(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    for step, step_config in cfg.experiments.items():
-        data_file = cache_data(cfg.data.uri)
-        logger.info(
-            f"Cached local copy of dataset {cfg.data.name} from {cfg.data.uri} to {data_file}"
-        )
+    dataset = pd.read_json(cfg.data.uri, orient='records', lines=True)
 
-        logger.debug(f"Running {step} {step_config.name}")
-        models: list = OmegaConf.to_object(step_config.get("models", []))
-        shuffle(models)
+    # Judging step
+    if step := cfg.experiments.get('judge'):
+        models: list = OmegaConf.to_object(step.get("models", []))
+        standards: list = OmegaConf.to_object(step.get("standards", []))
+        permutations = itertools.product(models, standards)
+        shuffle(permutations)
 
-        df = pd.DataFrame()
+        num_runs = step.get("num_runs", 1)
+        for model, standard in permutations:
 
-        for model in models:
+            df = pd.DataFrame()
+
+            judge = Judger(model=model, **step.get("init",{}))
+            scorer = Scorer()
+            metriciser = Metriciser()
+
             try:
                 batch_id = dict(
-                    run_id=bm._run_id,
-                    experiment=step_config.name,
+                    run_id=bm._run_id, step="judge",
                     dataset=cfg.data.name,
                     model=model,
                 )
 
-                logger.info(f"Running batch: {batch_id}")
+                logger.info(dict(message=f"Judging {dataset.shape[0]} records over {num_runs} iteration(s) for batch: {batch_id}", **batch_id))
                 df = run_local(
                     model=model,
-                    num_runs=step_config.get('num_runs', 1),
+                    num_runs=num_runs,
                     target=step,
-                    dataset=data_file,
+                    dataset=dataset,
                     batch_id=batch_id,
                     column_mapping=cfg.data.columns,
-                    colour=next(colour_cycle),
-                    init=step_config.get("init", {}),
+                    colour=next(colour_cycle)
                 )
+                uri = bm.save(df.reset_index())
                 logger.info(
                     dict(
-                        message=f"Successfully completed batch: {batch_id} with {df.shape[0]} results.",
-                        **batch_id,
+                        message=f"Successfully completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
+                        **batch_id,results=uri
                     )
                 )
+
+                # score
+                df = scorer(df)
+
+                # evaluate
+                for model in cfg['evals'].get("evaluator").get("models",{}):
+                    evaluator = Evaluator(model=model, **cfg['evals'].get("evaluator").get("init",{}))
+                    evals = evaluator.batch(df)
+                    uri = bm.save(evals, filename='evaluator_{model}.jsonl')
+                    logger.info(dict(message=f"Saved {df.shape[0]} evaluated results from {model} to {uri}", **batch_id,results=uri
+                        ))
+                    df.loc[:, f'evaluator_{model}'] = evals
+
+                # generate metrics
+                metrics = metriciser.evaluate_results(df)
+                uri = bm.save(metrics.reset_index(), filename='metrics.jsonl')
+                logger.info(dict(message=f"Saved {metrics.shape[0]} aggregated scored batch results to {uri}", **batch_id,results=uri
+                    ))
 
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
                 break
             finally:
-                uri = bm.save(df.reset_index())
-                logger.info(f"Saved {df.shape[0]} step results to {uri}")
                 results = pd.concat([results, df])
 
-        Path(data_file).unlink(missing_ok=True)
-
-    for step, step_config in cfg.get('eval', {}).items():
-        models: list = OmegaConf.to_object(step_config.get("models", []))
-        for model in models:
-            if step_config.get('aggregate'):
-                aggregated = run_local(
-                    model=model,
-                    num_runs=step_config.get('num_runs', 1),
-                    target=step,
-                    dataset=results,
-                    column_mapping=step_config.get('columns'),
-                    batch_id=batch_id,
-                    colour=next(colour_cycle),
-                    init=step_config.get("init", {}),
-                )
-                uri = bm.save(aggregated.reset_index())
-                logger.info(f"Saved {aggregated.shape[0]} aggregated scored results to {uri}")
-            else:
-                scored = run_local(
-                    model=model,
-                    num_runs=step_config.get('num_runs', 1),
-                    target=step,
-                    dataset=results,
-                    column_mapping=step_config.get('columns'),
-                    batch_id=batch_id,
-                    colour=next(colour_cycle),
-                    init=step_config.get("init", {}),
-                )
-                uri = bm.save(scored.reset_index())
-                logger.info(f"Saved {scored.shape[0]} scored results to {uri}")
 
     uri = bm.save(results.reset_index(), filename="results")
-    logger.info(f"Saved {results.shape[0]} run batch results to {uri}")
+    logger.info(f"Saved {results.shape[0]} run results to {uri}")
 
 
 if __name__ == "__main__":
