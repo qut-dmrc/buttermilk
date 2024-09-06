@@ -143,12 +143,11 @@ def run(cfg: DictConfig) -> None:
                     )
                 )
 
-
                 # evaluate
                 for model in cfg.experiments.evals.get("evaluator", {}).get("models",{}):
                     evaluator = Evaluator(model=model, **cfg.experiments.evals.get("evaluator", {}).get("init",{}))
                     evals = evaluator.batch(df, prediction=step_name)
-                    uri = bm.save(evals, filename='evaluator_{model}.jsonl')
+                    uri = bm.save(evals, basename=f'evaluator_{model}.jsonl')
                     logger.info(dict(message=f"Saved {df.shape[0]} evaluated results from {model} to {uri}", **batch_id,results=uri
                         ))
                     df.loc[:, f'evaluator_{model}'] = evals
@@ -160,7 +159,7 @@ def run(cfg: DictConfig) -> None:
 
                 # generate metrics
                 metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
-                uri = bm.save(metrics.reset_index(), filename='metrics.jsonl')
+                uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
                 logger.info(dict(message=f"Saved {metrics.shape[0]} aggregated scored batch results to {uri}", **batch_id,results=uri
                     ))
 
@@ -172,7 +171,7 @@ def run(cfg: DictConfig) -> None:
             pass
 
 
-    uri = bm.save(results.reset_index(), filename="results")
+    uri = bm.save(results.reset_index(), basename="results")
     logger.info(f"Saved {results.shape[0]} run results to {uri}")
 
 

@@ -273,8 +273,8 @@ class BM(Singleton, BaseModel):
 
         return save_dir
 
-    def save(self, data, filename='', **kwargs):
+    def save(self, data, basename='', extension='.jsonl', **kwargs):
         """ Failsafe save method."""
-        result = save.save(data=data, save_dir=self.save_dir, filename=filename, **kwargs)
+        result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
         logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_id))
         return result

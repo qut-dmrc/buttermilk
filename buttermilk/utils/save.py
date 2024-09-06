@@ -16,7 +16,7 @@ from .utils import reset_index_and_dedup_columns
 from .utils import construct_dict_from_schema, make_serialisable
 from .log import logger
 
-def save(data, save_dir='', uri='', filename='', **params):
+def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
     from .utils import reset_index_and_dedup_columns
 
     # Failsafe save routine. We should be able to find some way of dumping the data.
@@ -41,26 +41,31 @@ def save(data, save_dir='', uri='', filename='', **params):
         pass
 
 
-    if not (uri := params.get("uri")):
+    if not uri:
         try:
             save_dir = CloudPath(save_dir)
             id = params.get("uuid", shortuuid.uuid())
-            filename = "_".join([x for x in [filename, id] if x])
-            uri = save_dir / filename
+            basename = "_".join([x for x in [basename, id] if x])
+            if extension:
+                basename = basename + extension
+            uri = save_dir / basename
         except Exception as e:
             logger.warning(
             f"Error saving data to using upload_dataframe_json: {e} {e.args=}, {params}"
         )
 
+    if isinstance(uri, CloudPath):
+        uri = uri.as_uri()
+
     upload_methods = []
     if uri:
         # Try to upload to GCS
         if isinstance(data, pd.DataFrame):
-            return upload_dataframe_json(data=data, uri=uri.as_uri())
+            return upload_dataframe_json(data=data, uri=uri)
         else:
             try:
                 df = pd.DataFrame(data)
-                return upload_dataframe_json(data=df, uri=uri.as_uri())
+                return upload_dataframe_json(data=df, uri=uri)
             except Exception as e:
                 logger.warning(
                 f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}"

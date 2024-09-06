@@ -1,6 +1,6 @@
 judge:
   name: judge
-  num_runs: 1
+  num_runs: 4
   standards:
   - trans_tja.jinja2
   - trans_cte.jinja2
@@ -8,7 +8,7 @@ judge:
   - trans_glaad.jinja2
   - trans_simplified.jinja2
   - trans_factored.jinja2
-  models: ["llama31_70b", "gpt4o", "sonnet", "gemini15pro"]
+  models: [llama31_70b,gpt4o,sonnet,gemini15pro]
 data:
   name: trans_train
   uri: gs://dmrc-platforms/data/tja_train.jsonl
@@ -22,6 +22,6 @@ evals:
     aggregate: false
   evaluator:
     aggregate: false
-    models: ["sonnet", "gemini15pro"]
+    models: ["sonnet", "llama31_70b", "gemini15pro"]
   metrics:
     aggregate: true
