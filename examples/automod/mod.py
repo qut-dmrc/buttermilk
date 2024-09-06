@@ -160,7 +160,7 @@ def run(cfg: DictConfig) -> None:
 
             except Exception as e:
                 logger.error(f"Unhandled error in our flow: {e}")
-                break
+                continue
             finally:
                 results = pd.concat([results, df])
             pass

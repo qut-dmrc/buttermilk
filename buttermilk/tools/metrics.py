@@ -35,7 +35,7 @@ class Metriciser:
         idx_cols = df_results.index.names
         if unique_col not in idx_cols:
             df_results = df_results.set_index(unique_col, append=True)
-            df_results = df_results.loc[(not df_results.index.duplicated),:]
+            df_results = df_results.loc[~(df_results.index.duplicated),:]
             df = df.reset_index(unique_col, drop=False)
 
         grouper = df.groupby(level=levels)
