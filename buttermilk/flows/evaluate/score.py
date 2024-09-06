@@ -70,7 +70,7 @@ class Evaluator(ToolProvider):
 
         chain = self.template.copy() | llm | ChatParser()
         input_vars = dict(
-            expected=groundtruth,
+            groundtruth=groundtruth,
             prediction=prediction,
         )
         output = chain.invoke(input=input_vars)

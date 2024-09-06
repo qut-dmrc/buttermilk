@@ -13,7 +13,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "batch automod: drag ots",
+            "name": "batch automod: trans",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.mod",
@@ -24,10 +24,8 @@
             ],
             "justMyCode": false,
             "args": [
-                "hydra/launcher=joblib",
                 "--multirun",
-                "+experiments=ots",
-                "+data=drag_noalt",
+                "+experiments=trans",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

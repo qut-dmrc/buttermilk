@@ -1,28 +1,27 @@
 judge:
-  name: tja
+  name: judge
   num_runs: 1
   standards:
-  - trans_tja.yaml
-  - trans_cte.yaml
-  - trans_hrc.yaml
-  - trans_glaad.yaml
-  - trans_simplified.yaml
-  - trans_factored.yaml
-  models: ["haiku"]
+  - trans_tja.jinja2
+  - trans_cte.jinja2
+  - trans_hrc.jinja2
+  - trans_glaad.jinja2
+  - trans_simplified.jinja2
+  - trans_factored.jinja2
+  models: ["llama31_70b", "gpt4o", "sonnet", "gemini15pro"]
 data:
   name: trans_train
   uri: gs://dmrc-platforms/data/tja_train.jsonl
   columns:
-  - record_id: id
-  - content: text
-  - groundtruth: expected_answer
-  - expected_reasons: expected_reasoning
-  - prediction: prediction
+    record_id: id
+    content: text
+    groundtruth: expected
+    prediction: prediction
 evals:
   score:
     aggregate: false
   evaluator:
     aggregate: false
-    models: ["haiku"]
+    models: ["sonnet", "gemini15pro"]
   metrics:
     aggregate: true

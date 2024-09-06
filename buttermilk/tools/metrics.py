@@ -4,13 +4,15 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 import pandas as pd
 
 class Scorer:
-    def __call__(self, df: pd.DataFrame, *, groundtruth: str = 'expected', prediction: str = 'prediction'):
-        df['correct'] = (df[groundtruth] == df[prediction])
+    def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = 'prediction'):
+
+        df.loc[:, 'preds'] = pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
+        df['correct'] = df.apply(lambda x: x[col][prediction] == x[groundtruth]['answer'], axis='columns')
         return df
 
 
 class Metriciser:
-    def evaluate_results(self, dataset, levels: list[str] = [],  groundtruth: str = 'expected', prediction: str = 'prediction', unique_col:str='timestamp') -> pd.DataFrame:
+    def evaluate_results(self, dataset, col: str, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = 'prediction', unique_col:str='timestamp') -> pd.DataFrame:
         """
         Evaluates the results of one or more training runs,
         aggregating at the levels selected.
@@ -25,12 +27,15 @@ class Metriciser:
         Returns:
             pd.DataFrame: The updated DataFrame with the new metric columns.
         """
-        df = dataset.copy()[[groundtruth, prediction]]
-
-        idx_cols = df.index.names
+        df = dataset.copy()
+        df_results = pd.json_normalize(df[col])
+        df_results.loc[:, 'preds'] = df_results[prediction].astype(int).to_numpy()
+        df_results.loc[:, 'expected'] = pd.json_normalize(df[groundtruth])['answer'].astype(int).to_numpy()
+        df_results.loc[:, 'correct'] = (df_results['preds'] == df_results['expected'])
+        idx_cols = df_results.index.names
         if unique_col not in idx_cols:
-            df = df.set_index(unique_col, append=True)
-            df = df.loc[~df.index.duplicated,:]
+            df_results = df_results.set_index(unique_col, append=True)
+            df_results = df_results.loc[(not df_results.index.duplicated),:]
             df = df.reset_index(unique_col, drop=False)
 
         grouper = df.groupby(level=levels)
@@ -39,21 +44,21 @@ class Metriciser:
 
         # Compute the metrics
         acc["precision"] = grouper.apply(
-            lambda x: precision_score(x[groundtruth], x[prediction], zero_division=0)
+            lambda x: precision_score(df_results['expected'], df_results['preds'], zero_division=0)
         )
         acc["recall"] = df.groupby(level=levels).apply(
-            lambda x: recall_score(x[groundtruth], x[prediction], zero_division=0)
+            lambda x: recall_score(df_results['expected'], df_results['preds'], zero_division=0)
         )
         acc["f1-score"] = df.groupby(level=levels).apply(
-            lambda x: f1_score(x[groundtruth], x[prediction], zero_division=0)
+            lambda x: f1_score(df_results['expected'], df_results['preds'], zero_division=0)
         )
         acc["accuracy"] = df.groupby(level=levels).apply(
-            lambda x: accuracy_score(x[groundtruth], x[prediction])
+            lambda x: accuracy_score(df_results['expected'], df_results['preds'])
         )
 
         # Calculate the confusion matrix for each level of the multi-index
         cm = (
-            grouper.apply(lambda x: pd.crosstab(x[groundtruth], x[prediction]))
+            grouper.apply(lambda x: pd.crosstab(df_results['expected'], df_results['preds']))
             .unstack(level=groundtruth, fill_value=0, sort=True)
             .sort_index(axis="columns")
         )

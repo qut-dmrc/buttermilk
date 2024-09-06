@@ -44,11 +44,9 @@ def save(data, save_dir='', uri='', filename='', **params):
     if not (uri := params.get("uri")):
         try:
             save_dir = CloudPath(save_dir)
-            if filename := params.get("filename"):
-                if id := params.get("uuid"):
-                    filename = f"{filename}_{id}"
-            else:
-                filename = params.get("uuid", shortuuid.uuid())
+            filename = params.get("filename")
+            id = params.get("uuid", shortuuid.uuid())
+            filename = "_".join([x for x in [filename, id] if x])
             uri = save_dir / filename
         except Exception as e:
             logger.warning(
@@ -186,7 +184,7 @@ def upload_binary(*, save_dir=None, data=None, uri=None, filename=None, extensio
         uri = f"{uri}/{shortuuid.uuid()}"
     if extension:
         uri = f"{uri}.{extension}"
-        
+
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 

@@ -42,23 +42,16 @@ import itertools
 def run_local(
     *,
     num_runs=1,
+    flow,
     target: str,
     model: str,
     batch_id: dict,
     colour: str = "magenta",
     dataset: str|pd.DataFrame,
-    column_mapping: dict[str, str],
-    init: dict = {},
+    column_mapping: dict[str, str]
 ) -> pd.DataFrame:
     results = []
-    init = init or {}
 
-    if target == "moderate":
-        flow = Moderator(model=model, **init)
-    elif target == "evaluate":
-        flow = Evaluator(model=model, **init)
-    else:
-        flow = Analyst(model=model, **init)
     if isinstance(dataset, str):
         dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
     runs = itertools.product(range(num_runs), dataset.iterrows())
@@ -69,17 +62,17 @@ def run_local(
         desc=f"{target}-{model}",
         bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
     ):
-        input_vars = {key: row[mapped] for key, mapped in column_mapping.items()}
+        input_vars = {key: row[mapped] for key, mapped in column_mapping.items() if mapped in row}
         details = flow(**input_vars)
-        details["init_vars"] = init
-        details["expected"] = row.pop('expected', None)
-        details["record"] = row.to_dict()
         details["timestamp"] = pd.to_datetime(datetime.datetime.now())
         for k, v in batch_id.items():
             if k not in details:
                 details[k] = v
-        results.append(details)
+        row[f"{target}_model"] = model
+        row[f"{target}_i"] = i
+        row[target] = details
 
+        results.append(row)
     results = pd.DataFrame(results)
     del flow
     torch.cuda.empty_cache()
@@ -106,39 +99,40 @@ def run(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    dataset = pd.read_json(cfg.data.uri, orient='records', lines=True)
+    dataset = pd.read_json(cfg.experiments.data.uri, orient='records', lines=True)
 
     # Judging step
     if step := cfg.experiments.get('judge'):
         models: list = OmegaConf.to_object(step.get("models", []))
         standards: list = OmegaConf.to_object(step.get("standards", []))
+        shuffle(models)
+        shuffle(standards)
         permutations = itertools.product(models, standards)
-        shuffle(permutations)
-
+        step_name = step.name
         num_runs = step.get("num_runs", 1)
         for model, standard in permutations:
 
             df = pd.DataFrame()
 
-            judge = Judger(model=model, **step.get("init",{}))
-            scorer = Scorer()
+            judge = Judger(model=model, standards_path=standard, **step.get("init",{}))
             metriciser = Metriciser()
 
             try:
                 batch_id = dict(
                     run_id=bm._run_id, step="judge",
-                    dataset=cfg.data.name,
-                    model=model,
+                    dataset=cfg.experiments.data.name,
+                    model=model, standard=standard,
                 )
 
                 logger.info(dict(message=f"Judging {dataset.shape[0]} records over {num_runs} iteration(s) for batch: {batch_id}", **batch_id))
                 df = run_local(
+                    flow=judge,
                     model=model,
                     num_runs=num_runs,
-                    target=step,
+                    target=step_name,
                     dataset=dataset,
                     batch_id=batch_id,
-                    column_mapping=cfg.data.columns,
+                    column_mapping=cfg.experiments.data.columns,
                     colour=next(colour_cycle)
                 )
                 uri = bm.save(df.reset_index())
@@ -149,20 +143,17 @@ def run(cfg: DictConfig) -> None:
                     )
                 )
 
-                # score
-                df = scorer(df)
-
                 # evaluate
-                for model in cfg['evals'].get("evaluator").get("models",{}):
-                    evaluator = Evaluator(model=model, **cfg['evals'].get("evaluator").get("init",{}))
-                    evals = evaluator.batch(df)
+                for model in cfg.experiments.evals.get("evaluator", {}).get("models",{}):
+                    evaluator = Evaluator(model=model, **cfg.experiments.evals.get("evaluator", {}).get("init",{}))
+                    evals = evaluator.batch(df, prediction=step_name)
                     uri = bm.save(evals, filename='evaluator_{model}.jsonl')
                     logger.info(dict(message=f"Saved {df.shape[0]} evaluated results from {model} to {uri}", **batch_id,results=uri
                         ))
                     df.loc[:, f'evaluator_{model}'] = evals
 
                 # generate metrics
-                metrics = metriciser.evaluate_results(df)
+                metrics = metriciser.evaluate_results(df, col=step_name)
                 uri = bm.save(metrics.reset_index(), filename='metrics.jsonl')
                 logger.info(dict(message=f"Saved {metrics.shape[0]} aggregated scored batch results to {uri}", **batch_id,results=uri
                     ))
@@ -172,6 +163,7 @@ def run(cfg: DictConfig) -> None:
                 break
             finally:
                 results = pd.concat([results, df])
+            pass
 
 
     uri = bm.save(results.reset_index(), filename="results")

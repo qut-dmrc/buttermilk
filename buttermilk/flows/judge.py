@@ -15,10 +15,11 @@ from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
-
+from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from buttermilk import BM
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
+
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR / "common", BASE_DIR / "templates"]
 
@@ -66,10 +67,9 @@ class Judger(ToolProvider):
         chain = self.template.copy() | llm | ChatParser()
 
         input_vars = {"content": [HumanMessage(content=content)]}
-        input_vars.update({k: v for k, v in kwargs.items() if v})
 
         t0 = time.time()
-        output = chain.invoke(input=input_vars, **kwargs)
+        output = chain.invoke(input=input_vars)
         t1 = time.time()
         logger.info(f"Judger invoked chain with {self.model} in {t1-t0:.2f} seconds")
 
