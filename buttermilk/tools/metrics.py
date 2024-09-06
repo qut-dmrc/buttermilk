@@ -35,10 +35,14 @@ class Metriciser:
         idx_cols = df_results.index.names
         if unique_col not in idx_cols:
             df_results = df_results.set_index(unique_col, append=True)
-            df_results = df_results.loc[~(df_results.index.duplicated),:]
-            df = df.reset_index(unique_col, drop=False)
+            df_results = df_results.loc[~(df_results.index.duplicated()),:]
+        df_results = df_results.reset_index(unique_col, drop=False)
 
-        grouper = df.groupby(level=levels)
+        df_results = df_results.set_index(levels)
+        if levels:
+            grouper = df_results.groupby(level=levels)
+        else:
+            grouper = df_results.groupby(level=df_results.index.names)
 
         acc = grouper.agg(n=(unique_col, "nunique"))
 
@@ -55,7 +59,7 @@ class Metriciser:
         acc["accuracy"] = df.groupby(level=levels).apply(
             lambda x: accuracy_score(df_results['expected'], df_results['preds'])
         )
-
+            
         # Calculate the confusion matrix for each level of the multi-index
         cm = (
             grouper.apply(lambda x: pd.crosstab(df_results['expected'], df_results['preds']))

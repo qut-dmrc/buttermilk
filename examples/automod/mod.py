@@ -143,6 +143,7 @@ def run(cfg: DictConfig) -> None:
                     )
                 )
 
+
                 # evaluate
                 for model in cfg.experiments.evals.get("evaluator", {}).get("models",{}):
                     evaluator = Evaluator(model=model, **cfg.experiments.evals.get("evaluator", {}).get("init",{}))
@@ -152,8 +153,13 @@ def run(cfg: DictConfig) -> None:
                         ))
                     df.loc[:, f'evaluator_{model}'] = evals
 
+                # Add all identifying details from batch_id and set index
+                df = pd.concat([df, pd.json_normalize(itertools.repeat(batch_id, df.shape[0]))], axis='columns')
+                idx = [x for x in batch_id.keys()]
+                df = df.set_index(idx)
+
                 # generate metrics
-                metrics = metriciser.evaluate_results(df, col=step_name)
+                metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
                 uri = bm.save(metrics.reset_index(), filename='metrics.jsonl')
                 logger.info(dict(message=f"Saved {metrics.shape[0]} aggregated scored batch results to {uri}", **batch_id,results=uri
                     ))

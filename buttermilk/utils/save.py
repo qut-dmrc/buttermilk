@@ -44,7 +44,6 @@ def save(data, save_dir='', uri='', filename='', **params):
     if not (uri := params.get("uri")):
         try:
             save_dir = CloudPath(save_dir)
-            filename = params.get("filename")
             id = params.get("uuid", shortuuid.uuid())
             filename = "_".join([x for x in [filename, id] if x])
             uri = save_dir / filename
