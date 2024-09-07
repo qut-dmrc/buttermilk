@@ -27,6 +27,8 @@ from buttermilk.apis import (
     HFPipeline,
 )
 
+from promptflow.azure import PFClient as AzurePFClient
+from promptflow.client import PFClient as LocalPFClient
 BASE_DIR = Path(__file__).absolute().parent
 import torch
 import datetime
@@ -39,54 +41,50 @@ import cloudpathlib
 from tempfile import NamedTemporaryFile
 import itertools
 
-def run_local(
-    *,
-    num_runs=1,
-    flow,
-    target: str,
-    model: str,
-    batch_id: dict,
-    colour: str = "magenta",
-    dataset: str|pd.DataFrame,
-    column_mapping: dict[str, str]
-) -> pd.DataFrame:
-    results = []
+# from azureml.core import Workspace, Experiment
+# from azureml.pipeline.core import Pipeline, PipelineData
 
-    if isinstance(dataset, str):
-        dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
-    runs = itertools.product(range(num_runs), dataset.iterrows())
-    for i, (_, row) in tqdm.tqdm(
-        runs,
-        total=num_runs*dataset.shape[0],
-        colour=colour,
-        desc=f"{target}-{model}",
-        bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-    ):
-        input_vars = {key: row[mapped] for key, mapped in column_mapping.items() if mapped in row}
-        details = flow(**input_vars)
-        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
-        for k, v in batch_id.items():
-            if k not in details:
-                details[k] = v
-        row[f"{target}_model"] = model
-        row[f"{target}_i"] = i
-        row[target] = details
+# # Initialize workspace
+# ws = Workspace.from_config()
 
-        results.append(row)
-    results = pd.DataFrame(results)
-    del flow
-    torch.cuda.empty_cache()
-    gc.collect()
-    return results
+# # Define your data and processing steps here
+# # ...
 
+# # Create a pipeline
+# pipeline = Pipeline(workspace=ws, steps=[...])
 
-def cache_data(uri: str) -> str:
-    with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
-        dataset = f.name
-        data = cloudpathlib.CloudPath(uri).read_bytes()
-        f.write(data)
-    return dataset
+# # Submit the pipeline
+# experiment = Experiment(workspace=ws, name='batch-flow-experiment')
+# run = experiment.submit(pipeline)
+# run.wait_for_completion(show_output=True)
+from typing import Type, TypeVar, Callable
 
+logger = getLogger()
+
+def run_flow(*, flow: Callable, dataset: str, column_mapping: dict[str,str]) -> pd.DataFrame:
+    pflocal = LocalPFClient()
+
+    standards = read_text(standards_path)
+    init_vars = dict(model = model, criteria=standards, template=template_path)
+
+    flow = Analyst(**init_vars)
+
+    run = pflocal.run(
+            flow=flow,
+            data=dataset,
+            init_vars=init_vars,
+            column_mapping=column_mapping,
+            stream=False,
+            name=batch_name,
+            timeout=150,
+        )
+
+    logger.info(
+        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
+    )
+
+    details = pflocal.get_details(run.name)
+    return details
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def run(cfg: DictConfig) -> None:

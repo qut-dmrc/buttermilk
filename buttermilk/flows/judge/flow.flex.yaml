@@ -1,0 +1,16 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+entry: judge:Judger
+environment:
+  # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
+  python_requirements_txt: requirements.txt
+inputs:
+  video_uri:
+    type: string
+    default: gs://dmrc-platforms/test/fyp/tiktok-imane-03.mp4
+init:
+  model:
+    type: string
+    default: gemini15pro
+  system_prompt_path:
+    type: string
+    default: frames_system.jinja2

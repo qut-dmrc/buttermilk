@@ -19,9 +19,10 @@ from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from buttermilk import BM
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
+import yaml
 
 BASE_DIR = Path(__file__).absolute().parent
-TEMPLATE_PATHS = [BASE_DIR, BASE_DIR / "common", BASE_DIR / "templates"]
+TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
 logger = getLogger()
 class KeepUndefined(Undefined):
@@ -37,34 +38,30 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger(ToolProvider):
-    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2') -> None:
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connection: dict ={}) -> None:
 
-        bm = BM()
-        self.connections = bm._connections_azure
-
-        env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-
-        partial_variables={}
-        if standards_path and not criteria:
-            standards = env.get_template(standards_path).render()
-            partial_variables=dict(criteria=standards)
-        elif criteria:
-            partial_variables=dict(criteria=criteria)
-        else:
-            raise ValueError("You must provide criteria either as a string `criteria` or a filename `standards_path`, but not both.")
-
-        tpl = env.get_template(template_path).render(**partial_variables)
-        self.template = ChatPromptTemplate.from_messages([("system",tpl), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
-
+        self.connection = connection
         self.model = model
+        loader=FileSystemLoader(searchpath=TEMPLATE_PATHS)
+        env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+
+        if standards_path and not criteria:
+            criteria = env.get_template(standards_path).render()
+
+        partial_variables=dict(criteria=criteria)
+
+        self.template = env.get_template(template_path).render(**partial_variables)
+
 
     @tool
     def __call__(
         self, *, content: str, **kwargs) -> LLMOutput:
 
-        llm = LLMs(connections=self.connections)[self.model]
+        llm = LLMs(connections=self.connection)[self.model]
 
-        chain = self.template.copy() | llm | ChatParser()
+        tpl = ChatPromptTemplate.from_messages([("system",self.template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+
+        chain = tpl | llm | ChatParser()
 
         input_vars = {"content": [HumanMessage(content=content)]}
 
@@ -82,6 +79,8 @@ class Judger(ToolProvider):
 
 
 if __name__ == "__main__":
-    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="apply.jinja2",  model="gpt4o")
+    bm = BM()
+    conn = bm._connections_azure['haiku']
+    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="judge.jinja2",  model="haiku", connection=conn)
     output = judger(content="Hello, world!")
     print(output)
