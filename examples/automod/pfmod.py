@@ -76,8 +76,9 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, run_name: str, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
+def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
     pflocal = LocalPFClient()
+    flow_name = flow_name or flow.__name__.lower()
     columns = col_mapping_hydra_to_pf(column_mapping)
     logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
     task = pflocal.run(
@@ -93,11 +94,26 @@ def run_flow(*, flow: object, run_name: str, dataset: str, column_mapping: dict[
 
     details = pflocal.get_details(task.name)
 
+    # Stack and rename columns to a predictable format
+    inputs = details[[x for x in details.columns if x.startswith('inputs.')]]
+    inputs.columns = [x.replace('inputs.', '') for x in inputs.columns]
+
+    id_cols = inputs[[x for x in ['record_id', 'line_number'] if x in inputs.columns]]
+    df = details[id_cols]
+
+    # Also a separate column with other step inputs
+    df.loc[:, 'inputs'] = inputs.drop(columns=id_cols).to_dict(orient='records')
+
+    # Add a column with the step results
+    flow_outputs = details[[x for x in details.columns if x.startswith('outputs.')]]
+    flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
+    df.loc[:, flow_name] = flow_outputs.to_dict(orient='records')
+
     logger.info(
-        f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {details.shape[0]} results."
+        f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
     )
 
-    return details
+    return df
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def run(cfg: DictConfig) -> None:
@@ -142,38 +158,33 @@ def run(cfg: DictConfig) -> None:
 
             # Set up  empty dataframe with batch details ready  to go
             df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
-
-            # Add a column with the step inputs
-            inputs = flow_outputs[[x for x in flow_outputs.columns if x.startswith('inputs.')]]
-            inputs.columns = [x.replace('inputs.', '') for x in inputs.columns]
-            df.loc[:, 'inputs'] = inputs.to_dict(orient='records')
-
-            # Add a column with the step results
-            flow_outputs = flow_outputs[[x for x in flow_outputs.columns if x.startswith('outputs.')]]
-            flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
-            df.loc[:, step.name] = flow_outputs.to_dict(orient='records')
-
-            # set index
-            idx = [x for x in batch_id.keys()]
-            df = df.set_index(idx)
+            df = pd.concat([df, flow_outputs], axis='columns')
 
             # Run the evaulation flows
             for eval_model in cfg.experiments.evaluator.models:
                 eval_name = f"{run_name}_evaluator_{eval_model}"
                 init_vars = {"model": eval_model}
+                flow_name = f'evaluator_{model}'
                 evals = run_flow(flow=Evaluator,
-                            dataset=data_file,
-                            run = run_name,
-                            run_name = eval_name,
-                            column_mapping=dict(cfg.experiments.evaluator.columns),
-                            init_vars = init_vars
+                                 flow_name=flow_name,
+                                dataset=data_file,
+                                run = run_name,
+                                run_name = eval_name,
+                                column_mapping=dict(cfg.experiments.evaluator.columns),
+                                init_vars = init_vars
                         )
 
                 # join the evaluation results
-                breakpoint()
-                #df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')
-                pass
-                pass
+                try:
+                    df.loc[:, flow_name] = evals[flow_name].to_dict(orient='records')
+                except Exception as e:
+                    # We might not get all the responses back. Try to join on line number instead?
+                    pass
+                    df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
+
+            # set index
+            idx = [x for x in batch_id.keys()]
+            df = df.set_index(idx)
 
         except Exception as e:
             logger.error(f"Unhandled error in our flow: {e}")
