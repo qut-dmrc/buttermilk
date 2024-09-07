@@ -67,6 +67,14 @@ class Evaluator(ToolProvider):
 
     @tool
     def __call__(self, *, groundtruth: dict, prediction: int, reasons: dict, **kwargs) -> LLMOutput:
+        expected = groundtruth['answer']
+        overall_answer = (prediction == expected)
+
+        scored_result = dict(predicted=prediction,
+                         expected=expected,
+                         correct=overall_answer)
+
+
         llm = LLMs(connections=self.connections)[self.model]
 
         chain = self.template.copy() | llm | ChatParser()
@@ -76,7 +84,8 @@ class Evaluator(ToolProvider):
             reasons=reasons,
         )
         output = chain.invoke(input=input_vars)
-        output['groundtruth'] = groundtruth
+        output['result'] = scored_result
+        output['groundtruth'] =expected
         for k in LLMOutput.__required_keys__:
             if k not in output:
                 output[k] = None

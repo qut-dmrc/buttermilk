@@ -82,13 +82,3 @@ def aggregate(processed_results: List[dict]):
     for k, v in metrics_converted.items():
         log_metric(key=k, value=v)
     return metrics_converted
-
-if __name__ == '__main__':
-    test_input="""{"processed_results": [{"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": true, "expected": false, "correct": false, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": false, "expected": false, "correct": true, "scores": {}}, {"predicted": false, "expected": false, "correct": true, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": false, "expected": false, "correct": true, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": false, "expected": true, "correct": false, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": true, "expected": false, "correct": false, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": false, "expected": false, "correct": true, "scores": {}}, {"predicted": true, "expected": false, "correct": false, "scores": {}}, {"predicted": false, "expected": false, "correct": true, "scores": {}}, {"predicted": true, "expected": true, "correct": true, "scores": {}}, {"predicted": true, "expected": false, "correct": false, "scores": {}}, {"predicted": false, "expected": true, "correct": false, "scores": {}}, {"predicted": true, "expected": false, "correct": false, "scores": {}}, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]}"""
-
-    import json
-    test_results = json.loads(test_input)
-    response = aggregate(test_results['processed_results'])
-    assert json.dumps(response)
-    print(response)
-

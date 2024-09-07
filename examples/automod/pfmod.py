@@ -86,6 +86,7 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
             flow=flow,
             data=dataset,
             run=run,
+            display_name=flow_name,
             init=init_vars,
             column_mapping=columns,
             stream=False,
@@ -170,7 +171,7 @@ def run(cfg: DictConfig) -> None:
                 eval_name = f"{run_name}_evaluator_{eval_model}"
                 init_vars = {"model": eval_model}
                 flow_name = f'evaluator_{model}'
-                evals = run_flow(flow=Evaluator,
+                evals = run_flow(flow="buttermilk/flows/evaluate",
                                  flow_name=flow_name,
                                 dataset=data_file,
                                 run = run_name,
@@ -182,6 +183,8 @@ def run(cfg: DictConfig) -> None:
                 # join the evaluation results
                 try:
                     df.loc[:, flow_name] = evals[flow_name].to_dict()
+                    if 'groundtruth' in evals and 'groundtruth' not in df.columns:
+                        df.loc[:, 'groundtruth'] = evals['groundtruth']
                 except Exception as e:
                     # We might not get all the responses back. Try to join on line number instead?
                     pass

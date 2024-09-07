@@ -1,0 +1,19 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+entry: evaluate:Evaluator
+environment:
+  # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
+  python_requirements_txt: requirements.txt
+init:
+  model:
+    type: string
+    default: haiku
+  template_path:
+    type: string
+    default: evaluate.jinja2
+inputs:
+  groundtruth:
+    type: object
+  prediction:
+    type: int
+  reasons:
+    type: list

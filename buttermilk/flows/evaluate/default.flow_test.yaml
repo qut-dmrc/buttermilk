@@ -1,9 +1,0 @@
-tests:
-  - name: eval_${run}_${timestamp}
-    display_name: eval_${run}
-    flow: /workspaces/dev/automod/flows/moderate_eval
-    data: /tmp/osb_drag_toxic_train.jsonl
-    run: moderate_comprehend_20240808_044646_257000
-    column_mapping:
-      groundtruth: ${data.expected}
-      result: ${run.outputs.result}
