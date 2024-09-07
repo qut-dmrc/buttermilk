@@ -80,7 +80,7 @@ class Judger(ToolProvider):
 
 if __name__ == "__main__":
     bm = BM()
-    conn = bm._connections_azure['haiku']
+    conn = {'haiku': bm._connections_azure['haiku']}
     judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="judge.jinja2",  model="haiku", connection=conn)
     output = judger(content="Hello, world!")
     print(output)
