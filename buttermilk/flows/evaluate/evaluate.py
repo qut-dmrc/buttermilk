@@ -50,7 +50,7 @@ class Evaluator(ToolProvider):
         env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         tpl = env.get_template(template_path).render({})
-        template_vars = {"groundtruth": "{{groundtruth}}", "prediction":r"{{prediction}}"}
+        template_vars = {"groundtruth": "{{groundtruth}}", "prediction":r"{{prediction}}", "reasons":r"{{reasons}}"}
         template = convert_prompt_template(tpl, api="chat", inputs=template_vars)
 
         # convert to a list of messages and roles expected by langchain
@@ -65,13 +65,14 @@ class Evaluator(ToolProvider):
         self.model = model
 
     @tool
-    def __call__(self, *, groundtruth: dict, prediction: dict[str, str], **kwargs) -> LLMOutput:
+    def __call__(self, *, groundtruth: dict, prediction: int, reasons: dict, **kwargs) -> LLMOutput:
         llm = LLMs(connections=self.connections)[self.model]
 
         chain = self.template.copy() | llm | ChatParser()
         input_vars = dict(
             groundtruth=groundtruth,
             prediction=prediction,
+            reasons=reasons,
         )
         output = chain.invoke(input=input_vars)
 

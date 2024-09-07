@@ -150,7 +150,7 @@ def run(cfg: DictConfig) -> None:
 
             # Add a column with the step results
             flow_outputs = flow_outputs[[x for x in flow_outputs.columns if x.startswith('outputs.')]]
-            flow_outputs.columns = [x.replace('outputs.', '') for x in inputs.columns]
+            flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
             df.loc[:, step.name] = flow_outputs.to_dict(orient='records')
 
             # set index
@@ -165,10 +165,15 @@ def run(cfg: DictConfig) -> None:
                             dataset=data_file,
                             run = run_name,
                             run_name = eval_name,
-                            column_mapping=dict(cfg.experiments.evaluator.columns))
+                            column_mapping=dict(cfg.experiments.evaluator.columns),
+                            init_vars = init_vars
+                        )
 
-                # Add a column with the evaluation results
-                df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')
+                # join the evaluation results
+                breakpoint()
+                #df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')
+                pass
+                pass
 
         except Exception as e:
             logger.error(f"Unhandled error in our flow: {e}")
