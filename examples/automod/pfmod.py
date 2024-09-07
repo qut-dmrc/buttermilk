@@ -174,7 +174,7 @@ def run(cfg: DictConfig) -> None:
     try:
         # generate metrics
         metriciser = Metriciser()
-        metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
+        metrics = metriciser.evaluate_results(df, col=step_name)
         metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
         logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
             ))
@@ -182,9 +182,14 @@ def run(cfg: DictConfig) -> None:
         logger.error(f"Unhandled error generating metrics: {e}")
 
     finally:
-        uri = bm.save(results.reset_index(), basename="results")
-        logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
-            ))
+        if results.shape[0]>0:
+            uri = bm.save(results.reset_index(), basename="results")
+            logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
+                ))
+        else:
+            logger.info(dict(message=f"Full run completed, no results to save.", **batch_id
+                ))
+
 
     pass
 
