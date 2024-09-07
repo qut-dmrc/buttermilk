@@ -82,6 +82,7 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
     flow_name = flow_name or flow.__name__.lower()
     columns = col_mapping_hydra_to_pf(column_mapping)
     logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
+    environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "spawn"}
     task = pflocal.run(
             flow=flow,
             data=dataset,
@@ -91,7 +92,8 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
             column_mapping=columns,
             stream=False,
             name=run_name,
-            timeout=150,
+            timeout=60,
+            environment_variables=environment_variables,
         )
 
     details = pflocal.get_details(task.name)
@@ -209,24 +211,24 @@ def run(cfg: DictConfig) -> None:
                 # add to full batch results
                 results = pd.concat([results, df])
 
-    try:
-        # generate metrics
-        metriciser = Metriciser()
-        metrics = metriciser.evaluate_results(df, col=step_name)
-        metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
-        logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
-            ))
-    except Exception as e:
-        logger.error(f"Unhandled error generating metrics: {e}")
+    # try:
+    #     # generate metrics
+    #     metriciser = Metriciser()
+    #     metrics = metriciser.evaluate_results(df, col=step_name)
+    #     metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
+    #     logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
+    #         ))
+    # except Exception as e:
+    #     logger.error(f"Unhandled error generating metrics: {e}")
 
-    finally:
-        if results.shape[0]>0:
-            uri = bm.save(results.reset_index(), basename="results")
-            logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
-                ))
-        else:
-            logger.info(dict(message=f"Full run completed, no results to save.", **batch_id
-                ))
+    # finally:
+    if results.shape[0]>0:
+        uri = bm.save(results.reset_index(), basename="results")
+        logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
+            ))
+    else:
+        logger.info(dict(message=f"Full run completed, no results to save.", **batch_id
+            ))
 
 
     pass

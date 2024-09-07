@@ -15,7 +15,6 @@ judger:
   - trans_simplified.jinja2
   - trans_factored.jinja2
   models:
-  - haiku
   - llama31_70b
   - gpt4o
   - sonnet
@@ -26,8 +25,9 @@ evaluator:
     prediction: run.outputs.prediction
     reasons: run.outputs.reasons
   models:
-  - haiku
-#  models: ["sonnet", "llama31_70b", "gemini15pro"]
+  - sonnet
+  - llama31_70b
+  - gemini15pro
 score:
   aggregate: false
 metrics:
