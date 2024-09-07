@@ -2,8 +2,8 @@ data:
   name: trans_train
   uri: gs://dmrc-platforms/data/tja_train.jsonl
   columns:
-    record_id: id
-    content: text
+    record_id: data.id
+    content: data.text
 judge:
   name: judge
   num_runs: 1
@@ -18,11 +18,9 @@ judge:
   - haiku
 #[llama31_70b,gpt4o,sonnet,gemini15pro]
 evaluator:
-  groundtruth: expected
-  prediction: prediction
   columns:
-    groundtruth: expected
-    prediction: prediction
+    groundtruth: data.expected
+    prediction: run.outputs.output
   models:
   - haiku
 #  models: ["sonnet", "llama31_70b", "gemini15pro"]

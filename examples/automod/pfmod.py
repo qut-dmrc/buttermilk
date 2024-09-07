@@ -7,10 +7,7 @@ from tempfile import NamedTemporaryFile
 import gc
 import cloudpathlib
 import pandas as pd
-from sqlalchemy import column
 from buttermilk import BM
-from buttermilk.flows.extract import Analyst
-from buttermilk.flows.moderate.scorers import Moderator
 from buttermilk.flows.evaluate.evaluate import Evaluator
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
@@ -61,6 +58,17 @@ from typing import Type, TypeVar, Callable, Optional
 
 logger = getLogger()
 
+def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
+    output = {}
+    for k, v in mapping_dict.items():
+        # need to escape the curly braces
+        # prompt flow expects a mapping like:
+        #   record_id: ${data.id}
+        output[k] = f"${{{v}}}"
+
+    return output
+
+
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name
@@ -70,14 +78,14 @@ def cache_data(uri: str) -> str:
 
 def run_flow(*, flow: object, run_name: str, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
     pflocal = LocalPFClient()
-
+    columns = col_mapping_hydra_to_pf(column_mapping)
     logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
     task = pflocal.run(
             flow=flow,
             data=dataset,
             run=run,
-            init_vars=init_vars,
-            column_mapping=column_mapping,
+            init=init_vars,
+            column_mapping=columns,
             stream=False,
             name=run_name,
             timeout=150,
@@ -119,24 +127,30 @@ def run(cfg: DictConfig) -> None:
         df = pd.DataFrame()
         try:
             conn = {model: bm._connections_azure[model]}
-            init_vars = {"model": model, "standards_path": standards, "template_path": "judge.jinja2", "connection": conn}
+            init_vars = {"model": model, "standards_path": standard, "template_path": "judge.jinja2", "connection": conn}
             init_vars.update( step.get("init",{}))
             batch_id = dict(
                 run_id=bm._run_id, step="judge",
                 dataset=cfg.experiments.data.name,
-                model=model, standard=standard,
+                model=model, standard=standard.replace(".jinja2", "").replace(".yaml", ""),
             )
-            run_name = f"{bm._run_id}_{step.name}_{cfg.experiments.data.name}_{model}_{standard}"
-
+            run_name = "_".join(list(batch_id.values()))
             flow_outputs = run_flow(flow=Judger,
                         dataset=data_file,
                         run_name = run_name,
-                        column_mapping=OmegaConf.to_object(cfg.experiments.data.columns) )
+                        column_mapping=dict(cfg.experiments.data.columns), init_vars=init_vars )
 
             # Set up  empty dataframe with batch details ready  to go
             df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
 
+            # Add a column with the step inputs
+            inputs = flow_outputs[[x for x in flow_outputs.columns if x.startswith('inputs.')]]
+            inputs.columns = [x.replace('inputs.', '') for x in inputs.columns]
+            df.loc[:, 'inputs'] = inputs.to_dict(orient='records')
+
             # Add a column with the step results
+            flow_outputs = flow_outputs[[x for x in flow_outputs.columns if x.startswith('outputs.')]]
+            flow_outputs.columns = [x.replace('outputs.', '') for x in inputs.columns]
             df.loc[:, step.name] = flow_outputs.to_dict(orient='records')
 
             # set index
@@ -151,7 +165,7 @@ def run(cfg: DictConfig) -> None:
                             dataset=data_file,
                             run = run_name,
                             run_name = eval_name,
-                            column_mapping=OmegaConf.to_object(cfg.experiments.evaluator.columns))
+                            column_mapping=dict(cfg.experiments.evaluator.columns))
 
                 # Add a column with the evaluation results
                 df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')

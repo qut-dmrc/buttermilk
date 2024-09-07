@@ -3,8 +3,7 @@ import  pandas as pd
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 import pandas as pd
-
-from promptflow import log_metric
+from promptflow.core import log_metric
 class Scorer:
     def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = 'prediction'):
 
