@@ -1,3 +1,9 @@
+data:
+  name: trans_train
+  uri: gs://dmrc-platforms/data/tja_train.jsonl
+  columns:
+    record_id: id
+    content: text
 judge:
   name: judge
   num_runs: 4
@@ -9,19 +15,14 @@ judge:
   - trans_simplified.jinja2
   - trans_factored.jinja2
   models: [llama31_70b,gpt4o,sonnet,gemini15pro]
-data:
-  name: trans_train
-  uri: gs://dmrc-platforms/data/tja_train.jsonl
+evaluator:
+  groundtruth: expected
+  prediction: prediction
   columns:
-    record_id: id
-    content: text
     groundtruth: expected
     prediction: prediction
-evals:
-  score:
-    aggregate: false
-  evaluator:
-    aggregate: false
-    models: ["sonnet", "llama31_70b", "gemini15pro"]
-  metrics:
-    aggregate: true
+  models: ["sonnet", "llama31_70b", "gemini15pro"]
+score:
+  aggregate: false
+metrics:
+  aggregate: true

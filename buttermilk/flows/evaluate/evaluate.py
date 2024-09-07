@@ -43,7 +43,7 @@ class KeepUndefined(Undefined):
 
 
 class Evaluator(ToolProvider):
-    def __init__(self, *, model: str, template_path: str = "score.jinja2") -> None:
+    def __init__(self, *, model: str, template_path: str = "evaluate.jinja2") -> None:
         bm = BM()
         self.connections = bm._connections_azure
 

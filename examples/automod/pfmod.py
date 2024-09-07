@@ -11,7 +11,7 @@ from sqlalchemy import column
 from buttermilk import BM
 from buttermilk.flows.extract import Analyst
 from buttermilk.flows.moderate.scorers import Moderator
-from buttermilk.flows.evaluate.score import Evaluator
+from buttermilk.flows.evaluate.evaluate import Evaluator
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 import hydra
@@ -57,33 +57,38 @@ import itertools
 # experiment = Experiment(workspace=ws, name='batch-flow-experiment')
 # run = experiment.submit(pipeline)
 # run.wait_for_completion(show_output=True)
-from typing import Type, TypeVar, Callable
+from typing import Type, TypeVar, Callable, Optional
 
 logger = getLogger()
 
-def run_flow(*, flow: Callable, dataset: str, column_mapping: dict[str,str]) -> pd.DataFrame:
+def cache_data(uri: str) -> str:
+    with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
+        dataset = f.name
+        data = cloudpathlib.CloudPath(uri).read_bytes()
+        f.write(data)
+    return dataset
+
+def run_flow(*, flow: object, run_name: str, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
     pflocal = LocalPFClient()
 
-    standards = read_text(standards_path)
-    init_vars = dict(model = model, criteria=standards, template=template_path)
-
-    flow = Analyst(**init_vars)
-
-    run = pflocal.run(
+    logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
+    task = pflocal.run(
             flow=flow,
             data=dataset,
+            run=run,
             init_vars=init_vars,
             column_mapping=column_mapping,
             stream=False,
-            name=batch_name,
+            name=run_name,
             timeout=150,
         )
 
+    details = pflocal.get_details(task.name)
+
     logger.info(
-        f"Run {run.name} completed with status {run.status}. URL: {run._portal_url}."
+        f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {details.shape[0]} results."
     )
 
-    details = pflocal.get_details(run.name)
     return details
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -97,80 +102,87 @@ def run(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    dataset = pd.read_json(cfg.experiments.data.uri, orient='records', lines=True)
+    data_file = cache_data(cfg.experiments.data.uri)
+
+    connections = bm._connections_azure
 
     # Judging step
-    if step := cfg.experiments.get('judge'):
-        models: list = OmegaConf.to_object(step.get("models", []))
-        standards: list = OmegaConf.to_object(step.get("standards", []))
-        shuffle(models)
-        shuffle(standards)
-        permutations = itertools.product(models, standards)
-        step_name = step.name
-        num_runs = step.get("num_runs", 1)
-        for model, standard in permutations:
+    step = cfg.experiments.judge
+    models: list = OmegaConf.to_object(step.get("models", []))
+    standards: list = OmegaConf.to_object(step.get("standards", []))
+    shuffle(models)
+    shuffle(standards)
+    permutations = itertools.product(models, standards)
+    step_name = step.name
+    num_runs = step.get("num_runs", 1)
+    for model, standard in permutations:
+        df = pd.DataFrame()
+        try:
+            conn = {model: bm._connections_azure[model]}
+            init_vars = {"model": model, "standards_path": standards, "template_path": "judge.jinja2", "connection": conn}
+            init_vars.update( step.get("init",{}))
+            batch_id = dict(
+                run_id=bm._run_id, step="judge",
+                dataset=cfg.experiments.data.name,
+                model=model, standard=standard,
+            )
+            run_name = f"{bm._run_id}_{step.name}_{cfg.experiments.data.name}_{model}_{standard}"
 
-            df = pd.DataFrame()
+            flow_outputs = run_flow(flow=Judger,
+                        dataset=data_file,
+                        run_name = run_name,
+                        column_mapping=cfg.experiments.data.columns, )
 
-            judge = Judger(model=model, standards_path=standard, **step.get("init",{}))
-            metriciser = Metriciser()
+            # Set up  empty dataframe with batch details ready  to go
+            df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
 
-            try:
-                batch_id = dict(
-                    run_id=bm._run_id, step="judge",
-                    dataset=cfg.experiments.data.name,
-                    model=model, standard=standard,
+            # Add a column with the step results
+            df.loc[:, step.name] = flow_outputs.to_dict(orient='records')
+
+            # Run the evaulation flows
+            for eval_model in cfg.experiments.evaluator.models:
+                eval_name = f"{run_name}_evaluator_{eval_model}"
+                init_vars = {"model": eval_model}
+                evals = run_flow(flow=Evaluator,
+                            dataset=data_file,
+                            run = run_name,
+                            run_name = eval_name,
+                            column_mapping=cfg.experiments.evaluator.columns)
+
+                # Add a column with the evaluation results
+                df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')
+
+        except Exception as e:
+            logger.error(f"Unhandled error in our flow: {e}")
+            continue
+        finally:
+            uri = bm.save(df.reset_index())
+            logger.info(
+                dict(
+                    message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
+                    **batch_id,results=uri
                 )
+            )
+            # Set index and add to full batch results
+            idx = [x for x in batch_id.keys()]
+            df = df.set_index(idx)
+            results = pd.concat([results, df])
 
-                logger.info(dict(message=f"Judging {dataset.shape[0]} records over {num_runs} iteration(s) for batch: {batch_id}", **batch_id))
-                df = run_local(
-                    flow=judge,
-                    model=model,
-                    num_runs=num_runs,
-                    target=step_name,
-                    dataset=dataset,
-                    batch_id=batch_id,
-                    column_mapping=cfg.experiments.data.columns,
-                    colour=next(colour_cycle)
-                )
-                uri = bm.save(df.reset_index())
-                logger.info(
-                    dict(
-                        message=f"Successfully completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
-                        **batch_id,results=uri
-                    )
-                )
+    try:
+        # generate metrics
+        metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
+        metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
+        logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
+            ))
+    except Exception as e:
+        logger.error(f"Unhandled error generating metrics: {e}")
 
-                # evaluate
-                for model in cfg.experiments.evals.get("evaluator", {}).get("models",{}):
-                    evaluator = Evaluator(model=model, **cfg.experiments.evals.get("evaluator", {}).get("init",{}))
-                    evals = evaluator.batch(df, prediction=step_name)
-                    uri = bm.save(evals, basename=f'evaluator_{model}.jsonl')
-                    logger.info(dict(message=f"Saved {df.shape[0]} evaluated results from {model} to {uri}", **batch_id,results=uri
-                        ))
-                    df.loc[:, f'evaluator_{model}'] = evals
+    finally:
+        uri = bm.save(results.reset_index(), basename="results")
+        logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
+            ))
 
-                # Add all identifying details from batch_id and set index
-                df = pd.concat([df, pd.json_normalize(itertools.repeat(batch_id, df.shape[0]))], axis='columns')
-                idx = [x for x in batch_id.keys()]
-                df = df.set_index(idx)
-
-                # generate metrics
-                metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
-                uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
-                logger.info(dict(message=f"Saved {metrics.shape[0]} aggregated scored batch results to {uri}", **batch_id,results=uri
-                    ))
-
-            except Exception as e:
-                logger.error(f"Unhandled error in our flow: {e}")
-                continue
-            finally:
-                results = pd.concat([results, df])
-            pass
-
-
-    uri = bm.save(results.reset_index(), basename="results")
-    logger.info(f"Saved {results.shape[0]} run results to {uri}")
+    pass
 
 
 if __name__ == "__main__":

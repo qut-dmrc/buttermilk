@@ -5,8 +5,9 @@ import time
 
 from promptflow.core import (
     ToolProvider,
-    tool,
+    tool
 )
+from promptflow.tracing import trace
 from langchain_core.messages import HumanMessage
 from pathlib import Path
 from typing import Optional, Self, TypedDict
@@ -15,8 +16,6 @@ from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
-from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
-from buttermilk import BM
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 import yaml
@@ -65,10 +64,7 @@ class Judger(ToolProvider):
 
         input_vars = {"content": [HumanMessage(content=content)]}
 
-        t0 = time.time()
-        output = chain.invoke(input=input_vars)
-        t1 = time.time()
-        logger.info(f"Judger invoked chain with {self.model} in {t1-t0:.2f} seconds")
+        output = self.invoke(chain=chain, input_vars=input_vars)
 
         for k in LLMOutput.__required_keys__:
             if k not in output:
@@ -76,9 +72,17 @@ class Judger(ToolProvider):
 
         return  output
 
+    @trace
+    def invoke(self, chain, input_vars):
+        t0 = time.time()
+        output = chain.invoke(input=input_vars)
+        t1 = time.time()
+        logger.info(f"Invoked chain with {self.model} in {t1-t0:.2f} seconds")
+        return output
 
 
 if __name__ == "__main__":
+    from buttermilk import BM
     bm = BM()
     conn = {'haiku': bm._connections_azure['haiku']}
     judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="judge.jinja2",  model="haiku", connection=conn)

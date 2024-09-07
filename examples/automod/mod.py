@@ -11,7 +11,7 @@ from sqlalchemy import column
 from buttermilk import BM
 from buttermilk.flows.extract import Analyst
 from buttermilk.flows.moderate.scorers import Moderator
-from buttermilk.flows.evaluate.score import Evaluator
+from buttermilk.flows.evaluate.evaluate import Evaluator
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 import hydra

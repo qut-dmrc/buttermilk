@@ -89,7 +89,7 @@ nodes:
   init:
     template_path:
       type: string
-      default: score.jinja2
+      default: evaluate.jinja2
     model:
       type: string
       default: sonnet
