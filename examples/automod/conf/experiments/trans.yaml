@@ -4,19 +4,22 @@ data:
   columns:
     record_id: data.id
     content: data.text
-judge:
-  name: judge
+judger:
+  name: judger
   num_runs: 1
   standards:
-  # - trans_tja.jinja2
-  # - trans_cte.jinja2
-  # - trans_hrc.jinja2
-  # - trans_glaad.jinja2
-  # - trans_simplified.jinja2
+  - trans_tja.jinja2
+  - trans_cte.jinja2
+  - trans_hrc.jinja2
+  - trans_glaad.jinja2
+  - trans_simplified.jinja2
   - trans_factored.jinja2
   models:
   - haiku
-#[llama31_70b,gpt4o,sonnet,gemini15pro]
+  - llama31_70b
+  - gpt4o
+  - sonnet
+  - gemini15pro
 evaluator:
   columns:
     groundtruth: data.expected

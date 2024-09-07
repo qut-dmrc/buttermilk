@@ -15,6 +15,7 @@ def eval_answer(groundtruth: dict, prediction: int) -> dict:
 
     scored_result = dict(predicted=prediction,
                          expected=expected,
-                         correct=overall_answer)
+                         correct=overall_answer,
+                         groundtruth=expected)
 
     return scored_result

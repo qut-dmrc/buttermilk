@@ -35,6 +35,7 @@ class LLMOutput(TypedDict):
     correct: bool
     alignment: float
     reasons: dict
+    groundtruth: dict
 
 
 class KeepUndefined(Undefined):
@@ -75,7 +76,7 @@ class Evaluator(ToolProvider):
             reasons=reasons,
         )
         output = chain.invoke(input=input_vars)
-
+        output['groundtruth'] = groundtruth
         for k in LLMOutput.__required_keys__:
             if k not in output:
                 output[k] = None

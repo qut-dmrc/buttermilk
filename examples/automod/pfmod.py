@@ -78,6 +78,7 @@ def cache_data(uri: str) -> str:
 
 def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
     pflocal = LocalPFClient()
+    df = pd.DataFrame()
     flow_name = flow_name or flow.__name__.lower()
     columns = col_mapping_hydra_to_pf(column_mapping)
     logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
@@ -98,8 +99,8 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
     inputs = details[[x for x in details.columns if x.startswith('inputs.')]]
     inputs.columns = [x.replace('inputs.', '') for x in inputs.columns]
 
-    id_cols = inputs[[x for x in ['record_id', 'line_number'] if x in inputs.columns]]
-    df = details[id_cols]
+    id_cols = [x for x in ['record_id', 'line_number'] if x in inputs.columns]
+    df = inputs[id_cols]
 
     # Also a separate column with other step inputs
     df.loc[:, 'inputs'] = inputs.drop(columns=id_cols).to_dict(orient='records')
@@ -108,6 +109,10 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
     flow_outputs = details[[x for x in details.columns if x.startswith('outputs.')]]
     flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
     df.loc[:, flow_name] = flow_outputs.to_dict(orient='records')
+
+    # TODO: see if we can add groundtruth back in
+    if 'groundtruth' in flow_outputs and 'groundtruth' not in df.columns:
+        df.loc[:, 'groundtruth'] = flow_outputs['groundtruth']
 
     logger.info(
         f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
@@ -131,7 +136,7 @@ def run(cfg: DictConfig) -> None:
     connections = bm._connections_azure
 
     # Judging step
-    step = cfg.experiments.judge
+    step = cfg.experiments.judger
     models: list = OmegaConf.to_object(step.get("models", []))
     standards: list = OmegaConf.to_object(step.get("standards", []))
     shuffle(models)
@@ -146,7 +151,7 @@ def run(cfg: DictConfig) -> None:
             init_vars = {"model": model, "standards_path": standard, "template_path": "judge.jinja2", "connection": conn}
             init_vars.update( step.get("init",{}))
             batch_id = dict(
-                run_id=bm._run_id, step="judge",
+                run_id=bm._run_id, step="judger",
                 dataset=cfg.experiments.data.name,
                 model=model, standard=standard.replace(".jinja2", "").replace(".yaml", ""),
             )
@@ -176,7 +181,7 @@ def run(cfg: DictConfig) -> None:
 
                 # join the evaluation results
                 try:
-                    df.loc[:, flow_name] = evals[flow_name].to_dict(orient='records')
+                    df.loc[:, flow_name] = evals[flow_name].to_dict()
                 except Exception as e:
                     # We might not get all the responses back. Try to join on line number instead?
                     pass
