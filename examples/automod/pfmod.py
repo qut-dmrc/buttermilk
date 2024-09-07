@@ -131,13 +131,17 @@ def run(cfg: DictConfig) -> None:
             flow_outputs = run_flow(flow=Judger,
                         dataset=data_file,
                         run_name = run_name,
-                        column_mapping=cfg.experiments.data.columns, )
+                        column_mapping=OmegaConf.to_object(cfg.experiments.data.columns) )
 
             # Set up  empty dataframe with batch details ready  to go
             df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
 
             # Add a column with the step results
             df.loc[:, step.name] = flow_outputs.to_dict(orient='records')
+
+            # set index
+            idx = [x for x in batch_id.keys()]
+            df = df.set_index(idx)
 
             # Run the evaulation flows
             for eval_model in cfg.experiments.evaluator.models:
@@ -147,7 +151,7 @@ def run(cfg: DictConfig) -> None:
                             dataset=data_file,
                             run = run_name,
                             run_name = eval_name,
-                            column_mapping=cfg.experiments.evaluator.columns)
+                            column_mapping=OmegaConf.to_object(cfg.experiments.evaluator.columns))
 
                 # Add a column with the evaluation results
                 df.loc[:, f'evaluator_{model}'] = evals.to_dict(orient='records')
@@ -156,20 +160,20 @@ def run(cfg: DictConfig) -> None:
             logger.error(f"Unhandled error in our flow: {e}")
             continue
         finally:
-            uri = bm.save(df.reset_index())
-            logger.info(
-                dict(
-                    message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
-                    **batch_id,results=uri
+            if df.shape[0]>0:
+                uri = bm.save(df.reset_index())
+                logger.info(
+                    dict(
+                        message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
+                        **batch_id,results=uri
+                    )
                 )
-            )
-            # Set index and add to full batch results
-            idx = [x for x in batch_id.keys()]
-            df = df.set_index(idx)
-            results = pd.concat([results, df])
+                # add to full batch results
+                results = pd.concat([results, df])
 
     try:
         # generate metrics
+        metriciser = Metriciser()
         metrics = metriciser.evaluate_results(df, col=step_name, levels=idx)
         metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
         logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri

@@ -1,8 +1,10 @@
+from re import T
 import  pandas as pd
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 import pandas as pd
 
+from promptflow import log_metric
 class Scorer:
     def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = 'prediction'):
 
@@ -59,7 +61,7 @@ class Metriciser:
         acc["accuracy"] = df.groupby(level=levels).apply(
             lambda x: accuracy_score(df_results['expected'], df_results['preds'])
         )
-            
+
         # Calculate the confusion matrix for each level of the multi-index
         cm = (
             grouper.apply(lambda x: pd.crosstab(df_results['expected'], df_results['preds']))
@@ -78,5 +80,11 @@ class Metriciser:
         proportion = cm.apply(lambda x: x / x.sum(), axis=1)
         proportion.columns = [f"{n}_proportion" for n in proportion.columns]
         acc = pd.concat([acc, cm, proportion], axis=1)
+        try:  # try to log metrics to promptflow
+            for row in acc.to_dict(orient='records'):
+                for key, value in row.items():
+                    log_metric(key=key, value=value)
+        except:
+            pass
 
         return acc

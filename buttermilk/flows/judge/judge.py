@@ -54,7 +54,7 @@ class Judger(ToolProvider):
 
     @tool
     def __call__(
-        self, *, content: str, **kwargs) -> LLMOutput:
+        self, *, content: str, record_id, **kwargs) -> LLMOutput:
 
         llm = LLMs(connections=self.connection)[self.model]
 
@@ -65,6 +65,8 @@ class Judger(ToolProvider):
         input_vars = {"content": [HumanMessage(content=content)]}
 
         output = self.invoke(chain=chain, input_vars=input_vars)
+
+        output['record_id'] = record_id
 
         for k in LLMOutput.__required_keys__:
             if k not in output:

@@ -13,6 +13,23 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "pflocal batch: trans",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.automod.pfmod",
+            "cwd": "${workspaceFolder}",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+                "+experiments=trans",
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "batch automod: trans",
             "type": "debugpy",
             "request": "launch",

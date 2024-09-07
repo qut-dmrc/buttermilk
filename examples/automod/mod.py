@@ -132,7 +132,7 @@ def run(cfg: DictConfig) -> None:
                     target=step_name,
                     dataset=dataset,
                     batch_id=batch_id,
-                    column_mapping=cfg.experiments.data.columns,
+                    column_mapping=OmegaConf.to_object(cfg.experiments.data.columns),
                     colour=next(colour_cycle)
                 )
                 uri = bm.save(df.reset_index())

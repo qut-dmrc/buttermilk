@@ -4,9 +4,10 @@ environment:
   # image: mcr.microsoft.com/azureml/promptflow/promptflow-python
   python_requirements_txt: requirements.txt
 inputs:
-  video_uri:
+  content:
     type: string
-    default: gs://dmrc-platforms/test/fyp/tiktok-imane-03.mp4
+  record_id:
+    type: string
 init:
   model:
     type: string
