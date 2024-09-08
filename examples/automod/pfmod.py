@@ -80,9 +80,9 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, 
     df = pd.DataFrame()
     if not flow_name:
         try:
-            flow_name = flow.__name__
+            flow_name = flow.__name__.lower()
         except:
-            flow_name = str(flow)
+            flow_name = str(flow).lower()
     columns = col_mapping_hydra_to_pf(column_mapping)
     logger.info(dict(message=f"Starting {flow_name} with flow {flow} with name: {run_name}"))
     environment_variables = {"PF_WORKER_COUNT": "1", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL"}
