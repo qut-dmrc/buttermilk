@@ -8,7 +8,7 @@ import gc
 import cloudpathlib
 import pandas as pd
 from buttermilk import BM
-from buttermilk.flows.evaluate.evaluate import Evaluator
+from buttermilk.flows.evalqa.evalqa import EvalQA
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 import hydra
@@ -37,7 +37,6 @@ from buttermilk.utils.log import getLogger
 import cloudpathlib
 from tempfile import NamedTemporaryFile
 import itertools
-
 # from azureml.core import Workspace, Experiment
 # from azureml.pipeline.core import Pipeline, PipelineData
 
@@ -57,6 +56,7 @@ import itertools
 from typing import Type, TypeVar, Callable, Optional
 
 logger = getLogger()
+pflocal = LocalPFClient()
 
 def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
     output = {}
@@ -76,13 +76,16 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
-    pflocal = LocalPFClient()
+def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
     df = pd.DataFrame()
-    flow_name = flow_name or flow.__name__.lower()
+    if not flow_name:
+        try:
+            flow_name = flow.__name__
+        except:
+            flow_name = str(flow)
     columns = col_mapping_hydra_to_pf(column_mapping)
-    logger.info(dict(message=f"Starting run with flow {flow} with name: {run_name}"))
-    environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "spawn"}
+    logger.info(dict(message=f"Starting {flow_name} with flow {flow} with name: {run_name}"))
+    environment_variables = {"PF_WORKER_COUNT": "1", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL"}
     task = pflocal.run(
             flow=flow,
             data=dataset,
@@ -106,16 +109,16 @@ def run_flow(*, flow: object, run_name: str, flow_name: Optional[str] = None, da
     df = inputs[id_cols]
 
     # Also a separate column with other step inputs
-    df.loc[:, 'inputs'] = inputs.drop(columns=id_cols).to_dict(orient='records')
+    df.loc[inputs.index.values, 'inputs'] = inputs.drop(columns=id_cols).to_dict(orient='records')
 
     # Add a column with the step results
     flow_outputs = details[[x for x in details.columns if x.startswith('outputs.')]]
     flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
-    df.loc[:, flow_name] = flow_outputs.to_dict(orient='records')
+    df.loc[flow_outputs.index.values, flow_name] = flow_outputs.to_dict(orient='records')
 
-    # TODO: see if we can add groundtruth back in
+    # see if we can add groundtruth back in
     if 'groundtruth' in flow_outputs and 'groundtruth' not in df.columns:
-        df.loc[:, 'groundtruth'] = flow_outputs['groundtruth']
+        df.loc[flow_outputs.index.values, 'groundtruth'] = flow_outputs['groundtruth']
 
     logger.info(
         f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
@@ -173,7 +176,7 @@ def run(cfg: DictConfig) -> None:
                 eval_name = f"{run_name}_evaluator_{eval_model}"
                 init_vars = {"model": eval_model}
                 flow_name = f'evaluator_{model}'
-                evals = run_flow(flow="buttermilk/flows/evaluate",
+                evals = run_flow(flow="buttermilk/flows/evalqa",
                                  flow_name=flow_name,
                                 dataset=data_file,
                                 run = run_name,
@@ -214,7 +217,7 @@ def run(cfg: DictConfig) -> None:
     # try:
     #     # generate metrics
     #     metriciser = Metriciser()
-    #     metrics = metriciser.evaluate_results(df, col=step_name)
+    #     metrics = metriciser.evalqa_results(df, col=step_name)
     #     metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
     #     logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
     #         ))

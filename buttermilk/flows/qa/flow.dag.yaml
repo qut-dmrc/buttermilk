@@ -1,0 +1,21 @@
+additional_includes:
+- ../judge/judge.py
+inputs:
+  inputs:
+    type: object
+  groundtruth:
+    type: object
+  query_params:
+    type: string
+    default: ""
+  qa_params:
+    type: string
+    default: ""
+outputs: {}
+nodes:
+- name: query
+  type: python
+  source:
+    type: code
+    path: ../judge/judge.py
+  inputs: {}

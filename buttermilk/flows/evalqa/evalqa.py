@@ -32,6 +32,7 @@ TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templ
 
 
 class LLMOutput(TypedDict):
+    timestamp: str
     correct: bool
     alignment: float
     reasons: dict
@@ -43,8 +44,8 @@ class KeepUndefined(Undefined):
         return "{{ " + self._undefined_name + " }}"
 
 
-class Evaluator(ToolProvider):
-    def __init__(self, *, model: str, template_path: str = "evaluate.jinja2") -> None:
+class EvalQA(ToolProvider):
+    def __init__(self, *, model: str, template_path: str = "evalqa.jinja2") -> None:
         bm = BM()
         self.connections = bm._connections_azure
 
@@ -86,6 +87,7 @@ class Evaluator(ToolProvider):
         output = chain.invoke(input=input_vars)
         output['result'] = scored_result
         output['groundtruth'] =expected
+        output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
         for k in LLMOutput.__required_keys__:
             if k not in output:
                 output[k] = None
@@ -101,7 +103,6 @@ class Evaluator(ToolProvider):
             bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
         ):
             details = self.__call__(groundtruth=row[groundtruth], prediction=row[prediction], **kwargs)
-            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
             results.append(details)
 

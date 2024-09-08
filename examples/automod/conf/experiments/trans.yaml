@@ -8,26 +8,28 @@ judger:
   name: judger
   num_runs: 1
   standards:
-  - trans_tja.jinja2
-  - trans_cte.jinja2
-  - trans_hrc.jinja2
-  - trans_glaad.jinja2
+  # - trans_tja.jinja2
+  # - trans_cte.jinja2
+  # - trans_hrc.jinja2
+  # - trans_glaad.jinja2
   - trans_simplified.jinja2
-  - trans_factored.jinja2
+  # - trans_factored.jinja2
   models:
-  - llama31_70b
-  - gpt4o
-  - sonnet
-  - gemini15pro
+  - haiku
+  # - llama31_70b
+  # - gpt4o
+  # - sonnet
+  # - gemini15pro
 evaluator:
   columns:
     groundtruth: data.expected
     prediction: run.outputs.prediction
     reasons: run.outputs.reasons
   models:
-  - sonnet
-  - llama31_70b
-  - gemini15pro
+  - haiku
+  # - sonnet
+  # - llama31_70b
+  # - gemini15pro
 score:
   aggregate: false
 metrics:
