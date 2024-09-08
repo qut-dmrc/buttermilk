@@ -7,6 +7,7 @@
 # The configuration files will be used to store the paths to the authentication credentials in
 # the cloud vaults.
 
+from dataclasses import dataclass
 import datetime
 import itertools
 import json
@@ -53,6 +54,7 @@ from .utils.log import logger
 
 _REGISTRY = {}
 
+_ = load_dotenv()
 
 T = TypeVar("T", bound="BM")
 
@@ -78,7 +80,7 @@ class Singleton:
         return self
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Any] = Field(default_factory=dict, validate_default=True)
+    cfg: Any = Field(default_factory=dict, validate_default=True)
     _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
     save_dir: Optional[str] = None
     _clients: dict[str, Any] = {}
@@ -87,6 +89,8 @@ class BM(Singleton, BaseModel):
 
     @field_validator('cfg', mode='before')
     def get_config(cls, v):
+        if 'project' in v.keys():
+            v = v.project
         if _REGISTRY.get('cfg'):
             if v:
                 logger.debug("Config passed in but we already have one loaded. Overwriting.")
@@ -98,17 +102,16 @@ class BM(Singleton, BaseModel):
             return v
         else:
             with initialize(version_base=None, config_path="conf"):
-                v = compose(config_name="config")
+                v = compose(config_name="config").project
             _REGISTRY['cfg'] = v
             return v
 
 
     def model_post_init(self, __context: Any) -> None:
-        load_dotenv()
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
-            self.setup_logging(verbose=self.cfg.project.get('verbose', False))
-            start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg['name'], job=self.cfg['job'])
+            self.setup_logging(verbose=self.cfg.verbose)
+            # start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
 
 
@@ -135,8 +138,8 @@ class BM(Singleton, BaseModel):
     @cached_property
     def metadata(self):# -> dict[str, Any]:
         labels = {
-            "function_name": self.cfg['name'],
-            "job": self.cfg['job'],
+            "function_name": self.cfg.name,
+            "job": self.cfg.job,
             "logs": self._run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
@@ -153,8 +156,8 @@ class BM(Singleton, BaseModel):
         except Exception as e:
             pass
         auth = DefaultAzureCredential()
-        vault_uri = self.cfg["project"]["azure"]["vault"]
-        models_secret = self.cfg["project"]["models_secret"]
+        vault_uri = self.cfg["azure"]["vault"]
+        models_secret = self.cfg["models_secret"]
         secrets = SecretClient(vault_uri, credential=auth)
         contents = secrets.get_secret(models_secret).value
         if not contents:
@@ -212,8 +215,8 @@ class BM(Singleton, BaseModel):
             labels={
                 "project_id": "dmrc-platforms",
                 "location": "us-central1",
-                "namespace": self.cfg['name'],
-                "job": self.cfg['job'],
+                "namespace": self.cfg.name,
+                "job": self.cfg.job,
                 "task_id": self._run_id,
             },
         )
@@ -225,7 +228,7 @@ class BM(Singleton, BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.cfg['name'], labels=self.metadata
+            client=client, resource=resource, name=self.cfg.name, labels=self.metadata
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -247,7 +250,7 @@ class BM(Singleton, BaseModel):
     @property
     def gcs(self) -> storage.Client:
         if self._clients.get('gcs') is None:
-            self._clients['gcs'] = storage.Client(project=self.cfg.project.gcp.project)
+            self._clients['gcs'] = storage.Client(project=self.cfg.gcp.project)
         return self._clients['gcs']
 
     def _get_save_dir(self, value=None) -> str:
@@ -264,10 +267,10 @@ class BM(Singleton, BaseModel):
                     f"save_path must be a string, Path, or CloudPath, got {type(value)}"
                 )
         else:
-            save_dir = self.cfg['project'].get('save_dir')
+            save_dir = self.cfg.get('save_dir')
             if not save_dir:
                 save_dir = (
-                    f"gs://{self.cfg['project']['gcp']['bucket']}/runs/{self.cfg['name']}/{self.cfg['job']}/{self._run_id}"
+                    f"gs://{self.cfg.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self._run_id}"
                 )
 
         # # Make sure the save directory is a valid path

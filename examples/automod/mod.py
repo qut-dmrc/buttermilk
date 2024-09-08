@@ -39,47 +39,6 @@ import cloudpathlib
 from tempfile import NamedTemporaryFile
 import itertools
 
-def run_local(
-    *,
-    num_runs=1,
-    flow,
-    target: str,
-    model: str,
-    batch_id: dict,
-    colour: str = "magenta",
-    dataset: str|pd.DataFrame,
-    column_mapping: dict[str, str]
-) -> pd.DataFrame:
-    results = []
-
-    if isinstance(dataset, str):
-        dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
-    runs = itertools.product(range(num_runs), dataset.iterrows())
-    for i, (_, row) in tqdm.tqdm(
-        runs,
-        total=num_runs*dataset.shape[0],
-        colour=colour,
-        desc=f"{target}-{model}",
-        bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-    ):
-        input_vars = {key: row[mapped] for key, mapped in column_mapping.items() if mapped in row}
-        details = flow(**input_vars)
-        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
-        for k, v in batch_id.items():
-            if k not in details:
-                details[k] = v
-        row[f"{target}_model"] = model
-        row[f"{target}_i"] = i
-        row[target] = details
-
-        results.append(row)
-    results = pd.DataFrame(results)
-    del flow
-    torch.cuda.empty_cache()
-    gc.collect()
-    return results
-
-
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name

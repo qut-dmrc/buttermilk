@@ -13,7 +13,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "pflocal batch: trans",
+            "name": "automod debug",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.pfmod",
@@ -33,7 +33,7 @@
             "name": "batch automod: trans",
             "type": "debugpy",
             "request": "launch",
-            "module": "examples.automod.mod",
+            "module": "examples.automod.pfmod",
             "cwd": "${workspaceFolder}",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
@@ -43,6 +43,8 @@
             "args": [
                 "--multirun",
                 "+experiments=trans",
+                "judger.model=gpt4o,sonnet,llama31_70b",
+                "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

@@ -1,3 +1,8 @@
+###
+# You can debug from here, or run from the command line with:
+#   python examples/automod/pfmod.py --multirun hydra/launcher=joblib +experiments=trans judger.model=gpt4o,sonnet,llama31_70b judger.standard=trans_factored.jinja2,trans_tja.jinja2,trans_hrc.jinja2,trans_glaad.jinja2,trans_simplified.jinja2
+###
+import os
 import datetime
 import resource
 from multiprocessing import Process
@@ -57,6 +62,7 @@ from typing import Type, TypeVar, Callable, Optional
 
 logger = getLogger()
 pflocal = LocalPFClient()
+bm = BM()
 
 def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
     output = {}
@@ -83,9 +89,15 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, 
             flow_name = flow.__name__.lower()
         except:
             flow_name = str(flow).lower()
-    columns = col_mapping_hydra_to_pf(column_mapping)
+
+    df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run, init_vars=init_vars)
+
+    return df
+
+def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
     logger.info(dict(message=f"Starting {flow_name} with flow {flow} with name: {run_name}"))
-    environment_variables = {"PF_WORKER_COUNT": "1", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL"}
+    columns = col_mapping_hydra_to_pf(column_mapping)
+    environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL", "PF_DISABLE_TRACING": "true"}
     task = pflocal.run(
             flow=flow,
             data=dataset,
@@ -108,9 +120,6 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, 
     id_cols = [x for x in ['record_id', 'line_number'] if x in inputs.columns]
     df = inputs[id_cols]
 
-    # Also a separate column with other step inputs
-    df.loc[inputs.index.values, 'inputs'] = inputs.drop(columns=id_cols).to_dict(orient='records')
-
     # Add a column with the step results
     flow_outputs = details[[x for x in details.columns if x.startswith('outputs.')]]
     flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
@@ -123,119 +132,153 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, 
     logger.info(
         f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
     )
-
     return df
 
+def run_local(
+    *,
+    num_runs=1,
+    flow,
+    target: str,
+    model: str,
+    batch_id: dict,
+    colour: str = "magenta",
+    init_vars: dict = {},
+    dataset: str|pd.DataFrame,
+    column_mapping: dict[str, str]
+) -> pd.DataFrame:
+    results = []
+
+    if isinstance(dataset, str):
+        dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
+    runs = itertools.product(range(num_runs), dataset.iterrows())
+    for i, (_, row) in tqdm.tqdm(
+        runs,
+        total=num_runs*dataset.shape[0],
+        colour=colour,
+        desc=f"{target}-{model}",
+        bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+    ):
+        runnable = flow(**init_vars)
+
+        # TODO: convert column_mapping to work for our dataframe
+        input_vars = {key: row[mapped] for key, mapped in column_mapping.items() if mapped in row}
+
+        # Run the flow for this line of data
+        details = runnable(**input_vars)
+
+        # add input details to  the result row
+        for k, v in input_vars.items():
+            if k not in details:
+                details[k] = v
+        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+        for k, v in batch_id.items():
+            if k not in details:
+                details[k] = v
+        for k, v in init_vars.items():
+            if k not in details:
+                details[k] = v
+        row[f"{target}_model"] = model
+        row[f"{target}_i"] = i
+        row[target] = details
+
+        results.append(row)
+
+    results = pd.DataFrame(results)
+    logger.info(
+        f"Run for {flow} completed locally, processed {results.shape[0]} results."
+    )
+    del flow
+    torch.cuda.empty_cache()
+    gc.collect()
+    return results
+
+
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
-def run(cfg: DictConfig) -> None:
-    pass
+def main(cfg: DictConfig) -> None:
+    global bm, logger
     bm = BM(cfg=cfg)
     logger = bm.logger
-    results = pd.DataFrame()
 
+    # from promptflow.tracing import start_trace, trace
+    # start_trace(resource_attributes={"run_id": bm._run_id, "job": cfg.project.job}, collection=cfg.project.name)
     # Create a cycle iterator for the progress bar colours
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    data_file = cache_data(cfg.experiments.data.uri)
-
-    connections = bm._connections_azure
-
-    # Judging step
-    step = cfg.experiments.judger
-    models: list = OmegaConf.to_object(step.get("models", []))
-    standards: list = OmegaConf.to_object(step.get("standards", []))
-    shuffle(models)
-    shuffle(standards)
-    permutations = itertools.product(models, standards)
-    step_name = step.name
-    num_runs = step.get("num_runs", 1)
-    for model, standard in permutations:
-        df = pd.DataFrame()
-        try:
-            conn = {model: bm._connections_azure[model]}
-            init_vars = {"model": model, "standards_path": standard, "template_path": "judge.jinja2", "connection": conn}
-            init_vars.update( step.get("init",{}))
-            batch_id = dict(
-                run_id=bm._run_id, step="judger",
-                dataset=cfg.experiments.data.name,
-                model=model, standard=standard.replace(".jinja2", "").replace(".yaml", ""),
-            )
-            run_name = "_".join(list(batch_id.values()))
-            flow_outputs = run_flow(flow=Judger,
-                        dataset=data_file,
-                        run_name = run_name,
-                        column_mapping=dict(cfg.experiments.data.columns), init_vars=init_vars )
-
-            # Set up  empty dataframe with batch details ready  to go
-            df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
-            df = pd.concat([df, flow_outputs], axis='columns')
-
-            # Run the evaulation flows
-            for eval_model in cfg.experiments.evaluator.models:
-                eval_name = f"{run_name}_evaluator_{eval_model}"
-                init_vars = {"model": eval_model}
-                flow_name = f'evaluator_{model}'
-                evals = run_flow(flow="buttermilk/flows/evalqa",
-                                 flow_name=flow_name,
-                                dataset=data_file,
-                                run = run_name,
-                                run_name = eval_name,
-                                column_mapping=dict(cfg.experiments.evaluator.columns),
-                                init_vars = init_vars
-                        )
-
-                # join the evaluation results
-                try:
-                    df.loc[:, flow_name] = evals[flow_name].to_dict()
-                    if 'groundtruth' in evals and 'groundtruth' not in df.columns:
-                        df.loc[:, 'groundtruth'] = evals['groundtruth']
-                except Exception as e:
-                    # We might not get all the responses back. Try to join on line number instead?
-                    pass
-                    df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
-
-            # set index
-            idx = [x for x in batch_id.keys()]
-            df = df.set_index(idx)
-
-        except Exception as e:
-            logger.error(f"Unhandled error in our flow: {e}")
-            continue
-        finally:
-            if df.shape[0]>0:
-                uri = bm.save(df.reset_index())
-                logger.info(
-                    dict(
-                        message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
-                        **batch_id,results=uri
-                    )
-                )
-                # add to full batch results
-                results = pd.concat([results, df])
-
-    # try:
-    #     # generate metrics
-    #     metriciser = Metriciser()
-    #     metrics = metriciser.evalqa_results(df, col=step_name)
-    #     metrics_uri = bm.save(metrics.reset_index(), basename='metrics.jsonl')
-    #     logger.info(dict(message=f"Full run completed, saved {metrics.shape[0]} aggregated metrics to {metrics_uri}", **batch_id,results=uri
-    #         ))
-    # except Exception as e:
-    #     logger.error(f"Unhandled error generating metrics: {e}")
-
-    # finally:
-    if results.shape[0]>0:
-        uri = bm.save(results.reset_index(), basename="results")
-        logger.info(dict(message=f"Full run completed, saved {results.shape[0]} final batch results to {uri}", **batch_id,results=uri
-            ))
-    else:
-        logger.info(dict(message=f"Full run completed, no results to save.", **batch_id
-            ))
-
-
+    df = run(data=cfg.data, judger=cfg.judger, evaluator=cfg.evaluator)
     pass
+
+def run(*, data, judger, evaluator):
+    global bm
+    df = pd.DataFrame()
+    data_file = cache_data(data.uri)
+    num_runs = judger.get('num_runs',1)
+    connections = bm._connections_azure
+    # Run judger flow
+    try:
+        conn = {judger.model: connections[judger.model]}
+        init_vars = {"model": judger.model, "standards_path": judger.standard, "template_path": "judge.jinja2", "connection": conn}
+        init_vars.update( judger.get("init",{}))
+        batch_id = dict(
+            run_id=bm._run_id, step=judger.name,
+            dataset=data.name,
+            model=judger.model, standard=judger.standard.replace(".jinja2", "").replace(".yaml", ""),
+        )
+        run_name = "_".join(list(batch_id.values()))
+        flow_outputs = run_flow(flow=Judger,
+                                flow_name=judger.name,
+                                dataset=data_file,
+                                run_name = run_name,
+                                column_mapping=dict(data.columns),
+                                init_vars=init_vars)
+
+        # Set up  empty dataframe with batch details ready  to go
+        df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
+        df = pd.concat([df, flow_outputs], axis='columns')
+
+        # Run the evaulation flows
+        for eval_model in evaluator.models:
+            eval_name = f"{run_name}_evaluator_{eval_model}"
+            init_vars = {"model": eval_model}
+            flow_name = f'evaluator_{eval_model}'
+            evals = run_flow(flow=EvalQA,
+                            flow_name=flow_name,
+                            dataset=data_file,
+                            run = run_name,
+                            run_name = eval_name,
+                            column_mapping=dict(evaluator.columns),
+                            init_vars = init_vars
+                    )
+
+            # join the evaluation results
+            try:
+                df.loc[:, flow_name] = evals[flow_name].to_dict()
+                if 'groundtruth' in evals and 'groundtruth' not in df.columns:
+                    df.loc[:, 'groundtruth'] = evals['groundtruth']
+            except Exception as e:
+                # We might not get all the responses back. Try to join on line number instead?
+                pass
+                df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
+
+        # set index
+        idx = [x for x in batch_id.keys()]
+        df = df.set_index(idx)
+
+    # except Exception as e:
+    #     logger.error(f"Unhandled error in our flow: {e}")
+    #     raise(e)
+    finally:
+        if df.shape[0]>0:
+            uri = bm.save(df.reset_index(), basename='batch')
+            logger.info(
+                dict(
+                    message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
+                    **batch_id,results=uri
+                )
+            )
+    return df
+
 
 
 if __name__ == "__main__":
-    run()
+    main()

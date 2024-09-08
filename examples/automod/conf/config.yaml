@@ -1,6 +1,6 @@
-name: automod
-job: judge
 project:
+  name: automod
+  job: judge
   secret_provider: azure
   logger: gcp
   verbose: true

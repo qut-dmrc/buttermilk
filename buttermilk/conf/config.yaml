@@ -1,6 +1,6 @@
-name: default_project
-job: development
 project:
+  name: default_project
+  job: development
   secret_provider: azure
   logger: gcp
   verbose: true
