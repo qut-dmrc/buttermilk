@@ -286,10 +286,6 @@ def run(*, data, judger, evaluator, run_cfg):
                 pass
                 df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
 
-        # set index
-        idx = [x for x in batch_id.keys()]
-        df = df.set_index(idx)
-
     # except Exception as e:
     #     logger.error(f"Unhandled error in our flow: {e}")
     #     raise(e)

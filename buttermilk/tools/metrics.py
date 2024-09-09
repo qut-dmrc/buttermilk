@@ -13,7 +13,7 @@ class Scorer:
 
 
 class Metriciser:
-    def evaluate_results(self, dataset, col: str, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = 'prediction', unique_col:str='timestamp') -> pd.DataFrame:
+    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = 'predicted', unique_col:str='timestamp') -> pd.DataFrame:
         """
         Evaluates the results of one or more training runs,
         aggregating at the levels selected.
@@ -28,62 +28,56 @@ class Metriciser:
         Returns:
             pd.DataFrame: The updated DataFrame with the new metric columns.
         """
-        df = dataset.copy()
-        df_results = pd.json_normalize(df[col])
-        df_results.loc[:, 'preds'] = df_results[prediction].astype(int).to_numpy()
-        df_results.loc[:, 'expected'] = pd.json_normalize(df[groundtruth])['answer'].astype(int).to_numpy()
-        df_results.loc[:, 'correct'] = (df_results['preds'] == df_results['expected'])
-        idx_cols = df_results.index.names
-        if unique_col not in idx_cols:
-            df_results = df_results.set_index(unique_col, append=True)
-            df_results = df_results.loc[~(df_results.index.duplicated()),:]
-        df_results = df_results.reset_index(unique_col, drop=False)
 
-        df_results = df_results.set_index(levels)
-        if levels:
+
+        df_results = dataset.copy()
+        idx_cols = df_results.index.names
+
+        if unique_col in idx_cols:
+            idx_cols = [x for x in idx_cols if x != unique_col]
+            df_results = df_results.reset_index(unique_col, drop=False)
+
+        if levels is not None and len(levels)>0:
+            df_results = df_results.reset_index().set_index(levels)
             grouper = df_results.groupby(level=levels)
         else:
-            grouper = df_results.groupby(level=df_results.index.names)
+            grouper = df_results.groupby(level=idx_cols)
 
-        acc = grouper.agg(n=(unique_col, "nunique"))
 
-        # Compute the metrics
-        acc["precision"] = grouper.apply(
-            lambda x: precision_score(df_results['expected'], df_results['preds'], zero_division=0)
-        )
-        acc["recall"] = df.groupby(level=levels).apply(
-            lambda x: recall_score(df_results['expected'], df_results['preds'], zero_division=0)
-        )
-        acc["f1-score"] = df.groupby(level=levels).apply(
-            lambda x: f1_score(df_results['expected'], df_results['preds'], zero_division=0)
-        )
-        acc["accuracy"] = df.groupby(level=levels).apply(
-            lambda x: accuracy_score(df_results['expected'], df_results['preds'])
-        )
+        # Calculate confusion matrix components
+        df_results['TP'] = (df_results[groundtruth] == 1) & (df_results[prediction] == 1)
+        df_results['TN'] = (df_results[groundtruth] == 0) & (df_results[prediction] == 0)
+        df_results['FP'] = (df_results[groundtruth] == 0) & (df_results[prediction] == 1)
+        df_results['FN'] = (df_results[groundtruth] == 1) & (df_results[prediction] == 0)
 
-        # Calculate the confusion matrix for each level of the multi-index
-        cm = (
-            grouper.apply(lambda x: pd.crosstab(df_results['expected'], df_results['preds']))
-            .unstack(level=groundtruth, fill_value=0, sort=True)
-            .sort_index(axis="columns")
-        )
+        # Aggregate confusion matrix components
+        conf_matrix = grouper[['TP', 'TN', 'FP', 'FN']].sum()
 
-        cm.columns = [f"predicted_{n[0]}_expected_{n[1]}".lower() for n in cm.columns]
-        rename_dict = {
-            "predicted_0_expected_0": "TN",
-            "predicted_0_expected_1": "FN",
-            "predicted_1_expected_0": "FP",
-            "predicted_1_expected_1": "TP",
-        }
-        cm = cm.rename(columns=rename_dict)
-        proportion = cm.apply(lambda x: x / x.sum(), axis=1)
-        proportion.columns = [f"{n}_proportion" for n in proportion.columns]
-        acc = pd.concat([acc, cm, proportion], axis=1)
+        # Calculate metrics
+        conf_matrix['precision'] = conf_matrix['TP'] / (conf_matrix['TP'] + conf_matrix['FP']).replace(0, 1)
+        conf_matrix['recall'] = conf_matrix['TP'] / (conf_matrix['TP'] + conf_matrix['FN']).replace(0, 1)
+        conf_matrix['f1-score'] = 2 * (conf_matrix['precision'] * conf_matrix['recall']) / (conf_matrix['precision'] + conf_matrix['recall']).replace(0, 1)
+        conf_matrix['accuracy'] = (conf_matrix['TP'] + conf_matrix['TN']) / (conf_matrix['TP'] + conf_matrix['TN'] + conf_matrix['FP'] + conf_matrix['FN']).replace(0, 1)
+
+        # Calculate proportions
+        proportion = conf_matrix[['TP', 'TN', 'FP', 'FN']].div(conf_matrix[['TP', 'TN', 'FP', 'FN']].sum(axis=1), axis=0)
+        proportion.columns = [f"{col}_proportion" for col in proportion.columns]
+
+        # Add number of examples
+        conf_matrix['n'] = grouper.agg(n=(unique_col, 'nunique'))['n']
+
+        # Combine metrics and proportions
+        metrics = pd.concat([conf_matrix, proportion], axis=1)
+
+        metrics = metrics.sort_values(by='accuracy', ascending=False)
+
+        return metrics
+
+
+    def log_metrics(self, metrics: pd.DataFrame):
         try:  # try to log metrics to promptflow
-            for row in acc.to_dict(orient='records'):
+            for row in metrics.to_dict(orient='records'):
                 for key, value in row.items():
                     log_metric(key=key, value=value)
         except:
             pass
-
-        return acc
