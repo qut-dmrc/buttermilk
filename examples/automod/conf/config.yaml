@@ -1,3 +1,7 @@
+defaults:
+  - _self_
+  - experiments/test
+
 project:
   name: automod
   job: judge
@@ -17,3 +21,6 @@ project:
   aws:
     secret_name: secret
     region: us-east-1
+
+run:
+  exec: local

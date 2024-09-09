@@ -24,7 +24,6 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=trans",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
@@ -43,7 +42,7 @@
             "args": [
                 "--multirun",
                 "+experiments=trans",
-                "judger.model=gpt4o,sonnet,llama31_70b",
+                "judger.model=gpt4o",
                 "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2"
             ],
             "envFile": "${workspaceFolder}/.env",

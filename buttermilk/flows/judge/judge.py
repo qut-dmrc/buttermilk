@@ -29,11 +29,11 @@ class KeepUndefined(Undefined):
         return '{{ ' + self._undefined_name + ' }}'
 
 class LLMOutput(TypedDict):
+    timestamp: object
     result: dict
     reasons: list
     labels: list
     metadata: dict
-    record_id: str
     scores: dict
 
 class Judger(ToolProvider):

@@ -90,3 +90,34 @@ class Job(BaseModel):
     options: dict[str, Any] = {}                # Additional options for the worker
     error: Optional[dict[str, Any]] = None
     metadata: dict = {}
+
+
+
+####################################
+# A response from a single LLM call
+####################################
+class LLMOutput(JobResultBase):
+    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
+    query_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
+
+    result: Optional[str] = None
+    reasons: Optional[list] = None
+    labels: Optional[list] = None
+    scores: Optional[dict] = None
+    prediction: Optional[bool] = None
+
+    source: Optional[str] = None
+    error: Optional[str] = None
+    worker: Optional[str] = None
+    raw: Optional[dict|str] = (
+        None  # when we receive an invalid response, log it in this field
+    )
+    metadata: Optional[dict] = {}
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+        use_enum_values=True,
+        json_encoders={np.bool_: lambda v: bool(v)},
+    )

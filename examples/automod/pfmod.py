@@ -74,6 +74,15 @@ def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
 
     return output
 
+def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
+    # For local dataframe mapping
+    output = {}
+    for k, v in mapping_dict.items():
+        # Usually we need to discard the early part of the mapping before the final '.'
+        output[k] = v.split('.')[-1]
+
+    return output
+
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -82,7 +91,7 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, column_mapping: dict[str,str], run: Optional[str] = None, init_vars: dict = {}) -> pd.DataFrame:
+def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], init_vars: dict = {}) -> pd.DataFrame:
     df = pd.DataFrame()
     if not flow_name:
         try:
@@ -90,8 +99,10 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str, 
         except:
             flow_name = str(flow).lower()
 
-    df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run, init_vars=init_vars)
-
+    if run_cfg.platform == "azure":
+        df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
+    else:
+        df = exec_local(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars)
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
@@ -134,54 +145,67 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     )
     return df
 
-def run_local(
+def exec_local(
     *,
     num_runs=1,
     flow,
-    target: str,
-    model: str,
-    batch_id: dict,
+    flow_name,
+    run_name,
     colour: str = "magenta",
     init_vars: dict = {},
     dataset: str|pd.DataFrame,
+    step_outputs: Optional[str|pd.DataFrame] = None,
     column_mapping: dict[str, str]
 ) -> pd.DataFrame:
+
+    logger.info(dict(message=f"Starting {flow_name} running locally with flow {flow} with name: {run_name}"))
+
     results = []
 
     if isinstance(dataset, str):
-        dataset = pd.read_json(dataset, orient="records", lines=True).sample(frac=1)
+        dataset = pd.read_json(dataset, orient="records", lines=True)
+    if isinstance(step_outputs, str):
+        step_outputs = pd.read_json(step_outputs, orient="records", lines=True)
+
     runs = itertools.product(range(num_runs), dataset.iterrows())
-    for i, (_, row) in tqdm.tqdm(
+
+    for i, (idx, row) in tqdm.tqdm(
         runs,
         total=num_runs*dataset.shape[0],
         colour=colour,
-        desc=f"{target}-{model}",
+        desc=run_name,
         bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
     ):
         runnable = flow(**init_vars)
 
-        # TODO: convert column_mapping to work for our dataframe
-        input_vars = {key: row[mapped] for key, mapped in column_mapping.items() if mapped in row}
+        # convert column_mapping to work for our dataframe
+        columns = col_mapping_hydra_to_local(column_mapping)
+        input_vars = {}
+        for key, mapped in columns.items():
+            if step_outputs is not None and isinstance(step_outputs, pd.DataFrame) and mapped in step_outputs.columns:
+                # Use the output from the previous step
+                # This relies on the step_outputs keeping the same index as the dataset
+                input_vars[key] = step_outputs.loc[idx, mapped]
+            elif mapped in dataset.columns:
+                input_vars[key] = row[mapped]
+            else:
+                ValueError("Unable to find data input for {key}: {mapped}")
 
         # Run the flow for this line of data
         details = runnable(**input_vars)
+
+        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
         # add input details to  the result row
         for k, v in input_vars.items():
             if k not in details:
                 details[k] = v
-        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
-        for k, v in batch_id.items():
-            if k not in details:
-                details[k] = v
+
         for k, v in init_vars.items():
             if k not in details:
                 details[k] = v
-        row[f"{target}_model"] = model
-        row[f"{target}_i"] = i
-        row[target] = details
 
-        results.append(row)
+        results.append(details)
 
     results = pd.DataFrame(results)
     logger.info(
@@ -205,10 +229,10 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    df = run(data=cfg.data, judger=cfg.judger, evaluator=cfg.evaluator)
+    df = run(data=cfg.data, judger=cfg.judger, evaluator=cfg.evaluator, run_cfg=cfg.run)
     pass
 
-def run(*, data, judger, evaluator):
+def run(*, data, judger, evaluator, run_cfg):
     global bm
     df = pd.DataFrame()
     data_file = cache_data(data.uri)
@@ -230,7 +254,7 @@ def run(*, data, judger, evaluator):
                                 dataset=data_file,
                                 run_name = run_name,
                                 column_mapping=dict(data.columns),
-                                init_vars=init_vars)
+                                init_vars=init_vars,run_cfg=run_cfg )
 
         # Set up  empty dataframe with batch details ready  to go
         df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
@@ -244,15 +268,17 @@ def run(*, data, judger, evaluator):
             evals = run_flow(flow=EvalQA,
                             flow_name=flow_name,
                             dataset=data_file,
-                            run = run_name,
+                            step_outputs = flow_outputs,
+                            run_outputs = run_name,
                             run_name = eval_name,
                             column_mapping=dict(evaluator.columns),
-                            init_vars = init_vars
+                            init_vars = init_vars,
+                            run_cfg=run_cfg
                     )
 
             # join the evaluation results
             try:
-                df.loc[:, flow_name] = evals[flow_name].to_dict()
+                df.loc[:, flow_name] = evals.to_dict(orient='records')
                 if 'groundtruth' in evals and 'groundtruth' not in df.columns:
                     df.loc[:, 'groundtruth'] = evals['groundtruth']
             except Exception as e:

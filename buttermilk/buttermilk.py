@@ -198,6 +198,7 @@ class BM(Singleton, BaseModel):
         import warnings
 
         warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+        warnings.filterwarnings(action="ignore",module="msal", category=DeprecationWarning)
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:

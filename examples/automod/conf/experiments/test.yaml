@@ -1,0 +1,28 @@
+# @package _global_
+project:
+  name: testing
+  job: judge
+run:
+  platform: local
+data:
+  name: trans_train
+  uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
+  columns:
+    record_id: data.id
+    content: data.alt_text
+judger:
+  name: judger
+  num_runs: 1
+  model: haiku
+  standard: criteria_ordinary.jinja2
+evaluator:
+  columns:
+    groundtruth: data.expected
+    prediction: run.outputs.prediction
+    reasons: run.outputs.reasons
+  models:
+    - haiku
+score:
+  aggregate: false
+metrics:
+  aggregate: true
