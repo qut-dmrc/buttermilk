@@ -1,9 +1,10 @@
 # @package _global_
-name: climateframes
-job: interactive_compare_instructions
 project:
+  name: climateframes
+  job: interactive_compare_instructions
   secret_provider: azure
   logger: gcp
+  verbose: false
   models_secret: models
   save_dest: gcp
   save_dir:
