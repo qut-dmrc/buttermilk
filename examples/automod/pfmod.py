@@ -4,6 +4,7 @@
 ###
 import os
 import datetime
+import re
 import resource
 from multiprocessing import Process
 from pathlib import Path
@@ -59,30 +60,12 @@ import itertools
 # run = experiment.submit(pipeline)
 # run.wait_for_completion(show_output=True)
 from typing import Type, TypeVar, Callable, Optional
+from buttermilk.utils.flows import col_mapping_hydra_to_pf
+
 
 logger = getLogger()
 pflocal = LocalPFClient()
 bm = BM()
-
-def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
-    output = {}
-    for k, v in mapping_dict.items():
-        # need to escape the curly braces
-        # prompt flow expects a mapping like:
-        #   record_id: ${data.id}
-        output[k] = f"${{{v}}}"
-
-    return output
-
-def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
-    # For local dataframe mapping
-    output = {}
-    for k, v in mapping_dict.items():
-        # Usually we need to discard the early part of the mapping before the final '.'
-        output[k] = v.split('.')[-1]
-
-    return output
-
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -229,28 +212,33 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
 
-    df = run(data=cfg.data, judger=cfg.judger, evaluator=cfg.evaluator, run_cfg=cfg.run)
+    df = run(data=cfg.data, flow_cfg=cfg.judger, evaluator_cfg=cfg.evaluator, run_cfg=cfg.run)
     pass
 
-def run(*, data, judger, evaluator, run_cfg):
+def run(*, data, flow_cfg, evaluator_cfg: Optional[dict]=None, run_cfg):
     global bm
     df = pd.DataFrame()
     data_file = cache_data(data.uri)
-    num_runs = judger.get('num_runs',1)
+
     connections = bm._connections_azure
-    # Run judger flow
+    # Run flow
     try:
-        conn = {judger.model: connections[judger.model]}
-        init_vars = {"model": judger.model, "standards_path": judger.standard, "template_path": "judge.jinja2", "connection": conn}
-        init_vars.update( judger.get("init",{}))
+        init_vars = {**flow_cfg.init, "connection": connections}
         batch_id = dict(
-            run_id=bm._run_id, step=judger.name,
+            run_id=bm._run_id,
+            step=flow_cfg.name,
             dataset=data.name,
-            model=judger.model, standard=judger.standard.replace(".jinja2", "").replace(".yaml", ""),
         )
+        for k,v in init_vars.items():
+            # remove path extensions
+            k = re.sub(r'_.*', '', str(k))
+            v = re.sub(r'\..*', '', str(v))
+
+            batch_id[k] = v
+
         run_name = "_".join(list(batch_id.values()))
         flow_outputs = run_flow(flow=Judger,
-                                flow_name=judger.name,
+                                flow_name=flow_cfg.name,
                                 dataset=data_file,
                                 run_name = run_name,
                                 column_mapping=dict(data.columns),
@@ -261,7 +249,7 @@ def run(*, data, judger, evaluator, run_cfg):
         df = pd.concat([df, flow_outputs], axis='columns')
 
         # Run the evaulation flows
-        for eval_model in evaluator.models:
+        for eval_model in evaluator_cfg.models:
             eval_name = f"{run_name}_evaluator_{eval_model}"
             init_vars = {"model": eval_model}
             flow_name = f'evaluator_{eval_model}'
@@ -271,7 +259,7 @@ def run(*, data, judger, evaluator, run_cfg):
                             step_outputs = flow_outputs,
                             run_outputs = run_name,
                             run_name = eval_name,
-                            column_mapping=dict(evaluator.columns),
+                            column_mapping=dict(evaluator_cfg.columns),
                             init_vars = init_vars,
                             run_cfg=run_cfg
                     )

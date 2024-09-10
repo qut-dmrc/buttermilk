@@ -1,4 +1,4 @@
-from buttermilk.utils.pf import test_col_mapping_hydra_to_pf
+from buttermilk.utils.flows import col_mapping_hydra_to_pf
 
 def test_col_mapping_hydra_to_pf():
     # Test case 1: Empty dictionary

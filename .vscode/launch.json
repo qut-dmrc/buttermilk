@@ -49,6 +49,26 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "batch automod: ots",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "examples.automod.pfmod",
+            "cwd": "${workspaceFolder}",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+                "--multirun",
+                "+experiments=ots",
+                "judger.model=sonnet",
+                "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2,trans_simplified.jinja2,trans_factored.jinja2"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Test Config",
             "type": "debugpy",
             "request": "launch",

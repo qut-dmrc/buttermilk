@@ -40,7 +40,7 @@ LLAMAGUARD_MODELS = [
     LlamaGuard3Together,
 ]
 
-LLAMAGUARD_CPU_MODELS = [
+LLAMAGUARD_GPU_MODELS = [
     LlamaGuard3Local,
     LlamaGuard3LocalInt8,
     LlamaGuard2Local,
@@ -50,9 +50,8 @@ LLAMAGUARD_CPU_MODELS = [
 def llamaguard(request):
     return request.param()
 
-@pytest.fixture(params=LLAMAGUARD_CPU_MODELS)
-@pytest.mark.async_timeout(300)
-def llamaguard_cpu(request):
+@pytest.fixture(params=LLAMAGUARD_GPU_MODELS)
+def llamaguard_gpu(request):
     return request.param()
 
 import pytest
@@ -101,12 +100,13 @@ class TestLlamaGuard:
             x = llamaguard.interpret("unsafe s3")
             assert x.scores[0].measure == "S3: Sex-Related Crimes".upper()
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     @pytest.mark.async_timeout(150)
-    async def test_llamaguard_cpu(self, llamaguard_cpu):
+    async def test_llamaguard_cpu(self, llamaguard_gpu):
         text = "The image is a black and white photo of a group of people in Ku Klux Klan (KKK) robes and hoods. There is text on the image that says 'i'm dreaming of a white christmas'."
         rec = InputRecord(record_id="testHFModels", text=text, source="testdata")
 
-        response = await llamaguard_cpu.mod_single(rec)
+        response = await llamaguard_gpu.mod_single(rec)
         assert response.result == False
         assert response.reasons is not None and "unsafe" in response.reasons
 
@@ -123,6 +123,7 @@ class TestLlamaGuard:
         pass
 
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     @pytest.mark.parametrize(
         "standard", ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"]
     )
@@ -188,7 +189,10 @@ class TestClients:
         )
 
     def test_comprehend(self, toxic_record: InputRecord):
-        client = ComprehendAPI()
+        tox=Comprehend()
+
+        client = tox.init_client()
+
         result = client.mod_meratesingle(toxic_record.text)
 
         assert result is not None
@@ -212,6 +216,7 @@ class TestClients:
             expected_labels <= received_labels
         ), f"Missing labels in the response; expected all of {expected_labels}"
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_HONEST_prompt(self, toxic_record: InputRecord):
         # This isn't in the right format yet.
         # see https://huggingface.co/spaces/evaluate-measurement/honest
@@ -223,6 +228,7 @@ class TestClients:
         assert score is not None
         assert isinstance(result, dict)
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_LFTW_R4(self, toxic_record: InputRecord):
         from transformers import pipeline
 
@@ -235,6 +241,7 @@ class TestClients:
             assert r["label"] in ["hate", "nothate"]
             assert isinstance(r, dict)
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_REGARD(self, toxic_record: InputRecord):
         regard = evaluate.load("regard", module_type="measurement")
         result = regard.compute(data=toxic_record.text)["regard"][0]
@@ -299,6 +306,7 @@ class TestToxicityModels:
         # )
         # assert uri
 
+    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_local_models(self, local_model, toxic_record):
         self.test_mod(tox_model=local_model, toxic_record=toxic_record)
 

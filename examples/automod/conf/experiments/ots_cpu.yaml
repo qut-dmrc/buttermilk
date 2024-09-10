@@ -1,7 +1,0 @@
-moderate:
-  name: ots
-  init:
-  models:
-  - HONEST
-  - LFTW
-  - REGARD

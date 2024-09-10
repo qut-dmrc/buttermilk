@@ -12,3 +12,6 @@ moderate:
   - LlamaGuard2Local
   - LlamaGuard3LocalInt8
   - Wildguard
+  - HONEST
+  - LFTW
+  - REGARD

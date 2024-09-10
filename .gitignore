@@ -1,6 +1,8 @@
 outputs
 multirun
 connections.json*
+*.jsonl
+
 __pycache__/
 .promptflow
 !.promptflow/flow.tools.json
@@ -180,4 +182,3 @@ cython_debug/
 
 *.pickle
 .runs/
-

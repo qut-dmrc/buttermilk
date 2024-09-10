@@ -1,6 +1,7 @@
-name: buttermilk
-job: testing
 project:
+  name: buttermilk
+  job: testing
+  verbose: true
   secret_provider: azure
   logger: gcp
   models_secret: models
