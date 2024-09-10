@@ -19,6 +19,7 @@ import datetime
 import tqdm
 from langchain_core.runnables import Runnable
 from jinja2 import Environment, BaseLoader, Undefined
+from buttermilk.flows.common.config import COL_PREDICTION
 from buttermilk.llms import LLMs
 
 from buttermilk import BM
@@ -52,7 +53,7 @@ class EvalQA(ToolProvider):
         env = Environment(loader=FileSystemLoader(searchpath=TEMPLATE_PATHS), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         tpl = env.get_template(template_path).render({})
-        template_vars = {"groundtruth": "{{groundtruth}}", "prediction":r"{{prediction}}", "reasons":r"{{reasons}}"}
+        template_vars = {"groundtruth": "{{groundtruth}}", COL_PREDICTION:r"{{" + COL_PREDICTION + "}}", "reasons":r"{{reasons}}"}
         template = convert_prompt_template(tpl, api="chat", inputs=template_vars)
 
         # convert to a list of messages and roles expected by langchain
@@ -94,7 +95,7 @@ class EvalQA(ToolProvider):
 
         return output
 
-    def batch(self, dataset: pd.DataFrame, groundtruth: str = 'expected', prediction: str = 'prediction', **kwargs) -> list:
+    def batch(self, dataset: pd.DataFrame, groundtruth: str = 'expected', prediction: str = COL_PREDICTION, **kwargs) -> list:
         results = []
         for _, row in tqdm.tqdm(
             dataset.iterrows(),

@@ -3,10 +3,7 @@ environment:
   python_requirements_txt: requirements.txt
 additional_includes:
 - ../common/requirements.txt
-- ../templates/frames.jinja2
-- ../templates/frames_climate.jinja2
-- ../templates/instructions.jinja2
-- ../templates/process.jinja2
+- ../templates
 inputs:
   content:
     type: string
@@ -32,15 +29,6 @@ nodes:
     langchain_model_name:
       type: string
       default: gpt4o
-    standards_path:
-      type: string
-      default: criteria_ordinary.jinja2
-    system_prompt_path:
-      type: string
-      default: instructions.jinja2
-    process_path:
-      type: string
-      default: process.jinja2
 - name: frames
   type: prompt
   source:

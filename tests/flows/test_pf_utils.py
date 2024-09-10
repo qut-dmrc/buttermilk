@@ -50,4 +50,4 @@ def test_col_mapping_hydra_to_pf_nested():
         "city": "${data.location.city}",
         "country": "${data.location.country}"
     }
-    assert  c(input_dict) == expected_output
+    assert col_mapping_hydra_to_pf(input_dict) == expected_output

@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
+from buttermilk.flows.common.config import COL_PREDICTION
 from buttermilk.toxicity import *
 from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.toxicity import LlamaGuardTox
@@ -297,7 +298,7 @@ class TestToxicityModels:
         assert result['process'] == tox_model.process_chain
         assert result["model"] == tox_model.model
         assert all([s["measure"] for s in result["scores"]])
-        assert result['predicted'] is not None
+        assert result[COL_PREDICTION] is not None
 
 
         # EvalSchema = read_yaml("datatools/chains/schemas/indicator.json")

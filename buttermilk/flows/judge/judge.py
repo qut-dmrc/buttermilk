@@ -1,8 +1,10 @@
 
+import datetime
 from logging import getLogger
 from pathlib import Path
 import time
 
+import pandas as pd
 from promptflow.core import (
     ToolProvider,
     tool
@@ -18,7 +20,6 @@ from jinja2 import Environment, BaseLoader, Undefined
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
-import yaml
 
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
@@ -37,9 +38,9 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger(ToolProvider):
-    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connection: dict ={}) -> None:
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connections: dict ={}) -> None:
 
-        self.connection = connection
+        self.connections = connections
         self.model = model
         loader=FileSystemLoader(searchpath=TEMPLATE_PATHS)
         env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
@@ -54,9 +55,9 @@ class Judger(ToolProvider):
 
     @tool
     def __call__(
-        self, *, content: str, record_id, **kwargs) -> LLMOutput:
+        self, *, content: str, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
 
-        llm = LLMs(connections=self.connection)[self.model]
+        llm = LLMs(connections=self.connections)[self.model]
 
         tpl = ChatPromptTemplate.from_messages([("system",self.template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
 
@@ -66,7 +67,10 @@ class Judger(ToolProvider):
 
         output = self.invoke(chain=chain, input_vars=input_vars)
 
-        output['record_id'] = record_id
+        if record_id is not None:
+            output['record_id'] = record_id
+
+        output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
         for k in LLMOutput.__required_keys__:
             if k not in output:
@@ -87,6 +91,6 @@ if __name__ == "__main__":
     from buttermilk import BM
     bm = BM()
     conn = {'haiku': bm._connections_azure['haiku']}
-    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="judge.jinja2",  model="haiku", connection=conn)
+    judger = Judger(standards_path="criteria_ordinary.jinja2", template_path="judge.jinja2",  model="haiku", connections=conn)
     output = judger(content="Hello, world!")
     print(output)

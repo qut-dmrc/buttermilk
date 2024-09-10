@@ -46,15 +46,20 @@ class Nemo(ToxicityModel):
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
         outcome.response = response
-        if "yes" in str(response).lower()[:6]:
+        try:
+            first_part = str(response).lower().split("\n")[0]
+        except:
+            first_part = str(response).lower()[:16]
+        if "yes" in first_part:
             outcome.scores.append(
-                        Score(measure=str(self.standard), score=1.0, result=True)
+                        Score(measure=str(self.standard), score=1.0, result=True, reasons=[response])
                     )
             outcome.labels = [self.standard]
             outcome.predicted = True
+
         elif "no" in str(response).lower()[:6]:
             outcome.scores.append(
-                        Score(measure=str(self.standard), score=0.0, result=True)
+                        Score(measure=str(self.standard), score=0.0, result=True, reasons=[response])
                     )
         else:
             outcome.error = f"Unable to interpret result."

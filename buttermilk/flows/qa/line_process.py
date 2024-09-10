@@ -1,5 +1,7 @@
 from promptflow.core import tool
 
+from buttermilk.flows.common.config import COL_PREDICTION
+
 
 @tool
 def eval_answer(groundtruth: dict, result: dict) -> dict:
@@ -10,7 +12,7 @@ def eval_answer(groundtruth: dict, result: dict) -> dict:
     :param response: the prediction of a single line.
     """
     expected = groundtruth['answer']
-    prediction = result['prediction']
+    prediction = result[COL_PREDICTION]
     overall_answer = (prediction == expected)
 
     scored_result = dict(predicted=prediction,

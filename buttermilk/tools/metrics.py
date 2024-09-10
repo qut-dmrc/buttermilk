@@ -4,8 +4,10 @@ import  pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 import pandas as pd
 from promptflow.core import log_metric
+
+from buttermilk.flows.common.config import COL_PREDICTION
 class Scorer:
-    def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = 'prediction'):
+    def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = COL_PREDICTION):
 
         df.loc[:, 'preds'] = pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
         df['correct'] = df.apply(lambda x: x[col][prediction] == x[groundtruth]['answer'], axis='columns')
@@ -13,7 +15,7 @@ class Scorer:
 
 
 class Metriciser:
-    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = 'predicted', unique_col:str='timestamp') -> pd.DataFrame:
+    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = COL_PREDICTION, unique_col:str='timestamp') -> pd.DataFrame:
         """
         Evaluates the results of one or more training runs,
         aggregating at the levels selected.

@@ -17,6 +17,7 @@ from pydantic import (
     validator,
 )
 
+from buttermilk.flows.common.config import COL_PREDICTION
 from buttermilk.utils import read_yaml
 
 import datetime
@@ -151,7 +152,7 @@ class EvalRecord(BaseModel):
 
         # add booleans
         if self.predicted is not None:
-            record["predicted"] = self.predicted
+            record[COL_PREDICTION] = self.predicted
 
         if self.scores and isinstance(self.scores, list):
             record["scores"] = [

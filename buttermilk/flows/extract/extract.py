@@ -1,10 +1,12 @@
 """ An Azure PromptFlow flavoured wrapper around a Langchain model call."""
 from cgitb import text
+import datetime
 from logging import getLogger
 from pathlib import Path
 import sys
 import time
 
+import pandas as pd
 from promptflow.core import (
     ToolProvider,
     tool,
@@ -31,6 +33,7 @@ class KeepUndefined(Undefined):
         return '{{ ' + self._undefined_name + ' }}'
 
 class LLMOutput(TypedDict):
+    timestamp: object
     metadata: dict
     record_id: str
     analysis: str
@@ -76,21 +79,11 @@ class Analyst():
         bm = BM()
         self.tpl_variables = kwargs
         self.model = model
-        self.llm = LLMs(connections=bm._connections_azure)[self.model]
+        self.connections = bm._connections_azure
 
-        self.batch_id = dict(flow="Analyst", model=self.model,template=template)
         if template:
             self.tpl_variables['system'] = system_prompt
             self.tpl_variables['user'] = user_prompt
-            # This is a bit of a hack to allow Prompty to interpret the template first, but then
-            # leave the actual input variables for us to fill later with langchain.
-            #self.tpl_variables = {"content":r"{{content}}"}
-            # if system_prompt or user_template:
-            #     # Load sub-templates ourselves, since Promptflow's prompty won't do it for us.
-            #     env = Environment(loader=FileSystemLoader(searchpath=[BASE_DIR, TEMPLATE_PATH]), trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
-            #     system_tpl = env.get_template(system_prompt_path).render()
-            #     user_tpl = env.get_template(user_template_path).render()
-            #     self.tpl_variables.update(dict(system_prompt=system_tpl, user_prompt=user_tpl))
 
             # Load the template from a prompty file
             from promptflow.core import Prompty
@@ -115,22 +108,23 @@ class Analyst():
 
     @tool
     def __call__(
-        self, *, content: str, media_attachment_uri=None, record_id='', **kwargs) -> LLMOutput:
+        self, *, content: str, media_attachment_uri=None, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
         # Add a human message to the end of the prompt
         messages = self.langchain_template + [prompt_with_media(uri=media_attachment_uri, text=content)]
 
+        llm = LLMs(connections=self.connections)[self.model]
         tpl = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
-        call_details = dict(record=record_id)
-        call_details.update(self.batch_id)
 
-        chain = tpl | self.llm | ChatParser()
+        chain = tpl | llm | ChatParser()
         input_vars = dict()
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        output = self.invoke_langchain(chain=chain, input_vars=input_vars, call_details=call_details, **kwargs)
+        output = self.invoke_langchain(chain=chain, input_vars=input_vars, **kwargs)
 
         if record_id:
             output['record_id'] = record_id
+
+        output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
         for k in LLMOutput.__required_keys__:
             if k not in output:
@@ -138,10 +132,9 @@ class Analyst():
         return  output
 
     @trace
-    def invoke_langchain(self, *, chain, input_vars, call_details: dict = {}, **kwargs):
-        logger.debug(f"Invoking chain with {self.model} with params: {call_details}")
+    def invoke_langchain(self, *, chain, input_vars, **kwargs):
         t0 = time.time()
         response = chain.invoke(input=input_vars, **kwargs)
         t1 = time.time()
-        logger.debug(f"Finished chain with {self.model} in {t1-t0:.2f} seconds with params: {call_details} ")
+        logger.debug(f"Finished chain with {self.model} in {t1-t0:.2f} seconds.")
         return response

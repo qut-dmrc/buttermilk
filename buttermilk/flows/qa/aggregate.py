@@ -2,6 +2,7 @@ from typing import List
 import numpy as np
 from promptflow.core import log_metric, tool
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, log_loss,precision_recall_fscore_support
+from buttermilk.flows.common.config import COL_PREDICTION
 from buttermilk.utils.utils import scrub_serializable
 
 @tool
@@ -25,7 +26,7 @@ def aggregate(processed_results: List[dict]):
         return metrics
 
     # Calculate classification results from scikit-learn stats
-    pred = np.array([x.get('predicted') for x in results])
+    pred = np.array([x.get(COL_PREDICTION) for x in results])
     expected = np.array([x.get('expected') for x in results])
 
     try:

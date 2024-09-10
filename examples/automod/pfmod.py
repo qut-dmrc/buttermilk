@@ -223,7 +223,7 @@ def run(*, data, flow_cfg, evaluator_cfg: Optional[dict]=None, run_cfg):
     connections = bm._connections_azure
     # Run flow
     try:
-        init_vars = {**flow_cfg.init, "connection": connections}
+        init_vars = {**flow_cfg.init, "connections": connections}
         batch_id = dict(
             run_id=bm._run_id,
             step=flow_cfg.name,
