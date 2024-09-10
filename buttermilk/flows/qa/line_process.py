@@ -12,10 +12,10 @@ def eval_answer(groundtruth: dict, result: dict) -> dict:
     :param response: the prediction of a single line.
     """
     expected = groundtruth['answer']
-    prediction = result[COL_PREDICTION]
-    overall_answer = (prediction == expected)
+    predicted = result[COL_PREDICTION]
+    overall_answer = (predicted == expected)
 
-    scored_result = dict(predicted=prediction,
+    scored_result = dict(predicted=predicted,
                          expected=expected,
                          correct=overall_answer)
 

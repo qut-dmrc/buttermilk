@@ -68,11 +68,11 @@ class EvalQA(ToolProvider):
         self.model = model
 
     @tool
-    def __call__(self, *, groundtruth: dict, prediction: int, reasons: dict, **kwargs) -> LLMOutput:
+    def __call__(self, *, groundtruth: dict, predicted: int, reasons: dict, **kwargs) -> LLMOutput:
         expected = groundtruth['answer']
-        overall_answer = (prediction == expected)
+        overall_answer = (predicted == expected)
 
-        scored_result = dict(predicted=prediction,
+        scored_result = dict(predicted=predicted,
                          expected=expected,
                          correct=overall_answer)
 
@@ -82,7 +82,7 @@ class EvalQA(ToolProvider):
         chain = self.template.copy() | llm | ChatParser()
         input_vars = dict(
             groundtruth=groundtruth,
-            prediction=prediction,
+            predicted=predicted,
             reasons=reasons,
         )
         output = chain.invoke(input=input_vars)
@@ -95,7 +95,7 @@ class EvalQA(ToolProvider):
 
         return output
 
-    def batch(self, dataset: pd.DataFrame, groundtruth: str = 'expected', prediction: str = COL_PREDICTION, **kwargs) -> list:
+    def batch(self, dataset: pd.DataFrame, groundtruth: str = 'expected', predicted: str = COL_PREDICTION, **kwargs) -> list:
         results = []
         for _, row in tqdm.tqdm(
             dataset.iterrows(),
@@ -103,7 +103,7 @@ class EvalQA(ToolProvider):
             desc=f'evaluator-{self.model}',
             bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
         ):
-            details = self.__call__(groundtruth=row[groundtruth], prediction=row[prediction], **kwargs)
+            details = self.__call__(groundtruth=row[groundtruth], predicted=row[predicted], **kwargs)
 
             results.append(details)
 

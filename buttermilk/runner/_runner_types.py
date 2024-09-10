@@ -104,7 +104,7 @@ class LLMOutput(JobResultBase):
     reasons: Optional[list] = None
     labels: Optional[list] = None
     scores: Optional[dict] = None
-    prediction: Optional[bool] = None
+    predicted: Optional[bool] = None
 
     source: Optional[str] = None
     error: Optional[str] = None

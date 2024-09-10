@@ -39,7 +39,7 @@ class SaveResultsBQ(pydantic.BaseModel):
         details = details.drop(columns=cols)
 
         # for outputs, keep some results and stack any other results
-        cols_to_keep = ['outputs.reasons', 'outputs.prediction',
+        cols_to_keep = ['outputs.reasons', 'outputs.predicted',
         'outputs.labels', 'outputs.metadata', 'outputs.record_id',
         'outputs.scores', 'outputs.result']
         cols_to_stack = []

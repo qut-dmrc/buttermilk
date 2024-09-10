@@ -7,15 +7,15 @@ from promptflow.core import log_metric
 
 from buttermilk.flows.common.config import COL_PREDICTION
 class Scorer:
-    def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', prediction: str = COL_PREDICTION):
+    def __call__(self, df: pd.DataFrame, *, col: str, groundtruth: str = 'expected', predicted: str = COL_PREDICTION):
 
-        df.loc[:, 'preds'] = pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
-        df['correct'] = df.apply(lambda x: x[col][prediction] == x[groundtruth]['answer'], axis='columns')
+        df.loc[:, 'preds'] = pd.json_normalize(df[col])[predicted].astype(int).to_numpy()
+        df['correct'] = df.apply(lambda x: x[col][predicted] == x[groundtruth]['answer'], axis='columns')
         return df
 
 
 class Metriciser:
-    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', prediction: str = COL_PREDICTION, unique_col:str='timestamp') -> pd.DataFrame:
+    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', predicted: str = COL_PREDICTION, unique_col:str='timestamp') -> pd.DataFrame:
         """
         Evaluates the results of one or more training runs,
         aggregating at the levels selected.
@@ -47,10 +47,10 @@ class Metriciser:
 
 
         # Calculate confusion matrix components
-        df_results['TP'] = (df_results[groundtruth] == 1) & (df_results[prediction] == 1)
-        df_results['TN'] = (df_results[groundtruth] == 0) & (df_results[prediction] == 0)
-        df_results['FP'] = (df_results[groundtruth] == 0) & (df_results[prediction] == 1)
-        df_results['FN'] = (df_results[groundtruth] == 1) & (df_results[prediction] == 0)
+        df_results['TP'] = (df_results[groundtruth] == 1) & (df_results[predicted] == 1)
+        df_results['TN'] = (df_results[groundtruth] == 0) & (df_results[predicted] == 0)
+        df_results['FP'] = (df_results[groundtruth] == 0) & (df_results[predicted] == 1)
+        df_results['FN'] = (df_results[groundtruth] == 1) & (df_results[predicted] == 0)
 
         # Aggregate confusion matrix components
         conf_matrix = grouper[['TP', 'TN', 'FP', 'FN']].sum()

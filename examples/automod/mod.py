@@ -65,7 +65,7 @@ def run(cfg: DictConfig) -> None:
                 colour=next(colour_cycle)
             )
 
-        evals = evaluator.batch(df, prediction=step_name)
+        evals = evaluator.batch(df, predicted=step_name)
 
 
 if __name__ == "__main__":
