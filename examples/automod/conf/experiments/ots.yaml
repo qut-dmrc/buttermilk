@@ -2,6 +2,7 @@ moderate:
   name: ots
   num_runs: range(32)
   init:
+    model: to_be_replaced
   models:
   - Comprehend
   - Perspective

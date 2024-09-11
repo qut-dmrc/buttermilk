@@ -3,3 +3,4 @@ uri: gs://dmrc-platforms/data/drag_train.jsonl
 columns:
   record_id: id
   content: alt_text
+  text: text

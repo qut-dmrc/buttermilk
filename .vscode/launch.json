@@ -61,9 +61,9 @@
             "justMyCode": false,
             "args": [
                 "--multirun",
+                "hydra/launcher=joblib",
                 "+experiments=ots",
-                "judger.model=sonnet",
-                "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2,trans_simplified.jinja2,trans_factored.jinja2"
+                "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

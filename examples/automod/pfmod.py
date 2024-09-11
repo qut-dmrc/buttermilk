@@ -29,7 +29,7 @@ from buttermilk.apis import (
     HFLlama270bn,
     HFPipeline,
 )
-
+from buttermilk.utils import col_mapping_hydra_to_local
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 BASE_DIR = Path(__file__).absolute().parent
@@ -211,45 +211,51 @@ def main(cfg: DictConfig) -> None:
     # Create a cycle iterator for the progress bar colours
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
-
-    df = run(data=cfg.data, flow_cfg=cfg.judger, evaluator_cfg=cfg.evaluator, run_cfg=cfg.run)
+    if 'moderate' in cfg.experiments.keys():
+        for model in cfg.experiments.moderate.models:
+            cfg.experiments.moderate.init['model'] = model
+            df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+    if 'judger' in cfg.experiments.keys():
+        connections = bm._connections_azure
+        cfg.experiments.judger.init['connections'] = connections
+        df = run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
     pass
 
-def run(*, data, flow_cfg, evaluator_cfg: Optional[dict]=None, run_cfg):
+def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
     global bm
     df = pd.DataFrame()
     data_file = cache_data(data.uri)
 
-    connections = bm._connections_azure
     # Run flow
     try:
-        init_vars = {**flow_cfg.init, "connections": connections}
         batch_id = dict(
             run_id=bm._run_id,
             step=flow_cfg.name,
             dataset=data.name,
+            **run_cfg
         )
-        for k,v in init_vars.items():
-            # remove path extensions
-            k = re.sub(r'_.*', '', str(k))
-            v = re.sub(r'\..*', '', str(v))
-
-            batch_id[k] = v
+        for k,v in flow_cfg.init.items():
+            if isinstance(v, str):
+                # remove path extensions
+                k = re.sub(r'_.*', '', str(k))
+                v = re.sub(r'\..*', '', str(v))
+                v = str.lower(v)
+                batch_id[k] = v
 
         run_name = "_".join(list(batch_id.values()))
-        flow_outputs = run_flow(flow=Judger,
+        flow_outputs = run_flow(flow=flow_obj,
                                 flow_name=flow_cfg.name,
                                 dataset=data_file,
                                 run_name = run_name,
                                 column_mapping=dict(data.columns),
-                                init_vars=init_vars,run_cfg=run_cfg )
+                                init_vars=flow_cfg.init, run_cfg=run_cfg )
 
         # Set up  empty dataframe with batch details ready  to go
         df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
         df = pd.concat([df, flow_outputs], axis='columns')
 
         # Run the evaulation flows
-        for eval_model in evaluator_cfg.models:
+        for eval_model in evaluator_cfg.get("models", []):
             eval_name = f"{run_name}_evaluator_{eval_model}"
             init_vars = {"model": eval_model}
             flow_name = f'evaluator_{eval_model}'
@@ -274,9 +280,6 @@ def run(*, data, flow_cfg, evaluator_cfg: Optional[dict]=None, run_cfg):
                 pass
                 df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
 
-    # except Exception as e:
-    #     logger.error(f"Unhandled error in our flow: {e}")
-    #     raise(e)
     finally:
         if df.shape[0]>0:
             uri = bm.save(df.reset_index(), basename='batch')

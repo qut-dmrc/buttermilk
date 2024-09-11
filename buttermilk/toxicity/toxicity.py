@@ -121,7 +121,6 @@ def llamaguard_template(template: LlamaGuardTemplate):
 from ..types.tox import EvalRecord, Score
 
 # Let's provide an interface for all the various toxicity models
-
 class ToxicityModel(BaseModel):
     model: str
     process_chain: str
@@ -174,14 +173,15 @@ class ToxicityModel(BaseModel):
             stop=stop_after_attempt(5),
     )
     @trace
-    def __call__(self, text: str, record_id: Optional[str] = None) -> dict:
-        if not text or text.strip() == '':
-            response = EvalRecord(
-                error="No input provided."
-                )
+    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> dict:
+        if not content or content.strip() == '':
+            if (content := kwargs.get('text','').strip()) == '':
+                response = EvalRecord(
+                    error="No input provided."
+                    )
         else:
             try:
-                response = self.moderate(text)
+                response = self.moderate(content)
                 if not isinstance(response, EvalRecord):
                     response = EvalRecord( **response)
 

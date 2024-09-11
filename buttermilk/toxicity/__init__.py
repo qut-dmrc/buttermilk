@@ -1,3 +1,4 @@
+from typing import TypeVar,Any
 from .aegis import Aegis
 from .wildguard import Wildguard
 from .nemo import NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
@@ -63,3 +64,10 @@ TOXCLIENTS_LOCAL = [
     Aegis,
     Wildguard
 ]
+
+# Let's provide an interface for all the various toxicity models
+def get_tox_model(model: str, **kwargs) -> ToxicityModel:
+    return globals()[model]
+
+def load_tox_model(model: str, **kwargs) -> ToxicityModel:
+    return globals()[model](**kwargs)

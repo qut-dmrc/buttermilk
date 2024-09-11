@@ -1,10 +1,9 @@
-# @package _global_
-project:
+/project:
   name: testing
   job: judge
-run:
+/run:
   platform: local
-data:
+/data:
   name: trans_train
   uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
   columns:
