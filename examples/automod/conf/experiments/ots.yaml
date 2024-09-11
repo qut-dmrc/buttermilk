@@ -4,6 +4,7 @@ moderate:
   init:
     model: to_be_replaced
   models:
+  - GoogleModerate
   - NemoInputSimpleGPT4o
   - NemoInputComplexGPT4o
   - NemoOutputSimpleGPT4o

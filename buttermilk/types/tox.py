@@ -43,6 +43,7 @@ class Score(BaseModel):
     measure: str
     score: Optional[float] = Field(default=None, validation_alias="scores")
     confidence: Optional[float|str] = None
+    severity: Optional[float] = None
     result: Optional[bool] = None
     labels: Optional[list[str]] = Field(default=[], validation_alias="label")
     reasons: list[str] = Field(default=[], validation_alias="reason")

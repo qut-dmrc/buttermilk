@@ -1,6 +1,7 @@
 from typing import TypeVar,Any
 from .aegis import Aegis
 from .wildguard import Wildguard
+from .google_moderate import GoogleModerate
 from .nemo import NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 from .toxicity import (Comprehend,
     Perspective,
@@ -40,6 +41,7 @@ TOXCLIENTS = [
     LlamaGuard2Together,
     LlamaGuard3Together,
     LlamaGuard3Octo,
+    GoogleModerate,
     NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 ]
 

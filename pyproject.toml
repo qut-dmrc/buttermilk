@@ -59,6 +59,7 @@ hydra-joblib-launcher = "^1.2.0"
 hydra-colorlog = "^1.2.0"
 google-crc32c = "^1.6.0"
 openpyxl = "^3.1.5"
+google-cloud-language = "^2.14.0"
 
 
 [tool.poetry.group.dev.dependencies]
