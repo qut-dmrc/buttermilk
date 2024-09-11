@@ -75,18 +75,16 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], init_vars: dict = {}) -> pd.DataFrame:
+def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str]) -> pd.DataFrame:
     df = pd.DataFrame()
-    if not flow_name:
-        try:
-            flow_name = flow.__name__.lower()
-        except:
-            flow_name = str(flow).lower()
-
+    
+    init_vars = flow_cfg.init
+    flow_name = flow_cfg.name
     if run_cfg.platform == "azure":
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
-        df = exec_local(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars)
+        num_runs = flow_cfg.get('num_runs', 1)
+        df = exec_local(flow=flow, num_runs=num_runs, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars)
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
@@ -142,7 +140,7 @@ def exec_local(
     column_mapping: dict[str, str]
 ) -> pd.DataFrame:
 
-    logger.info(dict(message=f"Starting {flow_name} running locally with flow {flow} with name: {run_name}"))
+    logger.info(dict(message=f"Starting {flow_name} x{num_runs} running locally with flow {flow} with name: {run_name}"))
     t0 = datetime.datetime.now()
 
     results = []
@@ -235,10 +233,12 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
 
     # Run flow
     try:
+        flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
         batch_id = dict(
             run_id=bm._run_id,
-            step=flow_cfg.name,
+            step=flow_name,
             dataset=data.name,
+            num_runs=flow_cfg.num_runs,
             **run_cfg
         )
         for k,v in flow_cfg.init.items():
@@ -251,7 +251,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
 
         run_name = "_".join(list(batch_id.values()))
         flow_outputs = run_flow(flow=flow_obj,
-                                flow_name=flow_cfg.name,
+                                flow_cfg=flow_cfg,
                                 dataset=data_file,
                                 run_name = run_name,
                                 column_mapping=dict(data.columns),
@@ -265,9 +265,9 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
         for eval_model in evaluator_cfg.get("models", []):
             eval_name = f"{run_name}_evaluator_{eval_model}"
             init_vars = {"model": eval_model}
-            flow_name = f'evaluator_{eval_model}'
+            evaluator_cfg['name'] = f'evaluator_{eval_model}'
             evals = run_flow(flow=EvalQA,
-                            flow_name=flow_name,
+                                flow_cfg=flow_cfg,
                             dataset=data_file,
                             step_outputs = flow_outputs,
                             run_outputs = run_name,
@@ -279,13 +279,13 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
 
             # join the evaluation results
             try:
-                df.loc[:, flow_name] = evals.to_dict(orient='records')
+                df.loc[:, evaluator_cfg['name']] = evals.to_dict(orient='records')
                 if 'groundtruth' in evals and 'groundtruth' not in df.columns:
                     df.loc[:, 'groundtruth'] = evals['groundtruth']
             except Exception as e:
                 # We might not get all the responses back. Try to join on line number instead?
                 pass
-                df = df.merge(evals[['line_number',flow_name]], left_on='line_number', right_on='line_number')
+                df = df.merge(evals[['line_number',evaluator_cfg['name']]], left_on='line_number', right_on='line_number')
 
     finally:
         if df.shape[0]>0:
