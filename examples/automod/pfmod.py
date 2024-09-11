@@ -139,7 +139,7 @@ def exec_local(
     column_mapping: dict[str, str]
 ) -> pd.DataFrame:
 
-    logger.info(dict(message=f"Starting {flow_name} x{num_runs} running locally with flow {flow} with name: {run_name}"))
+    logger.info(dict(message=f"Starting {flow_name} x{num_runs} running locally with run name: {run_name}"))
     t0 = datetime.datetime.now()
 
     results = []
@@ -248,7 +248,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
                 v = str.lower(v)
                 batch_id[k] = v
 
-        run_name = "_".join(list(str(batch_id.values())))
+        run_name = "_".join([str(x) for x in list(batch_id.values())])
         flow_outputs = run_flow(flow=flow_obj,
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
