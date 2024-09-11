@@ -2,48 +2,53 @@
 # You can debug from here, or run from the command line with:
 #   python examples/automod/pfmod.py --multirun hydra/launcher=joblib +experiments=trans judger.model=gpt4o,sonnet,llama31_70b judger.standard=trans_factored.jinja2,trans_tja.jinja2,trans_hrc.jinja2,trans_glaad.jinja2,trans_simplified.jinja2
 ###
-import os
 import datetime
+import gc
+import os
 import re
 import resource
 from multiprocessing import Process
 from pathlib import Path
 from random import shuffle
 from tempfile import NamedTemporaryFile
-import gc
+
 import cloudpathlib
+import hydra
 import pandas as pd
+from humanfriendly import format_timespan
+from omegaconf import DictConfig, OmegaConf
+from promptflow.azure import PFClient as AzurePFClient
+from promptflow.client import PFClient as LocalPFClient
+
 from buttermilk import BM
+from buttermilk.apis import (HFInferenceClient, HFLlama270bn, HFPipeline,
+                             Llama2ChatMod, replicatellama2, replicatellama3)
 from buttermilk.flows.evalqa.evalqa import EvalQA
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
-import hydra
-from buttermilk.tools.metrics import Scorer, Metriciser
-from buttermilk.utils.utils import read_text
-from omegaconf import DictConfig, OmegaConf
-from buttermilk.apis import (
-    Llama2ChatMod,
-    replicatellama2,
-    replicatellama3,
-    HFInferenceClient,
-    HFLlama270bn,
-    HFPipeline,
-)
-from humanfriendly import format_timespan
+from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
-from promptflow.azure import PFClient as AzurePFClient
-from promptflow.client import PFClient as LocalPFClient
+from buttermilk.utils.utils import read_text
+
 BASE_DIR = Path(__file__).absolute().parent
-import torch
 import datetime
-import tqdm
+import itertools
 from itertools import cycle
-from buttermilk.toxicity import *
-from buttermilk.utils.log import getLogger
+from tempfile import NamedTemporaryFile
+# # Submit the pipeline
+# experiment = Experiment(workspace=ws, name='batch-flow-experiment')
+# run = experiment.submit(pipeline)
+# run.wait_for_completion(show_output=True)
+from typing import Callable, Optional, Type, TypeVar
 
 import cloudpathlib
-from tempfile import NamedTemporaryFile
-import itertools
+import torch
+import tqdm
+
+from buttermilk.toxicity import *
+from buttermilk.utils.flows import col_mapping_hydra_to_pf
+from buttermilk.utils.log import getLogger
+
 # from azureml.core import Workspace, Experiment
 # from azureml.pipeline.core import Pipeline, PipelineData
 
@@ -56,12 +61,6 @@ import itertools
 # # Create a pipeline
 # pipeline = Pipeline(workspace=ws, steps=[...])
 
-# # Submit the pipeline
-# experiment = Experiment(workspace=ws, name='batch-flow-experiment')
-# run = experiment.submit(pipeline)
-# run.wait_for_completion(show_output=True)
-from typing import Type, TypeVar, Callable, Optional
-from buttermilk.utils.flows import col_mapping_hydra_to_pf
 
 global_run_id = BM.make_run_id()
 logger = None
@@ -249,7 +248,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
                 v = str.lower(v)
                 batch_id[k] = v
 
-        run_name = "_".join(list(batch_id.values()))
+        run_name = "_".join(list(str(batch_id.values())))
         flow_outputs = run_flow(flow=flow_obj,
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
