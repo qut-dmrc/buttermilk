@@ -4,7 +4,6 @@ moderate:
   init:
     model: to_be_replaced
   models:
-  - GPTJT
   - Aegis
   - ShieldGemma
   - LlamaGuard3Local
@@ -16,3 +15,5 @@ moderate:
   - HONEST
   - LFTW
   - REGARD
+  models_disabled:
+  - GPTJT
