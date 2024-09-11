@@ -62,6 +62,7 @@
             "args": [
                 "--multirun",
                 "hydra/launcher=joblib",
+                "+x=range(3)",
                 "+experiments=ots",
                 "+data=drag_noalt",
             ],

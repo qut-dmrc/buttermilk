@@ -29,6 +29,7 @@ from buttermilk.apis import (
     HFLlama270bn,
     HFPipeline,
 )
+from humanfriendly import format_timespan
 from buttermilk.utils import col_mapping_hydra_to_local
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
@@ -142,6 +143,7 @@ def exec_local(
 ) -> pd.DataFrame:
 
     logger.info(dict(message=f"Starting {flow_name} running locally with flow {flow} with name: {run_name}"))
+    t0 = datetime.datetime.now()
 
     results = []
 
@@ -191,8 +193,9 @@ def exec_local(
         results.append(details)
 
     results = pd.DataFrame(results)
+    t1 = datetime.datetime.now()
     logger.info(
-        f"Run for {flow} completed locally, processed {results.shape[0]} results."
+        f"Run {run_name} completed locally, processed {results.shape[0]} results in {format_timespan(t1-t0)}."
     )
     del flow
     torch.cuda.empty_cache()
@@ -284,10 +287,8 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
         if df.shape[0]>0:
             uri = bm.save(df.reset_index(), basename='batch')
             logger.info(
-                dict(
-                    message=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
-                    **batch_id,results=uri
-                )
+                    msg=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
+                    extra=dict(**batch_id,results=uri)
             )
     return df
 

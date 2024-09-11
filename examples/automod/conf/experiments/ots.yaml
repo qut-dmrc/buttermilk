@@ -4,20 +4,6 @@ moderate:
   init:
     model: to_be_replaced
   models:
-  - Comprehend
-  - Perspective
-  - HONEST
-  - LFTW
-  - REGARD
-  - AzureContentSafety
-  - AzureModerator
-  - OpenAIModerator
-  - LlamaGuard1Replicate
-  - LlamaGuard1Together
-  - LlamaGuard2Replicate
-  - LlamaGuard2Together
-  - LlamaGuard3Together
-  - LlamaGuard3Octo
   - NemoInputSimpleGPT4o
   - NemoInputComplexGPT4o
   - NemoOutputSimpleGPT4o
@@ -26,3 +12,18 @@ moderate:
   - NemoInputComplexLlama31_70b
   - NemoOutputSimpleLlama31_70b
   - NemoOutputComplexLlama31_70b
+  - Comprehend
+  - Perspective
+  - HONEST
+  - LFTW
+  - REGARD
+  - AzureContentSafety
+  - OpenAIModerator
+  - LlamaGuard1Replicate
+  - LlamaGuard1Together
+  - LlamaGuard2Replicate
+  - LlamaGuard2Together
+  - LlamaGuard3Together
+  - LlamaGuard3Octo
+  disabled_models:
+  - AzureModerator

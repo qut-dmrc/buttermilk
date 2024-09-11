@@ -25,10 +25,11 @@ class Nemo(ToxicityModel):
         template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
         prompt_name = "nemo_self_check"
         criteria = str(self.standard).replace(prompt_name + ".", "")
-        messages = [("human", template_text[prompt_name][criteria])]
+
+        messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
         langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
-        chain = langchain_template | llm | StrOutputParser()
+        chain = langchain_template | llm | ChatParser()
         return chain
 
     @trace
@@ -45,24 +46,26 @@ class Nemo(ToxicityModel):
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
-        outcome.response = response
-        try:
-            first_part = str(response).lower().split("\n")[0]
-        except:
-            first_part = str(response).lower()[:16]
-        if "yes" in first_part:
-            outcome.scores.append(
-                        Score(measure=str(self.standard), score=1.0, result=True, reasons=[response])
-                    )
-            outcome.labels = [self.standard]
-            outcome.predicted = True
 
-        elif "no" in str(response).lower()[:6]:
-            outcome.scores.append(
-                        Score(measure=str(self.standard), score=0.0, result=True, reasons=[response])
+        try:
+            answer = response.get('answer','').lower()
+            if answer[:3] == 'yes':
+                outcome.scores.append(
+                        Score(measure=str(self.standard), score=1.0, result=True, reasons=[response.get('reasoning', str(response))])
                     )
-        else:
-            outcome.error = f"Unable to interpret result."
+                outcome.labels = [self.standard]
+                outcome.predicted = True
+            elif answer[:2] == "no":
+                outcome.scores.append(
+                            Score(measure=str(self.standard), score=0.0, result=False, reasons=[response.get('reasoning', str(response))])
+                        )
+                outcome.predicted = False
+            else:
+                outcome.error = f"Unable to interpret result."
+                outcome.response = response
+
+        except Exception as e:
+            outcome.error = f"Unable to interpret result: {e}. {e.args}"
             outcome.response = response
 
         return outcome

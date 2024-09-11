@@ -158,20 +158,20 @@ class ToxicityModel(BaseModel):
         output.result = response
         return output
 
-    @retry(
-        retry=retry_if_exception_type(
-            exception_types=(
-                RateLimit,
-                requests.exceptions.ConnectionError,
-                urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
-                OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
-            ),
-        ),
-            # Wait interval: increasing exponentially up to a max of 30s between retries
-            wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
-            # Retry up to five times before giving up
-            stop=stop_after_attempt(5),
-    )
+    # @retry(
+    #     retry=retry_if_exception_type(
+    #         exception_types=(
+    #             RateLimit,
+    #             requests.exceptions.ConnectionError,
+    #             urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
+    #             OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
+    #         ),
+    #     ),
+    #         # Wait interval: increasing exponentially up to a max of 30s between retries
+    #         wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
+    #         # Retry up to five times before giving up
+    #         stop=stop_after_attempt(5),
+    # )
     @trace
     def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> dict:
         if not content or content.strip() == '':

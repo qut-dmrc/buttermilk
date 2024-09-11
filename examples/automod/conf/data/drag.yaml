@@ -4,3 +4,4 @@ columns:
   record_id: id
   content: alt_text
   text: text
+  groundtruth: expected
