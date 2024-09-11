@@ -253,8 +253,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
                                 run_name = run_name,
-                                column_mapping=dict(data.columns),
-                                init_vars=flow_cfg.init, run_cfg=run_cfg )
+                                column_mapping=dict(data.columns), run_cfg=run_cfg )
 
         # Set up  empty dataframe with batch details ready  to go
         df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
@@ -263,16 +262,15 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
         # Run the evaulation flows
         for eval_model in evaluator_cfg.get("models", []):
             eval_name = f"{run_name}_evaluator_{eval_model}"
-            init_vars = {"model": eval_model}
+            evaluator_cfg['init_vars']['model'] = eval_model
             evaluator_cfg['name'] = f'evaluator_{eval_model}'
             evals = run_flow(flow=EvalQA,
-                                flow_cfg=flow_cfg,
+                                flow_cfg=evaluator_cfg,
                             dataset=data_file,
                             step_outputs = flow_outputs,
                             run_outputs = run_name,
                             run_name = eval_name,
                             column_mapping=dict(evaluator_cfg.columns),
-                            init_vars = init_vars,
                             run_cfg=run_cfg
                     )
 
