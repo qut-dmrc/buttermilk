@@ -63,10 +63,10 @@ import itertools
 from typing import Type, TypeVar, Callable, Optional
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
 
-
-logger = getLogger()
+global_run_id = BM.make_run_id()
+logger = None
 pflocal = LocalPFClient()
-bm = BM()
+bm: BM = None
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -90,7 +90,7 @@ def run_flow(*, flow: object, run_name: str, flow_name: str=None, dataset: str|p
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
-    logger.info(dict(message=f"Starting {flow_name} with flow {flow} with name: {run_name}"))
+    logger.info(dict(message=f"Starting {flow_name} for run: {run_name}", **init_vars))
     columns = col_mapping_hydra_to_pf(column_mapping)
     environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL", "PF_DISABLE_TRACING": "true"}
     task = pflocal.run(
@@ -205,8 +205,12 @@ def exec_local(
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    global bm, logger
-    bm = BM(cfg=cfg)
+    global bm, logger, global_run_id
+    # cfg changes with multiple options selected at runtime, but 
+    # we want to make sure that run_id (which informs the logging
+    # tags and save directories) does not change across processes.
+    bm = BM(run_id=global_run_id, cfg=cfg)
+
     logger = bm.logger
 
     # from promptflow.tracing import start_trace, trace
