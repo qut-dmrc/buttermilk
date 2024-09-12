@@ -151,6 +151,8 @@ def exec_local(
 
     runs = itertools.product(range(num_runs), dataset.iterrows())
 
+    runnable = flow(**init_vars)
+
     for i, (idx, row) in tqdm.tqdm(
         runs,
         total=num_runs*dataset.shape[0],
@@ -158,8 +160,6 @@ def exec_local(
         desc=run_name,
         bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
     ):
-        runnable = flow(**init_vars)
-
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(column_mapping)
         input_vars = {}

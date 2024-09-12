@@ -11,7 +11,7 @@ from cloudpathlib import CloudPath
 from google.auth.credentials import TokenState
 from numpy import isin
 from pytest import CaptureFixture
-
+from huggingface_hub import login
 
 
 class Test00Setup:
@@ -25,7 +25,6 @@ class Test00Setup:
     def test_gcloud_credentials_adc(self):
         credentials, project_id = google.auth.default()
         assert credentials.token_state == TokenState.FRESH
-
 
     def test_gc_logger(self, logger):
         assert isinstance(logger, DMRCLogger)
@@ -77,3 +76,5 @@ class Test00Setup:
         assert CloudPath(gc.save_dir)
 
 
+    def test_hf_login(self):
+        assert login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])
