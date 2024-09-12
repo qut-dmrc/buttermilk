@@ -4,6 +4,7 @@
 ###
 import datetime
 import gc
+from math import pi
 import os
 import re
 import resource
@@ -48,6 +49,7 @@ import tqdm
 from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
 from buttermilk.utils.log import getLogger
+import datasets
 
 # from azureml.core import Workspace, Experiment
 # from azureml.pipeline.core import Pipeline, PipelineData
@@ -144,46 +146,71 @@ def exec_local(
         dataset = pd.read_json(dataset, orient="records", lines=True)
     if isinstance(step_outputs, str):
         step_outputs = pd.read_json(step_outputs, orient="records", lines=True)
+    if step_outputs is not None and isinstance(step_outputs, pd.DataFrame):
+        try:
+            dataset = dataset.join(step_outputs)
+        except:
+            dataset = pd.concat([dataset, step_outputs], axis='columns')
 
-    runs = itertools.product(range(num_runs), dataset.iterrows())
+    # convert column_mapping to work for our dataframe
+    columns = col_mapping_hydra_to_local(column_mapping)
+    rename_dict = {v: k for k, v in columns.items()}
+    input_df = dataset.rename(columns=rename_dict)
+    input_df = pd.concat(itertools.repeat(input_df, num_runs))
 
+
+    # for out in pipe(KeyDataset(dataset, "audio")):
+    # print(out)
     runnable = flow(**init_vars)
 
-    for i, (idx, row) in tqdm.tqdm(
-        runs,
-        total=num_runs*dataset.shape[0],
-        colour=colour,
-        desc=run_name,
-        bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-    ):
-        # convert column_mapping to work for our dataframe
-        columns = col_mapping_hydra_to_local(column_mapping)
-        input_vars = {}
-        for key, mapped in columns.items():
-            if step_outputs is not None and isinstance(step_outputs, pd.DataFrame) and mapped in step_outputs.columns:
-                # Use the output from the previous step
-                # This relies on the step_outputs keeping the same index as the dataset
-                input_vars[key] = step_outputs.loc[idx, mapped]
-            elif mapped in dataset.columns:
-                input_vars[key] = row[mapped]
-            else:
-                ValueError("Unable to find data input for {key}: {mapped}")
+    if isinstance(runnable, ToxicityModel):
+        input_ds = datasets.Dataset.from_pandas(input_df)
+        # Run  as batch
+        for details in tqdm.tqdm(
+            runnable.moderate_batch(input_ds),
+            total=num_runs*dataset.shape[0],
+            colour=colour,
+            desc=run_name,
+            bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        ):
+            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
-        # Run the flow for this line of data
-        details = runnable(**input_vars)
+            # add input details to  the result row
+            for k, v in columns.items():
+                if k not in details:
+                    details[k] = v
 
-        details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+            for k, v in init_vars.items():
+                if k not in details:
+                    details[k] = v
 
-        # add input details to  the result row
-        for k, v in input_vars.items():
-            if k not in details:
-                details[k] = v
+            results.append(details)
 
-        for k, v in init_vars.items():
-            if k not in details:
-                details[k] = v
+    else:
+        for idx, row in tqdm.tqdm(
+            input_df.iterrows(),
+            total=num_runs*dataset.shape[0],
+            colour=colour,
+            desc=run_name,
+            bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        ):
 
-        results.append(details)
+            # Run the flow for this line of data
+            input_vars = {k: v for k, v in  row.items() if k in columns.keys()}
+            details = runnable(**input_vars)
+
+            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+
+            # add input details to  the result row
+            for k, v in columns.items():
+                if k not in details:
+                    details[k] = v
+
+            for k, v in init_vars.items():
+                if k not in details:
+                    details[k] = v
+
+            results.append(details)
 
     results = pd.DataFrame(results)
     del flow

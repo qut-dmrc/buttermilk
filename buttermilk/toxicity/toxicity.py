@@ -203,6 +203,24 @@ class ToxicityModel(BaseModel):
         output = scrub_serializable(output)
         return output
 
+    @trace
+    def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
+        if isinstance(self.client, transformers.Pipeline):
+            for response in self.client(dataset):
+                output = self.interpret(response)
+                yield output
+        elif isinstance(dataset, pd.DataFrame):
+            for _, row in dataset.iterrows():
+                response = self.call_client(row['text'], **kwargs)
+                output = self.interpret(response)
+                yield output
+        else:
+            for text in dataset:
+                response = self.call_client(text, **kwargs)
+                output = self.interpret(response)
+                yield output
+
+
     async def moderate_async(
             self, text: str
         ) -> EvalRecord:
