@@ -31,6 +31,7 @@ import requests
 import torch
 import transformers
 import urllib3
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from anthropic import APIConnectionError as AnthropicAPIConnectionError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from azure.ai.contentsafety import BlocklistClient, ContentSafetyClient
@@ -47,6 +48,7 @@ from google.generativeai.types.generation_types import (
     BlockedPromptException,
     StopCandidateException,
 )
+from transformers import pipeline
 from googleapiclient import discovery
 from langchain_community.llms import Replicate
 from langchain_core.language_models.llms import LLM
@@ -603,6 +605,10 @@ class GPTJT(ToxicityModel):
     process_chain: str = "hf_transformers"
     standard: str = "gpt-jt-mod-v1"
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "gpt-jt-mod-v1.txt"))
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
 
     client: Any = None
 
@@ -616,11 +622,9 @@ class GPTJT(ToxicityModel):
 
     def init_client(self):
         # Use a pipeline as a high-level helper
-        from transformers import pipeline
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         return pipeline(
             "text-generation", model="togethercomputer/GPT-JT-Moderation-6B",
-                device=device,max_new_tokens=3
+                device=self.device,max_new_tokens=3
         )
     @trace
     def call_client(
@@ -1101,14 +1105,17 @@ class ShieldGemma(ToxicityModel):
     standard: str = "shieldgemma-27b"
     client: Any = None
     tokenizer: Any = None
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
 
     def init_client(self):
-        from transformers import AutoTokenizer, AutoModelForCausalLM
 
         tokenizer = AutoTokenizer.from_pretrained("google/shieldgemma-27b")
         model = AutoModelForCausalLM.from_pretrained(
             "google/shieldgemma-27b",
-            device_map="auto",
+            device_map=self.device,
             torch_dtype=torch.bfloat16,
         )
         self.tokenizer = tokenizer
@@ -1139,7 +1146,7 @@ class ShieldGemma(ToxicityModel):
         'Yes' or 'No'. And then walk through step by step to be sure we answer
         correctly."""
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         with torch.no_grad():
             logits = self.client(**inputs).logits
 

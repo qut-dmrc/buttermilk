@@ -58,7 +58,8 @@ curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 mkdir -p $INSTALL_DIR/miniconda3 && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $INSTALL_DIR/miniconda3/miniconda.sh && bash $INSTALL_DIR/miniconda3/miniconda.sh -b -u -p $INSTALL_DIR/miniconda3 && rm $INSTALL_DIR/miniconda3/miniconda.sh && $INSTALL_DIR/miniconda3/bin/conda init
 
 # Change cache location (our GPU machine has limited space on /)
-echo "export XDG_CACHE_HOME=$INSTALL_DIR/cache\nexport POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a ~USER/.bashrc
+echo "export XDG_CACHE_HOME=$INSTALL_DIR/cache"|tee -a ~USER/.bashrc
+echo "export POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a ~/.bashrc
 echo "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee ~USER/.condarc
 
 mkdir -p $INSTALL_DIR/src $INSTALL_DIR/cache && chown -R $USER $INSTALL_DIR/cache $INSTALL_DIR/miniconda3 $INSTALL_DIR/src
@@ -88,5 +89,6 @@ pf config set trace.destination=azureml://subscriptions/7e7e056a-4224-4e26-99d2-
 echo "POETRY_CACHE_DIR=/mnt/cache/poetry\nHF_HOME=/mnt/cache/hf\nPF_WORKER_COUNT=24\nPF_BATCH_METHOD=fork" | tee -a /mnt/src/buttermilk/.env
 
 # Run
-python -m examples.automod.mod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt
+python -m examples.automod.mod --multirun +experiments=ots_gpu +data=drag_noalt
+python -m examples.automod.mod --multirun hydra/launcher=joblib hydra/launcher/joblib/n_jobs=8 +experiments=ots +data=drag_noalt
 ```

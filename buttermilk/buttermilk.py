@@ -81,7 +81,7 @@ class Singleton:
 
 class BM(Singleton, BaseModel):
     cfg: Any = Field(default_factory=dict, validate_default=True)
-    _run_id: str = PrivateAttr(default_factory=lambda: BM.make_run_id())
+    run_id: str = Field(default_factory=lambda: BM.make_run_id())
     save_dir: Optional[str] = None
     _clients: dict[str, Any] = {}
 
@@ -140,7 +140,7 @@ class BM(Singleton, BaseModel):
         labels = {
             "function_name": self.cfg.name,
             "job": self.cfg.job,
-            "logs": self._run_id,
+            "logs": self.run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
         }
@@ -218,7 +218,7 @@ class BM(Singleton, BaseModel):
                 "location": "us-central1",
                 "namespace": self.cfg.name,
                 "job": self.cfg.job,
-                "task_id": self._run_id,
+                "task_id": self.run_id,
             },
         )
 
@@ -271,7 +271,7 @@ class BM(Singleton, BaseModel):
             save_dir = self.cfg.get('save_dir')
             if not save_dir:
                 save_dir = (
-                    f"gs://{self.cfg.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self._run_id}"
+                    f"gs://{self.cfg.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self.run_id}"
                 )
 
         # # Make sure the save directory is a valid path
@@ -285,5 +285,5 @@ class BM(Singleton, BaseModel):
     def save(self, data, basename='', extension='.jsonl', **kwargs):
         """ Failsafe save method."""
         result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_id))
+        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self.run_id))
         return result

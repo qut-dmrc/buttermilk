@@ -128,8 +128,7 @@ class HFTransformer(LLM):
 class HFPipeline(HFTransformer):
     def _load_models(self):
         if self.initialized is False:
-            # access token with permission to access the model and PRO subscription
-            login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])
+            self._login()
 
             self.pipeline = pipeline(
                 "text-generation",

@@ -76,7 +76,7 @@ def cache_data(uri: str) -> str:
 
 def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str]) -> pd.DataFrame:
     df = pd.DataFrame()
-    
+
     init_vars = flow_cfg.init
     flow_name = flow_cfg.name
     if run_cfg.platform == "azure":
@@ -87,7 +87,6 @@ def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
-    logger.info(dict(message=f"Starting {flow_name} for run: {run_name}", **init_vars))
     columns = col_mapping_hydra_to_pf(column_mapping)
     environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL", "PF_DISABLE_TRACING": "true"}
     task = pflocal.run(
@@ -139,9 +138,6 @@ def exec_local(
     column_mapping: dict[str, str]
 ) -> pd.DataFrame:
 
-    logger.info(dict(message=f"Starting {flow_name} x{num_runs} running locally with run name: {run_name}"))
-    t0 = datetime.datetime.now()
-
     results = []
 
     if isinstance(dataset, str):
@@ -190,10 +186,6 @@ def exec_local(
         results.append(details)
 
     results = pd.DataFrame(results)
-    t1 = datetime.datetime.now()
-    logger.info(
-        f"Run {run_name} completed locally, processed {results.shape[0]} results in {format_timespan(t1-t0)}."
-    )
     del flow
     torch.cuda.empty_cache()
     gc.collect()
@@ -203,7 +195,7 @@ def exec_local(
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     global bm, logger, global_run_id
-    # cfg changes with multiple options selected at runtime, but 
+    # cfg changes with multiple options selected at runtime, but
     # we want to make sure that run_id (which informs the logging
     # tags and save directories) does not change across processes.
     bm = BM(run_id=global_run_id, cfg=cfg)
@@ -219,27 +211,32 @@ def main(cfg: DictConfig) -> None:
         for model in cfg.experiments.moderate.models:
             cfg.experiments.moderate.init['model'] = model
             df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
-    if 'judger' in cfg.experiments.keys():
+    elif 'judger' in cfg.experiments.keys():
         connections = bm._connections_azure
         cfg.experiments.judger.init['connections'] = connections
         df = run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
     pass
 
-def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
+def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
     global bm
+    logger = bm.logger
     df = pd.DataFrame()
     data_file = cache_data(data.uri)
 
+    flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
+
+    batch_id = dict(
+        run_id=bm.run_id,
+        step=flow_name,
+        dataset=data.name,
+        num_runs=flow_cfg.num_runs,
+        **run_cfg
+    )
+    run_name = "_".join([str(x) for x in list(batch_id.values())])
+    logger.info(dict(message=f"Starting {flow_name} x{flow_cfg.num_runs} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
+    t0 = datetime.datetime.now()
     # Run flow
     try:
-        flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
-        batch_id = dict(
-            run_id=bm._run_id,
-            step=flow_name,
-            dataset=data.name,
-            num_runs=flow_cfg.num_runs,
-            **run_cfg
-        )
         for k,v in flow_cfg.init.items():
             if isinstance(v, str):
                 # remove path extensions
@@ -248,7 +245,6 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
                 v = str.lower(v)
                 batch_id[k] = v
 
-        run_name = "_".join([str(x) for x in list(batch_id.values())])
         flow_outputs = run_flow(flow=flow_obj,
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
@@ -270,7 +266,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
                             step_outputs = flow_outputs,
                             run_outputs = run_name,
                             run_name = eval_name,
-                            column_mapping=dict(evaluator_cfg.columns),
+                            column_mapping=dict(evaluator_cfg['columns']),
                             run_cfg=run_cfg
                     )
 
@@ -287,9 +283,10 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: Optional[dict]={}, run_cfg):
     finally:
         if df.shape[0]>0:
             uri = bm.save(df.reset_index(), basename='batch')
+
+            t1 = datetime.datetime.now()
             logger.info(
-                    msg=f"Completed batch: {batch_id} with {df.shape[0]} step results saved to {uri}.",
-                    extra=dict(**batch_id,results=uri)
+                dict(message=f"Completed batch: {batch_id} run {run_name} completed locally, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", **batch_id, results=uri)
             )
     return df
 

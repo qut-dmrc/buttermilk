@@ -1,8 +1,11 @@
 
+from pydantic import Field
+import torch
 from transformers import pipeline
 
 from typing import (
     Any,
+    Union,
 )
 from .toxicity import ToxicityModel, EvalRecord, Score
 from promptflow.tracing import trace
@@ -12,9 +15,13 @@ class Wildguard(ToxicityModel):
     process_chain: str = "hf_transformers"
     standard: str = "wildguard"
     client: Any = None
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
 
     def init_client(self):
-        return pipeline("text-generation", model="allenai/wildguard", max_new_tokens=1000)
+        return pipeline("text-generation", model="allenai/wildguard", max_new_tokens=1000, device=self.device)
 
     @trace
     def call_client(

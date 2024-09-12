@@ -74,10 +74,9 @@ class Aegis(LlamaGuardTox):
         self, text: str, **kwargs
     ) -> Any:
         content = self.make_prompt(text)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         inputs = self.tokenizer(
             content, return_tensors="pt", add_special_tokens=True
-        ).to(device)
+        ).to(self.device)
 
         prompt_len = inputs["input_ids"].shape[-1]
         output = self.client.generate(
