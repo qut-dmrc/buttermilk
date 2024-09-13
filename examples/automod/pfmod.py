@@ -68,8 +68,8 @@ logger = None
 pflocal = LocalPFClient()
 bm: BM = None
 
-# from promptflow.tracing import start_trace, trace
-# start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
+from promptflow.tracing import start_trace, trace
+start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
 
 
 def cache_data(uri: str) -> str:

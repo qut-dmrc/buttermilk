@@ -24,6 +24,9 @@
             ],
             "justMyCode": false,
             "args": [
+                "+experiments=ots_gpu",
+                "experiments.moderate.models=['Aegis']",
+                "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

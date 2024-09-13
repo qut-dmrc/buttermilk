@@ -208,7 +208,7 @@ class ToxicityModel(BaseModel):
             # prepare batch
             dataset['text'] = dataset['text'].apply(self.make_prompt)
             input_ds = datasets.Dataset.from_pandas(dataset)
-            for response in self.client(input_ds):
+            for response in self.client(input_ds['text']):
                 output = self.interpret(response)
                 output = self.prepare_output_dict(output)
                 yield output

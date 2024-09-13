@@ -16,7 +16,7 @@ from pathlib import Path
 
 from peft.peft_model import PeftModel
 from peft.config import PeftConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextGenerationPipeline
 from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
 from buttermilk.utils import read_text
 
@@ -65,9 +65,8 @@ class Aegis(LlamaGuardTox):
         config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
         self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e")
         base_model = AutoModelForCausalLM.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e", device_map=self.device)
-        model = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0", torch_device=self.device)
-
-        return model
+        self.client = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0", torch_device=self.device)
+        return self.client
 
     @trace
     def call_client(
