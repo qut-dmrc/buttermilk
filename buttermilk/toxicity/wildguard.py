@@ -43,7 +43,8 @@ class Wildguard(ToxicityModel):
         <|assistant|>
         """
         prompt = prompt.format(content=text)
-        return self.client(prompt)
+        response = self.client(prompt)
+        return str(response[0]['generated_text']).strip()
 
     def interpret(self, response: Any) -> EvalRecord:
         ### Example output:

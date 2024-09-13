@@ -6,7 +6,6 @@ moderate:
   models:
   - Aegis
   - ShieldGemma
-  - ShieldGemma2b
   - LlamaGuard3Local
   - MDJudgeLocalDomain
   - MDJudgeLocalTask

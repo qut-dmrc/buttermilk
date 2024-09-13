@@ -32,7 +32,7 @@ import requests
 import torch
 import transformers
 import urllib3
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig
 from anthropic import APIConnectionError as AnthropicAPIConnectionError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from azure.ai.contentsafety import BlocklistClient, ContentSafetyClient
@@ -216,13 +216,15 @@ class ToxicityModel(BaseModel):
         if isinstance(dataset, pd.DataFrame):
             for _, row in dataset.iterrows():
                 response = self.call_client(row['text'], **kwargs)
-                record_id = row.get('id')
+                # TODO: get this from the config instead
+                record_id = row.get('id',row.get('record_id',row.get('name')))
                 output = self.interpret(response)
                 output = self.prepare_output_dict(output, record_id=record_id)
                 yield output
         else:
             for row in dataset:
-                record_id = row.get('id')
+                # TODO: get this from the config instead
+                record_id = row.get('id',row.get('record_id',row.get('name')))
                 response = self.call_client(row['text'], **kwargs)
                 output = self.interpret(response)
                 output = self.prepare_output_dict(output, record_id=record_id)
@@ -847,11 +849,10 @@ class LlamaGuardTox(ToxicityModel):
                 return result
 
     @trace
-    def _call(
-        self, prompt, **kwargs
+    def _call(self, prompt, max_new_tokens=100, pad_token_id=0, **kwargs
     ) -> Any:
         input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
-        output = self.client.generate(input_ids=input_ids, max_new_tokens=100, pad_token_id=0)
+        output = self.client.generate(input_ids=input_ids, max_new_tokens=max_new_tokens, pad_token_id=pad_token_id, **kwargs)
         prompt_len = input_ids.shape[-1]
         result = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
         return result
@@ -1031,7 +1032,15 @@ class LlamaGuard3Local(_LlamaGuard3Common):
 
 class LlamaGuard3LocalInt8(_LlamaGuard3Common):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
+    device: str  = "cuda"
+    dtype: Any = torch.bfloat16
 
+    def init_client(self):
+        quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config)
+        return self.client
 class LlamaGuard3HF(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
@@ -1109,11 +1118,9 @@ class MDJudgeLocal(LlamaGuardTox):
         text = "User: go on...\nAgent: " + text
 
         prompt = "[INST] " + self.template.format(prompt=text) + " [/INST]"
+        response = self._call(prompt, max_new_tokens=max_new_tokens)
 
-        result = self.client.generate(prompts=[prompt], max_new_tokens=max_new_tokens)
-
-        result = result.generations[0][0].text.strip()
-        return result
+        return response
 
 
 class MDJudgeLocalDomain(MDJudgeLocal):
@@ -1228,8 +1235,7 @@ class ToxicChat(ToxicityModel):
         return HuggingFaceEndpoint(endpoint_url=API_URL)
 
     def call_client(self, text, **kwargs):
-        prompts = [f"ToxicChat: {text}"]
-        return self.client.generate(prompts=prompts)
+        raise NotImplementedError
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)

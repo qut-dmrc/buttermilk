@@ -242,7 +242,7 @@ def main(cfg: DictConfig) -> None:
     if 'moderate' in cfg.experiments.keys():
         shuffle(cfg.experiments.moderate.models)
         for model in cfg.experiments.moderate.models:
-            cfg.experiments.moderate.init['model'] = model
+            cfg.experiments.moderate.init['model'] = str(model)
             df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
     elif 'judger' in cfg.experiments.keys():
         connections = bm._connections_azure
@@ -264,21 +264,20 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
         run_id=bm.run_id,
         step=flow_name,
         dataset=data.name,
-        **run_cfg,
-        **flow_cfg
+        **run_cfg
     )
     run_name = "_".join([str(x) for x in list(batch_id.values())])
+    for k,v in flow_cfg.init.items():
+        if isinstance(v, str):
+            # remove path extensions
+            k = re.sub(r'_.*', '', str(k))
+            v = re.sub(r'\..*', '', str(v))
+            v = str.lower(v)
+            batch_id[k] = v
     logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
     t0 = datetime.datetime.now()
     # Run flow
     try:
-        for k,v in flow_cfg.init.items():
-            if isinstance(v, str):
-                # remove path extensions
-                k = re.sub(r'_.*', '', str(k))
-                v = re.sub(r'\..*', '', str(v))
-                v = str.lower(v)
-                batch_id[k] = v
 
         flow_outputs = run_flow(flow=flow_obj,
                                 flow_cfg=flow_cfg,
