@@ -83,7 +83,7 @@ def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame
     df = pd.DataFrame()
 
     init_vars = flow_cfg.init
-    flow_name = flow_cfg.name
+    flow_name = "_".join([str(x) for x in [flow_cfg.name] + list(flow_cfg.values())])
     if run_cfg.platform == "azure":
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
@@ -166,60 +166,63 @@ def exec_local(
     # for out in pipe(KeyDataset(dataset, "audio")):
     # print(out)
     runnable = flow(**init_vars)
+    try:
+        if isinstance(runnable, ToxicityModel):
+            # Run  as batch
+            for details in tqdm.tqdm(
+                runnable.moderate_batch(input_df),
+                total=num_runs*dataset.shape[0],
+                colour=colour,
+                desc=flow_name,
+                bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ):
+                details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
-    if isinstance(runnable, ToxicityModel):
-        # Run  as batch
-        for details in tqdm.tqdm(
-            runnable.moderate_batch(input_df),
-            total=num_runs*dataset.shape[0],
-            colour=colour,
-            desc=run_name,
-            bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-        ):
-            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+                # add input details to  the result row
+                for k, v in columns.items():
+                    if k not in details:
+                        details[k] = v
 
-            # add input details to  the result row
-            for k, v in columns.items():
-                if k not in details:
-                    details[k] = v
+                for k, v in init_vars.items():
+                    if k not in details:
+                        details[k] = v
 
-            for k, v in init_vars.items():
-                if k not in details:
-                    details[k] = v
+                results.append(details)
 
-            results.append(details)
+        else:
+            for idx, row in tqdm.tqdm(
+                input_df.iterrows(),
+                total=num_runs*dataset.shape[0],
+                colour=colour,
+                desc=run_name,
+                bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ):
 
-    else:
-        for idx, row in tqdm.tqdm(
-            input_df.iterrows(),
-            total=num_runs*dataset.shape[0],
-            colour=colour,
-            desc=run_name,
-            bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-        ):
+                # Run the flow for this line of data
+                input_vars = {k: v for k, v in  row.items() if k in columns.keys()}
+                details = runnable(**input_vars)
 
-            # Run the flow for this line of data
-            input_vars = {k: v for k, v in  row.items() if k in columns.keys()}
-            details = runnable(**input_vars)
+                details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
-            details["timestamp"] = pd.to_datetime(datetime.datetime.now())
+                # add input details to  the result row
+                for k, v in columns.items():
+                    if k not in details:
+                        details[k] = v
 
-            # add input details to  the result row
-            for k, v in columns.items():
-                if k not in details:
-                    details[k] = v
+                for k, v in init_vars.items():
+                    if k not in details:
+                        details[k] = v
 
-            for k, v in init_vars.items():
-                if k not in details:
-                    details[k] = v
+                results.append(details)
+    finally:
+        results = pd.DataFrame(results)
+        bm.save(results, basename='failed_flow')
+        del flow
+        torch.cuda.empty_cache()
+        gc.collect()
 
-            results.append(details)
-
-    results = pd.DataFrame(results)
-    del flow
-    torch.cuda.empty_cache()
-    gc.collect()
     return results
+
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
