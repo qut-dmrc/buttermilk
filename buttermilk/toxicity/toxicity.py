@@ -1212,7 +1212,6 @@ correctly."""
             else:
                 outcome.predicted = False
 
-            outcome.response = response
         except Exception as e:
             raise ValueError(f"Unable to interpret response from Gemma Guard. Response: {response}. Error: {e} {e.args=}"
             )
