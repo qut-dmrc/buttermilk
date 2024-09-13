@@ -837,7 +837,10 @@ class LlamaGuardTox(ToxicityModel):
         try:
             result = response[0][0]['generated_text'].strip()
         except:
-            result = response.generations[0][0].text.strip()
+            try:
+                result = response.generations[0][0].text.strip()
+            except:
+                result = response.strip()
         return str(result[len(content):])
 
     @trace
