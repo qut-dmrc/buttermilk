@@ -122,6 +122,6 @@ Task: Check if there is unsafe content in '{agent_type}' messages in conversatio
 {agent_type}: {prompt}
 <END CONVERSATION>
 
-Provide your safety assessment for '{agent_type}]' in the above conversation:
+Provide your safety assessment for '{agent_type}' in the above conversation:
 - First line must read 'safe' or 'unsafe'.
 - If unsafe, a second line must include a comma-separated list of violated categories.

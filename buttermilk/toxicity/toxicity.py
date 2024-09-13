@@ -820,7 +820,15 @@ class LlamaGuardTox(ToxicityModel):
         self, text: str, **kwargs
     ) -> Any:
         content = self.make_prompt(text)
-        response = self.client.generate(prompts=[content])
+        response = self._call(prompts=[content])
+        result = response.generations[0][0].text.strip()
+        return str(result)
+
+    @trace
+    def _call(
+        self, prompts: list[str], **kwargs
+    ) -> Any:
+        response = self.client.generate(prompts=prompts)
         result = response.generations[0][0].text.strip()
         return str(result)
 

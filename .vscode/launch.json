@@ -60,10 +60,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "--multirun",
-                "hydra/launcher=joblib",
-                "+x=range(3)",
-                "+experiments=ots",
+                "+experiments=ots_gpu",
                 "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",

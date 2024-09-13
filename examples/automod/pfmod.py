@@ -68,8 +68,8 @@ logger = None
 pflocal = LocalPFClient()
 bm: BM = None
 
-from promptflow.tracing import start_trace, trace
-start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
+# from promptflow.tracing import start_trace, trace
+# start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
 
 
 def cache_data(uri: str) -> str:
@@ -83,7 +83,7 @@ def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame
     df = pd.DataFrame()
 
     init_vars = flow_cfg.init
-    flow_name = "_".join([str(x) for x in [flow_cfg.name] + list(flow_cfg.values())])
+    flow_name = "_".join([str(x) for x in [flow_cfg.name] + list(flow_cfg.init.values())])
     if run_cfg.platform == "azure":
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
