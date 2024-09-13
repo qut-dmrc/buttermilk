@@ -56,15 +56,16 @@ class HFInferenceClient(LLM):
         res = self.client.text_generation(prompt, **self.options)
         return res.strip()
 
-def hf_pipeline(hf_model_path, device: str = '', torch_dtype: Optional[torch.dtype] = torch.bfloat16, **model_kwargs) -> Pipeline:
+def hf_pipeline(hf_model_path, **model_kwargs) -> Pipeline:
     # access token with permission to access the model
     login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
-    device = device or "cuda" if torch.cuda.is_available() else "cpu"
+    device = model_kwargs.get('device') or "auto" if torch.cuda.is_available() else "cpu"
+    max_new_tokens = model_kwargs.pop('max_new_tokens', 1000)
     client = pipeline(
                 "text-generation",
                 model=hf_model_path,
-                device=device,
-                dtype=torch_dtype,
+                device_map=device,
+                max_new_tokens=max_new_tokens,
                 model_kwargs=model_kwargs
             )
     return client

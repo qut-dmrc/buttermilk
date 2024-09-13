@@ -28,6 +28,7 @@ from buttermilk.toxicity import MDJudgeLocalTask,  MDJudgeLocalDomain
 #     ToxicChat,
 #     Toxigen,
 # )
+from buttermilk.types.tox import EvalRecord
 from buttermilk.utils import read_text
 from buttermilk.runner import InputRecord, Job, Consumer, ResultsCollector, TaskDistributor
 
@@ -269,29 +270,10 @@ class TestClients:
 class TestToxicityModels:
     """These tests test the toxicity models through the ToxicityModel wrapper"""
 
-    @pytest.fixture(
-        scope="session",
-        params=TOXCLIENTS,
-    )
-    def tox_model(self, bm, request):
-        yield request.param()
-
-    @pytest.fixture(
-        scope="session",
-        params=TOXCLIENTS_LOCAL,
-    )
-    def local_model(self, request):
-        yield request.param()
-
-    @pytest.fixture()
-    def example_with_answer(self) -> InputRecord:
-        examples = _load_tests()
-        example_category = random.choice(list(examples.values()))
-        example = random.choice(example_category)
-        return example
-
-    def test_mod(self, tox_model: ToxicityModel, toxic_record: InputRecord):
-        result = tox_model(toxic_record.text)
+    @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS)
+    def test_mod(self, tox_model_cls, toxic_record: InputRecord):
+        tox_model = tox_model_cls()
+        result = tox_model.moderate(toxic_record.text)
         assert isinstance(result, dict)
         assert not result.get('error')
         assert result['standard'] == tox_model.standard
@@ -307,9 +289,18 @@ class TestToxicityModels:
         # )
         # assert uri
 
-#    @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_local_models(self, local_model, toxic_record):
-        self.test_mod(tox_model=local_model, toxic_record=toxic_record)
+    @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS_LOCAL)
+    def test_local_models(self, tox_model_cls, toxic_record):
+        local_model = tox_model_cls()
+        assert local_model
+        result = local_model.moderate(toxic_record.text)
+        assert isinstance(result, EvalRecord)
+        assert not result.get('error')
+        assert result['standard'] == local_model.standard
+        assert result['process'] == local_model.process_chain
+        assert result["model"] == local_model.model
+        assert all([s["measure"] for s in result["scores"]])
+        assert result[COL_PREDICTION] is not None
 
 class TestIndicators:
     def test_bq_record(self, indicator):

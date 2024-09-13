@@ -18,6 +18,7 @@ from typing import (
     Union,
 )
 
+from huggingface_hub import login
 import boto3
 from buttermilk.exceptions import RateLimit
 from buttermilk.runner._runner_types import Job
@@ -31,7 +32,7 @@ import requests
 import torch
 import transformers
 import urllib3
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from anthropic import APIConnectionError as AnthropicAPIConnectionError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from azure.ai.contentsafety import BlocklistClient, ContentSafetyClient
@@ -658,7 +659,7 @@ class GPTJT(ToxicityModel):
         self.client = hf_pipeline(hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
                 device=self.device, max_new_tokens=3
         )
-        
+
     @trace
     def call_client(
         self, text: str, **kwargs
@@ -1098,7 +1099,6 @@ class MDJudgeLocal(LlamaGuardTox):
         client = hf_pipeline(
             hf_model_path=self.model,
             device=device,
-            torch_dtype=torch.bfloat16,
         )
 
         return client
@@ -1131,21 +1131,19 @@ class MDJudgeLocalTask(MDJudgeLocal):
     categories: EnumMeta = MDJudgeTaskCategories
 
 class ShieldGemma(ToxicityModel):
-    model: str = "shieldgemma-27b"
+    model: str = "google/shieldgemma-27b"
     process_chain: str = "local transformers"
     standard: str = "shieldgemma-27b"
     client: transformers.Pipeline = None
-    device: Union[str, torch.device] = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
-        description="Device type (CPU or CUDA)",
-    )
+    tokenizer: Any = None
+    classes: Any = None
 
     def init_client(self):
-        self.client = hf_pipeline(hf_model_path="google/shieldgemma-27b",
-            device_map=self.device,
-            torch_dtype=torch.bfloat16,
-        )
-
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
+        vocab = self.tokenizer.get_vocab()
+        self.classes = [vocab['Yes'], vocab['No']]
         return self.client
 
     def make_prompt(self, text):
@@ -1175,12 +1173,21 @@ correctly."""
 
         prompt = self.make_prompt(text)
 
-        #inputs = self.client.tokenizer(prompt, return_tensors="pt").to(self.device)
-        # with torch.no_grad():
-        output = self.client(prompt)
+        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+        with torch.no_grad():
+            model_outputs = self.client(**inputs)
 
-        return output
+        logits = model_outputs.logits
 
+        selected_logits = logits[0, -1, self.classes]
+
+        # Convert these logits to a probability with softmax
+        probabilities = torch.softmax(selected_logits, dim=0)
+
+        # Return probability of 'Yes'
+        score = float(probabilities[0].item())
+
+        return dict(score=score)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -1189,33 +1196,25 @@ correctly."""
         )
 
         try:
-            logits = response.logits
+            score = response['score']
+            outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
+            if score > 0.5:
+                outcome.labels.append("violating")
+                outcome.predicted = True
+            else:
+                outcome.predicted = False
 
-            # Extract the logits for the Yes and No tokens
-            vocab = self.client.tokenizer.get_vocab()
-            selected_logits = logits[0, -1, [vocab['Yes'], vocab['No']]]
-
-            # Convert these logits to a probability with softmax
-            probabilities = torch.softmax(selected_logits, dim=0)
-
-            # Return probability of 'Yes'
-            score = float(probabilities[0].item())
-
+            outcome.response = response
         except Exception as e:
             raise ValueError(f"Unable to interpret response from Gemma Guard. Response: {response}. Error: {e} {e.args=}"
             )
 
-        outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
-        if score > 0.5:
-            outcome.labels.append("violating")
-            outcome.predicted = True
-        else:
-            outcome.predicted = False
-
-        outcome.response = response
 
         return outcome
 
+
+class ShieldGemma2b(ShieldGemma):
+    model: str = "google/shieldgemma-2b"
 
 
 class ToxicChat(ToxicityModel):

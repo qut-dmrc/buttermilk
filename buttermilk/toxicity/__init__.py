@@ -26,7 +26,7 @@ from .toxicity import (Comprehend,
     MDJudgeLocalTask,
     LlamaGuard2Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma,
+    ShieldGemma,ShieldGemma2b,
     ToxicityModel)
 
 TOXCLIENTS = [
@@ -59,7 +59,7 @@ TOXCLIENTS_LOCAL = [
     LlamaGuard2Local,
     LlamaGuard3Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma,
+    ShieldGemma,ShieldGemma2b,
     MDJudgeLocalDomain,
     MDJudgeLocalTask,
     GPTJT,
