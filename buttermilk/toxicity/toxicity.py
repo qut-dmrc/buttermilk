@@ -204,15 +204,16 @@ class ToxicityModel(BaseModel):
 
     @trace
     def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
-        if isinstance(self.client, transformers.Pipeline):
-            # prepare batch
-            dataset['text'] = dataset['text'].apply(self.make_prompt)
-            input_ds = datasets.Dataset.from_pandas(dataset)
-            for response in self.client(input_ds['text']):
-                output = self.interpret(response)
-                output = self.prepare_output_dict(output)
-                yield output
-        elif isinstance(dataset, pd.DataFrame):
+        # if isinstance(self.client, transformers.Pipeline):
+        #     # prepare batch
+        #     dataset['text'] = dataset['text'].apply(self.make_prompt)
+        #     input_ds = datasets.Dataset.from_pandas(dataset)
+        #     for response in self.client(input_ds['text']):
+        #         output = self.interpret(response)
+        #         output = self.prepare_output_dict(output)
+        #         yield output
+        # el
+        if isinstance(dataset, pd.DataFrame):
             for _, row in dataset.iterrows():
                 response = self.call_client(row['text'], **kwargs)
                 record_id = row.get('id')
@@ -836,12 +837,14 @@ class LlamaGuardTox(ToxicityModel):
         response = self._call(content)
         try:
             result = response[0][0]['generated_text'].strip()
+            return str(result[len(content):])
         except:
             try:
                 result = response.generations[0][0].text.strip()
+                return str(result[len(content):])
             except:
                 result = response.strip()
-        return str(result[len(content):])
+                return result
 
     @trace
     def _call(
@@ -990,10 +993,6 @@ class LlamaGuard2Local(LlamaGuardTox):
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     options: ClassVar[dict] = {}
     client: Any = None
-
-    def init_client(self) -> transformers.Pipeline:
-        return hf_pipeline(hf_model_path=self.model, **self.options)
-
 
 
 class LlamaGuard2HF(LlamaGuardTox):

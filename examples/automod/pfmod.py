@@ -256,16 +256,18 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
     data_file = cache_data(data.uri)
 
     flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
+    if model := flow_cfg.get('init', {}).get('model', None):
+        flow_name = f"{flow_name}_{model}x{flow_cfg.num_runs}"
 
     batch_id = dict(
         run_id=bm.run_id,
         step=flow_name,
         dataset=data.name,
-        num_runs=flow_cfg.num_runs,
-        **run_cfg
+        **run_cfg,
+        **flow_cfg
     )
     run_name = "_".join([str(x) for x in list(batch_id.values())])
-    logger.info(dict(message=f"Starting {flow_name} x{flow_cfg.num_runs} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
+    logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
     t0 = datetime.datetime.now()
     # Run flow
     try:
@@ -311,15 +313,19 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
                 # We might not get all the responses back. Try to join on line number instead?
                 pass
                 df = df.merge(evals[['line_number',evaluator_cfg['name']]], left_on='line_number', right_on='line_number')
+    except Exception as e:
+        logger.error(dict(message=f"Failed {flow_name} running on {run_cfg.platform} with run name: {run_name}", error=str(e), **batch_id))
+        raise e
 
     finally:
+        uri=None
         if df.shape[0]>0:
             uri = bm.save(df.reset_index(), basename='batch')
 
-            t1 = datetime.datetime.now()
-            logger.info(
-                dict(message=f"Completed batch: {batch_id} run {run_name} completed locally, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", **batch_id, results=uri)
-            )
+        t1 = datetime.datetime.now()
+        logger.info(
+            dict(message=f"Completed batch: {batch_id} run {run_name} completed locally, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", **batch_id, results=uri)
+        )
     return df
 
 
