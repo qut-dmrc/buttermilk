@@ -803,6 +803,19 @@ class MDJudgeTaskCategories(Enum):
 class LlamaGuardTox(ToxicityModel):
     categories: EnumMeta
     template: str
+    client: Any = None
+    tokenizer: Any = None
+    model: str
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
+
+    def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
+        return self.client
 
     def make_prompt(self, content):
         # Load the message info into the output
@@ -820,17 +833,22 @@ class LlamaGuardTox(ToxicityModel):
         self, text: str, **kwargs
     ) -> Any:
         content = self.make_prompt(text)
-        response = self._call(prompts=[content])
-        result = response.generations[0][0].text.strip()
-        return str(result)
+        response = self._call(content)
+        try:
+            result = response[0][0]['generated_text'].strip()
+        except:
+            result = response.generations[0][0].text.strip()
+        return str(result[len(content):])
 
     @trace
     def _call(
-        self, prompts: list[str], **kwargs
+        self, prompt, **kwargs
     ) -> Any:
-        response = self.client.generate(prompts=prompts)
-        result = response.generations[0][0].text.strip()
-        return str(result)
+        input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
+        output = self.client.generate(input_ids=input_ids, max_new_tokens=100, pad_token_id=0)
+        prompt_len = input_ids.shape[-1]
+        result = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
+        return result
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -848,7 +866,10 @@ class LlamaGuardTox(ToxicityModel):
                     try:
                         answer, labels = response.strip().split(" ")
                     except ValueError:
-                        answer = response
+                        try:
+                            answer = response.strip()
+                        except ValueError:
+                            answer = response
                         labels = ""
 
 
@@ -981,8 +1002,8 @@ class LlamaGuard2HF(LlamaGuardTox):
     options: ClassVar[dict] = {}
     client: Any = None
 
-    def init_client(self) -> transformers.Pipeline:
-        return hf_pipeline(hf_model_path=self.model, **self.options)
+    def init_client(self):
+        return HFInferenceClient(hf_model_path=self.model, **self.options)
 
 
 
@@ -990,9 +1011,10 @@ class _LlamaGuard3Common(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
+    process_chain: str = "local transformers"
+    options: ClassVar[dict] = {}
 
     def make_prompt(self, content):
-        # Load the message info into the output
         agent_type = "Agent"
         content = f"{agent_type}: {content}"
         content = (
@@ -1003,30 +1025,16 @@ class _LlamaGuard3Common(LlamaGuardTox):
         return content
 
 class LlamaGuard3Local(_LlamaGuard3Common):
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     model: str = "meta-llama/Llama-Guard-3-8B"
-    process_chain: str = "local transformers"
-    options: ClassVar[dict] = {}
-
-    def init_client(self) -> transformers.Pipeline:
-        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 class LlamaGuard3LocalInt8(_LlamaGuard3Common):
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
-    process_chain: str = "local transformers"
-    options: ClassVar[dict] = {}
-
-    def init_client(self) -> transformers.Pipeline:
-        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 class LlamaGuard3HF(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     model: str = "meta-llama/Llama-Guard-3-8B"
-    process_chain: str = "huggingface API"
+    process_chain: str = "local transformers"
 
     def init_client(self):
         return HFInferenceClient(hf_model_path=self.model)
@@ -1038,8 +1046,6 @@ class LlamaGuard3HFInt8(_LlamaGuard3Common):
     process_chain: str = "huggingface API"
     options: ClassVar[dict] = {}
 
-    def init_client(self):
-        return HFInferenceClient(hf_model_path=self.model)
 
 class LlamaGuard3Together(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
@@ -1091,25 +1097,6 @@ class MDJudgeLocal(LlamaGuardTox):
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
 
-    def init_client(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        if device == "cpu":
-            # Get RAM available (converting bytes to gigabytes)
-            mem_available = psutil.virtual_memory().total / (1024.0**3)
-
-            # Check if the total RAM available is greater than 22 GB
-            if mem_available < 40:
-                raise ValueError(
-                    f"The total RAM available is less than 22 GB. We cannot run MDJudge locally. ({mem_available}GB total RAM)"
-                )
-
-        client = hf_pipeline(
-            hf_model_path=self.model,
-            device=device,
-        )
-
-        return client
 
     @trace
     def call_client(
