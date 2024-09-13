@@ -607,13 +607,11 @@ class LFTW(ToxicityModel):
     client: Any = None
 
     def init_client(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        return transformers.pipeline(
-            "text-classification",
-            model="facebook/roberta-hate-speech-dynabench-r4-target",
-                device=device
+        self.client = hf_pipeline(hf_model_path="facebook/roberta-hate-speech-dynabench-r4-target",
         )
-    @trace
+
+        return self.client
+
     def call_client(
         self, text: str, **kwargs
     ) -> Any:
@@ -657,11 +655,10 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self):
-        # Use a pipeline as a high-level helper
-        return pipeline(
-            "text-generation", model="togethercomputer/GPT-JT-Moderation-6B",
-                device=self.device,max_new_tokens=3
+        self.client = hf_pipeline(hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
+                device=self.device, max_new_tokens=3
         )
+        
     @trace
     def call_client(
         self, text: str, **kwargs
@@ -1144,8 +1141,7 @@ class ShieldGemma(ToxicityModel):
     )
 
     def init_client(self):
-
-        self.client = pipeline("text-generation", model="google/shieldgemma-27b",
+        self.client = hf_pipeline(hf_model_path="google/shieldgemma-27b",
             device_map=self.device,
             torch_dtype=torch.bfloat16,
         )
