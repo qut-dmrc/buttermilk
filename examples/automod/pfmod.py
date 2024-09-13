@@ -216,7 +216,7 @@ def exec_local(
                 results.append(details)
     finally:
         results = pd.DataFrame(results)
-        bm.save(results, basename='failed_flow')
+        bm.save(results, basename='partial_flow')
         del flow
         torch.cuda.empty_cache()
         gc.collect()
@@ -240,6 +240,7 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
     if 'moderate' in cfg.experiments.keys():
+        shuffle(cfg.experiments.moderate.models)
         for model in cfg.experiments.moderate.models:
             cfg.experiments.moderate.init['model'] = model
             df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
