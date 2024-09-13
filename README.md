@@ -57,10 +57,10 @@ curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 # miniconda
 mkdir -p $INSTALL_DIR/miniconda3 && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $INSTALL_DIR/miniconda3/miniconda.sh && bash $INSTALL_DIR/miniconda3/miniconda.sh -b -u -p $INSTALL_DIR/miniconda3 && rm $INSTALL_DIR/miniconda3/miniconda.sh && $INSTALL_DIR/miniconda3/bin/conda init
 
+
 # Change cache location (our GPU machine has limited space on /)
-echo "export XDG_CACHE_HOME=$INSTALL_DIR/cache"|tee -a ~USER/.bashrc
-echo "export POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a ~/.bashrc
-echo "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee ~USER/.condarc
+echo -e "export XDG_CACHE_HOME=$INSTALL_DIR/cache\nexport POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a /home/$USER/.bashrc
+echo "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee /home/$USER/.condarc
 
 mkdir -p $INSTALL_DIR/src $INSTALL_DIR/cache && chown -R $USER $INSTALL_DIR/cache $INSTALL_DIR/miniconda3 $INSTALL_DIR/src
 
