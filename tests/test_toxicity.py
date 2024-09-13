@@ -307,7 +307,7 @@ class TestToxicityModels:
         # )
         # assert uri
 
-    @pytest.mark.skip(reason="Don't run local GPU tests")
+#    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_local_models(self, local_model, toxic_record):
         self.test_mod(tox_model=local_model, toxic_record=toxic_record)
 

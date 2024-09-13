@@ -74,10 +74,10 @@ from tenacity import (
     wait_exponential_jitter,
     wait_random_exponential,
 )
-
+import datasets
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
-from buttermilk.apis import HFTransformer, HFInferenceClient
+from buttermilk.apis import HFInferenceClient, hf_pipeline
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
 
@@ -194,43 +194,36 @@ class ToxicityModel(BaseModel):
                 )
 
         # add identifying info in
-        response.model=self.model
-        response.process=self.process_chain
-        response.standard=self.standard
-        response.record_id=record_id
+        output = self.prepare_output_dict(response, record_id=record_id)
 
-        output = response.model_dump()
-        output = scrub_serializable(output)
         return output
+
+    def make_prompt(self, content):
+        raise NotImplementedError
 
     @trace
     def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
-        def add_info(record: EvalRecord):
-            # add identifying info in
-            record.model=self.model
-            record.process=self.process_chain
-            record.standard=self.standard
-
-            output = record.model_dump()
-            output = scrub_serializable(output)
-            return output
-
         if isinstance(self.client, transformers.Pipeline):
-            for response in self.client(dataset):
+            # prepare batch
+            dataset['text'] = dataset['text'].apply(self.make_prompt)
+            input_ds = datasets.Dataset.from_pandas(dataset)
+            for response in self.client(input_ds):
                 output = self.interpret(response)
-                output = add_info(output)
+                output = self.prepare_output_dict(output)
                 yield output
         elif isinstance(dataset, pd.DataFrame):
             for _, row in dataset.iterrows():
                 response = self.call_client(row['text'], **kwargs)
+                record_id = row.get('id')
                 output = self.interpret(response)
-                output = add_info(output)
+                output = self.prepare_output_dict(output, record_id=record_id)
                 yield output
         else:
-            for text in dataset:
-                response = self.call_client(text, **kwargs)
+            for row in dataset:
+                record_id = row.get('id')
+                response = self.call_client(row['text'], **kwargs)
                 output = self.interpret(response)
-                output = add_info(output)
+                output = self.prepare_output_dict(output, record_id=record_id)
                 yield output
 
 
@@ -259,6 +252,18 @@ class ToxicityModel(BaseModel):
     def interpret(self, response: Any) -> EvalRecord:
         raise NotImplementedError()
 
+
+    def prepare_output_dict(self, record: EvalRecord, record_id=None, **kwargs):
+        # add identifying info in
+        record.model=self.model
+        record.process=self.process_chain
+        record.standard=self.standard
+        if record_id is not None:
+            record.record_id=record_id
+
+        output = record.model_dump()
+        output = scrub_serializable(output)
+        return output
 
 class Perspective(ToxicityModel):
     model: str = "perspective"
@@ -956,9 +961,8 @@ class LlamaGuard2Local(LlamaGuardTox):
     options: ClassVar[dict] = {}
     client: Any = None
 
-    def init_client(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        return HFTransformer(hf_model_path=self.model, device=device, **self.options)
+    def init_client(self) -> transformers.Pipeline:
+        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 
 
@@ -968,10 +972,11 @@ class LlamaGuard2HF(LlamaGuardTox):
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     standard: str = "llamaguard2"
     process_chain: str = "huggingface API"
+    options: ClassVar[dict] = {}
     client: Any = None
 
-    def init_client(self):
-        return HFInferenceClient(hf_model_path=self.model)
+    def init_client(self) -> transformers.Pipeline:
+        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 
 
@@ -998,9 +1003,8 @@ class LlamaGuard3Local(_LlamaGuard3Common):
     process_chain: str = "local transformers"
     options: ClassVar[dict] = {}
 
-    def init_client(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        return HFTransformer(hf_model_path=self.model, device=device, **self.options)
+    def init_client(self) -> transformers.Pipeline:
+        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 class LlamaGuard3LocalInt8(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
@@ -1009,9 +1013,8 @@ class LlamaGuard3LocalInt8(_LlamaGuard3Common):
     process_chain: str = "local transformers"
     options: ClassVar[dict] = {}
 
-    def init_client(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        return HFTransformer(hf_model_path=self.model, device=device, **self.options)
+    def init_client(self) -> transformers.Pipeline:
+        return hf_pipeline(hf_model_path=self.model, **self.options)
 
 class LlamaGuard3HF(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
@@ -1095,7 +1098,7 @@ class MDJudgeLocal(LlamaGuardTox):
                     f"The total RAM available is less than 22 GB. We cannot run MDJudge locally. ({mem_available}GB total RAM)"
                 )
 
-        client = HFTransformer(
+        client = hf_pipeline(
             hf_model_path=self.model,
             device=device,
             torch_dtype=torch.bfloat16,
@@ -1132,10 +1135,9 @@ class MDJudgeLocalTask(MDJudgeLocal):
 
 class ShieldGemma(ToxicityModel):
     model: str = "shieldgemma-27b"
-    process_chain: str = "hftransformers"
+    process_chain: str = "local transformers"
     standard: str = "shieldgemma-27b"
-    client: Any = None
-    tokenizer: Any = None
+    client: transformers.Pipeline = None
     device: Union[str, torch.device] = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
@@ -1143,72 +1145,78 @@ class ShieldGemma(ToxicityModel):
 
     def init_client(self):
 
-        tokenizer = AutoTokenizer.from_pretrained("google/shieldgemma-27b")
-        model = AutoModelForCausalLM.from_pretrained(
-            "google/shieldgemma-27b",
+        self.client = pipeline("text-generation", model="google/shieldgemma-27b",
             device_map=self.device,
             torch_dtype=torch.bfloat16,
         )
-        self.tokenizer = tokenizer
-        self.client = model
+
         return self.client
+
+    def make_prompt(self, text):
+        prompt =  f"""You are a policy expert trying to help determine whether a user prompt is in violation of the defined safety policies.
+
+<start_of_turn>
+Human Question: {text}
+<end_of_turn>
+
+Our safety principle is defined in the below:
+
+* "No Hate Speech": The prompt shall not contain or seek generation of content
+that expresses, incites, or promotes hate based on race, gender, ethnicity,
+religion, nationality, sexual orientation, disability status, or caste.
+
+===
+
+Does the human question violate the above principle? Your answer must start with
+'Yes' or 'No'. And then walk through step by step to be sure we answer
+correctly."""
+        return prompt
 
     @trace
     def call_client(
         self, text: str, **kwargs
     ) -> Any:
 
-        prompt =  f"""You are a policy expert trying to help determine whether a user prompt is in
-        violation of the defined safety policies.
+        prompt = self.make_prompt(text)
 
-        <start_of_turn>
-        Human Question: {text}
-        <end_of_turn>
+        #inputs = self.client.tokenizer(prompt, return_tensors="pt").to(self.device)
+        # with torch.no_grad():
+        output = self.client(prompt)
 
-        Our safety principle is defined in the below:
+        return output
 
-        * "No Hate Speech": The prompt shall not contain or seek generation of content
-        that expresses, incites, or promotes hate based on race, gender, ethnicity,
-        religion, nationality, sexual orientation, disability status, or caste.
-
-        ===
-
-        Does the human question violate the above principle? Your answer must start with
-        'Yes' or 'No'. And then walk through step by step to be sure we answer
-        correctly."""
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-        with torch.no_grad():
-            logits = self.client(**inputs).logits
-
-        # Extract the logits for the Yes and No tokens
-        vocab = self.tokenizer.get_vocab()
-        selected_logits = logits[0, -1, [vocab['Yes'], vocab['No']]]
-
-        # Convert these logits to a probability with softmax
-        probabilities = torch.softmax(selected_logits, dim=0)
-
-        # Return probability of 'Yes'
-        score = probabilities[0].item()
-        return score
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(
             predicted=False,
         )
+
         try:
-            result = float(response)
+            logits = response.logits
+
+            # Extract the logits for the Yes and No tokens
+            vocab = self.client.tokenizer.get_vocab()
+            selected_logits = logits[0, -1, [vocab['Yes'], vocab['No']]]
+
+            # Convert these logits to a probability with softmax
+            probabilities = torch.softmax(selected_logits, dim=0)
+
+            # Return probability of 'Yes'
+            score = float(probabilities[0].item())
+
         except Exception as e:
             raise ValueError(f"Unable to interpret response from Gemma Guard. Response: {response}. Error: {e} {e.args=}"
             )
 
-        outcome.scores = [Score(measure="GemmaGuardDefault", score=result)]
-        if result > 0.5:
+        outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
+        if score > 0.5:
             outcome.labels.append("violating")
             outcome.predicted = True
         else:
             outcome.predicted = False
+
+        outcome.response = response
 
         return outcome
 

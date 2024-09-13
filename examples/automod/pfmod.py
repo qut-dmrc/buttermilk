@@ -22,7 +22,7 @@ from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 
 from buttermilk import BM
-from buttermilk.apis import (HFInferenceClient, HFLlama270bn, HFPipeline,
+from buttermilk.apis import (HFInferenceClient, hf_pipeline,
                              Llama2ChatMod, replicatellama2, replicatellama3)
 from buttermilk.flows.evalqa.evalqa import EvalQA
 from buttermilk.flows.judge.judge import Judger
@@ -63,11 +63,14 @@ import datasets
 # # Create a pipeline
 # pipeline = Pipeline(workspace=ws, steps=[...])
 
-
 global_run_id = BM.make_run_id()
 logger = None
 pflocal = LocalPFClient()
 bm: BM = None
+
+from promptflow.tracing import start_trace, trace
+start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
+
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -90,7 +93,7 @@ def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
     columns = col_mapping_hydra_to_pf(column_mapping)
-    environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL", "PF_DISABLE_TRACING": "true"}
+    environment_variables = {"PF_WORKER_COUNT": "11", "PF_BATCH_METHOD": "fork", "PF_LOGGING_LEVEL":"CRITICAL", }
     task = pflocal.run(
             flow=flow,
             data=dataset,
@@ -141,6 +144,7 @@ def exec_local(
 ) -> pd.DataFrame:
 
     results = []
+    torch.cuda.empty_cache()
 
     if isinstance(dataset, str):
         dataset = pd.read_json(dataset, orient="records", lines=True)
@@ -164,10 +168,9 @@ def exec_local(
     runnable = flow(**init_vars)
 
     if isinstance(runnable, ToxicityModel):
-        input_ds = datasets.Dataset.from_pandas(input_df)
         # Run  as batch
         for details in tqdm.tqdm(
-            runnable.moderate_batch(input_ds),
+            runnable.moderate_batch(input_df),
             total=num_runs*dataset.shape[0],
             colour=colour,
             desc=run_name,
@@ -229,8 +232,7 @@ def main(cfg: DictConfig) -> None:
 
     logger = bm.logger
 
-    # from promptflow.tracing import start_trace, trace
-    # start_trace(resource_attributes={"run_id": bm._run_id, "job": cfg.project.job}, collection=cfg.project.name)
+
     # Create a cycle iterator for the progress bar colours
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
