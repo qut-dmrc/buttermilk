@@ -202,7 +202,6 @@ class ToxicityModel(BaseModel):
     def make_prompt(self, content):
         raise NotImplementedError
 
-    @trace
     def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
         # if isinstance(self.client, transformers.Pipeline):
         #     # prepare batch
@@ -215,19 +214,15 @@ class ToxicityModel(BaseModel):
         # el
         if isinstance(dataset, pd.DataFrame):
             for _, row in dataset.iterrows():
-                response = self.call_client(row['text'], **kwargs)
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.interpret(response)
-                output = self.prepare_output_dict(output, record_id=record_id)
+                output = self.moderate(row['text'],record=record_id, **kwargs)
                 yield output
         else:
             for row in dataset:
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                response = self.call_client(row['text'], **kwargs)
-                output = self.interpret(response)
-                output = self.prepare_output_dict(output, record_id=record_id)
+                output = self.moderate(row['text'],record=record_id, **kwargs)
                 yield output
 
 
@@ -238,10 +233,11 @@ class ToxicityModel(BaseModel):
 
     @trace
     def moderate(
-        self, text: str, **kwargs
+        self, text: str, record_id: str, **kwargs
     ) -> EvalRecord:
         response = self.call_client(text, **kwargs)
         output = self.interpret(response)
+        output = self.prepare_output_dict(output, record_id=record_id)
         return output
 
     @trace
@@ -849,7 +845,8 @@ class LlamaGuardTox(ToxicityModel):
                 return result
 
     @trace
-    def _call(self, prompt, max_new_tokens=100, pad_token_id=0, **kwargs
+    def _call(
+        self, prompt, max_new_tokens=100, pad_token_id=0, **kwargs
     ) -> Any:
         input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
         output = self.client.generate(input_ids=input_ids, max_new_tokens=max_new_tokens, pad_token_id=pad_token_id, **kwargs)
@@ -1107,7 +1104,6 @@ class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
-
 
     @trace
     def call_client(
