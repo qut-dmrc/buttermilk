@@ -1028,7 +1028,7 @@ class LlamaGuard3Local(_LlamaGuard3Common):
 class LlamaGuard3LocalInt8(_LlamaGuard3Common):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
-    dtype: Any = torch.bfloat16
+    dtype: Any = "auto"
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
