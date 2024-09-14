@@ -1,8 +1,10 @@
 
+from sys import flags
 from pydantic import Field
 import torch
 from transformers import pipeline
 
+import re
 from typing import (
     Any,
     Union,
@@ -61,11 +63,21 @@ class Wildguard(ToxicityModel):
             outcome.error = f"Unable to interpret result."
             outcome.response = response
 
-        for line in lines:
-            try:
-                label, prediction = line.split(':')
+        pattern = re.compile(r"^\s*([\w\s]*(request|response|refusal)):\s+(yes|no)", flags=re.IGNORECASE|re.MULTILINE)
+        matches = pattern.findall(response)
+        if not matches:
+            outcome.error = f"Unable to interpret result."
+            outcome.response = response
+        else:
+            outcome.predicted = False
+            for match in matches:
+                label = match[0]
+                prediction = match[2]
                 if prediction.lower().strip() == 'yes':
-                    labels.append(label)
+                    labels.append(label.lower().strip())
+                    if label.lower().strip() in ["harmful request", "harmful response"]:
+                        outcome.predicted = True
+
                     outcome.scores.append(
                         Score(measure=str(label), score=1.0, result=True)
                     )
@@ -73,15 +85,6 @@ class Wildguard(ToxicityModel):
                     outcome.scores.append(
                         Score(measure=str(label), score=0.0, result=False)
                     )
-            except:
-                pass
-
-
-        # Load the message info into the output
-        if "Harmful request" or "Harmful response"in labels:
-            outcome.predicted = True
-        else:
-            outcome.predicted = False
 
 
         return outcome
