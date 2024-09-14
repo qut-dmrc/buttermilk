@@ -147,7 +147,7 @@ class ToxicityModel(BaseModel):
         return self.client
 
     def run(self, job: Job) -> Job:
-        response = self.moderate(job.record.text)
+        response = self.moderate(job.record.text,record_id=job.record.record_id)
         if not isinstance(response, EvalRecord):
             raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
 
@@ -176,15 +176,14 @@ class ToxicityModel(BaseModel):
     #         stop=stop_after_attempt(5),
     # )
     @trace
-    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> dict:
-        if not content or content.strip() == '':
-            if (content := kwargs.get('text','').strip()) == '':
-                response = EvalRecord(
-                    error="No input provided."
-                    )
+    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> EvalRecord:
+        if (content := kwargs.get('text','').strip()) == '':
+            response = EvalRecord(
+                error="No input provided."
+                )
         else:
             try:
-                response = self.moderate(content)
+                response = self.moderate(content, record_id=record_id, **kwargs)
                 if not isinstance(response, EvalRecord):
                     response = EvalRecord( **response)
 
@@ -194,10 +193,7 @@ class ToxicityModel(BaseModel):
                     metadata=extract_error_info(e=e)
                 )
 
-        # add identifying info in
-        output = self.prepare_output_dict(response, record_id=record_id)
-
-        return output
+        return response
 
     def make_prompt(self, content):
         raise NotImplementedError
@@ -216,20 +212,24 @@ class ToxicityModel(BaseModel):
             for _, row in dataset.iterrows():
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(row['text'],record=record_id, **kwargs)
+                output = self.moderate(row['text'],record_id=record_id, **kwargs)
+                output = output.model_dump()
+                output = scrub_serializable(output)
                 yield output
         else:
             for row in dataset:
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(row['text'],record=record_id, **kwargs)
+                output = self.moderate(row['text'],record_id=record_id, **kwargs)
+                output = output.model_dump()
+                output = scrub_serializable(output)
                 yield output
 
 
     async def moderate_async(
-            self, text: str
+            self, text: str, record_id:str, **kwargs
         ) -> EvalRecord:
-            return self.moderate(text)
+            return self.moderate(text, record_id=record_id, **kwargs)
 
     @trace
     def moderate(
@@ -237,7 +237,7 @@ class ToxicityModel(BaseModel):
     ) -> EvalRecord:
         response = self.call_client(text, **kwargs)
         output = self.interpret(response)
-        output = self.prepare_output_dict(output, record_id=record_id)
+        output = self.add_output_info(output, record_id=record_id)
         return output
 
     @trace
@@ -253,7 +253,7 @@ class ToxicityModel(BaseModel):
         raise NotImplementedError()
 
 
-    def prepare_output_dict(self, record: EvalRecord, record_id=None, **kwargs):
+    def add_output_info(self, record: EvalRecord, record_id=None, **kwargs) -> EvalRecord:
         # add identifying info in
         record.model=self.model
         record.process=self.process_chain
@@ -261,9 +261,7 @@ class ToxicityModel(BaseModel):
         if record_id is not None:
             record.record_id=record_id
 
-        output = record.model_dump()
-        output = scrub_serializable(output)
-        return output
+        return record
 
 class Perspective(ToxicityModel):
     model: str = "perspective"
