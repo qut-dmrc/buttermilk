@@ -79,8 +79,10 @@ import datasets
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from buttermilk.apis import HFInferenceClient, hf_pipeline
-
+from buttermilk import logger
+from ..types.tox import EvalRecord, Score
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
+
 
 PerspectiveAttributes = Literal[
     "TOXICITY",
@@ -121,7 +123,6 @@ def llamaguard_template(template: LlamaGuardTemplate):
     tpl = read_yaml(Path(__file__).parent / "templates/llamaguard.yaml")
     return tpl[template.value]
 
-from ..types.tox import EvalRecord, Score
 
 # Let's provide an interface for all the various toxicity models
 class ToxicityModel(BaseModel):
@@ -236,7 +237,13 @@ class ToxicityModel(BaseModel):
         self, text: str, record_id: str, **kwargs
     ) -> EvalRecord:
         response = self.call_client(text, **kwargs)
-        output = self.interpret(response)
+        try:
+            output = self.interpret(response)
+        except ValueError as e:
+            err_msg = f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
+            output = EvalRecord(
+                error=err_msg, response=response)
+            logger.error(err_msg)
         output = self.add_output_info(output, record_id=record_id)
         return output
 
@@ -346,11 +353,7 @@ class Comprehend(ToxicityModel):
         outcome = EvalRecord(
             predicted=False,
         )
-        try:
-            result = response["ResultList"][0]
-        except Exception as e:
-            raise ValueError(f"Unable to interpret response from AWS Comprehend. Response: {response}. Error: {e} {e.args=}"
-            )
+        result = response["ResultList"][0]
 
         outcome.scores = [Score(measure="Toxicity", score=result["Toxicity"])]
         if result["Toxicity"] > 0.5:
@@ -680,17 +683,14 @@ class GPTJT(ToxicityModel):
         outcome = EvalRecord(
         )
         outcome.response = response
-        try:
-            outcome.scores = [
-                Score(
-                    measure=self.standard, score=self.ResponseMap[response], labels=[response]
-                )
-            ]
+        outcome.scores = [
+            Score(
+                measure=self.standard, score=self.ResponseMap[response], labels=[response]
+            )
+        ]
 
-            outcome.predicted = self.ResponseMap[response] >= 2
-            outcome.labels = [response]
-        except (TypeError, ValueError) as e:
-            outcome.error = f"Unable to extract scores. Hit error: {e} {e.args}"
+        outcome.predicted = self.ResponseMap[response] >= 2
+        outcome.labels = [response]
 
         return outcome
 
@@ -1023,12 +1023,13 @@ class LlamaGuard3LocalInt8(_LlamaGuard3Common):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
+    options: ClassVar[dict] = {"max_new_tokens": 1024}
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
         return self.client
 class LlamaGuard3HF(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
@@ -1096,7 +1097,7 @@ class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
-    options: ClassVar[dict] = {"max_new_tokens": 32}
+    options: ClassVar[dict] = {"max_new_tokens": 128}
 
     def make_prompt(self, content):
         prompt = "User: go on...\nAgent: " + content
@@ -1182,19 +1183,13 @@ correctly."""
             predicted=False,
         )
 
-        try:
-            score = response['score']
-            outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
-            if score > 0.5:
-                outcome.labels.append("violating")
-                outcome.predicted = True
-            else:
-                outcome.predicted = False
-
-        except Exception as e:
-            raise ValueError(f"Unable to interpret response from Gemma Guard. Response: {response}. Error: {e} {e.args=}"
-            )
-
+        score = response['score']
+        outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
+        if score > 0.5:
+            outcome.labels.append("violating")
+            outcome.predicted = True
+        else:
+            outcome.predicted = False
 
         return outcome
 
