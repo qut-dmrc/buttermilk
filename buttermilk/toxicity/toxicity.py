@@ -807,6 +807,7 @@ class LlamaGuardTox(ToxicityModel):
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )
+    options: dict = Field(default_factory=lambda: dict(max_new_tokens=128, pad_token_id=0))
 
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
@@ -829,28 +830,21 @@ class LlamaGuardTox(ToxicityModel):
     def call_client(
         self, text: str, **kwargs
     ) -> Any:
-        content = self.make_prompt(text)
-        response = self._call(content)
+        prompt = self.make_prompt(text)
+        input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
+        output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
+        prompt_len = input_ids.shape[-1]
+        response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
         try:
             result = response[0][0]['generated_text'].strip()
-            return str(result[len(content):])
+            return str(result[len(prompt):])
         except:
             try:
                 result = response.generations[0][0].text.strip()
-                return str(result[len(content):])
+                return str(result[len(prompt):])
             except:
                 result = response.strip()
                 return result
-
-    @trace
-    def _call(
-        self, prompt, max_new_tokens=100, pad_token_id=0, **kwargs
-    ) -> Any:
-        input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
-        output = self.client.generate(input_ids=input_ids, max_new_tokens=max_new_tokens, pad_token_id=pad_token_id, **kwargs)
-        prompt_len = input_ids.shape[-1]
-        result = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
-        return result
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -1097,24 +1091,19 @@ class LlamaGuard3Octo(_LlamaGuard3Common):
         result = ''.join(result).strip()
         return str(result)
 
-## MDJudge is based on mistral with the same response style as LlamaGuard
+## MDJudge has the same response style as LlamaGuard
 class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
+    options: ClassVar[dict] = {"max_new_tokens": 32}
 
-    @trace
-    def call_client(
-        self, text: str, **kwargs
-    ) -> Any:
-        max_new_tokens = kwargs.get('max_new_tokens', 32)
+    def make_prompt(self, content):
+        prompt = "User: go on...\nAgent: " + content
 
-        text = "User: go on...\nAgent: " + text
+        prompt = "[INST] " + self.template.format(prompt=prompt) + " [/INST]"
 
-        prompt = "[INST] " + self.template.format(prompt=text) + " [/INST]"
-        response = self._call(prompt, max_new_tokens=max_new_tokens)
-
-        return response
+        return content
 
 
 class MDJudgeLocalDomain(MDJudgeLocal):
