@@ -178,14 +178,14 @@ def exec_local(
             ):
                 details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
-                # add input details to  the result row
+                # add input details to the result row
                 for k, v in columns.items():
-                    if k not in details:
-                        details[k] = v
+                    if k not in details and v in input_df.columns:
+                        details[k] = input_df[v]
 
                 for k, v in init_vars.items():
-                    if k not in details:
-                        details[k] = v
+                    if k not in details and v in input_df.columns:
+                        details[k] = input_df[v]
 
                 results.append(details)
 
@@ -240,10 +240,14 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
     if 'moderate' in cfg.experiments.keys():
-        shuffle(cfg.experiments.moderate.models)
-        for model in cfg.experiments.moderate.models:
-            cfg.experiments.moderate.init['model'] = str(model)
+        if cfg.experiment.moderate.init.get('model') and cfg.experiment.moderate.init.model != 'to_be_replaced':
+            # just run one model as specified
             df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+        else:
+            shuffle(cfg.experiments.moderate.models)
+            for model in cfg.experiments.moderate.models:
+                cfg.experiments.moderate.init['model'] = str(model)
+                df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
     elif 'judger' in cfg.experiments.keys():
         connections = bm._connections_azure
         cfg.experiments.judger.init['connections'] = connections

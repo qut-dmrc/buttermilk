@@ -1,6 +1,6 @@
 moderate:
   name: ots
-  num_runs: 8
+  num_runs: 16
   init:
     model: to_be_replaced
   models:
