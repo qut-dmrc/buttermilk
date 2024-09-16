@@ -803,17 +803,6 @@ class LlamaGuardTox(ToxicityModel):
     client: Any = None
     tokenizer: Any = None
     model: str
-    device: Union[str, torch.device] = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
-        description="Device type (CPU or CUDA)",
-    )
-    options: dict = Field(default_factory=lambda: dict(max_new_tokens=128, pad_token_id=0))
-
-    def init_client(self):
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
-        return self.client
 
     def make_prompt(self, content):
         # Load the message info into the output
@@ -825,26 +814,6 @@ class LlamaGuardTox(ToxicityModel):
         )
 
         return content
-
-    @trace
-    def call_client(
-        self, content: str, **kwargs
-    ) -> Any:
-        prompt = self.make_prompt(content)
-        input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
-        output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
-        prompt_len = input_ids.shape[-1]
-        response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
-        try:
-            result = response[0][0]['generated_text'].strip()
-            return str(result[len(prompt):])
-        except:
-            try:
-                result = response.generations[0][0].text.strip()
-                return str(result[len(prompt):])
-            except:
-                result = response.strip()
-                return result
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -914,6 +883,39 @@ class LlamaGuardTox(ToxicityModel):
 
         return outcome
 
+class LlamaGuardToxLocal(LlamaGuardTox):
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA)",
+    )
+    options: dict = Field(default_factory=lambda: dict(max_new_tokens=128, pad_token_id=0))
+
+    def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
+        return self.client
+
+    @trace
+    def call_client(
+        self, content: str, **kwargs
+    ) -> Any:
+        prompt = self.make_prompt(content)
+        input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
+        output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
+        prompt_len = input_ids.shape[-1]
+        response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
+        try:
+            result = response[0][0]['generated_text'].strip()
+            return str(result[len(prompt):])
+        except:
+            try:
+                result = response.generations[0][0].text.strip()
+                return str(result[len(prompt):])
+            except:
+                result = response.strip()
+                return result
+
 class LlamaGuard1Together(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories1
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD1))
@@ -975,7 +977,7 @@ class LlamaGuard2Together(LlamaGuardTox):
         return Together(model=self.model, **self.options)
 
 
-class LlamaGuard2Local(LlamaGuardTox):
+class LlamaGuard2Local(LlamaGuardToxLocal):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
     standard: str = "llamaguard2"
@@ -1003,6 +1005,23 @@ class _LlamaGuard3Common(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
+    options: ClassVar[dict] = {}
+
+    def make_prompt(self, content):
+        agent_type = "Agent"
+        content = f"{agent_type}: {content}"
+        content = (
+            "<|begin_of_text|><|start_header_id|>user<|end_header_id|> " +
+            self.template.format(prompt=content, agent_type=agent_type) +
+            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>")
+
+        return content
+
+class LlamaGuard3Local(LlamaGuardToxLocal):
+    model: str = "meta-llama/Llama-Guard-3-8B"
+    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
+    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
+    standard: str = "llamaguard3"
     process_chain: str = "local transformers"
     options: ClassVar[dict] = {}
 
@@ -1016,10 +1035,8 @@ class _LlamaGuard3Common(LlamaGuardTox):
 
         return content
 
-class LlamaGuard3Local(_LlamaGuard3Common):
-    model: str = "meta-llama/Llama-Guard-3-8B"
 
-class LlamaGuard3LocalInt8(_LlamaGuard3Common):
+class LlamaGuard3LocalInt8(LlamaGuard3Local):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
@@ -1031,23 +1048,6 @@ class LlamaGuard3LocalInt8(_LlamaGuard3Common):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
         return self.client
-class LlamaGuard3HF(_LlamaGuard3Common):
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
-    model: str = "meta-llama/Llama-Guard-3-8B"
-    process_chain: str = "local transformers"
-
-    def init_client(self):
-        return HFInferenceClient(hf_model_path=self.model)
-
-class LlamaGuard3HFInt8(_LlamaGuard3Common):
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
-    model: str = "meta-llama/Llama-Guard-3-8B-INT8"
-    process_chain: str = "huggingface API"
-    options: ClassVar[dict] = {}
-
-
 class LlamaGuard3Together(_LlamaGuard3Common):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))

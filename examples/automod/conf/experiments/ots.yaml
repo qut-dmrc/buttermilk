@@ -15,9 +15,6 @@ moderate:
   - NemoOutputComplexLlama31_70b
   - Comprehend
   - Perspective
-  - HONEST
-  - LFTW
-  - REGARD
   - AzureContentSafety
   - OpenAIModerator
   - LlamaGuard1Replicate

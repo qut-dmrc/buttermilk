@@ -24,8 +24,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ots_gpu",
-                "experiments.moderate.models=['Aegis']",
+                "+experiments=ots",
                 "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",
@@ -63,7 +62,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ots_gpu",
+                "+experiments=ots",
                 "+data=drag_noalt",
             ],
             "envFile": "${workspaceFolder}/.env",

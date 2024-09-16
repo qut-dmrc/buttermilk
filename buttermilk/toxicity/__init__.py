@@ -16,8 +16,6 @@ from .toxicity import (Comprehend,
     LlamaGuard2Replicate,
     LlamaGuard2Together,
     LlamaGuard3Together,
-    LlamaGuard3HF,
-    LlamaGuard3HFInt8,
     LlamaGuard3Octo,
     GPTJT,
     LlamaGuard2HF,
@@ -46,8 +44,6 @@ TOXCLIENTS = [
 ]
 
 TOXCLIENTS_NOT_AVAILABLE = [
-    LlamaGuard3HF,
-    LlamaGuard3HFInt8,
     LlamaGuard2HF,
 ]
 BAD_MODELS = []

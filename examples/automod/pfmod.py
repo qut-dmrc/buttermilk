@@ -289,7 +289,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
                                 run_name = run_name,
                                 column_mapping=dict(data.columns), run_cfg=run_cfg )
 
-        # Set up  empty dataframe with batch details ready  to go
+        # Set up  empty dataframe with batch details ready to go
         df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
         df = pd.concat([df, flow_outputs], axis='columns')
 

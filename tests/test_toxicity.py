@@ -37,8 +37,6 @@ LLAMAGUARD_MODELS = [
     LlamaGuard2Replicate,
     LlamaGuard2Together,
     LlamaGuard2HF,
-    LlamaGuard3HF,
-    LlamaGuard3HFInt8,
     LlamaGuard3Together,
 ]
 
