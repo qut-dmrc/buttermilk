@@ -162,6 +162,10 @@ class ToxicityModel(BaseModel):
         output.result = response
         return output
 
+    @trace
+    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> EvalRecord:
+        return self.call_client(content=content, record_id=record_id, **kwargs)
+
     # @retry(
     #     retry=retry_if_exception_type(
     #         exception_types=(
@@ -177,7 +181,9 @@ class ToxicityModel(BaseModel):
     #         stop=stop_after_attempt(5),
     # )
     @trace
-    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> EvalRecord:
+    def call_client(
+        self, content: str, *, record_id: Optional[str] = None, **kwargs
+    ) -> EvalRecord:
         if (content := kwargs.get('text','').strip()) == '':
             response = EvalRecord(
                 error="No input provided."
@@ -236,7 +242,7 @@ class ToxicityModel(BaseModel):
     def moderate(
         self, text: str, record_id: str, **kwargs
     ) -> EvalRecord:
-        response = self.call_client(text, **kwargs)
+        response = self.call_client(content=text, **kwargs)
         try:
             output = self.interpret(response)
         except ValueError as e:
@@ -247,12 +253,6 @@ class ToxicityModel(BaseModel):
         output = self.add_output_info(output, record_id=record_id)
         return output
 
-    @trace
-    @abc.abstractmethod
-    def call_client(
-        self, text: str, *args, **kwargs
-    ) -> Any:
-        raise NotImplementedError()
 
     @trace
     @abc.abstractmethod
@@ -1211,9 +1211,6 @@ class ToxicChat(ToxicityModel):
             "https://api-inference.huggingface.co/models/lmsys/toxicchat-t5-large-v1.0"
         )
         return HuggingFaceEndpoint(endpoint_url=API_URL)
-
-    def call_client(self, text, **kwargs):
-        raise NotImplementedError
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)

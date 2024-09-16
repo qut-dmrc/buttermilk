@@ -69,6 +69,9 @@ def toxic_record() -> InputRecord:
 
     return rec
 
+@pytest.fixture(scope="session", params=TOXCLIENTS)
+def toxmodel(request):
+    return request.param()
 
 @pytest.fixture(scope="session")
 def news_article():
@@ -307,3 +310,39 @@ class TestIndicators:
         record = indicator.to_record()
         assert record
         pass
+
+
+def test_moderate_success(mocker, toxmodel):
+    # Mock the response from call_client
+    mock_response = {'some': 'response'}
+    # Mock the method in the superclass
+    mock_super_method = mocker.patch('buttermilk.toxicity.ToxicityModel.call_client', return_value=mock_response)
+
+    # Mock the output from interpret
+    mock_output = EvalRecord()
+    mock_interpret = mocker.patch.object('buttermilk.toxicity.ToxicityModel.interpret', return_value=mock_output)
+
+    # Call the method
+    result = toxmodel.moderate('some text', 'record_id')
+
+    # Assertions
+    mock_super_method.assert_called_once_with('some text')
+    mock_interpret.assert_called_once_with(mock_response)
+    assert result == mock_output
+
+def test_moderate_interpret_error(mocker, toxmodel):
+    # Mock the response from call_client
+    mock_response = {'some': 'response'}
+    mock_call_client = mocker.patch.object(toxmodel, 'call_client', return_value=mock_response)
+
+    # Mock interpret to raise a ValueError
+    mock_interpret = mocker.patch.object(toxmodel, 'interpret', side_effect=ValueError('Interpretation error'))
+
+    # Call the method
+    result = toxmodel.moderate('some text', 'record_id')
+
+    # Assertions
+    mock_call_client.assert_called_once_with('some text')
+    mock_interpret.assert_called_once_with(mock_response)
+    assert isinstance(result, EvalRecord)
+    assert 'Unable to interpret response' in result.error
