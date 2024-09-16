@@ -34,10 +34,10 @@ class Nemo(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
 
-        input_vars = dict(content=text)
+        input_vars = dict(content=content)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
         output = self.client.invoke(input=input_vars, **kwargs)

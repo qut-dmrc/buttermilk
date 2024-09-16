@@ -25,11 +25,11 @@ class GoogleModerate(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> language_v2.ModerateTextResponse:
 
         document = language_v2.Document(
-            content=text,
+            content=content,
             type_=language_v2.Document.Type.PLAIN_TEXT,
         )
         return self.client.moderate_text(document=document)

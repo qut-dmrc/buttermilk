@@ -27,7 +27,7 @@ class Wildguard(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
 
         prompt = """<s><|user|>
@@ -44,7 +44,7 @@ class Wildguard(ToxicityModel):
         Answers: [/INST]
         <|assistant|>
         """
-        prompt = prompt.format(content=text)
+        prompt = prompt.format(content=content)
         response = self.client(prompt)
         return str(response[0]['generated_text']).strip()
 

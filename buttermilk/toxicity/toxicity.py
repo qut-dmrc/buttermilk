@@ -303,7 +303,7 @@ class Perspective(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
         if not (attributes := kwargs.get('attributes')):
             # get all
@@ -313,7 +313,7 @@ class Perspective(ToxicityModel):
             )
 
         analyze_request = {
-            "comment": {"text": text},
+            "comment": {"text": content},
             "requestedAttributes": {attr: {} for attr in attributes},
             "doNotStore": True,
         }
@@ -342,10 +342,10 @@ class Comprehend(ToxicityModel):
         )
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
         return self.client.detect_toxic_content(
-            LanguageCode="en", TextSegments=[{"Text": text}]
+            LanguageCode="en", TextSegments=[{"Text": content}]
         )
 
     @trace
@@ -405,10 +405,10 @@ class AzureContentSafety(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
         request = AnalyzeTextOptions(
-            text=text, output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS
+            text=content, output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS
         )
         return self.client.analyze_text(request)
 
@@ -484,9 +484,9 @@ class AzureModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        text_stream = StringIO(text)
+        text_stream = StringIO(content)
         response = self.client.text_moderation.screen_text(
             language="eng",
             text_content_type="text/plain",
@@ -549,9 +549,9 @@ class REGARD(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        result = self.client.compute(data=[text])
+        result = self.client.compute(data=[content])
         return result
 
     @trace
@@ -583,9 +583,9 @@ class HONEST(ToxicityModel):
         return evaluate.load("honest", "en")
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        completions = [text.split(" ")]
+        completions = [content.split(" ")]
         result = self.client.compute(predictions=completions)
         return result
 
@@ -614,9 +614,9 @@ class LFTW(ToxicityModel):
         return self.client
 
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        return self.client(text)
+        return self.client(content)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -662,9 +662,9 @@ class GPTJT(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        prompt = self.template.format(content=text)
+        prompt = self.template.format(content=content)
 
         response = self.client(prompt)
 
@@ -712,9 +712,9 @@ class OpenAIModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        return self.client.create(input=text)
+        return self.client.create(input=content)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -828,9 +828,9 @@ class LlamaGuardTox(ToxicityModel):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        prompt = self.make_prompt(text)
+        prompt = self.make_prompt(content)
         input_ids = self.tokenizer(prompt, return_tensors="pt").to(self.device)['input_ids']
         output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
         prompt_len = input_ids.shape[-1]
@@ -1076,9 +1076,9 @@ class LlamaGuard3Octo(_LlamaGuard3Common):
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
-        content = self.make_prompt(text)
+        content = self.make_prompt(content)
         response = self.client.text_gen.create_completion_stream(
             prompt=content,
             max_tokens=512,
@@ -1156,10 +1156,10 @@ correctly."""
 
     @trace
     def call_client(
-        self, text: str, **kwargs
+        self, content: str, **kwargs
     ) -> Any:
 
-        prompt = self.make_prompt(text)
+        prompt = self.make_prompt(content)
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
         with torch.no_grad():

@@ -178,7 +178,7 @@ class TestClients:
     # These tests test the toxicity models directly
     def test_perspective(self, toxic_record: InputRecord):
         client = Perspective()
-        result = client.call_client(toxic_record.text)
+        result = client.call_client(content=toxic_record.text)
         assert result is not None
 
         assert all(
