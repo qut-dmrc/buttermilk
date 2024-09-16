@@ -184,23 +184,7 @@ class ToxicityModel(BaseModel):
     def call_client(
         self, content: str, *, record_id: Optional[str] = None, **kwargs
     ) -> EvalRecord:
-        if (content := kwargs.get('text','').strip()) == '':
-            response = EvalRecord(
-                error="No input provided."
-                )
-        else:
-            try:
-                response = self.moderate(content=content, record_id=record_id, **kwargs)
-                if not isinstance(response, EvalRecord):
-                    response = EvalRecord( **response)
-
-            except Exception as e:
-                response = EvalRecord(
-                    error=f'{e}',
-                    metadata=extract_error_info(e=e)
-                )
-
-        return response
+        raise NotImplementedError
 
     def make_prompt(self, content):
         raise NotImplementedError
@@ -240,7 +224,7 @@ class ToxicityModel(BaseModel):
 
     @trace
     def moderate(
-        self, content: str, record_id: str, **kwargs
+        self, content: str, record_id: str=None, **kwargs
     ) -> EvalRecord:
         response = self.call_client(content=content, **kwargs)
         try:
@@ -814,6 +798,13 @@ class LlamaGuardTox(ToxicityModel):
         )
 
         return content
+
+    @trace
+    def call_client(
+        self, content: str, **kwargs
+    ) -> Any:
+        prompt = self.make_prompt(content)
+        return self.client(prompt, **kwargs)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:

@@ -274,14 +274,14 @@ class TestToxicityModels:
     @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS)
     def test_mod(self, tox_model_cls, toxic_record: InputRecord):
         tox_model = tox_model_cls()
-        result = tox_model.moderate(content=toxic_record.text)
-        assert isinstance(result, dict)
-        assert not result.get('error')
-        assert result['standard'] == tox_model.standard
-        assert result['process'] == tox_model.process_chain
-        assert result["model"] == tox_model.model
-        assert all([s["measure"] for s in result["scores"]])
-        assert result[COL_PREDICTION] is not None
+        result = tox_model.moderate(content=toxic_record.text, record_id='test_record')
+        assert isinstance(result, EvalRecord)
+        assert not result.error
+        assert result.standard == tox_model.standard
+        assert result.process == tox_model.process_chain
+        assert result.model == tox_model.model
+        assert all([s.measure for s in result.scores])
+        assert result.predicted is not None
 
 
         # EvalSchema = read_yaml("datatools/chains/schemas/indicator.json")
@@ -321,7 +321,7 @@ def test_moderate_success(mocker, toxmodel):
     mock_interpret = mocker.patch.object('buttermilk.toxicity.ToxicityModel.interpret', return_value=mock_output)
 
     # Call the method
-    result = toxmodel.moderate(content='some text', 'record_id')
+    result = toxmodel.moderate(content='some text', record_id='record_id')
 
     # Assertions
     mock_super_method.assert_called_once_with('some text')
@@ -337,7 +337,7 @@ def test_moderate_interpret_error(mocker, toxmodel):
     mock_interpret = mocker.patch.object(toxmodel, 'interpret', side_effect=ValueError('Interpretation error'))
 
     # Call the method
-    result = toxmodel.moderate(content='some text', 'record_id')
+    result = toxmodel.moderate(content='some text', record_id='record_id')
 
     # Assertions
     mock_call_client.assert_called_once_with('some text')
