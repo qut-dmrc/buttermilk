@@ -240,7 +240,7 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
     if 'moderate' in cfg.experiments.keys():
-        if cfg.experiment.moderate.init.get('model') and cfg.experiment.moderate.init.model != 'to_be_replaced':
+        if cfg.experiments.moderate.init.get('model') and cfg.experiments.moderate.init.model != 'to_be_replaced':
             # just run one model as specified
             df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
         else:
