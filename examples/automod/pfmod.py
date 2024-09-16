@@ -242,16 +242,16 @@ def main(cfg: DictConfig) -> None:
     if 'moderate' in cfg.experiments.keys():
         if cfg.experiments.moderate.init.get('model') and cfg.experiments.moderate.init.model != 'to_be_replaced':
             # just run one model as specified
-            df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+            run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
         else:
             shuffle(cfg.experiments.moderate.models)
             for model in cfg.experiments.moderate.models:
                 cfg.experiments.moderate.init['model'] = str(model)
-                df = run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
     elif 'judger' in cfg.experiments.keys():
         connections = bm._connections_azure
         cfg.experiments.judger.init['connections'] = connections
-        df = run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
+        run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
     pass
 
 def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
@@ -330,7 +330,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
         logger.info(
             dict(message=f"Completed batch: {batch_id} run {run_name} completed locally, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", **batch_id, results=uri)
         )
-    return df
+
 
 
 
