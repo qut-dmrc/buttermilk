@@ -276,7 +276,7 @@ class TestToxicityModels:
     @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS)
     def test_mod(self, tox_model_cls, toxic_record: InputRecord):
         tox_model = tox_model_cls()
-        result = tox_model.moderate(toxic_record.text)
+        result = tox_model.moderate(content=toxic_record.text)
         assert isinstance(result, dict)
         assert not result.get('error')
         assert result['standard'] == tox_model.standard
@@ -296,7 +296,7 @@ class TestToxicityModels:
     def test_local_models(self, tox_model_cls, toxic_record):
         local_model = tox_model_cls()
         assert local_model
-        result = local_model.moderate(toxic_record.text)
+        result = local_model.moderate(content=toxic_record.text)
         assert isinstance(result, EvalRecord)
         assert not result.get('error')
         assert result['standard'] == local_model.standard
@@ -323,7 +323,7 @@ def test_moderate_success(mocker, toxmodel):
     mock_interpret = mocker.patch.object('buttermilk.toxicity.ToxicityModel.interpret', return_value=mock_output)
 
     # Call the method
-    result = toxmodel.moderate('some text', 'record_id')
+    result = toxmodel.moderate(content='some text', 'record_id')
 
     # Assertions
     mock_super_method.assert_called_once_with('some text')
@@ -339,7 +339,7 @@ def test_moderate_interpret_error(mocker, toxmodel):
     mock_interpret = mocker.patch.object(toxmodel, 'interpret', side_effect=ValueError('Interpretation error'))
 
     # Call the method
-    result = toxmodel.moderate('some text', 'record_id')
+    result = toxmodel.moderate(content='some text', 'record_id')
 
     # Assertions
     mock_call_client.assert_called_once_with('some text')

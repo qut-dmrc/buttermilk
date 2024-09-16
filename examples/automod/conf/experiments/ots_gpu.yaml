@@ -4,14 +4,15 @@ moderate:
   init:
     model: to_be_replaced
   models:
-  - Aegis
-  - ShieldGemma
-  - LlamaGuard3Local
-  - MDJudgeLocalDomain
-  - MDJudgeLocalTask
-  - LlamaGuard2Local
-  - LlamaGuard3LocalInt8
-  - Wildguard
+  # - Aegis
+  # - ShieldGemma
+  # - LlamaGuard3Local
+  # - MDJudgeLocalDomain
+  # - MDJudgeLocalTask
+  # - LlamaGuard2Local
+  # - LlamaGuard3LocalInt8
+  # - Wildguard
+  - ShieldGemma2b
   - HONEST
   - LFTW
   - REGARD

@@ -148,7 +148,7 @@ class ToxicityModel(BaseModel):
         return self.client
 
     def run(self, job: Job) -> Job:
-        response = self.moderate(job.record.text,record_id=job.record.record_id)
+        response = self.moderate(content=job.record.text,record_id=job.record.record_id)
         if not isinstance(response, EvalRecord):
             raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
 
@@ -190,7 +190,7 @@ class ToxicityModel(BaseModel):
                 )
         else:
             try:
-                response = self.moderate(content, record_id=record_id, **kwargs)
+                response = self.moderate(content=content, record_id=record_id, **kwargs)
                 if not isinstance(response, EvalRecord):
                     response = EvalRecord( **response)
 
@@ -219,7 +219,7 @@ class ToxicityModel(BaseModel):
             for _, row in dataset.iterrows():
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(row['text'],record_id=record_id, **kwargs)
+                output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
                 output = output.model_dump()
                 output = scrub_serializable(output)
                 yield output
@@ -227,7 +227,7 @@ class ToxicityModel(BaseModel):
             for row in dataset:
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(row['text'],record_id=record_id, **kwargs)
+                output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
                 output = output.model_dump()
                 output = scrub_serializable(output)
                 yield output
@@ -236,13 +236,13 @@ class ToxicityModel(BaseModel):
     async def moderate_async(
             self, text: str, record_id:str, **kwargs
         ) -> EvalRecord:
-            return self.moderate(text, record_id=record_id, **kwargs)
+            return self.moderate(content=text, record_id=record_id, **kwargs)
 
     @trace
     def moderate(
-        self, text: str, record_id: str, **kwargs
+        self, content: str, record_id: str, **kwargs
     ) -> EvalRecord:
-        response = self.call_client(content=text, **kwargs)
+        response = self.call_client(content=content, **kwargs)
         try:
             output = self.interpret(response)
         except ValueError as e:

@@ -5,3 +5,9 @@ columns:
   content: alt_text
   text: text
   groundtruth: expected
+
+
+  # record_id: data.id
+  # content: data.alt_text
+  # text: data.text
+  # groundtruth: data.expected
