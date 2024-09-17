@@ -17,9 +17,9 @@ moderate:
   # - Perspective
   - AzureContentSafety
   - OpenAIModerator
-  - LlamaGuard1Replicate
+  # - LlamaGuard1Replicate
   - LlamaGuard1Together
-  - LlamaGuard2Replicate
+  # - LlamaGuard2Replicate
   - LlamaGuard2Together
   - LlamaGuard3Together
   - LlamaGuard3Octo

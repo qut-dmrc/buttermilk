@@ -125,7 +125,10 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not data.empty:
         try:
             gcs = storage.Client()
-            json_data = data.to_json(orient="records", lines=True).encode()
+            rows = data.to_json(orient="records")
+            rows = scrub_serializable(rows)
+            # Try to upload as newline delimited json
+            json_data = "\n".join([json.dumps(row) for row in rows]).encode('utf-8')
             blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 
             # Try to upload as binary from a file like object
