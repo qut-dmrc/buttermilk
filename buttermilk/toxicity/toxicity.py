@@ -118,6 +118,7 @@ class LlamaGuardTemplate(StrEnum):
     LLAMAGUARD3 = "llamaguard3"
     MDJUDGEDOMAIN = "mdjudgedomain"
     MDJUDGETASK = "mdjudgetask"
+    MDJUDGE2 = "mdjudge2"
 
 def llamaguard_template(template: LlamaGuardTemplate):
     tpl = read_yaml(Path(__file__).parent / "templates/llamaguard.yaml")
@@ -1074,6 +1075,14 @@ class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
+    tokenizer: Any = None
+    template: str
+
+    def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
+        return self.client
 
     def make_prompt(self, content):
         prompt = "User: go on...\nAgent: " + content
@@ -1093,6 +1102,42 @@ class MDJudgeLocalTask(MDJudgeLocal):
     standard: Literal["MDJUDGE.TASK_POLICY"] = "MDJUDGE.TASK_POLICY"
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGETASK))
     categories: EnumMeta = MDJudgeTaskCategories
+
+class MDJudge2(MDJudgeLocal):
+    process_chain: str = "local transformers"
+    model: str = "OpenSafetyLab/MD-Judge-v0_2-internlm2_7b"
+    client: Any = None
+    tokenizer: Any = None
+    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGE2))
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
+    def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, trust_remote_code=True).to("cuda")
+        return self.client
+
+
+    def make_prompt(self, content):
+        input_conversation = [
+        {"role": "user", "content": self.template.strip().format(prompt=content)}
+        ]
+
+        return input_conversation
+
+    @trace
+    def call_client(
+        self, content: str, **kwargs
+    ) -> Any:
+        prompt = self.make_prompt(content)
+        prompt = self.tokenizer.apply_chat_template(prompt, tokenize=False)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=True).to("cuda")
+
+        outputs = self.client.generate(**inputs, max_new_tokens=256)
+        outputs = outputs[0].cpu().tolist()[len(inputs["input_ids"][0]) :]
+        resp = self.tokenizer.decode(outputs, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        resp = resp.split("<|im_end|>")[0]
+        return resp.strip()
 
 class ShieldGemma(ToxicityModel):
     model: str = "google/shieldgemma-27b"
