@@ -986,7 +986,7 @@ class LlamaGuard2Together(LlamaGuardTox):
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
     client: Together = None
-    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0, top_p=0.95)
 
     def init_client(self):
         return Together(model=self.model, **self.options)
@@ -1051,7 +1051,7 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
-    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95, max_new_tokens=128)
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
@@ -1062,12 +1062,12 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
 class LlamaGuard3Together(_LlamaGuard3Common):
     model: str = "meta-llama/Meta-Llama-Guard-3-8B"
     process_chain: str = "Together API"
-    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0)
 
     def init_client(self):
         return Together(model=self.model, **self.options)
 
-class LlamaGuard3Octo(_LlamaGuard3Common, _Octo):
+class LlamaGuard3Octo(_Octo, _LlamaGuard3Common):
     model: str = "llama-guard-3-8b"
     process_chain: str = "Octo API"
 
