@@ -716,7 +716,7 @@ class GPTJT(ToxicityModel):
 
 
 class OpenAIModerator(ToxicityModel):
-    model: str = "openaimod"
+    model: str = "text-moderation-latest"
     process_chain: str = "api"
     standard: str = "openaimod"
     client: Any = None
@@ -729,7 +729,7 @@ class OpenAIModerator(ToxicityModel):
     def call_client(
         self, content: str, **kwargs
     ) -> Any:
-        return self.client.create(input=content)
+        return self.client.create(input=content, model=self.model)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -1170,7 +1170,8 @@ correctly."""
 
 class ShieldGemma2b(ShieldGemma):
     model: str = "google/shieldgemma-2b"
-
+class ShieldGemma9b(ShieldGemma):
+    model: str = "google/shieldgemma-9b"
 
 class ToxicChat(ToxicityModel):
     model: str = "toxicchat"

@@ -24,7 +24,7 @@ from .toxicity import (Comprehend,
     MDJudgeLocalTask,
     LlamaGuard2Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma,ShieldGemma2b,
+    ShieldGemma,ShieldGemma2b,ShieldGemma9b,
     ToxicityModel)
 
 TOXCLIENTS = [
@@ -40,7 +40,7 @@ TOXCLIENTS = [
     LlamaGuard3Together,
     LlamaGuard3Octo,
     GoogleModerate,
-    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,NemoInputSimpleMistralOcto,NemoInputComplexMistralOcto,NemoOutputSimpleMistralOcto,NemoOutputComplexMistralOcto
+    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,NemoInputSimpleMistralOcto,NemoInputComplexMistralOcto,NemoOutputSimpleMistralOcto,NemoOutputComplexMistralOcto,
 ]
 
 TOXCLIENTS_NOT_AVAILABLE = [
@@ -55,7 +55,7 @@ TOXCLIENTS_LOCAL = [
     LlamaGuard2Local,
     LlamaGuard3Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma,ShieldGemma2b,
+    ShieldGemma,ShieldGemma2b,ShieldGemma9b,
     MDJudgeLocalDomain,
     MDJudgeLocalTask,
     GPTJT,
