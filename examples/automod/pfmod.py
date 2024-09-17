@@ -162,9 +162,6 @@ def exec_local(
     input_df = dataset.rename(columns=rename_dict)
     input_df = pd.concat(itertools.repeat(input_df, num_runs))
 
-
-    # for out in pipe(KeyDataset(dataset, "audio")):
-    # print(out)
     runnable = flow(**init_vars)
     try:
         if isinstance(runnable, ToxicityModel):
@@ -188,7 +185,6 @@ def exec_local(
                 desc=run_name,
                 bar_format="{desc:30}: {bar:20} | {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
             ):
-
                 # Run the flow for this line of data
                 input_vars = {k: v for k, v in  row.items() if k in columns.keys()}
                 details = runnable(**input_vars)
@@ -237,7 +233,8 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
     if 'inputs' not in df.columns and inputs.shape[0]==df.shape[0] and inputs.shape[1]>0:
         df = df.assign(inputs=inputs.to_dict(orient='records'))
     leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
-    destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
+    destination = upload_rows(rows=df, schema=schema, dataset=save_cfg.dataset)
+    logger.info(f'Saved {results.shape[0]} rows to {destination}.')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
