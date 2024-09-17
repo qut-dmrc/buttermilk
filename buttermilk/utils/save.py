@@ -123,7 +123,21 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if any(data.columns.duplicated()):
         data = reset_index_and_dedup_columns(data)
     if not data.empty:
-        data.to_json(uri, orient="records", lines=True)
+        try:
+            gcs = storage.Client()
+            json_data = data.to_json(orient="records", lines=True).encode()
+            blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
+
+            # Try to upload as binary from a file like object
+            with io.BytesIO(json_data) as b:
+                blob.upload_from_file(file_obj=b)
+                return uri
+        except Exception as e:
+            logger.warning(
+                f"Error saving data to {uri} in upload_dataframe_json using BytesIO: {e} {e.args=}"
+            )
+            data.to_json(uri, orient="records", lines=True)
+            return uri
 
     return uri
 
