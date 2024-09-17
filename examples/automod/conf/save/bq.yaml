@@ -1,0 +1,3 @@
+destination: bq
+dataset: 'dmrc-platforms.toxicity.indicator'
+schema: buttermilk/schemas/moderate.json

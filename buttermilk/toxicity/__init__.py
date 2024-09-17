@@ -64,8 +64,8 @@ TOXCLIENTS_LOCAL = [
 ]
 
 # Let's provide an interface for all the various toxicity models
-def get_tox_model(model: str, **kwargs) -> ToxicityModel:
-    return globals()[model]
+def get_tox_flow(flow: str, **kwargs) -> ToxicityModel:
+    return globals()[flow]
 
-def load_tox_model(model: str, **kwargs) -> ToxicityModel:
-    return globals()[model](**kwargs)
+def load_tox_flow(flow: str, **kwargs) -> ToxicityModel:
+    return globals()[flow](**kwargs)

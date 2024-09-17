@@ -945,7 +945,7 @@ class LlamaGuard1Together(LlamaGuardTox):
     standard: str = "llamaguard1"
     model: str = "Meta-Llama/Llama-Guard-7b"
     process_chain: str = "together"
-    options: ClassVar[dict] = dict(temperature=1.0,pad_token_id=0, max_new_tokens=128, top_k=1, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
     client: Together = None
 
     def init_client(self):
@@ -982,6 +982,7 @@ class LlamaGuard2Together(LlamaGuardTox):
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
     client: Together = None
+    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
 
     def init_client(self):
         return Together(model=self.model, **self.options)
@@ -1054,18 +1055,16 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
         self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
         return self.client
 class LlamaGuard3Together(_LlamaGuard3Common):
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     model: str = "meta-llama/Meta-Llama-Guard-3-8B"
     process_chain: str = "Together API"
+    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
 
     def init_client(self):
         return Together(model=self.model, **self.options)
 
 class LlamaGuard3Octo(_LlamaGuard3Common, _Octo):
     model: str = "llama-guard-3-8b"
-    categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
+    process_chain: str = "Octo API"
 
 ## MDJudge has the same response style as LlamaGuard
 class MDJudgeLocal(LlamaGuardTox):

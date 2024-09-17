@@ -51,7 +51,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "batch automod: ots",
+            "name": "debug automod: ots",
             "type": "debugpy",
             "request": "launch",
             "module": "examples.automod.pfmod",
@@ -64,6 +64,8 @@
             "args": [
                 "+experiments=ots",
                 "+data=drag_noalt",
+                "+save=bq",
+                "experiments.moderate.init.flow=GoogleModerate"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
