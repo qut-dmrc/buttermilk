@@ -209,10 +209,12 @@ def exec_local(
         results = pd.DataFrame(results)
 
         # add input details to the result dataset
-        for k, v in list(columns.items()) + list(init_vars.items()):
-            if k not in results.columns and v in input_df.columns:
-                results[k] = input_df[v]
-
+        for k in list(columns.keys()):
+            if k not in results.columns and k in input_df.columns:
+                results[k] = input_df[k]
+        for k, v in list(init_vars.items()):
+            if k not in results.columns:
+                results[k] = v
         bm.save(results, basename='partial_flow')
         del flow
         torch.cuda.empty_cache()
@@ -227,7 +229,7 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
 
     run_info_cols = ["step", "dataset", "platform", "flow", "model", "process", "standard"]
     run_info = results[[c for c in run_info_cols if c in results.columns]]
-    inputs = results[[c for c in ["content", "text"] if c in results.columns ]]
+    inputs = results[[c for c in ["content","groundtruth","text","record_id"] if c in results.columns ]]
 
     df = results[schema_cols]
     if 'run_info' not in df.columns:
