@@ -296,12 +296,12 @@ class TestToxicityModels:
         assert local_model
         result = local_model.moderate(content=toxic_record.text)
         assert isinstance(result, EvalRecord)
-        assert not result.get('error')
-        assert result['standard'] == local_model.standard
-        assert result['process'] == local_model.process_chain
-        assert result["model"] == local_model.model
-        assert all([s["measure"] for s in result["scores"]])
-        assert result[COL_PREDICTION] is not None
+        assert not result.error
+        assert result.standard == tox_model.standard
+        assert result.process == tox_model.process_chain
+        assert result.model == tox_model.model
+        assert all([s.measure for s in result.scores])
+        assert result.predicted is not None
 
 class TestIndicators:
     def test_bq_record(self, indicator):
