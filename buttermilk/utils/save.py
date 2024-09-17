@@ -116,7 +116,6 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
 
-
     # use pandas to upload to GCS
     if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
         uri = uri + ".jsonl"
@@ -192,21 +191,14 @@ def upload_binary(*, save_dir=None, data=None, uri=None, filename=None, extensio
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 
-    try:
-        blob.upload_from_string(data)
+    if isinstance(data, io.BufferedIOBase):
+        blob.upload_from_file(file_obj=data)
         return uri
-    except (Exception, TypeError) as e:
-        logger.warning(
-            f"Error uploading file {uri} as string: {e}. Trying with BytesIO instead."
-        )
-        if isinstance(data, io.BufferedIOBase):
-            blob.upload_from_file(file_obj=data)
+    else:
+        # Try to upload as binary from a file like object
+        with io.BytesIO(data) as b:
+            blob.upload_from_file(file_obj=b)
             return uri
-        else:
-            # Try to upload as binary from a file like object
-            with io.BytesIO(data) as b:
-                blob.upload_from_file(file_obj=b)
-                return uri
 
 def dump_to_disk(data, **kwargs):
     with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".jsonl") as out:
