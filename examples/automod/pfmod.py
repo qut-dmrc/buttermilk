@@ -178,15 +178,6 @@ def exec_local(
             ):
                 details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
-                # add input details to the result row
-                for k, v in columns.items():
-                    if k not in details and v in input_df.columns:
-                        details[k] = input_df[v]
-
-                for k, v in init_vars.items():
-                    if k not in details and v in input_df.columns:
-                        details[k] = input_df[v]
-
                 results.append(details)
 
         else:
@@ -216,6 +207,12 @@ def exec_local(
                 results.append(details)
     finally:
         results = pd.DataFrame(results)
+
+        # add input details to the result dataset
+        for k, v in list(columns.items()) + list(init_vars.items()):
+            if k not in results.columns and v in input_df.columns:
+                results[k] = input_df[v]
+
         bm.save(results, basename='partial_flow')
         del flow
         torch.cuda.empty_cache()
@@ -236,7 +233,7 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
     if 'run_info' not in df.columns:
         df = df.assign(run_info=run_info.to_dict(orient='records'))
     if 'inputs' not in df.columns:
-            df = df.assign(inputs=inputs.to_dict(orient='records'))
+        df = df.assign(inputs=inputs.to_dict(orient='records'))
     leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
     destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
 

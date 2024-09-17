@@ -65,7 +65,8 @@
                 "+experiments=ots",
                 "+data=drag_noalt",
                 "+save=bq",
-                "experiments.moderate.init.flow=GoogleModerate"
+                "experiments.moderate.init.flow=Perspective"
+                // "experiments.moderate.init.flow=GoogleModerate"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

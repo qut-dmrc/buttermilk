@@ -3,5 +3,4 @@ defaults:
 name: drag_noalt
 columns:
   content: text
-  text: text
-  
+

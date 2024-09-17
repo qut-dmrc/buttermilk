@@ -205,6 +205,7 @@ class ToxicityModel(BaseModel):
                 record_id = row.get('id',row.get('record_id',row.get('name')))
                 output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
                 output = output.model_dump()
+
                 output = scrub_serializable(output)
                 yield output
         else:
@@ -213,6 +214,7 @@ class ToxicityModel(BaseModel):
                 record_id = row.get('id',row.get('record_id',row.get('name')))
                 output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
                 output = output.model_dump()
+
                 output = scrub_serializable(output)
                 yield output
 

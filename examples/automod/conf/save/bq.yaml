@@ -1,3 +1,3 @@
 destination: bq
-dataset: 'dmrc-platforms.toxicity.indicator'
+dataset: 'dmrc-analysis.toxicity.indicator'
 schema: buttermilk/schemas/moderate.json

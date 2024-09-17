@@ -2,7 +2,7 @@ moderate:
   name: ots
   num_runs: 64
   init:
-    model: to_be_replaced
+    flow: to_be_replaced
   models:
   # - Aegis
   # - ShieldGemma

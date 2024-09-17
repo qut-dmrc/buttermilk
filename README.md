@@ -60,12 +60,12 @@ mkdir -p $INSTALL_DIR/miniconda3 && wget https://repo.anaconda.com/miniconda/Min
 
 # Change cache location (our GPU machine has limited space on /)
 echo -e "export XDG_CACHE_HOME=$INSTALL_DIR/cache\nexport POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a /home/$USER/.bashrc
-echo "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee /home/$USER/.condarc
+echo -e "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee /home/$USER/.condarc
 
 mkdir -p $INSTALL_DIR/src $INSTALL_DIR/cache && chown -R $USER $INSTALL_DIR/cache $INSTALL_DIR/miniconda3 $INSTALL_DIR/src
 
 # create environment
-conda create --name bm -y -c conda-forge -c pytorch -c nvidia python==3.11 poetry ipykernel google-crc32c pytorch torchvision torchaudio pytorch-cuda=12.4
+$INSTALL_DIR/miniconda3/bin/conda create --name bm -y -c conda-forge -c pytorch -c nvidia python==3.11 poetry ipykernel google-crc32c pytorch torchvision torchaudio pytorch-cuda=12.4
 ```
 
 At this point, log out and back in to activate the environment and check your install:
