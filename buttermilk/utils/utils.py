@@ -5,7 +5,7 @@ import pathlib
 import fsspec
 import requests
 import yaml
-import re
+import regex as re 
 import pandas as pd
 import numpy as np
 import pydantic

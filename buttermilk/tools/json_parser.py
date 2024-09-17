@@ -1,4 +1,3 @@
-import re
 from json import JSONDecodeError
 from typing import Any, List, Literal
 
@@ -8,7 +7,8 @@ from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.utils.json import parse_json_markdown
 from langchain_core.outputs import Generation
 from pydantic import BaseModel, Field
-import re
+
+import regex as re
 from json import JSONDecodeError
 
 from langchain_core.exceptions import OutputParserException

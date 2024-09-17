@@ -6,7 +6,7 @@ import datetime
 import gc
 from math import pi
 import os
-import re
+import regex as re
 import resource
 from multiprocessing import Process
 from pathlib import Path
@@ -29,7 +29,7 @@ from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
-from buttermilk.utils.utils import read_text
+from buttermilk.utils.utils import read_json, read_text
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -223,6 +223,22 @@ def exec_local(
 
     return results
 
+def save_to_bigquery(results: pd.DataFrame, save_cfg):
+    from buttermilk.utils.save import upload_rows
+    schema = read_json(save_cfg.schema)
+    schema_cols = [x['name'] for x in schema if x['name'] in results.columns]
+
+    run_info_cols = ["step", "dataset", "platform", "flow", "model", "process", "standard"]
+    run_info = results[[c for c in run_info_cols if c in results.columns]]
+    inputs = results[[c for c in ["content", "text"] if c in results.columns ]]
+
+    df = results[schema_cols]
+    if 'run_info' not in df.columns:
+        df = df.assign(run_info=run_info.to_dict(orient='records'))
+    if 'inputs' not in df.columns:
+            df = df.assign(inputs=inputs.to_dict(orient='records'))
+    leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
+    destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -240,29 +256,29 @@ def main(cfg: DictConfig) -> None:
     bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
     colour_cycle = cycle(bar_colours)
     if 'moderate' in cfg.experiments.keys():
-        if cfg.experiments.moderate.init.get('model') and cfg.experiments.moderate.init.model != 'to_be_replaced':
+        if cfg.experiments.moderate.init.get('flow') and cfg.experiments.moderate.init.flow != 'to_be_replaced':
             # just run one model as specified
-            run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+            run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run, save_cfg=cfg.save)
         else:
             shuffle(cfg.experiments.moderate.models)
-            for model in cfg.experiments.moderate.models:
-                cfg.experiments.moderate.init['model'] = str(model)
-                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_model, run_cfg=cfg.run)
+            for flow in cfg.experiments.moderate.models:
+                cfg.experiments.moderate.init['flow'] = str(flow)
+                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run,save_cfg=cfg.save)
     elif 'judger' in cfg.experiments.keys():
         connections = bm._connections_azure
         cfg.experiments.judger.init['connections'] = connections
         run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
     pass
 
-def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
+def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=None):
     global bm
     logger = bm.logger
     df = pd.DataFrame()
     data_file = cache_data(data.uri)
 
     flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
-    if model := flow_cfg.get('init', {}).get('model', None):
-        flow_name = f"{flow_name}_{model}x{flow_cfg.num_runs}"
+    if flow := flow_cfg.get('init', {}).get('flow', None):
+        flow_name = f"{flow_name}_{flow}x{flow_cfg.num_runs}"
 
     batch_id = dict(
         run_id=bm.run_id,
@@ -296,7 +312,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
         # Run the evaulation flows
         for eval_model in evaluator_cfg.get("models", []):
             eval_name = f"{run_name}_evaluator_{eval_model}"
-            evaluator_cfg['init_vars']['model'] = eval_model
+            evaluator_cfg['init_vars']['flow'] = eval_model
             evaluator_cfg['name'] = f'evaluator_{eval_model}'
             evals = run_flow(flow=EvalQA,
                                 flow_cfg=evaluator_cfg,
@@ -317,6 +333,9 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg):
                 # We might not get all the responses back. Try to join on line number instead?
                 pass
                 df = df.merge(evals[['line_number',evaluator_cfg['name']]], left_on='line_number', right_on='line_number')
+        if save_cfg:
+            # save to bigquery
+            save_to_bigquery(df, save_cfg=save_cfg)
     except Exception as e:
         logger.exception(dict(message=f"Failed {flow_name} running on {run_cfg.platform} with run name: {run_name}", error=str(e), **batch_id))
     finally:

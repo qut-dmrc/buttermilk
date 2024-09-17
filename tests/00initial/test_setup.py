@@ -1,6 +1,6 @@
 import datetime
 import os
-import re
+import regex as re
 import sys
 
 import google.auth

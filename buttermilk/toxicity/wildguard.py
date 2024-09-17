@@ -4,7 +4,7 @@ from pydantic import Field
 import torch
 from transformers import pipeline
 
-import re
+import regex as re
 from typing import (
     Any,
     Union,

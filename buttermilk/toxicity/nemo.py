@@ -12,7 +12,7 @@ from typing import Literal
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from langchain_core.output_parsers import StrOutputParser
 
-import re
+import regex as re
 class _Langchain(ToxicityModel):
     model: str
     process_chain: str = "langchain"
@@ -36,6 +36,7 @@ class Nemo(ToxicityModel):
     model: str
     standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
     client: Any = None
+    process_chain: str = "langchain"
 
     def init_client(self):
         bm = BM()
@@ -80,16 +81,16 @@ class Nemo(ToxicityModel):
 
 class NemoInputSimpleMistralOcto(Nemo, _Octo):
     standard: str = "nemo_self_check.input_simple"
-    model="mistral-nemo-instruct"
+    model: str ="mistral-nemo-instruct"
 class NemoInputComplexMistralOcto(Nemo, _Octo):
     standard: str = "nemo_self_check.input"
-    model="mistral-nemo-instruct"
+    model: str ="mistral-nemo-instruct"
 class NemoOutputSimpleMistralOcto(Nemo, _Octo):
     standard: str = "nemo_self_check.output_simple"
-    model="mistral-nemo-instruct"
+    model: str ="mistral-nemo-instruct"
 class NemoOutputComplexMistralOcto(Nemo, _Octo):
     standard: str = "nemo_self_check.output"
-    model="mistral-nemo-instruct"            
+    model: str ="mistral-nemo-instruct"
 class NemoInputSimpleGPT4o(Nemo):
     standard: str = "nemo_self_check.input_simple"
     model: str = "gpt4o"
