@@ -221,6 +221,9 @@ def exec_local(
 def save_to_bigquery(results: pd.DataFrame, save_cfg):
     from buttermilk.utils.save import upload_rows
     schema = read_json(save_cfg.schema)
+
+    # deduplicate columns
+    results.columns = [x[1] if x[1] not in results.columns[:x[0]] else f"{x[1]}_{list(results.columns[:x[0]]).count(x[1])}" for x in enumerate(results.columns)]
     schema_cols = [x['name'] for x in schema if x['name'] in results.columns]
 
     run_info_cols = ["step", "dataset", "platform", "flow", "model", "process", "standard"]
@@ -228,13 +231,14 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
     inputs = results[[c for c in ["content","groundtruth","text","record_id"] if c in results.columns ]]
 
     df = results[schema_cols]
+
     if 'run_info' not in df.columns:
         df = df.assign(run_info=run_info.to_dict(orient='records'))
     if 'inputs' not in df.columns and inputs.shape[0]==df.shape[0] and inputs.shape[1]>0:
         df = df.assign(inputs=inputs.to_dict(orient='records'))
     leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
     destination = upload_rows(rows=df, schema=schema, dataset=save_cfg.dataset)
-    logger.info(f'Saved {results.shape[0]} rows to {destination}.')
+    logger.info(f'Saved {results.shape[0]} rows to {destination}. (Leftover columns: {leftover_cols})')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
