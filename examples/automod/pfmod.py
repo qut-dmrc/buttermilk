@@ -144,7 +144,6 @@ def exec_local(
 ) -> pd.DataFrame:
 
     results = []
-    torch.cuda.empty_cache()
 
     if isinstance(dataset, str):
         dataset = pd.read_json(dataset, orient="records", lines=True)
