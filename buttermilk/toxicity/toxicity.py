@@ -33,6 +33,7 @@ import torch
 import transformers
 import urllib3
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig
+
 from anthropic import APIConnectionError as AnthropicAPIConnectionError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from azure.ai.contentsafety import BlocklistClient, ContentSafetyClient
@@ -1109,7 +1110,6 @@ class MDJudge2(MDJudgeLocal):
     client: Any = None
     tokenizer: Any = None
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGE2))
-    from transformers import AutoTokenizer, AutoModelForCausalLM
 
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
