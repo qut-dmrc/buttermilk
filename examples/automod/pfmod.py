@@ -232,7 +232,7 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
     df = results[schema_cols]
     if 'run_info' not in df.columns:
         df = df.assign(run_info=run_info.to_dict(orient='records'))
-    if 'inputs' not in df.columns:
+    if 'inputs' not in df.columns and inputs.shape[0]==df.shape[0] and inputs.shape[1]>0:
         df = df.assign(inputs=inputs.to_dict(orient='records'))
     leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
     destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
