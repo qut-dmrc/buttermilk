@@ -1051,7 +1051,7 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
-    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95, max_new_tokens=128)
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)

@@ -44,7 +44,7 @@ class Nemo(ToxicityModel):
         template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
         prompt_name = "nemo_self_check"
 
-        criteria = re.match(pattern=r'^.*\.(.*)$', string=self.standard).group(0)
+        criteria = re.match(pattern=r'^.*\.(.*)$', string=self.standard).group(1)
 
         messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
         langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")

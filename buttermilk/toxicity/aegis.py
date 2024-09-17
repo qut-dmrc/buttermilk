@@ -60,7 +60,7 @@ class Aegis(LlamaGuardTox):
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )
-    options: ClassVar[dict] = {"max_new_tokens": 1024}
+    options: ClassVar[dict] = {}
 
     def init_client(self):
         config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
