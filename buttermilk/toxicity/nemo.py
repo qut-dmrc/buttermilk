@@ -1,7 +1,7 @@
 from typing import (
     Any,
 )
-from .toxicity import ToxicityModel, EvalRecord, Score
+from .toxicity import ToxicityModel, EvalRecord, Score, _Octo
 from promptflow.tracing import trace
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from buttermilk import BM
@@ -12,25 +12,10 @@ from typing import Literal
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from langchain_core.output_parsers import StrOutputParser
 
-class Nemo(ToxicityModel):
+import re
+class _Langchain(ToxicityModel):
     model: str
     process_chain: str = "langchain"
-    standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
-    client: Any = None
-    langchain_template: Any = None
-
-    def init_client(self):
-        bm = BM()
-        llm = LLMs(connections=bm._connections_azure)[self.model]
-        template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
-        prompt_name = "nemo_self_check"
-        criteria = str(self.standard).replace(prompt_name + ".", "")
-
-        messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
-        langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
-
-        chain = langchain_template | llm | ChatParser()
-        return chain
 
     @trace
     def call_client(
@@ -43,6 +28,28 @@ class Nemo(ToxicityModel):
         output = self.client.invoke(input=input_vars, **kwargs)
 
         return  output
+
+    def init_client(self):
+        raise NotImplementedError()
+
+class Nemo(ToxicityModel):
+    model: str
+    standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
+    client: Any = None
+
+    def init_client(self):
+        bm = BM()
+        llm = LLMs(connections=bm._connections_azure)[self.model]
+        template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
+        prompt_name = "nemo_self_check"
+
+        criteria = re.match(pattern=r'^.*\.(.*)$', string=self.standard).group(0)
+
+        messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
+        langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
+
+        chain = langchain_template | llm | ChatParser()
+        return chain
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
@@ -70,6 +77,19 @@ class Nemo(ToxicityModel):
 
         return outcome
 
+
+class NemoInputSimpleMistralOcto(Nemo, _Octo):
+    standard: str = "nemo_self_check.input_simple"
+    model="mistral-nemo-instruct"
+class NemoInputComplexMistralOcto(Nemo, _Octo):
+    standard: str = "nemo_self_check.input"
+    model="mistral-nemo-instruct"
+class NemoOutputSimpleMistralOcto(Nemo, _Octo):
+    standard: str = "nemo_self_check.output_simple"
+    model="mistral-nemo-instruct"
+class NemoOutputComplexMistralOcto(Nemo, _Octo):
+    standard: str = "nemo_self_check.output"
+    model="mistral-nemo-instruct"            
 class NemoInputSimpleGPT4o(Nemo):
     standard: str = "nemo_self_check.input_simple"
     model: str = "gpt4o"
