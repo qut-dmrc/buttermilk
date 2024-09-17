@@ -14,7 +14,7 @@ moderate:
   - NemoOutputSimpleLlama31_70b
   - NemoOutputComplexLlama31_70b
   - Comprehend
-  - Perspective
+  # - Perspective
   - AzureContentSafety
   - OpenAIModerator
   - LlamaGuard1Replicate

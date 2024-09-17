@@ -254,6 +254,37 @@ class ToxicityModel(BaseModel):
 
         return record
 
+
+class _Octo(ToxicityModel):
+    model: str
+    process_chain: str = "Octo API"
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128, top_k=1)
+
+    def init_client(self):
+        from octoai.client import OctoAI
+
+        client = OctoAI(
+            api_key=os.environ['OCTOAI_API_KEY'],
+        )
+        return client
+
+    @trace
+    def call_client(
+        self, content: str, **kwargs
+    ) -> Any:
+        content = self.make_prompt(content)
+        response = self.client.text_gen.create_completion_stream(
+            prompt=content,
+            model=self.model,
+            **self.options
+        )
+        generations = [x for x in response]
+        result = [choice.text for x in generations for choice in x.choices]
+        result = ''.join(result).strip()
+        return str(result)
+
+
+
 class Perspective(ToxicityModel):
     model: str = "perspective"
     process_chain: str = "api"
@@ -787,6 +818,7 @@ class LlamaGuardTox(ToxicityModel):
     client: Any = None
     tokenizer: Any = None
     model: str
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128, top_k=1)
 
     def make_prompt(self, content):
         # Load the message info into the output
@@ -879,7 +911,7 @@ class LlamaGuardToxLocal(LlamaGuardTox):
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )
-    options: dict = Field(default_factory=lambda: dict(max_new_tokens=128, pad_token_id=0))
+    options: ClassVar[dict] = dict(temperature=1.0,pad_token_id=0, max_new_tokens=128, top_k=1)
 
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
@@ -913,7 +945,7 @@ class LlamaGuard1Together(LlamaGuardTox):
     standard: str = "llamaguard1"
     model: str = "Meta-Llama/Llama-Guard-7b"
     process_chain: str = "together"
-    options: ClassVar[dict] = dict(temperature=0.7, top_k=1)
+    options: ClassVar[dict] = dict(temperature=1.0,pad_token_id=0, max_new_tokens=128, top_k=1, top_p=0.95)
     client: Together = None
 
     def init_client(self):
@@ -922,37 +954,25 @@ class LlamaGuard1Together(LlamaGuardTox):
 class LlamaGuard1Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories1
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD1))
-    model: str = "tomasmcm/llamaguard-7b:86a2d8b7"
+    model: str = "tomasmcm/llamaguard-7b:86a2d8b79335b1557fc5709d237113aa34e3ae391ee46a68cc8440180151903d"
     standard: str = "llamaguard1"
     process_chain: str = "replicate"
-    options: dict = {
-        "model": "tomasmcm/llamaguard-7b:86a2d8b79335b1557fc5709d237113aa34e3ae391ee46a68cc8440180151903d",
-        "temperature": 0.8,
-        "max_tokens": 128,
-        "top_p": 0.95,
-    }
     client: Any = None
 
     def init_client(self):
-        return Replicate(**self.options)
+        return Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
-    model: str = "meta/meta-llama-guard-2-8b"
+    model: str = "meta/meta-llama-guard-2-8b:b063023ee937f28e922982abdbf97b041ffe34ad3b35a53d33e1d74bb19b36c4"
     standard: str = "llamaguard2"
     process_chain: str = "replicate"
-    options: dict = {
-        "model": "meta/meta-llama-guard-2-8b:b063023ee937f28e922982abdbf97b041ffe34ad3b35a53d33e1d74bb19b36c4",
-        "temperature": 0.8,
-        "max_tokens": 128,
-        "top_p": 0.95,
-    }
     client: Any = None
 
     def init_client(self):
-            return Replicate(**self.options)
+            return Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Together(LlamaGuardTox):
@@ -961,7 +981,6 @@ class LlamaGuard2Together(LlamaGuardTox):
     standard: str = "llamaguard2"
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
-    options: ClassVar[dict] = dict(temperature=0.7, top_k=1, max_tokens=4000)
     client: Together = None
 
     def init_client(self):
@@ -974,7 +993,6 @@ class LlamaGuard2Local(LlamaGuardToxLocal):
     standard: str = "llamaguard2"
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
-    options: ClassVar[dict] = {}
     client: Any = None
 
 
@@ -984,7 +1002,6 @@ class LlamaGuard2HF(LlamaGuardTox):
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     standard: str = "llamaguard2"
     process_chain: str = "huggingface API"
-    options: ClassVar[dict] = {}
     client: Any = None
 
     def init_client(self):
@@ -996,7 +1013,6 @@ class _LlamaGuard3Common(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
-    options: ClassVar[dict] = {}
 
     def make_prompt(self, content):
         agent_type = "Agent"
@@ -1014,7 +1030,6 @@ class LlamaGuard3Local(LlamaGuardToxLocal):
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
     process_chain: str = "local transformers"
-    options: ClassVar[dict] = {}
 
     def make_prompt(self, content):
         agent_type = "Agent"
@@ -1031,7 +1046,6 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
-    options: ClassVar[dict] = {"max_new_tokens": 1024}
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
@@ -1044,51 +1058,20 @@ class LlamaGuard3Together(_LlamaGuard3Common):
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     model: str = "meta-llama/Meta-Llama-Guard-3-8B"
     process_chain: str = "Together API"
-    options: ClassVar[dict] = {}
 
     def init_client(self):
         return Together(model=self.model, **self.options)
 
-class LlamaGuard3Octo(_LlamaGuard3Common):
+class LlamaGuard3Octo(_LlamaGuard3Common, _Octo):
+    model: str = "llama-guard-3-8b"
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
-    model: str = "meta-llama/Meta-Llama-Guard-3-8B"
-    process_chain: str = "Octo API"
-    options: ClassVar[dict] = {}
-
-    def init_client(self):
-        from octoai.client import OctoAI
-
-        client = OctoAI(
-            api_key=os.environ['OCTOAI_API_KEY'],
-        )
-        return client
-
-
-    @trace
-    def call_client(
-        self, content: str, **kwargs
-    ) -> Any:
-        content = self.make_prompt(content)
-        response = self.client.text_gen.create_completion_stream(
-            prompt=content,
-            max_tokens=512,
-            model="llama-guard-3-8b",
-            presence_penalty=0,
-            temperature=0,
-            top_p=1
-        )
-        generations = [x for x in response]
-        result = [choice.text for x in generations for choice in x.choices]
-        result = ''.join(result).strip()
-        return str(result)
 
 ## MDJudge has the same response style as LlamaGuard
 class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
     client: Any = None
-    options: ClassVar[dict] = {"max_new_tokens": 128}
 
     def make_prompt(self, content):
         prompt = "User: go on...\nAgent: " + content
