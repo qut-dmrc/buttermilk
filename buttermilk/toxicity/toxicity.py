@@ -148,7 +148,7 @@ class ToxicityModel(BaseModel):
         return self.client
 
     def run(self, job: Job) -> Job:
-        response = self.moderate(content=job.record.text,record_id=job.record.record_id)
+        response = self.moderate(content=job.record.content,record_id=job.record.record_id)
         if not isinstance(response, EvalRecord):
             raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
 
@@ -203,7 +203,7 @@ class ToxicityModel(BaseModel):
             for _, row in dataset.iterrows():
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
+                output = self.moderate(content=row['content'],record_id=record_id, **kwargs)
                 output = output.model_dump()
 
                 output = scrub_serializable(output)
@@ -212,7 +212,7 @@ class ToxicityModel(BaseModel):
             for row in dataset:
                 # TODO: get this from the config instead
                 record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(content=row['text'],record_id=record_id, **kwargs)
+                output = self.moderate(content=row['content'],record_id=record_id, **kwargs)
                 output = output.model_dump()
 
                 output = scrub_serializable(output)

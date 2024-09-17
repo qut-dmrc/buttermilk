@@ -89,6 +89,6 @@ pf config set trace.destination=azureml://subscriptions/7e7e056a-4224-4e26-99d2-
 echo "POETRY_CACHE_DIR=/mnt/cache/poetry\nHF_HOME=/mnt/cache/hf\nPF_WORKER_COUNT=24\nPF_BATCH_METHOD=fork" | tee -a /mnt/src/buttermilk/.env
 
 # Run
-python -m examples.automod.mod --multirun +experiments=ots_gpu +data=drag_noalt
-python -m examples.automod.mod --multirun hydra/launcher=joblib hydra/launcher/joblib/n_jobs=8 +experiments=ots +data=drag_noalt
+python -m examples.automod.pfmod +experiments=ots_gpu +data=drag +save=bq
+python -m examples.automod.pfmod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt +save=bq
 ```
