@@ -13,47 +13,10 @@ from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from langchain_core.output_parsers import StrOutputParser
 
 import regex as re
-class _Langchain(ToxicityModel):
-    model: str
-    process_chain: str = "langchain"
-
-    def init_client(self):
-        raise NotImplementedError()
 
 class Nemo(ToxicityModel):
-    model: str
     standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
-    client: Any = None
-    process_chain: str = "langchain"
 
-    def make_prompt(self, content: str) -> str:
-        return content
-    
-    @trace
-    def call_client(
-        self, prompt: str, **kwargs
-    ) -> str:
-
-        input_vars = dict(content=prompt)
-        input_vars.update({k: v for k, v in kwargs.items() if v})
-
-        output = self.client.invoke(input=input_vars, **kwargs)
-
-        return  output
-
-    def init_client(self):
-        bm = BM()
-        llm = LLMs(connections=bm._connections_azure)[self.model]
-        template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
-        prompt_name = "nemo_self_check"
-
-        criteria = re.match(pattern=r'^.*\.(.*)$', string=self.standard).group(1)
-
-        messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
-        langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
-
-        chain = langchain_template | llm | ChatParser()
-        return chain
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()
@@ -80,9 +43,43 @@ class Nemo(ToxicityModel):
             outcome.response = response
 
         return outcome
+class NemoLangchain(Nemo):
+    model: str
+    client: Any = None
+    process_chain: str = "langchain"
+
+    def make_prompt(self, content: str) -> str:
+        return content
+
+    @trace
+    def call_client(
+        self, prompt: str, **kwargs
+    ) -> str:
+
+        input_vars = dict(content=prompt)
+        input_vars.update({k: v for k, v in kwargs.items() if v})
+
+        output = self.client.invoke(input=input_vars, **kwargs)
+
+        return  output
+
+    def init_client(self):
+        bm = BM()
+        llm = LLMs(connections=bm._connections_azure)[self.model]
+        template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
+        prompt_name = "nemo_self_check"
+
+        criteria = re.match(pattern=r'^.*\.(.*)$', string=self.standard).group(1)
+
+        messages = [("system", template_text[prompt_name]["system"]), ("human", template_text[prompt_name][criteria])]
+        langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
+
+        chain = langchain_template | llm | ChatParser()
+        return chain
 
 
-class NemoInputSimpleMistralOcto(Nemo, _Octo):
+
+class NemoInputSimpleMistralOcto(_Octo, Nemo):
     standard: str = "nemo_self_check.input_simple"
     model: str ="mistral-nemo-instruct"
 class NemoInputComplexMistralOcto(Nemo, _Octo):
@@ -94,28 +91,28 @@ class NemoOutputSimpleMistralOcto(Nemo, _Octo):
 class NemoOutputComplexMistralOcto(Nemo, _Octo):
     standard: str = "nemo_self_check.output"
     model: str ="mistral-nemo-instruct"
-class NemoInputSimpleGPT4o(Nemo):
+class NemoInputSimpleGPT4o(NemoLangchain):
     standard: str = "nemo_self_check.input_simple"
     model: str = "gpt4o"
-class NemoInputComplexGPT4o(Nemo):
+class NemoInputComplexGPT4o(NemoLangchain):
     standard: str = "nemo_self_check.input"
     model: str = "gpt4o"
-class NemoOutputSimpleGPT4o(Nemo):
+class NemoOutputSimpleGPT4o(NemoLangchain):
     standard: str = "nemo_self_check.output_simple"
     model: str = "gpt4o"
-class NemoOutputComplexGPT4o(Nemo):
+class NemoOutputComplexGPT4o(NemoLangchain):
     standard: str = "nemo_self_check.output"
     model: str = "gpt4o"
 
-class NemoInputSimpleLlama31_70b(Nemo):
+class NemoInputSimpleLlama31_70b(NemoLangchain):
     standard: str = "nemo_self_check.input_simple"
     model: str = "llama31_70b"
-class NemoInputComplexLlama31_70b(Nemo):
+class NemoInputComplexLlama31_70b(NemoLangchain):
     standard: str = "nemo_self_check.input"
     model: str = "llama31_70b"
-class NemoOutputSimpleLlama31_70b(Nemo):
+class NemoOutputSimpleLlama31_70b(NemoLangchain):
     standard: str = "nemo_self_check.output_simple"
     model: str = "llama31_70b"
-class NemoOutputComplexLlama31_70b(Nemo):
+class NemoOutputComplexLlama31_70b(NemoLangchain):
     standard: str = "nemo_self_check.output"
     model: str = "llama31_70b"

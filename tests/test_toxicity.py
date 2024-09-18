@@ -297,9 +297,9 @@ class TestToxicityModels:
         result = local_model.moderate(content=toxic_record.text)
         assert isinstance(result, EvalRecord)
         assert not result.error
-        assert result.standard == tox_model.standard
-        assert result.process == tox_model.process_chain
-        assert result.model == tox_model.model
+        assert result.standard == local_model.standard
+        assert result.process == local_model.process_chain
+        assert result.model == local_model.model
         assert all([s.measure for s in result.scores])
         assert result.predicted is not None
 
@@ -313,12 +313,15 @@ class TestIndicators:
 def test_moderate_success(mocker, toxmodel):
     # Mock the response from call_client
     mock_response = {'some': 'response'}
-    # Mock the method in the superclass
-    mock_super_method = mocker.patch('buttermilk.toxicity.ToxicityModel.call_client', return_value=mock_response)
+    try:
+        mock_super_method = mocker.patch.object(toxmodel, 'call_client', return_value=mock_response)
+    except:
+        # Mock the method in the superclass
+        mock_super_method = mocker.patch('buttermilk.toxicity.ToxicityModel.call_client', return_value=mock_response)
 
     # Mock the output from interpret
     mock_output = EvalRecord()
-    mock_interpret = mocker.patch.object(toxmodel, 'buttermilk.toxicity.ToxicityModel.interpret', return_value=mock_output)
+    mock_interpret = mocker.patch.object(toxmodel, 'interpret', return_value=mock_output)
 
     # Call the method
     result = toxmodel.moderate(content='some text', record_id='record_id')

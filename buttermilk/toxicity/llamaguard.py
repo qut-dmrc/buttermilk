@@ -305,7 +305,7 @@ class LlamaGuard3Together(_LlamaGuard3Common):
     def init_client(self):
         return Together(model=self.model, **self.options)
 
-class LlamaGuard3Octo(_Octo, _LlamaGuard3Common):
+class LlamaGuard3Octo(_LlamaGuard3Common,_Octo):
     model: str = "llama-guard-3-8b"
     process_chain: str = "Octo API"
 

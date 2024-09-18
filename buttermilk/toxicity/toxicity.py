@@ -172,7 +172,7 @@ class ToxicityModel(BaseModel):
     # )
     @trace
     def call_client(
-        self, prompt: str, *, **kwargs
+        self, prompt: str, **kwargs
     ) -> EvalRecord:
         raise NotImplementedError
 
@@ -467,6 +467,9 @@ class AzureContentSafety(ToxicityModel):
         # blocklist_client = BlocklistClient(endpoint, credential)
         return content_safety_client
 
+    def make_prompt(self, content: str) -> str:
+        return content
+
     @trace
     def call_client(
         self, prompt: str, **kwargs
@@ -546,6 +549,9 @@ class AzureModerator(ToxicityModel):
             credentials=CognitiveServicesCredentials(subscription_key=SUBSCRIPTION_KEY),
         )
 
+    def make_prompt(self, content: str) -> str:
+        return content
+    
     @trace
     def call_client(
         self, prompt: str, **kwargs
