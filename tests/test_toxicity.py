@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from buttermilk.flows.common.config import COL_PREDICTION
 from buttermilk.toxicity import *
 from buttermilk.toxicity import TOXCLIENTS
-from buttermilk.toxicity.toxicity import LlamaGuardTox
+from buttermilk.toxicity.llamaguard import LlamaGuardTox
 from buttermilk.toxicity import MDJudgeLocalTask,  MDJudgeLocalDomain
 
 # from datatools.datapipes.toxic import (

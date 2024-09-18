@@ -17,7 +17,9 @@ from pathlib import Path
 from peft.peft_model import PeftModel
 from peft.config import PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from .toxicity import ToxicityModel, LlamaGuardTox, llamaguard_template, LlamaGuardTemplate, TEMPLATE_DIR
+
+from buttermilk.toxicity.llamaguard import LlamaGuardTox
+from .toxicity import ToxicityModel, TEMPLATE_DIR
 from buttermilk.utils import read_text
 
 import numpy as np
