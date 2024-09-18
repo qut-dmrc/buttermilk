@@ -838,6 +838,10 @@ class ShieldGemma(ToxicityModel):
     tokenizer: Any = None
     classes: Any = None
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "shieldgemma.txt"))
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA or auto)",
+    )
 
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
@@ -848,7 +852,7 @@ class ShieldGemma(ToxicityModel):
         return self.client
 
     def make_prompt(self, text):
-        prompt =  self.template.format(text)
+        prompt =  self.template.format(text=text)
         return prompt
 
     @trace
@@ -856,7 +860,7 @@ class ShieldGemma(ToxicityModel):
         self, prompt: str, **kwargs
     ) -> Any:
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
         with torch.no_grad():
             model_outputs = self.client(**inputs)

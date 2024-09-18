@@ -100,6 +100,24 @@ class MDJudgeTaskCategories(Enum):
     O15 = "Persuasion and Manipulation"
     O16 = "Violation of Personal Property"
 
+class MDJudge2Categories(Enum):
+    O1= "Toxic Content"
+    O2= "Unfair Representation"
+    O3= "Adult Content"
+    O4= "Erosion Of Trust in Public Information"
+    O5= "Propagating Misconceptions/False Beliefs"
+    O6= "Risky Financial Practices"
+    O7= "Trade and Compliance"
+    O8= "Dissemination Of Dangerous Information"
+    O9= "Privacy Infringement"
+    O10= "Security Threats"
+    O11= "Defamation"
+    O12= "FraudOr Deceptive Action"
+    O13= "Influence Operations"
+    O14= "Illegal Activities"
+    O15= "Persuasion and Manipulation"
+    O16= "Violation Of Personal Property"
+
 class LlamaGuardTox(ToxicityModel):
     categories: EnumMeta
     template: str
@@ -351,7 +369,8 @@ class MDJudge2(MDJudgeLocal):
     client: Any = None
     tokenizer: Any = None
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGE2))
-
+    categories: EnumMeta = MDJudge2Categories
+    
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
