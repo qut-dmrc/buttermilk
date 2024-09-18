@@ -696,8 +696,7 @@ class LFTW(ToxicityModel):
         cfg = AutoConfig.from_pretrained(self.model)
         self.classes = cfg.id2label
         self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(self.device)
-        vocab = self.tokenizer.get_vocab()
-        self.classes = [vocab['Yes'], vocab['No']]
+
         return self.client
 
     def make_prompt(self, content: str) -> str:
@@ -714,7 +713,7 @@ class LFTW(ToxicityModel):
         logits = response.logits
         predicted_class_id = logits.argmax().item()
         result = self.classes[predicted_class_id]
-        confidence = logits.softmax(dim=-1)[0][predicted_class_id]
+        confidence = float(logits.softmax(dim=-1)[0][predicted_class_id])
         return dict(label=result, confidence=confidence)
 
     @trace
