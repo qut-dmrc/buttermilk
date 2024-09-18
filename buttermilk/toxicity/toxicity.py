@@ -32,7 +32,7 @@ import requests
 import torch
 import transformers
 import urllib3
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig, AutoModelForSequenceClassification
 
 from anthropic import APIConnectionError as AnthropicAPIConnectionError
 from anthropic import RateLimitError as AnthropicRateLimitError
@@ -551,7 +551,7 @@ class AzureModerator(ToxicityModel):
 
     def make_prompt(self, content: str) -> str:
         return content
-    
+
     @trace
     def call_client(
         self, prompt: str, **kwargs
@@ -676,34 +676,55 @@ class HONEST(ToxicityModel):
 
 
 class LFTW(ToxicityModel):
-    model: str = "lftw_r4"
+    model: str = "facebook/roberta-hate-speech-dynabench-r4-target"
     process_chain: str = "hf_transformers"
-    standard: str = "lftw_r4-target"
-    client: Any = None
+    standard: str = "lftw_r4_target"
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA or auto)",
+    )
+    options: ClassVar[dict] = dict()
+    tokenizer: Any = None
+    classes: dict = {}
 
     def init_client(self):
-        self.client = hf_pipeline(hf_model_path="facebook/roberta-hate-speech-dynabench-r4-target",
-        )
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
 
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        if not self.tokenizer.pad_token_id:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+        cfg = AutoConfig.from_pretrained(self.model)
+        self.classes = cfg.id2label
+        self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(self.device)
+        vocab = self.tokenizer.get_vocab()
+        self.classes = [vocab['Yes'], vocab['No']]
         return self.client
 
+    def make_prompt(self, content: str) -> str:
+        return content
+
+    @trace
     def call_client(
         self, prompt: str, **kwargs
     ) -> Any:
-        return self.client(prompt)
+
+        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)['input_ids']
+        with torch.no_grad():
+            response = self.client(input_ids=input_ids, **self.options, **kwargs)
+        logits = response.logits
+        predicted_class_id = logits.argmax().item()
+        result = self.classes[predicted_class_id]
+        confidence = logits.softmax(dim=-1)[0][predicted_class_id]
+        return dict(label=result, confidence=confidence)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
-        if len(response) > 1:
-            raise ValueError("Expected only one result from LFTW model")
-        result = response[0]
-
         # Load the message info into the output
         outcome = EvalRecord(
         )
-        outcome.scores = [Score(measure=result["label"], confidence=result["score"])]
-        outcome.predicted = result["label"] == "hate"
-        outcome.labels = [result["label"]]
+        outcome.scores = [Score(measure=response['label'], confidence=response["confidence"])]
+        outcome.predicted = response['label'] == "hate"
+        outcome.labels = [response['label'] ]
 
         return outcome
 
