@@ -7,6 +7,7 @@ from transformers import pipeline
 import regex as re
 from typing import (
     Any,
+    ClassVar,
     Union,
 )
 from .toxicity import ToxicityModel, EvalRecord, Score
@@ -21,9 +22,11 @@ class Wildguard(ToxicityModel):
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )
+    options: ClassVar[dict] = dict(max_new_tokens=128,
+            temperature=1.0, top_p=1.0)
 
     def init_client(self):
-        return pipeline("text-generation", model="allenai/wildguard", max_new_tokens=1000, device=self.device)
+        return pipeline("text-generation", model=self.model,device=self.device)
 
     @trace
     def call_client(
