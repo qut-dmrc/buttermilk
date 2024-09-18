@@ -24,12 +24,16 @@ class GoogleModerate(ToxicityModel):
         return client
 
     @trace
+    def make_prompt(self, content: str) -> str:
+        return content
+
+    @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> language_v2.ModerateTextResponse:
 
         document = language_v2.Document(
-            content=content,
+            content=prompt,
             type_=language_v2.Document.Type.PLAIN_TEXT,
         )
         return self.client.moderate_text(document=document)

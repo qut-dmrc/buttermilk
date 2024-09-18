@@ -153,8 +153,8 @@ class ToxicityModel(BaseModel):
         return output
 
     @trace
-    def __call__(self, content: str, record_id: Optional[str] = None, **kwargs) -> EvalRecord:
-        return self.call_client(content=content, record_id=record_id, **kwargs)
+    def __call__(self, prompt: str, **kwargs) -> EvalRecord:
+        return self.call_client(prompt=prompt, **kwargs)
 
     # @retry(
     #     retry=retry_if_exception_type(
@@ -172,13 +172,15 @@ class ToxicityModel(BaseModel):
     # )
     @trace
     def call_client(
-        self, content: str, *, record_id: Optional[str] = None, **kwargs
+        self, prompt: str, *, **kwargs
     ) -> EvalRecord:
         raise NotImplementedError
 
+    @trace
     def make_prompt(self, content):
         raise NotImplementedError
 
+    @trace
     def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
         # if isinstance(self.client, transformers.Pipeline):
         #     # prepare batch
@@ -218,7 +220,10 @@ class ToxicityModel(BaseModel):
     def moderate(
         self, content: str, record_id: str=None, **kwargs
     ) -> EvalRecord:
-        response = self.call_client(content=content, **kwargs)
+        prompt = self.make_prompt(content)
+
+        response = self.call_client(prompt=prompt, **kwargs)
+
         try:
             output = self.interpret(response)
         except ValueError as e:
@@ -246,6 +251,53 @@ class ToxicityModel(BaseModel):
 
         return record
 
+class _HF(ToxicityModel):
+    process_chain: str = "local transformers"
+    model: str
+    device: Union[str, torch.device] = Field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        description="Device type (CPU or CUDA or auto)",
+    )
+    options: ClassVar[dict] = dict(temperature=1.0)
+    client: Any = None
+    tokenizer: Any = None
+
+    def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
+        if not self.tokenizer.pad_token_id:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+
+        self.client = AutoModelForCausalLM.from_pretrained(self.model, trust_remote_code=True).to(self.device)
+
+        return self.client
+
+    @trace
+    def call_client(
+        self, prompt: str, **kwargs
+    ) -> Any:
+
+        input_ids = self.tokenizer([prompt], padding="longest", return_tensors="pt").to(self.device)['input_ids']
+
+        output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
+        prompt_len = input_ids.shape[-1]
+        response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
+        try:
+            result = response[0][0]['generated_text'].strip()
+            return str(result[len(prompt):])
+        except:
+            try:
+                result = response.generations[0][0].text.strip()
+                return str(result[len(prompt):])
+            except:
+                result = response.strip()
+                return result
+
+    # def batch(self, texts: list[str]):
+    #     inputs = tokenizer(texts, padding="longest", padding_side="left", return_tensors="pt")
+    #     inputs = {key: val.to(model.device) for key, val in inputs.items()}
+
 
 class _Octo(ToxicityModel):
     model: str
@@ -262,11 +314,10 @@ class _Octo(ToxicityModel):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        content = self.make_prompt(content)
         response = self.client.text_gen.create_completion_stream(
-            prompt=content,
+            prompt=prompt,
             model=self.model,
             **self.options
         )
@@ -294,6 +345,8 @@ class Perspective(ToxicityModel):
         )
         return client
 
+    def make_prompt(self, content: str) -> str:
+        return content
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -310,7 +363,7 @@ class Perspective(ToxicityModel):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
         if not (attributes := kwargs.get('attributes')):
             # get all
@@ -320,7 +373,7 @@ class Perspective(ToxicityModel):
             )
 
         analyze_request = {
-            "comment": {"text": content},
+            "comment": {"text": prompt},
             "requestedAttributes": {attr: {} for attr in attributes},
             "doNotStore": True,
         }
@@ -347,12 +400,16 @@ class Comprehend(ToxicityModel):
             aws_secret_access_key=secret_key,
             region_name=region,
         )
+
+    def make_prompt(self, content: str) -> str:
+        return content
+
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
         return self.client.detect_toxic_content(
-            LanguageCode="en", TextSegments=[{"Text": content}]
+            LanguageCode="en", TextSegments=[{"Text": prompt}]
         )
 
     @trace
@@ -412,10 +469,10 @@ class AzureContentSafety(ToxicityModel):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
         request = AnalyzeTextOptions(
-            text=content, output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS
+            text=prompt, output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS
         )
         return self.client.analyze_text(request)
 
@@ -491,9 +548,9 @@ class AzureModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        text_stream = StringIO(content)
+        text_stream = StringIO(prompt)
         response = self.client.text_moderation.screen_text(
             language="eng",
             text_content_type="text/plain",
@@ -554,11 +611,15 @@ class REGARD(ToxicityModel):
         else:
             return evaluate.load("regard", module_type="measurement")
 
+
+    def make_prompt(self, content: str) -> str:
+        return content
+
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        result = self.client.compute(data=[content])
+        result = self.client.compute(data=[prompt])
         return result
 
     @trace
@@ -590,9 +651,9 @@ class HONEST(ToxicityModel):
         return evaluate.load("honest", "en")
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        completions = [content.split(" ")]
+        completions = [prompt.split(" ")]
         result = self.client.compute(predictions=completions)
         return result
 
@@ -621,9 +682,9 @@ class LFTW(ToxicityModel):
         return self.client
 
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        return self.client(content)
+        return self.client(prompt)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -667,12 +728,14 @@ class GPTJT(ToxicityModel):
                 device=self.device, max_new_tokens=3
         )
 
+    def make_prompt(self, content: str) -> str:
+        prompt = self.template.format(content=content)
+        return prompt
+
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        prompt = self.template.format(content=content)
-
         response = self.client(prompt)
 
         if len(response) > 1:
@@ -719,9 +782,9 @@ class OpenAIModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        return self.client.create(input=content, model=self.model)
+        return self.client.create(input=prompt, model=self.model)
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
@@ -748,6 +811,7 @@ class ShieldGemma(ToxicityModel):
     client: transformers.Pipeline = None
     tokenizer: Any = None
     classes: Any = None
+    template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "shieldgemma.txt"))
 
     def init_client(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
@@ -758,33 +822,16 @@ class ShieldGemma(ToxicityModel):
         return self.client
 
     def make_prompt(self, text):
-        prompt =  f"""You are a policy expert trying to help determine whether a user prompt is in violation of the defined safety policies.
-
-<start_of_turn>
-Human Question: {text}
-<end_of_turn>
-
-Our safety principle is defined in the below:
-
-* "No Hate Speech": The prompt shall not contain or seek generation of content
-that expresses, incites, or promotes hate based on race, gender, ethnicity,
-religion, nationality, sexual orientation, disability status, or caste.
-
-===
-
-Does the human question violate the above principle? Your answer must start with
-'Yes' or 'No'. And then walk through step by step to be sure we answer
-correctly."""
+        prompt =  self.template.format(text)
         return prompt
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
 
-        prompt = self.make_prompt(content)
-
         inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+
         with torch.no_grad():
             model_outputs = self.client(**inputs)
 
@@ -819,6 +866,7 @@ correctly."""
 
 class ShieldGemma2b(ShieldGemma):
     model: str = "google/shieldgemma-2b"
+
 class ShieldGemma9b(ShieldGemma):
     model: str = "google/shieldgemma-9b"
 

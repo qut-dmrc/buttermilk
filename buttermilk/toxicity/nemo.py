@@ -17,18 +17,6 @@ class _Langchain(ToxicityModel):
     model: str
     process_chain: str = "langchain"
 
-    @trace
-    def call_client(
-        self, content: str, **kwargs
-    ) -> Any:
-
-        input_vars = dict(content=content)
-        input_vars.update({k: v for k, v in kwargs.items() if v})
-
-        output = self.client.invoke(input=input_vars, **kwargs)
-
-        return  output
-
     def init_client(self):
         raise NotImplementedError()
 
@@ -37,6 +25,21 @@ class Nemo(ToxicityModel):
     standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
     client: Any = None
     process_chain: str = "langchain"
+
+    def make_prompt(self, content: str) -> str:
+        return content
+    
+    @trace
+    def call_client(
+        self, prompt: str, **kwargs
+    ) -> str:
+
+        input_vars = dict(content=prompt)
+        input_vars.update({k: v for k, v in kwargs.items() if v})
+
+        output = self.client.invoke(input=input_vars, **kwargs)
+
+        return  output
 
     def init_client(self):
         bm = BM()

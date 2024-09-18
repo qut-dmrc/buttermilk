@@ -73,11 +73,10 @@ class Aegis(LlamaGuardTox):
 
     @trace
     def call_client(
-        self, content: str, **kwargs
+        self, prompt: str, **kwargs
     ) -> Any:
-        content = self.make_prompt(content)
         inputs = self.tokenizer(
-            content, return_tensors="pt", add_special_tokens=True
+            prompt, return_tensors="pt", add_special_tokens=True
         ).to(self.device)
 
         prompt_len = inputs["input_ids"].shape[-1]
