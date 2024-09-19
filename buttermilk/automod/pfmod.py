@@ -202,10 +202,7 @@ def exec_local(
                 results.append(details)
     finally:
         results = pd.DataFrame(results)
-
-        # deduplicate columns
-        results.columns = [x[1] if x[1] not in results.columns[:x[0]] else f"{x[1]}_{list(results.columns[:x[0]]).count(x[1])}" for x in enumerate(results.columns)]
-
+        
         # add input details to the result dataset
         relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()))
         if len(relevant_input_cols) > 1:
