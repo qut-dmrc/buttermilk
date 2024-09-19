@@ -282,7 +282,7 @@ class _LlamaGuard3Common(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
-    options: ClassVar[dict] = dict(temperature=1.0)
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
 
     def make_prompt(self, content):
         agent_type = "Agent"
@@ -307,7 +307,6 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     model: str = "meta-llama/Llama-Guard-3-8B-INT8"
     device: str  = "cuda"
     dtype: Any = "auto"
-    options: ClassVar[dict] = dict(temperature=1.0)
 
     def init_client(self):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
@@ -315,10 +314,10 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
         return self.client
+
 class LlamaGuard3Together(_LlamaGuard3Common):
     model: str = "meta-llama/Meta-Llama-Guard-3-8B"
     process_chain: str = "Together API"
-    options: ClassVar[dict] = dict(temperature=1.0)
 
     def init_client(self):
         return Together(model=self.model, **self.options)
