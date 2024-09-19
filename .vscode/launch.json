@@ -16,7 +16,7 @@
             "name": "automod debug",
             "type": "debugpy",
             "request": "launch",
-            "module": "examples.automod.pfmod",
+            "module": "buttermilk.automod.pfmod",
             "cwd": "${workspaceFolder}",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
@@ -26,6 +26,7 @@
             "args": [
                 "+experiments=ots",
                 "+data=drag_noalt",
+                "experiments.ots.init.flow=REGARD"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

@@ -203,13 +203,18 @@ def exec_local(
     finally:
         results = pd.DataFrame(results)
 
+        # deduplicate columns
+        results.columns = [x[1] if x[1] not in results.columns[:x[0]] else f"{x[1]}_{list(results.columns[:x[0]]).count(x[1])}" for x in enumerate(results.columns)]
+
         # add input details to the result dataset
-        for k in list(columns.keys()):
-            if k not in results.columns and k in input_df.columns:
-                results[k] = input_df[k]
+        relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()))
+        if len(relevant_input_cols) > 1:
+            results = pd.merge(results, input_df[relevant_input_cols], left_on='record_id', right_on='record_id', suffixes=(None,'_inputs'))
+
         for k, v in list(init_vars.items()):
             if k not in results.columns:
                 results[k] = v
+
         bm.save(results, basename='partial_flow')
         del flow
         torch.cuda.empty_cache()
@@ -223,6 +228,8 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
 
     # deduplicate columns
     results.columns = [x[1] if x[1] not in results.columns[:x[0]] else f"{x[1]}_{list(results.columns[:x[0]]).count(x[1])}" for x in enumerate(results.columns)]
+
+
     schema_cols = [x['name'] for x in schema if x['name'] in results.columns]
 
     run_info_cols = ["step", "dataset", "platform", "flow", "model", "process", "standard"]
