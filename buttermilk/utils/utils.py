@@ -5,12 +5,13 @@ import pathlib
 import fsspec
 import requests
 import yaml
-import regex as re 
+import regex as re
 import pandas as pd
 import numpy as np
 import pydantic
 import uuid
 import validators
+import math
 
 
 from typing import Any, List, Optional, TypeVar, Union
@@ -235,3 +236,17 @@ def reset_index_and_dedup_columns(df: pd.DataFrame):
         df.columns = cols
 
     return df
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i : i + n]
+
+
+def split(l, num_chunks):
+    """Split a list into a number of chunks"""
+    # get number of full chunks
+    chunk_size = math.ceil(len(l) / num_chunks)
+
+    # yield them successively
+    yield from (l[i : i + chunk_size] for i in range(0, len(l), chunk_size))

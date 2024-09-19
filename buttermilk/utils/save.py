@@ -1,7 +1,7 @@
 import pandas as pd
 import shortuuid
 import pandas as pd
-from .utils import scrub_serializable
+from .utils import chunks, scrub_serializable
 import json
 from cloudpathlib import GSPath
 import pickle
@@ -150,7 +150,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
 
     if isinstance(schema, str):
         schema = bigquery.Client().schema_from_json(schema)
-        
+
     if isinstance(rows, pd.DataFrame):
         # deduplicate columns
         rows.columns = [x[1] if x[1] not in rows.columns[:x[0]] else f"{x[1]}_{list(rows.columns[:x[0]]).count(x[1])}" for x in enumerate(rows.columns)]
@@ -175,10 +175,10 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
         raise IOError(msg)
 
     logger.debug(f"Inserting {len(bq_rows)} rows to BigQuery table {dataset}.")
-    try:
-        errors = bq.insert_rows(table, bq_rows)
-    except:
-        errors = bq.insert_rows(table, bq_rows, selected_fields=schema)
+
+    errors = []
+    for chunk in chunks(bq_rows, 100):
+        errors.append(bq.insert_rows(table, chunk, selected_fields=schema))
 
     if not errors:
         inserted = True
@@ -187,7 +187,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
             f"Successfully pushed {len(bq_rows)} rows to BigQuery table {dataset}."
         )
     else:
-        raise IOError(f"Google BigQuery returned an error result: {str(errors[:3])}")
+        raise IOError(f"Google BigQuery returned an error result: {str(errors)[:1000]}")
 
     return dataset
 
