@@ -79,7 +79,7 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str]) -> pd.DataFrame:
+def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()
 
     init_vars = flow_cfg.init
@@ -88,7 +88,7 @@ def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
         num_runs = flow_cfg.get('num_runs', 1)
-        df = exec_local(flow=flow, num_runs=num_runs, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars)
+        df = exec_local(flow=flow, num_runs=num_runs, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars, batch_id=batch_id)
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
@@ -135,6 +135,7 @@ def exec_local(
     num_runs=1,
     flow,
     flow_name,
+    batch_id,
     run_name,
     colour: str = "magenta",
     init_vars: dict = {},
@@ -191,7 +192,7 @@ def exec_local(
                 details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
                 # add input details to  the result row
-                for k, v in columns.items():
+                for k, v in input_vars.items():
                     if k not in details:
                         details[k] = v
 
@@ -202,15 +203,16 @@ def exec_local(
                 results.append(details)
     finally:
         results = pd.DataFrame(results)
-        
-        # add input details to the result dataset
-        relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()))
-        if len(relevant_input_cols) > 1:
-            results = pd.merge(results, input_df[relevant_input_cols], left_on='record_id', right_on='record_id', suffixes=(None,'_inputs'))
 
-        for k, v in list(init_vars.items()):
-            if k not in results.columns:
-                results[k] = v
+        # add input details to the result dataset
+        relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()) - set(results.keys()))
+        inputs = pd.Series(input_df[relevant_input_cols].to_dict(orient='records'), index=input_df['record_id'],name='inputs')
+        results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
+
+        # add batch details to the result dataset
+        batch_columns = pd.concat(results[["model", "process", "standard"]], pd.json_normalize(itertools.repeat(batch_id, results.shape[0])), axis='columns')
+
+        results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=["model", "process", "standard"])
 
         bm.save(results, basename='partial_flow')
         del flow
@@ -223,25 +225,8 @@ def save_to_bigquery(results: pd.DataFrame, save_cfg):
     from buttermilk.utils.save import upload_rows
     schema = read_json(save_cfg.schema)
 
-    # deduplicate columns
-    results.columns = [x[1] if x[1] not in results.columns[:x[0]] else f"{x[1]}_{list(results.columns[:x[0]]).count(x[1])}" for x in enumerate(results.columns)]
-
-
-    schema_cols = [x['name'] for x in schema if x['name'] in results.columns]
-
-    run_info_cols = ["step", "dataset", "platform", "flow", "model", "process", "standard"]
-    run_info = results[[c for c in run_info_cols if c in results.columns]]
-    inputs = results[[c for c in ["content","groundtruth","text","record_id"] if c in results.columns ]]
-
-    df = results[schema_cols]
-
-    if 'run_info' not in df.columns:
-        df = df.assign(run_info=run_info.to_dict(orient='records'))
-    if 'inputs' not in df.columns and inputs.shape[0]==df.shape[0] and inputs.shape[1]>0:
-        df = df.assign(inputs=inputs.to_dict(orient='records'))
-    leftover_cols = [c for c in results.columns if c not in df.columns and c not in  run_info.columns and c not in inputs.columns]
-    destination = upload_rows(rows=df, schema=schema, dataset=save_cfg.dataset)
-    logger.info(f'Saved {results.shape[0]} rows to {destination}. (Leftover columns: {leftover_cols})')
+    destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
+    logger.info(f'Saved {results.shape[0]} rows to {destination}.')
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -306,11 +291,8 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
                                 run_name = run_name,
-                                column_mapping=dict(data.columns), run_cfg=run_cfg )
+                                column_mapping=dict(data.columns), run_cfg=run_cfg, batch_id=batch_id )
 
-        # Set up  empty dataframe with batch details ready to go
-        df = pd.json_normalize(itertools.repeat(batch_id, flow_outputs.shape[0]))
-        df = pd.concat([df, flow_outputs], axis='columns')
 
         # Run the evaulation flows
         for eval_model in evaluator_cfg.get("models", []):
@@ -324,7 +306,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
                             run_outputs = run_name,
                             run_name = eval_name,
                             column_mapping=dict(evaluator_cfg['columns']),
-                            run_cfg=run_cfg
+                            run_cfg=run_cfg,batch_id=batch_id
                     )
 
             # join the evaluation results
@@ -336,6 +318,12 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
                 # We might not get all the responses back. Try to join on line number instead?
                 pass
                 df = df.merge(evals[['line_number',evaluator_cfg['name']]], left_on='line_number', right_on='line_number')
+
+            # Put evals in a single column
+            eval_cols = [x for x in df.columns if x.startswith('evaluator_')]
+            evals = df[eval_cols]
+            evals.columns = [x.replace('evaluator_', '') for x in evals.columns]
+            df = df.assign(evals=evals.to_dict(orient='records')).drop(columns=eval_cols)
         if save_cfg:
             # save to bigquery
             save_to_bigquery(df, save_cfg=save_cfg)

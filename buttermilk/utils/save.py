@@ -149,6 +149,9 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     bq = bigquery.Client()  # use application default credentials
 
     if isinstance(rows, pd.DataFrame):
+        # deduplicate columns
+        rows.columns = [x[1] if x[1] not in rows.columns[:x[0]] else f"{x[1]}_{list(rows.columns[:x[0]]).count(x[1])}" for x in enumerate(rows.columns)]
+
         bq_rows = rows.to_dict(orient="records")
     else:
         bq_rows = rows.copy()
