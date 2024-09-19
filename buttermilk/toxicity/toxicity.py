@@ -138,7 +138,7 @@ class ToxicityModel(BaseModel):
         return self.client
 
     def run(self, job: Job) -> Job:
-        response = self.moderate(content=job.record.content,record_id=job.record.record_id)
+        response = self.moderate(content=job.record.content, record_id=job.record.record_id)
         if not isinstance(response, EvalRecord):
             raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
 
