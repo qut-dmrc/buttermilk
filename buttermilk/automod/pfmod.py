@@ -210,7 +210,7 @@ def exec_local(
         results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
 
         # add batch details to the result dataset
-        batch_columns = pd.concat(results[["model", "process", "standard"]], pd.json_normalize(itertools.repeat(batch_id, results.shape[0])), axis='columns')
+        batch_columns = pd.concat([results[["model", "process", "standard"]], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
 
         results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=["model", "process", "standard"])
 
@@ -223,9 +223,7 @@ def exec_local(
 
 def save_to_bigquery(results: pd.DataFrame, save_cfg):
     from buttermilk.utils.save import upload_rows
-    schema = read_json(save_cfg.schema)
-
-    destination = upload_rows(rows=results, schema=schema, dataset=save_cfg.dataset)
+    destination = upload_rows(rows=results, schema=save_cfg.schema, dataset=save_cfg.dataset)
     logger.info(f'Saved {results.shape[0]} rows to {destination}.')
 
 

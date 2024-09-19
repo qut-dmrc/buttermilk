@@ -148,6 +148,9 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     """Upload results to Google Bigquery"""
     bq = bigquery.Client()  # use application default credentials
 
+    if isinstance(schema, str):
+        schema = bigquery.Client().schema_from_json(schema)
+        
     if isinstance(rows, pd.DataFrame):
         # deduplicate columns
         rows.columns = [x[1] if x[1] not in rows.columns[:x[0]] else f"{x[1]}_{list(rows.columns[:x[0]]).count(x[1])}" for x in enumerate(rows.columns)]
