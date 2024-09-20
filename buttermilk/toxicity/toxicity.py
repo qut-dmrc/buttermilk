@@ -772,7 +772,7 @@ class GPTJT(ToxicityModel):
         if result.startswith(prompt):
             result = result[len(prompt):]
 
-        return result
+        return result.strip()
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
