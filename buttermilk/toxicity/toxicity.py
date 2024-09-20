@@ -803,6 +803,9 @@ class OpenAIModerator(ToxicityModel):
         openai.api_type = 'openai'
         self.client = openai.moderations
 
+    def make_prompt(self, content: str) -> str:
+        return content
+    
     @trace
     def call_client(
         self, prompt: str, **kwargs
