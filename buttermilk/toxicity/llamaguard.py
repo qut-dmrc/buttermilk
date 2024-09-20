@@ -313,6 +313,8 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        if not self.tokenizer.pad_token_id:
+            self.tokenizer.pad_token_id = 0
         self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
 
 class LlamaGuard3Together(_LlamaGuard3Common):
