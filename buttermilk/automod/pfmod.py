@@ -208,8 +208,9 @@ def exec_local(
         # add input details to the result dataset
         relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()) - set(results.keys()))
         inputs = input_df.drop_duplicates(subset='record_id').set_index('record_id')[relevant_input_cols]
-        inputs = pd.Series(input_df[relevant_input_cols].to_dict(orient='records'), index=input_df.index, name='inputs')
-        results = pd.merge(results, inputs, left_on='record_id',right_index=True,how='inner', suffixes=(None,'_exec'))
+        inputs = pd.merge(results, inputs, left_on='record_id',right_index=True,how='inner', suffixes=(None,'_exec'))
+        inputs = pd.Series(inputs[columns.keys()].to_dict(orient='records'), index=inputs.index, name='inputs')
+        results = results.assign(inputs=inputs).drop(columns=columns.keys(),errors='ignore')
 
         # add batch details to the result dataset
         relevant_batch_cols = [c for c in ["model", "process", "standard"] if c in results.columns and c not in batch_id.keys()]
