@@ -36,11 +36,10 @@ class Nemo(ToxicityModel):
                 outcome.predicted = False
             else:
                 outcome.error = f"Unable to interpret result."
-                outcome.response = response
+                outcome.response = str(response)
 
         except Exception as e:
-            outcome.error = f"Unable to interpret result: {e}. {e.args}"
-            outcome.response = response
+            raise ValueError(f"Unable to interpret result: {e}. {e.args}")
 
         return outcome
 class NemoLangchain(Nemo):

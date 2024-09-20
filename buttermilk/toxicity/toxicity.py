@@ -781,7 +781,7 @@ class GPTJT(ToxicityModel):
         outcome = EvalRecord(
         )
         try:
-            outcome.response = response
+            outcome.response = str(response)
             outcome.scores = [
                 Score(
                     measure=self.standard, score=self.ResponseMap[response], labels=[response]
