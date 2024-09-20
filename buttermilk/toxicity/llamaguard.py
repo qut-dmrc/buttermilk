@@ -212,7 +212,7 @@ class LlamaGuard1Together(LlamaGuardTox):
     standard: str = "llamaguard1"
     model: str = "Meta-Llama/Llama-Guard-7b"
     process_chain: str = "together"
-    options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0, top_k=1)
     client: Together = None
 
     def init_client(self) -> None:
@@ -249,7 +249,7 @@ class LlamaGuard2Together(LlamaGuardTox):
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
     client: Together = None
-    options: ClassVar[dict] = dict(temperature=1.0, top_p=0.95)
+    options: ClassVar[dict] = dict(temperature=1.0)
 
     def init_client(self) -> None:
         self.client = Together(model=self.model, **self.options)
@@ -262,7 +262,7 @@ class LlamaGuard2Local(_HF, LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     client: Any = None
-    options: ClassVar[dict] = dict(temperature=1.0, top_p=0.95, max_new_tokens=128)
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
 
 
 class LlamaGuard2HF(LlamaGuardTox):

@@ -23,7 +23,6 @@ class HFInferenceClient(LLM):
         do_sample=False,
         max_new_tokens=4096,
         repetition_penalty=0.1,
-        top_p=0.7,
         temperature=1.0,
         watermark=False,
     )

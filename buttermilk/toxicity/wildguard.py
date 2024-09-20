@@ -24,7 +24,7 @@ class Wildguard(ToxicityModel):
         description="Device type (CPU or CUDA)",
     )
     options: ClassVar[dict] = dict(max_new_tokens=128,
-            temperature=1.0, top_p=1.0)
+            temperature=1.0)
 
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "wildguard.txt"))
 
