@@ -211,13 +211,10 @@ def exec_local(
         results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
 
         # add batch details to the result dataset
-        for idx, row in results.iterrows():
-            row_batch_info = batch_id.copy()
-            for c in ["model", "process", "standard"]:
-                if c in row and c not in row_batch_info.keys():
-                    row_batch_info[c] = row[c]
+        cols = [c for c in ["model", "process", "standard"] if c in row and c not in batch_id.keys()]
+        batch_columns = pd.concat([results[cols], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
 
-            results.loc[idx, 'run_info'] = row_batch_info
+        results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=cols)
 
         bm.save(results, basename='partial_flow')
         del flow

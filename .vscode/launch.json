@@ -27,8 +27,8 @@
                 "+experiments=ots",
                 "+data=drag_noalt",
                 "+save=bq",
-                // "experiments.moderate.init.flow=REGARD",
-                "experiments.moderate.num_runs=1"
+                "experiments.moderate.init.flow=Aegis",
+                "experiments.moderate.num_runs=2"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

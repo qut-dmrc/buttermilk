@@ -126,7 +126,8 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
             rows = data.to_dict(orient="records")
             rows = scrub_serializable(rows)
             # Try to upload as newline delimited json
-            json_data = "\n".join([json.dumps(row) for row in rows]).encode('utf-8')
+            json_data = "\n".join([json.dumps(row) for row in rows])
+            json_data = json_data.encode('utf-8')
             blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 
             # Try to upload as binary from a file like object
