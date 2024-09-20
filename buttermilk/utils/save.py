@@ -177,7 +177,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
 
     errors = []
     for chunk in chunks(bq_rows, 100):
-        errors.append(bq.insert_rows(table, chunk, selected_fields=schema))
+        errors.extend(bq.insert_rows(table, chunk, selected_fields=schema))
 
     if not errors:
         inserted = True

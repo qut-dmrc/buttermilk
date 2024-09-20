@@ -263,6 +263,7 @@ class LlamaGuard2Local(_HF, LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     client: Any = None
+    options: ClassVar[dict] = dict(temperature=1.0, top_p=0.95, max_new_tokens=128)
 
 
 class LlamaGuard2HF(LlamaGuardTox):
@@ -282,7 +283,6 @@ class _LlamaGuard3Common(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
-    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
 
     def make_prompt(self, content):
         agent_type = "Agent"
@@ -300,6 +300,7 @@ class LlamaGuard3Local(_HF, _LlamaGuard3Common):
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
     process_chain: str = "local transformers"
+    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
 
 
 
