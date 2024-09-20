@@ -13,6 +13,7 @@ import uuid
 import validators
 import math
 
+from google.cloud.bigquery import SchemaField
 
 from typing import Any, List, Optional, TypeVar, Union
 
@@ -133,12 +134,9 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
     new_dict = {}
     keys_deleted = []
 
-    schema_keys = [row.get("name") for row in schema]
-    extra_keys = [key_name for key_name in d if key_name not in schema_keys]
-    if extra_keys and not remove_extra:
-        raise IOError(f"Received extra keys not in the schema: {extra_keys}")
-
     for row in schema:
+        if isinstance(row, SchemaField):
+            row = row.to_api_repr()
         key_name = row["name"]
         if key_name not in d:
             keys_deleted.append(key_name)

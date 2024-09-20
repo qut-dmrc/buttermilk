@@ -24,9 +24,10 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ots",
+                "+experiments=ots_gpu",
                 "+data=drag_noalt","+save=bq",
-                "experiments.moderate.init.flow=REGARD"
+                // "experiments.moderate.init.flow=REGARD",
+                "experiments.moderate.num_runs=1"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

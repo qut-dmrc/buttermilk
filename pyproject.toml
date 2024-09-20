@@ -104,7 +104,7 @@ addopts = [ "-rxX",
     ]
 #   " "-rA", "--timeout_method=thread", "--with-integration"
 filterwarnings = [
-    "ignore::DeprecationWarning",
+    "ignore::DeprecationWarning","ignore:The `dict` method is deprecated:PydanticDeprecatedSince20",
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning"
     ]
 

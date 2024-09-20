@@ -30,6 +30,7 @@ from buttermilk.flows.results_bq import SaveResultsBQ
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
 from buttermilk.utils.utils import read_json, read_text
+from buttermilk.exceptions import FatalError
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -237,26 +238,31 @@ def main(cfg: DictConfig) -> None:
 
     logger = bm.logger
 
+    try:
+        # Create a cycle iterator for the progress bar colours
+        bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
+        colour_cycle = cycle(bar_colours)
+        if 'moderate' in cfg.experiments.keys():
+            if cfg.experiments.moderate.init.get('flow') and cfg.experiments.moderate.init.flow != 'to_be_replaced':
+                # just run one model as specified
+                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run, save_cfg=cfg.save)
+            else:
+                shuffle(cfg.experiments.moderate.models)
+                for flow in cfg.experiments.moderate.models:
+                    cfg.experiments.moderate.init['flow'] = str(flow)
+                    run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run,save_cfg=cfg.save)
+        elif 'judger' in cfg.experiments.keys():
+            connections = bm._connections_azure
+            cfg.experiments.judger.init['connections'] = connections
+            run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
+        pass
 
-    # Create a cycle iterator for the progress bar colours
-    bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
-    colour_cycle = cycle(bar_colours)
-    if 'moderate' in cfg.experiments.keys():
-        if cfg.experiments.moderate.init.get('flow') and cfg.experiments.moderate.init.flow != 'to_be_replaced':
-            # just run one model as specified
-            run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run, save_cfg=cfg.save)
-        else:
-            shuffle(cfg.experiments.moderate.models)
-            for flow in cfg.experiments.moderate.models:
-                cfg.experiments.moderate.init['flow'] = str(flow)
-                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run,save_cfg=cfg.save)
-    elif 'judger' in cfg.experiments.keys():
-        connections = bm._connections_azure
-        cfg.experiments.judger.init['connections'] = connections
-        run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
-    pass
-
+    except KeyboardInterrupt:
+        # Second time; quit immediately.
+        raise FatalError("Keyboard interrupt. Aborting immediately.")
 def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=None):
+
+
     global bm
     logger = bm.logger
     df = pd.DataFrame()
@@ -285,12 +291,13 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
     # Run flow
     try:
 
-        flow_outputs = run_flow(flow=flow_obj,
+        df = run_flow(flow=flow_obj,
                                 flow_cfg=flow_cfg,
                                 dataset=data_file,
                                 run_name = run_name,
                                 column_mapping=dict(data.columns), run_cfg=run_cfg, batch_id=batch_id )
 
+        df.loc[:, 'run_id'] = bm.run_id
 
         # Run the evaulation flows
         for eval_model in evaluator_cfg.get("models", []):
@@ -325,6 +332,12 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
         if save_cfg:
             # save to bigquery
             save_to_bigquery(df, save_cfg=save_cfg)
+    except KeyboardInterrupt:
+                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
+                logger.info(
+                    "Keyboard interrupt. Finishing current job but not quitting. Interrupt again to quit immediately."
+                )
+
     except Exception as e:
         logger.exception(dict(message=f"Failed {flow_name} running on {run_cfg.platform} with run name: {run_name}", error=str(e), **batch_id))
     finally:
