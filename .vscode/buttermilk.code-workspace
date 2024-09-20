@@ -5,6 +5,10 @@
 		},
 		{
 			"path": "../../dev"
+		},
+		{
+			"name": "explorations",
+			"path": "../../explorations"
 		}
 	],
 	"settings": {

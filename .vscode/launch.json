@@ -24,8 +24,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ots_gpu",
-                "+data=drag_noalt","+save=bq",
+                "+experiments=ots",
+                "+data=drag_noalt",
+                "+save=bq",
                 // "experiments.moderate.init.flow=REGARD",
                 "experiments.moderate.num_runs=1"
             ],

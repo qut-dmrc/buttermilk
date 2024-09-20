@@ -173,7 +173,7 @@ class ToxicityModel(BaseModel):
     def call_client(
         self, prompt: str, **kwargs
     ) -> EvalRecord:
-        raise NotImplementedError
+        return self.client.__call__(prompt, **kwargs)
 
     @trace
     def make_prompt(self, content):
