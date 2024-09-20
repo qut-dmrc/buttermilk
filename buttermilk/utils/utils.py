@@ -218,11 +218,7 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
 def remove_punctuation(text):
     return re.sub(r"\p{P}+", "", text)
 
-def reset_index_and_dedup_columns(df: pd.DataFrame):
-    """Reset index and rename any duplicate columns in a dataframe"""
-
-    df = df.reset_index(allow_duplicates=True)
-
+def dedup_columns(df):
     if any(df.columns.duplicated()):
         cols = pd.Series(df.columns)
         dup_count = cols.value_counts()
@@ -234,6 +230,14 @@ def reset_index_and_dedup_columns(df: pd.DataFrame):
         df.columns = cols
 
     return df
+
+def reset_index_and_dedup_columns(df: pd.DataFrame):
+    """Reset index and rename any duplicate columns in a dataframe"""
+
+    df = df.reset_index(allow_duplicates=True)
+
+    return dedup_columns(df)
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""

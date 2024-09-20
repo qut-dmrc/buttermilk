@@ -29,7 +29,7 @@ from buttermilk.flows.judge.judge import Judger
 from buttermilk.flows.results_bq import SaveResultsBQ
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
-from buttermilk.utils.utils import read_json, read_text
+from buttermilk.utils.utils import dedup_columns, read_json, read_text
 from buttermilk.exceptions import FatalError
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -212,7 +212,8 @@ def exec_local(
 
         # add batch details to the result dataset
         id_cols = [c for c in ["model", "process", "standard"] if c not in batch_id.keys() ]
-        batch_columns = pd.concat([results[id_cols], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
+        batch_columns = dedup_columns(results[id_cols])
+        batch_columns = pd.concat([batch_columns, pd.json_normalize(itertools.repeat(batch_id, batch_columns.shape[0]))], axis='columns')
 
         results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=["model", "process", "standard"])
 
