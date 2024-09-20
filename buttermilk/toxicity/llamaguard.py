@@ -124,7 +124,7 @@ class LlamaGuardTox(ToxicityModel):
     client: Any = None
     tokenizer: Any = None
     model: str
-    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128, top_k=1)
+    options: ClassVar[dict] = dict(temperature=1.0)
 
     @trace
     def make_prompt(self, content):

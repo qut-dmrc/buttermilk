@@ -300,7 +300,7 @@ class _HF(ToxicityModel):
 class _Octo(ToxicityModel):
     model: str
     process_chain: str = "Octo API"
-    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128, top_k=1)
+    options: ClassVar[dict]
 
     def init_client(self) -> None:
         from octoai.client import OctoAI
