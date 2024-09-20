@@ -744,6 +744,7 @@ class GPTJT(ToxicityModel):
     ResponseMap: dict[str, int] = {
         "casual": 1,
         "needs caution": 2,
+        "need caution": 2,
         "needs intervention": 3,
         "possibly needs caution": 4,
         "probably needs caution": 5,
@@ -779,15 +780,18 @@ class GPTJT(ToxicityModel):
         # Load the message info into the output
         outcome = EvalRecord(
         )
-        outcome.response = response
-        outcome.scores = [
-            Score(
-                measure=self.standard, score=self.ResponseMap[response], labels=[response]
-            )
-        ]
+        try:
+            outcome.response = response
+            outcome.scores = [
+                Score(
+                    measure=self.standard, score=self.ResponseMap[response], labels=[response]
+                )
+            ]
 
-        outcome.predicted = self.ResponseMap[response] >= 2
-        outcome.labels = [response]
+            outcome.predicted = self.ResponseMap[response] >= 2
+            outcome.labels = [response]
+        except Exception as e:
+            raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
 
         return outcome
 

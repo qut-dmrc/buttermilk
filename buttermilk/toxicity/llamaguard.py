@@ -300,6 +300,7 @@ class LlamaGuard3Local(_HF, _LlamaGuard3Common):
     standard: str = "llamaguard3"
     process_chain: str = "local transformers"
     options: ClassVar[dict] = dict(temperature=1.0)
+    call_options: ClassVar[dict] = dict(max_new_tokens=128, pad_token_id=0)
 
 
 
