@@ -11,7 +11,7 @@ judger:
   init:
     model: haiku
     template_path: judge.jinja2
-    standard_path: trans_simplified.jinja2
+    standards_path: trans_simplified.jinja2
   # standards:
   # - trans_tja.jinja2
   # - trans_cte.jinja2
@@ -31,10 +31,10 @@ evaluator:
     predicted: run.outputs.predicted
     reasons: run.outputs.reasons
   models:
-    - llama31_70b
-    - gpt4o
+    # - llama31_70b
+    # - gpt4o
     - sonnet
-    - gemini15pro
+    # - gemini15pro
 score:
   aggregate: false
 metrics:

@@ -211,7 +211,8 @@ def exec_local(
         results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
 
         # add batch details to the result dataset
-        batch_columns = pd.concat([results[["model", "process", "standard"]], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
+        id_cols = [c for c in ["model", "process", "standard"] if c not in batch_id.keys() ]
+        batch_columns = pd.concat([results[id_cols], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
 
         results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=["model", "process", "standard"])
 
@@ -260,6 +261,8 @@ def main(cfg: DictConfig) -> None:
     except KeyboardInterrupt:
         # Second time; quit immediately.
         raise FatalError("Keyboard interrupt. Aborting immediately.")
+
+
 def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=None):
 
 
@@ -270,7 +273,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
 
     flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
     if flow := flow_cfg.get('init', {}).get('flow', None):
-        flow_name = f"{flow_name}_{flow}x{flow_cfg.num_runs}"
+        flow_name = f"{flow_name}_{flow}_x{flow_cfg.num_runs}"
 
     batch_id = dict(
         run_id=bm.run_id,
@@ -286,7 +289,9 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
             v = re.sub(r'\..*', '', str(v))
             v = str.lower(v)
             batch_id[k] = v
+
     logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
+
     t0 = datetime.datetime.now()
     # Run flow
     try:
@@ -307,7 +312,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
             evals = run_flow(flow=EvalQA,
                                 flow_cfg=evaluator_cfg,
                             dataset=data_file,
-                            step_outputs = flow_outputs,
+                            step_outputs = df,
                             run_outputs = run_name,
                             run_name = eval_name,
                             column_mapping=dict(evaluator_cfg['columns']),
