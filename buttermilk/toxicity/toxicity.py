@@ -661,8 +661,7 @@ class HONEST(ToxicityModel):
     def call_client(
         self, prompt: str, **kwargs
     ) -> Any:
-        completions = self.make_prompt(prompt)
-        result = self.client.compute(predictions=completions)
+        result = self.client.compute(predictions=prompt)
         return result
 
     @trace
