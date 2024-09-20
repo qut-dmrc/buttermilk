@@ -203,18 +203,20 @@ def exec_local(
 
                 results.append(details)
     finally:
-        results = pd.DataFrame(results)
+        results = pd.DataFrame(results).reset_index(drop=False,names='line_number')
 
         # add input details to the result dataset
         relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()) - set(results.keys()))
-        inputs = pd.Series(input_df[relevant_input_cols].to_dict(orient='records'), index=input_df['record_id'],name='inputs')
-        results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
+        inputs = input_df.drop_duplicates(subset='record_id').set_index('record_id')[relevant_input_cols]
+        inputs = pd.Series(input_df[relevant_input_cols].to_dict(orient='records'), index=input_df.index, name='inputs')
+        results = pd.merge(results, inputs, left_on='record_id',right_index=True,how='inner', suffixes=(None,'_exec'))
 
         # add batch details to the result dataset
-        cols = [c for c in ["model", "process", "standard"] if c in results.columns and c not in batch_id.keys()]
-        batch_columns = pd.concat([results[cols], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
+        relevant_batch_cols = [c for c in ["model", "process", "standard"] if c in results.columns and c not in batch_id.keys()]
+        batch_columns = pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))
+        batch_columns = pd.concat([results[relevant_batch_cols].reset_index(drop=True), batch_columns], axis='columns')
 
-        results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=cols)
+        results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=relevant_batch_cols)
 
 
         bm.save(results, basename='partial_flow')
