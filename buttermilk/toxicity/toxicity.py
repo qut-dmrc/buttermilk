@@ -175,7 +175,7 @@ class ToxicityModel(BaseModel):
     ) -> EvalRecord:
         return self.client.__call__(prompt, **kwargs)
 
-    @trace
+    @abc.abstractmethod
     def make_prompt(self, content):
         raise NotImplementedError
 
@@ -652,11 +652,15 @@ class HONEST(ToxicityModel):
 
     def init_client(self) -> None:
         self.client = evaluate.load("honest", "en")
+
+    def make_prompt(self, content: str) -> list[str]:
+        return content.split(' ')
+
     @trace
     def call_client(
         self, prompt: str, **kwargs
     ) -> Any:
-        completions = [prompt.split(" ")]
+        completions = self.make_prompt(prompt)
         result = self.client.compute(predictions=completions)
         return result
 
@@ -805,7 +809,7 @@ class OpenAIModerator(ToxicityModel):
 
     def make_prompt(self, content: str) -> str:
         return content
-    
+
     @trace
     def call_client(
         self, prompt: str, **kwargs
