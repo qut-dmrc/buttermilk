@@ -127,15 +127,14 @@ class ToxicityModel(BaseModel):
     @model_validator(mode="after")
     def validate_model(self):
         if self.client is None:
-            self.client = self.init_client()
+            self.init_client()
             if self.client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
         return self
 
-    def init_client(self):
+    def init_client(self) -> None:
         if self.client is None:
             raise NotImplementedError()
-        return self.client
 
     def run(self, job: Job) -> Job:
         response = self.moderate(content=job.record.content, record_id=job.record.record_id)
@@ -262,7 +261,7 @@ class _HF(ToxicityModel):
     client: Any = None
     tokenizer: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
@@ -271,7 +270,6 @@ class _HF(ToxicityModel):
 
         self.client = AutoModelForCausalLM.from_pretrained(self.model, trust_remote_code=True).to(self.device)
 
-        return self.client
 
     @trace
     def call_client(
@@ -304,13 +302,13 @@ class _Octo(ToxicityModel):
     process_chain: str = "Octo API"
     options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128, top_k=1)
 
-    def init_client(self):
+    def init_client(self) -> None:
         from octoai.client import OctoAI
 
         client = OctoAI(
             api_key=os.environ['OCTOAI_API_KEY'],
         )
-        return client
+        self.client = client
 
     @trace
     def call_client(
@@ -334,16 +332,15 @@ class Perspective(ToxicityModel):
     standard: str = "perspective"
     client: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         credentials, _ = google.auth.default()
-        client = discovery.build(
+        self.client = discovery.build(
             "commentanalyzer",
             "v1alpha1",
             credentials=credentials,
             discoveryServiceUrl="https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1",
             static_discovery=False,
         )
-        return client
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -389,12 +386,12 @@ class Comprehend(ToxicityModel):
     standard: str = "comprehend"
     client: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         access_key = os.getenv("AWS_ACCESS_KEY_ID")
         secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         region = os.getenv("AWS_REGION")
 
-        return boto3.client(
+        self.client = boto3.client(
             service_name="comprehend",
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
@@ -455,7 +452,7 @@ class AzureContentSafety(ToxicityModel):
         **Note: We are using a cut-off of >=3 for the binary 'result' field.**
     """
 
-    def init_client(self):
+    def init_client(self) -> None:
         API_KEY = os.environ["AZURE_CONTENT_SAFETY_KEY"]
         ENDPOINT = os.environ.get(
             "AZURE_CONTENT_SAFETY_ENDPOINT",
@@ -465,7 +462,7 @@ class AzureContentSafety(ToxicityModel):
         credential = AzureKeyCredential(API_KEY)
         content_safety_client = ContentSafetyClient(ENDPOINT, credential)
         # blocklist_client = BlocklistClient(endpoint, credential)
-        return content_safety_client
+        self.client = content_safety_client
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -538,13 +535,13 @@ class AzureModerator(ToxicityModel):
     """
 
 
-    def init_client(self):
+    def init_client(self) -> None:
         SUBSCRIPTION_KEY = os.environ["AZURE_CONTENT_MODERATOR_KEY"]
         ENDPOINT = os.environ.get(
             "AZURE_CONTENT_MODERATOR_ENDPOINT",
             "https://westus.api.cognitive.microsoft.com",
         )
-        return ContentModeratorClient(
+        self.client = ContentModeratorClient(
             endpoint=ENDPOINT,
             credentials=CognitiveServicesCredentials(subscription_key=SUBSCRIPTION_KEY),
         )
@@ -611,11 +608,11 @@ class REGARD(ToxicityModel):
     standard: str = "regard"
     client: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         if torch.cuda.is_available():
-            return evaluate.load("regard", module_type="measurement",device = "cuda")
+            self.client = evaluate.load("regard", module_type="measurement",device = "cuda")
         else:
-            return evaluate.load("regard", module_type="measurement")
+            self.client = evaluate.load("regard", module_type="measurement")
 
 
     def make_prompt(self, content: str) -> str:
@@ -653,8 +650,8 @@ class HONEST(ToxicityModel):
     standard: str = "honest"
     client: Any = None
 
-    def init_client(self):
-        return evaluate.load("honest", "en")
+    def init_client(self) -> None:
+        self.client = evaluate.load("honest", "en")
     @trace
     def call_client(
         self, prompt: str, **kwargs
@@ -687,7 +684,7 @@ class LFTW(ToxicityModel):
     tokenizer: Any = None
     classes: dict = {}
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
@@ -697,7 +694,6 @@ class LFTW(ToxicityModel):
         self.classes = cfg.id2label
         self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(self.device)
 
-        return self.client
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -749,7 +745,7 @@ class GPTJT(ToxicityModel):
         "probably needs caution": 5,
     }
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.client = hf_pipeline(hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
                 device=self.device, max_new_tokens=3
@@ -803,9 +799,9 @@ class OpenAIModerator(ToxicityModel):
     standard: str = "openaimod"
     client: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         openai.api_type = 'openai'
-        return openai.moderations
+        self.client = openai.moderations
 
     @trace
     def call_client(
@@ -844,13 +840,13 @@ class ShieldGemma(ToxicityModel):
         description="Device type (CPU or CUDA or auto)",
     )
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
         vocab = self.tokenizer.get_vocab()
         self.classes = [vocab['Yes'], vocab['No']]
-        return self.client
+
 
     def make_prompt(self, text):
         prompt =  self.template.format(text=text)
@@ -907,13 +903,13 @@ class ToxicChat(ToxicityModel):
     standard: str = "toxicchat"
     client: Any = None
 
-    def init_client(self):
+    def init_client(self) -> None:
         from langchain_community.llms.huggingface_endpoint import HuggingFaceEndpoint
 
         API_URL = (
             "https://api-inference.huggingface.co/models/lmsys/toxicchat-t5-large-v1.0"
         )
-        return HuggingFaceEndpoint(endpoint_url=API_URL)
+        self.client = HuggingFaceEndpoint(endpoint_url=API_URL)
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)

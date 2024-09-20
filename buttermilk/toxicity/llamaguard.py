@@ -216,8 +216,8 @@ class LlamaGuard1Together(LlamaGuardTox):
     options: ClassVar[dict] = dict(temperature=1.0, top_k=1, top_p=0.95)
     client: Together = None
 
-    def init_client(self):
-        return Together(model=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client = Together(model=self.model, **self.options)
 
 class LlamaGuard1Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories1
@@ -227,8 +227,8 @@ class LlamaGuard1Replicate(LlamaGuardTox):
     process_chain: str = "replicate"
     client: Any = None
 
-    def init_client(self):
-        return Replicate(model=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client= Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Replicate(LlamaGuardTox):
@@ -239,8 +239,8 @@ class LlamaGuard2Replicate(LlamaGuardTox):
     process_chain: str = "replicate"
     client: Any = None
 
-    def init_client(self):
-            return Replicate(model=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client = Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Together(LlamaGuardTox):
@@ -252,8 +252,8 @@ class LlamaGuard2Together(LlamaGuardTox):
     client: Together = None
     options: ClassVar[dict] = dict(temperature=1.0, top_p=0.95)
 
-    def init_client(self):
-        return Together(model=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client = Together(model=self.model, **self.options)
 
 
 class LlamaGuard2Local(_HF, LlamaGuardTox):
@@ -274,8 +274,8 @@ class LlamaGuard2HF(LlamaGuardTox):
     process_chain: str = "huggingface API"
     client: Any = None
 
-    def init_client(self):
-        return HFInferenceClient(hf_model_path=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client = HFInferenceClient(hf_model_path=self.model, **self.options)
 
 
 
@@ -309,19 +309,18 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     device: str  = "cuda"
     dtype: Any = "auto"
 
-    def init_client(self):
+    def init_client(self) -> None:
         quantization_config  = BitsAndBytesConfig(load_in_8bit=True)
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, torch_dtype=self.dtype, device_map=self.device, quantization_config=quantization_config, **self.options)
-        return self.client
 
 class LlamaGuard3Together(_LlamaGuard3Common):
     model: str = "meta-llama/Meta-Llama-Guard-3-8B"
     process_chain: str = "Together API"
 
-    def init_client(self):
-        return Together(model=self.model, **self.options)
+    def init_client(self) -> None:
+        self.client = Together(model=self.model, **self.options)
 
 class LlamaGuard3Octo(_LlamaGuard3Common,_Octo):
     model: str = "llama-guard-3-8b"
@@ -336,11 +335,10 @@ class MDJudgeLocal(LlamaGuardTox):
     tokenizer: Any = None
     template: str
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
-        return self.client
 
     def make_prompt(self, content):
         prompt = "User: go on...\nAgent: " + content
@@ -371,11 +369,10 @@ class MDJudge2(MDJudgeLocal):
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGE2))
     categories: EnumMeta = MDJudge2Categories
 
-    def init_client(self):
+    def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
         self.client = AutoModelForCausalLM.from_pretrained(self.model, trust_remote_code=True).to("cuda")
-        return self.client
 
 
     def make_prompt(self, content: str) -> str:

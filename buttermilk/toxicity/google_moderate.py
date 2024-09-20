@@ -19,9 +19,8 @@ class GoogleModerate(ToxicityModel):
     process_chain: str = "LanguageServiceClient"
     client: Any = None
 
-    def init_client(self):
-        client = language_v2.LanguageServiceClient()
-        return client
+    def init_client(self) -> None:
+        self.client = language_v2.LanguageServiceClient()
 
     @trace
     def make_prompt(self, content: str) -> str:

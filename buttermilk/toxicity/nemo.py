@@ -63,7 +63,7 @@ class NemoLangchain(Nemo):
 
         return  output
 
-    def init_client(self):
+    def init_client(self) -> None:
         bm = BM()
         llm = LLMs(connections=bm._connections_azure)[self.model]
         template_text = read_yaml(Path(__file__).parent / "templates/nemo_self_check.yaml")
@@ -75,7 +75,7 @@ class NemoLangchain(Nemo):
         langchain_template = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
         chain = langchain_template | llm | ChatParser()
-        return chain
+        self.client = chain
 
 
 

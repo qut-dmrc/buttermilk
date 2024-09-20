@@ -194,9 +194,7 @@ class TestClients:
     def test_comprehend(self, toxic_record: InputRecord):
         tox=Comprehend()
 
-        client = tox.init_client()
-
-        result = client.mod_meratesingle(toxic_record.text)
+        result = tox.client.mod_meratesingle(toxic_record.text)
 
         assert result is not None
 

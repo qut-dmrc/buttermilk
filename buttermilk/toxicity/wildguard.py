@@ -28,8 +28,8 @@ class Wildguard(ToxicityModel):
 
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "wildguard.txt"))
 
-    def init_client(self):
-        return pipeline("text-generation", model=self.model,device=self.device)
+    def init_client(self) -> None:
+        self.client = pipeline("text-generation", model=self.model,device=self.device)
 
     @trace
     def make_prompt(self, content: str) -> str:

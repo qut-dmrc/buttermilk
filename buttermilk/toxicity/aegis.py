@@ -69,7 +69,6 @@ class Aegis(LlamaGuardTox):
         self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e")
         base_model = AutoModelForCausalLM.from_pretrained("meta-llama/LlamaGuard-7b", revision="3e764390d6b39028ddea5b20603c89476107b41e", device_map=self.device, **self.options)
         self.client = PeftModel.from_pretrained(base_model, "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0", torch_device=self.device)
-        return self.client
 
     @trace
     def call_client(
