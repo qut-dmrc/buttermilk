@@ -190,7 +190,6 @@ class LlamaGuardTox(ToxicityModel):
             outcome.predicted = True
             explanation = explanation or 'unsafe'
             if not reasons:
-                reasons = ["unknown"]
                 outcome.error = f"Invalid reasons returned from LLM: {answer}"
 
             for reason in reasons:
