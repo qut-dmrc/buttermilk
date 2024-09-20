@@ -204,17 +204,12 @@ def exec_local(
                 results.append(details)
     finally:
         results = pd.DataFrame(results)
-
-        # add input details to the result dataset
-        relevant_input_cols = list(set(input_df.columns).intersection(columns.keys()) - set(results.keys()))
-        inputs = pd.Series(input_df[relevant_input_cols].to_dict(orient='records'), index=input_df['record_id'],name='inputs')
-        results = pd.merge(results, inputs, left_on='record_id',right_index=True ,suffixes=(None,'_exec'))
-
         # add batch details to the result dataset
-        cols = [c for c in ["model", "process", "standard"] if c in row and c not in batch_id.keys()]
+        cols = [c for c in ["model", "process", "standard"] if c in results.columns and c not in batch_id.keys()]
         batch_columns = pd.concat([results[cols], pd.json_normalize(itertools.repeat(batch_id, results.shape[0]))], axis='columns')
 
         results = results.assign(run_info=batch_columns.to_dict(orient='records')).drop(columns=cols)
+
 
         bm.save(results, basename='partial_flow')
         del flow
