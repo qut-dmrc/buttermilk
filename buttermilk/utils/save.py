@@ -50,7 +50,7 @@ def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: st
             uri = save_dir / basename
         except Exception as e:
             logger.warning(
-            f"Error saving data to using upload_dataframe_json: {e} {e.args=}, {params}"
+            f"Error saving data to cloud uri: {e} {e.args=}, {params}"
         )
 
     if isinstance(uri, CloudPath):
@@ -124,7 +124,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not data.empty:
         try:
             gcs = storage.Client()
-            rows = data.to_json(orient="records")
+            rows = data.to_dict(orient="records")
             rows = scrub_serializable(rows)
             # Try to upload as newline delimited json
             json_data = "\n".join([json.dumps(row) for row in rows]).encode('utf-8')
