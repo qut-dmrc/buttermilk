@@ -115,7 +115,6 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
 
-    # use pandas to upload to GCS
     if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
         uri = uri + ".jsonl"
 
@@ -138,6 +137,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
             logger.warning(
                 f"Error saving data to {uri} in upload_dataframe_json using BytesIO: {e} {e.args=}"
             )
+            # use pandas to upload to GCS
             data.to_json(uri, orient="records", lines=True)
             return uri
 
