@@ -262,7 +262,8 @@ class LlamaGuard2Local(_HF, LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     client: Any = None
-    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
+    options: ClassVar[dict] = dict(temperature=1.0)
+    call_options: ClassVar[dict] = dict(max_new_tokens=128)
 
 
 class LlamaGuard2HF(LlamaGuardTox):
