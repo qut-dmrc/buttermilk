@@ -299,7 +299,7 @@ class LlamaGuard3Local(_HF, _LlamaGuard3Common):
     template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
     standard: str = "llamaguard3"
     process_chain: str = "local transformers"
-    options: ClassVar[dict] = dict(temperature=1.0, max_new_tokens=128)
+    options: ClassVar[dict] = dict(temperature=1.0)
 
 
 

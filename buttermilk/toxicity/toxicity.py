@@ -258,6 +258,7 @@ class _HF(ToxicityModel):
         description="Device type (CPU or CUDA or auto)",
     )
     options: ClassVar[dict] = dict(temperature=1.0)
+    call_options: ClassVar[dict] = dict(max_new_tokens=128)
     client: Any = None
     tokenizer: Any = None
 
@@ -278,7 +279,7 @@ class _HF(ToxicityModel):
 
         input_ids = self.tokenizer([prompt], padding="longest", return_tensors="pt").to(self.device)['input_ids']
 
-        output = self.client.generate(input_ids=input_ids, **self.options, **kwargs)
+        output = self.client.generate(input_ids=input_ids, **self.options, **self.call_options, **kwargs)
         prompt_len = input_ids.shape[-1]
         response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
         try:
