@@ -750,6 +750,7 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self):
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.client = hf_pipeline(hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
                 device=self.device, max_new_tokens=3
         )
