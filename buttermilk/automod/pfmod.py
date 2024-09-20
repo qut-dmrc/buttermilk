@@ -217,7 +217,7 @@ def exec_local(
                 if c in row and c not in row_batch_info.keys():
                     row_batch_info[c] = row[c]
 
-            results.loc[idx, 'batch_id'] = row_batch_info
+            results.loc[idx, 'run_info'] = row_batch_info
 
         bm.save(results, basename='partial_flow')
         del flow
