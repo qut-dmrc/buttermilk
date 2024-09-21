@@ -153,7 +153,7 @@ class ToxicityModel(BaseModel):
 
     @trace
     def __call__(self, prompt: str, **kwargs) -> EvalRecord:
-        return self.call_client(prompt=prompt, **kwargs)
+        return self.moderate(prompt=prompt, **kwargs)
 
     # @retry(
     #     retry=retry_if_exception_type(

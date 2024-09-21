@@ -17,6 +17,8 @@ import regex as re
 class Nemo(ToxicityModel):
     standard: Literal["nemo_self_check.input", "nemo_self_check.output", "nemo_self_check.input_simple", "nemo_self_check.output_simple",]
 
+    def make_prompt(self, content: str) -> str:
+        return content
 
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord()

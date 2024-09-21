@@ -2,6 +2,8 @@
 
 import json
 import random
+import pytest
+from langchain_core.globals import set_debug
 
 #import evaluate
 import pandas as pd
@@ -54,8 +56,6 @@ def llamaguard(request):
 def llamaguard_gpu(request):
     return request.param()
 
-import pytest
-from langchain_core.globals import set_debug
 
 @pytest.fixture(scope="session")
 def toxic_record() -> InputRecord:

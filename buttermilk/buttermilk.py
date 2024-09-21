@@ -199,7 +199,7 @@ class BM(Singleton, BaseModel):
 
         warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
         warnings.filterwarnings(action="ignore",module="msal", category=DeprecationWarning)
-        warnings.filterwarnings(action="ignore",message="ignore:The `dict` method is deprecated:PydanticDeprecatedSince20",module="promptflow-tracing", category=DeprecationWarning)
+        warnings.filterwarnings(action="ignore",message="The `dict` method is deprecated",module="promptflow-tracing", category=DeprecationWarning)
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:

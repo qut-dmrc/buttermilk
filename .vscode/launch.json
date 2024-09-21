@@ -27,7 +27,7 @@
                 "+experiments=ots",
                 "+data=drag_noalt",
                 "+save=bq",
-                "experiments.moderate.init.flow=Aegis",
+                "experiments.moderate.init.flow=GoogleModerate",
                 "experiments.moderate.num_runs=2"
             ],
             "envFile": "${workspaceFolder}/.env",
