@@ -12,8 +12,7 @@ import tempfile
 from google.api_core.exceptions import AlreadyExists, ClientError, GoogleAPICallError
 from cloudpathlib import CloudPath
 from google.cloud import bigquery, storage
-from .utils import reset_index_and_dedup_columns
-from .utils import construct_dict_from_schema, make_serialisable
+from .utils import read_file, reset_index_and_dedup_columns, construct_dict_from_schema, make_serialisable
 from .log import logger
 def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
     from .utils import reset_index_and_dedup_columns
@@ -149,6 +148,11 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     bq = bigquery.Client()  # use application default credentials
 
     if isinstance(schema, str):
+        # Check if str looks like a filename
+        try:
+            schema = read_file(schema)
+        except:
+            pass
         schema = bigquery.Client().schema_from_json(schema)
 
     if isinstance(rows, pd.DataFrame):
@@ -198,7 +202,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_binary(*, save_dir=None, data=None, uri=None, filename=None, extension=None):
+def upload_binary(data=None, *, save_dir=None, uri=None, filename=None, extension=None):
     assert data is not None
     gcs = storage.Client()
 

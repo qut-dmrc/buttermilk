@@ -33,6 +33,7 @@ from buttermilk.toxicity import MDJudgeLocalTask,  MDJudgeLocalDomain
 from buttermilk.types.tox import EvalRecord
 from buttermilk.utils import read_text
 from buttermilk.runner import InputRecord, Job, Consumer, ResultsCollector, TaskDistributor
+from tests.conftest import skipif_no_gpu
 
 LLAMAGUARD_MODELS = [
     LlamaGuard1Together,
@@ -302,7 +303,9 @@ class TestToxicityModels:
         # assert uri
 
     @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS_LOCAL)
-    def test_local_models(self, tox_model_cls, toxic_record):
+    @pytest.mark.gpu
+    @skipif_no_gpu("Not running GPU or RAM intensive tests")
+    def test_tox_models_gpu(self, tox_model_cls, toxic_record):
         local_model = tox_model_cls()
         assert local_model
         result = local_model.moderate(content=toxic_record.text)

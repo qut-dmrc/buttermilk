@@ -1,5 +1,5 @@
 from typing import (
-    Any,
+    Any,ClassVar
 )
 from .toxicity import ToxicityModel, EvalRecord, Score, _Octo
 from promptflow.tracing import trace
@@ -48,6 +48,7 @@ class NemoLangchain(Nemo):
     model: str
     client: Any = None
     process_chain: str = "langchain"
+    options: ClassVar[dict] = {}
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -83,13 +84,13 @@ class NemoLangchain(Nemo):
 class NemoInputSimpleMistralOcto(_Octo, Nemo):
     standard: str = "nemo_self_check.input_simple"
     model: str ="mistral-nemo-instruct"
-class NemoInputComplexMistralOcto(Nemo, _Octo):
+class NemoInputComplexMistralOcto(_Octo, Nemo):
     standard: str = "nemo_self_check.input"
     model: str ="mistral-nemo-instruct"
-class NemoOutputSimpleMistralOcto(Nemo, _Octo):
+class NemoOutputSimpleMistralOcto(_Octo, Nemo):
     standard: str = "nemo_self_check.output_simple"
     model: str ="mistral-nemo-instruct"
-class NemoOutputComplexMistralOcto(Nemo, _Octo):
+class NemoOutputComplexMistralOcto(_Octo, Nemo):
     standard: str = "nemo_self_check.output"
     model: str ="mistral-nemo-instruct"
 class NemoInputSimpleGPT4o(NemoLangchain):
