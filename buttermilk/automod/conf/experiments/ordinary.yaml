@@ -1,6 +1,8 @@
-judge:
-  name: ordinary
+
+judger:
+  name: judger
+  num_runs: 1
   init:
-    template: judge.prompty
-    standard: criteria_ordinary.jinja2
+    template_path: judge.jinja2
+    standards_path: criteria_ordinary.jinja2
   models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus","haiku", "sonnet", "gemini15pro"]

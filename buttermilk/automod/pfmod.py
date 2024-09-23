@@ -294,7 +294,7 @@ def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=N
             v = str.lower(v)
             batch_id[k] = v
 
-    logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with run name: {run_name}", **batch_id))
+    logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with batch id {batch_id}.", **batch_id))
 
     t0 = datetime.datetime.now()
     # Run flow

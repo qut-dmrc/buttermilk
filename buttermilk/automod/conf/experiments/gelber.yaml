@@ -1,6 +1,5 @@
 defaults:
  - ordinary
-judge:
-  name: gelber
+judger:
   init:
-    standard: criteria_gelber.jinja2
+    standards_path: criteria_ordinary.jinja2

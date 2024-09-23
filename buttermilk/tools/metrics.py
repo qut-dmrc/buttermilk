@@ -71,7 +71,7 @@ class Metriciser:
         # Combine metrics and proportions
         metrics = pd.concat([conf_matrix, proportion], axis=1)
 
-        metrics = metrics.sort_values(by='accuracy', ascending=False)
+        metrics = metrics.sort_values(by='f1-score', ascending=False)
 
         return metrics
 
