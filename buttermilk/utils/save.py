@@ -148,11 +148,11 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     bq = bigquery.Client()  # use application default credentials
 
     if isinstance(schema, str):
-        # Check if str looks like a filename
-        try:
-            schema = read_file(schema)
-        except:
-            pass
+        # # Check if str looks like a filename
+        # try:
+        #     schema = read_file(schema)
+        # except:
+        #     pass
         schema = bigquery.Client().schema_from_json(schema)
 
     if isinstance(rows, pd.DataFrame):

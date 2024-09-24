@@ -1,2 +1,0 @@
-promptflow
-scikit-learn

@@ -38,7 +38,7 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger(ToolProvider):
-    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connections: dict ={}) -> None:
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connections: dict ={}, **kwargs) -> None:
 
         self.connections = connections
         self.model = model
@@ -48,14 +48,14 @@ class Judger(ToolProvider):
         if standards_path and not criteria:
             criteria = env.get_template(standards_path).render()
 
-        partial_variables=dict(criteria=criteria)
+        partial_variables=dict(criteria=criteria, **kwargs)
 
         self.template = env.get_template(template_path).render(**partial_variables)
 
 
     @tool
     def __call__(
-        self, *, content: str, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
+        self, *, content: Optional[str] = None, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
 
         llm = LLMs(connections=self.connections)[self.model]
 
@@ -63,7 +63,9 @@ class Judger(ToolProvider):
 
         chain = tpl | llm | ChatParser()
 
-        input_vars = {"content": [HumanMessage(content=content)]}
+        input_vars = {}
+        if content is not None:
+            input_vars = {"content": [HumanMessage(content=content)]}
 
         output = self.invoke(chain=chain, input_vars=input_vars)
 

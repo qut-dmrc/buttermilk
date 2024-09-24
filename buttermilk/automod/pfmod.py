@@ -257,10 +257,10 @@ def main(cfg: DictConfig) -> None:
                     cfg.experiments.moderate.init['flow'] = str(flow)
                     run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run,save_cfg=cfg.save)
         elif 'judger' in cfg.experiments.keys():
-            connections = bm._connections_azure
-            cfg.experiments.judger.init['connections'] = connections
+            cfg.experiments.judger.init['connections'] = bm._connections_azure
             run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
         pass
+
 
     except KeyboardInterrupt:
         # Second time; quit immediately.
