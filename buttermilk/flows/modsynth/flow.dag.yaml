@@ -13,7 +13,10 @@ inputs:
 outputs:
   results:
     type: string
-    reference: ${lc.output}
+    reference: ${synth.output}
+  initial:
+    type: string
+    reference: ${mod.output}
 nodes:
 - name: mod
   type: python
