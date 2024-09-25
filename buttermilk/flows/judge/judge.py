@@ -21,6 +21,7 @@ from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 
+from buttermilk import BM
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
@@ -38,9 +39,13 @@ class LLMOutput(TypedDict):
     scores: dict
 
 class Judger(ToolProvider):
-    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connections: dict ={}, **kwargs) -> None:
+    def __init__(self, *, model: str, criteria: str = None, standards_path: str = None, template_path: str = 'judge.jinja2', connections: Optional[dict] = None) -> None:
+        if connections is not None:
+            self.connections = connections
+        else:
+            bm = BM()
+            self.connections = bm._connections_azure
 
-        self.connections = connections
         self.model = model
         loader=FileSystemLoader(searchpath=TEMPLATE_PATHS)
         env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
@@ -48,14 +53,14 @@ class Judger(ToolProvider):
         if standards_path and not criteria:
             criteria = env.get_template(standards_path).render()
 
-        partial_variables=dict(criteria=criteria, **kwargs)
+        partial_variables=dict(criteria=criteria)
 
         self.template = env.get_template(template_path).render(**partial_variables)
 
 
     @tool
     def __call__(
-        self, *, content: Optional[str] = None, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
+        self, *, content: Optional[str] = None, record_id: Optional[str] = None) -> LLMOutput:
 
         llm = LLMs(connections=self.connections)[self.model]
 

@@ -1,0 +1,71 @@
+$schema: https://azuremlschemas.azureedge.net/promptflow/latest/Flow.schema.json
+environment:
+  python_requirements_txt: requirements.txt
+additional_includes:
+- ../templates
+- ../templates/criteria_ordinary.jinja2
+- ../templates/judge.jinja2
+- ../judge/judge.py
+- ../lc/lc.py
+inputs:
+  content:
+    type: string
+    default: kill all men
+outputs:
+  outcomes:
+    type: string
+    reference: ${lc.output}
+  agg:
+    type: string
+    reference: ${agg.output}
+nodes:
+- name: judgersonnet
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: sonnet
+    content: ${inputs.content}
+  aggregation: false
+- name: judgergpt4o
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: gpt4o
+    content: ${inputs.content}
+  aggregation: false
+- name: judgergemini
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: gemini15pro
+    content: ${inputs.content}
+  aggregation: false
+- name: agg
+  type: python
+  source:
+    type: code
+    path: agg.py
+  inputs:
+    model1: ${judgersonnet.output}
+    model2: ${judgergpt4o.output}
+    model3: ${judgergemini.output}
+  aggregation: false
+- name: lc
+  type: python
+  source:
+    type: code
+    path: lc.py
+  inputs:
+    answers: ${agg.output}
+    content: ${inputs.content}
+    model: sonnet
+  aggregation: false

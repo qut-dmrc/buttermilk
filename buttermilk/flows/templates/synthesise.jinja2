@@ -23,11 +23,13 @@ You may be provided with additional feedback to consider. You should incorporate
     <END DRAFT ANSWER {{ draft.id }}>
 {% endfor %}
 
+{% if feedback %}
 {% for feedback in feedback %}
     <BEGIN FEEDBACK {{ feedback.id }}>
     {{ feedback.text }}
     <END FEEDBACK {{ feedback.id }}>
 {% endfor %}
+{% endif %}
 
 
 Ensure that your final answer is a complete and precise response to the original question. Present your answer in json format according to the original instructions. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.

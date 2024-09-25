@@ -51,8 +51,6 @@ class Wildguard(ToxicityModel):
         # Response refusal: yes
         # Harmful response: no
 
-        labels = []
-
         outcome = EvalRecord()
         lines = response.split('\n')
         if len(lines) < 2:
@@ -70,7 +68,7 @@ class Wildguard(ToxicityModel):
                 label = match[0]
                 prediction = match[2]
                 if prediction.lower().strip() == 'yes':
-                    labels.append(label.lower().strip())
+                    outcome.labels.append(label.lower().strip())
                     if label.lower().strip() in ["harmful request", "harmful response"]:
                         outcome.predicted = True
 
