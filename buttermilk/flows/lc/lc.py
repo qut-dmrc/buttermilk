@@ -31,13 +31,13 @@ from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined,
 
 
 class LangChainMulti(ToolProvider):
-    def __init__(self, *, models: dict, template_path: str, other_templates: dict = {}, other_vars: Optional[dict] = None) -> None:
+    def __init__(self, *, models: list, template_path: str, other_templates: dict = {}, other_vars: Optional[dict] = None) -> None:
         bm = BM()
         template_vars = {}
         if other_vars and isinstance(other_vars, dict):
             template_vars.update(other_vars)
         self.connections = bm._connections_azure
-        self.models = list(models.keys())
+        self.models = models
 
         self.llm = LLMs(connections=self.connections)
 
@@ -55,8 +55,7 @@ class LangChainMulti(ToolProvider):
         self,
         *,
         inputs: dict = {},
-        content: Optional[str] = None,
-        **kwargs: Any,
+        content: Optional[str] = None
     ) -> LLMOutputBatch:
         """Evaluate with langchain evaluator."""
         results = {}

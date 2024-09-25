@@ -5,117 +5,36 @@ additional_includes:
 - ../templates
 - ../templates/criteria_ordinary.jinja2
 - ../templates/judge.jinja2
-- ../judge/judge.py
 - ../lc/lc.py
 inputs:
   content:
     type: string
-    default: kill all men
+    default: ""
 outputs:
-  outcomes:
+  results:
     type: string
     reference: ${lc.output}
-  sonnet:
-    type: object
-    reference: ${judger_sonnet.output}
-  haiku:
-    type: object
-    reference: ${judger_haiku.output}
-  gpt4o:
-    type: object
-    reference: ${judger_gpt4o.output}
-  gemini15pro:
-    type: object
-    reference: ${judger_gemini.output}
-  llama31_70b:
-    type: object
-    reference: ${judger_llama31_70b.output}
-  llama31_8b:
-    type: object
-    reference: ${judger_llama31_8b.output}
-  llama31_405b:
-    type: object
-    reference: ${judger_llama31_405b.output}
 nodes:
-- name: judger_sonnet
+- name: mod
   type: python
   source:
     type: code
-    path: judge.py
+    path: lc.py
   inputs:
     standards_path: criteria_ordinary.jinja2
-    model: sonnet
     content: ${inputs.content}
-  aggregation: false
-- name: judger_gpt4o
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: gpt4o
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_gemini
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: gemini15pro
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_llama31_70b
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: llama31_70b
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_llama31_8b
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: llama31_8b
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_llama31_405b
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: llama31_405b
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_haiku
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: haiku
-    content: ${inputs.content}
-  aggregation: false
-- name: judger_opus
-  type: python
-  source:
-    type: code
-    path: judge.py
-  inputs:
-    standards_path: criteria_ordinary.jinja2
-    model: opus
-    content: ${inputs.content}
+    template_path: judge.jinja2
+    other_templates:
+      criteria: criteria_ordinary.jinja2
+    models:
+    - haiku
+    - sonnet
+  init:
+    models:
+      type: list
+      default:
+      - haiku
+      - sonnet
   aggregation: false
 - name: agg
   type: python
@@ -123,21 +42,28 @@ nodes:
     type: code
     path: agg.py
   inputs:
-    sonnet: ${judger_sonnet.output}
-    haiku: ${judger_haiku.output}
-    gpt4o: ${judger_gpt4o.output}
-    gemini15pro: ${judger_gemini.output}
-    llama31_70b: ${judger_llama31_70b.output}
-    llama31_8b: ${judger_llama31_8b.output}
-    llama31_405b: ${judger_llama31_405b.output}
+    moderated_results: ${mod.output}
   aggregation: false
-- name: lc
+- name: synth
   type: python
   source:
     type: code
     path: lc.py
   inputs:
-    answers: ${agg.output}
+    inputs: ${agg.output}
     content: ${inputs.content}
-    model: sonnet
+    template_path: synthesise.jinja2
+    other_vars: {}
+    other_templates:
+      original_instructions: judge.jinja2
+      criteria: criteria_ordinary.jinja2
+    models:
+    - haiku
+    - sonnet
   aggregation: false
+  init:
+    models:
+      type: list
+      default:
+      - haiku
+      - sonnet

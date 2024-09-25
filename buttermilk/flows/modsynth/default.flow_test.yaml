@@ -1,0 +1,12 @@
+tests:
+  - name: modsynth_${variant_id}_${timestamp}
+    display_name: modsynth_${variant_id}_${timestamp}
+    flow: /workspaces/buttermilk/buttermilk/flows/modsynth
+    data: /tmp/d2.jsonl
+    column_mapping:
+      models:
+        haiku: true
+        sonnet: true
+      record_id: ${data.id}
+      content: ${data.alt_text}
+      groundtruth: ${data.expected}

@@ -77,16 +77,16 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, flow_cfg,  flow_name, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run: Optional[str] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
+def run_flow(*, flow: object, flow_cfg,  flow_name, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, from_run: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()
 
     init_vars = OmegaConf.to_object(flow_cfg.init)
 
     if run_cfg.platform == "azure":
-        df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
+        df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=from_run, init_vars=init_vars)
     else:
         num_runs = flow_cfg.get('num_runs', 1)
-        df = exec_local(flow=flow, num_runs=num_runs, run_name=run_name, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars, batch_id=batch_id)
+        df = exec_local(flow=flow, num_runs=num_runs, run_name=run_name, run=from_run, flow_name=flow_name, dataset=dataset, step_outputs=step_outputs, column_mapping=column_mapping, init_vars=init_vars, batch_id=batch_id)
     return df
 
 def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_vars) -> pd.DataFrame:
@@ -114,7 +114,7 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     # id_cols = [x for x in ['record_id', 'line_number'] if x in inputs.columns]
     # df = inputs[id_cols]
 
-    details = details.assign(inputs=inputs.to_dict(orient='records')).drop(columns=inputs.columns)
+    details = details.assign(inputs=inputs.to_dict(orient='records')).drop(columns=inputs.columns, errors='ignore')
     details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
     # Add a column with the step results
@@ -123,7 +123,7 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     details.loc[flow_outputs.index.values, flow_name] = flow_outputs.to_dict(orient='records')
 
     logger.info(
-        f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
+        f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {details.shape[0]} results."
     )
     return details
 
@@ -134,6 +134,7 @@ def exec_local(
     flow_name,
     batch_id,
     run_name,
+    run: Optional[str] = None,
     colour: str = "magenta",
     init_vars: dict = {},
     dataset: str|pd.DataFrame,
@@ -272,9 +273,9 @@ def main(cfg: DictConfig) -> None:
                 t1 = datetime.datetime.now()
                 if df.shape[0]>0:
                     uri = bm.save(df.reset_index(), basename=step_name)
-                    logger.info(
-                        dict(message=f"Completed step: {step_name}, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", results=uri)
-                    )
+                logger.info(
+                    dict(message=f"Completed step: {step_name}, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", results=uri)
+                )
 
     except KeyboardInterrupt:
         # Second time; quit immediately.
@@ -291,20 +292,28 @@ def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names:dict={}):
     df = pd.DataFrame()
     run = None
     data_file = None
-    if 'run' in flow_cfg.data:
-        # Previous run data, if applicable
-        run = run_names[flow_cfg.data.run]
-
-    if 'uri' in flow_cfg.data:
-        # And/or dataset
-        data_file = cache_data(flow_cfg.data.uri)
 
     batch_id = dict(
         run_id=bm.run_id,
         step=flow_name,
-        dataset=flow_cfg.data.name,
         **run_cfg
     )
+    if 'run' in flow_cfg.data:
+        # Previous run data, if applicable
+        if 'from_run' in flow_cfg.data:
+            # Load an explicit run id
+            run = flow_cfg.data.from_run
+        else:
+            # Load a run from this batch run
+            run = run_names[flow_cfg.data.run]
+
+        batch_id['from_run']=run
+
+    if 'uri' in flow_cfg.data:
+        # And/or dataset
+        data_file = cache_data(flow_cfg.data.uri)
+        batch_id['dataset']=flow_cfg.data.name
+
     run_name = "_".join([str(x) for x in list(batch_id.values())])
 
     logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with batch id {batch_id}.", **batch_id))
@@ -315,7 +324,7 @@ def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names:dict={}):
                             flow_name= flow_name,
                             dataset=data_file,
                             run_name = run_name,
-                            run=run,
+                            from_run=run,
                             column_mapping=OmegaConf.to_object(flow_cfg.data.columns),
                             run_cfg=run_cfg,
                             batch_id=batch_id )

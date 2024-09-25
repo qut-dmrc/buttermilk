@@ -6,42 +6,45 @@ run:
   platform: azure
 
 experiments:
-  judger:
-    flow: lc
-    num_runs: 1
-    init:
-      template_path: judge.jinja2
-      other_templates:
-        criteria: criteria_ordinary.jinja2
-      models:
-        haiku: True
-        sonnet: True
-    data:
-      name: drag
-      uri: gs://dmrc-platforms/data/drag_train.jsonl
-      columns:
-        record_id: data.id
-        content: data.alt_text
-        groundtruth: data.expected
-    save:
-      destination: bq
-      dataset: 'dmrc-analysis.toxicity.moderate'
-      schema: buttermilk/schemas/moderate.json
-    # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+  # judger:
+  #   flow: lc
+  #   num_runs: 1
+  #   init:
+  #     template_path: judge.jinja2
+  #     other_templates:
+  #       criteria: criteria_ordinary.jinja2
+  #     models:
+  #       haiku: True
+  #       sonnet: True
+  #   data:
+  #     name: drag
+  #     uri: gs://dmrc-platforms/data/drag_train.jsonl
+  # uri: gs://dmrc-platforms/tmp/d2.jsonl
+  #     columns:
+  #       record_id: data.id
+  #       content: data.alt_text
+  #       groundtruth: data.expected
+  #   save:
+  #     destination: bq
+  #     dataset: 'dmrc-analysis.toxicity.moderate'
+  #     schema: buttermilk/schemas/moderate.json
+  #   # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
   synthesise:
     flow: lc
     num_runs: 1
     init:
       template_path: synthesise.jinja2
       other_templates:
-        original_instructions: criteria_ordinary.jinja2
+        original_instructions: judge.jinja2
+        criteria: criteria_ordinary.jinja2
       models:
         haiku: True
         sonnet: True
     data:
       run: judger
+      from_run: '20240925T2249Z-Eedy-26f087537f3a-vscode_judger_drag_azure'
       columns:
-        answers: ${run.outputs.answers}
+        answers: run.outputs.answers
     save:
       destination: bq
       dataset: 'dmrc-analysis.toxicity.moderate'
