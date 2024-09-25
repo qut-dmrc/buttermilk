@@ -24,7 +24,6 @@ nodes:
     type: code
     path: lc.py
   inputs:
-    standards_path: criteria_ordinary.jinja2
     content: ${inputs.content}
     template_path: judge.jinja2
     other_templates:
