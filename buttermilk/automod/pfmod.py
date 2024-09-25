@@ -25,6 +25,7 @@ from buttermilk import BM
 from buttermilk.apis import (HFInferenceClient, hf_pipeline,
                              Llama2ChatMod, replicatellama2, replicatellama3)
 from buttermilk.flows.judge.judge import Judger
+from buttermilk.flows.lc.lc import LangChainMulti
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
 from buttermilk.exceptions import FatalError
@@ -76,11 +77,11 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run: Optional[str] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
+def run_flow(*, flow: object, flow_cfg,  flow_name, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run: Optional[str] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()
 
-    init_vars = flow_cfg.init
-    flow_name = "_".join([str(x) for x in [flow_cfg.name] + list(flow_cfg.init.values())])
+    init_vars = OmegaConf.to_object(flow_cfg.init)
+    flow_name = "_".join([str(x) for x in [ flow_name] + list(flow_cfg.init.values())])
     if run_cfg.platform == "azure":
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
@@ -247,12 +248,13 @@ def main(cfg: DictConfig) -> None:
             t0 = datetime.datetime.now()
             df = pd.DataFrame()
             try:
-                if step_name == 'moderate':
+                if step_cfg.flow == 'lc':
+                    flow_obj = LangChainMulti
+                elif step_cfg.flow == 'moderate':
                     flow_obj=load_tox_flow
-                elif step_name == 'judger':
+                elif step_cfg.flow == 'judger':
                     flow_obj = Judger
-                shuffle(step_cfg.models)
-                run_name, df = run(flow_cfg=step_cfg, flow_obj=flow_obj, run_cfg=cfg.run, save_cfg=cfg.save, run_names=run_names)
+                run_name, df = run(flow_cfg=step_cfg, flow_obj=flow_obj, flow_name=step_name, run_cfg=cfg.run,run_names=run_names)
                 run_results[step_name] = df
                 run_names[step_name] = run_name
                 pass
@@ -279,16 +281,17 @@ def main(cfg: DictConfig) -> None:
         # Second time; quit immediately.
         raise FatalError("Keyboard interrupt. Aborting immediately.")
 
+    except Exception as e:
+        logger.exception(dict(message=f"Failed run on {cfg.run.platform}", error=str(e)))
     pass
 
 
-def run(*, flow_cfg, flow_obj, run_cfg, save_cfg=None, run_names:dict={}):
+def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names:dict={}):
     global bm
     logger = bm.logger
     df = pd.DataFrame()
     run = None
     data_file = None
-
     if 'run' in flow_cfg.data:
         # Previous run data, if applicable
         run = run_names[flow_cfg.data.run]
@@ -296,8 +299,6 @@ def run(*, flow_cfg, flow_obj, run_cfg, save_cfg=None, run_names:dict={}):
     if 'uri' in flow_cfg.data:
         # And/or dataset
         data_file = cache_data(flow_cfg.data.uri)
-
-    flow_name = flow_cfg.name
 
     batch_id = dict(
         run_id=bm.run_id,
@@ -312,19 +313,20 @@ def run(*, flow_cfg, flow_obj, run_cfg, save_cfg=None, run_names:dict={}):
     # Run flow
     df = run_flow(flow=flow_obj,
                             flow_cfg=flow_cfg,
+                            flow_name= flow_name,
                             dataset=data_file,
                             run_name = run_name,
                             run=run,
-                            column_mapping=dict(flow_cfg.data.columns),
+                            column_mapping=OmegaConf.to_object(flow_cfg.data.columns),
                             run_cfg=run_cfg,
                             batch_id=batch_id )
 
     df.loc[:, 'run_id'] = bm.run_id
     run_names[flow_name] = run_name
 
-    if save_cfg:
+    if flow_cfg.save:
         # save to bigquery
-        save_to_bigquery(df, save_cfg=save_cfg)
+        save_to_bigquery(df, save_cfg=flow_cfg.save)
 
     return run_name, df
 

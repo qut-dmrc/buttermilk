@@ -25,16 +25,19 @@ from promptflow.core import (
 )
 
 from buttermilk import BM
-from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined
+from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined,LLMOutputBatch
 
 
 
 
 class LangChainMulti(ToolProvider):
-    def __init__(self, *, models: list[str], template_path: str, other_templates: dict[str, str] = {}, other_vars: dict[str,str] = {}) -> None:
+    def __init__(self, *, models: dict, template_path: str, other_templates: dict = {}, other_vars: Optional[dict] = None) -> None:
         bm = BM()
+        template_vars = {}
+        if other_vars and isinstance(other_vars, dict):
+            template_vars.update(other_vars)
         self.connections = bm._connections_azure
-        self.models = models
+        self.models = list(models.keys())
 
         self.llm = LLMs(connections=self.connections)
 
@@ -42,19 +45,19 @@ class LangChainMulti(ToolProvider):
         env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         for k, v in other_templates.items():
-            other_vars[k] = env.get_template(v).render()
+            template_vars[k] = env.get_template(v).render()
 
-        self.template = env.get_template(template_path).render(**other_vars)
+        self.template = env.get_template(template_path).render(**template_vars)
 
 
     @tool
     def __call__(
         self,
         *,
-        inputs: Optional[dict[str, Any]] = {},
+        inputs: dict = {},
         content: Optional[str] = None,
         **kwargs: Any,
-    ) -> dict[str, LLMOutput]:
+    ) -> LLMOutputBatch:
         """Evaluate with langchain evaluator."""
         results = {}
         for model in self.models:

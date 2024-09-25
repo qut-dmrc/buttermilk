@@ -7,37 +7,41 @@ run:
 
 experiments:
   judger:
-    name: judger
+    flow: lc
     num_runs: 1
     init:
       template_path: judge.jinja2
       other_templates:
         criteria: criteria_ordinary.jinja2
+      models:
+        haiku: True
+        sonnet: True
     data:
       name: drag
       uri: gs://dmrc-platforms/data/drag_train.jsonl
       columns:
-        record_id: id
-        content: alt_text
-        groundtruth: expected
-    models: ["haiku", "sonnet"]
+        record_id: data.id
+        content: data.alt_text
+        groundtruth: data.expected
     save:
       destination: bq
       dataset: 'dmrc-analysis.toxicity.moderate'
       schema: buttermilk/schemas/moderate.json
     # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
   synthesise:
-    name: synthesiser
+    flow: lc
     num_runs: 1
     init:
       template_path: synthesise.jinja2
       other_templates:
         original_instructions: criteria_ordinary.jinja2
+      models:
+        haiku: True
+        sonnet: True
     data:
       run: judger
       columns:
         answers: ${run.outputs.answers}
-    models: ["haiku", "sonnet"]
     save:
       destination: bq
       dataset: 'dmrc-analysis.toxicity.moderate'

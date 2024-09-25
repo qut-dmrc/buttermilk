@@ -30,6 +30,9 @@ class KeepUndefined(Undefined):
     def __str__(self):
         return '{{ ' + self._undefined_name + ' }}'
 
+class LLMOutputBatch(TypedDict):
+    model_name: dict
+
 class LLMOutput(TypedDict):
     timestamp: object
     result: dict
