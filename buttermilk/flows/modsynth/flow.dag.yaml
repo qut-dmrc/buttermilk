@@ -15,11 +15,29 @@ outputs:
   outcomes:
     type: string
     reference: ${lc.output}
-  agg:
-    type: string
-    reference: ${agg.output}
+  sonnet:
+    type: object
+    reference: ${judger_sonnet.output}
+  haiku:
+    type: object
+    reference: ${judger_haiku.output}
+  gpt4o:
+    type: object
+    reference: ${judger_gpt4o.output}
+  gemini15pro:
+    type: object
+    reference: ${judger_gemini.output}
+  llama31_70b:
+    type: object
+    reference: ${judger_llama31_70b.output}
+  llama31_8b:
+    type: object
+    reference: ${judger_llama31_8b.output}
+  llama31_405b:
+    type: object
+    reference: ${judger_llama31_405b.output}
 nodes:
-- name: judgersonnet
+- name: judger_sonnet
   type: python
   source:
     type: code
@@ -29,7 +47,7 @@ nodes:
     model: sonnet
     content: ${inputs.content}
   aggregation: false
-- name: judgergpt4o
+- name: judger_gpt4o
   type: python
   source:
     type: code
@@ -39,7 +57,7 @@ nodes:
     model: gpt4o
     content: ${inputs.content}
   aggregation: false
-- name: judgergemini
+- name: judger_gemini
   type: python
   source:
     type: code
@@ -49,15 +67,69 @@ nodes:
     model: gemini15pro
     content: ${inputs.content}
   aggregation: false
+- name: judger_llama31_70b
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: llama31_70b
+    content: ${inputs.content}
+  aggregation: false
+- name: judger_llama31_8b
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: llama31_8b
+    content: ${inputs.content}
+  aggregation: false
+- name: judger_llama31_405b
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: llama31_405b
+    content: ${inputs.content}
+  aggregation: false
+- name: judger_haiku
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: haiku
+    content: ${inputs.content}
+  aggregation: false
+- name: judger_opus
+  type: python
+  source:
+    type: code
+    path: judge.py
+  inputs:
+    standards_path: criteria_ordinary.jinja2
+    model: opus
+    content: ${inputs.content}
+  aggregation: false
 - name: agg
   type: python
   source:
     type: code
     path: agg.py
   inputs:
-    model1: ${judgersonnet.output}
-    model2: ${judgergpt4o.output}
-    model3: ${judgergemini.output}
+    sonnet: ${judger_sonnet.output}
+    haiku: ${judger_haiku.output}
+    gpt4o: ${judger_gpt4o.output}
+    gemini15pro: ${judger_gemini.output}
+    llama31_70b: ${judger_llama31_70b.output}
+    llama31_8b: ${judger_llama31_8b.output}
+    llama31_405b: ${judger_llama31_405b.output}
   aggregation: false
 - name: lc
   type: python

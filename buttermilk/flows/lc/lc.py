@@ -30,54 +30,58 @@ from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined
 
 
 
-class LangChainMachine(ToolProvider):
-    def __init__(self, *, model: str, connections: dict = None, custom_connection: Optional[CustomConnection] = None) -> None:
-        if connections is not None:
-            self.connections = connections
-        else:
-            bm = BM()
-            self.connections = bm._connections_azure
-        self.model = model
+class LangChainMulti(ToolProvider):
+    def __init__(self, *, models: list[str], template_path: str, other_templates: dict[str, str] = {}, other_vars: dict[str,str] = {}) -> None:
+        bm = BM()
+        self.connections = bm._connections_azure
+        self.models = models
 
-        self.llm = LLMs(connections=self.connections)[self.model]
+        self.llm = LLMs(connections=self.connections)
+
+        loader=FileSystemLoader(searchpath=TEMPLATE_PATHS)
+        env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+
+        for k, v in other_templates.items():
+            other_vars[k] = env.get_template(v).render()
+
+        self.template = env.get_template(template_path).render(**other_vars)
 
 
     @tool
     def __call__(
         self,
-        answers: dict[str, List[dict[str, str]]],
         *,
+        inputs: Optional[dict[str, Any]] = {},
         content: Optional[str] = None,
-        chain: Optional[Any] = None,
         **kwargs: Any,
-    ) -> LLMOutput:
+    ) -> dict[str, LLMOutput]:
         """Evaluate with langchain evaluator."""
+        results = {}
+        for model in self.models:
+            if content:
+                chain = ChatPromptTemplate.from_messages([("system",self.template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+                inputs['content'] = [HumanMessage(content=content)]
+            else:
+                chain = ChatPromptTemplate.from_messages([("human",self.template)], template_format="jinja2")
 
-        input_vars = {}
+            output = self.invoke(chain=chain, model=model, input_vars=inputs)
+            output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
-        loader=FileSystemLoader(searchpath=TEMPLATE_PATHS)
-        env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
+            for k in LLMOutput.__required_keys__:
+                if k not in output:
+                    output[k] = None
 
-        original_instructions = env.get_template("criteria_ordinary.jinja2").render()
+            results[model] = LLMOutput(**output)
 
-        self.template = env.get_template("synthesise.jinja2").render(original_instructions=original_instructions, content=content, answers=answers,feedback=None)
-
-        if chain is None:
-            chain = ChatPromptTemplate.from_messages([("human",self.template)]) | self.llm | ChatParser()
-        else:
-            chain = chain | self.llm | ChatParser()
-
-        output = self.invoke(chain=chain, input_vars=input_vars)
-        output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
-
-        return LLMOutput(**output)
+        return results
 
     @trace
-    def invoke(self, chain, input_vars):
+    def invoke(self, chain, input_vars, model):
         t0 = time.time()
+        chain = chain | self.llm[model] | ChatParser()
         output = chain.invoke(input=input_vars)
         t1 = time.time()
-        logger.info(f"Invoked chain with {self.model} in {t1-t0:.2f} seconds")
+        logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
         return output
 
 if __name__ == "__main__":
@@ -89,7 +93,7 @@ if __name__ == "__main__":
     start_trace()
     pf = PFClient()
     #connection = pf.connections.get(name="my_llm_connection")
-    evaluator = LangChainMachine(connections=conn,model="haiku")
+    evaluator = LangChainMulti(connections=conn,model="haiku")
     result = evaluator(
         content="What's 2+2?",
     )

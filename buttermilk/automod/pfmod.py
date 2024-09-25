@@ -80,7 +80,7 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
+def run_flow(*, flow: object, flow_cfg, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, run: Optional[str] = None, run_outputs: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()
 
     init_vars = flow_cfg.init
@@ -243,122 +243,94 @@ def main(cfg: DictConfig) -> None:
 
     logger = bm.logger
 
-    try:
-        # Create a cycle iterator for the progress bar colours
-        bar_colours = ["cyan", "yellow", "magenta", "green", "blue"]
-        colour_cycle = cycle(bar_colours)
-        if 'moderate' in cfg.experiments.keys():
-            if cfg.experiments.moderate.init.get('flow') and cfg.experiments.moderate.init.flow != 'to_be_replaced':
-                # just run one model as specified
-                run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run, save_cfg=cfg.save)
-            else:
-                shuffle(cfg.experiments.moderate.models)
-                for flow in cfg.experiments.moderate.models:
-                    cfg.experiments.moderate.init['flow'] = str(flow)
-                    run(data=cfg.data, flow_cfg=cfg.experiments.moderate, flow_obj=load_tox_flow, run_cfg=cfg.run,save_cfg=cfg.save)
-        elif 'judger' in cfg.experiments.keys():
-            cfg.experiments.judger.init['connections'] = bm._connections_azure
-            run(data=cfg.data, flow_cfg=cfg.experiments.judger, flow_obj=Judger, evaluator_cfg=cfg.experiments.evaluator, run_cfg=cfg.run)
-        pass
+    run_results = {}
+    run_names = {}
 
+    try:
+        for step_name, step_cfg in cfg.experiments.items():
+            t0 = datetime.datetime.now()
+            df = pd.DataFrame()
+            try:
+                if step_name == 'moderate':
+                    flow_obj=load_tox_flow
+                elif step_name == 'judger':
+                    flow_obj = Judger
+                shuffle(step_cfg.models)
+                run_name, df = run(flow_cfg=step_cfg, flow_obj=flow_obj, run_cfg=cfg.run, save_cfg=cfg.save, run_names=run_names)
+                run_results[step_name] = df
+                run_names[step_name] = run_name
+                pass
+
+            except KeyboardInterrupt:
+                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
+                logger.info(
+                    "Keyboard interrupt. Quitting run."
+                )
+
+            except Exception as e:
+                logger.exception(dict(message=f"Failed {step_name} running on {cfg.run.platform}", error=str(e)))
+                break
+            finally:
+                uri=None
+                t1 = datetime.datetime.now()
+                if df.shape[0]>0:
+                    uri = bm.save(df.reset_index(), basename=step_name)
+                    logger.info(
+                        dict(message=f"Completed step: {step_name}, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", results=uri)
+                    )
 
     except KeyboardInterrupt:
         # Second time; quit immediately.
         raise FatalError("Keyboard interrupt. Aborting immediately.")
 
+    pass
 
-def run(*, data, flow_cfg, flow_obj, evaluator_cfg: dict={}, run_cfg, save_cfg=None):
 
-
+def run(*, flow_cfg, flow_obj, run_cfg, save_cfg=None, run_names:dict={}):
     global bm
     logger = bm.logger
     df = pd.DataFrame()
-    data_file = cache_data(data.uri)
+    run = None
+    data_file = None
 
-    flow_name = flow_cfg.get('name', flow_obj.__name__.lower())
-    if flow := flow_cfg.get('init', {}).get('flow', None):
-        flow_name = f"{flow_name}_{flow}_x{flow_cfg.num_runs}"
+    if 'run' in flow_cfg.data:
+        # Previous run data, if applicable
+        run = run_names[flow_cfg.data.run]
+
+    if 'uri' in flow_cfg.data:
+        # And/or dataset
+        data_file = cache_data(flow_cfg.data.uri)
+
+    flow_name = flow_cfg.name
 
     batch_id = dict(
         run_id=bm.run_id,
         step=flow_name,
-        dataset=data.name,
+        dataset=flow_cfg.data.name,
         **run_cfg
     )
     run_name = "_".join([str(x) for x in list(batch_id.values())])
-    for k,v in flow_cfg.init.items():
-        if isinstance(v, str):
-            # remove path extensions
-            k = re.sub(r'_.*', '', str(k))
-            v = re.sub(r'\..*', '', str(v))
-            v = str.lower(v)
-            batch_id[k] = v
 
     logger.info(dict(message=f"Starting {flow_name} running on {run_cfg.platform} with batch id {batch_id}.", **batch_id))
 
-    t0 = datetime.datetime.now()
     # Run flow
-    try:
-
-        df = run_flow(flow=flow_obj,
-                                flow_cfg=flow_cfg,
-                                dataset=data_file,
-                                run_name = run_name,
-                                column_mapping=dict(data.columns), run_cfg=run_cfg, batch_id=batch_id )
-
-        df.loc[:, 'run_id'] = bm.run_id
-
-        # Run the evaulation flows
-        for eval_model in evaluator_cfg.get("models", []):
-            eval_name = f"{run_name}_evaluator_{eval_model}"
-            evaluator_cfg['init_vars']['flow'] = eval_model
-            evaluator_cfg['name'] = f'evaluator_{eval_model}'
-            evals = run_flow(flow=EvalQA,
-                                flow_cfg=evaluator_cfg,
+    df = run_flow(flow=flow_obj,
+                            flow_cfg=flow_cfg,
                             dataset=data_file,
-                            step_outputs = df,
-                            run_outputs = run_name,
-                            run_name = eval_name,
-                            column_mapping=dict(evaluator_cfg['columns']),
-                            run_cfg=run_cfg,batch_id=batch_id
-                    )
+                            run_name = run_name,
+                            run=run,
+                            column_mapping=dict(flow_cfg.data.columns),
+                            run_cfg=run_cfg,
+                            batch_id=batch_id )
 
-            # join the evaluation results
-            try:
-                df.loc[:, evaluator_cfg['name']] = evals.to_dict(orient='records')
-                if 'groundtruth' in evals and 'groundtruth' not in df.columns:
-                    df.loc[:, 'groundtruth'] = evals['groundtruth']
-            except Exception as e:
-                # We might not get all the responses back. Try to join on line number instead?
-                pass
-                df = df.merge(evals[['line_number',evaluator_cfg['name']]], left_on='line_number', right_on='line_number')
+    df.loc[:, 'run_id'] = bm.run_id
+    run_names[flow_name] = run_name
 
-            # Put evals in a single column
-            eval_cols = [x for x in df.columns if x.startswith('evaluator_')]
-            evals = df[eval_cols]
-            evals.columns = [x.replace('evaluator_', '') for x in evals.columns]
-            df = df.assign(evals=evals.to_dict(orient='records')).drop(columns=eval_cols)
-        if save_cfg:
-            # save to bigquery
-            save_to_bigquery(df, save_cfg=save_cfg)
-    except KeyboardInterrupt:
-                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
-                logger.info(
-                    "Keyboard interrupt. Finishing current job but not quitting. Interrupt again to quit immediately."
-                )
+    if save_cfg:
+        # save to bigquery
+        save_to_bigquery(df, save_cfg=save_cfg)
 
-    except Exception as e:
-        logger.exception(dict(message=f"Failed {flow_name} running on {run_cfg.platform} with run name: {run_name}", error=str(e), **batch_id))
-    finally:
-        uri=None
-        if df.shape[0]>0:
-            uri = bm.save(df.reset_index(), basename='batch')
-
-        t1 = datetime.datetime.now()
-        logger.info(
-            dict(message=f"Completed batch: {batch_id} run {run_name} completed locally, processed {df.shape[0]} results in {format_timespan(t1-t0)}. Saved to {uri}", **batch_id, results=uri)
-        )
-
+    return run_name, df
 
 
 
