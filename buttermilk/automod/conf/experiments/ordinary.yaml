@@ -1,42 +1,45 @@
-/project:
+# @package _global_
+project:
   name: automod
   job: judge
-/run:
+run:
   platform: azure
-judger:
-  name: judger
-  num_runs: 1
-  init:
-    template_path: judge.jinja2
-    other_templates:
-      criteria: criteria_ordinary.jinja2
-  data:
-    name: drag
-    uri: gs://dmrc-platforms/data/drag_train.jsonl
-    columns:
-      record_id: id
-      content: alt_text
-      groundtruth: expected
-  models: ["haiku", "sonnet"]
-  save:
-    destination: bq
-    dataset: 'dmrc-analysis.toxicity.moderate'
-    schema: buttermilk/schemas/moderate.json
-  # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
-synthesise:
-  name: synthesiser
-  num_runs: 1
-  init:
-    template_path: synthesise.jinja2
-    other_templates:
-      original_instructions: criteria_ordinary.jinja2
-  data:
-    run: judger
-    columns:
-      answers: ${run.outputs.answers}
-  models: ["haiku", "sonnet"]
-  save:
-    destination: bq
-    dataset: 'dmrc-analysis.toxicity.moderate'
-    schema: buttermilk/schemas/moderate.json
-  # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+
+experiments:
+  judger:
+    name: judger
+    num_runs: 1
+    init:
+      template_path: judge.jinja2
+      other_templates:
+        criteria: criteria_ordinary.jinja2
+    data:
+      name: drag
+      uri: gs://dmrc-platforms/data/drag_train.jsonl
+      columns:
+        record_id: id
+        content: alt_text
+        groundtruth: expected
+    models: ["haiku", "sonnet"]
+    save:
+      destination: bq
+      dataset: 'dmrc-analysis.toxicity.moderate'
+      schema: buttermilk/schemas/moderate.json
+    # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+  synthesise:
+    name: synthesiser
+    num_runs: 1
+    init:
+      template_path: synthesise.jinja2
+      other_templates:
+        original_instructions: criteria_ordinary.jinja2
+    data:
+      run: judger
+      columns:
+        answers: ${run.outputs.answers}
+    models: ["haiku", "sonnet"]
+    save:
+      destination: bq
+      dataset: 'dmrc-analysis.toxicity.moderate'
+      schema: buttermilk/schemas/moderate.json
+    # models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]

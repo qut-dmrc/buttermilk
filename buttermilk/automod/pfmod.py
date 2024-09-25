@@ -24,12 +24,9 @@ from promptflow.client import PFClient as LocalPFClient
 from buttermilk import BM
 from buttermilk.apis import (HFInferenceClient, hf_pipeline,
                              Llama2ChatMod, replicatellama2, replicatellama3)
-from buttermilk.flows.evalqa.evalqa import EvalQA
 from buttermilk.flows.judge.judge import Judger
-from buttermilk.flows.results_bq import SaveResultsBQ
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
-from buttermilk.utils.utils import dedup_columns, read_json, read_text
 from buttermilk.exceptions import FatalError
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -49,7 +46,7 @@ import tqdm
 
 from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
-from buttermilk.utils.log import getLogger
+from buttermilk.utils.log import logger
 import datasets
 
 # from azureml.core import Workspace, Experiment
@@ -65,7 +62,6 @@ import datasets
 # pipeline = Pipeline(workspace=ws, steps=[...])
 
 global_run_id = BM.make_run_id()
-logger = None
 pflocal = LocalPFClient()
 bm: BM = None
 

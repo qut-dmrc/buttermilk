@@ -24,11 +24,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ots",
-                "+data=drag_noalt",
-                "+save=bq",
-                "experiments.moderate.init.flow=GoogleModerate",
-                "experiments.moderate.num_runs=2"
+                "+experiments=ordinary",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
