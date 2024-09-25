@@ -81,7 +81,7 @@ def run_flow(*, flow: object, flow_cfg,  flow_name, run_name: str, dataset: str|
     df = pd.DataFrame()
 
     init_vars = OmegaConf.to_object(flow_cfg.init)
-    flow_name = "_".join([str(x) for x in [ flow_name] + list(flow_cfg.init.values())])
+
     if run_cfg.platform == "azure":
         df = exec_pf(flow=flow, run_name=run_name, flow_name=flow_name, dataset=dataset, column_mapping=column_mapping, run=run_outputs, init_vars=init_vars)
     else:
@@ -111,22 +111,21 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     inputs = details[[x for x in details.columns if x.startswith('inputs.')]]
     inputs.columns = [x.replace('inputs.', '') for x in inputs.columns]
 
-    id_cols = [x for x in ['record_id', 'line_number'] if x in inputs.columns]
-    df = inputs[id_cols]
+    # id_cols = [x for x in ['record_id', 'line_number'] if x in inputs.columns]
+    # df = inputs[id_cols]
+
+    details = details.assign(inputs=inputs.to_dict(orient='records')).drop(columns=inputs.columns)
+    details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
     # Add a column with the step results
     flow_outputs = details[[x for x in details.columns if x.startswith('outputs.')]]
     flow_outputs.columns = [x.replace('outputs.', '') for x in flow_outputs.columns]
-    df.loc[flow_outputs.index.values, flow_name] = flow_outputs.to_dict(orient='records')
-
-    # see if we can add groundtruth back in
-    if 'groundtruth' in flow_outputs and 'groundtruth' not in df.columns:
-        df.loc[flow_outputs.index.values, 'groundtruth'] = flow_outputs['groundtruth']
+    details.loc[flow_outputs.index.values, flow_name] = flow_outputs.to_dict(orient='records')
 
     logger.info(
         f"Run {task.name} for {flow} completed with status {task.status}. URL: {task._portal_url}. Processed {df.shape[0]} results."
     )
-    return df
+    return details
 
 def exec_local(
     *,
@@ -324,9 +323,9 @@ def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names:dict={}):
     df.loc[:, 'run_id'] = bm.run_id
     run_names[flow_name] = run_name
 
-    if flow_cfg.save:
-        # save to bigquery
-        save_to_bigquery(df, save_cfg=flow_cfg.save)
+    # if flow_cfg.save:
+    #     # save to bigquery
+    #     save_to_bigquery(df, save_cfg=flow_cfg.save)
 
     return run_name, df
 
