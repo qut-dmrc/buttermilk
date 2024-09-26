@@ -18,7 +18,7 @@ from langchain_core.messages import HumanMessage
 
 from buttermilk.utils.log import logger
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, Template
 from promptflow.core import (
     ToolProvider,
     tool
@@ -47,7 +47,11 @@ class LangChainMulti(ToolProvider):
         for k, v in other_templates.items():
             template_vars[k] = env.get_template(v)
 
-        # will this automatically render the sub-templates?
+        # render sub-templates first
+        for k, v in template_vars.items():
+            if isinstance(v, Template):
+                template_vars[k] = v.render(**template_vars)
+
         self.template = env.get_template(template_path).render(**template_vars)
 
 
