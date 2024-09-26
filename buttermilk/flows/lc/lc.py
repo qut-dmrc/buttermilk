@@ -29,7 +29,7 @@ from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate
 from tenacity import (
     retry, RetryError,
     retry_if_exception_type,
-    stop_after_attempt,
+    stop_after_attempt,wait_random,
     wait_exponential_jitter,
     wait_random_exponential,
 )
@@ -115,15 +115,14 @@ class LangChainMulti(ToolProvider):
     @retry(
         retry=retry_if_exception_type(
             exception_types=(
-                RateLimit,
+                RateLimit,TimeoutError,
                 requests.exceptions.ConnectionError,
                 urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
                 OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
             ),
         ),
-            wait=wait_exponential_jitter(initial=4, max=256, jitter=15),
-            # Retry up to five times before giving up
-            stop=stop_after_attempt(5),
+            wait=wait_random(min=10,max=60),
+            stop=stop_after_attempt(4),
     )
     @trace
     def invoke(self, chain, input_vars, model) -> dict[str, str]:
