@@ -48,7 +48,6 @@ class LangChainMulti(ToolProvider):
 
         self.template = env.get_template(template_path)
 
-        breakpoint()
         pass
 
 
@@ -73,6 +72,8 @@ class LangChainMulti(ToolProvider):
                 v = v.render(**local_inputs)
             local_inputs[k] = v
 
+        local_template = self.template.render(**local_inputs)
+        
         for model in self.models:
 
             if content:
