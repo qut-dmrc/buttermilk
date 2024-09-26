@@ -55,13 +55,12 @@ class LangChainMulti(ToolProvider):
     def __call__(
         self,
         *,
-        inputs: dict = {},
         content: Optional[str] = None, **kwargs
     ) -> LLMOutputBatch:
         """Evaluate with langchain evaluator."""
 
         results = {}
-        local_inputs = inputs.copy()
+        local_inputs = {}
         local_inputs.update(kwargs)
         breakpoint()
 
@@ -73,7 +72,7 @@ class LangChainMulti(ToolProvider):
             local_inputs[k] = v
 
         local_template = self.template.render(**local_inputs)
-        
+
         for model in self.models:
 
             if content:
