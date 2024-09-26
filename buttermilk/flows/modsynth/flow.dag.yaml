@@ -10,13 +10,8 @@ inputs:
   content:
     type: string
     default: kill all men
-  models:
-    type: list
-    default:
-    - haiku
-    - sonnet
 outputs:
-  results:
+  final:
     type: string
     reference: ${synth.output}
   initial:
@@ -34,14 +29,9 @@ nodes:
     other_templates:
       criteria: criteria_ordinary.jinja2
     models:
-    - haiku
+    - llama31_8b
     - sonnet
-  init:
-    models:
-      type: list
-      default:
-      - haiku
-      - sonnet
+    - haiku
   aggregation: false
 - name: agg
   type: python
@@ -65,12 +55,10 @@ nodes:
       criteria: criteria_ordinary.jinja2
       original_instructions: judge.jinja2
     models:
-    - haiku
+    - gpt4o
+    - gemini15pro
+    - llama31_70b
+    - llama31_8b
     - sonnet
+    - haiku
   aggregation: false
-  init:
-    models:
-      type: list
-      default:
-      - haiku
-      - sonnet

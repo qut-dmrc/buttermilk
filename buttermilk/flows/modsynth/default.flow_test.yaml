@@ -2,11 +2,16 @@ tests:
   - name: modsynth_${variant_id}_${timestamp}
     display_name: modsynth_${variant_id}_${timestamp}
     flow: /workspaces/buttermilk/buttermilk/flows/modsynth
-    data: /tmp/d2.jsonl
+    data: /tmp/drag_train.jsonl
     column_mapping:
       models:
-        haiku: true
-        sonnet: true
+        - haiku
+        - sonnet
+        - gpt4o
+        - gemini15pro
+        - llama31_70b
+        - llama31_8b
+        - llama31_405b
       record_id: ${data.id}
       content: ${data.alt_text}
       groundtruth: ${data.expected}

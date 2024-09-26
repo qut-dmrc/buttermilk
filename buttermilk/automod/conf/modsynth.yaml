@@ -1,0 +1,15 @@
+display_name: modsynth_${variant_id}_${timestamp}
+flow: /workspaces/buttermilk/buttermilk/flows/modsynth
+data: /tmp/drag_train.jsonl
+column_mapping:
+  record_id: ${data.id}
+  content: ${data.alt_text}
+  groundtruth: ${data.expected}
+  models:
+    - haiku
+    - sonnet
+    - gpt4o
+    - gemini15pro
+    - llama31_70b
+    - llama31_8b
+    - llama31_405b

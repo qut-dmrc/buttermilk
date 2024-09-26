@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import datetime
+from random import shuffle
 import time
 from typing import Any, List, Optional, TypedDict
 
@@ -62,7 +63,6 @@ class LangChainMulti(ToolProvider):
         results = {}
         local_inputs = {}
         local_inputs.update(kwargs)
-        breakpoint()
 
         # render sub-templates first
         # WARNING. Template vars have to be in REVERSE ORDER of dependency to render correctly.
@@ -72,7 +72,7 @@ class LangChainMulti(ToolProvider):
             local_inputs[k] = v
 
         local_template = self.template.render(**local_inputs)
-
+        shuffle(self.models)
         for model in self.models:
 
             if content:
@@ -95,8 +95,15 @@ class LangChainMulti(ToolProvider):
     @trace
     def invoke(self, chain, input_vars, model):
         t0 = time.time()
-        chain = chain | self.llm[model] | ChatParser()
-        output = chain.invoke(input=input_vars)
+        try:
+            chain = chain | self.llm[model] | ChatParser()
+            logger.info(f"Invoking chain with {model}...")
+            output = chain.invoke(input=input_vars)
+        except Exception as e:
+            t1 = time.time()
+            err = "Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
+            logger.error(err)
+            return dict(error=err)
         t1 = time.time()
         logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
         return output
