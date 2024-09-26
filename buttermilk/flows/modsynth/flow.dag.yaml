@@ -10,6 +10,13 @@ inputs:
   content:
     type: string
     default: kill all men
+  groundtruth:
+    type: object
+    default:
+      answer: unknown
+  record_id:
+    type: string
+    default: ""
 outputs:
   final:
     type: string
@@ -17,6 +24,9 @@ outputs:
   initial:
     type: string
     reference: ${mod.output}
+  score:
+    type: string
+    reference: ${score.output}
 nodes:
 - name: mod
   type: python
@@ -29,9 +39,13 @@ nodes:
     other_templates:
       criteria: criteria_ordinary.jinja2
     models:
-    - llama31_8b
-    - sonnet
     - haiku
+    - sonnet
+    - gpt4o
+    - gemini15pro
+    - llama31_70b
+    - llama31_8b
+    - llama31_405b
   aggregation: false
 - name: agg
   type: python
@@ -62,3 +76,13 @@ nodes:
     - sonnet
     - haiku
   aggregation: false
+- name: score
+  type: python
+  source:
+    type: code
+    path: score.py
+  inputs:
+    moderated_results: ${mod.output}
+    synth_results: ${synth.output}
+    groundtruth: ${inputs.groundtruth}
+    record_id: ${inputs.record_id}

@@ -101,7 +101,7 @@ class LangChainMulti(ToolProvider):
             output = chain.invoke(input=input_vars)
         except Exception as e:
             t1 = time.time()
-            err = "Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
+            err = f"Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
             logger.error(err)
             return dict(error=err)
         t1 = time.time()
