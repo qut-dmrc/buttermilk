@@ -13,6 +13,8 @@ def aggregate(moderated_results: dict) -> list:
             continue
         if not isinstance(result, dict):
             continue
+        if 'error' in result and result['error']:
+            continue
         reasons = [f'{k}: {str(result.get(k))}' for k in ['interpretation', 'reasons', 'conclusion', 'predicted']]
         text = '\n'.join(reasons)
         answer = dict(text=text, id=f"{name}_{uuid.uuid4()}")
