@@ -77,11 +77,11 @@ class LangChainMulti(ToolProvider):
 
             if content:
                 chain = ChatPromptTemplate.from_messages([("system",local_template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
-                inputs['content'] = [HumanMessage(content=content)]
+                local_inputs['content'] = [HumanMessage(content=content)]
             else:
                 chain = ChatPromptTemplate.from_messages([("human",local_template)], template_format="jinja2")
 
-            output = self.invoke(chain=chain, model=model, input_vars=inputs)
+            output = self.invoke(chain=chain, model=model, input_vars=local_inputs)
             output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
             for k in LLMOutput.__required_keys__:
