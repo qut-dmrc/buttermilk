@@ -32,9 +32,9 @@ from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined,
 class LangChainMulti(ToolProvider):
     def __init__(self, *, models: list, template_path: str, other_templates: dict = {}, other_vars: Optional[dict] = None) -> None:
         bm = BM()
-        template_vars = {}
+        self.template_vars = {}
         if other_vars and isinstance(other_vars, dict):
-            template_vars.update(other_vars)
+            self.template_vars.update(other_vars)
         self.connections = bm._connections_azure
         self.models = models
 
@@ -44,15 +44,9 @@ class LangChainMulti(ToolProvider):
         env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         for k, v in other_templates.items():
-            template_vars[k] = env.get_template(v)
+            self.template_vars[k] = env.get_template(v)
 
-        # render sub-templates first
-        # WARNING. Template vars have to be in REVERSE ORDER of dependency to render correctly.
-        for k, v in template_vars.items():
-            if isinstance(v, Template):
-                template_vars[k] = v.render(**template_vars)
-
-        self.template = env.get_template(template_path).render(**template_vars)
+        self.template = env.get_template(template_path)
 
         breakpoint()
         pass
@@ -66,15 +60,26 @@ class LangChainMulti(ToolProvider):
         content: Optional[str] = None, **kwargs
     ) -> LLMOutputBatch:
         """Evaluate with langchain evaluator."""
+
         results = {}
         inputs.update(kwargs)
         breakpoint()
+
+        # render sub-templates first
+        # WARNING. Template vars have to be in REVERSE ORDER of dependency to render correctly.
+        for k, v in self.template_vars.items():
+            if isinstance(v, Template):
+                inputs[k] = v.render(**self.template_vars, **inputs)
+
+        local_template = self.template.render(**inputs)
+
         for model in self.models:
+
             if content:
-                chain = ChatPromptTemplate.from_messages([("system",self.template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
+                chain = ChatPromptTemplate.from_messages([("system",local_template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")
                 inputs['content'] = [HumanMessage(content=content)]
             else:
-                chain = ChatPromptTemplate.from_messages([("human",self.template)], template_format="jinja2")
+                chain = ChatPromptTemplate.from_messages([("human",local_template)], template_format="jinja2")
 
             output = self.invoke(chain=chain, model=model, input_vars=inputs)
             output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
