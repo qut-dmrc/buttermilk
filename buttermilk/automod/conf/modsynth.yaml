@@ -1,6 +1,7 @@
 display_name: modsynth_${variant_id}_${timestamp}
 flow: /workspaces/buttermilk/buttermilk/flows/modsynth
 data: /tmp/drag_train.jsonl
+timeout: 150
 column_mapping:
   record_id: ${data.id}
   content: ${data.alt_text}

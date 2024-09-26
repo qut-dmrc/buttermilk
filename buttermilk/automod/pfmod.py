@@ -101,7 +101,7 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
             column_mapping=columns,
             stream=False,
             name=run_name,
-            timeout=60,
+            timeout=150,
             environment_variables=environment_variables,
         )
 
@@ -254,6 +254,8 @@ def main(cfg: DictConfig) -> None:
                     flow_obj=load_tox_flow
                 elif step_cfg.flow == 'judger':
                     flow_obj = Judger
+                elif step_cfg.flow == 'modsynth':
+                    flow_obj = 'buttermilk/flows/modsynth'
                 run_name, df = run(flow_cfg=step_cfg, flow_obj=flow_obj, flow_name=step_name, run_cfg=cfg.run,run_names=run_names)
                 run_results[step_name] = df
                 run_names[step_name] = run_name
