@@ -62,16 +62,16 @@ class LangChainMulti(ToolProvider):
         """Evaluate with langchain evaluator."""
 
         results = {}
-        inputs.update(kwargs)
+        local_inputs = inputs.copy()
+        local_inputs.update(kwargs)
         breakpoint()
 
         # render sub-templates first
         # WARNING. Template vars have to be in REVERSE ORDER of dependency to render correctly.
         for k, v in self.template_vars.items():
             if isinstance(v, Template):
-                inputs[k] = v.render(**self.template_vars, **inputs)
-
-        local_template = self.template.render(**inputs)
+                v = v.render(**local_inputs)
+            local_inputs[k] = v
 
         for model in self.models:
 
