@@ -5233,7 +5233,7 @@ files = [
 promptflow-azure = {version = "1.15.1", optional = true, markers = "extra == \"azure\""}
 promptflow-core = "1.15.1"
 promptflow-devkit = "1.15.1"
-promptflow-tracing = "1.15.1"
+promptflow-tracing = {version = ">1.15.0", path = "../promptflow/src/promptflow-tracing", develop = true}
 
 [package.extras]
 all = ["promptflow-azure (==1.15.1)", "promptflow-core[executor-service] (==1.15.1)", "promptflow-devkit[all] (==1.15.1)"]
@@ -5277,7 +5277,7 @@ fastapi = ">=0.109.0,<1.0.0"
 filetype = ">=1.2.0"
 flask = ">=2.2.3,<4.0.0"
 jsonschema = ">=4.0.0,<5.0.0"
-promptflow-tracing = "1.15.1"
+promptflow-tracing = ">=1.15.1"
 psutil = "*"
 python-dateutil = ">=2.1.0,<3.0.0"
 "ruamel.yaml" = ">=0.17.10,<1.0.0"

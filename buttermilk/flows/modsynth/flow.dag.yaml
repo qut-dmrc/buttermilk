@@ -17,6 +17,8 @@ inputs:
   record_id:
     type: string
     default: ""
+  models:
+    type: list
 outputs:
   final:
     type: string
@@ -40,7 +42,12 @@ nodes:
       criteria: criteria_ordinary.jinja2
     models:
     - haiku
+    - sonnet
     - gpt4o
+    - gemini15pro
+    - llama31_70b
+    - llama31_8b
+    - llama31_405b
   aggregation: false
 - name: agg
   type: python
@@ -64,8 +71,13 @@ nodes:
       criteria: criteria_ordinary.jinja2
       original_instructions: judge.jinja2
     models:
-    - gpt4o
     - haiku
+    - sonnet
+    - gpt4o
+    - gemini15pro
+    - llama31_70b
+    - llama31_8b
+    - llama31_405b
   aggregation: false
 - name: score
   type: python
