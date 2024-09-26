@@ -40,12 +40,7 @@ nodes:
       criteria: criteria_ordinary.jinja2
     models:
     - haiku
-    - sonnet
     - gpt4o
-    - gemini15pro
-    - llama31_70b
-    - llama31_8b
-    - llama31_405b
   aggregation: false
 - name: agg
   type: python
@@ -70,10 +65,6 @@ nodes:
       original_instructions: judge.jinja2
     models:
     - gpt4o
-    - gemini15pro
-    - llama31_70b
-    - llama31_8b
-    - sonnet
     - haiku
   aggregation: false
 - name: score

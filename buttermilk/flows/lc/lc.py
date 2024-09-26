@@ -107,7 +107,8 @@ class LangChainMulti(ToolProvider):
                     output[k] = None
 
             results[model] = LLMOutput(**output)
-
+        breakpoint()
+        results['metadata'] = self.try_sum_tokens(results)
         return results
 
     @retry(
@@ -138,7 +139,37 @@ class LangChainMulti(ToolProvider):
             return dict(error=err)
         t1 = time.time()
         logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
+        breakpoint()
         return output
+
+    def try_sum_tokens(self, results):
+        breakpoint()
+        try:
+            cumulative_usage = results['metadata']['usage']
+        except:
+            try:
+                cumulative_usage = results['usage']
+            except:
+                cumulative_usage = dict(total_tokens=0, prompt_tokens=0, completion_tokens=0)
+
+        for model_output in results.keys():
+            try:
+                usage = results.get('metadata', results.get('usage').get('usage'))
+                if usage:
+                    cumulative_usage['total_tokens'] += usage.get('total_tokens', 0)
+                    cumulative_usage['prompt_tokens'] += usage.get('prompt_tokens', 0)
+                    cumulative_usage['completion_tokens'] += usage.get('completion_tokens', 0)
+                else:
+                    cumulative_usage['total_tokens'] += model_output.get('llm.usage.total_tokens', 0)
+                    cumulative_usage['prompt_tokens'] += model_output.get('llm.usage.prompt_tokens', 0)
+                    cumulative_usage['completion_tokens'] += model_output.get('llm.usage.completion_tokens', 0)
+            except Exception as e:
+                breakpoint()
+                continue
+
+        results['usage'] = cumulative_usage
+        breakpoint()
+        return results
 
 if __name__ == "__main__":
     from promptflow.tracing import start_trace

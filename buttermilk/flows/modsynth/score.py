@@ -8,10 +8,11 @@ from buttermilk.utils.log import logger
 
 @tool
 def score(moderated_results: dict, synth_results: dict, groundtruth: dict, record_id: str) -> dict:
+    breakpoint()
     num_correct = 0
     num_results = 0
     expected = groundtruth['answer']
-    scored_results = dict(moderated={}, synthesised={})
+    scored_results = dict(moderated={}, synthesised={}, record_id=record_id)
 
     for name, result in moderated_results.items():
         try:

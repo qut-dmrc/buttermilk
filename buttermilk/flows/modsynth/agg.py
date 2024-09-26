@@ -6,6 +6,7 @@ import uuid
 
 @tool
 def aggregate(moderated_results: dict) -> list:
+    breakpoint()
     aggregated_results = []
 
     for name, result in moderated_results.items():
