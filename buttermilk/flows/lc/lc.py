@@ -28,7 +28,7 @@ from buttermilk import BM
 from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined,LLMOutputBatch
 
 
-
+breakpoint()
 
 class LangChainMulti(ToolProvider):
     def __init__(self, *, models: list, template_path: str, other_templates: dict = {}, other_vars: Optional[dict] = None) -> None:
@@ -45,8 +45,9 @@ class LangChainMulti(ToolProvider):
         env = Environment(loader=loader, trim_blocks=True, keep_trailing_newline=True, undefined=KeepUndefined)
 
         for k, v in other_templates.items():
-            template_vars[k] = env.get_template(v).render()
+            template_vars[k] = env.get_template(v)
 
+        # will this automatically render the sub-templates?
         self.template = env.get_template(template_path).render(**template_vars)
 
 
@@ -55,10 +56,11 @@ class LangChainMulti(ToolProvider):
         self,
         *,
         inputs: dict = {},
-        content: Optional[str] = None
+        content: Optional[str] = None, **kwargs
     ) -> LLMOutputBatch:
         """Evaluate with langchain evaluator."""
         results = {}
+        inputs.update(kwargs)
         for model in self.models:
             if content:
                 chain = ChatPromptTemplate.from_messages([("system",self.template), MessagesPlaceholder("content", optional=True)], template_format="jinja2")

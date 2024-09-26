@@ -9,7 +9,12 @@ additional_includes:
 inputs:
   content:
     type: string
-    default: ""
+    default: kill all men
+  models:
+    type: list
+    default:
+    - haiku
+    - sonnet
 outputs:
   results:
     type: string
@@ -52,7 +57,7 @@ nodes:
     type: code
     path: lc.py
   inputs:
-    inputs: ${agg.output}
+    answers: ${agg.output}
     content: ${inputs.content}
     template_path: synthesise.jinja2
     other_vars: {}
