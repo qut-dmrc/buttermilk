@@ -50,6 +50,8 @@ from google.generativeai.types.generation_types import (
     BlockedPromptException,
     StopCandidateException,
 )
+from openai import APIConnectionError as OpenAIAPIConnectionError
+from openai import RateLimitError as OpenAIRateLimitError
 from transformers import pipeline
 from googleapiclient import discovery
 from langchain_community.llms import Replicate
@@ -57,8 +59,6 @@ from langchain_core.language_models.llms import LLM
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_together import Together
 from msrest.authentication import CognitiveServicesCredentials
-from openai import APIConnectionError as OpenAIAPIConnectionError
-from openai import RateLimitError as OpenAIRateLimitError
 from promptflow.tracing import trace
 from pydantic import (
     BaseModel,

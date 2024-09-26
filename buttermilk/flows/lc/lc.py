@@ -5,8 +5,19 @@ import time
 from typing import Any, List, Optional, TypedDict
 
 import pandas as pd
+import requests
+import urllib3
 
-
+from google.api_core.exceptions import ResourceExhausted
+from google.generativeai.types.generation_types import (
+    BlockedPromptException,
+    StopCandidateException,
+)
+from buttermilk.exceptions import RateLimit
+from anthropic import APIConnectionError as AnthropicAPIConnectionError
+from anthropic import RateLimitError as AnthropicRateLimitError
+from openai import APIConnectionError as OpenAIAPIConnectionError
+from openai import RateLimitError as OpenAIRateLimitError
 from buttermilk.llms import LLMs
 from promptflow.client import PFClient
 from promptflow.connections import CustomConnection
@@ -15,6 +26,13 @@ from buttermilk.tools.json_parser import ChatParser
 from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+    wait_random_exponential,
+)
 from langchain_core.messages import HumanMessage
 
 from buttermilk.utils.log import logger
@@ -92,6 +110,20 @@ class LangChainMulti(ToolProvider):
 
         return results
 
+    @retry(
+        retry=retry_if_exception_type(
+            exception_types=(
+                RateLimit,
+                requests.exceptions.ConnectionError,
+                urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
+                OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
+            ),
+        ),
+            # Wait interval: increasing exponentially up to a max of 30s between retries
+            wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
+            # Retry up to five times before giving up
+            stop=stop_after_attempt(5),
+    )
     @trace
     def invoke(self, chain, input_vars, model):
         t0 = time.time()
