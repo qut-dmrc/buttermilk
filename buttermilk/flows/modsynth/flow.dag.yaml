@@ -62,7 +62,6 @@ nodes:
     template_path: synthesise.jinja2
     other_vars: {}
     other_templates:
-      criteria: criteria_ordinary.jinja2
       original_instructions: judge.jinja2
     models:
     - haiku
