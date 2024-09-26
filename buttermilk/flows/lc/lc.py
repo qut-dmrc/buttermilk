@@ -71,6 +71,7 @@ class LangChainMulti(ToolProvider):
 
 
     @tool
+    @trace
     def __call__(
         self,
         *,
@@ -99,7 +100,9 @@ class LangChainMulti(ToolProvider):
             else:
                 chain = ChatPromptTemplate.from_messages([("human",local_template)], template_format="jinja2")
 
-            output = self.invoke(chain=chain, model=model, input_vars=local_inputs)
+            chain = chain | self.llm[model] | ChatParser()
+            logger.info(f"Invoking chain with {model}...")
+            output = chain.invoke(input=local_inputs)
             output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
             for k in LLMOutput.__required_keys__:
@@ -107,24 +110,33 @@ class LangChainMulti(ToolProvider):
                     output[k] = None
 
             results[model] = LLMOutput(**output)
-        breakpoint()
-        results['metadata'] = self.try_sum_tokens(results)
+
+        # results['metadata'] = self.try_sum_tokens(results)
+        # results['__computed__.cumulative_token_count.completion'] = results['metadata'].get("completion_tokens", 0)
+        # results['__computed__.cumulative_token_count.prompt'] = results['metadata'].get("total_tokens", 0)
+        # results['__computed__.cumulative_token_count.total'] = results['metadata'].get("prompt_tokens", 0)
+        # results['llm.usage.completion_tokens'] = results['metadata'].get("completion_tokens", 0)
+        # results['llm.usage.total_tokens'] = results['metadata'].get("total_tokens", 0)
+        # results['llm.usage.prompt_tokens'] = results['metadata'].get("prompt_tokens", 0)
+
+        # results['token_usage'] = results['metadata']
         return results
 
-    @retry(
-        retry=retry_if_exception_type(
-            exception_types=(
-                RateLimit,
-                requests.exceptions.ConnectionError,
-                urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
-                OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
-            ),
-        ),
-            # Wait interval: increasing exponentially up to a max of 30s between retries
-            wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
-            # Retry up to five times before giving up
-            stop=stop_after_attempt(5),
-    )
+    # @retry(
+    #     retry=retry_if_exception_type(
+    #         exception_types=(
+    #             RateLimit,
+    #             requests.exceptions.ConnectionError,
+    #             urllib3.exceptions.ProtocolError,urllib3.exceptions.TimeoutError,
+    #             OpenAIAPIConnectionError, OpenAIRateLimitError, AnthropicAPIConnectionError, AnthropicRateLimitError, ResourceExhausted
+    #         ),
+    #     ),
+    #         # Wait interval: increasing exponentially up to a max of 30s between retries
+    #         wait=wait_exponential_jitter(initial=1, max=30, jitter=5),
+    #         # Retry up to five times before giving up
+    #         stop=stop_after_attempt(5),
+    # )
+
     @trace
     def invoke(self, chain, input_vars, model):
         t0 = time.time()
@@ -139,22 +151,27 @@ class LangChainMulti(ToolProvider):
             return dict(error=err)
         t1 = time.time()
         logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
-        breakpoint()
+
         return output
 
     def try_sum_tokens(self, results):
-        breakpoint()
-        try:
-            cumulative_usage = results['metadata']['usage']
-        except:
-            try:
-                cumulative_usage = results['usage']
-            except:
-                cumulative_usage = dict(total_tokens=0, prompt_tokens=0, completion_tokens=0)
+        cumulative_usage = dict(total_tokens=0, prompt_tokens=0, completion_tokens=0)
 
-        for model_output in results.keys():
+        for model_name, model_output in results.items():
             try:
-                usage = results.get('metadata', results.get('usage').get('usage'))
+                try:
+                    usage = model_output['metadata']['usage']
+                except:
+                    try:
+                        usage = model_output['metadata']['token_usage']
+                    except:
+                        try:
+                            usage = model_output['token_usage']
+                        except:
+                            try:
+                                usage = model_output['usage']
+                            except:
+                                usage = None
                 if usage:
                     cumulative_usage['total_tokens'] += usage.get('total_tokens', 0)
                     cumulative_usage['prompt_tokens'] += usage.get('prompt_tokens', 0)
@@ -167,21 +184,18 @@ class LangChainMulti(ToolProvider):
                 breakpoint()
                 continue
 
-        results['usage'] = cumulative_usage
-        breakpoint()
-        return results
+        return cumulative_usage
 
 if __name__ == "__main__":
     from promptflow.tracing import start_trace
     from buttermilk import BM
     bm = BM()
-    conn = {'haiku': bm._connections_azure['haiku']}
 
     start_trace()
     pf = PFClient()
     #connection = pf.connections.get(name="my_llm_connection")
-    evaluator = LangChainMulti(connections=conn,model="haiku")
-    result = evaluator(
+    lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
+    result = lc(
         content="What's 2+2?",
     )
     print(result)
