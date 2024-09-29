@@ -1,24 +1,25 @@
 
+import time
 from logging import getLogger
 from pathlib import Path
-import time
-
-from promptflow.core import (
-    ToolProvider,
-    tool
-)
-from promptflow.tracing import trace
-from langchain_core.messages import HumanMessage
-from pathlib import Path
 from typing import Optional, Self, TypedDict
-from jinja2 import Environment, FileSystemLoader
-from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+
+import yaml
+from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import (
+    ChatMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+)
 from langchain_core.runnables import Runnable
-from jinja2 import Environment, BaseLoader, Undefined
+from promptflow.core import ToolProvider, tool
+from promptflow.tracing import trace
+
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
-from langchain_core.prompts import MessagesPlaceholder
-import yaml
 
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
@@ -28,7 +29,7 @@ class KeepUndefined(Undefined):
     def __str__(self):
         return '{{ ' + self._undefined_name + ' }}'
 
-class LLMOutput(TypedDict):
+class Prediction(TypedDict):
     result: dict
     reasons: list
     labels: list
@@ -54,7 +55,7 @@ class Judger(ToolProvider):
 
     @tool
     def __call__(
-        self, *, content: str, record_id, **kwargs) -> LLMOutput:
+        self, *, content: str, record_id, **kwargs) -> Prediction:
 
         llm = LLMs(connections=self.connection)[self.model]
 
@@ -68,7 +69,7 @@ class Judger(ToolProvider):
 
         output['record_id'] = record_id
 
-        for k in LLMOutput.__required_keys__:
+        for k in Prediction.__required_keys__:
             if k not in output:
                 output[k] = None
 

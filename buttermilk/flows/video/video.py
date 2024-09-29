@@ -1,26 +1,26 @@
 
+import sys
+import time
 from cgitb import text
 from logging import getLogger
 from pathlib import Path
-import sys
-import time
-
-from jinja2 import Environment, FileSystemLoader
-from promptflow.core import Prompty
-from promptflow.core._prompty_utils import convert_prompt_template
-from promptflow.core import (
-    ToolProvider,
-    tool,
-)
-from promptflow.tracing import trace
-from pathlib import Path
 from typing import Optional, Self, TypedDict
-from buttermilk import BM
-from vertexai.generative_models import GenerativeModel, Part, SafetySetting, FinishReason
-import vertexai.generative_models as generative_models
 
-from buttermilk.tools.json_parser import ChatParser
 import vertexai
+import vertexai.generative_models as generative_models
+from jinja2 import Environment, FileSystemLoader
+from promptflow.core import Prompty, ToolProvider, tool
+from promptflow.core._prompty_utils import convert_prompt_template
+from promptflow.tracing import trace
+from vertexai.generative_models import (
+    FinishReason,
+    GenerativeModel,
+    Part,
+    SafetySetting,
+)
+
+from buttermilk import BM
+from buttermilk.tools.json_parser import ChatParser
 
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATH = BASE_DIR.parent / "templates"
@@ -33,7 +33,7 @@ generation_config = {
     "temperature": 1,
 }
 
-class LLMOutput(TypedDict):
+class Prediction(TypedDict):
     metadata: dict
     record_id: str
     analysis: str
@@ -51,7 +51,7 @@ class Analyst():
 
     @tool
     def __call__(
-        self, *, content: str='', media_attachment_uri: str, **kwargs) -> LLMOutput:
+        self, *, content: str='', media_attachment_uri: str, **kwargs) -> Prediction:
         vertexai.init(project="dmrc-platforms", location="us-central1")
         video_part = Part.from_uri(
             mime_type="video/mp4",

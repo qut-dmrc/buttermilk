@@ -1,28 +1,29 @@
 """ An Azure PromptFlow flavoured wrapper around a Langchain model call."""
-from cgitb import text
 import datetime
-from logging import getLogger
-from pathlib import Path
 import sys
 import time
-
-import pandas as pd
-from promptflow.core import (
-    ToolProvider,
-    tool,
-)
-from promptflow.tracing import trace
+from cgitb import text
+from logging import getLogger
 from pathlib import Path
 from typing import Optional, Self, TypedDict
-from jinja2 import Environment, FileSystemLoader
-from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+
+import pandas as pd
+from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import (
+    ChatMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain_core.runnables import Runnable
-from jinja2 import Environment, BaseLoader, Undefined
-from langchain_core.messages import SystemMessage
+from promptflow.core import ToolProvider, tool
+from promptflow.tracing import trace
+
 from buttermilk import BM
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
+
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATH = BASE_DIR.parent / "templates"
 
@@ -32,7 +33,7 @@ class KeepUndefined(Undefined):
     def __str__(self):
         return '{{ ' + self._undefined_name + ' }}'
 
-class LLMOutput(TypedDict):
+class Prediction(TypedDict):
     timestamp: object
     metadata: dict
     record_id: str
@@ -108,7 +109,7 @@ class Analyst():
 
     @tool
     def __call__(
-        self, *, content: str, media_attachment_uri=None, record_id: Optional[str] = None, **kwargs) -> LLMOutput:
+        self, *, content: str, media_attachment_uri=None, record_id: Optional[str] = None, **kwargs) -> Prediction:
         # Add a human message to the end of the prompt
         messages = self.langchain_template + [prompt_with_media(uri=media_attachment_uri, text=content)]
 
@@ -126,7 +127,7 @@ class Analyst():
 
         output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
-        for k in LLMOutput.__required_keys__:
+        for k in Prediction.__required_keys__:
             if k not in output:
                 output[k] = None
         return  output

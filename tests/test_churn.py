@@ -10,10 +10,20 @@
 ## The basic unit is a Prediction, which has identifiers about the 
 ## question, source data, agent; an answer; and a unique identifier.
 
-import pytest
-from buttermilk.churn.types import AgentInfo, RunInfo, PredictionResult, PredictionInputs, Prediction
 from datetime import datetime, timezone
+
+import pytest
 import shortuuid
+
+from buttermilk.churn.types import (
+    AgentInfo,
+    Prediction,
+    PredictionInputs,
+    PredictionResult,
+    RunInfo,
+)
+from buttermilk.flows.lc.lc import LangChainMulti
+
 
 def test_agent_info():
     agent_info = AgentInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
@@ -75,3 +85,42 @@ def test_prediction_result_optional_fields():
     assert result.predicted_result is None
     assert result.labels is None
     assert result.confidence is None
+
+
+def test_single_flow(sample_record, flow):
+    prediction = flow.predict(sample_record)
+    assert isinstance(prediction, Prediction)
+    assert prediction.agent_info.agent_id == "test_agent"
+    assert prediction.run_info.run_id == "test_run"
+    assert prediction.outputs.predicted_class == "class1"
+    assert prediction.inputs.record_id == "record1"
+
+def test_batch_flow(sample_batch, flow):
+    predictions = flow.batch_predict(sample_batch)
+    assert isinstance(predictions, list)
+    assert len(predictions) == 2
+    for prediction in predictions:
+        assert isinstance(prediction, Prediction)
+        assert prediction.agent_info.agent_id == "test_agent"
+        assert prediction.run_info.run_id == "test_run"
+        assert prediction.outputs.predicted_class == "class1"
+
+class TestSynthesis:
+    def test_get_examples(self, pail, sample_record, identifiers):
+        examples = pail._get_examples(sample_record, identifiers)
+        assert isinstance(examples, list)
+        assert len(examples) == 1
+        example = examples[0]
+        assert example["record_id"] == "record1"
+        assert example["parameters"] == {"param3": "value3"}
+
+
+@pytest.fixture
+def pail():
+    return Pail()
+
+@pytest.fixture
+def flow():
+    lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
+    return lc
+    

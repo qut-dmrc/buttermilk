@@ -1,38 +1,33 @@
-from pathlib import Path
+import datetime
 import time
-import pandas as pd
-from promptflow.core import (
-    ToolProvider,
-    tool,
-)
-from langchain_core.messages import HumanMessage
 from pathlib import Path
 from typing import Optional, Self, TypedDict
-from jinja2 import Environment, FileSystemLoader
+
+import pandas as pd
+import tqdm
+from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
+from langchain_core.messages import HumanMessage
 from langchain_core.prompts import (
     ChatMessagePromptTemplate,
     ChatPromptTemplate,
     HumanMessagePromptTemplate,
+    MessagesPlaceholder,
     SystemMessagePromptTemplate,
 )
-import datetime
-import tqdm
 from langchain_core.runnables import Runnable
-from jinja2 import Environment, BaseLoader, Undefined
-from buttermilk.flows.common.config import COL_PREDICTION
-from buttermilk.llms import LLMs
+from promptflow.core import Prompty, ToolProvider, tool
+from promptflow.core._prompty_utils import convert_prompt_template
 
 from buttermilk import BM
+from buttermilk.flows.common.config import COL_PREDICTION
+from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
-from langchain_core.prompts import MessagesPlaceholder
-from promptflow.core import Prompty
-from promptflow.core._prompty_utils import convert_prompt_template
 
 BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
 
-class LLMOutput(TypedDict):
+class Prediction(TypedDict):
     timestamp: str
     correct: bool
     alignment: float
@@ -68,7 +63,7 @@ class EvalQA(ToolProvider):
         self.model = model
 
     @tool
-    def __call__(self, *, groundtruth: dict, scored_result: dict, reasons: dict, **kwargs) -> LLMOutput:
+    def __call__(self, *, groundtruth: dict, scored_result: dict, reasons: dict, **kwargs) -> Prediction:
 
         predicted=scored_result['predicted']
 
@@ -84,7 +79,7 @@ class EvalQA(ToolProvider):
         output['result'] = scored_result
         output['groundtruth'] = groundtruth
         output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
-        for k in LLMOutput.__required_keys__:
+        for k in Prediction.__required_keys__:
             if k not in output:
                 output[k] = None
 

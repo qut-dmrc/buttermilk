@@ -1,51 +1,55 @@
-from dataclasses import dataclass
 import datetime
-from random import shuffle
 import time
+from dataclasses import dataclass
+from random import shuffle
 from typing import Any, List, Optional, TypedDict
 
 import pandas as pd
 import requests
 import urllib3
-
+from anthropic import APIConnectionError as AnthropicAPIConnectionError
+from anthropic import RateLimitError as AnthropicRateLimitError
 from google.api_core.exceptions import ResourceExhausted
 from google.generativeai.types.generation_types import (
     BlockedPromptException,
     StopCandidateException,
 )
-from buttermilk.exceptions import RateLimit
-from anthropic import APIConnectionError as AnthropicAPIConnectionError
-from anthropic import RateLimitError as AnthropicRateLimitError
+from jinja2 import Environment, FileSystemLoader, Template
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import (
+    ChatMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+)
 from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import RateLimitError as OpenAIRateLimitError
-from buttermilk.llms import LLMs
 from promptflow.client import PFClient
 from promptflow.connections import CustomConnection
+from promptflow.core import ToolProvider, tool
 from promptflow.tracing import trace
-from buttermilk.tools.json_parser import ChatParser
-from langchain_core.prompts import MessagesPlaceholder
-from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
-
 from tenacity import (
-    retry, RetryError,
+    RetryError,
+    retry,
     retry_if_exception_type,
-    stop_after_attempt,wait_random,
+    stop_after_attempt,
     wait_exponential_jitter,
+    wait_random,
     wait_random_exponential,
-)
-from langchain_core.messages import HumanMessage
-
-from buttermilk.utils.log import logger
-
-from jinja2 import Environment, FileSystemLoader, Template
-from promptflow.core import (
-    ToolProvider,
-    tool
 )
 
 from buttermilk import BM
-from buttermilk.flows.judge.judge import LLMOutput,TEMPLATE_PATHS,KeepUndefined,LLMOutputBatch
-
+from buttermilk.exceptions import RateLimit
+from buttermilk.flows.judge.judge import (
+    TEMPLATE_PATHS,
+    KeepUndefined,
+    Prediction,
+    PredictionBatch,
+)
+from buttermilk.llms import LLMs
+from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.log import logger
 
 
 class LangChainMulti(ToolProvider):
@@ -75,7 +79,7 @@ class LangChainMulti(ToolProvider):
         self,
         *,
         content: Optional[str] = None, **kwargs
-    ) -> LLMOutputBatch:
+    ) -> PredictionBatch:
         """Evaluate with langchain evaluator."""
 
         results = {}
@@ -104,11 +108,11 @@ class LangChainMulti(ToolProvider):
                 output = dict(error="Retry timeout querying LLM")
             output["timestamp"] = pd.to_datetime(datetime.datetime.now(tz=datetime.UTC)).isoformat()
 
-            for k in LLMOutput.__required_keys__:
+            for k in Prediction.__required_keys__:
                 if k not in output:
                     output[k] = None
 
-            results[model] = LLMOutput(**output)
+            results[model] = Prediction(**output)
 
         return results
 
@@ -145,6 +149,7 @@ class LangChainMulti(ToolProvider):
 
 if __name__ == "__main__":
     from promptflow.tracing import start_trace
+
     from buttermilk import BM
     bm = BM()
 
