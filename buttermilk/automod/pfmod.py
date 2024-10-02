@@ -4,10 +4,9 @@
 ###
 import datetime
 import gc
-from math import pi
 import os
-import regex as re
 import resource
+from math import pi
 from multiprocessing import Process
 from pathlib import Path
 from random import shuffle
@@ -16,25 +15,32 @@ from tempfile import NamedTemporaryFile
 import cloudpathlib
 import hydra
 import pandas as pd
+import regex as re
 from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 
 from buttermilk import BM
-from buttermilk.apis import (HFInferenceClient, hf_pipeline,
-                             Llama2ChatMod, replicatellama2, replicatellama3)
+from buttermilk.apis import (
+    HFInferenceClient,
+    Llama2ChatMod,
+    hf_pipeline,
+    replicatellama2,
+    replicatellama3,
+)
+from buttermilk.exceptions import FatalError
 from buttermilk.flows.judge.judge import Judger
-from buttermilk.flows.lc.lc import LangChainMulti
+from buttermilk.lc import LC
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
-from buttermilk.exceptions import FatalError
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
 import itertools
 from itertools import cycle
 from tempfile import NamedTemporaryFile
+
 # # Submit the pipeline
 # experiment = Experiment(workspace=ws, name='batch-flow-experiment')
 # run = experiment.submit(pipeline)
@@ -42,13 +48,13 @@ from tempfile import NamedTemporaryFile
 from typing import Callable, Optional, Type, TypeVar
 
 import cloudpathlib
+import datasets
 import torch
 import tqdm
 
 from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
 from buttermilk.utils.log import logger
-import datasets
 
 # from azureml.core import Workspace, Experiment
 # from azureml.pipeline.core import Pipeline, PipelineData
@@ -67,6 +73,7 @@ pflocal = LocalPFClient()
 bm: BM = None
 
 from promptflow.tracing import start_trace, trace
+
 start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
 
 
@@ -249,7 +256,7 @@ def main(cfg: DictConfig) -> None:
             df = pd.DataFrame()
             try:
                 if step_cfg.flow == 'lc':
-                    flow_obj = LangChainMulti
+                    flow_obj = LC
                 elif step_cfg.flow == 'moderate':
                     flow_obj=load_tox_flow
                 elif step_cfg.flow == 'judger':

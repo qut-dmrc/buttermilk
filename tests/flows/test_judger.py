@@ -10,7 +10,7 @@ def test_judger_ordinary(bm, fight_no_more_forever, model):
     judger = Judger(standards_path="criteria_ordinary.jinja2", model=model, connections=bm._connections_azure)
     output = judger(content=fight_no_more_forever['text'])
     assert output
-    assert output[COL_PREDICTION] == False
+    assert not output[COL_PREDICTION] 
     pass
 
 
@@ -19,5 +19,5 @@ def test_judger_vaw(bm,  fight_no_more_forever, model):
     judger = Judger(standards_path="criteria_vaw.jinja2", model=model,  connections=bm._connections_azure)
     output = judger(content=fight_no_more_forever)
     assert output
-    assert output[COL_PREDICTION] == False
+    assert not output[COL_PREDICTION] 
     pass

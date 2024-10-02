@@ -19,13 +19,12 @@ from pydantic import (
 
 class AgentInfo(BaseModel):
     agent_id: str
-    agent_version: str
-    parameters: dict
+    parameters: dict = {}
 
 class RunInfo(BaseModel):
     run_id: str
     experiment_name: str
-    parameters: dict
+    parameters: dict = {}
 
 class Result(BaseModel):
     category: Optional[str|int] = None
@@ -47,7 +46,7 @@ class InputRecord(BaseModel):
     path:  Optional[str] = ""
 
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
     )
 
     @model_validator(mode="after")
@@ -61,11 +60,11 @@ class InputRecord(BaseModel):
 
         return self
 
-    @field_validator("labels")
-    def vld_labels(labels):
-        # ensure labels is a list
-        if isinstance(labels, str):
-            return [labels]
+    # @field_validator("labels")
+    # def vld_labels(labels):
+    #     # ensure labels is a list
+    #     if isinstance(labels, str):
+    #         return [labels]
 
     @field_validator("path")
     def vld_path(path):
@@ -81,15 +80,16 @@ class InputRecord(BaseModel):
 class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now(tz=datetime.timezone.utc))
-    name: str  # The name of the task
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
+    step_name: str  # The name of the task in the workflow
 
     agent_info: AgentInfo
     run_info: RunInfo
     record: InputRecord                 # The data to be processed by the worker
+    input_map: dict =  {}               # Map from data fields to worker variables
     parameters: dict[str, Any] = {}     # Additional options for the worker
 
-    outputs: Result
+    outputs: Optional[Result] = None
 
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = {}

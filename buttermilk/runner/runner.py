@@ -67,7 +67,17 @@ from asyncio import Queue, QueueEmpty, TaskGroup, gather
 from functools import cached_property, wraps
 from pathlib import Path
 from random import random
-from typing import Any, AsyncGenerator, Coroutine, List, Optional, Sequence, Type, Union
+from typing import (
+    Any,
+    AsyncGenerator,
+    Coroutine,
+    List,
+    Optional,
+    Self,
+    Sequence,
+    Type,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
@@ -76,12 +86,21 @@ import shortuuid
 from cloudpathlib import CloudPath
 from humanfriendly import format_timespan
 from promptflow.tracing import start_trace, trace
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from tqdm.asyncio import tqdm as atqdm
 
-
-from buttermilk.runner._runner_types import Job
+from buttermilk.buttermilk import BM
+from buttermilk.exceptions import FatalError
+from buttermilk.runner import Job
 from buttermilk.utils.errors import extract_error_info
+from buttermilk.utils.log import logger
 
 # The schema for the "runs" table in a BigQuery dataset
 RUNS_SCHEMA = """
@@ -224,9 +243,11 @@ class Consumer(BaseModel):
     @trace
     async def process_trace(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         # This allows a worker to yield multiple results from a single input
-        async for result in self.process(job=job):
-            yield result
-            await asyncio.sleep(delay=0.1)
+        result = await self.process(job=job)
+        yield result
+        await asyncio.sleep(delay=0.1)
+
+
 
     @abstractmethod
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
@@ -247,16 +268,20 @@ class Consumer(BaseModel):
 class ResultsCollector(BaseModel):
     """A simple collector that receives results from a queue and collates them."""
 
+    bm: BM = Field(default_factory=lambda: BM())
     results: Queue[Job] = Field(default_factory=Queue)
     shutdown: bool = False
     n_results: int = 0
     to_save: list = []
     batch_size: int = 50  # rows
 
-    # The URI or path to save all results from this run
-    batch_path: Union[CloudPath, Path] = Field(
-        default_factory=lambda: CloudPath(gc.save_dir)
-    )
+    # # The URI or path to save all results from this run
+    batch_path: Union[CloudPath, Path] = None
+    
+    @model_validator(mode="after")
+    def get_path(self) -> Self:
+        if self.batch_path is None:
+            self.batch_path = CloudPath(self.bm.save_dir)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -304,17 +329,19 @@ class ResultsCollector(BaseModel):
 
     # Turn a Job with results into a record dict to save
     def process(self, response: Job) -> dict[str, Any]:
-        # By default, just dump the result
-        return response.model_dump()
+        if isinstance(response, Job):
+            return response.model_dump()
+        return response
 
     @trace
     def save_with_trace(self, **kwargs):
         return self._save(**kwargs)
 
     def _save(self):
-        _save_path = self.batch_path / f"results_{self.n_results}.json"
-        gc.save(data=self.to_save, uri=_save_path.as_uri())
-        self.to_save = []
+        if self.to_save:
+            _save_path = self.batch_path / f"results_{self.n_results}.json"
+            self.bm.save(data=self.to_save, uri=_save_path.as_uri())
+            self.to_save = []
 
 ################################
 #
@@ -336,6 +363,7 @@ class TaskDistributor(BaseModel):
     _tasks: List[Coroutine] = []
     total_tasks: int = 0
     _collector: Optional[ResultsCollector] = None
+    bm: BM = Field(default_factory=lambda: BM())
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -378,9 +406,6 @@ class TaskDistributor(BaseModel):
 
         t0 = time.perf_counter()
         try:
-            # Set up tracing using promptflow
-            start_trace(collection=bm.name, resource_attributes=dict(job=bm.job))
-
             global_pbar = atqdm(
                 total=self.total_tasks,
                 dynamic_ncols=False,
@@ -450,8 +475,7 @@ class TaskDistributor(BaseModel):
                 )
         except Exception as e:
             logger.exception(
-                f"Received unhandled exception! {e}",
-                extra={"traceback": e.__traceback__, "args": e.args},
+                f"Received unhandled exception! {e} {e.args=}"
             )
         finally:
             time_taken = time.perf_counter() - t0

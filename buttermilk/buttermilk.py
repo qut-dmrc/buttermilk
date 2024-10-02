@@ -7,7 +7,6 @@
 # The configuration files will be used to store the paths to the authentication credentials in
 # the cloud vaults.
 
-from dataclasses import dataclass
 import datetime
 import itertools
 import json
@@ -15,14 +14,24 @@ import logging
 import os
 import platform
 import sys
+import types
+from dataclasses import dataclass
 from functools import cached_property
 from logging import getLogger
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Type, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Self,
+    Type,
+    TypeVar,
+    Union,
+)
 
-from hydra import initialize, initialize_config_dir, compose
-
-from google.cloud import bigquery, storage
 import cloudpathlib
 import coloredlogs
 import fsspec
@@ -36,17 +45,24 @@ import yaml
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from cloudpathlib import AnyPath, CloudPath
+from dotenv import load_dotenv
+from google.cloud import bigquery, storage
 from google.cloud.logging.handlers import CloudLoggingHandler
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
-from hydra import compose, initialize
+from hydra import compose, initialize, initialize_config_dir
 from omegaconf import DictConfig, OmegaConf, SCMode
-from pydantic import (BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
-                      model_validator, root_validator)
 from promptflow.tracing import start_trace, trace
-from  typing import  Self, MutableMapping
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+    root_validator,
+)
+
 from .utils import save
-import types
-from dotenv import load_dotenv
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 
@@ -111,7 +127,7 @@ class BM(Singleton, BaseModel):
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
-            # start_trace(resource_attributes={"run_id": self._run_id}, collection=self.cfg.name, job=self.cfg.job)
+            start_trace(resource_attributes={"run_id": self.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
 
 

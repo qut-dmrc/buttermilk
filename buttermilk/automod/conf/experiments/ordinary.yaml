@@ -6,19 +6,37 @@ run:
   platform: local
 
 experiments:
-  modsynth:
-    flow: modsynth
+  judge:
     num_runs: 1
     init:
-      models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+      template_path: judge.jinja2
+      other_template_paths:
+        criteria: criteria_ordinary.jinja2
+    # model: ['haiku']
+    model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
     data:
       name: drag
       uri: gs://dmrc-platforms/data/drag_train.jsonl
       columns:
-        record_id: data.id
+        record_id: data.record_id
         content: data.alt_text
         groundtruth: data.expected
-        models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+    save:
+      destination: bq
+      dataset: 'dmrc-analysis.toxicity.moderate'
+      schema: buttermilk/schemas/moderate.json
+  synth:
+    init:
+      template_path: synth.jinja2
+      criteria: 
+        - criteria_ordinary.jinja2
+      num_runs: 1
+      models: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+    flow:
+      name: judge
+      dataset: 'dmrc-analysis.toxicity.moderate'
+      filter:
+        record_id: data.id
     save:
       destination: bq
       dataset: 'dmrc-analysis.toxicity.moderate'

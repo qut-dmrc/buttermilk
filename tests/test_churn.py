@@ -13,16 +13,9 @@
 from datetime import datetime, timezone
 
 import pytest
-import shortuuid
 
-from buttermilk.churn.types import (
-    AgentInfo,
-    Prediction,
-    PredictionInputs,
-    PredictionResult,
-    RunInfo,
-)
-from buttermilk.flows.lc.lc import LangChainMulti
+from buttermilk.flows.judge.judge import Judger
+from buttermilk.runner import AgentInfo, Job, RunInfo, run_flow
 
 
 def test_agent_info():
@@ -87,23 +80,14 @@ def test_prediction_result_optional_fields():
     assert result.confidence is None
 
 
-def test_single_flow(sample_record, flow):
-    prediction = flow.predict(sample_record)
-    assert isinstance(prediction, Prediction)
+def test_single_flow(sample_job):
+    prediction = run_flow(sample_job)
+    assert isinstance(prediction, Job)
     assert prediction.agent_info.agent_id == "test_agent"
     assert prediction.run_info.run_id == "test_run"
     assert prediction.outputs.predicted_class == "class1"
     assert prediction.inputs.record_id == "record1"
 
-def test_batch_flow(sample_batch, flow):
-    predictions = flow.batch_predict(sample_batch)
-    assert isinstance(predictions, list)
-    assert len(predictions) == 2
-    for prediction in predictions:
-        assert isinstance(prediction, Prediction)
-        assert prediction.agent_info.agent_id == "test_agent"
-        assert prediction.run_info.run_id == "test_run"
-        assert prediction.outputs.predicted_class == "class1"
 
 class TestSynthesis:
     def test_get_examples(self, pail, sample_record, identifiers):
@@ -115,12 +99,10 @@ class TestSynthesis:
         assert example["parameters"] == {"param3": "value3"}
 
 
-@pytest.fixture
-def pail():
-    return Pail()
 
 @pytest.fixture
 def flow():
-    lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
-    return lc
+    return Judger(model='fake', template_path="judge.jinja2", criteria="criteria_ordinary.jinja2")
+    #lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
+    #return lc
     
