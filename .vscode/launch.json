@@ -24,7 +24,7 @@
                 "-Xdev"
             ],
             "justMyCode": false,
-            "args": [
+            "args": [ "-m",
                 "+experiments=ordinary",
             ],
             "envFile": "${workspaceFolder}/.env",
