@@ -94,12 +94,9 @@ class LC(BaseModel):
 
         self._template = env.get_template(self.template_path)
 
-    def __call__(
-        self, content: Optional[str] = None, *, model: Optional[str] = None,  **kwargs
-    ) -> PredictionBatch:
+    async def call_async(self, content: Optional[str] = None, model: Optional[str] = None, **kwargs):
         if isinstance(content, InputRecord):
             content = content.text
-        results = {}
         local_inputs = self.template_vars.copy()
         local_inputs.update(kwargs)
 
@@ -123,21 +120,12 @@ class LC(BaseModel):
             chain = ChatPromptTemplate.from_messages(
                 [("human", local_template)], template_format="jinja2"
             )
-        try:
-            output = self.invoke(chain=chain, model=model, input_vars=local_inputs)
-        except RetryError:
-            output = dict(error="Retry timeout querying LLM")
-        output["timestamp"] = pd.to_datetime(
-            datetime.datetime.now(tz=datetime.UTC)
-        ).isoformat()
+        chain = chain | self.llm[model] | ChatParser()
 
-        for k in Prediction.__required_keys__:
-            if k not in output:
-                output[k] = None
-
-        results = Prediction(**output)
-
+        results = await self.invoke(chain, input_vars=local_inputs, model=model)
+        
         return results
+
 
     @retry(
         retry=retry_if_exception_type(
@@ -158,22 +146,36 @@ class LC(BaseModel):
         stop=stop_after_attempt(4),
     )
     @trace
-    def invoke(self, chain, input_vars, model) -> dict[str, str]:
-        t0 = time.time()
-        try:
-            chain = chain | self.llm[model] | ChatParser()
-            logger.info(f"Invoking chain with {model}...")
-            output = chain.invoke(input=input_vars)
-        except Exception as e:
-            t1 = time.time()
-            err = f"Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
-            logger.error(err)
-            raise e
-            # return dict(error=err)
-        t1 = time.time()
-        logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
+    async def invoke(self, chain, input_vars, model) -> dict[str, str]:
 
-        return output
+        try:
+            t0 = time.time()
+            try:
+                logger.info(f"Invoking chain with {model}...")
+                output = await chain.ainvoke(input=input_vars)
+            except Exception as e:
+                t1 = time.time()
+                err = f"Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
+                logger.error(err)
+                raise e
+                # return dict(error=err)
+            t1 = time.time()
+            logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
+
+
+        except RetryError:
+            output = dict(error="Retry timeout querying LLM")
+        output["timestamp"] = pd.to_datetime(
+            datetime.datetime.now(tz=datetime.UTC)
+        ).isoformat()
+
+        for k in Prediction.__required_keys__:
+            if k not in output:
+                output[k] = None
+
+        results = Prediction(**output)
+
+        return results
 
 
 if __name__ == "__main__":

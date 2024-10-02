@@ -76,7 +76,7 @@ class Moderator(Consumer):
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         """ Take a Job, process it, and return a Job."""
         try:
-            job = run_flow(flow=self._client, job=job)
+            job = await run_flow(flow=self._client, job=job)
         except Exception as e:
             job.error = f"Error running job: {e} {e.args=}"
         finally:

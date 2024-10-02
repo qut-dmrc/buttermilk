@@ -8,11 +8,11 @@ from pydantic import BaseModel
 from buttermilk.runner import Job
 
 
-def run_flow(job: Job, flow: callable):
+async def run_flow(job: Job, flow: callable):
     data = job.record.model_dump()
     inputs = {k: data[v] for k, v in job.input_map.items()}
     try:
-        job.outputs = flow(**inputs)
+        job.outputs = await flow.call_async(**inputs)
     except Exception as e:
         job.error = str(e)
     return job
