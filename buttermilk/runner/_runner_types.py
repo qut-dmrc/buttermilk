@@ -30,9 +30,9 @@ class Result(BaseModel):
     category: Optional[str|int] = None
     result: Optional[float] = None
     labels: Optional[list[str]] = None
-    confidence: Optional[float] = None
-    reasons: Optional[list[str]] = None
-    scores: Optional[dict] = None
+    confidence: Optional[float|str] = None
+    reasons: Optional[list] = None
+    scores: Optional[dict|list] = None
 
 
 
@@ -85,7 +85,7 @@ class Job(BaseModel):
 
     agent_info: AgentInfo
     run_info: RunInfo
-    record: InputRecord                 # The data to be processed by the worker
+    record: InputRecord|dict                 # The data to be processed by the worker
     input_map: dict =  {}               # Map from data fields to worker variables
     parameters: dict[str, Any] = {}     # Additional options for the worker
 

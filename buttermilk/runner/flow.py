@@ -9,8 +9,14 @@ from buttermilk.runner import Job
 
 
 async def run_flow(job: Job, flow: callable):
-    data = job.record.model_dump()
-    inputs = {k: data[v] for k, v in job.input_map.items()}
+    inputs = {}
+    data = job.model_dump()
+    for k, v in job.input_map.items():
+        v = v.split(".")
+        for part in v:
+            last_value = getattr(data, part)
+        inputs[k] = last_value
+        
     try:
         job.outputs = await flow.call_async(**inputs)
     except Exception as e:

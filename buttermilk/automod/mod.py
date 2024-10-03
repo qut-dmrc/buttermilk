@@ -112,6 +112,8 @@ async def run(cfg):
             flow_obj=load_tox_flow
         elif step_name == 'judge':
             flow_obj = LC
+        elif step_name == 'synth':
+            flow_obj = LC
         
         init_vars = OmegaConf.to_object(step_cfg.init)
         for model in step_cfg.model:
@@ -119,9 +121,14 @@ async def run(cfg):
             moderator = Moderator(task_name=model, flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
             consumers.append(moderator)
 
-        
+        data = {}
+
         # load data
-        dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+        data['dataset'] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+
+        # load prior steps
+        for prior_step in step_cfg.jobs:
+            data[prior_step] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
         break # one at a time for now
     
     for task in consumers:
@@ -132,19 +139,43 @@ async def run(cfg):
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
         # rename_dict = {v: k for k, v in columns.items()}
         # dataset = dataset.rename(columns=rename_dict)
+        dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+
+        # add additional inputs from groups of past jobs
+        for prior_step in step_cfg.jobs:
+            dataset = group_and_filter_prior_step(dataset, prior_step)
+
         for idx, row in dataset.sample(frac=1).iterrows():
-            job = Job(step_name=step_name, 
+            job_info = dict(step_name=step_name, 
                       agent_info=agent_info,
-                      input_map=columns,
-                      run_info=run_info, 
-                      record=InputRecord(**row))
+                      run_info=run_info,
+                      parameters=step_cfg.parameters )
+            
+            # Load input record
+            record = InputRecord(**row)
+            
+            job = Job(**job_info,
+                    record=record)
+            
             # Add each job to the queue
             orchestrator.add_job(task_name=task.task_name, job=job)
+
 
     # Run!
     results = await orchestrator.run()
 
     return results
+
+def group_and_filter_prior_step(df, prior_step):
+    if 'uri' in prior_step:
+        new_data = pd.read_json(prior_step.uri, orient='records', lines=True)
+
+    new_data = new_data.set_index(prior_step.group)
+    for name, value in prior_step.columns.items():
+        grouped = new_data[value].groupby(level=0).apply(list)
+        df[name] = grouped
+
+    return df        
 
 def save_to_bigquery(results: pd.DataFrame, save_cfg):
     from buttermilk.utils.save import upload_rows
