@@ -127,8 +127,10 @@ async def run(cfg):
         data['dataset'] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
 
         # load prior steps
-        for prior_step in step_cfg.jobs:
-            data[prior_step] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+        if 'jobs' in step_cfg:
+            for prior_step in step_cfg.jobs:
+                data[prior_step] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+        
         break # one at a time for now
     
     for task in consumers:
@@ -137,22 +139,27 @@ async def run(cfg):
         agent_info = AgentInfo(agent_id=task.task_name, paramters=init_vars)
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
-        # rename_dict = {v: k for k, v in columns.items()}
-        # dataset = dataset.rename(columns=rename_dict)
+        rename_dict = {v: k for k, v in columns.items()}
         dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
+        dataset = dataset.rename(columns=rename_dict)
 
         # add additional inputs from groups of past jobs
-        for prior_step in step_cfg.jobs:
-            dataset = group_and_filter_prior_step(dataset, prior_step)
-
+        if 'jobs' in step_cfg:
+            for prior_step in step_cfg.jobs:
+                dataset = group_and_filter_prior_step(dataset, prior_step)
+        dataset = dataset[step_cfg.data.columns.keys()]
+        
         for idx, row in dataset.sample(frac=1).iterrows():
             job_info = dict(step_name=step_name, 
                       agent_info=agent_info,
                       run_info=run_info,
-                      parameters=step_cfg.parameters )
+                      input_map=columns)
+            
+            if step_cfg.parameters:
+                job_info['parameters'] = step_cfg.parameters
             
             # Load input record
-            record = InputRecord(**row)
+            record = InputRecord(**row, source=step_cfg.data.name)
             
             job = Job(**job_info,
                     record=record)
@@ -170,11 +177,22 @@ def group_and_filter_prior_step(df, prior_step):
     if 'uri' in prior_step:
         new_data = pd.read_json(prior_step.uri, orient='records', lines=True)
 
-    new_data = new_data.set_index(prior_step.group)
-    for name, value in prior_step.columns.items():
-        grouped = new_data[value].groupby(level=0).apply(list)
-        df[name] = grouped
+    for group in prior_step.group:
+        grp, col = group.split('.')
 
+        # extract the contents of the nested source column that will form the
+        # new index
+        exploded = pd.json_normalize(new_data[grp])
+        new_data.loc[:, col] = exploded[col]
+        new_data = new_data.set_index(col)
+
+    for mapped_name, col_name in prior_step.columns.items():
+        new_data.groupby(level=0)[col_name].agg(list)
+        
+        mapped_col = new_data.groupby(level=0)[col_name].agg(list)
+        mapped_col.name = mapped_name
+        df = pd.merge(df, mapped_col, left_on=prior_step.group, right_index=True)
+        
     return df        
 
 def save_to_bigquery(results: pd.DataFrame, save_cfg):

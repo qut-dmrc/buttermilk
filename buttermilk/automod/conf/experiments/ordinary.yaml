@@ -6,27 +6,28 @@ run:
   platform: local
 
 experiments:
-  # judge:
-  #   num_runs: 1
-    # parameters:
-  #   init:
-  #     template_path: judge.jinja2
-  #     other_template_paths:
-  #       criteria: criteria_ordinary.jinja2
-  #   # model: ['haiku']
-  #   #model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
-  #   model: ["llama31_70b", "llama31_8b", "gpt4o", "opus", "sonnet", "gemini15pro"]
-  #   data:
-  #     name: drag
-  #     uri: gs://dmrc-platforms/data/drag_train.jsonl
-  #     columns:
-  #       record_id: data.record_id
-  #       content: data.alt_text
-  #       groundtruth: data.expected
-  #   save:
-  #     destination: bq
-  #     dataset: 'dmrc-analysis.toxicity.moderate'
-  #     schema: buttermilk/schemas/moderate.json
+  judge:
+    num_runs: 1
+    parameters:
+    init:
+      template_path: judge.jinja2
+      other_template_paths:
+        criteria: criteria_ordinary.jinja2
+    model: ['haiku']
+    #model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+    # model: ["llama31_70b", "llama31_8b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+    jobs: {}
+    data:
+      name: drag queens - alt text
+      uri: gs://dmrc-platforms/data/drag_train.jsonl
+      columns:
+        record_id: data.id
+        content: data.alt_text
+        groundtruth: data.expected
+    save:
+      destination: bq
+      dataset: 'dmrc-analysis.toxicity.moderate'
+      schema: buttermilk/schemas/moderate.json
   synth:
     init:
       template_path: synthesise.jinja2
@@ -49,6 +50,6 @@ experiments:
         filter:
           max: 32
         group:
-          - record_id
+          - record.record_id
         columns:
           draft: outputs
