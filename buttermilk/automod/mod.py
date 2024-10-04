@@ -34,7 +34,7 @@ from buttermilk.apis import (
 from buttermilk.exceptions import FatalError
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.lc import LC
-from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, RunInfo
+from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo, StepInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
 from buttermilk.tools.metrics import Metriciser, Scorer
@@ -66,7 +66,7 @@ class Moderator(Consumer):
     ## This is a standard pattern for creating a new Consumer class.
     _client: Optional[LC] = None
     init_vars: dict = {}
-    agent_info: AgentInfo = {}
+    step_info: StepInfo = {}
     run_info: RunInfo = {}
 
     @model_validator(mode='after')
@@ -81,7 +81,7 @@ class Moderator(Consumer):
             job.error = f"Error running job: {e} {e.args=}"
         finally:
             job.timestamp = pd.to_datetime(datetime.datetime.now())
-            job.agent_info = self.agent_info
+            job.step_info = self.step_info
             job.run_info = self.run_info
             return job
 
@@ -137,7 +137,9 @@ async def run(cfg):
     for task in consumers:
         orchestrator.register_task(consumer=task)
 
-        agent_info = AgentInfo(agent_id=task.task_name, paramters=init_vars, 
+        step_info = StepInfo(agent_id=task.task_name, 
+                      step_name=step_name, 
+                      paramters=init_vars, 
                       source=step_cfg.data.name)
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
@@ -160,8 +162,7 @@ async def run(cfg):
 
         for idx, row in dataset.sample(frac=1).iterrows():
             job = Job(record_id=idx,
-                      step_name=step_name, 
-                      agent_info=agent_info,
+                      step_info=step_info,
                       run_info=run_info,
                       inputs=row.to_dict(),
                       parameters=step_cfg.parameters,

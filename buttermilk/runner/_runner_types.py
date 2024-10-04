@@ -17,7 +17,8 @@ from pydantic import (
 )
 
 
-class AgentInfo(BaseModel):
+class StepInfo(BaseModel):
+    step_name: str
     agent_id: str
     parameters: dict = {}
     source: str
@@ -84,7 +85,7 @@ class Job(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
     step_name: str  # The name of the task in the workflow
 
-    agent_info: AgentInfo
+    step_info: StepInfo
     run_info: RunInfo
     record_id: str   
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker

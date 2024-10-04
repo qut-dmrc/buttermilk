@@ -15,13 +15,13 @@ from datetime import datetime, timezone
 import pytest
 
 from buttermilk.flows.judge.judge import Judger
-from buttermilk.runner import AgentInfo, Job, RunInfo, run_flow
+from buttermilk.runner import Job, RunInfo, StepInfo, run_flow
 
 
-def test_agent_info():
-    agent_info = AgentInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
-    assert agent_info.agent_id == "test_agent"
-    assert agent_info.agent_version == "1.0"
+def test_step_info():
+    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    assert step_info.agent_id == "test_agent"
+    assert step_info.agent_version == "1.0"
 
 
 def test_run_info():
@@ -43,29 +43,29 @@ def test_prediction_inputs():
     assert inputs.parameters == {"param3": "value3"}
 
 def test_prediction():
-    agent_info = AgentInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     outputs = PredictionResult(predicted_class="class1", predicted_result=0.75, labels=["label1", "label2"], confidence=0.9)
     inputs = PredictionInputs(record_id="record1", parameters={"param3": "value3"})
 
-    prediction = Prediction(agent_info=agent_info, run_info=run_info, outputs=outputs, inputs=inputs)
+    prediction = Prediction(step_info=step_info, run_info=run_info, outputs=outputs, inputs=inputs)
 
     assert isinstance(prediction.prediction_id, str)
     assert len(prediction.prediction_id) == 22  # ShortUUID length
     assert isinstance(prediction.timestamp, datetime)
     assert prediction.timestamp.tzinfo == timezone.utc
-    assert prediction.agent_info == agent_info
+    assert prediction.step_info == step_info
     assert prediction.run_info == run_info
     assert prediction.outputs == outputs
     assert prediction.inputs == inputs
 
 def test_prediction_default_values():
-    agent_info = AgentInfo(agent_id="test_agent", agent_version="1.0", parameters={})
+    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={})
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={})
     outputs = PredictionResult()
     inputs = PredictionInputs(record_id="record1", parameters={})
 
-    prediction = Prediction(agent_info=agent_info, run_info=run_info, outputs=outputs, inputs=inputs)
+    prediction = Prediction(step_info=step_info, run_info=run_info, outputs=outputs, inputs=inputs)
 
     assert isinstance(prediction.prediction_id, str)
     assert len(prediction.prediction_id) == 22  # ShortUUID length
@@ -83,7 +83,7 @@ def test_prediction_result_optional_fields():
 def test_single_flow(sample_job):
     prediction = run_flow(sample_job)
     assert isinstance(prediction, Job)
-    assert prediction.agent_info.agent_id == "test_agent"
+    assert prediction.step_info.agent_id == "test_agent"
     assert prediction.run_info.run_id == "test_run"
     assert prediction.outputs.predicted_class == "class1"
     assert prediction.inputs.record_id == "record1"

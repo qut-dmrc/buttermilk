@@ -33,7 +33,13 @@ class ResultsSaver(ResultsCollector):
         # Here we use the data field as the source of data to upload in each row
         if not isinstance(response, Job):
             raise ValueError(f"Expected a Job to save, got: {type(response)} for: {response}")
-        return response.model_dump()
+        output = response.model_dump()
+        try: 
+            # move metadata to the record id
+            output['metadata']['output'] = output['outputs']['metadata']
+            del output['outputs']['metadata']
+        except KeyError:
+            pass
 
     def _save(self):
         try:

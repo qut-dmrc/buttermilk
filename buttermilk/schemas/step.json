@@ -10,17 +10,12 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "step_name",
+        "name": "step_info",
         "type": "STRING",
         "mode": "REQUIRED"
     },
     {
         "name": "run_info",
-        "type": "JSON",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "agent_info",
         "type": "JSON",
         "mode": "REQUIRED"
     },
@@ -32,7 +27,7 @@
     {
         "name": "parameters",
         "type": "JSON",
-        "mode": "REQUIRED"
+        "mode": "NULLABLE"
     },
     {
         "name": "inputs",
