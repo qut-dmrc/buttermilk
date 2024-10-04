@@ -1,21 +1,20 @@
 import datetime
 import json
-from cloudpathlib import AnyPath, CloudPath
-import pathlib
-import fsspec
-import requests
-import yaml
-import regex as re
-import pandas as pd
-import numpy as np
-import pydantic
-import uuid
-import validators
 import math
-
-from google.cloud.bigquery import SchemaField
-
+import pathlib
+import uuid
 from typing import Any, List, Optional, TypeVar, Union
+
+import fsspec
+import numpy as np
+import pandas as pd
+import pydantic
+import regex as re
+import requests
+import validators
+import yaml
+from cloudpathlib import AnyPath, CloudPath
+from google.cloud.bigquery import SchemaField
 
 T = TypeVar("T")
 
@@ -164,13 +163,13 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
             # convert string dates to datetimes
             if not isinstance(d[key_name], datetime.datetime):
                 _ts = None
-                if type(d[key_name]) == str:
+                if type(d[key_name]) is str:
                     if d[key_name].isnumeric():
                         _ts = float(d[key_name])
                     else:
                         new_dict[key_name] = pd.to_datetime(d[key_name])
 
-                if type(d[key_name]) == int or type(d[key_name]) == float or _ts:
+                if type(d[key_name]) is int or type(d[key_name]) is float or _ts:
                     if not _ts:
                         _ts = d[key_name]
 

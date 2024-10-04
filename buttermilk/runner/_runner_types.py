@@ -22,11 +22,19 @@ class StepInfo(BaseModel):
     agent_id: str
     parameters: dict = {}
     source: str
+    
+    model_config = ConfigDict(
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+    )
 
 class RunInfo(BaseModel):
     run_id: str
     experiment_name: str
     parameters: dict = {}
+
+    model_config = ConfigDict(
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+    )
 
 class Result(BaseModel):
     category: Optional[str|int] = None
@@ -83,8 +91,7 @@ class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    step_name: str  # The name of the task in the workflow
-
+    
     step_info: StepInfo
     run_info: RunInfo
     record_id: str   

@@ -66,13 +66,22 @@ class Moderator(Consumer):
     ## This is a standard pattern for creating a new Consumer class.
     _client: Optional[LC] = None
     init_vars: dict = {}
-    step_info: StepInfo = {}
     run_info: RunInfo = {}
+    step_name: str 
+    source: str
 
     @model_validator(mode='after')
     def init(self) -> Self:
         self._client =  LC(**self.init_vars)
-        
+    
+    @property
+    def step_info(self) -> StepInfo:
+        step_info = StepInfo(agent_id=self.task_name, 
+                      step_name=self.step_name, 
+                      parameters=self.init_vars, 
+                      source=self.source)
+        return step_info
+    
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         """ Take a Job, process it, and return a Job."""
         try:
@@ -119,7 +128,8 @@ async def run(cfg):
         init_vars = OmegaConf.to_object(step_cfg.init)
         for model in step_cfg.model:
             init_vars['default_model'] = model
-            moderator = Moderator(task_name=model, flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
+            moderator = Moderator(task_name=model, step_name=step_name, source=step_cfg.data.name,
+                                  flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
             consumers.append(moderator)
 
         data = {}
@@ -137,10 +147,6 @@ async def run(cfg):
     for task in consumers:
         orchestrator.register_task(consumer=task)
 
-        step_info = StepInfo(agent_id=task.task_name, 
-                      step_name=step_name, 
-                      paramters=init_vars, 
-                      source=step_cfg.data.name)
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
         fields = list(columns.keys())
@@ -162,7 +168,7 @@ async def run(cfg):
 
         for idx, row in dataset.sample(frac=1).iterrows():
             job = Job(record_id=idx,
-                      step_info=step_info,
+                      step_info=task.step_info,
                       run_info=run_info,
                       inputs=row.to_dict(),
                       parameters=step_cfg.parameters,

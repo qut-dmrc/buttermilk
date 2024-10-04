@@ -41,6 +41,8 @@ class ResultsSaver(ResultsCollector):
         except KeyError:
             pass
 
+        return output
+
     def _save(self):
         try:
             if self.to_save:
@@ -50,7 +52,7 @@ class ResultsSaver(ResultsCollector):
                 self.to_save = []  # Clear the batch after saving
         except Exception as e:
             # emergency save
-            uri = save(self.to_save)
+            uri = save.save(self.to_save)
             raise e
 
 
