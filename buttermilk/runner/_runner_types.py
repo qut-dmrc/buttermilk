@@ -20,6 +20,7 @@ from pydantic import (
 class AgentInfo(BaseModel):
     agent_id: str
     parameters: dict = {}
+    source: str
 
 class RunInfo(BaseModel):
     run_id: str
@@ -86,7 +87,7 @@ class Job(BaseModel):
     agent_info: AgentInfo
     run_info: RunInfo
     record_id: str   
-    parameters: dict[str, Any] = {}     # Additional options for the worker
+    parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
     
     inputs: dict =  {}              # The data to be processed by the worker
     

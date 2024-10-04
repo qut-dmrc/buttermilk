@@ -41,9 +41,9 @@ experiments:
       name: drag
       uri: gs://dmrc-platforms/data/drag_train.jsonl
       columns:
-        record_id: data.record_id
-        content: data.alt_text
-        groundtruth: data.expected
+        record_id: record_id
+        content: alt_text
+        groundtruth: expected
     jobs:
       - name: mod
         uri: gs://dmrc-analysis/runs/automod/modsynth/20241002T1647Z-iwvk-adad094b5d0d-debian/results_117.json

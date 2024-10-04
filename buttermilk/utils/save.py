@@ -185,9 +185,7 @@ def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
         errors.extend(bq.insert_rows(table, chunk, selected_fields=schema))
 
     if not errors:
-        inserted = True
-
-        logger.debug(
+        logger.info(
             f"Successfully pushed {len(bq_rows)} rows to BigQuery table {dataset}."
         )
     else:

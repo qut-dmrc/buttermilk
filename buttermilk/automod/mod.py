@@ -137,7 +137,8 @@ async def run(cfg):
     for task in consumers:
         orchestrator.register_task(consumer=task)
 
-        agent_info = AgentInfo(agent_id=task.task_name, paramters=init_vars)
+        agent_info = AgentInfo(agent_id=task.task_name, paramters=init_vars, 
+                      source=step_cfg.data.name)
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
         fields = list(columns.keys())
@@ -145,14 +146,16 @@ async def run(cfg):
         rename_dict = {v: k for k, v in columns.items()}
         
         dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
-        dataset = dataset.rename(columns=rename_dict).set_index('record_id')
+        dataset = dataset.rename(columns=rename_dict)
         
         # add additional inputs from groups of past jobs
         if 'jobs' in step_cfg:
             for prior_step in step_cfg.jobs:
                 dataset = group_and_filter_prior_step(dataset, prior_step)
                 fields.extend(list(prior_step.columns.keys()))
-        
+
+        # add index, but don't remove record_id form the columns
+        dataset = dataset.set_index('record_id',drop=False)
         dataset = dataset[fields]
 
         for idx, row in dataset.sample(frac=1).iterrows():
@@ -160,8 +163,7 @@ async def run(cfg):
                       step_name=step_name, 
                       agent_info=agent_info,
                       run_info=run_info,
-                      inputs=row.dict(),
-                      source=step_cfg.data.name,
+                      inputs=row.to_dict(),
                       parameters=step_cfg.parameters,
                     )
 
@@ -196,11 +198,6 @@ def group_and_filter_prior_step(df, prior_step):
         df = pd.merge(df, mapped_col, left_on=prior_step.group, right_index=True)
         
     return df        
-
-def save_to_bigquery(results: pd.DataFrame, save_cfg):
-    from buttermilk.utils.save import upload_rows
-    destination = upload_rows(rows=results, schema=save_cfg.schema, dataset=save_cfg.dataset)
-    logger.info(f'Saved {results.shape[0]} rows to {destination}.')
 
 
 global_run_id = BM.make_run_id()
