@@ -36,10 +36,10 @@ class Result(BaseModel):
 
 
 
-class InputRecord(BaseModel):
+class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     source: str
-    text: Optional[str] = ""
+    content: Optional[str] = ""
     image: Optional[object] = None
     alt_text: Optional[str] = ""
     ground_truth: Optional[Result] = None
@@ -52,7 +52,7 @@ class InputRecord(BaseModel):
     @model_validator(mode="after")
     def vld_input(self) -> Self:
         if (
-            self.text is None
+            self.content is None
             and self.image is None
             and self.alt_text is None
         ):
@@ -85,10 +85,11 @@ class Job(BaseModel):
 
     agent_info: AgentInfo
     run_info: RunInfo
-    record: InputRecord|dict                 # The data to be processed by the worker
-    input_map: dict =  {}               # Map from data fields to worker variables
+    record_id: str   
     parameters: dict[str, Any] = {}     # Additional options for the worker
-
+    
+    inputs: dict =  {}              # The data to be processed by the worker
+    
     outputs: Optional[Result] = None
 
     error: Optional[dict[str, Any]] = None

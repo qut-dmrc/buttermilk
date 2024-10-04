@@ -4,6 +4,10 @@ project:
   job: modsynth
 run:
   platform: local
+save:
+  destination: bq
+  dataset: 'dmrc-analysis.toxicity.step'
+  schema: buttermilk/schemas/step.json
 
 experiments:
   judge:
@@ -24,10 +28,6 @@ experiments:
         record_id: data.id
         content: data.alt_text
         groundtruth: data.expected
-    save:
-      destination: bq
-      dataset: 'dmrc-analysis.toxicity.moderate'
-      schema: buttermilk/schemas/moderate.json
   synth:
     init:
       template_path: synthesise.jinja2

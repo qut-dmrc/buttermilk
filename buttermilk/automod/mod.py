@@ -34,8 +34,8 @@ from buttermilk.apis import (
 from buttermilk.exceptions import FatalError
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.lc import LC
-from buttermilk.runner._runner_types import AgentInfo, InputRecord, Job, RunInfo
-from buttermilk.runner.flow import run_flow
+from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, RunInfo
+from buttermilk.runner.flow import ResultsSaver, run_flow
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
@@ -95,16 +95,17 @@ async def run(cfg):
     orchestrator = TaskDistributor()
     
     # First we create a collector to save the results. 
-    # Defaults for this one are to save to the unique gc.save_path GCS folder.
-    collector = ResultsCollector()
-
+    if cfg.save.destination == 'bq': 
+        # Save to bigquery
+        collector = ResultsSaver(dataset=cfg.save.dataset, dest_schema=cfg.save.schema)
+    else:
+        # default to save to GCS
+        collector = ResultsCollector()
+          
     # Register this collector as the default output queue for all workers.
     orchestrator.register_collector(collector)
     
     consumers = []
-
-    run_results = {}
-    run_names = {}
 
     run_info = RunInfo(run_id=global_run_id, experiment_name="mod")
     for step_name, step_cfg in cfg.experiments.items():
@@ -139,30 +140,31 @@ async def run(cfg):
         agent_info = AgentInfo(agent_id=task.task_name, paramters=init_vars)
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(step_cfg.data.columns)
+        fields = list(columns.keys())
+        
         rename_dict = {v: k for k, v in columns.items()}
+        
         dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
-        dataset = dataset.rename(columns=rename_dict)
-
+        dataset = dataset.rename(columns=rename_dict).set_index('record_id')
+        
         # add additional inputs from groups of past jobs
         if 'jobs' in step_cfg:
             for prior_step in step_cfg.jobs:
                 dataset = group_and_filter_prior_step(dataset, prior_step)
-        dataset = dataset[step_cfg.data.columns.keys()]
+                fields.extend(list(prior_step.columns.keys()))
         
+        dataset = dataset[fields]
+
         for idx, row in dataset.sample(frac=1).iterrows():
-            job_info = dict(step_name=step_name, 
+            job = Job(record_id=idx,
+                      step_name=step_name, 
                       agent_info=agent_info,
                       run_info=run_info,
-                      input_map=columns)
-            
-            if step_cfg.parameters:
-                job_info['parameters'] = step_cfg.parameters
-            
-            # Load input record
-            record = InputRecord(**row, source=step_cfg.data.name)
-            
-            job = Job(**job_info,
-                    record=record)
+                      inputs=row.dict(),
+                      source=step_cfg.data.name,
+                      parameters=step_cfg.parameters,
+                    )
+
             
             # Add each job to the queue
             orchestrator.add_job(task_name=task.task_name, job=job)
@@ -212,9 +214,6 @@ def main(cfg: DictConfig) -> None:
     bm = BM(run_id=global_run_id, cfg=cfg)
 
     logger = bm.logger
-
-    run_results = {}
-    run_names = {}
 
     try:
     

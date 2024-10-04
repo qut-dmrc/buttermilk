@@ -50,9 +50,10 @@ from buttermilk.flows.judge.judge import (
     PredictionBatch,
 )
 from buttermilk.llms import LLMs
+from buttermilk.runner import RecordInfo
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.log import logger
-from buttermilk.runner import InputRecord
+
 
 #########################################
 ###
@@ -95,8 +96,8 @@ class LC(BaseModel):
         self._template = env.get_template(self.template_path)
 
     async def call_async(self, content: Optional[str] = None, model: Optional[str] = None, **kwargs):
-        if isinstance(content, InputRecord):
-            content = content.text
+        if isinstance(content, RecordInfo):
+            content = content.content
         local_inputs = self.template_vars.copy()
         local_inputs.update(kwargs)
 

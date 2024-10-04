@@ -1,0 +1,57 @@
+[
+    {
+        "name": "job_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "step_name",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "run_info",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "agent_info",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "record_id",
+        "type": "STRING",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "parameters",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "inputs",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "outputs",
+        "type": "JSON",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "error",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "metadata",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    }
+]
