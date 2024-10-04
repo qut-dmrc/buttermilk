@@ -1,15 +1,14 @@
 # A flow takes a job, does something, and returns a job.
 
 from functools import wraps
-from typing import Callable, Any
+from typing import Any, Callable
 
 from pydantic import BaseModel
 
+from buttermilk.runner import Job
 from buttermilk.runner.runner import ResultsCollector
 from buttermilk.utils import save
 from buttermilk.utils.save import upload_rows
-from buttermilk.runner import Job
-
 
 
 ################################
@@ -32,9 +31,9 @@ class ResultsSaver(ResultsCollector):
     # Turn a Job with results into a record dict to save
     def process(self, response: Job) -> dict[str, Any]:
         # Here we use the data field as the source of data to upload in each row
-        if not isinstance(response.data, Job):
+        if not isinstance(response, Job):
             raise ValueError(f"Expected a Job to save, got: {type(response)} for: {response}")
-        return response.data.model_dump()
+        return response.model_dump()
 
     def _save(self):
         try:
@@ -51,18 +50,8 @@ class ResultsSaver(ResultsCollector):
 
 
 async def run_flow(job: Job, flow: callable):
-    inputs = {}
-    data = job.record.model_dump()
-    
-    inputs = {k:data[k] for k in job.input_map.keys()}
-    # for k, v in job.input_map.items():
-    #     v = v.split(".")
-    #     for part in v:
-    #         last_value = getattr(data, part)
-    #     inputs[k] = last_value
-        
     try:
-        job.outputs = await flow.call_async(**inputs)
+        job.outputs = await flow.call_async(**job.inputs)
     except Exception as e:
         job.error = str(e)
     return job
