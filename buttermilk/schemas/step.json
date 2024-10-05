@@ -11,7 +11,7 @@
     },
     {
         "name": "step_info",
-        "type": "STRING",
+        "type": "JSON",
         "mode": "REQUIRED"
     },
     {

@@ -17,8 +17,9 @@ experiments:
       template_path: judge.jinja2
       other_template_paths:
         criteria: criteria_ordinary.jinja2
-    model: ['haiku']
-    #model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+      concurrent: 4
+    #model: ['haiku']
+    model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
     # model: ["llama31_70b", "llama31_8b", "gpt4o", "opus", "sonnet", "gemini15pro"]
     jobs: {}
     data:

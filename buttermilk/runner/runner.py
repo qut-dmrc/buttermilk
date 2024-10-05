@@ -340,8 +340,9 @@ class ResultsCollector(BaseModel):
     def _save(self):
         if self.to_save:
             _save_path = self.batch_path / f"results_{self.n_results}.json"
-            self.bm.save(data=self.to_save, uri=_save_path.as_uri())
+            uri = self.bm.save(data=self.to_save, uri=_save_path.as_uri())
             self.to_save = []
+        return uri
 
 ################################
 #
