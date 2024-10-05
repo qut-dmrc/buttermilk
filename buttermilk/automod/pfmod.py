@@ -77,12 +77,6 @@ from promptflow.tracing import start_trace, trace
 start_trace(resource_attributes={"run_id": global_run_id}, collection="automod")
 
 
-def cache_data(uri: str) -> str:
-    with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
-        dataset = f.name
-        data = cloudpathlib.CloudPath(uri).read_bytes()
-        f.write(data)
-    return dataset
 
 def run_flow(*, flow: object, flow_cfg,  flow_name, run_name: str, dataset: str|pd.DataFrame, run_cfg, step_outputs: Optional[str|pd.DataFrame] = None, from_run: Optional[str] = None, column_mapping: dict[str,str], batch_id: dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()

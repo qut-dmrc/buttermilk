@@ -36,6 +36,7 @@ from buttermilk.flows.judge.judge import Judger
 from buttermilk.lc import LC
 from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo, StepInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
+from buttermilk.runner.helpers import load_data
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
@@ -132,38 +133,21 @@ async def run(cfg):
                                   flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
             consumers.append(moderator)
 
-        data = {}
-
-        # load data
-        data['dataset'] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
-
-        # load prior steps
-        if 'jobs' in step_cfg:
-            for prior_step in step_cfg.jobs:
-                data[prior_step] = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
-        
         break # one at a time for now
     
     for task in consumers:
         orchestrator.register_task(consumer=task)
 
-        # convert column_mapping to work for our dataframe
-        columns = col_mapping_hydra_to_local(step_cfg.data.columns)
-        fields = list(columns.keys())
-        
-        rename_dict = {v: k for k, v in columns.items()}
-        
-        dataset = pd.read_json(step_cfg.data.uri, orient='records', lines=True)
-        dataset = dataset.rename(columns=rename_dict)
-        
-        # add additional inputs from groups of past jobs
-        if 'jobs' in step_cfg:
-            for prior_step in step_cfg.jobs:
-                dataset = group_and_filter_prior_step(dataset, prior_step)
-                fields.extend(list(prior_step.columns.keys()))
+        dataset = pd.DataFrame()
+        fields = []
 
+        for src in step_cfg.data:
+            fields.extend(src.columns.keys())
+            data = load_data(src)
+            dataset = group_and_filter_prior_step(dataset, new_data=data, prior_step=src)
+    
         # add index, but don't remove record_id form the columns
-        dataset = dataset.set_index('record_id',drop=False)
+        dataset = dataset.set_index('record_id', drop=False)
         dataset = dataset[fields]
 
         for idx, row in dataset.sample(frac=1).iterrows():
@@ -184,10 +168,7 @@ async def run(cfg):
 
     return results
 
-def group_and_filter_prior_step(df, prior_step):
-    if 'uri' in prior_step:
-        new_data = pd.read_json(prior_step.uri, orient='records', lines=True)
-
+def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
     for group in prior_step.group:
         grp, col = group.split('.')
 

@@ -37,6 +37,7 @@ import coloredlogs
 import fsspec
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
+import pandas as pd
 import psutil
 import pydantic
 import requests
@@ -65,6 +66,9 @@ from pydantic import (
 from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
+
+# https://cloud.google.com/bigquery/pricing
+GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
 from .utils.log import logger
 
@@ -171,6 +175,7 @@ class BM(Singleton, BaseModel):
             contents = Path(CONFIG_CACHE_PATH).read_text()
         except Exception as e:
             pass
+
         auth = DefaultAzureCredential()
         vault_uri = self.cfg["azure"]["vault"]
         models_secret = self.cfg["models_secret"]
@@ -181,7 +186,7 @@ class BM(Singleton, BaseModel):
         try:
             Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
             Path(CONFIG_CACHE_PATH).write_text(contents)
-        except:
+        except Exception as e:
             pass
 
         connections = json.loads(contents)
@@ -304,3 +309,69 @@ class BM(Singleton, BaseModel):
         result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
         logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self.run_id))
         return result
+
+    @property
+    def bq(self) -> bigquery.Client:
+        if self._clients.get('bq') is None:
+            self._clients['bq'] = bigquery.Client(project=self.cfg.gcp.project)
+        return self._clients['bq']
+
+    def run_query(
+        self,
+        sql,
+        destination=None,
+        overwrite=False,
+        do_not_return_results=False,
+        save_to_gcs=False,
+    ) -> pd.DataFrame:
+        
+        t0 = datetime.datetime.now()
+
+        job_config = {
+            "use_legacy_sql": False,
+        }
+
+        # Cannot set write_disposition if saving to GCS
+        if save_to_gcs:
+            # Tell BigQuery to save the results to a specific GCS location
+            gcs_results_uri = f"{self.save_dir}/query_{shortuuid.uuid()}/*.json"
+            export_command = f"""   EXPORT DATA OPTIONS(
+                        uri='{gcs_results_uri}',
+                        format='JSON',
+                        overwrite=false) AS """
+            sql = export_command + sql
+            self.logger.debug(f"Saving results to {gcs_results_uri}.")
+        else:
+            if destination:
+                self.logger.debug(f"Saving results to {destination}.")
+                job_config["destination"] = destination
+                job_config["allow_large_results"] = True
+
+                if overwrite:
+                    job_config["write_disposition"] = "WRITE_TRUNCATE"
+                else:
+                    job_config["write_disposition"] = "WRITE_APPEND"
+
+        job_config = bigquery.QueryJobConfig(**job_config)
+        job = self.bq.query(sql, job_config=job_config)
+
+        result = job.result()  # blocks until job is finished
+
+        bytes_billed = job.total_bytes_billed
+        cache_hit = job.cache_hit
+
+        approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
+        bytes_billed = humanfriendly.format_size(bytes_billed)
+
+        time_taken = datetime.datetime.now() - t0
+        self.logger.info(
+            f"Query stats: Ran in {time_taken} seconds, cache hit: {cache_hit}, billed {bytes_billed}, approx cost ${approx_cost:0.2}."
+        )
+
+        if do_not_return_results:
+            return True
+        else:
+            # job.result() blocks until the query has finished.
+            result = job.result()
+            results_df = result.to_dataframe()
+            return results_df

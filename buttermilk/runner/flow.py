@@ -38,7 +38,7 @@ class ResultsSaver(ResultsCollector):
             # move metadata to the record id
             output['metadata']['output'] = output['outputs']['metadata']
             del output['outputs']['metadata']
-        except KeyError:
+        except (TypeError, KeyError):
             pass
 
         return output

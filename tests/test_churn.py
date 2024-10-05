@@ -13,6 +13,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from omegaconf import OmegaConf
 
 from buttermilk.flows.judge.judge import Judger
 from buttermilk.runner import Job, RunInfo, StepInfo, run_flow
@@ -106,3 +107,22 @@ def flow():
     #lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
     #return lc
     
+DATA_CONFIGS = [
+    {"type": "file", "name": "drag", "uri": "gs://dmrc-platforms/data/drag_train.jsonl", 
+     "columns": {"record_id": "record_id", "content": "alt_text", "groundtruth": "expected"}},
+    {"type": "job", "name": "mod", "dataset": "dmrc-analysis.toxicity.step", 
+     "filter": {"max": 32}, "group": ["record.record_id"], "columns": {"draft": "outputs"}}     
+]
+
+@pytest.fixture
+def data_cfg():
+    return OmegaConf.create(DATA_CONFIGS)
+
+@pytest.fixture
+def expected_rows():
+    return 20
+
+def test_load_data(data_cfg, expected_rows):
+    from buttermilk.runner import load_data
+    data = load_data(data_cfg)
+    assert data.shape[0] == expected_rows

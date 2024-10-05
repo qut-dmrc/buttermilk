@@ -6,29 +6,29 @@ run:
   platform: local
 save:
   destination: bq
-  dataset: 'dmrc-analysis.toxicity.step'
+  dataset: dmrc-analysis.toxicity.step
   schema: buttermilk/schemas/step.json
 
 experiments:
-  judge:
-    num_runs: 1
-    parameters:
-    init:
-      template_path: judge.jinja2
-      other_template_paths:
-        criteria: criteria_ordinary.jinja2
-      concurrent: 4
-    #model: ['haiku']
-    model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
-    # model: ["llama31_70b", "llama31_8b", "gpt4o", "opus", "sonnet", "gemini15pro"]
-    jobs: {}
-    data:
-      name: drag queens - alt text
-      uri: gs://dmrc-platforms/data/drag_train.jsonl
-      columns:
-        record_id: data.id
-        content: data.alt_text
-        groundtruth: data.expected
+  # judge:
+  #   num_runs: 1
+  #   parameters:
+  #   init:
+  #     template_path: judge.jinja2
+  #     other_template_paths:
+  #       criteria: criteria_ordinary.jinja2
+  #     concurrent: 4
+  #   #model: ['haiku']
+  #   model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+  #   # model: ["llama31_70b", "llama31_8b", "gpt4o", "opus", "sonnet", "gemini15pro"]
+  #   jobs: {}
+  #   data:
+  #   - name: drag queens - alt text
+  #     uri: gs://dmrc-platforms/data/drag_train.jsonl
+  #     columns:
+  #       record_id: data.id
+  #       content: data.alt_text
+  #       groundtruth: data.expected
   synth:
     init:
       template_path: synthesise.jinja2
@@ -39,15 +39,16 @@ experiments:
     model: ['haiku']
       # model: ["llama31_70b", "llama31_8b", "llama31_405b", "gpt4o", "opus", "sonnet", "gemini15pro"]
     data:
-      name: drag
-      uri: gs://dmrc-platforms/data/drag_train.jsonl
-      columns:
-        record_id: record_id
-        content: alt_text
-        groundtruth: expected
-    jobs:
-      - name: mod
-        uri: gs://dmrc-analysis/runs/automod/modsynth/20241002T1647Z-iwvk-adad094b5d0d-debian/results_117.json
+      - type: file 
+        name: drag
+        uri: gs://dmrc-platforms/data/drag_train.jsonl
+        columns:
+          record_id: record_id
+          content: alt_text
+          groundtruth: expected
+      - type: job
+        name: mod
+        dataset: dmrc-analysis.toxicity.step
         filter:
           max: 32
         group:
