@@ -14,7 +14,7 @@ from json import JSONDecodeError
 from langchain_core.exceptions import OutputParserException
 from langchain_core.utils.json import parse_json_markdown
 
-
+from ..utils.log import logger
 
 class ChatParser(JsonOutputParser):
     """A safe JSON parser. If all else fails, return the original string as a dictionary with the key 'response'"""
@@ -55,7 +55,8 @@ class ChatParser(JsonOutputParser):
             try:
                 output = parse_json_markdown(text)
             except (JSONDecodeError, OutputParserException, Exception) as e:
-                output = dict(error="Unable to decode JSON in result", response=text)
+                logger.error(f"Unable to decode JSON in result: {text}")
+                raise e
 
         if not isinstance(output, dict):
             output = dict(response=output)

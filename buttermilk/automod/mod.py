@@ -4,13 +4,7 @@
 ###
 import asyncio
 import datetime
-import gc
-import os
-import resource
-from math import pi
-from multiprocessing import Process
 from pathlib import Path
-from random import shuffle
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
@@ -19,8 +13,6 @@ import pandas as pd
 import regex as re
 from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
-from promptflow.azure import PFClient as AzurePFClient
-from promptflow.client import PFClient as LocalPFClient
 from pydantic import model_validator
 
 from buttermilk import BM
@@ -69,7 +61,6 @@ class Moderator(Consumer):
     init_vars: dict = {}
     run_info: RunInfo = {}
     step_name: str 
-    source: str
 
     @model_validator(mode='after')
     def init(self) -> Self:
@@ -79,8 +70,7 @@ class Moderator(Consumer):
     def step_info(self) -> StepInfo:
         step_info = StepInfo(agent_id=self.task_name, 
                       step_name=self.step_name, 
-                      parameters=self.init_vars, 
-                      source=self.source)
+                      parameters=self.init_vars)
         return step_info
     
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
@@ -129,7 +119,7 @@ async def run(cfg):
         init_vars = OmegaConf.to_object(step_cfg.init)
         for model in step_cfg.model:
             init_vars['default_model'] = model
-            moderator = Moderator(task_name=model, step_name=step_name, source=step_cfg.data.name,
+            moderator = Moderator(task_name=model, step_name=step_name,
                                   flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
             consumers.append(moderator)
 
@@ -169,21 +159,29 @@ async def run(cfg):
     return results
 
 def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
+    if prior_step.type != 'job':
+        return pd.concat([df, new_data])
+    
+    # Add columns to group by to the index
+    idx_cols = []
     for group in prior_step.group:
-        grp, col = group.split('.')
+        try:
+            grp, col = group.split('.')
 
-        # extract the contents of the nested source column that will form the
-        # new index
-        exploded = pd.json_normalize(new_data[grp])
-        new_data.loc[:, col] = exploded[col]
-        new_data = new_data.set_index(col)
-
-    for mapped_name, col_name in prior_step.columns.items():
-        new_data.groupby(level=0)[col_name].agg(list)
+            # extract the contents of the nested source column that 
+            # will form the new index
+            exploded = pd.json_normalize(new_data[grp])
+            new_data.loc[:, col] = exploded[col]
+        except ValueError:
+            col = group
+            pass  # no group in this column definition
+        idx_cols.append(col)
         
-        mapped_col = new_data.groupby(level=0)[col_name].agg(list)
-        mapped_col.name = mapped_name
-        df = pd.merge(df, mapped_col, left_on=prior_step.group, right_index=True)
+    new_data = new_data.set_index(idx_cols)
+
+    for mapped_name in prior_step.columns.keys():
+        mapped_col = new_data.groupby(level=0)[mapped_name].agg(list)
+        df = pd.merge(df, mapped_col, left_on=idx_cols, right_index=True)
         
     return df        
 

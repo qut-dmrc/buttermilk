@@ -21,7 +21,6 @@ class StepInfo(BaseModel):
     step_name: str
     agent_id: str
     parameters: dict = {}
-    source: str
     
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True

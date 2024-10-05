@@ -24,8 +24,8 @@ def load_data(data_cfg) -> pd.DataFrame:
 
 def load_job(dataset: str, filter: str = None) -> pd.DataFrame:
     sql = f"SELECT * FROM `{dataset}` ORDER BY RAND()"
-    if filter.max:
-        sql += " LIMIT {filter.max}"
+    if 'max' in filter and filter.max:
+        sql += f" LIMIT {filter.max}"
     
     df = bm.run_query(sql)
     return df
