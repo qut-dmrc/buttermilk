@@ -6,8 +6,6 @@ import pandas as pd
 from buttermilk import BM
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 
-from ..utils.log import logger
-
 
 def load_data(data_cfg) -> pd.DataFrame:
     if data_cfg.type == 'file':
@@ -24,7 +22,7 @@ def load_data(data_cfg) -> pd.DataFrame:
     return df
 
 def load_job(dataset: str, filter: dict = {}) -> pd.DataFrame:
-    sql = f"SELECT * FROM `{dataset}` ORDER BY RAND()"
+    sql = f"SELECT * FROM `{dataset}` WHERE error IS NULL ORDER BY RAND()"
     bm = BM()
     df = bm.run_query(sql)
     return df

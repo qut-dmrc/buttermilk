@@ -11,6 +11,8 @@ from vertexai.generative_models._generative_models import (
     ResponseValidationError,
 )
 
+from buttermilk.exceptions import RateLimit
+
 from .log import getLogger
 
 logger = getLogger()
@@ -53,7 +55,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             if "rate limit" in str(e).lower() or "quota" in str(e).lower():
                 raise RateLimit(str(e))
 
-            error_dict.update({"error": f"Prompt blocked by LLM", "error_info": additional})
+            error_dict.update({"error": "Prompt blocked by LLM", "error_info": additional})
 
         elif isinstance(e, BlockedPromptException):
             error_dict.update({"error": "Prompt blocked by LLM"})

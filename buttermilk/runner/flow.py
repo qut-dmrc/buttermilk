@@ -60,10 +60,7 @@ class ResultsSaver(ResultsCollector):
 
 
 async def run_flow(job: Job, flow: callable):
-    try:
-        job.outputs = await flow.call_async(**job.inputs)
-    except Exception as e:
-        job.error = str(e)
+    job.outputs = await flow.call_async(**job.inputs)
     return job
 
 def flow():

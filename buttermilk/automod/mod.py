@@ -75,15 +75,8 @@ class Moderator(Consumer):
     
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         """ Take a Job, process it, and return a Job."""
-        try:
-            job = await run_flow(flow=self._client, job=job)
-        except Exception as e:
-            job.error = f"Error running job: {e} {e.args=}"
-        finally:
-            job.timestamp = pd.to_datetime(datetime.datetime.now())
-            job.step_info = self.step_info
-            job.run_info = self.run_info
-            return job
+        job = await run_flow(flow=self._client, job=job)
+        return job
 
 async def run(cfg):
     """
@@ -158,7 +151,7 @@ async def run(cfg):
 
     return results
 
-def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
+def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32):
     if prior_step.type != 'job':
         return pd.concat([df, new_data])
     
@@ -171,7 +164,13 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
             # extract the contents of the nested source column that 
             # will form the new index
             exploded = pd.json_normalize(new_data[grp])
-            new_data.loc[:, col] = exploded[col]
+
+            # limit to n list items per dataframe row
+            exploded = exploded.groupby(exploded.index).agg({
+                col: lambda x: x.tolist()[:max_n]
+            }).reset_index(level=1, drop=True)
+
+            new_data.loc[:, col] = exploded
         except ValueError:
             col = group
             pass  # no group in this column definition
@@ -180,7 +179,8 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
     new_data = new_data.set_index(idx_cols)
 
     for mapped_name in prior_step.columns.keys():
-        mapped_col = new_data.groupby(level=0)[mapped_name].agg(list)
+        mapped_col = new_data.groupby(level=0)[mapped_name].agg(
+            lambda x: x.tolist()[:max_n])
         df = pd.merge(df, mapped_col, left_on=idx_cols, right_index=True)
         
     return df        

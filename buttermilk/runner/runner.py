@@ -223,18 +223,22 @@ class Consumer(BaseModel):
                     return
 
                 try:
-                    async for result in self.process_trace(job=job):
-                        await self.output_queue.put(result)
-                        pass
-
-                except Exception as e:
+                    job = await self.process(job=job)
+                except Exception as e: 
                     job.error = extract_error_info(e=e)
-                    await self.output_queue.put(job)
 
+                finally:
+                    job.timestamp = pd.to_datetime(datetime.datetime.now())
+                    job.step_info = self.step_info
+                    job.run_info = self.run_info
+
+                    await self.output_queue.put(job)
+                    
                 # mark input job done
                 self.input_queue.task_done()
                 self.pbar.update(1)
                 self.pbar.refresh()
+                
         except Exception as e:
             logger.error(
                 f"Error processing task {self.task_name} by {self.worker_name} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
