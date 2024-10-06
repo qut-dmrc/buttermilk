@@ -97,3 +97,12 @@ class LLMs(BaseModel):
 
     def __getitem__(self, __name: str) -> LLM:
         return self.__getattr__(__name)
+
+if __name__ == '__main__':
+    from buttermilk import BM
+    bm = BM()
+    llm = LLMs(connections=bm._connections_azure)['o1-preview']
+    import pprint
+    
+    pprint.pprint(llm.invoke('hi what model are you?'))
+    pass

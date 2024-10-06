@@ -108,7 +108,13 @@ class LC(BaseModel):
 
         local_template = self._template.render(**local_inputs)
 
-        if content:
+        if model.startswith("o1-preview"):
+            # No system message
+            local_template = local_template + '\n' + content
+            chain = ChatPromptTemplate.from_messages(
+                [("human", local_template)], template_format="jinja2"
+            )
+        elif content:
             chain = ChatPromptTemplate.from_messages(
                 [
                     ("system", local_template),
@@ -148,7 +154,6 @@ class LC(BaseModel):
     )
     @trace
     async def invoke(self, chain, input_vars, model) -> dict[str, str]:
-
         try:
             t0 = time.time()
             try:
@@ -156,16 +161,22 @@ class LC(BaseModel):
                 output = await chain.ainvoke(input=input_vars)
             except Exception as e:
                 t1 = time.time()
-                err = f"Error invoking chain with {model}: {e} after {t1-t0:.2f} seconds. {e.args=}"
+                elapsed = t1-t0
+                err = f"Error invoking chain with {model}: {e} after {elapsed:.2f} seconds. {e.args=}"
                 logger.error(err)
                 raise e
                 # return dict(error=err)
             t1 = time.time()
-            logger.info(f"Invoked chain with {model} in {t1-t0:.2f} seconds")
+            elapsed = t1-t0
+            logger.info(f"Invoked chain with {model} in {elapsed:.2f} seconds")
 
 
         except RetryError:
             output = dict(error="Retry timeout querying LLM")
+        if 'metadata' not in output:
+            output['metadata'] = {}
+        output['metadata']['seconds_elapsed'] = elapsed
+
         output["timestamp"] = pd.to_datetime(
             datetime.datetime.now(tz=datetime.UTC)
         ).isoformat()
