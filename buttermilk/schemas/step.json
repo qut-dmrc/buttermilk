@@ -32,12 +32,12 @@
     {
         "name": "inputs",
         "type": "JSON",
-        "mode": "REQUIRED"
+        "mode": "NULLABLE"
     },
     {
         "name": "outputs",
         "type": "JSON",
-        "mode": "REQUIRED"
+        "mode": "NULLABLE"
     },
     {
         "name": "error",

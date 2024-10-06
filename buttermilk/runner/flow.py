@@ -39,6 +39,8 @@ class ResultsSaver(ResultsCollector):
             output['metadata']['output'] = output['outputs']['metadata']
             del output['outputs']['metadata']
         except (TypeError, KeyError):
+            if 'outputs' not in output:
+                output['outputs'] = {}
             pass
 
         return output

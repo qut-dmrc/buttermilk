@@ -70,7 +70,7 @@ CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
-from .utils.log import logger
+from buttermilk.utils.log import logger
 
 _REGISTRY = {}
 
