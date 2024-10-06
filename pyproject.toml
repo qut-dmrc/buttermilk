@@ -95,7 +95,6 @@ markers = [
   "integration: integration tests, don't run by default",
   "scheduled: mark tests to run in scheduled testing",
 ]
-testpaths = ["datatools/tests"]
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
 default_async_timeout = 300
