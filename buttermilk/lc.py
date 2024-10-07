@@ -181,13 +181,7 @@ class LC(BaseModel):
             datetime.datetime.now(tz=datetime.UTC)
         ).isoformat()
 
-        for k in Prediction.__required_keys__:
-            if k not in output:
-                output[k] = None
-
-        results = Prediction(**output)
-
-        return results
+        return output
 
 
 if __name__ == "__main__":
