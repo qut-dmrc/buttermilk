@@ -22,9 +22,16 @@ def load_data(data_cfg) -> pd.DataFrame:
     return df
 
 def load_job(dataset: str, filter: dict = {}) -> pd.DataFrame:
-    sql = f"SELECT * FROM `{dataset}` WHERE error IS NULL ORDER BY RAND()"
+    sql = f"SELECT * FROM `{dataset}` WHERE error IS NULL "
+    
+    for field, condition in filter.items():
+        sql += f" AND {field} = '{condition}' "
+
+    sql += " ORDER BY RAND() "
+
     bm = BM()
     df = bm.run_query(sql)
+    
     return df
 
 

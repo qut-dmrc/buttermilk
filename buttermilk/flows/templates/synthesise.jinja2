@@ -49,7 +49,7 @@ Do not include any text outside of the JSON object in your response -- additiona
 
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER {{ draft.id }}>
-    {{ draft.text }}
+    {{ draft.answer }}
     <END DRAFT ANSWER {{ draft.id }}>
 {% endfor %}
 

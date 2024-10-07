@@ -72,7 +72,7 @@ class Moderator(Consumer):
     @property
     def step_info(self) -> StepInfo:
         step_info = StepInfo(agent_id=self.task_name, 
-                      step_name=self.step_name, 
+                      step=self.step_name, 
                       parameters=self.init_vars)
                     
         return step_info
@@ -182,11 +182,25 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
         
     new_data = new_data.set_index(idx_cols)
 
-    for mapped_name in prior_step.columns.keys():
-        mapped_col = new_data.groupby(level=0)[mapped_name].agg(
+    # Get the names of all the mapped fields for the new record
+    mapped_names = list(prior_step.record.keys())
+
+    # rename the mapped fields
+    new_data = new_data.rename(columns={v:k for k, v in prior_step.record.items()})
+
+    # put all the mapped columns into a dictionary in
+    # a new field named after this previous job step
+    new_data[prior_step.name] = new_data[mapped_names].to_dict(orient='records')
+    
+    # Now aggregate them by the existing index we used above,
+    # ensuring we shuffle and pick a maximum of max_n
+    mapped_cols = new_data.sample(frac=1).groupby(
+        level=0)[prior_step.name].agg(
             lambda x: x.tolist()[:max_n])
-        df = pd.merge(df, mapped_col, left_on=idx_cols, right_index=True)
-        
+   
+    # Add the column to the source dataset
+    df = pd.merge(df, mapped_cols, left_on=idx_cols, right_index=True)
+    
     return df        
 
 

@@ -58,10 +58,16 @@ experiments:
           content: alt_text
           groundtruth: expected
       - type: job
-        name: mod
-        dataset: dmrc-analysis.toxicity.step
-        filter: null
+        name: draft
+        dataset: dmrc-analysis.toxicity.step_extracted
+        filter:
+          step: judge
         group:
           - record_id
         columns:
-          draft: outputs
+          draft: record
+        record:
+          id: job_id
+          agent: agent 
+          answer: reasons
+          predicted: predicted

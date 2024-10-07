@@ -27,8 +27,7 @@
             "justMyCode": false,
             "args": [ "-m",
                 "+experiments=ordinary",
-                "experiments.judge.num_runs=1",
-                "experiments.judge.model=['haiku']",
+                //"-experiments.judge",
                 "experiments.synth.num_runs=1",
                 "experiments.synth.model=['haiku']",
                 

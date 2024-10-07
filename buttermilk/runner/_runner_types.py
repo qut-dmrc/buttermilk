@@ -22,7 +22,7 @@ from buttermilk.utils.utils import get_ip
 
 
 class StepInfo(BaseModel):
-    step_name: str
+    step: str
     agent_id: str
     parameters: dict = {}
     
