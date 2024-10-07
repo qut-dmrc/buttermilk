@@ -63,7 +63,6 @@ from pydantic import (
     root_validator,
 )
 
-from buttermilk.runner._runner_types import RunInfo
 
 from .utils import save
 
@@ -129,8 +128,9 @@ class BM(Singleton, BaseModel):
             return v
 
     @cached_property
-    def run_info(self) -> RunInfo:
-          return RunInfo(run_id=self.run_id, project=self.cfg.name, job=self.cfg.job)
+    def run_info(self):
+        from buttermilk.runner._runner_types import RunInfo
+        return RunInfo(run_id=self.run_id, project=self.cfg.name, job=self.cfg.job)
 
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
