@@ -28,7 +28,9 @@ class StepInfo(BaseModel):
 
 class RunInfo(BaseModel):
     run_id: str
-    experiment_name: str
+    project: str
+    job: str
+    platform: str
     parameters: dict = {}
 
     model_config = ConfigDict(

@@ -13,6 +13,7 @@ from typing import (
     Literal,
     LiteralString,
     Optional,
+    Self,
     Sequence,
     Tuple,
     Union,
@@ -125,7 +126,7 @@ class ToxicityModel(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def validate_model(self):
+    def validate_model(self) -> Self:
         if self.client is None:
             self.init_client()
             if self.client is None:

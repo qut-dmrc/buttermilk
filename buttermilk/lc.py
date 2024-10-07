@@ -2,7 +2,7 @@ import datetime
 import time
 from dataclasses import dataclass
 from random import shuffle
-from typing import Any, List, Optional, TypedDict
+from typing import Any, List, Optional, Self, TypedDict
 
 import pandas as pd
 import requests
@@ -74,7 +74,7 @@ class LC(BaseModel):
         return LLMs(connections=self._connections)
 
     @model_validator(mode="after")
-    def load_connections_and_template(self) -> None:
+    def load_connections_and_template(self) -> Self:
         bm = BM()
         if not self._connections:
             self._connections = bm._connections_azure
@@ -94,6 +94,8 @@ class LC(BaseModel):
             self.template_vars[k] = env.get_template(v).render()
 
         self._template = env.get_template(self.template_path)
+
+        return self
 
     async def call_async(self, content: Optional[str] = None, model: Optional[str] = None, **kwargs):
         if isinstance(content, RecordInfo):

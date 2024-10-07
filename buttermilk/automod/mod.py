@@ -58,19 +58,23 @@ class Moderator(Consumer):
     ## We inherit from the Consumer class and override the process method.
     ## This is a standard pattern for creating a new Consumer class.
     _client: Optional[LC] = None
+    flow_obj: Any
     init_vars: dict = {}
-    run_info: RunInfo = {}
     step_name: str 
 
     @model_validator(mode='after')
     def init(self) -> Self:
-        self._client =  LC(**self.init_vars)
+        self._client =  self.flow_obj(**self.init_vars)
+        del self.flow_obj  # Don't keep the class around
+
+        return self
     
     @property
     def step_info(self) -> StepInfo:
         step_info = StepInfo(agent_id=self.task_name, 
                       step_name=self.step_name, 
                       parameters=self.init_vars)
+                    
         return step_info
     
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
@@ -100,7 +104,6 @@ async def run(cfg):
     
     consumers = []
 
-    run_info = RunInfo(run_id=global_run_id, experiment_name="mod")
     for step_name, step_cfg in cfg.experiments.items():
         if step_name == 'moderate':
             flow_obj=load_tox_flow
@@ -136,7 +139,7 @@ async def run(cfg):
         for idx, row in dataset.sample(frac=1).iterrows():
             job = Job(record_id=idx,
                       step_info=task.step_info,
-                      run_info=run_info,
+                      run_info=bm.run_info,
                       inputs=row.to_dict(),
                       parameters=step_cfg.parameters,
                     )

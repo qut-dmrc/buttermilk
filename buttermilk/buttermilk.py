@@ -63,6 +63,8 @@ from pydantic import (
     root_validator,
 )
 
+from buttermilk.runner._runner_types import RunInfo
+
 from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
@@ -126,6 +128,10 @@ class BM(Singleton, BaseModel):
             _REGISTRY['cfg'] = v
             return v
 
+    @property
+    def run_info(self) -> RunInfo:
+          return RunInfo(run_id=self.run_id, project=self.cfg.project.name, job=self.cfg.project.job,
+                      platform=self.cfg.run.platform)
 
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)

@@ -149,7 +149,7 @@ class Consumer(BaseModel):
     # flag to stop the task or to indicate the queue has finished
     done: bool = False
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
 
     # Worker name for identification and logging
     @computed_field
@@ -158,7 +158,7 @@ class Consumer(BaseModel):
         return f"{self.task_name}_{shortuuid.uuid()[:6]}"
 
     @model_validator(mode="after")
-    def validate_concurrent(self):
+    def validate_concurrent(self) -> Self:
         if self.concurrent < 1:
             raise ValueError("concurrent must be at least 1")
 
@@ -286,6 +286,7 @@ class ResultsCollector(BaseModel):
     def get_path(self) -> Self:
         if self.batch_path is None:
             self.batch_path = CloudPath(self.bm.save_dir)
+        return self
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
