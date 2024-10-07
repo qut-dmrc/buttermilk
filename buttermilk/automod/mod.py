@@ -138,16 +138,16 @@ async def run(cfg):
         dataset = dataset.set_index('record_id', drop=False)
         dataset = dataset[fields]
 
-        for idx, row in dataset.sample(frac=1).iterrows():
-            job = Job(record_id=idx,
-                      inputs=row.to_dict(), 
-                      run_info=bm.run_info,
-                      parameters=step_cfg.parameters,
-                    )
-
-            
-            # Add each job to the queue
-            orchestrator.add_job(task_name=task.task_name, job=job)
+        for i in range(step_cfg.num_runs):
+            for idx, row in dataset.sample(frac=1).iterrows():
+                job = Job(record_id=idx,
+                        inputs=row.to_dict(), 
+                        run_info=bm.run_info,
+                        parameters=step_cfg.parameters,
+                        )
+                
+                # Add each job to the queue
+                orchestrator.add_job(task_name=task.task_name, job=job)
 
 
     # Run!
