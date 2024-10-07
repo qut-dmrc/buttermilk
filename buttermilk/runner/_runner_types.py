@@ -1,7 +1,9 @@
 import datetime
+import platform
 from typing import Any, AsyncGenerator, Generator, Optional, Self, Type, Union
 
 import numpy as np
+import psutil
 import pydantic
 import shortuuid
 from cloudpathlib import CloudPath, GSPath
@@ -15,6 +17,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from buttermilk.utils.utils import get_ip
 
 
 class StepInfo(BaseModel):
@@ -30,8 +34,11 @@ class RunInfo(BaseModel):
     run_id: str
     project: str
     job: str
-    platform: str
     parameters: dict = {}
+
+    ip: str = Field(default_factory=get_ip)
+    node_name: str = Field(default_factory=lambda: platform.uname().node)
+    username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
 
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
@@ -93,14 +100,14 @@ class Job(BaseModel):
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
     
-    step_info: StepInfo
     run_info: RunInfo
     record_id: str   
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
     
     inputs: dict =  {}              # The data to be processed by the worker
     
-    outputs: Optional[Result] = None
+    step_info: Optional[StepInfo] = None  # These fields will be added once 
+    outputs: Optional[Result] = None      # the record is processed
 
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = {}

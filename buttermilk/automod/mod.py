@@ -80,6 +80,7 @@ class Moderator(Consumer):
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         """ Take a Job, process it, and return a Job."""
         job = await run_flow(flow=self._client, job=job)
+        job.step_info = self.step_info
         return job
 
 async def run(cfg):
@@ -116,7 +117,8 @@ async def run(cfg):
         for model in step_cfg.model:
             init_vars['default_model'] = model
             moderator = Moderator(task_name=model, step_name=step_name,
-                                  flow_obj=flow_obj, concurrent=1, init_vars=init_vars)
+                                  flow_obj=flow_obj, concurrent=1, init_vars=init_vars, 
+                                  run_info=bm.run_info)
             consumers.append(moderator)
 
         break # one at a time for now
@@ -138,9 +140,8 @@ async def run(cfg):
 
         for idx, row in dataset.sample(frac=1).iterrows():
             job = Job(record_id=idx,
-                      step_info=task.step_info,
+                      inputs=row.to_dict(), 
                       run_info=bm.run_info,
-                      inputs=row.to_dict(),
                       parameters=step_cfg.parameters,
                     )
 

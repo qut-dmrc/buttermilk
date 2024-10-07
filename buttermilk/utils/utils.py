@@ -16,6 +16,8 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath
 from google.cloud.bigquery import SchemaField
 
+from .log import logger
+
 T = TypeVar("T")
 
 def download_limited(url, *, allow_arbitrarily_large_downloads=False,
@@ -251,3 +253,13 @@ def split(l, num_chunks):
 
     # yield them successively
     yield from (l[i : i + chunk_size] for i in range(0, len(l), chunk_size))
+
+
+def get_ip() -> str:
+    # Get external IP address
+    try:
+        ip_addr = requests.get("https://api.ipify.org").content.decode("utf8")
+        return ip_addr
+    except Exception as e:
+        logger.error(f"Unable to get host IP address from external source.")
+        return None

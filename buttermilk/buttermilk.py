@@ -128,10 +128,9 @@ class BM(Singleton, BaseModel):
             _REGISTRY['cfg'] = v
             return v
 
-    @property
+    @cached_property
     def run_info(self) -> RunInfo:
-          return RunInfo(run_id=self.run_id, project=self.cfg.project.name, job=self.cfg.project.job,
-                      platform=self.cfg.run.platform)
+          return RunInfo(run_id=self.run_id, project=self.cfg.name, job=self.cfg.job)
 
     def model_post_init(self, __context: Any) -> None:
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
