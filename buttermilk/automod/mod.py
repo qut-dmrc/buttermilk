@@ -50,8 +50,8 @@ from buttermilk.utils.flows import col_mapping_hydra_to_pf
 from buttermilk.utils.log import logger
 
 ### We have a standard runner in datatools.runner that allows us to run
-### a batch of jobs asynchronously. Consumers take a Job item from a queue, 
-### process it, and return it as a new Job item. The main method to 
+### a batch of jobs asynchronously. Consumers take a Job item from a queue,
+### process it, and return it as a new Job item. The main method to
 ### overwrite in any subclass is `.process()`
 
 class Moderator(Consumer):
@@ -60,7 +60,7 @@ class Moderator(Consumer):
     _client: Optional[LC] = None
     flow_obj: Any
     init_vars: dict = {}
-    step_name: str 
+    step_name: str
 
     @model_validator(mode='after')
     def init(self) -> Self:
@@ -68,15 +68,15 @@ class Moderator(Consumer):
         del self.flow_obj  # Don't keep the class around
 
         return self
-    
+
     @property
     def step_info(self) -> StepInfo:
-        step_info = StepInfo(agent_id=self.task_name, 
-                      step=self.step_name, 
+        step_info = StepInfo(agent_id=self.task_name,
+                      step=self.step_name,
                       parameters=self.init_vars)
-                    
+
         return step_info
-    
+
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
         """ Take a Job, process it, and return a Job."""
         job = await run_flow(flow=self._client, job=job)
@@ -88,21 +88,21 @@ async def run(cfg):
     This function runs the jobs asynchronously, and returns a list of
     results.
     """
-    
+
     # The Orchestrator runs the jobs asynchronously
     orchestrator = TaskDistributor()
-    
-    # First we create a collector to save the results. 
-    if cfg.save.destination == 'bq': 
+
+    # First we create a collector to save the results.
+    if cfg.save.destination == 'bq':
         # Save to bigquery
         collector = ResultsSaver(dataset=cfg.save.dataset, dest_schema=cfg.save.schema)
     else:
         # default to save to GCS
         collector = ResultsCollector()
-          
+
     # Register this collector as the default output queue for all workers.
     orchestrator.register_collector(collector)
-    
+
     consumers = []
 
     for step_name, step_cfg in cfg.experiments.items():
@@ -112,17 +112,17 @@ async def run(cfg):
             flow_obj = LC
         elif step_name == 'synth':
             flow_obj = LC
-        
+
         init_vars = OmegaConf.to_object(step_cfg.init)
         for model in step_cfg.model:
             init_vars['default_model'] = model
             moderator = Moderator(task_name=model, step_name=step_name,
-                                  flow_obj=flow_obj, concurrent=1, init_vars=init_vars, 
+                                  flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
                                   run_info=bm.run_info)
             consumers.append(moderator)
 
         break # one at a time for now
-    
+
     for task in consumers:
         orchestrator.register_task(consumer=task)
 
@@ -133,7 +133,7 @@ async def run(cfg):
             fields.extend(src.columns.keys())
             data = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=data, prior_step=src)
-    
+
         # add index, but don't remove record_id form the columns
         dataset = dataset.set_index('record_id', drop=False)
         dataset = dataset[fields]
@@ -141,11 +141,11 @@ async def run(cfg):
         for i in range(step_cfg.num_runs):
             for idx, row in dataset.sample(frac=1).iterrows():
                 job = Job(record_id=idx,
-                        inputs=row.to_dict(), 
+                        inputs=row.to_dict(),
                         run_info=bm.run_info,
                         parameters=step_cfg.parameters,
                         )
-                
+
                 # Add each job to the queue
                 orchestrator.add_job(task_name=task.task_name, job=job)
 
@@ -158,14 +158,14 @@ async def run(cfg):
 def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32):
     if prior_step.type != 'job':
         return pd.concat([df, new_data])
-    
+
     # Add columns to group by to the index
     idx_cols = []
     for group in prior_step.group:
         try:
             grp, col = group.split('.')
 
-            # extract the contents of the nested source column that 
+            # extract the contents of the nested source column that
             # will form the new index
             exploded = pd.json_normalize(new_data[grp])
 
@@ -179,7 +179,7 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             col = group
             pass  # no group in this column definition
         idx_cols.append(col)
-        
+
     new_data = new_data.set_index(idx_cols)
 
     # Get the names of all the mapped fields for the new record
@@ -191,17 +191,17 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
     # put all the mapped columns into a dictionary in
     # a new field named after this previous job step
     new_data[prior_step.name] = new_data[mapped_names].to_dict(orient='records')
-    
+
     # Now aggregate them by the existing index we used above,
     # ensuring we shuffle and pick a maximum of max_n
     mapped_cols = new_data.sample(frac=1).groupby(
         level=0)[prior_step.name].agg(
             lambda x: x.tolist()[:max_n])
-   
+
     # Add the column to the source dataset
     df = pd.merge(df, mapped_cols, left_on=idx_cols, right_index=True)
-    
-    return df        
+
+    return df
 
 
 global_run_id = BM.make_run_id()
@@ -217,7 +217,7 @@ def main(cfg: DictConfig) -> None:
     logger = bm.logger
 
     try:
-    
+
         t0 = datetime.datetime.now()
         try:
 
@@ -231,7 +231,7 @@ def main(cfg: DictConfig) -> None:
 
         except Exception as e:
             logger.exception(dict(message=f"Failed run {global_run_id} on {cfg.run.platform}", error=str(e)))
-            
+
         finally:
             t1 = datetime.datetime.now()
             logger.info(f"Completed run {global_run_id} in {format_timespan(t1-t0)}."

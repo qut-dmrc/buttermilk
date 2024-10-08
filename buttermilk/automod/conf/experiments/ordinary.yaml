@@ -12,12 +12,12 @@ save:
 experiments:
   judge:
     num_runs: 4
+    concurrent: 4
     parameters: null
     init:
       template_path: judge.jinja2
       other_template_paths:
         criteria: criteria_ordinary.jinja2
-      concurrent: 4
     #model: ['haiku']
     model:
       - o1-preview
@@ -69,6 +69,6 @@ experiments:
           draft: record
         record:
           id: job_id
-          agent: agent 
+          agent: agent
           answer: reasons
           predicted: predicted
