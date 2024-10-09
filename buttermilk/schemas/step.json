@@ -25,6 +25,11 @@
         "mode": "NULLABLE"
     },
     {
+        "name": "source",
+        "type": "STRING",
+        "mode": "NULLABLE"
+    },
+    {
         "name": "parameters",
         "type": "JSON",
         "mode": "NULLABLE"

@@ -23,9 +23,9 @@ from buttermilk.utils.utils import get_ip
 
 class StepInfo(BaseModel):
     step: str
-    agent_id: str
+    agent: str
     parameters: dict = {}
-    
+
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
     )
@@ -92,21 +92,21 @@ class RecordInfo(BaseModel):
 
 
 ##################################
-# A single unit of work, including 
+# A single unit of work, including
 # a result once we get it.
 ##################################
 class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    
+
     run_info: RunInfo
-    record_id: str   
+    record_id: str
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
-    
+    source: list[str]
     inputs: dict =  {}              # The data to be processed by the worker
-    
-    step_info: Optional[StepInfo] = None  # These fields will be added once 
+
+    step_info: Optional[StepInfo] = None  # These fields will be added once
     outputs: Optional[Result] = None      # the record is processed
 
     error: Optional[dict[str, Any]] = None

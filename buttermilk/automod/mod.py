@@ -59,8 +59,6 @@ class Moderator(Consumer):
     ## This is a standard pattern for creating a new Consumer class.
     _client: Optional[LC] = None
     flow_obj: Any
-    init_vars: dict = {}
-    step_name: str
 
     @model_validator(mode='after')
     def init(self) -> Self:
@@ -69,15 +67,7 @@ class Moderator(Consumer):
 
         return self
 
-    @property
-    def step_info(self) -> StepInfo:
-        step_info = StepInfo(agent_id=self.task_name,
-                      step=self.step_name,
-                      parameters=self.init_vars)
-
-        return step_info
-
-    async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
+    async def process(self, *, job: Job) -> Job:
         """ Take a Job, process it, and return a Job."""
         job = await run_flow(flow=self._client, job=job)
         job.step_info = self.step_info
@@ -129,10 +119,13 @@ async def run(cfg):
         dataset = pd.DataFrame()
         fields = []
 
+        source_list = []
+
         for src in cfg.data:
             fields.extend(src.columns.keys())
             data = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=data, prior_step=src)
+            source_list.append(src.name)
 
         # add index, but don't remove record_id form the columns
         dataset = dataset.set_index('record_id', drop=False)
@@ -143,7 +136,7 @@ async def run(cfg):
                 job = Job(record_id=idx,
                         inputs=row.to_dict(),
                         run_info=bm.run_info,
-                        parameters=step_cfg.parameters,
+                        parameters=step_cfg.parameters,source=source_list,
                         )
 
                 # Add each job to the queue

@@ -3,11 +3,11 @@
 ## are not always well-defined, by agents with varying capabilities.
 ##
 ## Accordingly, the Churn is a metaphor and methodology for repeatedly
-## querying agents about a dataset from multiple perspectives over 
-## multiple time periods. We sample from prior answers to inform 
+## querying agents about a dataset from multiple perspectives over
+## multiple time periods. We sample from prior answers to inform
 ## current predictions, adjusting for randomness and specificity.
 ##
-## The basic unit is a Prediction, which has identifiers about the 
+## The basic unit is a Prediction, which has identifiers about the
 ## question, source data, agent; an answer; and a unique identifier.
 
 from datetime import datetime, timezone
@@ -20,8 +20,8 @@ from buttermilk.runner import Job, RunInfo, StepInfo, run_flow
 
 
 def test_step_info():
-    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
-    assert step_info.agent_id == "test_agent"
+    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    assert step_info.agent == "test_agent"
     assert step_info.agent_version == "1.0"
 
 
@@ -44,7 +44,7 @@ def test_prediction_inputs():
     assert inputs.parameters == {"param3": "value3"}
 
 def test_prediction():
-    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     outputs = PredictionResult(predicted_class="class1", predicted_result=0.75, labels=["label1", "label2"], confidence=0.9)
     inputs = PredictionInputs(record_id="record1", parameters={"param3": "value3"})
@@ -61,7 +61,7 @@ def test_prediction():
     assert prediction.inputs == inputs
 
 def test_prediction_default_values():
-    step_info = StepInfo(agent_id="test_agent", agent_version="1.0", parameters={})
+    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={})
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={})
     outputs = PredictionResult()
     inputs = PredictionInputs(record_id="record1", parameters={})
@@ -84,7 +84,7 @@ def test_prediction_result_optional_fields():
 def test_single_flow(sample_job):
     prediction = run_flow(sample_job)
     assert isinstance(prediction, Job)
-    assert prediction.step_info.agent_id == "test_agent"
+    assert prediction.step_info.agent == "test_agent"
     assert prediction.run_info.run_id == "test_run"
     assert prediction.outputs.predicted_class == "class1"
     assert prediction.inputs.record_id == "record1"
@@ -106,12 +106,12 @@ def flow():
     return Judger(model='fake', template_path="judge.jinja2", criteria="criteria_ordinary.jinja2")
     #lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
     #return lc
-    
+
 DATA_CONFIGS = [
-    {"type": "file", "name": "drag", "uri": "gs://dmrc-platforms/data/drag_train.jsonl", 
+    {"type": "file", "name": "drag", "uri": "gs://dmrc-platforms/data/drag_train.jsonl",
      "columns": {"record_id": "record_id", "content": "alt_text", "groundtruth": "expected"}},
-    {"type": "job", "name": "mod", "dataset": "dmrc-analysis.toxicity.step", 
-     "filter": {"max": 32}, "group": ["record.record_id"], "columns": {"draft": "outputs"}}     
+    {"type": "job", "name": "mod", "dataset": "dmrc-analysis.toxicity.step",
+     "filter": {"max": 32}, "group": ["record.record_id"], "columns": {"draft": "outputs"}}
 ]
 
 @pytest.fixture

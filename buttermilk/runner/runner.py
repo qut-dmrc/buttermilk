@@ -99,7 +99,7 @@ from tqdm.asyncio import tqdm as atqdm
 from buttermilk.buttermilk import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.runner import Job
-from buttermilk.runner._runner_types import RunInfo
+from buttermilk.runner._runner_types import RunInfo, StepInfo
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.log import logger
 
@@ -139,11 +139,13 @@ class Consumer(BaseModel):
         run(self) -> None: Run the worker asynchronously until finished or told to stop.
     """
 
-    task_name: str
+    task_name: str      # This is model, or client, or whatever is used to get the result
+    step_name: str      # This is the step in the process that includes this particular task
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
     task_num: Optional[int] = None
     run_info: RunInfo
+    init_vars: dict = {}
     concurrent: int = 1  # Number of async tasks to run
 
     # flag to stop the task or to indicate the queue has finished
@@ -156,6 +158,15 @@ class Consumer(BaseModel):
     @cached_property
     def worker_name(self) -> str:
         return f"{self.task_name}_{shortuuid.uuid()[:6]}"
+
+
+    @property
+    def step_info(self) -> StepInfo:
+        step_info = StepInfo(agent=self.task_name,
+                      step=self.step_name,
+                      parameters=self.init_vars)
+
+        return step_info
 
     @model_validator(mode="after")
     def validate_concurrent(self) -> Self:
@@ -224,7 +235,7 @@ class Consumer(BaseModel):
 
                 try:
                     job = await self.process(job=job)
-                except Exception as e: 
+                except Exception as e:
                     job.error = extract_error_info(e=e)
 
                 finally:
@@ -233,12 +244,12 @@ class Consumer(BaseModel):
                     job.run_info = self.run_info
 
                     await self.output_queue.put(job)
-                    
+
                 # mark input job done
                 self.input_queue.task_done()
                 self.pbar.update(1)
                 self.pbar.refresh()
-                
+
         except Exception as e:
             logger.error(
                 f"Error processing task {self.task_name} by {self.worker_name} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
@@ -281,7 +292,7 @@ class ResultsCollector(BaseModel):
 
     # # The URI or path to save all results from this run
     batch_path: Union[CloudPath, Path] = None
-    
+
     @model_validator(mode="after")
     def get_path(self) -> Self:
         if self.batch_path is None:

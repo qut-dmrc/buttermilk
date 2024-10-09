@@ -15,11 +15,11 @@ experiments:
       template_path: synthesise.jinja2
       other_template_paths:
         original_instructions: criteria_ordinary.jinja2
-      concurrent: 4
+    concurrent: 4
     num_runs: 1
     parameters: null
     model:
-      - o1-preview
+      # - o1-preview
       - gpt4o
       - opus
       - sonnet
