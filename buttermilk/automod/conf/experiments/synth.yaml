@@ -18,10 +18,28 @@ experiments:
     concurrent: 4
     num_runs: 1
     parameters: null
+    data:
+      - name: draft
+        type: job
+        dataset: dmrc-analysis.toxicity.step_extracted
+        filter:
+          step: judge
+        group:
+          - record_id
+        columns:
+          draft: record
+        record:
+          id: job_id
+          agent: agent
+          answer: reasons
+          predicted: predicted
     model:
       # - o1-preview
       - gpt4o
       - opus
       - sonnet
       - gemini15pro
-
+      - llama31_70b
+      - llama31_8b
+      - llama31_405b
+      - haiku

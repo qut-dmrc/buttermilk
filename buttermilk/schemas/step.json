@@ -27,7 +27,7 @@
     {
         "name": "source",
         "type": "STRING",
-        "mode": "NULLABLE"
+        "mode": "REPEATED"
     },
     {
         "name": "parameters",

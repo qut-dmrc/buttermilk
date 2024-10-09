@@ -112,7 +112,7 @@ def scrub_serializable(d) -> T:
         elif isinstance(d, np.generic):
             # This should catch all other numpy objects
             return d.item()
-        elif isinstance(d, datetime.date) or isinstance(d, datetime.datetime):
+        elif isinstance(d, datetime.date) or isinstance(d, datetime.datetime) or isinstance(d, pd.Timestamp):
             # ensure dates and datetimes are stored as strings in ISO format for uploading
             d = d.isoformat()
         elif isinstance(d, uuid.UUID):
