@@ -1,12 +1,7 @@
-name: drag
-uri: gs://dmrc-platforms/data/drag_train.jsonl
-columns:
-  record_id: id
-  content: alt_text
-  groundtruth: expected
-
-
-  # record_id: data.id
-  # content: data.alt_text
-  # text: data.text
-  # groundtruth: data.expected
+- name: drag queens - alt text
+  type: file
+  uri: gs://dmrc-platforms/data/drag_train.jsonl
+  columns:
+    record_id: id
+    content: alt_text
+    groundtruth: expected

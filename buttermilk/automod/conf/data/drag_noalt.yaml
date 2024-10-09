@@ -1,6 +1,7 @@
 defaults:
   - drag
-name: drag_noalt
-columns:
-  content: text
 
+data:
+- name: drag_noalt
+  columns:
+    content: text

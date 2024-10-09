@@ -129,7 +129,7 @@ async def run(cfg):
         dataset = pd.DataFrame()
         fields = []
 
-        for src in step_cfg.data:
+        for src in cfg.data:
             fields.extend(src.columns.keys())
             data = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=data, prior_step=src)

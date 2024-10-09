@@ -27,10 +27,7 @@
             "justMyCode": false,
             "args": [ "-m",
                 "+experiments=ordinary",
-                //"-experiments.judge",
-                "experiments.synth.num_runs=1",
-                "experiments.synth.model=['haiku']",
-                
+                "+data=osb",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

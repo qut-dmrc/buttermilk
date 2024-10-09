@@ -68,7 +68,7 @@ class LC(BaseModel):
     _connections: Optional[dict] = {}
     _template: Optional[Template] = None
 
- 
+
     @cached_property
     def llm(self):
         return LLMs(connections=self._connections)
@@ -132,7 +132,7 @@ class LC(BaseModel):
         chain = chain | self.llm[model] | ChatParser()
 
         results = await self.invoke(chain, input_vars=local_inputs, model=model)
-        
+
         return results
 
 
