@@ -73,7 +73,7 @@ class Moderator(Consumer):
         job.step_info = self.step_info
         return job
 
-async def run(cfg):
+async def run(cfg, step_name, step_cfg):
     """
     This function runs the jobs asynchronously, and returns a list of
     results.
@@ -95,23 +95,19 @@ async def run(cfg):
 
     consumers = []
 
-    for step_name, step_cfg in cfg.experiments.items():
-        if step_name == 'moderate':
-            flow_obj=load_tox_flow
-        elif step_name == 'judge':
-            flow_obj = LC
-        elif step_name == 'synth':
-            flow_obj = LC
+    if step_name == 'moderate':
+        flow_obj=load_tox_flow
+    else:
+        flow_obj = LC
 
-        init_vars = OmegaConf.to_object(step_cfg.init)
-        for model in step_cfg.model:
-            init_vars['default_model'] = model
-            moderator = Moderator(task_name=model, step_name=step_name,
-                                  flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
-                                  run_info=bm.run_info)
-            consumers.append(moderator)
+    init_vars = OmegaConf.to_object(step_cfg.init)
+    for model in step_cfg.model:
+        init_vars['default_model'] = model
+        moderator = Moderator(task_name=model, step_name=step_name,
+                                flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
+                                run_info=bm.run_info)
+        consumers.append(moderator)
 
-        break # one at a time for now
 
     for task in consumers:
         orchestrator.register_task(consumer=task)
@@ -121,7 +117,12 @@ async def run(cfg):
 
         source_list = []
 
-        for src in cfg.data + step_cfg.data:
+        for src in cfg.data:
+            fields.extend(src.columns.keys())
+            dataset = load_data(src)
+            source_list.append(src.name)
+
+        for src in step_cfg.data:
             fields.extend(src.columns.keys())
             data = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=data, prior_step=src)
@@ -173,6 +174,8 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             pass  # no group in this column definition
         idx_cols.append(col)
 
+    idx_cols = [ c for c in idx_cols if c in df.columns]
+
     new_data = new_data.set_index(idx_cols)
 
     # Get the names of all the mapped fields for the new record
@@ -210,25 +213,26 @@ def main(cfg: DictConfig) -> None:
     logger = bm.logger
 
     try:
+        for step_name, step_cfg in cfg.experiments.items():
 
-        t0 = datetime.datetime.now()
-        try:
+            t0 = datetime.datetime.now()
+            try:
 
-            asyncio.run(run(cfg))
+                asyncio.run(run(cfg, step_name=step_name, step_cfg=step_cfg))
 
-        except KeyboardInterrupt:
-            # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
-            logger.info(
-                "Keyboard interrupt. Quitting run."
-            )
-
-        except Exception as e:
-            logger.exception(dict(message=f"Failed run {global_run_id} on {cfg.run.platform}", error=str(e)))
-
-        finally:
-            t1 = datetime.datetime.now()
-            logger.info(f"Completed run {global_run_id} in {format_timespan(t1-t0)}."
+            except KeyboardInterrupt:
+                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
+                logger.info(
+                    "Keyboard interrupt. Quitting run."
                 )
+
+            except Exception as e:
+                logger.exception(dict(message=f"Failed step {step_name} on run {global_run_id} on {cfg.run.platform}", error=str(e)))
+
+            finally:
+                t1 = datetime.datetime.now()
+                logger.info(f"Completed step {step_name} on run {global_run_id} in {format_timespan(t1-t0)}."
+                    )
 
     except KeyboardInterrupt:
         # Second time; quit immediately.

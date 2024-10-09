@@ -1,41 +1,80 @@
 # @package _global_
+project:
+  name: automod
+  job: modsynth
+run:
+  platform: local
+save:
+  destination: bq
+  dataset: dmrc-analysis.toxicity.step
+  schema: buttermilk/schemas/step.json
+
 data:
-  name: trans_train
-  uri: gs://dmrc-platforms/data/tja_train.jsonl
-  columns:
-    record_id: data.id
-    content: data.text
-judger:
-  name: judger
-  num_runs: 1
-  init:
-    model: haiku
-    template_path: judge.jinja2
-    standards_path: trans_simplified.jinja2
-  # standards:
-  # - trans_tja.jinja2
-  # - trans_cte.jinja2
-  # - trans_hrc.jinja2
-  # - trans_glaad.jinja2
-  # - trans_simplified.jinja2
-  # - trans_factored.jinja2
-  # models:
-  # # - haiku
-  # - llama31_70b
-  # # - gpt4o
-  # - sonnet
-  # # - gemini15pro
-evaluator:
-  columns:
-    groundtruth: data.expected
-    predicted: run.outputs.predicted
-    reasons: run.outputs.reasons
-  models:
-    # - llama31_70b
-    # - gpt4o
-    - sonnet
-    # - gemini15pro
-score:
-  aggregate: false
-metrics:
-  aggregate: true
+  - name: trans_train
+    type: file
+    uri: gs://dmrc-platforms/data/tja_train.jsonl
+    columns:
+      record_id: id
+      content: text
+      groundtruth: expected
+
+experiments:
+  # tja:
+  #   num_runs: 1
+  #   concurrent: 4
+  #   parameters: null
+  #   init:
+  #     template_path: judge.jinja2
+  #     other_template_paths:
+  #       criteria: trans_simplified.jinja2
+  #   # - trans_tja.jinja2
+  #   # - trans_cte.jinja2
+  #   # - trans_hrc.jinja2
+  #   # - trans_glaad.jinja2
+  #   # - trans_simplified.jinja2
+  #   # - trans_factored.jinja2
+  #   model: ['haiku']
+  #   data: []
+    # model:
+    #   # - o1-preview
+    #   - llama31_70b
+    #   - llama31_8b
+    #   # - llama31_405b
+    #   - gpt4o
+    #   - opus
+    #   - sonnet
+    #   - haiku
+    #   - gemini15pro
+  tja_eval:
+    num_runs: 1
+    concurrent: 4
+    parameters: null
+    init:
+      template_path: evaluate.jinja2
+    columns:
+    model: ['haiku']
+    # model:
+    #   # - o1-preview
+    #   # - llama31_70b
+    #   # - llama31_8b
+    #   # - llama31_405b
+    #   - gpt4o
+    #   # - opus
+    #   - sonnet
+    #   - haiku
+    #   # - gemini15pro
+    data:
+      - name: answer
+        type: job
+        dataset: dmrc-analysis.toxicity.step_extracted
+        filter:
+          step: tja
+        group:
+          - record_id
+          - agent
+        columns:
+          answer: record
+        record:
+          id: job_id
+          predicted: predicted
+          answer: reasons

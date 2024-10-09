@@ -33,10 +33,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "batch automod: trans",
+            "name": "automod: trans",
             "type": "debugpy",
             "request": "launch",
-            "module": "examples.automod.pfmod",
+            "module": "buttermilk.automod.mod",
             "cwd": "${workspaceFolder}",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
@@ -44,10 +44,11 @@
             ],
             "justMyCode": false,
             "args": [
-                "--multirun",
                 "+experiments=trans",
-                "judger.model=sonnet",
-                "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2,trans_simplified.jinja2,trans_factored.jinja2"
+                // "--multirun",
+                // "+experiments=trans",
+                // "judger.model=sonnet",
+                // "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2,trans_simplified.jinja2,trans_factored.jinja2"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
