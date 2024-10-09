@@ -67,6 +67,7 @@ hf-transfer = "^0.1.8"
 regex = "^2024.9.11"
 einops = "^0.8.0"
 pytest = "^8.3.3"
+google-cloud-bigquery-storage = "^2.26.0"
 
 
 [tool.poetry.group.dev.dependencies]
