@@ -339,7 +339,8 @@ def test_moderate_success(mocker, toxmodel):
 
     # Mock the output from interpret
     mock_output = EvalRecord()
-    mock_interpret = mocker.patch.object(toxmodel, 'interpret', return_value=mock_output)
+    try:
+        mock_interpret = mocker.patch.object('buttermilk.toxicity.ToxicityModel.call_client', 'interpret', return_value=mock_output)
 
     # Call the method
     result = toxmodel.moderate(content='some text', record_id='record_id')

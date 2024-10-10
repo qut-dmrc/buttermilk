@@ -122,13 +122,15 @@ class ToxicityModel(BaseModel):
     standard: str
     client: Any = None
     info_url: Optional[str] = None
+    options: ClassVar[dict] = {}
+    call_options: ClassVar[dict] = {}
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
     def validate_model(self) -> Self:
         if self.client is None:
-            self.init_client()
+            self.init_client(**self.options)
             if self.client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
         return self
@@ -174,7 +176,7 @@ class ToxicityModel(BaseModel):
     def call_client(
         self, prompt: str, **kwargs
     ) -> EvalRecord:
-        return self.client.__call__(prompt, **kwargs)
+        return self.client.__call__(prompt, **self.call_options, **kwargs)
 
     @abc.abstractmethod
     def make_prompt(self, content):

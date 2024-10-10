@@ -1,6 +1,6 @@
 ###
 # You can debug from here, or run from the command line with:
-#   python examples/automod/pfmod.py --multirun hydra/launcher=joblib +experiments=trans judger.model=gpt4o,sonnet,llama31_70b judger.standard=trans_factored.jinja2,trans_tja.jinja2,trans_hrc.jinja2,trans_glaad.jinja2,trans_simplified.jinja2
+#   python examples/automod/mod.py +experiments=trans +data=tja
 ###
 import asyncio
 import datetime
