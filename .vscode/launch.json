@@ -44,9 +44,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=trans",
                 "--multirun",
-                "experiments.trans.init.criteria=trans_cte,trans_glaad,trans_hrc,trans_tja,trans_simplified,trans_factored"
+                "+experiments=trans",
+                "experiments.init.criteria=trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
