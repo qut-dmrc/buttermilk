@@ -1,0 +1,37 @@
+name: evaluator
+num_runs: 1
+concurrent: 1
+max_batch: 1
+parameters: null
+init:
+  template: evaluate
+model: ["haiku"]
+save:
+  destination: bq
+  dataset: 'dmrc-analysis.toxicity.step'
+  schema: buttermilk/schemas/step.json
+data:
+  - type: job
+    name: answer
+    dataset: dmrc-analysis.toxicity.step_extracted
+    last_n_days: 3
+    aggregate: false
+    filter:
+      step: judge
+      agent:
+      source:
+    group:
+      step: step
+      record_id: record_id
+      agent: agent
+    columns:
+      id: job_id
+      expected: inputs.groundtruth.answer
+      predicted: predicted
+      answer:
+        reasons: outputs.reasons
+        conclusion: outputs.conclusion
+        labels: labels
+        scores: scores
+      groundtruth: expected
+

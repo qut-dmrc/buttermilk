@@ -6,22 +6,23 @@ Next, you must qualitatively assess the reasoning provided. You will be provided
 
 Present your response in fully valid JSON with the following fields:
 ```json
-{"correct": BOOLEAN (true if the overall classification is correct; false otherwise),
- "alignment": FLOAT (your evaluation on a scale from 0 to 1 of the correctness of the analyst's reasoning),
- "reasons": STRING (a short explanation of your reasoning)
+{   "id": STRING (the ID of the answer being evaluated),
+    "correct": BOOLEAN (true if the overall classification is correct; false otherwise),
+    "alignment": FLOAT (your evaluation on a scale from 0 to 1 of the correctness of the analyst's reasoning),
+    "reasons": STRING (a short explanation of your reasoning)
 }
 ```
 
 <BEGIN EXPECTED ANSWER>
-{{ groundtruth }}
+{{ groundtruth['answer'] }}
 <END EXPECTED ANSWER>
 
 
 {% for response in answer %}
-<BEGIN ANALYST ANSWER {{ response.id }}>
-Answer: {{ response.predicted }}
-{% for reason in response.answer %}
+<BEGIN ANALYST ANSWER {{ response['id'] }}>
+Answer: {{ response['predicted'] }}
+{% for reason in response['reasons'] %}
 {{ reason }}
 {% endfor %}
-<END ANALYST ANSWER {{ response.id }}>
+<END ANALYST ANSWER {{ response['id'] }}>
 {% endfor %}

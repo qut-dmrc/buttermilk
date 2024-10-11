@@ -45,36 +45,3 @@ experiments:
     #   - sonnet
     #   - haiku
     #   - gemini15pro
-  tja_eval:
-    num_runs: 1
-    concurrent: 4
-    parameters: null
-    init:
-      template_path: evaluate.jinja2
-    columns:
-    model: ['haiku']
-    # model:
-    #   # - o1-preview
-    #   # - llama31_70b
-    #   # - llama31_8b
-    #   # - llama31_405b
-    #   - gpt4o
-    #   # - opus
-    #   - sonnet
-    #   - haiku
-    #   # - gemini15pro
-    data:
-      - name: answer
-        type: job
-        dataset: dmrc-analysis.toxicity.step_extracted
-        filter:
-          step: tja
-        group:
-          - record_id
-          - agent
-        columns:
-          answer: record
-        record:
-          id: job_id
-          predicted: predicted
-          answer: reasons

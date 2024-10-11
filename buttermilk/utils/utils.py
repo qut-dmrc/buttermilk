@@ -263,3 +263,37 @@ def get_ip() -> str:
     except Exception as e:
         logger.error(f"Unable to get host IP address from external source.")
         return None
+
+
+def find_key_string_pairs(data):
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, str):
+                yield (key, value)
+            elif isinstance(value, (dict, list)):
+                yield from find_key_string_pairs(value)
+    elif isinstance(data, list):
+        for item in data:
+            yield from find_key_string_pairs(item)
+
+def find_all_keys_in_dict(x, search_key):
+    results = []
+
+    if isinstance(x, dict):
+        if search_key in x and x[search_key]:
+            if isinstance(x[search_key], list):
+                results.extend(x[search_key])
+            else:
+                results.append(x[search_key])
+        else:
+            for k in x:
+                result = find_all_keys_in_dict(x[k], search_key)
+                if result:
+                    results.extend(result)
+    elif isinstance(x, list):
+        for y in x:
+            result = find_all_keys_in_dict(y, search_key)
+            if result:
+                results.extend(result)
+
+    return results

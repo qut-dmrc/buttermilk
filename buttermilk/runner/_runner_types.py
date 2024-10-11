@@ -49,9 +49,14 @@ class Result(BaseModel):
     result: Optional[float] = None
     labels: Optional[list[str]] = None
     confidence: Optional[float|str] = None
-    reasons: Optional[list] = None
+    reasons: Optional[list[str]] = None
     scores: Optional[dict|list] = None
 
+    @field_validator("labels", "reasons", mode="before")
+    def vld_list(labels):
+        # ensure labels is a list
+        if isinstance(labels, str):
+            return [labels]
 
 
 class RecordInfo(BaseModel):
@@ -103,7 +108,7 @@ class Job(BaseModel):
     run_info: RunInfo
     record_id: str
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
-    source: list[str]
+    source: str|list[str]
     inputs: dict =  {}              # The data to be processed by the worker
 
     step_info: Optional[StepInfo] = None  # These fields will be added once
@@ -119,3 +124,18 @@ class Job(BaseModel):
         use_enum_values=True,
         json_encoders={np.bool_: lambda v: bool(v)},
     )
+
+    @field_validator("source", mode="before")
+    def vld_list(v):
+        if isinstance(v, str):
+            return [v]
+        return v
+
+    @field_validator("outputs", mode="before")
+    def convert_result(v):
+        if v and isinstance(v, dict):
+            return Result(**v)
+        elif isinstance(v, Result):
+            return v
+        else:
+            raise ValueError(f'Job constructor expected outputs as type Result, got {type(v)}.')

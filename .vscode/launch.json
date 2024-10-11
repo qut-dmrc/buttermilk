@@ -44,7 +44,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=trans",
+                "+experiments=evaluator",
                 // "--multirun",
                 // "+experiments=trans",
                 // "judger.model=sonnet",

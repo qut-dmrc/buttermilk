@@ -1,4 +1,5 @@
 import datetime
+from pathlib import Path
 import time
 from dataclasses import dataclass
 from random import shuffle
@@ -62,12 +63,23 @@ from buttermilk.utils.log import logger
 #########################################
 class LC(BaseModel):
     default_model: Optional[str] = None
-    template_path: Optional[str] = None
+    template: Optional[str] = None
     template_vars: Optional[dict] = {}
-    other_template_paths: Optional[dict] = {}
     _connections: Optional[dict] = {}
     _template: Optional[Template] = None
 
+    class Config:
+        extra = "allow"
+
+    def __init__(self, **kwargs):
+        known_fields = {field: kwargs.pop(field) for field in self.model_fields.keys() if field in kwargs.keys()}
+
+        # Add misc kwargs to template_vars
+        if 'template_vars' not in known_fields.keys():
+            known_fields['template_vars'] = {}
+        known_fields['template_vars'].update(**kwargs)
+
+        super().__init__(**known_fields)
 
     @cached_property
     def llm(self):
@@ -79,7 +91,7 @@ class LC(BaseModel):
         if not self._connections:
             self._connections = bm._connections_azure
 
-        if self.template_path is None:
+        if self.template is None:
             return
 
         loader = FileSystemLoader(searchpath=TEMPLATE_PATHS)
@@ -90,10 +102,15 @@ class LC(BaseModel):
             undefined=KeepUndefined,
         )
 
-        for k, v in self.other_template_paths.items():
-            self.template_vars[k] = env.get_template(v).render()
-
-        self._template = env.get_template(self.template_path)
+        for k in self.template_vars.keys():
+            try:
+                # Try to load a template if it's passed in by filename, otherwise use it
+                # as a plain string replacement.
+                _tpl = self.template_vars[k] + '.jinja2'
+                self.template_vars[k] = env.get_template(_tpl).render()
+            except Exception as e:
+                pass
+        self._template = env.get_template(self.template + '.jinja2')
 
         return self
 
@@ -189,8 +206,7 @@ class LC(BaseModel):
 if __name__ == "__main__":
     lc = LC(
         default_model=["fake"],
-        template_path="judge.jinja2",
-        other_template_paths={"criteria": "criteria_ordinary.jinja2"},
+        template="judge.jinja2", criteria="criteria_ordinary",
     )
     result = lc(
         content="What's 2+2?",

@@ -1,0 +1,18 @@
+name: metriciser
+num_runs: 1
+concurrent: 4
+parameters:
+init:
+model:
+data:
+  - type: job
+    dataset: dmrc-analysis.toxicity.step_extracted
+    filter:
+      step: tja
+      source:
+    aggregate:
+      - agent
+      - run_id
+    columns:
+      predicted: predicted
+      groundtruth: groundtruth.answer
