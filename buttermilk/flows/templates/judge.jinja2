@@ -1,6 +1,8 @@
-{% include system_rules.jinja2 %}
+You are a careful and precise auditor. You will be provided with a set of criteria and some material to be assessed.
 
-{% include instructions_hate.jinja2 %}
+{% include 'json_rules.jinja2' %}
+
+{% include 'instructions_hate.jinja2' %}
 
 <BEGIN CRITERIA>
 {{ criteria }}

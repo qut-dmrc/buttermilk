@@ -1,20 +1,22 @@
-You are a careful and precise auditor. You will be provided with a set of criteria and some material to be assessed.
-
 You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:
 
 {% raw %}
 ```json
 {
-    "interpretation": <String: one to five sentences interpreting the content in context>,
     "reasons": [ <List of JSON dictionaries presenting EACH AND EVERY step of your reasoning for each potential and plausible rule violation. Present each step as a valid JSON dictionary with the following fields:
         {"heading": <String: one to four words identifying the rule (e.g. "R4 INFERIORITY") or step of the analysis (e.g. "INTENT")>,
         "reasoning": <String: one to five sentences of text with clear reasoning for a single logical step>,
         "violates": <Boolean: the content violates this component of the rules.>,
         "confidence": <String: "high", "medium", or "low" confidence in the analysis>,
         },
-        [... other steps ...],
+        [... other steps ...].
+
+        Your first step should be an interpretation:
+        {"heading": "interpretation", "reasoning": <String: one to five sentences interpreting the content in context>}
+
+        Your final step should be a conclusion:
+        {"heading": "conclusion", "reasoning": <String: one to five sentences of text with clear reasoning presenting your overall conclusion>}
     ],
-    "conclusion": <String: one to five sentences of text with clear reasoning presenting your overall conclusion>,
     "predicted": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,
     "confidence": <String: "high", "medium", or "low" confidence in the overall conclusion>,
 

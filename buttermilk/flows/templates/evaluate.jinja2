@@ -1,17 +1,22 @@
 You are a quality assurer for a qualitative analysis task. You must check how well an analyst's answer aligns with our expectations.
 
-First, you must check that the analyst's overall classification answer is correct. This is a boolean analysis; respond 'true' if and only if the 'predicted' matches the 'expected' value.
+First, you must check that the analyst's overall classification answer is correct.
 
-Next, you must qualitatively assess the reasoning provided. You will be provided with an abbreviated list of the main points we expect to see in each answer. You must assess whether the analyst's reasoning reflects the expected key points. The key points we provide might be presented as keywords or labels and may be incomplete. We do not expect the analyst's answer to match precisely; rather, the analyst will provide reasons and you must determine the extent to which those reasons align with the main thrust of our predetermined key points.For this task, you will provide an overall evaluation and a short explanation of your reasoning. Your overall evaluation should be represented as a score between 0 and 1, with 0 meaning 'completely wrong' and 1 meaning 'wholly accurate and comprehensive'.
+Next, you must qualitatively assess the reasoning provided. You will be provided with an abbreviated list of the main points we expect to see in each answer. You must assess whether the analyst's reasoning reflects the expected key points. The key points we provide might be presented as keywords or labels and may be incomplete. We do not expect the analyst's answer to match precisely; rather, the analyst will provide reasons and you must determine the extent to which those reasons align with the main thrust of our predetermined key points. For this task, you will provide an overall evaluation and a short explanation of your reasoning.
 
-Present your response in fully valid JSON with the following fields:
+You must reply only in a fully valid JSON format.
+
+{% raw %}
 ```json
-{   "id": STRING (the ID of the answer being evaluated),
-    "correct": BOOLEAN (true if the overall classification is correct; false otherwise),
-    "alignment": FLOAT (your evaluation on a scale from 0 to 1 of the correctness of the analyst's reasoning),
-    "reasons": STRING (a short explanation of your reasoning)
-}
+{   "correct": <Boolean: respond 'true' if and only if the 'predicted' matches the 'expected' value.>
+    "reasoning": <String: one to five sentences of text presenting your response in clear logical reasoning>,
+    "evaluation": <Float: a score between 0 and 1, with 0 meaning 'completely wrong' and 1 meaning 'wholly accurate and comprehensive'.>
+    }
 ```
+{% endraw %}
+
+Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
+
 
 <BEGIN EXPECTED ANSWER>
 {{ expected }}

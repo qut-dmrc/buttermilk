@@ -1,0 +1,13 @@
+You must reply only in a fully valid JSON format.
+
+{% raw %}
+```json
+{ "reasoning": <String: one to five sentences of text presenting your response in clear logical reasoning>,
+    "evaluation": <Boolean:
+    }
+```
+{% endraw %}
+
+Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
+
+
