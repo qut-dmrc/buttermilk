@@ -13,11 +13,9 @@ experiments:
   judge:
     num_runs: 4
     concurrent: 4
-    parameters: null
     init:
-      template_path: judge.jinja2
-      other_template_paths:
-        criteria: criteria_ordinary.jinja2
+      template_path: judge
+      criteria: criteria_ordinary
     #model: ['haiku']
     model:
       # - o1-preview

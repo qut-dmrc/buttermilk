@@ -17,7 +17,6 @@ experiments:
         original_instructions: criteria_ordinary.jinja2
     concurrent: 4
     num_runs: 1
-    parameters: null
     data:
       - name: draft
         type: job

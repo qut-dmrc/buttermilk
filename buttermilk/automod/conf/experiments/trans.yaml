@@ -2,7 +2,6 @@ name: trans_reporting
 num_runs: 1
 concurrent: 4
 max_batch: 1
-parameters: null
 init:
   template: judge
   criteria: trans_simplified

@@ -1,7 +1,6 @@
 name: metriciser
 num_runs: 1
 concurrent: 4
-parameters:
 init:
 model:
 data:

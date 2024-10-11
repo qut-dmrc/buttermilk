@@ -24,17 +24,15 @@ from buttermilk.utils.utils import get_ip
 class StepInfo(BaseModel):
     step: str
     agent: str
-    parameters: dict = {}
 
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
     )
 
 class RunInfo(BaseModel):
     run_id: str
     project: str
     job: str
-    parameters: dict = {}
 
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)

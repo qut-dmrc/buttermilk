@@ -1,7 +1,7 @@
 name: evaluator
 num_runs: 1
-concurrent: 1
-max_batch: 1
+concurrent: 8
+max_batch: 128
 init:
   template: evaluate
 # model: ["haiku"]
@@ -31,15 +31,10 @@ data:
     group:
       step: step
       record_id: record_id
-      agent: agent
+      criteria: step_info.criteria
     columns:
-      expected: expected
+      expected: groundtruth
       id: job_id
       predicted: predicted
-      answer:
-        interpretation: outputs.interpretation
-        reasoning: outputs.reasons
-        conclusion: outputs.conclusion
-        labels: labels
-        scores: scores
+      answer: outputs.reasons
 

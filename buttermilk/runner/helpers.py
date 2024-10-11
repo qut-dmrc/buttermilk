@@ -33,13 +33,13 @@ def load_job(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed: 
     sql += " AND NOT expected IS NULL "
 
     # exclude records already processed if necessary
-    if exclude_processed:
-        sql += f" AND job_id NOT IN (SELECT job_id FROM `{dataset}` processed WHERE error IS NULL AND "
-        sql += f"processed.step = '{new_job_name}' AND "
-        for level in exclude_processed:
-            sql += f"processed.{level} = jobs.{level} AND "
-        sql += f" TIMESTAMP_TRUNC(processed.timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
-        sql += ") "
+    # if exclude_processed:
+    #     sql += f" AND job_id NOT IN (SELECT job_id FROM `{dataset}` processed WHERE error IS NULL AND "
+    #     sql += f"processed.step = '{new_job_name}' AND "
+    #     for level in exclude_processed:
+    #         sql += f"processed.{level} = jobs.{level} AND "
+    #     sql += f" TIMESTAMP_TRUNC(processed.timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
+    #     sql += ") "
 
     sql += " ORDER BY RAND() "
 

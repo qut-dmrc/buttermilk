@@ -163,8 +163,7 @@ class Consumer(BaseModel):
     @property
     def step_info(self) -> StepInfo:
         step_info = StepInfo(agent=self.task_name,
-                      step=self.step_name,
-                      parameters=self.init_vars)
+                      step=self.step_name, **self.init_vars)
 
         return step_info
 

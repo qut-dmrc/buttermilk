@@ -108,7 +108,6 @@ async def run(cfg, step_cfg):
 
     init_vars = OmegaConf.to_object(step_cfg.init)
     for model in step_cfg.model:
-        init_vars['default_model'] = model
         processor = JobProcessor(task_name=model, step_name=step_name,
                                 flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
                                 run_info=bm.run_info)
@@ -137,7 +136,6 @@ async def run(cfg, step_cfg):
                 job = Job(record_id=idx,
                         inputs=make_serialisable(row.to_dict()),
                         run_info=bm.run_info,
-                        parameters=step_cfg.parameters,
                         source=source_list,
                         )
 
