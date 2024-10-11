@@ -4,7 +4,7 @@ import math
 import pathlib
 import uuid
 from typing import Any, List, Optional, TypeVar, Union
-
+from typing import Mapping, Sequence
 import fsspec
 import numpy as np
 import pandas as pd
@@ -266,13 +266,13 @@ def get_ip() -> str:
 
 
 def find_key_string_pairs(data):
-    if isinstance(data, dict):
+    if isinstance(data, Mapping):
         for key, value in data.items():
             if isinstance(value, str):
                 yield (key, value)
-            elif isinstance(value, (dict, list)):
+            elif isinstance(value, (Mapping, Sequence)):
                 yield from find_key_string_pairs(value)
-    elif isinstance(data, list):
+    elif isinstance(data, Sequence):
         for item in data:
             yield from find_key_string_pairs(item)
 

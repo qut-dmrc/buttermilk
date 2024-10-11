@@ -25,13 +25,13 @@ data:
       record_id: record_id
       agent: agent
     columns:
+      expected: expected
       id: job_id
-      expected: inputs.groundtruth.answer
       predicted: predicted
       answer:
-        reasons: outputs.reasons
+        interpretation: outputs.interpretation
+        reasoning: outputs.reasons
         conclusion: outputs.conclusion
         labels: labels
         scores: scores
-      groundtruth: expected
 

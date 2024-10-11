@@ -16,6 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import model_validator
 
 from buttermilk import BM
+from buttermilk.utils import make_serialisable
 from buttermilk.apis import (
     HFInferenceClient,
     Llama2ChatMod,
@@ -38,7 +39,7 @@ import datetime
 import itertools
 from itertools import cycle
 from tempfile import NamedTemporaryFile
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Type, TypeVar
+from typing import Any, AsyncGenerator, Callable, Optional, Self, Type, TypeVar, Mapping
 
 import cloudpathlib
 import datasets
@@ -134,7 +135,7 @@ async def run(cfg, step_cfg):
         for i in range(step_cfg.num_runs):
             for idx, row in dataset.sample(frac=1).iterrows():
                 job = Job(record_id=idx,
-                        inputs=row.to_dict(),
+                        inputs=make_serialisable(row.to_dict()),
                         run_info=bm.run_info,
                         parameters=step_cfg.parameters,
                         source=source_list,
@@ -178,17 +179,17 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             pass  # no group in this column definition
             if col_name != group:
                 # rename column
-                new_data = new_data.rename(columns={group: col})
+                new_data = new_data.rename(columns={group: col_name})
 
     # Add columns to group by to the index
     idx_cols = [ c for c in prior_step.group.keys() if c in new_data.columns]
 
     # Stack any nested fields in the mapping
     for k, v in prior_step.columns.items():
-        if isinstance(v, dict):
+        if isinstance(v, Mapping):
             # put all the mapped columns into a dictionary in
             # a new field named as provided in the step config
-            new_data[prior_step.name] = new_data[v.keys()].to_dict(orient='records')
+            new_data.loc[:, k] = new_data[v.keys()].to_dict(orient='records')
 
 
     # Reduce down to one row per index (but don't aggregate this time, just

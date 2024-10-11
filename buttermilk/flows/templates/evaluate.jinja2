@@ -14,15 +14,10 @@ Present your response in fully valid JSON with the following fields:
 ```
 
 <BEGIN EXPECTED ANSWER>
-{{ groundtruth['answer'] }}
+{{ expected }}
 <END EXPECTED ANSWER>
 
-
-{% for response in answer %}
-<BEGIN ANALYST ANSWER {{ response['id'] }}>
-Answer: {{ response['predicted'] }}
-{% for reason in response['reasons'] %}
-{{ reason }}
-{% endfor %}
-<END ANALYST ANSWER {{ response['id'] }}>
-{% endfor %}
+<BEGIN ANALYST ANSWER #: {{ id }}>
+Answer: {{ predicted }}
+{{ answer }}
+<END ANALYST ANSWER #: {{ id }}>

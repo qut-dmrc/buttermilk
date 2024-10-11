@@ -30,6 +30,8 @@ def load_job(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed: 
         if condition:
             sql += f" AND {field} = '{condition}' "
 
+    sql += " AND NOT expected IS NULL "
+
     # exclude records already processed if necessary
     if exclude_processed:
         sql += f" AND job_id NOT IN (SELECT job_id FROM `{dataset}` processed WHERE error IS NULL AND "
