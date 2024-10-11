@@ -10,13 +10,17 @@ def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
     return output
 
 def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
-    # For local dataframe mapping
-    output = {}
-    for k, v in mapping_dict.items():
-        # Usually we need to discard the early part of the mapping before the final '.'
-        output[k] = v.split('.')[-1]
+    # do nothing right now.
+    # TODO: if we go back to using promptflow, fix this
+    return mapping_dict
 
-    return output
+    # # For local dataframe mapping
+    # output = {}
+    # for k, v in mapping_dict.items():
+    #     # Usually we need to discard the early part of the mapping before the final '.'
+    #     output[k] = v.split('.')[-1]
+
+    # return output
 
 def col_mapping_hydra_to_pandas(mapping_dict: dict) -> dict:
     # For local dataframe mapping
