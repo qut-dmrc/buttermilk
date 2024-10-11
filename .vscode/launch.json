@@ -44,11 +44,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=evaluator",
-                // "--multirun",
-                // "+experiments=trans",
-                // "judger.model=sonnet",
-                // "judger.standard=trans_cte.jinja2,trans_glaad.jinja2,trans_hrc.jinja2,trans_tja.jinja2,trans_simplified.jinja2,trans_factored.jinja2"
+                "+experiments=trans",
+                "--multirun",
+                "experiments.trans.init.criteria=trans_cte,trans_glaad,trans_hrc,trans_tja,trans_simplified,trans_factored"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

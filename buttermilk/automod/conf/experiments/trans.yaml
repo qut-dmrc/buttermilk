@@ -1,14 +1,23 @@
-# @package _global_
-project:
-  name: automod
-  job: modsynth
-run:
-  platform: local
+name: trans_reporting
+num_runs: 1
+concurrent: 4
+max_batch: 1
+parameters: null
+init:
+  template: judge
+  criteria: trans_simplified
+    #   # - trans_tja
+    #   # - trans_cte
+    #   # - trans_hrc
+    #   # - trans_glaad
+    #   # - trans_simplified
+    #   # - trans_factored
+model:
+  - gpt4o
 save:
   destination: bq
-  dataset: dmrc-analysis.toxicity.step
+  dataset: 'dmrc-analysis.toxicity.step'
   schema: buttermilk/schemas/step.json
-
 data:
   - name: trans_train
     type: file
@@ -17,31 +26,3 @@ data:
       record_id: id
       content: text
       groundtruth: expected
-
-experiments:
-  # tja:
-  #   num_runs: 1
-  #   concurrent: 4
-  #   parameters: null
-  #   init:
-  #     template_path: judge.jinja2
-  #     other_template_paths:
-  #       criteria: trans_simplified.jinja2
-  #   # - trans_tja.jinja2
-  #   # - trans_cte.jinja2
-  #   # - trans_hrc.jinja2
-  #   # - trans_glaad.jinja2
-  #   # - trans_simplified.jinja2
-  #   # - trans_factored.jinja2
-  #   model: ['haiku']
-  #   data: []
-    # model:
-    #   # - o1-preview
-    #   - llama31_70b
-    #   - llama31_8b
-    #   # - llama31_405b
-    #   - gpt4o
-    #   - opus
-    #   - sonnet
-    #   - haiku
-    #   - gemini15pro
