@@ -848,7 +848,9 @@ class ShieldGemma(ToxicityModel):
     client: transformers.Pipeline = None
     tokenizer: Any = None
     classes: Any = None
-    template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "shieldgemma.txt"))
+    _tpl: str = ''
+    _criteria: str = ''
+    criteria: str
     device: Union[str, torch.device] = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA or auto)",
@@ -861,9 +863,13 @@ class ShieldGemma(ToxicityModel):
         vocab = self.tokenizer.get_vocab()
         self.classes = [vocab['Yes'], vocab['No']]
 
+        template = read_yaml(TEMPLATE_DIR / "shieldgemma.yaml")
+        self._criteria = template['criteria'][self.criteria]
+        self._tpl = template['template']
+
 
     def make_prompt(self, text):
-        prompt =  self.template.format(text=text)
+        prompt =  self._tpl.format(text=text, criteria=self._criteria)
         return prompt
 
     @trace

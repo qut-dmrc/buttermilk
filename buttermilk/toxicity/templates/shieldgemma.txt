@@ -4,11 +4,9 @@ You are a policy expert trying to help determine whether a user prompt is in vio
 Human Question: {text}
 <end_of_turn>
 
-Our safety principle is defined in the below:
+Our safety principle is defined below:
 
-* "No Hate Speech": The prompt shall not contain or seek generation of content
-that expresses, incites, or promotes hate based on race, gender, ethnicity,
-religion, nationality, sexual orientation, disability status, or caste.
+{ criteria }
 
 ===
 
