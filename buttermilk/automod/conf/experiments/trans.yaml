@@ -11,16 +11,16 @@ init:
     #   # - trans_glaad
     #   # - trans_simplified
     #   # - trans_factored
-  model:
-    # - o1-preview
-    - llama31_70b
-    - llama31_8b
-    # - llama31_405b
-    - gpt4o
-    - opus
-    - sonnet
-    - haiku
-    - gemini15pro
+model:
+  # - o1-preview
+  - llama31_70b
+  - llama31_8b
+  # - llama31_405b
+  - gpt4o
+  - opus
+  - sonnet
+  - haiku
+  - gemini15pro
 save:
   destination: bq
   dataset: 'dmrc-analysis.toxicity.step'
