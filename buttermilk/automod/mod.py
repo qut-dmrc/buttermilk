@@ -108,6 +108,7 @@ async def run(cfg, step_cfg):
 
     init_vars = OmegaConf.to_object(step_cfg.init)
     for model in step_cfg.model:
+        init_vars['model'] = model
         processor = JobProcessor(task_name=model, step_name=step_name,
                                 flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
                                 run_info=bm.run_info)
@@ -124,7 +125,7 @@ async def run(cfg, step_cfg):
 
         for src in step_cfg.data:
             fields.extend(src.columns.keys())
-            df = load_data(src, new_job_name=step_name)
+            df = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=df, prior_step=src)
             source_list.append(src.name)
 
@@ -190,7 +191,7 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             new_data.loc[:, k] = new_data[v.keys()].to_dict(orient='records')
 
 
-    # Reduce down to one row per index (but don't aggregate this time, just
+    # Reduce down to one row per index (but don't aggregate at this time, just
     # keep a random row)
     new_data = new_data.sample(frac=1).groupby(idx_cols).first()
 

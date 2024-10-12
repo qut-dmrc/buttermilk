@@ -62,7 +62,7 @@ from buttermilk.utils.log import logger
 ###
 #########################################
 class LC(BaseModel):
-    default_model: Optional[str] = None
+    model: Optional[str] = None
     template: Optional[str] = None
     template_vars: Optional[dict] = {}
     _connections: Optional[dict] = {}
@@ -120,7 +120,7 @@ class LC(BaseModel):
         local_inputs = self.template_vars.copy()
         local_inputs.update(kwargs)
 
-        if not (model := model or self.default_model):
+        if not (model := model or self.model):
             raise ValueError(
                 "You must provide either model name or a default model when initialising."
             )
@@ -205,7 +205,7 @@ class LC(BaseModel):
 
 if __name__ == "__main__":
     lc = LC(
-        default_model=["fake"],
+        model=["fake"],
         template="judge.jinja2", criteria="criteria_ordinary",
     )
     result = lc(

@@ -27,11 +27,11 @@ data:
     aggregate: false
     filter:
       step: trans_reporting
-      agent:
     group:
       step: step
       record_id: record_id
       criteria: step_info.criteria
+      agent: step_info.agent
     columns:
       expected: groundtruth
       id: job_id

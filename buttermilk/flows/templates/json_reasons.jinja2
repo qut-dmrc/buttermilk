@@ -2,8 +2,10 @@ You must reply only in a fully valid JSON format.
 
 {% raw %}
 ```json
-{ "reasoning": <String: one to five sentences of text presenting your response in clear logical reasoning>,
-    "evaluation": <Boolean:
+    "reasons": [ <ARRAY of STRING: one or more logical reasoning steps. Present EACH STEP of your reasoning as a distinct element; each step should comprise one to five sentences of text presenting clear logical reasoning>,
+        [... other steps ...]
+    ],
+    "evaluation": <Float: a score between 0 and 1, with 0 meaning 'completely wrong' and 1 meaning 'wholly accurate and comprehensive'.>
     }
 ```
 {% endraw %}

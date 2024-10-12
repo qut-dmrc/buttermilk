@@ -13,6 +13,9 @@ from typing import Literal
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from langchain_core.output_parsers import StrOutputParser
 
+# These are categories that we do not interpret as relevant to an overall 'toxic' result
+NON_TOXIC_CATS = ['public safety', 'health', 'religion and belief', 'war and conflict', 'finance', 'politics', 'legal']
+
 class GoogleModerate(ToxicityModel):
     model: str = "PaLM 2"
     standard: str = "Google Moderate Text v2"
@@ -48,10 +51,12 @@ class GoogleModerate(ToxicityModel):
                     outcome.scores.append(Score(measure=category.name, confidence=category.confidence, severity=category.severity))
                 except:
                     outcome.scores.append(Score(measure=category.name, confidence=category.confidence))
+
                 if category.confidence > 0.5:
                     outcome.labels.append(category.name)
-                    outcome.predicted = True
 
+                    if str(category.name).lower() not in NON_TOXIC_CATS:
+                        outcome.predicted = True
 
         except Exception as e:
             outcome.error = f"Unable to interpret result: {e}. {e.args}"
