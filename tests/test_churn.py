@@ -44,7 +44,7 @@ def test_prediction_inputs():
     assert inputs.parameters == {"param3": "value3"}
 
 def test_prediction():
-    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}, step="testing")
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     outputs = PredictionResult(predicted_class="class1", predicted_result=0.75, labels=["label1", "label2"], confidence=0.9)
     inputs = PredictionInputs(record_id="record1", parameters={"param3": "value3"})
