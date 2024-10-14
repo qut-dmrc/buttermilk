@@ -95,4 +95,4 @@ Serially, on a gpu:
 `python -m buttermilk.automod.pfmod +experiments=ots_gpu +data=drag_noalt +save=bq`
 
 Parallel:
-`python -m buttermilk.automod.pfmod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt +save=bq experiments.moderate.init.flow=GoogleModerate,NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o,NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,Comprehend,Perspective,AzureContentSafety,OpenAIModerator,LlamaGuard1Replicate,LlamaGuard1Together,LlamaGuard2Replicate,LlamaGuard2Together,LlamaGuard3Together,LlamaGuard3Octo`
+`python -m buttermilk.automod.pfmod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt +save=bq experiments.moderate.init.flow=GoogleModerate,NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o,NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,Comprehend,Perspective,AzureContentSafety,OpenAIModerator,LlamaGuard1Replicate,LlamaGuard1Together,LlamaGuard2Replicate,LlamaGuard2Together,LlamaGuard3Together`

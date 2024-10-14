@@ -60,4 +60,4 @@ class Test00Setup:
 
 
     def test_hf_login(self):
-        assert login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])
+        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])

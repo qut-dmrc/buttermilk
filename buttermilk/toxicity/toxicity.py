@@ -301,35 +301,6 @@ class _HF(ToxicityModel):
     #     inputs = {key: val.to(model.device) for key, val in inputs.items()}
 
 
-class _Octo(ToxicityModel):
-    model: str
-    process_chain: str = "Octo API"
-    options: ClassVar[dict]
-
-    def init_client(self) -> None:
-        from octoai.client import OctoAI
-
-        client = OctoAI(
-            api_key=os.environ['OCTOAI_API_KEY'],
-        )
-        self.client = client
-
-    @trace
-    def call_client(
-        self, prompt: str, **kwargs
-    ) -> Any:
-        response = self.client.text_gen.create_completion_stream(
-            prompt=prompt,
-            model=self.model,
-            **self.options
-        )
-        generations = [x for x in response]
-        result = [choice.text for x in generations for choice in x.choices]
-        result = ''.join(result).strip()
-        return str(result)
-
-
-
 class Perspective(ToxicityModel):
     model: str = "perspective"
     process_chain: str = "api"

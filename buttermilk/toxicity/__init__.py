@@ -5,7 +5,6 @@ from buttermilk.toxicity.llamaguard import (LlamaGuard1Replicate,
     LlamaGuard2Replicate,
     LlamaGuard2Together,
     LlamaGuard3Together,
-    LlamaGuard3Octo,
     LlamaGuard2HF,
     LlamaGuard3Local,
     MDJudgeLocalDomain,
@@ -16,7 +15,7 @@ from buttermilk.toxicity.llamaguard import (LlamaGuard1Replicate,
 from .aegis import Aegis
 from .wildguard import Wildguard
 from .google_moderate import GoogleModerate
-from .nemo import NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,NemoInputSimpleMistralOcto,NemoInputComplexMistralOcto,NemoOutputSimpleMistralOcto,NemoOutputComplexMistralOcto
+from .nemo import NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 from .toxicity import (Comprehend,
     Perspective,
     HONEST,
@@ -40,10 +39,10 @@ TOXCLIENTS = [
     LlamaGuard2Replicate,
     LlamaGuard2Together,
     LlamaGuard3Together,
-    LlamaGuard3Octo,
     GoogleModerate,
-    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,NemoInputSimpleMistralOcto,NemoInputComplexMistralOcto,NemoOutputSimpleMistralOcto,NemoOutputComplexMistralOcto,
+    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 ]
+    
 
 TOXCLIENTS_NOT_AVAILABLE = [
     LlamaGuard2HF,

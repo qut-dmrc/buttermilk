@@ -22,6 +22,5 @@ moderate:
   # - LlamaGuard2Replicate
   - LlamaGuard2Together
   - LlamaGuard3Together
-  - LlamaGuard3Octo
   disabled_models:
   - AzureModerator

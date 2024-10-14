@@ -1,7 +1,7 @@
 from typing import (
     Any,ClassVar
 )
-from .toxicity import ToxicityModel, EvalRecord, Score, _Octo
+from .toxicity import ToxicityModel, EvalRecord, Score
 from promptflow.tracing import trace
 from langchain_core.prompts import ChatMessagePromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from buttermilk import BM
@@ -81,18 +81,6 @@ class NemoLangchain(Nemo):
 
 
 
-class NemoInputSimpleMistralOcto(_Octo, Nemo):
-    standard: str = "nemo_self_check.input_simple"
-    model: str ="mistral-nemo-instruct"
-class NemoInputComplexMistralOcto(_Octo, Nemo):
-    standard: str = "nemo_self_check.input"
-    model: str ="mistral-nemo-instruct"
-class NemoOutputSimpleMistralOcto(_Octo, Nemo):
-    standard: str = "nemo_self_check.output_simple"
-    model: str ="mistral-nemo-instruct"
-class NemoOutputComplexMistralOcto(_Octo, Nemo):
-    standard: str = "nemo_self_check.output"
-    model: str ="mistral-nemo-instruct"
 class NemoInputSimpleGPT4o(NemoLangchain):
     standard: str = "nemo_self_check.input_simple"
     model: str = "gpt4o"

@@ -20,7 +20,7 @@ from pydantic import (
     Field,
 )
 from buttermilk.apis import HFInferenceClient
-from buttermilk.toxicity.toxicity import _Octo, ToxicityModel, _HF
+from buttermilk.toxicity.toxicity import ToxicityModel, _HF
 from buttermilk.utils.utils import read_yaml
 from ..types.tox import EvalRecord, Score
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -124,7 +124,7 @@ class LlamaGuardTox(ToxicityModel):
     client: Any = None
     tokenizer: Any = None
     model: str
-    options: ClassVar[dict] = dict(temperature=1.0)
+    options: ClassVar[dict] = dict()
 
     @trace
     def make_prompt(self, content):
@@ -323,10 +323,6 @@ class LlamaGuard3Together(_LlamaGuard3Common):
 
     def init_client(self) -> None:
         self.client = Together(model=self.model, **self.options)
-
-class LlamaGuard3Octo(_LlamaGuard3Common,_Octo):
-    model: str = "llama-guard-3-8b"
-    process_chain: str = "Octo API"
 
 
 ## MDJudge has the same response style as LlamaGuard
