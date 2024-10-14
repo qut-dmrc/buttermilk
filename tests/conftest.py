@@ -1,13 +1,12 @@
 from typing import Any, Generator
 import pytest
-from torch import cuda
 
 from pytest import MarkDecorator
-from hydra import initialize, compose
-from buttermilk.buttermilk import BM
 
 @pytest.fixture(scope="session")
-def bm() -> Generator[BM, Any, None]:
+def bm() -> Generator["BM", Any, None]:
+    from buttermilk.buttermilk import BM
+    from hydra import initialize, compose
     with initialize(version_base=None, config_path="conf", ):
         cfg = compose(config_name="config")
     yield BM(cfg=cfg)
@@ -22,6 +21,8 @@ def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:
     :param reason: The reason for skipping the test.
     :return: A Pytest skipif mark decorator.
     """
+    
+    from torch import cuda
     has_gpu = cuda.is_available() and cuda.device_count() > 0
     return pytest.mark.skipif(not has_gpu, reason=reason)
 

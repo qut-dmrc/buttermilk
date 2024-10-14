@@ -102,13 +102,14 @@ markers = [
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
 default_async_timeout = 300
+asyncio_default_fixture_loop_scope="function"
 addopts = [ "-rxX",
     "--capture=fd", "--tb=short",
-    "--continue-on-collection-errors","--durations=10", "-n 16"
+    "--continue-on-collection-errors","--durations=10", 
+    "-n 16"
     ]
 #   " "-rA", "--timeout_method=thread", "--with-integration"
+# xfail_strict = true
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning"
     ]
-
-env_files = [".env"]
