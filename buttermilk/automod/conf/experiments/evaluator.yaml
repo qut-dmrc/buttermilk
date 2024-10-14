@@ -4,6 +4,8 @@ concurrent: 1
 max_batch: 1
 init:
   template: evaluate
+  formatting: json_reasons
+  criteria: trans_simplified
 # model: ["haiku"]
 model:
   #   #   # - o1-preview
@@ -20,26 +22,34 @@ save:
   dataset: 'dmrc-analysis.toxicity.step'
   schema: buttermilk/schemas/step.json
 data:
+  - name: trans_train
+    type: file
+    uri: gs://dmrc-platforms/data/tja_train.jsonl
+    columns:
+      record_id: id
+      content: text
   - type: job
     name: answer
     dataset: dmrc-analysis.toxicity.step_extracted
     last_n_days: 3
     aggregate: false
+    max_records_per_group: 1
     filter:
-      step: trans_reporting
-      agent:
+      step:
+        - trans_reporting
+        - synth
+        - trans_reporting_synth
     group:
       step: step
       record_id: record_id
-      agent: agent
+      agent: step_info.agent
+      criteria: step_info.criteria
     columns:
       expected: expected
-      id: job_id
-      predicted: predicted
-      answer:
-        interpretation: outputs.interpretation
+      answers:
+        id: job_id
+        predicted: outputs.predicted
         reasoning: outputs.reasons
-        conclusion: outputs.conclusion
-        labels: labels
-        scores: scores
+        labels: outputs.labels
+        confidence: outputs.confidence
 

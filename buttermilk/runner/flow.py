@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 
-from buttermilk.runner import Job
+from buttermilk.runner import Job, Result
 from buttermilk.runner.runner import ResultsCollector
 from buttermilk.utils import save
 from buttermilk.utils.save import upload_rows
@@ -34,7 +34,7 @@ class ResultsSaver(ResultsCollector):
         if not isinstance(response, Job):
             raise ValueError(f"Expected a Job to save, got: {type(response)} for: {response}")
         output = response.model_dump()
-        try: 
+        try:
             # move metadata to the record id
             output['metadata']['output'] = output['outputs']['metadata']
             del output['outputs']['metadata']
@@ -60,7 +60,8 @@ class ResultsSaver(ResultsCollector):
 
 
 async def run_flow(job: Job, flow: callable):
-    job.outputs = await flow.call_async(**job.inputs)
+    response = await flow.call_async(**job.inputs)
+    job.outputs = Result(response)
     return job
 
 def flow():

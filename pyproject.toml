@@ -70,6 +70,7 @@ pytest = "^8.3.3"
 google-cloud-bigquery-storage = "^2.26.0"
 google-cloud-aiplatform = {extras = ["evaluation"], version = "^1.70.0"}
 plotly = "^5.24.1"
+nbformat = "^5.10.4"
 
 
 [tool.poetry.group.dev.dependencies]

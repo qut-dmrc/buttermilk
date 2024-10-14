@@ -2,18 +2,32 @@ You are a quality assurer for a qualitative analysis task. You must check how we
 
 Your task is to qualitatively assess the reasoning provided. You will be provided with an abbreviated list of the main points we expect to see in each answer. You must assess whether the analyst's reasoning reflects the expected key points. The key points we provide might be presented as keywords or labels and may be incomplete. We do not expect the analyst's answer to match precisely; rather, the analyst will provide reasons and you must determine the extent to which those reasons align with the main thrust of our predetermined key points. For this task, you will provide an overall evaluation and a short explanation of your reasoning.
 
-You must reply only in a fully valid JSON format:
+You should not refer to the analyst or their response in your answer; just explain your evaluation of the reasoning provided.
 
-{% include 'json_reasons.jinja2' %}
+{{ formatting }}
 
-Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
 
+{% if criteria %}
+<BEGIN ORIGINAL INSTRUCTIONS>
+{{ criteria }}
+<END ORIGINAL INSTRUCTIONS>
+{% endif %}
+
+{% if content %}
+<BEGIN CONTENT>
+{{ content }}
+<END CONTENT>
+{% endif %}
 
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
 
-<BEGIN ANALYST ANSWER #: {{ id }}>
-Answer: {{ predicted }}
-{{ answer }}
-<END ANALYST ANSWER #: {{ id }}>
+{% for draft in answers %}
+<BEGIN ANALYST ANSWER #: {{ draft.id }}>
+Answer: {{ draft.predicted }}
+Labels: {{ draft.labels }}
+Reasons:
+{{ draft.reasons }}
+<END ANALYST ANSWER #: {{ draft.id }}>
+{% endfor %}

@@ -130,7 +130,7 @@ async def run(cfg, step_cfg):
             source_list.append(src.name)
 
         # add index, but don't remove record_id form the columns
-        dataset = dataset.reset_index().set_index('record_id', drop=False)
+        dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
 
         for i in range(step_cfg.num_runs):
             for idx, row in dataset.sample(frac=1).iterrows():
@@ -149,8 +149,9 @@ async def run(cfg, step_cfg):
 
     return results
 
-def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32):
+def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
     if prior_step.type != 'job':
+        new_data = new_data[prior_step.columns.keys()]
         return pd.concat([df, new_data])
 
     # expand and rename columns if we need to
@@ -164,16 +165,11 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             # will form the new index
             try:
                 exploded = pd.json_normalize(new_data[grp].apply(json.loads))
-                new_data.loc[:, col_name] = exploded[col]
-            except:
+            except Exception as e:
                 exploded = pd.json_normalize(new_data[grp])
-
-                # limit to n list items per dataframe row
-                exploded = exploded.groupby(exploded.index).agg({
-                    col: lambda x: x.tolist()[:max_n]
-                }).reset_index(level=1, drop=True)
-
                 new_data.loc[:, col_name] = exploded
+            else:
+                new_data.loc[:, col_name] = exploded[col]
         except ValueError:
             pass  # no group in this column definition
             if col_name != group:
@@ -190,29 +186,31 @@ def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step, max_n=32
             # a new field named as provided in the step config
             new_data.loc[:, k] = new_data[v.keys()].to_dict(orient='records')
 
+    # Reduce down to n list items per index (but don't aggregate
+    # at this time, just keep a random selection of rows)
+    new_data = new_data.sample(frac=1).groupby(idx_cols).agg(
+            lambda x: x.tolist()[:prior_step.max_records_per_group])
 
-    # Reduce down to one row per index (but don't aggregate at this time, just
-    # keep a random row)
-    new_data = new_data.sample(frac=1).groupby(idx_cols).first()
 
-    # Only return the columns we need
-    new_data = new_data[prior_step.columns.keys()]
 
-    # todo: come back and fix the code below when we need to select multiple
-    # records for each index
-    return new_data
-
-    # Now aggregate them by the existing index we used above,
-    # ensuring we shuffle and pick a maximum of max_n
-    mapped_cols = new_data.sample(frac=1).groupby(
-        idx_cols)[prior_step.name].agg(
-            lambda x: x.tolist()[:max_n])
 
     # Add the column to the source dataset
     if df.shape[0]>0:
-        df = pd.merge(df, mapped_cols, left_on=idx_cols, right_index=True)
+        # reset index columns that we're not matching on:
+        group_only_cols = [x for x in idx_cols if x not in df.columns]
+        idx_cols = list(set(idx_cols).difference(group_only_cols))
+        new_data = new_data.reset_index(level=group_only_cols, drop=False)
+
+        # Only return the columns we need
+        new_data = new_data[prior_step.columns.keys()]
+
+        df = pd.merge(df, new_data, left_on=idx_cols, right_index=True)
     else:
-        df = mapped_cols.reset_index()
+        # Only return the columns we need
+        new_data = new_data[prior_step.columns.keys()]
+        df = new_data.reset_index()
+
+
     return df
 
 

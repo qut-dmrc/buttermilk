@@ -53,6 +53,23 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "automod: trans synth",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "buttermilk.automod.mod",
+            "cwd": "${workspaceFolder}",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+                "+experiments=synth",
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "automod: trans eval",
             "type": "debugpy",
             "request": "launch",

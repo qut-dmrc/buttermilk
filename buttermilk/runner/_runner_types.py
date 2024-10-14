@@ -121,6 +121,7 @@ class Job(BaseModel):
         populate_by_name=True,
         use_enum_values=True,
         json_encoders={np.bool_: lambda v: bool(v)},
+        validate_assignment=True
     )
 
     @field_validator("source", mode="before")
@@ -131,7 +132,7 @@ class Job(BaseModel):
 
     @field_validator("outputs", mode="before")
     def convert_result(v):
-        if v and isinstance(v, dict):
+        if v and isinstance(v, Mapping):
             return Result(**v)
         elif isinstance(v, Result):
             return v

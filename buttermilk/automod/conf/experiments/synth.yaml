@@ -1,44 +1,46 @@
-# @package _global_
-project:
-  name: automod
-  job: modsynth
-run:
-  platform: local
+name: trans_reporting_synth
+concurrent: 10
+num_runs: 1
+max_batch: 1
+
 save:
   destination: bq
   dataset: dmrc-analysis.toxicity.step
   schema: buttermilk/schemas/step.json
 
-experiments:
-  synth:
-    init:
-      template_path: synthesise.jinja2
-      other_template_paths:
-        original_instructions: criteria_ordinary.jinja2
-    concurrent: 4
-    num_runs: 1
-    data:
-      - name: draft
-        type: job
-        dataset: dmrc-analysis.toxicity.step_extracted
-        filter:
-          step: judge
-        group:
-          - record_id
-        columns:
-          draft: record
-        record:
-          id: job_id
-          agent: agent
-          answer: reasons
-          predicted: predicted
+init:
+  template: synthesise
+  formatting: json_rules
+  criteria: trans_simplified
+
+model:
+  - gpt4o
+
+data:
+  - name: trans_train
+    type: file
+    uri: gs://dmrc-platforms/data/tja_train.jsonl
+    columns:
+      record_id: id
+      content: text
+      groundtruth: expected
+  - name: draft
+    type: job
+    dataset: dmrc-analysis.toxicity.step_extracted
+    last_n_days: 3
+    max_records_per_group: 8
+    filter:
+      step: trans_reporting
+      agent:
+    group:
+      record_id: record_id
+    columns:
+      answers:
+        id: job_id
+        predicted: predicted
+        reasons: outputs.reasons
+        labels: labels
+        scores: scores
     model:
-      # - o1-preview
       - gpt4o
-      - opus
       - sonnet
-      - gemini15pro
-      - llama31_70b
-      - llama31_8b
-      - llama31_405b
-      - haiku

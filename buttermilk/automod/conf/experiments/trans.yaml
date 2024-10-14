@@ -1,9 +1,10 @@
 name: trans_reporting
-num_runs: 1
+num_runs: 4
 concurrent: 10
 max_batch: 1
 init:
   template: judge
+  formatting: json_rules
   criteria: trans_simplified
     #   # - trans_tja
     #   # - trans_cte
@@ -15,7 +16,7 @@ model:
   # - o1-preview
   - llama31_70b
   - llama31_8b
-  # - llama31_405b
+  - llama31_405b
   - gpt4o
   - opus
   - sonnet

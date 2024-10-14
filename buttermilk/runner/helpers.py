@@ -5,7 +5,7 @@ import pandas as pd
 
 from buttermilk import BM
 from buttermilk.utils.flows import col_mapping_hydra_to_local
-
+from typing import Sequence
 
 def load_data(data_cfg) -> pd.DataFrame:
     if data_cfg.type == 'file':
@@ -25,10 +25,13 @@ def load_job(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed: 
     sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
 
     for field, condition in filter.items():
-        if condition:
+        if condition and isinstance(condition, str):
             sql += f" AND {field} = '{condition}' "
+        elif condition and isinstance(condition, Sequence):
+            multi_or = " OR ".join([f"{field} = '{term}'" for term in condition])
+            sql += f" AND ({multi_or})"
 
-    sql += " AND NOT expected IS NULL "
+    sql += " AND NOT predicted IS NULL "
 
     # exclude records already processed if necessary
     # if exclude_processed:
