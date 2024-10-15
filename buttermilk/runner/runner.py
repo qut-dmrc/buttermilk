@@ -407,7 +407,7 @@ class TaskDistributor(BaseModel):
             # By default, attach the main results queue to the consumer
             consumer.output_queue = self._collector.results
 
-        self._consumers[consumer.task_name] = consumer
+        self._consumers[consumer.worker_name] = consumer
 
     def add_job(self, task_name: str, job: Job):
         """Add a task to the corresponding queue."""
