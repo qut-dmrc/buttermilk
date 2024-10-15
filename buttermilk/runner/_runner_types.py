@@ -1,6 +1,6 @@
 import datetime
 import platform
-from typing import Any, AsyncGenerator, Generator, Optional, Self, Type, Union
+from typing import Any, AsyncGenerator, Generator, Optional, Self, Type, Union,Mapping
 
 import numpy as np
 import psutil
@@ -17,6 +17,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
 
 from buttermilk.utils.utils import get_ip
 
@@ -47,7 +48,7 @@ class Result(BaseModel):
     result: Optional[float] = None
     labels: Optional[list[str]] = None
     confidence: Optional[float|str] = None
-    reasons: Optional[list[str]] = None
+    reasons: Optional[list] = None
     scores: Optional[dict|list] = None
 
     @field_validator("labels", "reasons", mode="before")
@@ -55,6 +56,7 @@ class Result(BaseModel):
         # ensure labels is a list
         if isinstance(labels, str):
             return [labels]
+        return labels
 
 
 class RecordInfo(BaseModel):

@@ -61,7 +61,7 @@ class ResultsSaver(ResultsCollector):
 
 async def run_flow(job: Job, flow: callable):
     response = await flow.call_async(**job.inputs)
-    job.outputs = Result(response)
+    job.outputs = Result(**response)
     return job
 
 def flow():
