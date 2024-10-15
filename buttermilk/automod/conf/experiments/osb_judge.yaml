@@ -1,0 +1,30 @@
+# @package _global_
+hydra.mode: MULTIRUN
+step:
+- name: osb_judge
+  num_runs: 4
+  max_batch: 1
+
+  save:
+    destination: bq
+    dataset: 'dmrc-analysis.toxicity.step'
+    schema: buttermilk/schemas/step.json
+
+  init:
+    concurrent: 4
+    template: judge
+    formatting: json_rules
+    criteria: 
+      - criteria_gelber
+      - criteria_ordinary 
+      - criteria_hatefb_factorised
+    model:
+      # - o1-preview
+      - llama31_70b
+      - llama31_8b
+      - llama31_405b
+      - gpt4o
+      - opus
+      - sonnet
+      - haiku
+      - gemini15pro

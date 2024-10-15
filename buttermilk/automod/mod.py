@@ -13,7 +13,8 @@ import pandas as pd
 import regex as re
 from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
-from pydantic import model_validator
+from pydantic import Field, model_validator
+import shortuuid
 
 from buttermilk import BM
 from buttermilk.utils import make_serialisable
@@ -25,7 +26,6 @@ from buttermilk.apis import (
     replicatellama3,
 )
 from buttermilk.exceptions import FatalError
-from buttermilk.flows.judge.judge import Judger
 from buttermilk.lc import LC
 from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo, StepInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
@@ -39,7 +39,7 @@ import datetime
 import itertools
 from itertools import cycle
 from tempfile import NamedTemporaryFile
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Type, TypeVar, Mapping
+from typing import Any, AsyncGenerator, Callable, Optional, Self, Sequence, Type, TypeVar, Mapping
 
 import cloudpathlib
 import datasets
@@ -107,10 +107,20 @@ async def run(cfg, step_cfg):
         flow_obj = LC
 
     init_vars = OmegaConf.to_object(step_cfg.init)
-    for model in step_cfg.model:
-        init_vars['model'] = model
-        processor = JobProcessor(task_name=model, step_name=step_name,
-                                flow_obj=flow_obj, concurrent=step_cfg.concurrent, init_vars=init_vars,
+
+    # Convert string values to single item lists
+    string_vars = { k:[v] for k, v in init_vars.items() if isinstance(v, str) or not isinstance(v, Sequence) }
+    init_vars.update(string_vars)
+
+    # Generate all permutations of init_vars
+    permutations = itertools.product(*(init_vars[key] for key in init_vars))
+
+    # Convert the permutations to a list of dictionaries
+    init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
+
+    for i, init_dict in enumerate(init_vars):
+        processor = JobProcessor(task_name=f"{step_name}_{i}", step_name=f"{step_name}_{i}",
+                                flow_obj=flow_obj, init_vars=init_dict,
                                 run_info=bm.run_info)
         consumers.append(processor)
 
@@ -123,7 +133,7 @@ async def run(cfg, step_cfg):
 
         source_list = []
 
-        for src in step_cfg.data:
+        for src in cfg.data:
             fields.extend(src.columns.keys())
             df = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=df, prior_step=src)
@@ -141,7 +151,7 @@ async def run(cfg, step_cfg):
                         )
 
                 # Add each job to the queue
-                orchestrator.add_job(task_name=processor.task_name, job=job)
+                orchestrator.add_job(task_name=processor.worker_name, job=job)
 
 
     # Run!
@@ -227,27 +237,28 @@ def main(cfg: DictConfig) -> None:
     logger = bm.logger
 
     try:
-        step_cfg = cfg.experiments
-        step_name=step_cfg.name
+        for step_cfg in cfg.step:
+            step_name=step_cfg.name
 
-        t0 = datetime.datetime.now()
-        try:
+            t0 = datetime.datetime.now()
+            try:
 
-            asyncio.run(run(cfg, step_cfg=step_cfg))
+                asyncio.run(run(cfg, step_cfg=step_cfg))
 
-        except KeyboardInterrupt:
-            # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
-            logger.info(
-                "Keyboard interrupt. Quitting run."
-            )
-
-        except Exception as e:
-            logger.exception(dict(message=f"Failed step {step_name} on run {global_run_id} on {cfg.run.platform}", error=str(e)))
-
-        finally:
-            t1 = datetime.datetime.now()
-            logger.info(f"Completed step {step_name} on run {global_run_id} in {format_timespan(t1-t0)}."
+            except KeyboardInterrupt:
+                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
+                logger.info(
+                    "Keyboard interrupt. Quitting run."
                 )
+                break
+
+            except Exception as e:
+                logger.exception(dict(message=f"Failed step {step_name} on run {global_run_id} on {cfg.run.platform}", error=str(e)))
+
+            finally:
+                t1 = datetime.datetime.now()
+                logger.info(f"Completed step {step_name} on run {global_run_id} in {format_timespan(t1-t0)}."
+                    )
 
     except KeyboardInterrupt:
         # Second time; quit immediately.

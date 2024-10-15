@@ -106,6 +106,41 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "automod: osb judge",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "buttermilk.automod.mod",
+            "cwd": "${workspaceFolder}",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+                "+experiments=osb_judge",
+                "+data=osb"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "automod: osb synth",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "buttermilk.automod.mod",
+            "cwd": "${workspaceFolder}",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+                "+experiments=osb_synth"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Test Config",
             "type": "debugpy",
             "request": "launch",

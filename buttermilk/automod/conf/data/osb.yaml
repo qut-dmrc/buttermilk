@@ -1,3 +1,5 @@
+# @package _global_
+data:
 - name: osb - alt text
   type: file
   uri: gs://dmrc-platforms/data/osb_train.jsonl

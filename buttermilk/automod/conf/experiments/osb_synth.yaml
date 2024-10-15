@@ -1,23 +1,24 @@
-name: osb_synth
-concurrent: 10
-num_runs: 4
-max_batch: 1
+# @package _global_
+step:
+- name: osb_synth
+  concurrent: 4
+  num_runs: 4
+  max_batch: 1
 
-save:
-  destination: bq
-  dataset: dmrc-analysis.toxicity.step
-  schema: buttermilk/schemas/step.json
+  save:
+    destination: bq
+    dataset: dmrc-analysis.toxicity.step
+    schema: buttermilk/schemas/step.json
 
-init:
-  template: synthesise
-  formatting: json_rules
-  criteria: criteria_ordinary
-
-model:
-  - gpt4o
-  - sonnet
-  - opus
-  - gemini15pro
+  init:
+    template: synthesise
+    formatting: json_rules
+    criteria: criteria_ordinary
+    model:
+      - gpt4o
+      - sonnet
+      - opus
+      - gemini15pro
 
 data:
   - name: draft
