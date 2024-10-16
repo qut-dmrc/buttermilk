@@ -8,7 +8,7 @@ Core Classes:
         Key Attributes:
             input_queue: Queue for receiving data to process.
             output_queue: Queue for sending processed results.
-            worker_name: Identifier for the worker.
+            agent: Identifier for the worker.
             task_name: Description of the task being performed.
         Abstract Method:
             process(self, record: Any): Must be implemented by subclasses to define the actual data processing logic. This method is an asynchronous generator, yielding processed data as it becomes available.
@@ -139,7 +139,7 @@ class Consumer(BaseModel):
         run(self) -> None: Run the worker asynchronously until finished or told to stop.
     """
 
-    task_name: str      # This is model, or client, or whatever is used to get the result
+    agent: Optional[str|int] = ''      # This is model, or client, or whatever is used to get the result
     step_name: str      # This is the step in the process that includes this particular task
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
@@ -153,16 +153,9 @@ class Consumer(BaseModel):
 
     model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
 
-    # Worker name for identification and logging
-    @computed_field
-    @cached_property
-    def worker_name(self) -> str:
-        return f"{self.task_name}_{shortuuid.uuid()[:6]}"
-
-
     @property
     def step_info(self) -> StepInfo:
-        step_info = StepInfo(agent=self.task_name,
+        step_info = StepInfo(agent=self.agent,
                       step=self.step_name, **self.init_vars)
 
         return step_info
@@ -171,6 +164,9 @@ class Consumer(BaseModel):
     def validate_concurrent(self) -> Self:
         if self.concurrent < 1:
             raise ValueError("concurrent must be at least 1")
+
+        # Make a unique worker name for identification and logging
+        self.agent =  "_".join([x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x])
 
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
@@ -187,7 +183,7 @@ class Consumer(BaseModel):
             total=self.input_queue.qsize(),
             dynamic_ncols=True,
             position=self.task_num,
-            desc=self.task_name,
+            desc=self.agent,
             bar_format="{desc:20}: {bar:50} | {rate_inv_fmt}",
             colour=colour,
         )
@@ -208,7 +204,7 @@ class Consumer(BaseModel):
         except Exception as e:
             # If we hit here, all remaining tasks for this worker will be canceled.
             logger.error(
-                f"Canceling worker {self.worker_name} and remaining tasks after hitting error: {e} {e.args=}"
+                f"Canceling worker {self.agent} and remaining tasks after hitting error: {e} {e.args=}"
             )
 
         finally:
@@ -251,7 +247,7 @@ class Consumer(BaseModel):
 
         except Exception as e:
             logger.error(
-                f"Error processing task {self.task_name} by {self.worker_name} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
+                f"Error processing task {self.agent} by {self.agent} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
             )
 
     @trace
@@ -397,8 +393,8 @@ class TaskDistributor(BaseModel):
         if not self._collector:
             raise ValueError("Collector not registered. Do that first.")
 
-        if consumer.task_name in self._consumers.keys():
-            raise ValueError(f"Task {consumer.task_name} already exists")
+        if consumer.agent in self._consumers.keys():
+            raise ValueError(f"Task {consumer.agent} already exists")
 
         # set position for progressbar, making room for global and save rows
         consumer.task_num = len(self._consumers.keys()) + 2
@@ -407,7 +403,7 @@ class TaskDistributor(BaseModel):
             # By default, attach the main results queue to the consumer
             consumer.output_queue = self._collector.results
 
-        self._consumers[consumer.worker_name] = consumer
+        self._consumers[consumer.agent] = consumer
 
     def add_job(self, task_name: str, job: Job):
         """Add a task to the corresponding queue."""
@@ -455,7 +451,7 @@ class TaskDistributor(BaseModel):
                             if w.done and not w.input_queue.empty():
                                 # at least one of our consumers has died prematurely. We'll keep going with the others though.
                                 logger.warning(
-                                    f"Consumer {w.worker_name} died with {w.input_queue.qsize()} items left in the queue of type `{w.task_name}. Continuing other tasks."
+                                    f"Consumer {w.agent} died with {w.input_queue.qsize()} items left in the queue of type `{w.agent}. Continuing other tasks."
                                 )
                                 continue
                         self._collector.pbar.refresh()
