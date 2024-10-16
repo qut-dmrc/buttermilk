@@ -63,7 +63,7 @@ class JobProcessor(Consumer):
 
     @model_validator(mode='after')
     def init(self) -> Self:
-        self._client =  self.flow_obj(**self.init_vars)
+        self._client = self.flow_obj(**self.init_vars)
         del self.flow_obj  # Don't keep the class around
 
         return self
@@ -119,7 +119,7 @@ async def run(cfg, step_cfg):
     init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
 
     for i, init_dict in enumerate(init_vars):
-        processor = JobProcessor(task_name=f"{step_name}_{i}", step_name=f"{step_name}_{i}",
+        processor = JobProcessor(agent=i, step_name=f"{step_name}",
                                 flow_obj=flow_obj, init_vars=init_dict,
                                 run_info=bm.run_info)
         consumers.append(processor)
@@ -151,7 +151,7 @@ async def run(cfg, step_cfg):
                         )
 
                 # Add each job to the queue
-                orchestrator.add_job(task_name=processor.worker_name, job=job)
+                orchestrator.add_job(task_name=processor.agent, job=job)
 
 
     # Run!
