@@ -1,7 +1,7 @@
 # @package _global_
 hydra.mode: MULTIRUN
 step:
-- name: osb_judge
+- name: judge
   num_runs: 4
   max_batch: 1
 
@@ -15,9 +15,7 @@ step:
     template: judge
     formatting: json_rules
     criteria: 
-      - criteria_gelber
-      - criteria_ordinary 
-      - criteria_hatefb_factorised
+      - <TO REPLACE>
     model:
       # - o1-preview
       - llama31_70b
