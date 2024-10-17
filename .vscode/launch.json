@@ -117,8 +117,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=osb_judge",
-                "+data=osb"
+                "+experiments=judge",
+                "+data=osb",
+                "step.0.init.criteria=[criteria_ordinary]"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
@@ -135,7 +136,9 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=osb_synth"
+                "+experiments=synth",
+                "+data=osb",
+                "step.0.init.criteria=[criteria_ordinary]"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

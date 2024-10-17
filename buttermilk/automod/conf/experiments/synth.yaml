@@ -5,17 +5,19 @@ step:
     num_runs: 1
     max_batch: 1
 
-save:
-  destination: bq
-  dataset: dmrc-analysis.toxicity.step
-  schema: buttermilk/schemas/step.json
+    save:
+      destination: bq
+      dataset: dmrc-analysis.toxicity.step
+      schema: buttermilk/schemas/step.json
 
-init:
-  template: synthesise
-  formatting: json_rules
-  criteria: <TO FILL>
-  model:
-    - gpt4o
+    init:
+      template: synthesise
+      formatting: json_rules
+      criteria: 
+        - <TO FILL>
+      model:
+        - gpt4o
+        - gemini15pro
 
 data:
   - name: draft
