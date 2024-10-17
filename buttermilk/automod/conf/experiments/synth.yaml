@@ -1,4 +1,5 @@
 # @package _global_
+hydra.mode: MULTIRUN
 step:
   - name: synth
     concurrent: 10
@@ -23,7 +24,7 @@ data:
   - name: draft
     type: job
     dataset: dmrc-analysis.toxicity.step_extracted
-    last_n_days: 3
+    last_n_days: 14
     max_records_per_group: 8
     filter:
       step: judge

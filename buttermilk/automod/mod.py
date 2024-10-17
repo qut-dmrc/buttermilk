@@ -4,20 +4,20 @@
 ###
 import asyncio
 import datetime
+import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-import json
+
 import cloudpathlib
 import hydra
 import pandas as pd
 import regex as re
+import shortuuid
 from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from pydantic import Field, model_validator
-import shortuuid
 
 from buttermilk import BM
-from buttermilk.utils import make_serialisable
 from buttermilk.apis import (
     HFInferenceClient,
     Llama2ChatMod,
@@ -32,14 +32,28 @@ from buttermilk.runner.flow import ResultsSaver, run_flow
 from buttermilk.runner.helpers import load_data
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
 from buttermilk.tools.metrics import Metriciser, Scorer
-from buttermilk.utils import col_mapping_hydra_to_local, find_key_string_pairs
+from buttermilk.utils import (
+    col_mapping_hydra_to_local,
+    find_key_string_pairs,
+    make_serialisable,
+)
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
 import itertools
 from itertools import cycle
 from tempfile import NamedTemporaryFile
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Sequence, Type, TypeVar, Mapping
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    Mapping,
+    Optional,
+    Self,
+    Sequence,
+    Type,
+    TypeVar,
+)
 
 import cloudpathlib
 import datasets
@@ -119,7 +133,7 @@ async def run(cfg, step_cfg):
     init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
 
     for i, init_dict in enumerate(init_vars):
-        processor = JobProcessor(agent=i, step_name=f"{step_name}",
+        processor = JobProcessor(agent=str(i), step_name=step_name,
                                 flow_obj=flow_obj, init_vars=init_dict,
                                 run_info=bm.run_info)
         consumers.append(processor)
