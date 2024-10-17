@@ -139,7 +139,7 @@ class Consumer(BaseModel):
         run(self) -> None: Run the worker asynchronously until finished or told to stop.
     """
 
-    agent: Optional[str|int] = ''      # This is model, or client, or whatever is used to get the result
+    agent: Optional[str] = ''      # This is model, or client, or whatever is used to get the result
     step_name: str      # This is the step in the process that includes this particular task
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
@@ -160,6 +160,10 @@ class Consumer(BaseModel):
 
         return step_info
 
+    @field_validator("agent", mode="before")
+    def validate_agent(cls, value: Optional[str|int]) -> str:
+        return str(value)
+    
     @model_validator(mode="after")
     def validate_concurrent(self) -> Self:
         if self.concurrent < 1:
