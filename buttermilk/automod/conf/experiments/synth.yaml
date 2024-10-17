@@ -1,36 +1,32 @@
-name: trans_reporting_synth
-concurrent: 10
-num_runs: 1
-max_batch: 1
+# @package _global_
+hydra.mode: MULTIRUN
+step:
+  - name: synth
+    concurrent: 10
+    num_runs: 1
+    max_batch: 1
 
-save:
-  destination: bq
-  dataset: dmrc-analysis.toxicity.step
-  schema: buttermilk/schemas/step.json
+    save:
+      destination: bq
+      dataset: dmrc-analysis.toxicity.step
+      schema: buttermilk/schemas/step.json
 
-init:
-  template: synthesise
-  formatting: json_rules
-  criteria: trans_simplified
+    init:
+      template: synthesise
+      formatting: json_rules
+      criteria: trans_simplified
 
-model:
-  - gpt4o
+    model:
+      - gpt4o
 
 data:
-  - name: trans_train
-    type: file
-    uri: gs://dmrc-platforms/data/tja_train.jsonl
-    columns:
-      record_id: id
-      content: text
-      groundtruth: expected
   - name: draft
     type: job
     dataset: dmrc-analysis.toxicity.step_extracted
-    last_n_days: 3
+    last_n_days: 14
     max_records_per_group: 8
     filter:
-      step: trans_reporting
+      step: judge
       agent:
     group:
       record_id: record_id

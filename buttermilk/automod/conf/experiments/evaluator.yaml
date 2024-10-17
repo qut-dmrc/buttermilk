@@ -31,7 +31,7 @@ data:
   - type: job
     name: answer
     dataset: dmrc-analysis.toxicity.step_extracted
-    last_n_days: 3
+    last_n_days: 7
     aggregate: false
     max_records_per_group: 1
     filter:
