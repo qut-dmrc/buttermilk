@@ -107,7 +107,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "automod: osb judge",
+            "name": "batch automod: judge",
             "type": "debugpy",
             "request": "launch",
             "module": "buttermilk.automod.mod",
