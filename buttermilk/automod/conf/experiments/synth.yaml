@@ -19,6 +19,8 @@ step:
       model:
         - gpt4o
         - gemini15pro
+        - sonnet
+        - llama31_405b
 
 data:
   - name: draft
