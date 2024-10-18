@@ -196,10 +196,6 @@ class LC(BaseModel):
             output['metadata'] = {}
         output['metadata']['seconds_elapsed'] = elapsed
 
-        output["timestamp"] = pd.to_datetime(
-            datetime.datetime.now(tz=datetime.UTC)
-        ).isoformat()
-
         return output
 
 

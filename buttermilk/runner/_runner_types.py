@@ -45,11 +45,14 @@ class RunInfo(BaseModel):
 
 class Result(BaseModel):
     category: Optional[str|int] = None
+    prediction: Optional[bool|int] = Field(..., validation_alias=AliasChoices("prediction", "predicted", "pred"))
     result: Optional[float] = None
-    labels: Optional[list[str]] = None
+    labels: Optional[list[str]] = Field(..., validation_alias=AliasChoices("labels", "label"))
     confidence: Optional[float|str] = None
+    severity: Optional[float|str] = None
     reasons: Optional[list] = None
     scores: Optional[dict|list] = None
+    metadata: Optional[dict] = {}
 
     @field_validator("labels", "reasons", mode="before")
     def vld_list(labels):
@@ -58,6 +61,14 @@ class Result(BaseModel):
             return [labels]
         return labels
 
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+        use_enum_values=True,
+        json_encoders={np.bool_: lambda v: bool(v)},
+        validate_assignment=True
+    )
 
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
