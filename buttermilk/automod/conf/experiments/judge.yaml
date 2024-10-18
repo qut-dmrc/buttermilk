@@ -11,7 +11,7 @@ step:
     schema: buttermilk/schemas/step.json
 
   init:
-    concurrent: 4
+    concurrent: 10
     template: judge
     formatting: json_rules
     criteria: 

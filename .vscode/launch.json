@@ -26,8 +26,12 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=ordinary",
-                "+data=osb",
+                "+experiments=judge",
+                "+data=drag",
+                "step.0.init.model=[haiku]",
+                "step.0.num_runs=1",
+                "step.0.init.concurrent=1",
+                "step.0.init.criteria=[criteria_ordinary]" 
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
@@ -46,7 +50,8 @@
             "args": [
                 "--multirun",
                 "+experiments=trans",
-                "experiments.init.criteria=trans_simplified,trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored",
+                "step.0.init.criteria=trans_simplified,trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored",
+                
                 // "experiments.model=[haiku]"
             ],
             "envFile": "${workspaceFolder}/.env",
@@ -118,8 +123,9 @@
             "justMyCode": false,
             "args": [
                 "+experiments=judge",
-                "+data=osb",
-                "step.0.init.criteria=[criteria_ordinary]"
+                "+data=drag",
+                "step.0.init.model=['sonnet','opus']",
+                "step.0.init.criteria=[criteria_ordinary]" //,criteria_gelber,criteria_hatefb_factorised]"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
