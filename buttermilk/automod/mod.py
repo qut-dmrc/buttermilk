@@ -146,12 +146,23 @@ async def run(cfg, step_cfg):
         fields = []
 
         source_list = []
+        dataset_configs = []
 
+        # cfg.data is not ordered. Loop through and load the static data first.
         for data_id, src in cfg.data.items():
+            if src.type == 'job':
+                # end of list
+                dataset_configs.append(src)
+            else:
+                # start of list
+                dataset_configs = [src] + dataset_configs
+            source_list.append(data_id)
+
+        for src in dataset_configs:
             fields.extend(src.columns.keys())
             df = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=df, prior_step=src)
-            source_list.append(data_id)
+            
 
         # add index, but don't remove record_id form the columns
         dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
