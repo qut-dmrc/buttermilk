@@ -63,14 +63,14 @@ class Wildguard(ToxicityModel):
             outcome.error = f"Unable to interpret result."
             outcome.response = response
         else:
-            outcome.predicted = False
+            outcome.prediction = False
             for match in matches:
                 label = match[0]
                 prediction = match[2]
                 if prediction.lower().strip() == 'yes':
                     outcome.labels.append(label.lower().strip())
                     if label.lower().strip() in ["harmful request", "harmful response"]:
-                        outcome.predicted = True
+                        outcome.prediction = True
 
                     outcome.scores.append(
                         Score(measure=str(label), score=1.0, result=True)

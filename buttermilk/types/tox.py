@@ -79,7 +79,7 @@ class EvalRecord(BaseModel):
     source: Optional[str] = None
 
     reasons: list[Reasons] = Field(default=[], validation_alias="reason")
-    predicted: Optional[Union[bool, None]] = Field(default=None, validation_alias="result")
+    prediction: Optional[Union[bool, None]] = Field(default=None, validation_alias="result")
     scores: list[Score] = []
     labels: list[str] = Field(default=[], validation_alias="label")
 
@@ -97,7 +97,7 @@ class EvalRecord(BaseModel):
         json_encoders={np.bool_: lambda v: bool(v)},
     )
 
-    @field_validator("predicted")
+    @field_validator("prediction")
     @classmethod
     def validate_result(cls, v) -> Union[bool, None]:
         if v is None:
@@ -154,8 +154,8 @@ class EvalRecord(BaseModel):
         record = self.model_dump()
 
         # add booleans
-        if self.predicted is not None:
-            record[COL_PREDICTION] = self.predicted
+        if self.prediction is not None:
+            record[COL_PREDICTION] = self.prediction
 
         if self.scores and isinstance(self.scores, list):
             record["scores"] = [

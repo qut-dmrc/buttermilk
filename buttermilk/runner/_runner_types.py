@@ -45,7 +45,7 @@ class RunInfo(BaseModel):
 
 class Result(BaseModel):
     category: Optional[str|int] = None
-    prediction: Optional[bool|int] = Field(..., validation_alias=AliasChoices("prediction", "predicted", "pred"))
+    prediction: Optional[bool|int] = Field(..., validation_alias=AliasChoices("prediction", "prediction", "pred"))
     result: Optional[float] = None
     labels: Optional[list[str]] = Field(..., validation_alias=AliasChoices("labels", "label"))
     confidence: Optional[float|str] = None

@@ -30,12 +30,12 @@ class Nemo(ToxicityModel):
                         Score(measure=str(self.standard), score=1.0, result=True, reasons=[response.get('reasoning', str(response))])
                     )
                 outcome.labels = 'violating'
-                outcome.predicted = True
+                outcome.prediction = True
             elif answer[:2] == "no":
                 outcome.scores.append(
                             Score(measure=str(self.standard), score=0.0, result=False, reasons=[response.get('reasoning', str(response))])
                         )
-                outcome.predicted = False
+                outcome.prediction = False
             else:
                 outcome.error = f"Unable to interpret result."
                 outcome.response = str(response)

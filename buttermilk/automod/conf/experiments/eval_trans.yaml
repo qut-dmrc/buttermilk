@@ -48,7 +48,7 @@ data:
       expected: expected
       answers:
         id: job_id
-        predicted: outputs.predicted
+        prediction: outputs.prediction
         reasons: outputs.reasons
         labels: outputs.labels
         confidence: outputs.confidence

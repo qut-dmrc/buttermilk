@@ -21,7 +21,7 @@ You may be provided with additional feedback to consider. You should incorporate
 
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER {{ draft.id }}>
-    Answer: {{ draft.predicted }}
+    Answer: {{ draft.prediction }}
     Labels: {{ draft.labels }}
     Reasons:
     {{ draft.reasons }}

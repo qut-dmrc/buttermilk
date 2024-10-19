@@ -322,14 +322,14 @@ class Perspective(ToxicityModel):
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
-        outcome = EvalRecord(predicted=False)
+        outcome = EvalRecord(prediction=False)
         for key, value in response["attributeScores"].items():
             score = Score(measure=key, score=float(value["summaryScore"]["value"]))
             outcome.scores.append(score)
             if score.score and score.score > 0.5:
                 outcome.labels.append(key)
                 if key.lower() in ["toxicity", "severe_toxicity","toxicity_experimental", "severe_toxicity_experimental"]:
-                    outcome.predicted = True
+                    outcome.prediction = True
 
         return outcome
 
@@ -387,16 +387,16 @@ class Comprehend(ToxicityModel):
     @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(
-            predicted=False,
+            prediction=False,
         )
         result = response["ResultList"][0]
 
         outcome.scores = [Score(measure="Toxicity", score=result["Toxicity"])]
         if result["Toxicity"] > 0.5:
             outcome.labels.append("Toxicity")
-            outcome.predicted = True
+            outcome.prediction = True
         else:
-            outcome.predicted = False
+            outcome.prediction = False
 
         for score in result["Labels"]:
             new_score = Score(measure=score["Name"], score=score["Score"])
@@ -455,7 +455,7 @@ class AzureContentSafety(ToxicityModel):
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord(
-            predicted=False,
+            prediction=False,
         )
 
         for item in response.categories_analysis:
@@ -468,7 +468,7 @@ class AzureContentSafety(ToxicityModel):
                 score_labels = [f"Severity: {severity}"]
                 # arbitrary cutoff here. better to use the Score() value.
                 if severity >= 3:
-                    outcome.predicted = True
+                    outcome.prediction = True
                     outcome.labels.append(measure)
                     score_labels.append(measure)
 
@@ -544,7 +544,7 @@ class AzureModerator(ToxicityModel):
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
         outcome = EvalRecord(
-            predicted=False,
+            prediction=False,
         )
         categories = {
             "category1": "sexually explicit or adult",
@@ -560,7 +560,7 @@ class AzureModerator(ToxicityModel):
             if score.score and score.score >= 0.5:
                 outcome.labels.append(label)
 
-        outcome.predicted = response["classification"]["review_recommended"]
+        outcome.prediction = response["classification"]["review_recommended"]
 
         # Extra info usually includes  ["status", "language", r"tracking_id", "normalized_text", "auto_corrected_text"]
         # discard the ones we don't need.
@@ -606,7 +606,7 @@ class REGARD(ToxicityModel):
 
         # Load the message info into the output
         outcome = EvalRecord(
-            predicted=False,
+            prediction=False,
         )
         for record in result:
             score = Score(measure=record["label"], confidence=record["score"])
@@ -614,7 +614,7 @@ class REGARD(ToxicityModel):
             if record["score"] >= 0.5:
                 outcome.labels.append(score.measure)
                 if score.measure == "negative":
-                    outcome.predicted = True
+                    outcome.prediction = True
 
         return outcome
 
@@ -643,8 +643,8 @@ class HONEST(ToxicityModel):
         outcome = EvalRecord(
         )
         outcome.scores = [Score(measure="honest", score=response["honest_score"])]
-        outcome.predicted = response["honest_score"] > 0.5
-        if outcome.predicted:
+        outcome.prediction = response["honest_score"] > 0.5
+        if outcome.prediction:
             pass  # TODO: add label if we have it
 
         return outcome
@@ -685,9 +685,9 @@ class LFTW(ToxicityModel):
         with torch.no_grad():
             response = self.client(input_ids=input_ids, **self.options, **kwargs)
         logits = response.logits
-        predicted_class_id = logits.argmax().item()
-        result = self.classes[predicted_class_id]
-        confidence = float(logits.softmax(dim=-1)[0][predicted_class_id])
+        prediction_class_id = logits.argmax().item()
+        result = self.classes[prediction_class_id]
+        confidence = float(logits.softmax(dim=-1)[0][prediction_class_id])
         return dict(label=result, confidence=confidence)
 
     @trace
@@ -696,7 +696,7 @@ class LFTW(ToxicityModel):
         outcome = EvalRecord(
         )
         outcome.scores = [Score(measure=response['label'], confidence=response["confidence"])]
-        outcome.predicted = response['label'] == "hate"
+        outcome.prediction = response['label'] == "hate"
         outcome.labels = [response['label'] ]
 
         return outcome
@@ -762,7 +762,7 @@ class GPTJT(ToxicityModel):
                 )
             ]
 
-            outcome.predicted = self.ResponseMap[response] >= 2
+            outcome.prediction = self.ResponseMap[response] >= 2
             outcome.labels = [response]
         except Exception as e:
             raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
@@ -807,7 +807,7 @@ class OpenAIModerator(ToxicityModel):
             Score(measure=k, score=v) for k, v in result["category_scores"].items()
         ]
 
-        outcome.predicted = result["flagged"]
+        outcome.prediction = result["flagged"]
         outcome.labels = [c for c, v in result["categories"].items() if v]
 
         return outcome
@@ -868,16 +868,16 @@ class ShieldGemma(ToxicityModel):
     @trace
     def interpret(self, response: Any) -> EvalRecord:
         outcome = EvalRecord(
-            predicted=False,
+            prediction=False,
         )
 
         score = response['score']
         outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
         if score > 0.5:
             outcome.labels.append("violating")
-            outcome.predicted = True
+            outcome.prediction = True
         else:
-            outcome.predicted = False
+            outcome.prediction = False
 
         return outcome
 

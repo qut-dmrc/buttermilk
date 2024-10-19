@@ -19,7 +19,7 @@ def score(moderated_results: dict, synth_results: dict, groundtruth: dict, recor
 
     for name, result in moderated_results.items():
         try:
-            pred = result.get('predicted')
+            pred = result.get('prediction')
             correct = int(pred) == int(expected)
             scored_results['moderated'][name] = {}
             scored_results['moderated'][name]['correct'] = correct
@@ -35,7 +35,7 @@ def score(moderated_results: dict, synth_results: dict, groundtruth: dict, recor
             scored_results['synthesised'][name] = {}
             scored_results['synthesised'][name]['corrent_inputs'] = num_correct
             scored_results['synthesised'][name]['total_inputs'] = num_results
-            pred = result.get('predicted')
+            pred = result.get('prediction')
             correct = int(pred) == int(expected)
             scored_results['synthesised'][name]['correct'] = correct
             if correct:

@@ -13,5 +13,5 @@ data:
       - agent
       - run_id
     columns:
-      predicted: predicted
+      prediction: prediction
       groundtruth: groundtruth.answer

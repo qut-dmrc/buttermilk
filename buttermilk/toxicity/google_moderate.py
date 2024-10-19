@@ -43,7 +43,7 @@ class GoogleModerate(ToxicityModel):
     def interpret(self, response: language_v2.ModerateTextResponse) -> EvalRecord:
         outcome = EvalRecord()
         try:
-            outcome.predicted = False
+            outcome.prediction = False
 
             for category in response.moderation_categories:
                 try:
@@ -56,7 +56,7 @@ class GoogleModerate(ToxicityModel):
                     outcome.labels.append(category.name)
 
                     if str(category.name).lower() not in NON_TOXIC_CATS:
-                        outcome.predicted = True
+                        outcome.prediction = True
 
         except Exception as e:
             outcome.error = f"Unable to interpret result: {e}. {e.args}"
