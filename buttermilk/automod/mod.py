@@ -156,7 +156,7 @@ async def run(cfg, step_cfg):
             else:
                 # start of list
                 dataset_configs = [src] + dataset_configs
-            source_list.append(data_id)
+            source_list.append(src.name)
 
         for src in dataset_configs:
             fields.extend(src.columns.keys())
