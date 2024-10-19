@@ -1,5 +1,6 @@
-name: vaw
-uri: gs://dmrc-platforms/data/vaw_train.jsonl
-columns:
-  record_id: id
-  content: text
+vaw:
+  name: vaw
+  uri: gs://dmrc-platforms/data/vaw_train.jsonl
+  columns:
+    record_id: id
+    content: text

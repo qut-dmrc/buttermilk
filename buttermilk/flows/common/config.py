@@ -1,1 +1,1 @@
-COL_PREDICTION='predicted'
+COL_PREDICTION='prediction'

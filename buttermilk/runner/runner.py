@@ -145,7 +145,7 @@ class Consumer(BaseModel):
     output_queue: Queue[Job] = None
     task_num: Optional[int] = None
     run_info: RunInfo
-    init_vars: dict = {}
+    init_vars: dict = {}  # Vars to use when initialising the client
     concurrent: int = 1  # Number of async tasks to run
 
     # flag to stop the task or to indicate the queue has finished
@@ -253,14 +253,6 @@ class Consumer(BaseModel):
             logger.error(
                 f"Error processing task {self.agent} by {self.agent} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
             )
-
-    @trace
-    async def process_trace(self, *, job: Job) -> AsyncGenerator[Job, Any]:
-        # This allows a worker to yield multiple results from a single input
-        result = await self.process(job=job)
-        yield result
-        await asyncio.sleep(delay=0.1)
-
 
 
     @abstractmethod

@@ -1,5 +1,6 @@
-name: tonepolice
-uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
-columns:
-  record_id: id
-  content: alt_text
+tonepolice:
+  name: tonepolice
+  uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
+  columns:
+    record_id: id
+    content: alt_text

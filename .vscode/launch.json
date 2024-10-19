@@ -26,11 +26,11 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=judge",
+                "+experiments=synth",
                 "+data=drag",
                 "step.0.init.model=[haiku]",
                 "step.0.num_runs=1",
-                "step.0.init.concurrent=1",
+                "step.0.concurrent=1",
                 "step.0.init.criteria=[criteria_ordinary]" 
             ],
             "envFile": "${workspaceFolder}/.env",
