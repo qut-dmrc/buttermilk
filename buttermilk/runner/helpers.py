@@ -31,7 +31,7 @@ def load_job(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed: 
             multi_or = " OR ".join([f"{field} = '{term}'" for term in condition])
             sql += f" AND ({multi_or})"
 
-    sql += " AND NOT predicted IS NULL "
+    sql += " AND NOT prediction IS NULL "
 
     # exclude records already processed if necessary
     # if exclude_processed:

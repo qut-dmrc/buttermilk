@@ -37,7 +37,7 @@ data:
     columns:
       answers:
         id: job_id
-        predicted: predicted
+        prediction: prediction
         reasons: outputs.reasons
         labels: labels
         scores: scores

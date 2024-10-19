@@ -176,7 +176,7 @@ class LlamaGuardTox(ToxicityModel):
         )
 
         if answer[:4] == "safe":
-            outcome.predicted = False
+            outcome.prediction = False
             outcome.labels = ["safe"] + reasons
             explanation = explanation or 'safe'
             for reason in reasons:
@@ -187,7 +187,7 @@ class LlamaGuardTox(ToxicityModel):
                 )
 
         elif answer[:6] == "unsafe":
-            outcome.predicted = True
+            outcome.prediction = True
             explanation = explanation or 'unsafe'
             if not reasons:
                 outcome.error = f"Invalid reasons returned from LLM: {answer}"
@@ -405,10 +405,10 @@ class MDJudge2(MDJudgeLocal):
         try:
             reasons, result, category = response.strip().split("\n")
             if "unsafe" in result.lower():
-                outcome.predicted = True
+                outcome.prediction = True
                 outcome.labels.append('unsafe')
             elif "safe" in result.lower():
-                outcome.predicted = False
+                outcome.prediction = False
 
             score = re.match(r".*score (\d+)", result).group(1)
             if category := re.match(r".*UNSAFE CATEGORY]: (.*)", category):

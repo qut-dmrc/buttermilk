@@ -17,7 +17,7 @@ judger:
 evaluator:
   columns:
     groundtruth: data.expected
-    predicted: run.outputs.predicted
+    prediction: run.outputs.prediction
     reasons: run.outputs.reasons
   models:
     - haiku

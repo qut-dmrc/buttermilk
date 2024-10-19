@@ -25,7 +25,7 @@ You should not refer to the analyst or their response in your answer; just expla
 
 {% for draft in answers %}
 <BEGIN ANALYST ANSWER #: {{ draft.id }}>
-Answer: {{ draft.predicted }}
+Answer: {{ draft.prediction }}
 Labels: {{ draft.labels }}
 Reasons:
 {{ draft.reasons }}
