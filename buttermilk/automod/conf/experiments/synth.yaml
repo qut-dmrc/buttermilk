@@ -1,9 +1,9 @@
 # @package _global_
 hydra.mode: MULTIRUN
 step:
-  - name: synth
+  - name: synth32
     concurrent: 10
-    num_runs: 1
+    num_runs: 8
     max_batch: 1
 
     save:
@@ -31,7 +31,7 @@ data:
     type: job
     dataset: dmrc-analysis.toxicity.step_extracted
     last_n_days: 14
-    max_records_per_group: 8
+    max_records_per_group: 32
     filter:
       step: judge
       agent:
