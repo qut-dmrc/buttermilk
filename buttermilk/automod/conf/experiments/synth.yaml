@@ -21,6 +21,9 @@ step:
         - gemini15pro
         - sonnet
         - llama31_405b
+        - llama31_70b
+        - llama31_8b
+        - opus
 
 data:
   drafts:
