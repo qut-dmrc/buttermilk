@@ -147,11 +147,11 @@ async def run(cfg, step_cfg):
 
         source_list = []
 
-        for src in cfg.data:
+        for data_id, src in cfg.data.items():
             fields.extend(src.columns.keys())
             df = load_data(src)
             dataset = group_and_filter_prior_step(dataset, new_data=df, prior_step=src)
-            source_list.append(src.name)
+            source_list.append(data_id)
 
         # add index, but don't remove record_id form the columns
         dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
@@ -284,7 +284,7 @@ def main(cfg: DictConfig) -> None:
 
 
 
-    
+
 
 if __name__ == "__main__":
     main()

@@ -15,7 +15,7 @@ class Scorer:
 
 
 class Metriciser:
-    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', predicted: str = COL_PREDICTION, unique_col:str='timestamp') -> pd.DataFrame:
+    def evaluate_results(self, dataset, levels: list[str] = [], groundtruth: str = 'expected', predicted: str = COL_PREDICTION, unique_col:str='job_id') -> pd.DataFrame:
         """
         Evaluates the results of one or more training runs,
         aggregating at the levels selected.

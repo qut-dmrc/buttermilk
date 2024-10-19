@@ -23,7 +23,8 @@ step:
         - llama31_405b
 
 data:
-  - name: draft
+  drafts:
+    name: draft answers from previous step
     type: job
     dataset: dmrc-analysis.toxicity.step_extracted
     last_n_days: 14
