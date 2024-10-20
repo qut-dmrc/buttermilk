@@ -4,6 +4,8 @@ import json
 import random
 
 #import evaluate
+import evaluate
+import numpy as np
 import pandas as pd
 import pytest
 from langchain_core.globals import set_debug
@@ -19,7 +21,7 @@ from buttermilk.runner import (
 )
 from buttermilk.toxicity import *
 from buttermilk.toxicity import TOXCLIENTS, MDJudgeLocalDomain, MDJudgeLocalTask
-from buttermilk.toxicity.llamaguard import LlamaGuardTox
+from buttermilk.toxicity.llamaguard import LlamaGuardTox, MDJudgeLocal
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
@@ -35,6 +37,7 @@ from buttermilk.toxicity.llamaguard import LlamaGuardTox
 #     ToxicChat,
 #     Toxigen,
 # )
+from buttermilk.toxicity.toxicity import ToxicChat
 from buttermilk.types.tox import EvalRecord
 from buttermilk.utils import read_text
 from tests.conftest import skipif_no_gpu
@@ -115,7 +118,7 @@ class TestLlamaGuard:
         rec = RecordInfo(record_id="testHFModels", content=text, source="testdata")
 
         response = await llamaguard_gpu.mod_single(rec)
-        assert response.result == False
+        assert response.result
         assert response.reasons is not None and "unsafe" in response.reasons
 
     async def test_llamaguard_defaultprompt(
@@ -131,7 +134,7 @@ class TestLlamaGuard:
         pass
 
 
-    @pytest.mark.skip(reason="Don't run local GPU tests")
+#    @pytest.mark.skip(reason="Don't run local GPU tests")
     @pytest.mark.parametrize(
         "standard", ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"]
     )
@@ -247,11 +250,10 @@ class TestClients:
             assert r["label"] in ["hate", "nothate"]
             assert isinstance(r, dict)
 
-    @pytest.mark.skip(reason="Don't run local GPU tests")
+#    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_REGARD(self, toxic_record: RecordInfo):
         regard = evaluate.load("regard", module_type="measurement")
-        result = regard.compute(data=toxic_record.content)["regard"][0]
-        scores = {r["label"]: r["score"] for r in result}
+        scores = regard.compute(data=[toxic_record.content])["regard"][0]
         assert scores["negative"] > 0
         assert isinstance(scores, dict)
 
@@ -307,12 +309,12 @@ class TestToxicityModels:
         # assert uri
 
     @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS_LOCAL)
-    @pytest.mark.gpu
-    @skipif_no_gpu("Not running GPU or RAM intensive tests")
+#    @pytest.mark.gpu
+#    @skipif_no_gpu("Not running GPU or RAM intensive tests")
     def test_tox_models_gpu(self, tox_model_cls, toxic_record):
         local_model = tox_model_cls()
         assert local_model
-        result = local_model.moderate(content=toxic_record.text)
+        result = local_model.moderate(content=toxic_record.content)
         assert isinstance(result, EvalRecord)
         assert not result.error
         assert result.standard == local_model.standard

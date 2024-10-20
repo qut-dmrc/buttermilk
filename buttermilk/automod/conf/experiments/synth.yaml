@@ -1,7 +1,7 @@
 # @package _global_
 hydra.mode: MULTIRUN
 step:
-  - name: synth32
+  - name: synth
     concurrent: 10
     num_runs: 8
     max_batch: 1
@@ -24,6 +24,7 @@ step:
         - llama31_70b
         - llama31_8b
         - opus
+        - haiku
 
 data:
   drafts:
@@ -31,7 +32,7 @@ data:
     type: job
     dataset: dmrc-analysis.toxicity.step_extracted
     last_n_days: 14
-    max_records_per_group: 32
+    max_records_per_group: 8
     filter:
       step: judge
       agent:

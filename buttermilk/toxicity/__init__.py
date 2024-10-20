@@ -40,6 +40,7 @@ TOXCLIENTS = [
     LlamaGuard2Together,
     LlamaGuard3Together,
     GoogleModerate,
+    REGARD,
     NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
 ]
     
