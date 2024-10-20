@@ -125,14 +125,14 @@
             "args": [
                 "+experiments=judge",
                 "+data=drag",
-                "step.0.init.model=['sonnet','opus']",
+                "step.0.init.model=['haiku']",
                 "step.0.init.criteria=[criteria_ordinary]" //,criteria_gelber,criteria_hatefb_factorised]"
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"
         },
         {
-            "name": "automod: osb synth",
+            "name": "automod: tonepolice zeroshot",
             "type": "debugpy",
             "request": "launch",
             "module": "buttermilk.automod.mod",
@@ -143,8 +143,8 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=synth",
-                "+data=osb",
+                "+experiments=judge",
+                "+data=tonepolice",
                 "step.0.init.criteria=[criteria_ordinary]"
             ],
             "envFile": "${workspaceFolder}/.env",

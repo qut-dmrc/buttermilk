@@ -1,5 +1,6 @@
 tonepolice:
   name: tonepolice
+  type: file
   uri: gs://dmrc-platforms/data/tonepolice_test.jsonl
   columns:
     record_id: id
