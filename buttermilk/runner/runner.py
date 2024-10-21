@@ -153,13 +153,6 @@ class Consumer(BaseModel):
 
     model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
 
-    @property
-    def step_info(self) -> StepInfo:
-        step_info = StepInfo(agent=self.agent,
-                      step=self.step_name, **self.init_vars)
-
-        return step_info
-
     @field_validator("agent", mode="before")
     def validate_agent(cls, value: Optional[str|int]) -> str:
         return str(value)
@@ -174,6 +167,13 @@ class Consumer(BaseModel):
 
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
+
+    @property
+    def step_info(self) -> StepInfo:
+        step_info = StepInfo(agent=self.agent,
+                      step=self.step_name, **self.init_vars)
+
+        return step_info
 
     @computed_field
     @cached_property
