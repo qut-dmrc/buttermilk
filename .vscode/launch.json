@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -145,6 +146,22 @@
                 "+experiments=judge",
                 "+data=tonepolice",
                 "step.0.init.criteria=[criteria_ordinary]"
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "automod.cc",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "cwd": "/Users/suzor/src/automod/",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

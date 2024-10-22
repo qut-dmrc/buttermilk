@@ -39,7 +39,6 @@ gcsfs = "^2024.6.1"
 azure-ai-ml = "1.18.0"
 boto3 = "^1.35.7"
 evaluate = "^0.4.2"
-torch = {version = "^2.4.0+cu124", source = "torch124"}
 transformers = "^4.44.2"
 azure-ai-contentsafety = "^1.0.0"
 azure-cognitiveservices-vision-contentmoderator = "^1.0.0"
@@ -47,9 +46,6 @@ unidecode = "^1.3.8"
 accelerate = "^0.33.0"
 huggingface-hub = "^0.24.7"
 peft = "^0.12.0"
-torchaudio = {version = "^2.4.0+cu124", source = "torch124"}
-torchvision = {version = "^0.19.0+cu124", source = "torch124"}
-bitsandbytes = "^0.43.3"
 sentencepiece = "^0.2.0"
 validators = "^0.33.0"
 tqdm = "^4.66.5"
@@ -70,6 +66,7 @@ google-cloud-bigquery-storage = "^2.26.0"
 google-cloud-aiplatform = {extras = ["evaluation"], version = "^1.70.0"}
 plotly = "^5.24.1"
 nbformat = "^5.10.4"
+db-dtypes = "^1.3.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -80,12 +77,6 @@ seaborn = "^0.13.2"
 scikit-learn = "^1.5.1"
 pytest-mock = "^3.14.0"
 pytest-timeout = "^2.3.1"
-
-
-[[tool.poetry.source]]
-name = "torch124"
-url = "https://download.pytorch.org/whl/cu124"
-priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]
