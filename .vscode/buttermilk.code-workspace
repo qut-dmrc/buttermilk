@@ -1,15 +1,11 @@
 {
 	"folders": [
 		{
-			"path": "/workspaces/buttermilk/"
-		},
-		{
-			"name": "explorations",
-			"path": "../../explorations"
+			"path": ".."
 		},
 		{
 			"name": "automod.cc",
-			"path": "../../automod.cc"
+			"path": "../../automod"
 		}	],
 	"settings": {
 		"python.defaultInterpreterPath": "/opt/conda/envs/bm/bin/python",

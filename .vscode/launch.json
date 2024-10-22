@@ -5,6 +5,8 @@
     "version": "0.2.0",
     "configurations": [
 
+        
+
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -156,6 +158,22 @@
             "request": "launch",
             "program": "main.py",
             "cwd": "/Users/suzor/src/automod/",
+            "pythonArgs": [
+                "-Xfrozen_modules=off",
+                "-Xdev"
+            ],
+            "justMyCode": false,
+            "args": [
+            ],
+            "envFile": "${workspaceFolder}/.env",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "webbot automod",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/webbot.py",
+            "cwd": "/Users/suzor/src/automod/modbot",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
                 "-Xdev"

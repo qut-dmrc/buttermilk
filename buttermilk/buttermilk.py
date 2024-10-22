@@ -136,7 +136,7 @@ class BM(Singleton, BaseModel):
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
-            start_trace(resource_attributes={"run_id": self.run_id}, collection=self.cfg.name, job=self.cfg.job)
+            # start_trace(resource_attributes={"run_id": self.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
 
 
