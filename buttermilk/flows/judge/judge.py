@@ -23,8 +23,6 @@ from buttermilk import BM
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 
-BASE_DIR = Path(__file__).absolute().parent
-TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
 logger = getLogger()
 class KeepUndefined(Undefined):

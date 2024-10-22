@@ -3,7 +3,7 @@ import json
 import math
 import pathlib
 import uuid
-from typing import Any, List, Optional, TypeVar, Union
+from typing import Any, List, Optional, Tuple, TypeVar, Union
 from typing import Mapping, Sequence
 import fsspec
 import numpy as np
@@ -15,6 +15,7 @@ import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath
 from google.cloud.bigquery import SchemaField
+
 
 from .log import logger
 
@@ -244,6 +245,41 @@ def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i : i + n]
+
+def list_files_with_content(directory: str|list[pathlib.Path], pattern: str, extension: str = '') -> List[Tuple[str, str]]:
+    """
+    Return a list of tuples containing (filenames matching a pattern, file content)
+    for all files in the given directory.
+    
+    Args:
+    directory (str): The path to the directory to search.
+    pattern (str): The regex pattern to match filenames against.
+    
+    Returns:
+    List[Tuple[str, str]]: A list of tuples, each containing a matching filename and its content.
+    
+    Raises:
+    ValueError: If the provided directory does not exist.
+    """
+    if isinstance(directory, str):
+        dir_path = [pathlib.Path(directory)]
+    else:
+        dir_path = [pathlib.Path(d) if isinstance(d, str) else d for d in directory ]
+
+    for dir in dir_path:
+        if not dir.is_dir():
+            raise ValueError(f"The provided path '{directory}' is not a valid directory.")
+        
+        result = []
+        for file_path in dir.glob(f'*{extension}'):
+            if file_path.is_file() and re.search(pattern, file_path.name):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as file:
+                        content = file.read()
+                    result.append((file_path.name, content))
+                except IOError as e:
+                    logger.warning(f"Could not read file {file_path}: {str(e)}")
+    return result
 
 
 def split(l, num_chunks):

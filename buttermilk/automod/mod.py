@@ -133,7 +133,7 @@ async def run(cfg, step_cfg):
     init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
 
     for i, init_dict in enumerate(init_vars):
-        processor = JobProcessor(agent=f'{init_dict.get('model')}{i}', step_name=step_name,
+        processor = JobProcessor(agent=f'{init_dict.get("model")}{i}', step_name=step_name,
                                 flow_obj=flow_obj, init_vars=init_dict,
                                 run_info=bm.run_info)
         consumers.append(processor)

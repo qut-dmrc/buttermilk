@@ -15,7 +15,7 @@ from google.generativeai.types.generation_types import (
     BlockedPromptException,
     StopCandidateException,
 )
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader, Template, TemplateNotFound
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import (
     ChatMessagePromptTemplate,
@@ -44,8 +44,8 @@ from tenacity import (
 
 from buttermilk import BM
 from buttermilk.exceptions import RateLimit
+from buttermilk.flows.helpers import TEMPLATE_PATHS
 from buttermilk.flows.judge.judge import (
-    TEMPLATE_PATHS,
     KeepUndefined,
     Prediction,
     PredictionBatch,
@@ -106,11 +106,15 @@ class LC(BaseModel):
             try:
                 # Try to load a template if it's passed in by filename, otherwise use it
                 # as a plain string replacement.
-                _tpl = self.template_vars[k] + '.jinja2'
-                self.template_vars[k] = env.get_template(_tpl).render()
-            except Exception as e:
+                self.template_vars[k] = env.get_template(self.template_vars[k] + '.jinja2').render()
+            except TemplateNotFound as e:
+                # Treat template as a string
                 pass
-        self._template = env.get_template(self.template + '.jinja2')
+        try:
+            self._template = env.get_template(self.template + '.jinja2')
+        except TemplateNotFound as e:
+            # Treat template as a string
+            self._template = env.from_string(self.template)
 
         return self
 
@@ -124,7 +128,6 @@ class LC(BaseModel):
             raise ValueError(
                 "You must provide either model name or a default model when initialising."
             )
-
         local_template = self._template.render(**local_inputs)
 
         if model.startswith("o1-preview"):
