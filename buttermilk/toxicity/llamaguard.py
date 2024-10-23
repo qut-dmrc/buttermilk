@@ -19,7 +19,7 @@ from promptflow.tracing import trace
 from pydantic import (
     Field,
 )
-from buttermilk.apis import HFInferenceClient
+from buttermilk.libs import HFInferenceClient
 from buttermilk.toxicity.toxicity import ToxicityModel, _HF
 from buttermilk.utils.utils import read_yaml
 from ..types.tox import EvalRecord, Score

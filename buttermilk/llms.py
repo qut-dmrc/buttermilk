@@ -31,8 +31,8 @@ from promptflow.client import PFClient as LocalPFClient
 from promptflow.connections import CustomConnection
 from pydantic import BaseModel, Field, RootModel
 
-# from ..apis.hf import Llama2ChatMod
-# from ..apis.replicate import replicatellama3
+# from ..libs.hf import Llama2ChatMod
+# from ..libs.replicate import replicatellama3
 
 class LLMTypes(Enum):
     openai = "openai"

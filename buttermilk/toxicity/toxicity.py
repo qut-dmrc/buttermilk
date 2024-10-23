@@ -80,7 +80,7 @@ from tenacity import (
 import datasets
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
-from buttermilk.apis import HFInferenceClient, hf_pipeline
+from buttermilk.libs import HFInferenceClient, hf_pipeline
 from buttermilk import logger
 from ..types.tox import EvalRecord, Score
 TEMPLATE_DIR = Path(__file__).parent / 'templates'

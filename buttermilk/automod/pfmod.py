@@ -22,7 +22,7 @@ from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 
 from buttermilk import BM
-from buttermilk.apis import (
+from buttermilk.libs import (
     HFInferenceClient,
     Llama2ChatMod,
     hf_pipeline,
