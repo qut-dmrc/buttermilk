@@ -29,7 +29,7 @@ from buttermilk.exceptions import FatalError
 from buttermilk.lc import LC
 from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo, StepInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
-from buttermilk.runner.helpers import load_data
+from buttermilk.runner.helpers import group_and_filter_jobs, load_data
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import (
@@ -161,7 +161,11 @@ async def run(cfg, step_cfg):
         for src in dataset_configs:
             fields.extend(src.columns.keys())
             df = load_data(src)
-            dataset = group_and_filter_prior_step(dataset, new_data=df, prior_step=src)
+            if src.type != 'job':
+                dataset = pd.concat([dataset, df[src.columns.keys()]])
+            else:
+                # Load and join prior job data
+                dataset = group_and_filter_jobs(dataset, new_data=df, prior_step=src)
             
 
         # add index, but don't remove record_id form the columns
@@ -183,71 +187,6 @@ async def run(cfg, step_cfg):
     results = await orchestrator.run()
 
     return results
-
-def group_and_filter_prior_step(df, new_data: pd.DataFrame, prior_step):
-    if prior_step.type != 'job':
-        new_data = new_data[prior_step.columns.keys()]
-        return pd.concat([df, new_data])
-
-    # expand and rename columns if we need to
-    pairs_to_expand = list(find_key_string_pairs(prior_step.group)) + list(find_key_string_pairs(prior_step.columns))
-
-    for col_name, group in pairs_to_expand:
-        try:
-            grp, col = group.split('.', 1)
-
-            # extract the contents of the nested source column that
-            # will form the new index
-            try:
-                exploded = pd.json_normalize(new_data[grp].apply(json.loads))
-            except Exception as e:
-                exploded = pd.json_normalize(new_data[grp])
-                new_data.loc[:, col_name] = exploded
-            else:
-                new_data.loc[:, col_name] = exploded[col]
-        except ValueError:
-            pass  # no group in this column definition
-            if col_name != group:
-                # rename column
-                new_data = new_data.rename(columns={group: col_name})
-
-    # Add columns to group by to the index
-    idx_cols = [ c for c in prior_step.group.keys() if c in new_data.columns]
-
-    # Stack any nested fields in the mapping
-    for k, v in prior_step.columns.items():
-        if isinstance(v, Mapping):
-            # put all the mapped columns into a dictionary in
-            # a new field named as provided in the step config
-            new_data.loc[:, k] = new_data[v.keys()].to_dict(orient='records')
-
-    # Reduce down to n list items per index (but don't aggregate
-    # at this time, just keep a random selection of rows)
-    new_data = new_data.sample(frac=1).groupby(idx_cols).agg(
-            lambda x: x.tolist()[:prior_step.max_records_per_group])
-
-
-
-
-    # Add the column to the source dataset
-    if df.shape[0]>0:
-        # reset index columns that we're not matching on:
-        group_only_cols = [x for x in idx_cols if x not in df.columns]
-        idx_cols = list(set(idx_cols).difference(group_only_cols))
-        new_data = new_data.reset_index(level=group_only_cols, drop=False)
-
-        # Only return the columns we need
-        new_data = new_data[prior_step.columns.keys()]
-
-        df = pd.merge(df, new_data, left_on=idx_cols, right_index=True)
-    else:
-        # Only return the columns we need
-        new_data = new_data[prior_step.columns.keys()]
-        df = new_data.reset_index()
-
-
-    return df
-
 
 global_run_id = BM.make_run_id()
 

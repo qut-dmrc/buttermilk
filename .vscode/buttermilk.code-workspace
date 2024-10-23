@@ -4,7 +4,7 @@
 			"path": ".."
 		},
 		{
-			"name": "automod.cc",
+			"name": "automod",
 			"path": "../../automod"
 		}	],
 	"settings": {

@@ -19,7 +19,6 @@ from pydantic import (
 )
 
 from buttermilk import BM
-bm = BM()
 
 from buttermilk.utils.utils import get_ip
 
@@ -118,7 +117,7 @@ class Job(BaseModel):
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
 
-    run_info: RunInfo = pydantic.Field(default_factory=lambda: bm.run_info)
+    run_info: RunInfo = pydantic.Field(default_factory=lambda: BM().run_info)
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
     source: str|list[str]
