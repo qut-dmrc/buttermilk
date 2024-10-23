@@ -4,7 +4,7 @@ from tempfile import NamedTemporaryFile
 import cloudpathlib
 import pandas as pd
 
-from buttermilk import BM
+from buttermilk import BM, logger
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from typing import Mapping, Optional, Sequence
 
@@ -58,24 +58,24 @@ def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df
     # expand and rename columns if we need to
     pairs_to_expand = list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns))
     
-    for col_name, group in pairs_to_expand:
+    for col_name, grp in pairs_to_expand:
         try:
-            grp, col = group.split('.', 1)
+            grp, col = grp.split('.', 1)
 
             # extract the contents of the nested source column that
             # will form the new index
+
+            # First, check if the column is a JSON string, and interpret it.
             try:
-                exploded = pd.json_normalize(new_data[grp].apply(json.loads))
+                new_data[grp] = new_data[grp].apply(json.loads)
+            except TypeError:
+                pass  # already a dict
+            try:
+                # Now, try to get the sub-column from the dictionary within the grp column
+                new_data.loc[:, col_name] = pd.json_normalize(new_data[grp])[col].values
             except Exception as e:
-                exploded = pd.json_normalize(new_data[grp])
-                new_data.loc[:, col_name] = exploded
-            else:
-                new_data.loc[:, col_name] = exploded[col]
-        except ValueError:
-            pass  # no group in this column definition
-            if col_name != group:
-                # rename column
-                new_data = new_data.rename(columns={group: col_name})
+                logger.exception(f"Error extracting column {col} from {grp} in {new_data}: {e} {e.args=}")
+                raise e
 
         except ValueError:
             pass  # no group in this column definition
@@ -112,13 +112,12 @@ def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df
         new_data = new_data[columns.keys()]
 
         df = pd.merge(df, new_data, left_on=idx_cols, right_index=True)
+        return df
     else:
         # Only return the columns we need
-        new_data = new_data[idx_cols + list(columns.keys())]
-        df = new_data.reset_index()
+        return new_data[idx_cols + list(columns.keys())]
 
 
-    return df
 
 
 
