@@ -10,7 +10,11 @@
 		{
 			"name": "automod.cc",
 			"path": "../../automod"
-		}	],
+		},
+		{
+			"path": "../../bootstrap-python-fastapi"
+		}
+	],
 	"settings": {
 		"python.defaultInterpreterPath": "/opt/conda/envs/bm/bin/python",
 		"python.terminal.activateEnvironment": true

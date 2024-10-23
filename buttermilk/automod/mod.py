@@ -18,7 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import Field, model_validator
 
 from buttermilk import BM
-from buttermilk.apis import (
+from buttermilk.libs import (
     HFInferenceClient,
     Llama2ChatMod,
     hf_pipeline,
