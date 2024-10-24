@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from promptflow.tracing import start_trace, trace
 
 from google.cloud import pubsub
 import json
@@ -77,6 +78,7 @@ def main(cfg: DictConfig) -> None:
     global bm, logger
     bm = BM(cfg=cfg)
     logger = bm.logger
+    start_trace(resource_attributes={"run_id": bm.run_id}, collection="flow_api", job="pubsub prompter")
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
     listener_thread.start()

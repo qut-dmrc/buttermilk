@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 import pytest
 from omegaconf import OmegaConf
 
-from buttermilk.flows.judge.judge import Judger
 from buttermilk.runner import Job, RunInfo, StepInfo, run_flow
 
 
