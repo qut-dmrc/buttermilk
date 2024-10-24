@@ -2297,6 +2297,31 @@ proto-plus = {version = ">=1.22.2,<2.0.0dev", markers = "python_version >= \"3.1
 protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<6.0.0dev"
 
 [[package]]
+name = "google-cloud-pubsub"
+version = "2.26.1"
+description = "Google Cloud Pub/Sub API client library"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "google_cloud_pubsub-2.26.1-py2.py3-none-any.whl", hash = "sha256:932d4434d86af25673082b48d54b318a448d1a7cd718404c33bf008ae9a8bb22"},
+    {file = "google_cloud_pubsub-2.26.1.tar.gz", hash = "sha256:d46a302c2c7a008e399f4c04b4be6341d8aa7a537a25810ec8d38a5c125f816d"},
+]
+
+[package.dependencies]
+google-api-core = {version = ">=1.34.0,<2.0.dev0 || >=2.11.dev0,<3.0.0dev", extras = ["grpc"]}
+google-auth = ">=2.14.1,<3.0.0dev"
+grpc-google-iam-v1 = ">=0.12.4,<1.0.0dev"
+grpcio = ">=1.51.3,<2.0dev"
+grpcio-status = ">=1.33.2"
+opentelemetry-api = {version = ">=1.27.0", markers = "python_version >= \"3.8\""}
+opentelemetry-sdk = {version = ">=1.27.0", markers = "python_version >= \"3.8\""}
+proto-plus = {version = ">=1.22.2,<2.0.0dev", markers = "python_version >= \"3.11\""}
+protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<6.0.0dev"
+
+[package.extras]
+libcst = ["libcst (>=0.3.10)"]
+
+[[package]]
 name = "google-cloud-resource-manager"
 version = "1.12.5"
 description = "Google Cloud Resource Manager API client library"
@@ -7616,4 +7641,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "fc5dc5cef0d31931e7dfd1556bc31be75a6f2b8331a5b1e6bb5acbc298560b9b"
+content-hash = "ebb9b3c14d504bc33772324d8b5d086ba9cf76e9ef2cc3c93745e95dc26b2815"

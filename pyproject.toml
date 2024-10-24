@@ -67,6 +67,7 @@ google-cloud-aiplatform = {extras = ["evaluation"], version = "^1.70.0"}
 plotly = "^5.24.1"
 nbformat = "^5.10.4"
 db-dtypes = "^1.3.0"
+google-cloud-pubsub = "^2.26.1"
 
 
 [tool.poetry.group.dev.dependencies]
