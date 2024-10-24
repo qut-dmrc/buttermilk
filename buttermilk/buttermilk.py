@@ -66,7 +66,7 @@ from pydantic import (
 
 from .utils import save
 
-CONFIG_CACHE_PATH = ".cache/buttermilk/.models.json"
+CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.

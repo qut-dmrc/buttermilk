@@ -8,7 +8,7 @@ project:
   save_dest: gcp
   save_dir:
   gcp:
-    project: dmrc-analysis
+    project: dmrc-platforms
     region: us-central1
     bucket: dmrc-analysis
   azure:

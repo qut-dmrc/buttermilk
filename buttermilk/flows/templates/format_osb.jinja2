@@ -1,0 +1,48 @@
+Turn this file into a valid Markdown format with YAML headers. The final file should consist of a header in the format:
+
+```yaml
+---
+record_id: <the filename>
+title: <title>
+...<other keys>: <values taken from the first few lines of JSON-like metadata at the top of the file, including 'abstract', 
+'topic', 'standards', etc.>
+content_description: |
+  <Your summary of the content of the post(s), giving all relevant detail, including any information about 
+  how widely the post was shared, how it was received, any captions and media elements, and who the authors were.>
+relevant_background: |
+  <Your summary of the relevant background information. This should be as short as possible, only including
+  context required to understand the decision rationale that is not otherwise included in the verbatim component of 
+  the Oversight Board's Part 8 Decision Analysis.>
+key_findings: |
+  <Your summary of the key findings, rationale, and outcome of the case. You do not need to include background material
+  about Meta's actions or the procedural background of the appeal. You should include the 'ratio decidendi' and the
+  board's key findings and analysis that led to the outcome.>
+---
+```
+After creating your summary, you should not include the other sections with background information. These usually have 
+like titles 'attachments', 'summary', 'authority and scope', 'user submissions', and 'meta submissions'. This information 
+is not required.
+
+For the rest of the file, you should include the VERBATIM TEXT of the decision reasoning. In full cases, this is the text 
+starting from Section 8, "Full case decision", up to but not including the "10 Recommendations" section. Present this as
+properly formatted Markdown. DO NOT omit any substantive text. You may remove the "Procedural note" sections and, where 
+you find them, the explanations that "*Summary decisions examine cases ... Summary decisions provide transparency on 
+Meta's corrections and highlight areas of potential improvement in its policy enforcement.*"
+
+You may modify special characters, escape characters, and white space, but DO NOT CHANGE the text. All substantive text in
+the Markdown section must be IDENTICAL to the original input after you have formatted the file.
+
+Please preserve paragraph breaks and add a blank line between paragraphs. But ensure that multi-line text is presented with 
+each full paragraph on a single line of the file, without line breaks (paragraphs will usually consist of more than one 
+sentence; all sentences within a paragraph  should be on the same line). Make sure that there are line breaks and white 
+space between paragraphs, headings, list items, and so on, but remove extra whitespace where you see it.
+
+You must reply only in a fully valid JSON format. Your response should be an object with the key "result" and a string value. 
+The string value should be the final formatted text of the file. Make sure you escape any double quotes in your response.
+Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
+
+{% raw %}
+```json
+{ "result": <STRING: the VERBATIM text of the file, formatted as described above> }
+```
+{% endraw %}

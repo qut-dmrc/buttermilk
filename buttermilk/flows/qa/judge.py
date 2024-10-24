@@ -25,9 +25,6 @@ BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATHS = [BASE_DIR, BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
 
 logger = getLogger()
-class KeepUndefined(Undefined):
-    def __str__(self):
-        return '{{ ' + self._undefined_name + ' }}'
 
 class Prediction(TypedDict):
     result: dict
