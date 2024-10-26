@@ -22,19 +22,13 @@ from buttermilk import BM
 
 from buttermilk.utils.utils import get_ip
 
-
-class StepInfo(BaseModel):
-    step: str
-    agent: str
-
-    model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
-    )
-
 class RunInfo(BaseModel):
     run_id: str
     project: str
     job: str
+    step: str
+    agent: str
+    model: Optional[str] = None
 
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
@@ -123,9 +117,8 @@ class Job(BaseModel):
     source: str|list[str]
     inputs: dict =  {}              # The data to be processed by the worker
 
-    step_info: Optional[StepInfo] = None  # These fields will be added once
-    outputs: Optional[Result] = None      # the record is processed
-
+    # These fields will be added once the record is processed
+    outputs: Optional[Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = {}
 

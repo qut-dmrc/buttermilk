@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 import threading
+from typing import Optional, Self
 from cloudpathlib import AnyPath
+from pydantic import BaseModel, model_validator
 import uvicorn
 import hydra
 from omegaconf import DictConfig
@@ -21,33 +23,51 @@ from google.cloud import pubsub
 import json
 
 from buttermilk.lc import LC
-from buttermilk.utils.utils import read_file
+# from buttermilk.runner import Job
+# from buttermilk.runner._runner_types import Result
+# from buttermilk.utils.utils import read_file
+# from buttermilk.flows.agent import Agent
+
+
+# class FlowProcessor(Agent):
+#     _client: Optional[LC] = None
+
+#     @model_validator(mode='after')
+#     def init(self) -> Self:
+#         self._client = self.LC(**self.cfg.init_vars)
+
+#         return self
+     
+#     async def process(self, *, job: Job) -> Job:
+#         response = await self._client.call_async(**job.inputs)
+#         job.outputs = Result(**response)
+#         job.step_info = self.step_info
+#         return job
+
+class TestJob(BaseModel):
+    input: int
+    output: Optional[int] = None
+class TestAgent(BaseModel):
+    async def process(self, *, job: TestJob) -> TestJob:
+        job.output = 2 * job.input
+        return job
+
+
+## TEST
+## curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"input":4}'
 
 app = FastAPI()
 bm = None
 logger = None
+agent = TestAgent()
 
 # Initialize a semaphore with a concurrency limit
 semaphore = asyncio.Semaphore(5)
 
-@app.post("/format")
-async def process_job(job: dict):
-    async with semaphore:
-        basename = None
-        if content := job.get("content"):
-            pass
-        elif filename := job.get("filename"):
-            content = read_file(filename)
-            basename = AnyPath(filename).stem
-
-        flow = LC(model=job.get("model", "gpt4o"), template=job.get("template", "format_osb"), )
-
-        response = await flow.call_async(content=content)
-        bm.save(data=response, basename=basename, ext="json")
-        response.update({"status": "Job processed successfully"})
-        return response
-
-
+@app.post("/flow")
+async def process_job(job: TestJob):
+    result = await agent.process(job=job)
+    return result
 
 def callback(message):
     job = json.loads(message.data)
