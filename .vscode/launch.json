@@ -156,7 +156,7 @@
             "name": "automod.cc",
             "type": "debugpy",
             "request": "launch",
-            "program": "main.py",
+            "program": "demo/main.py",
             "cwd": "/Users/suzor/src/automod/",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
