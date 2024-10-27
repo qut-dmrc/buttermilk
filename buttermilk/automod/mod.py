@@ -135,7 +135,7 @@ async def run(cfg, step_cfg):
     for i, init_dict in enumerate(init_vars):
         processor = JobProcessor(agent=f'{init_dict.get("model")}{i}', step_name=step_name,
                                 flow_obj=flow_obj, init_vars=init_dict,
-                                run_info=bm.run_info)
+                                run_info=bm._run_metadata)
         consumers.append(processor)
 
 
@@ -175,7 +175,7 @@ async def run(cfg, step_cfg):
             for idx, row in dataset.sample(frac=1).iterrows():
                 job = Job(record_id=idx,
                         inputs=make_serialisable(row.to_dict()),
-                        run_info=bm.run_info,
+                        run_info=bm._run_metadata,
                         source=source_list,
                         )
 

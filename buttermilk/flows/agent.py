@@ -68,13 +68,12 @@ class Agent(BaseModel):
         # Store the original kwargs in a private attribute
         values['init_vars'] = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
 
-        values['agent_info'] = AgentInfo(agent=values['agent'], **values['_init_vars'])
+        values['agent_info'] = AgentInfo(agent=values['agent'], **values['init_vars'])
 
         return values
     
     @model_validator(mode='after')
     def init(self) -> Self:
-
         self.client = self.flow_obj(**self.init_vars)
         del self.flow_obj  # Don't keep the class around
         return self

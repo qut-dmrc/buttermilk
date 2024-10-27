@@ -104,7 +104,7 @@ class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM().run_info)
+    run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM()._run_metadata)
 
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker

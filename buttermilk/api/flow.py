@@ -29,7 +29,7 @@ from buttermilk.runner._runner_types import Result
 from buttermilk.utils.utils import read_file
 from buttermilk.flows.agent import Agent
 
-
+# curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"source": "api", "inputs":{"content": "Hello, how are you?"}}'
 class FlowProcessor(Agent):
     flow_obj: Optional[LC] = LC
      
