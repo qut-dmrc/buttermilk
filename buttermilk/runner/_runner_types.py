@@ -20,19 +20,13 @@ from pydantic import (
 
 from buttermilk import BM
 
-from buttermilk.utils.utils import get_ip
+from buttermilk.buttermilk import SessionInfo
 
-class RunInfo(BaseModel):
-    run_id: str
-    project: str
+class RunInfo(SessionInfo):
     job: str
     step: str
     agent: str
     model: Optional[str] = None
-
-    ip: str = Field(default_factory=get_ip)
-    node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
 
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
@@ -111,13 +105,13 @@ class Job(BaseModel):
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
 
-    run_info: RunInfo = pydantic.Field(default_factory=lambda: BM().run_info)
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
     source: str|list[str]
     inputs: dict =  {}              # The data to be processed by the worker
 
-    # These fields will be added once the record is processed
+    # These fields will be fully filled once the record is processed
+    run_info: RunInfo = pydantic.Field(default_factory=lambda: BM().run_info)
     outputs: Optional[Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = {}

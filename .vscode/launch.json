@@ -18,10 +18,10 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "automod debug",
+            "name": "flow mod debug",
             "type": "debugpy",
             "request": "launch",
-            "module": "buttermilk.automod.mod",
+            "module": "buttermilk.api.flow",
             "cwd": "${workspaceFolder}",
             "pythonArgs": [
                 "-Xfrozen_modules=off",
@@ -29,12 +29,8 @@
             ],
             "justMyCode": false,
             "args": [
-                "+experiments=synth",
-                "+data=drag",
-                "step.0.init.model=[haiku]",
-                "step.0.num_runs=1",
-                "step.0.concurrent=1",
-                "step.0.init.criteria=[criteria_ordinary]" 
+                "+flow=judge",
+                "flow.concurrent=1",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

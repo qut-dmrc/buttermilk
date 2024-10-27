@@ -63,8 +63,7 @@ from pydantic import (
     root_validator,
 )
 
-
-from .utils import save
+from .utils import save, get_ip
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 
@@ -100,11 +99,25 @@ class Singleton:
         """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
         return self
 
+class SessionInfo(BaseModel):
+    run_id: str
+    project: str
+
+    ip: str = Field(default_factory=get_ip)
+    node_name: str = Field(default_factory=lambda: platform.uname().node)
+    username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
+
+    save_dir: str
+
+    model_config = ConfigDict(
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+    )
 class BM(Singleton, BaseModel):
+
     cfg: Any = Field(default_factory=dict, validate_default=True)
-    run_id: str = Field(default_factory=lambda: BM.make_run_id())
     save_dir: Optional[str] = None
     _clients: dict[str, Any] = {}
+    _run_info: SessionInfo = PrivateAttr()
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -127,18 +140,19 @@ class BM(Singleton, BaseModel):
             _REGISTRY['cfg'] = v
             return v
 
-    @cached_property
-    def run_info(self):
-        from buttermilk.runner._runner_types import RunInfo
-        return RunInfo(run_id=self.run_id, project=self.cfg.name, job=self.cfg.job)
 
     def model_post_init(self, __context: Any) -> None:
+        from buttermilk.runner import RunInfo
+
         self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
+
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
             # start_trace(resource_attributes={"run_id": self.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
-
+        
+        run_id=BM.make_run_id()
+        self._run_info = SessionInfo(run_id=run_id, project=self.cfg.name, job=self.cfg.job, save_dir=self.save_dir)
 
     @classmethod
     def make_run_id(cls) -> str:

@@ -23,51 +23,27 @@ from google.cloud import pubsub
 import json
 
 from buttermilk.lc import LC
-# from buttermilk.runner import Job
-# from buttermilk.runner._runner_types import Result
-# from buttermilk.utils.utils import read_file
-# from buttermilk.flows.agent import Agent
+from buttermilk.runner._runner_types import Job
+from buttermilk.runner import Job
+from buttermilk.runner._runner_types import Result
+from buttermilk.utils.utils import read_file
+from buttermilk.flows.agent import Agent
 
 
-# class FlowProcessor(Agent):
-#     _client: Optional[LC] = None
+class FlowProcessor(Agent):
+    _client: Optional[LC] = None
 
-#     @model_validator(mode='after')
-#     def init(self) -> Self:
-#         self._client = self.LC(**self.cfg.init_vars)
+    @model_validator(mode='after')
+    def init(self) -> Self:
+        self._client = self.LC(**self.cfg.init_vars)
 
-#         return self
+        return self
      
-#     async def process(self, *, job: Job) -> Job:
-#         response = await self._client.call_async(**job.inputs)
-#         job.outputs = Result(**response)
-#         job.step_info = self.step_info
-#         return job
-
-class TestJob(BaseModel):
-    input: int
-    output: Optional[int] = None
-class TestAgent(BaseModel):
-    async def process(self, *, job: TestJob) -> TestJob:
-        job.output = 2 * job.input
+    async def process(self, *, job: Job) -> Job:
+        response = await self._client.call_async(**job.inputs)
+        job.outputs = Result(**response)
+        job.step_info = self.step_info
         return job
-
-
-## TEST
-## curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"input":4}'
-
-app = FastAPI()
-bm = None
-logger = None
-agent = TestAgent()
-
-# Initialize a semaphore with a concurrency limit
-semaphore = asyncio.Semaphore(5)
-
-@app.post("/flow")
-async def process_job(job: TestJob):
-    result = await agent.process(job=job)
-    return result
 
 def callback(message):
     job = json.loads(message.data)
@@ -81,7 +57,6 @@ def callback(message):
     print(response.json())
 
 def start_pubsub_listener():
-
     subscriber = pubsub.SubscriberClient()
     subscription_path = subscriber.subscription_path(bm.cfg.gcp.project, 'flow-sub')
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
@@ -93,6 +68,9 @@ def start_pubsub_listener():
         streaming_pull_future.cancel()
 
 
+bm = None
+logger = None
+
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     global bm, logger
@@ -100,9 +78,17 @@ def main(cfg: DictConfig) -> None:
     logger = bm.logger
     start_trace(resource_attributes={"run_id": bm.run_id}, collection="flow_api", job="pubsub prompter")
 
-    listener_thread = threading.Thread(target=start_pubsub_listener)
-    listener_thread.start()
-    
+    # listener_thread = threading.Thread(target=start_pubsub_listener)
+    # listener_thread.start()
+        
+    agent = FlowProcessor(init_vars=cfg.flow.init_vars)
+    app = FastAPI()
+
+    @app.post("/flow")
+    async def process_job(job: Job):
+        result = await agent.process(job=job)
+        return result
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":

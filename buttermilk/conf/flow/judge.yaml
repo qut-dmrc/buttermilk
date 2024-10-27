@@ -1,0 +1,15 @@
+name: judge
+num_runs: 4
+max_batch: 1
+
+save:
+  destination: bq
+  dataset: 'dmrc-analysis.toxicity.step'
+  schema: buttermilk/schemas/step.json
+
+init:
+  concurrent: 10
+  template: judge
+  formatting: json_rules
+  criteria: criteria_ordinary
+  model: haiku

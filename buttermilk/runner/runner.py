@@ -99,7 +99,7 @@ from tqdm.asyncio import tqdm as atqdm
 from buttermilk.buttermilk import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.runner import Job
-from buttermilk.runner._runner_types import RunInfo, StepInfo
+from buttermilk.runner._runner_types import RunInfo, RunInfo
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.log import logger
 
@@ -169,8 +169,8 @@ class Consumer(BaseModel):
         return self
 
     @property
-    def step_info(self) -> StepInfo:
-        step_info = StepInfo(agent=self.agent,
+    def step_info(self) -> RunInfo:
+        step_info = RunInfo(agent=self.agent,
                       step=self.step_name, **self.init_vars)
 
         return step_info

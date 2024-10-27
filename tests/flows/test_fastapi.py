@@ -1,12 +1,41 @@
+import json
+from typing import Optional
+from fastapi import FastAPI
+from pydantic import BaseModel
 import pytest
 import asyncio
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
-from buttermilk.api.flow import app, TestJob, agent
+from buttermilk.api.flow import agent
+
+
+class TestJob(BaseModel):
+    input: int
+    output: Optional[int] = None
+class TestAgent(BaseModel):
+    async def process(self, *, job: TestJob) -> TestJob:
+        job.output = 2 * job.input
+        return job
+
+
+## TEST
+## curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"input":4}'
+
+app = FastAPI()
+
+@app.post("/flow")
+async def process_job(job: TestJob):
+    result = await agent.process(job=job)
+    return result
+# bm = None
+# logger = None
+
+agent = TestAgent()
 
 @pytest.fixture
 def client():
     return TestClient(app)
+
 
 @pytest.mark.asyncio
 async def test_process_job(client):

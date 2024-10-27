@@ -15,11 +15,11 @@ from datetime import datetime, timezone
 import pytest
 from omegaconf import OmegaConf
 
-from buttermilk.runner import Job, RunInfo, StepInfo, run_flow
+from buttermilk.runner import Job, RunInfo, RunInfo, run_flow
 
 
 def test_step_info():
-    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    step_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
     assert step_info.agent == "test_agent"
     assert step_info.agent_version == "1.0"
 
@@ -43,7 +43,7 @@ def test_prediction_inputs():
     assert inputs.parameters == {"param3": "value3"}
 
 def test_prediction():
-    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}, step="testing")
+    step_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}, step="testing")
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     outputs = PredictionResult(predicted_class="class1", predicted_result=0.75, labels=["label1", "label2"], confidence=0.9)
     inputs = PredictionInputs(record_id="record1", parameters={"param3": "value3"})
@@ -60,7 +60,7 @@ def test_prediction():
     assert prediction.inputs == inputs
 
 def test_prediction_default_values():
-    step_info = StepInfo(agent="test_agent", agent_version="1.0", parameters={})
+    step_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={})
     run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={})
     outputs = PredictionResult()
     inputs = PredictionInputs(record_id="record1", parameters={})
