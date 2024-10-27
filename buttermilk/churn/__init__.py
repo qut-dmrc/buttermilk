@@ -1,8 +1,8 @@
-from .types import AgentInfo, Prediction, PredictionInputs, PredictionResult, RunInfo
+from .types import AgentInfo, Prediction, PredictionInputs, PredictionResult, AgentInfo
 
 ALL = [
     AgentInfo,
-    RunInfo,
+    AgentInfo,
     PredictionResult,
     PredictionInputs,
     Prediction,

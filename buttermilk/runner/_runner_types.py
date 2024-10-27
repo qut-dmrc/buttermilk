@@ -23,13 +23,13 @@ from buttermilk import BM
 from buttermilk.buttermilk import SessionInfo
 
 class AgentInfo(BaseModel):
-    job: str
-    step: str
+    # job: str
+    # step: str
     agent: str
     model: Optional[str] = None
 
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
     )
 
 class Result(BaseModel):
@@ -104,7 +104,7 @@ class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    run_info: RunInfo = pydantic.Field(default_factory=lambda: BM().run_info)
+    run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM().run_info)
 
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker

@@ -99,7 +99,7 @@ from tqdm.asyncio import tqdm as atqdm
 from buttermilk.buttermilk import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.runner import Job
-from buttermilk.runner._runner_types import RunInfo, RunInfo
+from buttermilk.runner._runner_types import AgentInfo, AgentInfo
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.log import logger
 
@@ -144,7 +144,7 @@ class Consumer(BaseModel):
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
     task_num: Optional[int] = None
-    run_info: RunInfo
+    run_info: AgentInfo
     init_vars: dict = {}  # Vars to use when initialising the client
     concurrent: int = 1  # Number of async tasks to run
 
@@ -169,8 +169,8 @@ class Consumer(BaseModel):
         return self
 
     @property
-    def agent_info(self) -> RunInfo:
-        agent_info = RunInfo(agent=self.agent,
+    def agent_info(self) -> AgentInfo:
+        agent_info = AgentInfo(agent=self.agent,
                       step=self.step_name, **self.init_vars)
 
         return agent_info

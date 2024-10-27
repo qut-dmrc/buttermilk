@@ -2,11 +2,11 @@ import pytest
 import shortuuid
 
 from buttermilk.automod.mod import JobProcessor
-from buttermilk.runner._runner_types import RunInfo
+from buttermilk.runner._runner_types import AgentInfo
 
 @pytest.fixture
 def run_info():
-    return RunInfo(job='testing', run_id='test', project='dict')
+    return AgentInfo(job='testing', run_id='test', project='dict')
 
 def test_agent_field_validator(run_info):
     # Test case 1: Basic functionality

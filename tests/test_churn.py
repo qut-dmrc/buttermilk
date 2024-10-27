@@ -15,17 +15,17 @@ from datetime import datetime, timezone
 import pytest
 from omegaconf import OmegaConf
 
-from buttermilk.runner import Job, RunInfo, RunInfo, run_flow
+from buttermilk.runner import Job, AgentInfo, AgentInfo, run_flow
 
 
 def test_agent_info():
-    agent_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
+    agent_info = AgentInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"})
     assert agent_info.agent == "test_agent"
     assert agent_info.agent_version == "1.0"
 
 
 def test_run_info():
-    run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
+    run_info = AgentInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     assert run_info.run_id == "test_run"
     assert run_info.experiment_name == "exp1"
     assert run_info.parameters == {"param2": "value2"}
@@ -43,8 +43,8 @@ def test_prediction_inputs():
     assert inputs.parameters == {"param3": "value3"}
 
 def test_prediction():
-    agent_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}, step="testing")
-    run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
+    agent_info = AgentInfo(agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}, step="testing")
+    run_info = AgentInfo(run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"})
     outputs = PredictionResult(predicted_class="class1", predicted_result=0.75, labels=["label1", "label2"], confidence=0.9)
     inputs = PredictionInputs(record_id="record1", parameters={"param3": "value3"})
 
@@ -60,8 +60,8 @@ def test_prediction():
     assert prediction.inputs == inputs
 
 def test_prediction_default_values():
-    agent_info = RunInfo(agent="test_agent", agent_version="1.0", parameters={})
-    run_info = RunInfo(run_id="test_run", experiment_name="exp1", parameters={})
+    agent_info = AgentInfo(agent="test_agent", agent_version="1.0", parameters={})
+    run_info = AgentInfo(run_id="test_run", experiment_name="exp1", parameters={})
     outputs = PredictionResult()
     inputs = PredictionInputs(record_id="record1", parameters={})
 

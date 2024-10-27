@@ -15,7 +15,7 @@ from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
-from buttermilk.runner._runner_types import Job, RecordInfo, Result, RunInfo
+from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -57,24 +57,25 @@ class Agent(BaseModel):
     client: object = None
     agent: str      # The name of this process that is used to get the result
     concurrent: int = 10     # Max number of async tasks to run
-    agent_info: Optional[dict] = None  # The metadata for this run
+    agent_info: Optional[AgentInfo] = None  # The metadata for this run
 
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
-    
+    init_vars: dict = {}  # Store the original kwargs
     model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
 
     @model_validator(mode='before')
     def preprocess_data(cls, values):
         # Store the original kwargs in a private attribute
-        values['_init_vars'] = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
+        values['init_vars'] = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
+
+        values['agent_info'] = AgentInfo(agent=values['agent'], **values['_init_vars'])
+
         return values
     
     @model_validator(mode='after')
     def init(self) -> Self:
-        self.agent_info = self.model_dump()
-        if self._client:
-            self._client = self.flow_obj(**self._init_vars)
 
+        self.client = self.flow_obj(**self.init_vars)
         del self.flow_obj  # Don't keep the class around
         return self
     
