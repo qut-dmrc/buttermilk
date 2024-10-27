@@ -101,21 +101,26 @@ class Singleton:
 
 class SessionInfo(BaseModel):
     project: str
-    run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id)
+    job: str
+    run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id())
+    save_bucket: str
+    save_dir: Optional[str] = ''
 
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
-
-    save_dir: Optional[str] = ''
+    save_dir: str
 
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
     )
 
+    @property
+    def __str__(self) -> str:
+        return self.run_id
+
     @pydantic.model_validator(mode="after")
     def get_save_dir(self) -> Self:
-        # Get the save directory from the configuration
         if self.save_dir:
             if isinstance(self.save_dir, str):
                 save_dir = self.save_dir
@@ -128,20 +133,19 @@ class SessionInfo(BaseModel):
                     f"save_path must be a string, Path, or CloudPath, got {type(self.save_dir)}"
                 )
         else:
-            if save_dir := self.cfg.get('save_dir'):
-                save_dir = (
-                    f"gs://{self.cfg.gcp.bucket}/runs/{self.project}/{self.run_id}"
-                )
-
-        return self
-
+            # Get the save directory from the configuration or use a default
+            save_dir = (
+                f"gs://{self.save_bucket}/runs/{self.project}/{self.job}/{self.run_id}"
+            )
         # # Make sure the save directory is a valid path
         try:
             _ = cloudpathlib.AnyPath(save_dir)
         except Exception as e:
             raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
+        self.save_dir = save_dir
+        del self.save_bucket
 
-        return save_dir
+        return self
 
     @classmethod
     def make_run_id(cls) -> str:
@@ -192,29 +196,13 @@ class BM(Singleton, BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        from buttermilk.runner import RunInfo
-
-        save_dir = self._get_save_dir()
-        self._run_info = SessionInfo( project=self.cfg.name, job=self.cfg.job, save_dir=save_dir)
+        self._run_info = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.gcp.bucket)
 
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
             # start_trace(resource_attributes={"run_id": self._run_info.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
         
-
-
-    @cached_property
-    def metadata(self):# -> dict[str, Any]:
-        labels = {
-            "function_name": self.cfg.name,
-            "job": self.cfg.job,
-            "logs": self._run_info.run_id,
-            "user": psutil.Process().username(),
-            "node": platform.uname().node
-        }
-        return labels
-
 
     @cached_property
     def _connections_azure(self) -> dict:
@@ -300,7 +288,7 @@ class BM(Singleton, BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.cfg.name, labels=self.metadata
+            client=client, resource=resource, name=self.cfg.name, labels=self._run_info.model_dump()
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -308,8 +296,8 @@ class BM(Singleton, BaseModel):
         logger.addHandler(cloudHandler)
 
         logger.info(
-            dict(message=f"Logging setup for: {self.metadata}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
-                save_dir=self._run_info.save_dir, **self.metadata)
+            dict(message=f"Logging setup for: {self._run_info}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
+                save_dir=self._run_info.save_dir, **self._run_info.model_dump())
         )
 
         try:
