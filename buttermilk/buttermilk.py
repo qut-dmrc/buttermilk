@@ -100,22 +100,72 @@ class Singleton:
         return self
 
 class SessionInfo(BaseModel):
-    run_id: str
     project: str
+    run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id)
 
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
 
-    save_dir: str
+    save_dir: Optional[str] = ''
 
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
     )
+
+    @pydantic.model_validator(mode="after")
+    def get_save_dir(self) -> Self:
+        # Get the save directory from the configuration
+        if self.save_dir:
+            if isinstance(self.save_dir, str):
+                save_dir = self.save_dir
+            elif isinstance(self.save_dir, (Path)):
+                save_dir = self.save_dir.as_posix()
+            elif isinstance(self.save_dir, (CloudPath)):
+                save_dir = self.save_dir.as_uri()
+            else:
+                raise ValueError(
+                    f"save_path must be a string, Path, or CloudPath, got {type(self.save_dir)}"
+                )
+        else:
+            if save_dir := self.cfg.get('save_dir'):
+                save_dir = (
+                    f"gs://{self.cfg.gcp.bucket}/runs/{self.project}/{self.run_id}"
+                )
+
+        return self
+
+        # # Make sure the save directory is a valid path
+        try:
+            _ = cloudpathlib.AnyPath(save_dir)
+        except Exception as e:
+            raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
+
+        return save_dir
+
+    @classmethod
+    def make_run_id(cls) -> str:
+        global _REGISTRY
+        if run_id := _REGISTRY.get("run_id"):
+            return run_id
+
+        # Create a unique identifier for this run
+        node_name = platform.uname().node
+        username = psutil.Process().username()
+        # get rid of windows domain if present
+        username = str.split(username, "\\")[-1]
+
+        # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
+        run_time = datetime.datetime.now(
+            datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
+
+        run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+        _REGISTRY["run_id"] = run_id
+        return run_id
+    
 class BM(Singleton, BaseModel):
 
     cfg: Any = Field(default_factory=dict, validate_default=True)
-    save_dir: Optional[str] = None
     _clients: dict[str, Any] = {}
     _run_info: SessionInfo = PrivateAttr()
 
@@ -144,42 +194,22 @@ class BM(Singleton, BaseModel):
     def model_post_init(self, __context: Any) -> None:
         from buttermilk.runner import RunInfo
 
-        self.save_dir = self.save_dir or self._get_save_dir(self.save_dir)
+        save_dir = self._get_save_dir()
+        self._run_info = SessionInfo( project=self.cfg.name, job=self.cfg.job, save_dir=save_dir)
 
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
-            # start_trace(resource_attributes={"run_id": self.run_id}, collection=self.cfg.name, job=self.cfg.job)
+            # start_trace(resource_attributes={"run_id": self._run_info.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
         
-        run_id=BM.make_run_id()
-        self._run_info = SessionInfo(run_id=run_id, project=self.cfg.name, job=self.cfg.job, save_dir=self.save_dir)
 
-    @classmethod
-    def make_run_id(cls) -> str:
-        global _REGISTRY
-        if run_id := _REGISTRY.get("run_id"):
-            return run_id
-
-        # Create a unique identifier for this run
-        node_name = platform.uname().node
-        username = psutil.Process().username()
-        # get rid of windows domain if present
-        username = str.split(username, "\\")[-1]
-
-        # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
-        run_time = datetime.datetime.now(
-            datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
-
-        run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-        _REGISTRY["run_id"] = run_id
-        return run_id
 
     @cached_property
     def metadata(self):# -> dict[str, Any]:
         labels = {
             "function_name": self.cfg.name,
             "job": self.cfg.job,
-            "logs": self.run_id,
+            "logs": self._run_info.run_id,
             "user": psutil.Process().username(),
             "node": platform.uname().node
         }
@@ -259,7 +289,7 @@ class BM(Singleton, BaseModel):
                 "location": "us-central1",
                 "namespace": self.cfg.name,
                 "job": self.cfg.job,
-                "task_id": self.run_id,
+                "task_id": self._run_info.run_id,
             },
         )
 
@@ -278,8 +308,8 @@ class BM(Singleton, BaseModel):
         logger.addHandler(cloudHandler)
 
         logger.info(
-            dict(message=f"Logging setup for: {self.metadata}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",
-                save_dir=self.save_dir, **self.metadata)
+            dict(message=f"Logging setup for: {self.metadata}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
+                save_dir=self._run_info.save_dir, **self.metadata)
         )
 
         try:
@@ -295,38 +325,10 @@ class BM(Singleton, BaseModel):
             self._clients['gcs'] = storage.Client(project=self.cfg.gcp.project)
         return self._clients['gcs']
 
-    def _get_save_dir(self, value=None) -> str:
-        # Get the save directory from the configuration
-        if value:
-            if isinstance(value, str):
-                save_dir = value
-            elif isinstance(value, (Path)):
-                save_dir = value.as_posix()
-            elif isinstance(value, (CloudPath)):
-                save_dir = value.as_uri()
-            else:
-                raise ValueError(
-                    f"save_path must be a string, Path, or CloudPath, got {type(value)}"
-                )
-        else:
-            save_dir = self.cfg.get('save_dir')
-            if not save_dir:
-                save_dir = (
-                    f"gs://{self.cfg.gcp.bucket}/runs/{self.cfg.name}/{self.cfg.job}/{self.run_id}"
-                )
-
-        # # Make sure the save directory is a valid path
-        try:
-            _ = cloudpathlib.AnyPath(save_dir)
-        except Exception as e:
-            raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
-
-        return save_dir
-
     def save(self, data, basename='', extension='.jsonl', **kwargs):
         """ Failsafe save method."""
-        result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self.run_id))
+        result = save.save(data=data, save_dir=self._run_info.save_dir, basename=basename, extension=extension, **kwargs)
+        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_info.run_id))
         return result
 
     @property
@@ -353,7 +355,7 @@ class BM(Singleton, BaseModel):
         # Cannot set write_disposition if saving to GCS
         if save_to_gcs:
             # Tell BigQuery to save the results to a specific GCS location
-            gcs_results_uri = f"{self.save_dir}/query_{shortuuid.uuid()}/*.json"
+            gcs_results_uri = f"{self._run_info.save_dir}/query_{shortuuid.uuid()}/*.json"
             export_command = f"""   EXPORT DATA OPTIONS(
                         uri='{gcs_results_uri}',
                         format='JSON',
