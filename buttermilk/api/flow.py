@@ -76,7 +76,7 @@ def main(cfg: DictConfig) -> None:
     global bm, logger
     bm = BM(cfg=cfg)
     logger = bm.logger
-    start_trace(resource_attributes={"run_id": bm.run_id}, collection="flow_api", job="pubsub prompter")
+    start_trace(resource_attributes={"run_id": bm._run_info.run_id}, collection="flow_api", job="pubsub prompter")
 
     # listener_thread = threading.Thread(target=start_pubsub_listener)
     # listener_thread.start()

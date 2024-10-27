@@ -296,8 +296,8 @@ class BM(Singleton, BaseModel):
         logger.addHandler(cloudHandler)
 
         logger.info(
-            dict(message=f"Logging setup for: {self._run_info}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
-                save_dir=self._run_info.save_dir, **self._run_info.model_dump())
+            dict(message=f"Logging setup for: {self._run_info.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
+                **self._run_info.model_dump())
         )
 
         try:
