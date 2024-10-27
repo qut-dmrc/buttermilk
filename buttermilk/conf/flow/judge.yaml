@@ -9,6 +9,7 @@ save:
   schema: buttermilk/schemas/step.json
 
 init:
+  agent: judger
   template: judge
   formatting: json_rules
   criteria: criteria_ordinary

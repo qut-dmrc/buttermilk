@@ -42,8 +42,8 @@ data:
     group:
       step: step
       record_id: record_id
-      agent: step_info.agent
-      criteria: step_info.criteria
+      agent: agent_info.agent
+      criteria: agent_info.criteria
     columns:
       expected: expected
       answers:

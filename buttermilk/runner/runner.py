@@ -169,11 +169,11 @@ class Consumer(BaseModel):
         return self
 
     @property
-    def step_info(self) -> RunInfo:
-        step_info = RunInfo(agent=self.agent,
+    def agent_info(self) -> RunInfo:
+        agent_info = RunInfo(agent=self.agent,
                       step=self.step_name, **self.init_vars)
 
-        return step_info
+        return agent_info
 
     @computed_field
     @cached_property
@@ -239,7 +239,7 @@ class Consumer(BaseModel):
 
                 finally:
                     job.timestamp = pd.to_datetime(datetime.datetime.now())
-                    job.step_info = self.step_info
+                    job.agent_info = self.agent_info
                     job.run_info = self.run_info
 
                     await self.output_queue.put(job)

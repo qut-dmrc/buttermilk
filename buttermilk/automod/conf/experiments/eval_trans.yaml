@@ -41,9 +41,9 @@ data:
         - trans_reporting_synth
     group:
       record_id: record_id
-      step: step_info.step
-      agent: step_info.agent
-      criteria: step_info.criteria
+      step: agent_info.step
+      agent: agent_info.agent
+      criteria: agent_info.criteria
     columns:
       expected: expected
       answers:

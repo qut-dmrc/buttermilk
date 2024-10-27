@@ -27,7 +27,7 @@ from buttermilk.libs import (
 )
 from buttermilk.exceptions import FatalError
 from buttermilk.lc import LC
-from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo, RunInfo
+from buttermilk.runner._runner_types import Job, RecordInfo, RunInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
 from buttermilk.runner.helpers import group_and_filter_jobs, load_data
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
@@ -85,7 +85,7 @@ class JobProcessor(Consumer):
     async def process(self, *, job: Job) -> Job:
         """ Take a Job, process it, and return a Job."""
         job = await run_flow(flow=self._client, job=job)
-        job.step_info = self.step_info
+        job.agent_info = self.agent_info
         return job
 
 async def run(cfg, step_cfg):

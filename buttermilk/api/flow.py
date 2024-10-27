@@ -31,18 +31,12 @@ from buttermilk.flows.agent import Agent
 
 
 class FlowProcessor(Agent):
-    _client: Optional[LC] = None
-
-    @model_validator(mode='after')
-    def init(self) -> Self:
-        self._client = self.LC(**self.cfg.init_vars)
-
-        return self
+    flow_obj: Optional[LC] = LC
      
     async def process(self, *, job: Job) -> Job:
-        response = await self._client.call_async(**job.inputs)
+        response = await self.client.call_async(**job.inputs)
         job.outputs = Result(**response)
-        job.step_info = self.step_info
+        job.agent_info = self.agent_info
         return job
 
 def callback(message):
@@ -76,12 +70,12 @@ def main(cfg: DictConfig) -> None:
     global bm, logger
     bm = BM(cfg=cfg)
     logger = bm.logger
-    start_trace(resource_attributes={"run_id": bm._run_info.run_id}, collection="flow_api", job="pubsub prompter")
+    start_trace(resource_attributes={"run_id": bm._run_metadata.run_id}, collection="flow_api", job="pubsub prompter")
 
     # listener_thread = threading.Thread(target=start_pubsub_listener)
     # listener_thread.start()
         
-    agent = FlowProcessor(init_vars=cfg.flow.init_vars)
+    agent = FlowProcessor(**cfg.flow.init)
     app = FastAPI()
 
     @app.post("/flow")

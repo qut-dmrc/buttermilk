@@ -171,7 +171,7 @@ class BM(Singleton, BaseModel):
 
     cfg: Any = Field(default_factory=dict, validate_default=True)
     _clients: dict[str, Any] = {}
-    _run_info: SessionInfo = PrivateAttr()
+    _run_metadata: SessionInfo = PrivateAttr()
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -196,7 +196,7 @@ class BM(Singleton, BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        self._run_info = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.gcp.bucket)
+        self._run_metadata = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.gcp.bucket)
 
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
@@ -277,7 +277,7 @@ class BM(Singleton, BaseModel):
                 "location": "us-central1",
                 "namespace": self.cfg.name,
                 "job": self.cfg.job,
-                "task_id": self._run_info.run_id,
+                "task_id": self._run_metadata.run_id,
             },
         )
 
@@ -288,7 +288,7 @@ class BM(Singleton, BaseModel):
 
         client = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client, resource=resource, name=self.cfg.name, labels=self._run_info.model_dump()
+            client=client, resource=resource, name=self.cfg.name, labels=self._run_metadata.model_dump()
         )
         cloudHandler.setLevel(
             logging.INFO
@@ -296,8 +296,8 @@ class BM(Singleton, BaseModel):
         logger.addHandler(cloudHandler)
 
         logger.info(
-            dict(message=f"Logging setup for: {self._run_info.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_info.save_dir}",
-                **self._run_info.model_dump())
+            dict(message=f"Logging setup for: {self._run_metadata.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_metadata.save_dir}",
+                **self._run_metadata.model_dump())
         )
 
         try:
@@ -315,8 +315,8 @@ class BM(Singleton, BaseModel):
 
     def save(self, data, basename='', extension='.jsonl', **kwargs):
         """ Failsafe save method."""
-        result = save.save(data=data, save_dir=self._run_info.save_dir, basename=basename, extension=extension, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_info.run_id))
+        result = save.save(data=data, save_dir=self._run_metadata.save_dir, basename=basename, extension=extension, **kwargs)
+        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
         return result
 
     @property
@@ -343,7 +343,7 @@ class BM(Singleton, BaseModel):
         # Cannot set write_disposition if saving to GCS
         if save_to_gcs:
             # Tell BigQuery to save the results to a specific GCS location
-            gcs_results_uri = f"{self._run_info.save_dir}/query_{shortuuid.uuid()}/*.json"
+            gcs_results_uri = f"{self._run_metadata.save_dir}/query_{shortuuid.uuid()}/*.json"
             export_command = f"""   EXPORT DATA OPTIONS(
                         uri='{gcs_results_uri}',
                         format='JSON',

@@ -15,7 +15,7 @@ from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
-from buttermilk.runner._runner_types import Job, RecordInfo, Result, RunInfo, RunInfo
+from buttermilk.runner._runner_types import Job, RecordInfo, Result, RunInfo
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -53,16 +53,31 @@ class Agent(BaseModel):
     """
     Receive data, processes it, save the results to BQ, and acknowledge completion.
     """
-
+    flow_obj: Type = None
+    client: object = None
     agent: str      # The name of this process that is used to get the result
-    init_vars: dict = {}    # Vars to use when initialising the client
     concurrent: int = 10     # Max number of async tasks to run
-    cfg: DictConfig         # The configuration for this agent
-    
+    agent_info: Optional[dict] = None  # The metadata for this run
+
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
     
-    model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
 
+    @model_validator(mode='before')
+    def preprocess_data(cls, values):
+        # Store the original kwargs in a private attribute
+        values['_init_vars'] = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
+        return values
+    
+    @model_validator(mode='after')
+    def init(self) -> Self:
+        self.agent_info = self.model_dump()
+        if self._client:
+            self._client = self.flow_obj(**self._init_vars)
+
+        del self.flow_obj  # Don't keep the class around
+        return self
+    
     @field_validator("agent", mode="before")
     def validate_agent(cls, value: Optional[str|int]) -> str:
         # Make a unique worker name for identification and logging
@@ -76,19 +91,6 @@ class Agent(BaseModel):
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
 
-    @property
-    def step_info(self) -> RunInfo:
-        step_info = RunInfo(agent=self.agent,
-                      step=self.step_name, **self.init_vars)
-
-        return step_info
-
-    @model_validator(mode='after')
-    def init(self) -> Self:
-        self._client = self.flow_obj(**self.init_vars)
-        del self.flow_obj  # Don't keep the class around
-
-        return self
     
     def enqueue(self, job: Job, background_tasks: BackgroundTasks)->bool:
         background_tasks.add_task(self._process_job_with_semaphore, job)
