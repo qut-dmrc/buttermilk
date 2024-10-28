@@ -1,7 +1,6 @@
 # @package _global_
-project:
-  name: automod
-  job: modsynth
+name: automod
+job: modsynth
 run:
   platform: local
 save:

@@ -4,8 +4,8 @@ max_batch: 1
 concurrent: 10
 
 save:
-  destination: bq
-  dataset: 'dmrc-analysis.toxicity.step'
+  type: bq
+  destination: 'dmrc-analysis.toxicity.step'
   schema: buttermilk/schemas/step.json
 
 init:

@@ -1,20 +1,21 @@
 # @package _global_
-project:
-  name: climateframes
-  job: interactive_compare_instructions
-  secret_provider: azure
-  logger: gcp
-  verbose: false
-  models_secret: models
-  save_dest: gcp
-  save_dir:
-  gcp:
-    project: dmrc-analysis
-    region: us-central1
-    bucket: dmrc-analysis
-  azure:
-    vault: https://suzorvault.vault.azure.net/
-    resource_group: rg-suzor_ai
+
+name: climateframes
+job: interactive_compare_instructions
+secret_provider: azure
+logger: gcp
+verbose: false
+models_secret: models
+save_dest: gcp
+save_dir:
+gcp:
+  project: dmrc-analysis
+  region: us-central1
+  bucket: dmrc-analysis
+azure:
+  vault: https://suzorvault.vault.azure.net/
+  resource_group: rg-suzor_ai
+  
 experiments:
   frames:
     dataset:

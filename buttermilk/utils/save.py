@@ -1,7 +1,6 @@
 import pandas as pd
 import shortuuid
 import pandas as pd
-from .utils import chunks, scrub_serializable
 import json
 from cloudpathlib import GSPath
 import pickle
@@ -10,10 +9,12 @@ from tenacity import retry, wait_exponential_jitter,  retry_if_exception_type, s
 import google.cloud.storage
 import tempfile
 from google.api_core.exceptions import AlreadyExists, ClientError, GoogleAPICallError
+from google.cloud import bigquery_storage_v1beta2
 from cloudpathlib import CloudPath
 from google.cloud import bigquery, storage
-from .utils import read_file, reset_index_and_dedup_columns, construct_dict_from_schema, make_serialisable
+from .utils import read_file, reset_index_and_dedup_columns, make_serialisable, chunks, scrub_serializable
 from .log import logger
+from .bq import construct_dict_from_schema
 
 def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
     from .utils import reset_index_and_dedup_columns
@@ -143,6 +144,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
             return uri
 
     return uri
+
 
 def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
     """Upload results to Google Bigquery"""

@@ -177,8 +177,6 @@ class BM(Singleton, BaseModel):
 
     @field_validator('cfg', mode='before')
     def get_config(cls, v):
-        if 'project' in v.keys():
-            v = v.project
         if _REGISTRY.get('cfg'):
             if v:
                 logger.debug("Config passed in but we already have one loaded. Overwriting.")
@@ -190,7 +188,7 @@ class BM(Singleton, BaseModel):
             return v
         else:
             with initialize(version_base=None, config_path="conf"):
-                v = compose(config_name="config").project
+                v = compose(config_name="config")
             _REGISTRY['cfg'] = v
             return v
 

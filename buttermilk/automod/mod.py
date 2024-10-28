@@ -18,6 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import Field, model_validator
 
 from buttermilk import BM
+from buttermilk.buttermilk import SessionInfo
 from buttermilk.libs import (
     HFInferenceClient,
     Llama2ChatMod,
@@ -100,9 +101,9 @@ async def run(cfg, step_cfg):
     orchestrator = TaskDistributor()
 
     # First we create a collector to save the results.
-    if step_cfg.save.destination == 'bq':
+    if step_cfg.save.type == 'bq':
         # Save to bigquery
-        collector = ResultsSaver(dataset=step_cfg.save.dataset, dest_schema=step_cfg.save.schema)
+        collector = ResultsSaver(dataset=step_cfg.save.destination, dest_schema=step_cfg.save.schema)
     else:
         # default to save to GCS
         collector = ResultsCollector()
@@ -188,7 +189,7 @@ async def run(cfg, step_cfg):
 
     return results
 
-global_run_id = BM.make_run_id()
+global_run_id = SessionInfo.make_run_id()
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:

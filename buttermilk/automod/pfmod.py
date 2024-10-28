@@ -22,6 +22,7 @@ from promptflow.azure import PFClient as AzurePFClient
 from promptflow.client import PFClient as LocalPFClient
 
 from buttermilk import BM
+from buttermilk.buttermilk import SessionInfo
 from buttermilk.libs import (
     HFInferenceClient,
     Llama2ChatMod,
@@ -67,7 +68,7 @@ from buttermilk.utils.log import logger
 # # Create a pipeline
 # pipeline = Pipeline(workspace=ws, steps=[...])
 
-global_run_id = BM.make_run_id()
+global_run_id = SessionInfo.make_run_id()
 pflocal = LocalPFClient()
 bm: BM = None
 
@@ -226,7 +227,7 @@ def exec_local(
 
 def save_to_bigquery(results: pd.DataFrame, save_cfg):
     from buttermilk.utils.save import upload_rows
-    destination = upload_rows(rows=results, schema=save_cfg.schema, dataset=save_cfg.dataset)
+    destination = upload_rows(rows=results, schema=save_cfg.schema, dataset=save_cfg.destination)
     logger.info(f'Saved {results.shape[0]} rows to {destination}.')
 
 

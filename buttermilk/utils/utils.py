@@ -14,7 +14,6 @@ import requests
 import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath
-from google.cloud.bigquery import SchemaField
 
 
 from .log import logger
@@ -125,97 +124,6 @@ def scrub_serializable(d) -> T:
 
     return d
 
-
-def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
-    """Recursively construct a new dictionary, changing data types to match BigQuery.
-    Only uses fields from d that are in schema.
-
-    INPUT: schema - list of dictionaries, each with keys 'name', 'type', and optionally 'fields'
-    """
-
-    new_dict = {}
-    keys_deleted = []
-
-    for row in schema:
-        if isinstance(row, SchemaField):
-            row = row.to_api_repr()
-        key_name = row["name"]
-        if key_name not in d:
-            keys_deleted.append(key_name)
-            continue
-
-        # Handle nested fields
-        if isinstance(d[key_name], dict) and "fields" in row:
-            new_dict[key_name] = construct_dict_from_schema(row["fields"], d[key_name])
-
-        # Handle repeated fields - use the same schema as we were passed
-        elif isinstance(d[key_name], list) and "fields" in row:
-            new_dict[key_name] = [
-                construct_dict_from_schema(row["fields"], item) for item in d[key_name]
-            ]
-
-        elif isinstance(d[key_name], str) and (
-            str.upper(remove_punctuation(d[key_name])) == "NULL"
-            or remove_punctuation(d[key_name]) == ""
-        ):
-            # don't add null values
-            keys_deleted.append(key_name)
-            continue
-
-        elif str.upper(row["type"]) in ["TIMESTAMP", "DATETIME", "DATE"]:
-            # convert string dates to datetimes
-            if not isinstance(d[key_name], datetime.datetime):
-                _ts = None
-                if type(d[key_name]) is str:
-                    if d[key_name].isnumeric():
-                        _ts = float(d[key_name])
-                    else:
-                        new_dict[key_name] = pd.to_datetime(d[key_name])
-
-                if type(d[key_name]) is int or type(d[key_name]) is float or _ts:
-                    if not _ts:
-                        _ts = d[key_name]
-
-                    try:
-                        new_dict[key_name] = datetime.datetime.utcfromtimestamp(_ts)
-                    except (ValueError, OSError):
-                        # time is likely in milliseconds
-                        new_dict[key_name] = datetime.datetime.utcfromtimestamp(
-                            _ts / 1000
-                        )
-
-                elif not isinstance(d[key_name], datetime.datetime):
-                    new_dict[key_name] = pd.to_datetime(d[key_name])
-            else:
-                # Already a datetime, move it over
-                new_dict[key_name] = d[key_name]
-
-            # if it's a date only field, remove time
-            if str.upper(row["type"]) == "DATE":
-                new_dict[key_name] = new_dict[key_name].date()
-
-        elif str.upper(row["type"]) in ["INTEGER", "FLOAT"]:
-            # convert string numbers to integers
-            if isinstance(d[key_name], str):
-                new_dict[key_name] = pd.to_numeric(d[key_name])
-            else:
-                new_dict[key_name] = d[key_name]
-
-        elif str.upper(row["type"]) == "BOOLEAN":
-            if isinstance(d[key_name], str):
-                try:
-                    new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(d[key_name])
-                except ValueError as e:
-                    if new_dict[key_name] == "":
-                        pass  # no value
-                    raise e
-            else:
-                new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(d[key_name])
-
-        else:
-            new_dict[key_name] = d[key_name]
-
-    return new_dict
 
 def remove_punctuation(text):
     return re.sub(r"\p{P}+", "", text)

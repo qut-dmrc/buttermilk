@@ -26,6 +26,7 @@ from buttermilk.lc import LC
 from buttermilk.runner._runner_types import Job
 from buttermilk.runner import Job
 from buttermilk.runner._runner_types import Result
+from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.utils import read_file
 from buttermilk.flows.agent import Agent
 
@@ -76,11 +77,14 @@ def main(cfg: DictConfig) -> None:
     # listener_thread.start()
         
     agent = FlowProcessor(**cfg.flow.init)
+    writer = TableWriter(**cfg.save)
     app = FastAPI()
 
     @app.post("/flow")
     async def process_job(job: Job):
         result = await agent.process(job=job)
+        rows = [result.model_dump()]
+        writer.append_rows(rows=rows)
         return result
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
