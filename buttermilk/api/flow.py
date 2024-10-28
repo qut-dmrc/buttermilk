@@ -77,15 +77,13 @@ def main(cfg: DictConfig) -> None:
     # listener_thread = threading.Thread(target=start_pubsub_listener)
     # listener_thread.start()
         
-    agent = FlowProcessor(**cfg.flow.init)
+    agent = FlowProcessor(**cfg.flow.init, save=cfg.flow.save)
     # writer = TableWriter(**cfg.save)
     app = FastAPI()
 
     @app.post("/flow")
     async def process_job(job: Job):
         result = await agent.process(job=job)
-        rows = [result.model_dump()]
-        upload_rows(rows=rows, dataset=bm.cfg.flow.save.destination, schema=bm.cfg.flow.save.schema)
         # writer.append_rows(rows=rows)
         return result
 

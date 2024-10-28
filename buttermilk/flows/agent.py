@@ -16,6 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
+from buttermilk.utils.save import upload_rows
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -59,9 +60,13 @@ class Agent(BaseModel):
     concurrent: int = 10     # Max number of async tasks to run
     agent_info: Optional[AgentInfo] = None  # The metadata for this run
 
+    save_dest: Optional[str] = None
+    save_schema: Optional[str] = None
+
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
     init_vars: dict = {}  # Store the original kwargs
     model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
+
 
     @model_validator(mode='before')
     def preprocess_data(cls, values):
@@ -70,6 +75,9 @@ class Agent(BaseModel):
 
         values['agent_info'] = AgentInfo(agent=values['agent'], **values['init_vars'])
 
+        # get save info if it's there
+        if save_cfg := values.get('save', None):
+            values['_save_dest'] = cloudpathlib.CloudPath(save_cfg.destination)
         return values
     
     @model_validator(mode='after')
@@ -98,10 +106,15 @@ class Agent(BaseModel):
 
     async def _process_job_with_semaphore(self, job: Job) -> Job:
         async with self._sem:
-            return await self.process_job(job)
-
+            result = await self.process_job(job)
+            if self.save_dest:
+                rows = [result.model_dump()]
+                upload_rows(rows=rows, dataset=self.save_dest, schema=self.save_schema)
+            return result
+        
     @abstractmethod
     async def process(self, *, job: Job) -> Job:
         """ Take a Job with Inputs, process it, and 
         return a Job with Inputs and Outputs."""
         raise NotImplementedError()
+    

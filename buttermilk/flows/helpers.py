@@ -4,10 +4,10 @@ from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
 
 
 BASE_DIR = Path(__file__).absolute()
-TEMPLATE_PATHS = [BASE_DIR.parent / "common", BASE_DIR.parent / "templates"]
+TEMPLATE_PATHS = [BASE_DIR.parent / "templates"]
 
-def get_templates(pattern: str = ".*"):
-    templates = list_files_with_content(TEMPLATE_PATHS, pattern=pattern)
+def get_templates(pattern: str = '', parent: str='', extension: str=''):
+    templates = list_files_with_content(TEMPLATE_PATHS, pattern=pattern, parent=parent, extension=extension)
     templates = [(t.replace(".jinja2", ""), tpl) for t, tpl in templates]
     return templates
 class KeepUndefined(Undefined):

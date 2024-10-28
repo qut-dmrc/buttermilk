@@ -154,7 +154,7 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i : i + n]
 
-def list_files_with_content(directory: str|list[pathlib.Path], pattern: str, extension: str = '') -> List[Tuple[str, str]]:
+def list_files_with_content(directory: str|list[pathlib.Path], filename: str = '', extension: str = '', parent: str ='') -> List[Tuple[str, str]]:
     """
     Return a list of tuples containing (filenames matching a pattern, file content)
     for all files in the given directory.
@@ -179,8 +179,14 @@ def list_files_with_content(directory: str|list[pathlib.Path], pattern: str, ext
             raise ValueError(f"The provided path '{directory}' is not a valid directory.")
         
         result = []
-        for file_path in dir.glob(f'*{extension}'):
-            if file_path.is_file() and re.search(pattern, file_path.name):
+        extension = extension or '.*'
+        if filename:
+            pattern = f'*{parent}*/*{filename}*{extension}'
+        else:
+            pattern = f'*{parent}*/*{extension}'
+
+        for file_path in dir.rglob(pattern):
+            if file_path.is_file():  # and re.search(pattern, file_path.name):
                 try:
                     with open(file_path, 'r', encoding='utf-8') as file:
                         content = file.read()
