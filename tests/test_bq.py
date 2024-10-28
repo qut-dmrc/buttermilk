@@ -22,7 +22,7 @@ MOCK_ROWS = [
 def writer(bm):
     """Fixture to create a TableWriter instance for testing."""
     return TableWriter(
-        project_id=bm.cfg.project.gcp.project,
+        project_id=bm.cfg.gcp.project,
         destination=bm.cfg.save.destination,
     )
 

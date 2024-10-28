@@ -12,8 +12,8 @@ def test_has_test_info(bm: BM):
     assert bm.save_dir.startswith("gs://")
 
 def test_config_obj(bm: BM):
-    assert "secret_provider" in bm.cfg.project
-    assert "models_secret" in bm.cfg.project
+    assert "secret_provider" in bm.cfg
+    assert "models_secret" in bm.cfg
 
 def test_config_models_azure(bm: BM):
     models = bm._connections_azure

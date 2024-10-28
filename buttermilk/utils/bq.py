@@ -9,7 +9,7 @@ from google.cloud.bigquery_storage_v1beta2.services.big_query_write.async_client
 from google.cloud import bigquery
 import pandas as pd
 from pydantic import BaseModel, Field
-from buttermilk import logger
+from .log import logger
 from google.cloud.bigquery_storage_v1beta2.types import (
     AppendRowsRequest,
     CreateWriteStreamRequest,
