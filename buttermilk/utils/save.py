@@ -146,7 +146,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     return uri
 
 
-def upload_rows(schema, rows, dataset, create_if_not_exists=False, **params):
+def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
     """Upload results to Google Bigquery"""
     bq = bigquery.Client()  # use application default credentials
 

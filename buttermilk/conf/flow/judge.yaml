@@ -5,12 +5,12 @@ concurrent: 10
 
 save:
   type: bq
-  destination: 'dmrc-analysis.toxicity.step'
-  schema: buttermilk/schemas/step.json
+  destination: dmrc-analysis.toxicity.flow
+  schema: buttermilk/schemas/flow.json
 
 init:
   agent: judger
   template: judge
   formatting: json_rules
   criteria: criteria_ordinary
-  model: haiku
+  model: gpt4o

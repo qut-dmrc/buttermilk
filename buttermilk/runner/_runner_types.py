@@ -112,7 +112,7 @@ class Job(BaseModel):
     inputs: dict =  {}              # The data to be processed by the worker
 
     # These fields will be fully filled once the record is processed
-    agent_info: Optional[dict] = None
+    agent_info: Optional[AgentInfo] = None
     outputs: Optional[Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = {}

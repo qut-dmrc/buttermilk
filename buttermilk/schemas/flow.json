@@ -10,12 +10,12 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "agent_info",
+        "name": "run_info",
         "type": "JSON",
         "mode": "REQUIRED"
     },
     {
-        "name": "run_info",
+        "name": "agent_info",
         "type": "JSON",
         "mode": "REQUIRED"
     },

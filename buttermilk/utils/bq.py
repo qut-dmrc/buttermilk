@@ -3,14 +3,15 @@ from typing import Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 import pydantic
 from google.cloud import bigquery_storage_v1beta2
-from google.cloud.bigquery_storage_v1beta2.services.big_query_write.async_client import (
+from google.cloud.bigquery_storage import (
     BigQueryWriteAsyncClient,
 )
+from google.protobuf.descriptor_pb2 import DescriptorProto
 from google.cloud import bigquery
 import pandas as pd
 from pydantic import BaseModel, Field
 from .log import logger
-from google.cloud.bigquery_storage_v1beta2.types import (
+from google.cloud.bigquery_storage_v1.types import (
     AppendRowsRequest,
     CreateWriteStreamRequest,
     ProtoRows,
@@ -125,18 +126,18 @@ class TableWriter(BaseModel):
 
     write_client:  BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
     destination: Optional[str] = None
-    schema: Optional[str] = None
-    stream: str = '_default'  # fully qualified table ID in the form `dataset.project.table`
-    project: str
+    bq_schema: Optional[str] = None
+    stream: Optional[str] = '_default'  # fully qualified table ID in the form `dataset.project.table`
+    project_id: Optional[str] = None
     dataset_id: Optional[str] = None
     table_id: Optional[str] = None
-    table_path: str = Field(init=False)
+    table_path: Optional[str] = None
 
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
     )
     
-    @pydantic.field_validator('schema', mode='before')
+    @pydantic.field_validator('bq_schema', mode='before')
     def load_schema(cls, v) -> dict:
         if isinstance(v, str):
             return bigquery.Client().schema_from_json(v)
@@ -171,20 +172,29 @@ class TableWriter(BaseModel):
             batch = rows.copy()
 
         # Handle other conversions required for bigquery
-        if self.schema:
-            batch = [construct_dict_from_schema(self.schema, row) for row in batch]
+        if self.bq_schema:
+            batch = [construct_dict_from_schema(self.bq_schema, row) for row in batch]
 
         batch = make_serialisable(batch)
 
         if not batch:
             logger.warning("No rows found in save function.")
             return None
-
-        # format the rows
+        
+        from google.protobuf import descriptor_pb2
+        
+        # # format the rows
         batch = ProtoRows(
                     serialized_rows=batch
-                )
-        
+                ) 
+        # request = AppendRowsRequest(write_stream=write_stream)
+        # first_message = batch[0]
+        # proto_descriptor = DescriptorProto()
+        # first_message.DESCRIPTOR.CopyToProto(proto_descriptor)
+        # request.proto_rows = AppendRowsRequest.ProtoData(
+        #     writer_schema=ProtoSchema(proto_descriptor=proto_descriptor),
+        #     rows=batch,
+        # )
         # Construct the request
         request = bigquery_storage_v1beta2.types.storage.AppendRowsRequest(write_stream=write_stream, proto_rows=batch)
 

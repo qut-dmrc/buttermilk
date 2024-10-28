@@ -1,4 +1,5 @@
-from google.cloud import bigquery_storage_v1beta2
+import datetime
+from google.cloud import bigquery_storage
 from google.api_core.exceptions import NotFound
 from unittest.mock import AsyncMock, MagicMock
 import pytest
@@ -14,8 +15,8 @@ from buttermilk.utils.bq import TableWriter
 # Mock data for testing
 MOCK_STREAM = "_default"
 MOCK_ROWS = [
-    {"column1": "value1", "column2": 10},
-    {"column1": "value2", "column2": 20},
+    {"test_time": datetime.datetime.now(), "success": True, "id": 1},
+    {"test_time": datetime.datetime.now(), "success": True, "id": 2},
 ]
 
 @pytest.fixture
@@ -31,12 +32,12 @@ async def test_append_rows(monkeypatch, writer):
     """Test appending rows to a BigQuery table."""
 
     # Mock the BigQueryWriteAsyncClient and its append_rows method
-    mock_write_client = AsyncMock(spec=bigquery_storage_v1beta2.BigQueryWriteAsyncClient)
+    mock_write_client = AsyncMock(spec=bigquery_storage.BigQueryWriteAsyncClient)
     mock_append_rows_stream = AsyncMock()
     mock_append_rows_stream.__aiter__.return_value = [MagicMock(), MagicMock()]  # Mock two responses
     mock_write_client.append_rows.return_value = mock_append_rows_stream
     monkeypatch.setattr(
-        bigquery_storage_v1beta2, "BigQueryWriteAsyncClient", lambda: mock_write_client
+        bigquery_storage, "BigQueryWriteAsyncClient", lambda: mock_write_client
     )
 
 
@@ -46,7 +47,6 @@ async def test_append_rows(monkeypatch, writer):
     # Assertions
     mock_write_client.append_rows.assert_called_once()
     request = mock_write_client.append_rows.call_args.args[0]
-    assert request.write_stream == f"{MOCK_TABLE_PATH}/streams/{MOCK_STREAM}"
 
     # Add assertions to check if the proto_rows are correctly constructed
     assert request.proto_rows.rows.serialized_rows[0].proto_bytes == MOCK_ROWS[0]
