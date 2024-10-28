@@ -139,7 +139,7 @@ class LC(BaseModel):
                 ],
                 template_format="jinja2",
             )
-            local_inputs["content"] = [HumanMessage(content=content)]
+            local_inputs["content"] = [HumanMessage(content=content['text'])]
         else:
             chain = ChatPromptTemplate.from_messages(
                 [("human", local_template)], template_format="jinja2"

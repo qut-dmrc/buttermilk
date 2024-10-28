@@ -4,15 +4,20 @@ The audience for your summary will be content moderators. There are many compone
 
 You must reply only in a fully valid JSON format. Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
 
-Your response should follow this schema:
+Your response should follow this schema exactly:
 {% raw %}
 ```json
 { 
    "title": <STRING: the name of the case>,
-  ... <metadata keys>: <values taken from the first few lines of JSON-like metadata at the top of the file, including 'abstract', 
-'topic', 'standards', etc.> ...,
-"content": <STRING: Your summary of the content of the post(s), giving all relevant detail, including any information about how widely the post was shared, how it was received, any captions and media elements, and who the authors were.>,
-"reasoning": [ <ARRAY OF STRING: Your summary of the key findings, rationale, and outcome of the case. You should present at least one paragraph for each key finding, setting out the relevant standard or rule and the board's analysis.>
+   "result": <STRING: the Board's ultimate decision on the content: 'takedown', 'leave up', or 'interstitial'>,
+   "type": <STRING: type of decision: 'standard', 'summary', or 'policy advisory'>,
+   "topics": <ARRAY OF STRING: keywords>,
+   "standards": <ARRAY OF STRING: relevant rules>,
+   "location": <STRING>,
+   "date": <DATE>,
+   "content": <STRING: Your summary of the content of the post.>,
+   "reasoning": <ARRAY OF STRING: Your summary of the key findings, rationale, and outcome of the case. You should present at least one paragraph for each key finding, setting out the relevant standard or rule and the board's analysis.>,
+   "recommendations": <ARRAY OF STRING: Your summary of the Board's policy recommendations, if applicable.>
 }
 ```
 {% endraw %}
@@ -21,6 +26,9 @@ Your goal is to identify and summarise the 'ratio decidendi', including the key 
 
 You should work through the reasoning step-by-step. For each logical step, you should: identify and state the rule that applies, summarise the relevant facts, and explain the Board's application of the rule to the facts.
 
-A good summary should include five to ten sentences for each key finding or step in the analysis. The final summary should be at least 700 words long for most standard cases. Do not skimp on relevant details. You do not need to include background material about Meta's actions or the procedural background of the appeal. Do not include background information from sections with titles like 'attachments', 'summary', 'authority and scope', 'user submissions', and 'meta submissions'. This information is not required. You should remove "Procedural note" sections and, where you find them, other notes and pro-forma explanations about what "*Summary decisions" are etc.
+Your results will be used for training on the application of content rules ONLY. Your summary of the content should be as comprehensive as possible, but it should not include any of the board's interpretation. The content description should, as close as possible, reflect only the information knowable at the outset. It should also only  include a thorough description of the content, any factual information about the user, and any details about the audience to whom it was made available and their reactions. The training data you produce should not include any material about how the content was treated by Meta or the Oversight Board, and should not include any procedural information about the appeal itself. Do not include any background material about Meta's actions or the procedural background of the appeal. Do not include background information from sections with titles like 'attachments', 'summary', 'authority and scope', 'user submissions', and 'meta submissions'. 
 
-In summarising the rationale, you should identify the key points of analysis and fact upon which the reasoning depends. You should carefully quote these key extracts from the decision and the content that is being analysed. You must be careful to ensure that ALL QUOTES MUST BE VERBATIM and properly enclosed in quotation marks.
+Your summary of the rationale should ONLY include the general principle and an explanation of how that principle applies to the objective description of the content. Ensure that you identify ALL key points of analysis and fact upon which the reasoning depends. For training purposes, you must isolate the general principle, not the specific facts, opinions, discussion of the Board. This means you must not include references to Board, to Meta, or platforms like 'Facebook' or 'Instagram'. You must not include any information about subsequent actions of the Board, Meta, or members of the public. You should carefully quote key statements of principle and application from the decision and the provide detail about how they apply to the content that is being analysed. Be precise about the analysis and do not skimp on the details. For example, instead of 'The accusation in the caption does not breach the policy', you should quote the caption and show why it does not breach the policy. You must be careful to ensure that ALL QUOTES MUST BE VERBATIM and properly enclosed in quotation marks. 
+
+Overall, always remember you are trying to extract the LOGICAL STEPS that will help future trainees APPLY THE PRINCIPLES to an OBJECTIVE DESCRIPTION OF THE CONTENT. Future trainees relying on your summary will need sufficient detail about ALL RELEVANT FACTS in order to determine whether future content is similar or dissimilar in a way that might impact the result. 
+

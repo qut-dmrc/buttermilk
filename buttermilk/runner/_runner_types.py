@@ -34,12 +34,12 @@ class AgentInfo(BaseModel):
 
 class Result(BaseModel):
     category: Optional[str|int] = None
-    prediction: Optional[bool|int] = Field(..., validation_alias=AliasChoices("prediction", "prediction", "pred"))
-    result: Optional[float] = None
-    labels: Optional[list[str]] = Field(..., validation_alias=AliasChoices("labels", "label"))
+    prediction: Optional[bool|int] = Field(default=None, validation_alias=AliasChoices("prediction", "prediction", "pred"))
+    result: Optional[float|str] = None
+    labels: Optional[list[str]] = Field(default=[], validation_alias=AliasChoices("labels", "label"))
     confidence: Optional[float|str] = None
     severity: Optional[float|str] = None
-    reasons: Optional[list] = None
+    reasons: Optional[list] = Field(default=[], validation_alias=AliasChoices("reasoning", "reason"))
     scores: Optional[dict|list] = None
     metadata: Optional[dict] = {}
 
@@ -51,7 +51,7 @@ class Result(BaseModel):
         return labels
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         use_enum_values=True,
@@ -107,23 +107,24 @@ class Job(BaseModel):
     run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM()._run_metadata)
 
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
-    parameters: Optional[dict[str, Any]] = {}     # Additional options for the worker
+    parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
     source: str|list[str]
-    inputs: dict =  {}              # The data to be processed by the worker
+    inputs: dict =  Field(default_factory=dict)             # The data to be processed by the worker
 
     # These fields will be fully filled once the record is processed
     agent_info: Optional[AgentInfo] = None
     outputs: Optional[Result] = None     
     error: Optional[dict[str, Any]] = None
-    metadata: Optional[dict] = {}
-
+    metadata: Optional[dict] = Field(default_factory=dict)
+    
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         use_enum_values=True,
         json_encoders={np.bool_: lambda v: bool(v)},
-        validate_assignment=True
+        validate_assignment=True,
+        exclude_unset=True
     )
 
     @field_validator("source", mode="before")
@@ -140,3 +141,13 @@ class Job(BaseModel):
             return v
         else:
             raise ValueError(f'Job constructor expected outputs as type Result, got {type(v)}.')
+    
+        
+    @model_validator(mode="after")
+    def move_metadata(self) -> Self:
+        if self.outputs and hasattr(self.outputs, 'metadata') and self.outputs.metadata:
+            if self.metadata is None:
+                self.metadata = {}
+            self.metadata['outputs'] = self.outputs.metadata
+            self.outputs.metadata = None
+        return self

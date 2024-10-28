@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).absolute()
 TEMPLATE_PATHS = [BASE_DIR.parent / "templates"]
 
 def get_templates(pattern: str = '', parent: str='', extension: str=''):
-    templates = list_files_with_content(TEMPLATE_PATHS, pattern=pattern, parent=parent, extension=extension)
+    templates = list_files_with_content(TEMPLATE_PATHS, filename=pattern, parent=parent, extension=extension)
     templates = [(t.replace(".jinja2", ""), tpl) for t, tpl in templates]
     return templates
 class KeepUndefined(Undefined):
