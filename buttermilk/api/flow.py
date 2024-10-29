@@ -32,7 +32,7 @@ from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import read_file
 from buttermilk.flows.agent import Agent
 
-# curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"source": "api", "inputs":{"content": "Hello, how are you?"}}'
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "content": "Republicans are arseholes."}'
 class FlowProcessor(Agent):
     client: Optional[LC] = LC
     
@@ -48,7 +48,7 @@ class FlowRequest(BaseModel):
     template: Optional[str] = None
     template_vars: Optional[dict] = Field(default_factory=dict)
     
-    content: Optional[str] = None
+    text: Optional[str] = None
     uri: Optional[str] = None
     media_b64: Optional[str] = None
 
@@ -61,9 +61,11 @@ class FlowRequest(BaseModel):
     def preprocess_data(cls, values):
         # Add any additional vars into the template_vars dict.
         kwargs = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
+        if 'template_vars' not in values:
+            values['template_vars'] = {}
         values['template_vars'].update(**kwargs)
 
-        if not any([values.get('content'), values.get('uri'), values.get('media_b64')]):
+        if not any([values.get('text'), values.get('uri'), values.get('media_b64')]):
             raise ValueError("At least one of content, uri, or media_b64 must be provided.")
         return values
 
@@ -79,7 +81,7 @@ class FlowRequest(BaseModel):
     def create_models(self) -> Self:
         self._client = LC(model=self.model, template=self.template, template_vars=self.template_vars)
 
-        inputs = dict(content=self.content, uri=self.uri, media_b64=self.media_b64)
+        inputs = dict(content=self.text, uri=self.uri, media_b64=self.media_b64)
         inputs = {k:v for k,v in inputs.items() if v}
         self._job = Job(inputs=inputs, source=INPUT_SOURCE)
 

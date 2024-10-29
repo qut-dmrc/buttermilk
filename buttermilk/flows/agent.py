@@ -82,8 +82,9 @@ class Agent(BaseModel):
     
     @model_validator(mode='after')
     def init(self) -> Self:
-        self.client = self.flow_obj(**self.init_vars)
-        del self.flow_obj  # Don't keep the class around
+        if self.client is None:
+            self.client = self.flow_obj(**self.init_vars)
+            del self.flow_obj  # Don't keep the class around
         return self
     
     @field_validator("agent", mode="before")
