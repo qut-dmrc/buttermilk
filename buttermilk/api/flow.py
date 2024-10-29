@@ -137,21 +137,3 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-        # # Ensure at least one of the content, uri, or media variables are provided
-        # # And make sure that we can form Client and Job objects from the input data.
-        # client = LC(model=request.model, template=request.template, template_vars=request.template_vars)
-
-        # inputs = dict(content=request.text, uri=request.uri, media_b64=request.media_b64)
-        # inputs = {k:v for k,v in inputs.items() if v}
-        # job = Job(inputs=inputs, source=INPUT_SOURCE)
-
-        # #  Now create the agent
-        # agent = FlowProcessor(client=client, agent=flow, **cfg.save, concurrent=cfg.concurrent)
-
-        # # And process
-        # result = await agent._process(job=job)
-        # # writer.append_rows(rows=rows)
-        # return result
