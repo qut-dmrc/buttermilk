@@ -16,7 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
-from buttermilk.utils.save import upload_rows
+from buttermilk.utils.save import upload_rows, save
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -27,6 +27,7 @@ from typing import (
     Any,
     AsyncGenerator,
     Callable,
+    Literal,
     Mapping,
     Optional,
     Self,
@@ -50,6 +51,12 @@ import cloudpathlib
 # langchain based template processed by an interchangeable LLM Chat model.
 #
 ##########
+
+class SaveInfo(BaseModel):
+    destination: str|cloudpathlib.AnyPath
+    db_schema: Optional[str] = Field(..., validation_alias='schema')
+    type: Literal['bq', 'gcs']
+
 class Agent(BaseModel):
     """
     Receive data, processes it, save the results to BQ, and acknowledge completion.
@@ -60,8 +67,7 @@ class Agent(BaseModel):
     concurrent: int = 10     # Max number of async tasks to run
     agent_info: Optional[AgentInfo] = None  # The metadata for this run
 
-    save_dest: Optional[str] = None
-    save_schema: Optional[str] = None
+    save_params: Optional[SaveInfo] = None
 
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
     init_vars: dict = Field(default_factory=dict)  # Store the original kwargs
@@ -75,9 +81,6 @@ class Agent(BaseModel):
 
         values['agent_info'] = AgentInfo(agent=values['agent'], **values['init_vars'])
 
-        # get save info if it's there
-        if save_cfg := values.get('save', None):
-            values['_save_dest'] = cloudpathlib.CloudPath(save_cfg.destination)
         return values
     
     @model_validator(mode='after')
@@ -102,19 +105,23 @@ class Agent(BaseModel):
 
     
     def enqueue(self, job: Job, background_tasks: BackgroundTasks)->bool:
-        background_tasks.add_task(self._process_job_with_semaphore, job)
+        background_tasks.add_task(self.run, job)
         return True
 
-    async def _process_job_with_semaphore(self, job: Job) -> Job:
+    async def run(self, job: Job) -> Job:
         async with self._sem:
             result = await self.process_job(job)
-            if self.save_dest:
+            
+            if self.save_params:
                 rows = [result.model_dump()]
-                upload_rows(rows=rows, dataset=self.save_dest, schema=self.save_schema)
+                if self.save_params.type == 'bq':
+                    upload_rows(rows=rows, dataset=self.save_params.destination, schema=self.save_params.db_schema)
+                else:
+                    save(save_dir=self.save_params.destination)
             return result
         
     @abstractmethod
-    async def _process(self, *, job: Job) -> Job:
+    async def process_job(self, *, job: Job) -> Job:
         """ Take a Job with Inputs, process it, and 
         return a Job with Inputs and Outputs."""
         raise NotImplementedError()

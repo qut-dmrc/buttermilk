@@ -32,11 +32,11 @@ from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import read_file
 from buttermilk.flows.agent import Agent
 
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "content": "Republicans are arseholes."}'
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
 class FlowProcessor(Agent):
     client: Optional[LC] = LC
     
-    async def _process(self, *, job: Job) -> Job:
+    async def process_job(self, job: Job) -> Job:
         response = await self.client.call_async(**job.inputs)
         job.outputs = Result(**response)
         job.agent_info = self.agent_info
@@ -81,7 +81,7 @@ class FlowRequest(BaseModel):
     def create_models(self) -> Self:
         self._client = LC(model=self.model, template=self.template, template_vars=self.template_vars)
 
-        inputs = dict(content=self.text, uri=self.uri, media_b64=self.media_b64)
+        inputs = dict(text=self.text, uri=self.uri, media_b64=self.media_b64)
         inputs = {k:v for k,v in inputs.items() if v}
         self._job = Job(inputs=inputs, source=INPUT_SOURCE)
 
@@ -127,9 +127,9 @@ def main(cfg: DictConfig) -> None:
     app = FastAPI()
 
     @app.post("/flow/{flow}")
-    async def process_job(flow: str, request: FlowRequest):
-        agent = FlowProcessor(client=request._client, agent=flow, **cfg.save, concurrent=cfg.concurrent)
-        result = await agent._process(job=request._job)
+    async def run_flow(flow: str, request: FlowRequest):
+        agent = FlowProcessor(client=request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
+        result = await agent.run(job=request._job)
         # writer.append_rows(rows=rows)
         return result
 
@@ -137,3 +137,21 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+        # # Ensure at least one of the content, uri, or media variables are provided
+        # # And make sure that we can form Client and Job objects from the input data.
+        # client = LC(model=request.model, template=request.template, template_vars=request.template_vars)
+
+        # inputs = dict(content=request.text, uri=request.uri, media_b64=request.media_b64)
+        # inputs = {k:v for k,v in inputs.items() if v}
+        # job = Job(inputs=inputs, source=INPUT_SOURCE)
+
+        # #  Now create the agent
+        # agent = FlowProcessor(client=client, agent=flow, **cfg.save, concurrent=cfg.concurrent)
+
+        # # And process
+        # result = await agent._process(job=job)
+        # # writer.append_rows(rows=rows)
+        # return result

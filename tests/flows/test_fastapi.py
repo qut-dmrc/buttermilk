@@ -24,7 +24,7 @@ class TestAgent(BaseModel):
 app = FastAPI()
 
 @app.post("/flow")
-async def process_job(job: TestJob):
+async def run_flow(job: TestJob):
     result = await agent.process(job=job)
     return result
 # bm = None
@@ -38,7 +38,7 @@ def client():
 
 
 @pytest.mark.asyncio
-async def test_process_job(client):
+async def test_run_flow(client):
     async with AsyncClient(app=app, base_url="http://test") as ac:
         response = await ac.post("/flow", json={"input": 4})
         assert response.status_code == 200

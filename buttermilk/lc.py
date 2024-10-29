@@ -88,8 +88,8 @@ class LC(BaseModel):
 
         if self.template is None:
             return
-
-        loader = FileSystemLoader(searchpath=TEMPLATE_PATHS)
+        recursive_paths = TEMPLATE_PATHS+ [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
+        loader = FileSystemLoader(searchpath=recursive_paths)
         env = Environment(
             loader=loader,
             trim_blocks=True,
@@ -113,11 +113,19 @@ class LC(BaseModel):
 
         return self
 
-    async def call_async(self, content: Optional[str] = None, model: Optional[str] = None, **kwargs):
-        if isinstance(content, RecordInfo):
-            content = content.content
+    async def call_async(self, text: Optional[str] = None, *, 
+                         inputs: Optional[dict|RecordInfo] = None, 
+                         image_b64: Optional[str] = None,
+                         model: Optional[str] = None, **kwargs):
+        
         local_inputs = self.template_vars.copy()
         local_inputs.update(kwargs)
+
+        content = {}
+        content['text'] = text
+        content['image_b64'] = image_b64
+        if isinstance(inputs, RecordInfo):
+            content.update(inputs.model_dump())
 
         if not (model := model or self.model):
             raise ValueError(
@@ -127,7 +135,7 @@ class LC(BaseModel):
 
         if model.startswith("o1-preview"):
             # No system message
-            local_template = local_template + '\n' + content
+            local_template = local_template + '\n' + content['text']
             chain = ChatPromptTemplate.from_messages(
                 [("human", local_template)], template_format="jinja2"
             )
@@ -140,6 +148,7 @@ class LC(BaseModel):
                 template_format="jinja2",
             )
             local_inputs["content"] = [HumanMessage(content=content['text'])]
+            # TODO: handle images & multimodal input
         else:
             chain = ChatPromptTemplate.from_messages(
                 [("human", local_template)], template_format="jinja2"
