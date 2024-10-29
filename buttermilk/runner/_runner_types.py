@@ -109,7 +109,7 @@ class Job(BaseModel):
     record_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
     source: str|list[str]
-    inputs: dict =  Field(default_factory=dict)             # The data to be processed by the worker
+    inputs: dict = Field(default_factory=dict)             # The data to be processed by the worker
 
     # These fields will be fully filled once the record is processed
     agent_info: Optional[AgentInfo] = None

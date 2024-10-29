@@ -101,7 +101,7 @@ class LLMs(BaseModel):
 if __name__ == '__main__':
     from buttermilk import BM
     bm = BM()
-    llm = LLMs(connections=bm._connections_azure)['o1-preview']
+    llm = LLMs(connections=bm._connections_azure)['haiku']
     import pprint
     
     pprint.pprint(llm.invoke('hi what model are you?'))

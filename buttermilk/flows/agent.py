@@ -64,7 +64,7 @@ class Agent(BaseModel):
     save_schema: Optional[str] = None
 
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
-    init_vars: dict = {}  # Store the original kwargs
+    init_vars: dict = Field(default_factory=dict)  # Store the original kwargs
     model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
 
 
@@ -113,7 +113,7 @@ class Agent(BaseModel):
             return result
         
     @abstractmethod
-    async def process(self, *, job: Job) -> Job:
+    async def _process(self, *, job: Job) -> Job:
         """ Take a Job with Inputs, process it, and 
         return a Job with Inputs and Outputs."""
         raise NotImplementedError()
