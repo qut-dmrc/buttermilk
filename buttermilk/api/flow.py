@@ -19,9 +19,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from promptflow.tracing import start_trace, trace
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import pubsub
 import json
-
 from buttermilk.lc import LC
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner._runner_types import Job
@@ -125,6 +126,21 @@ def main(cfg: DictConfig) -> None:
         
     # writer = TableWriter(**cfg.save)
     app = FastAPI()
+
+    # Set up CORS
+    origins = [
+        "http://localhost:8080",  # Frontend running on localhost:3000
+        "http://localhost:8000",  # Allow requests from localhost:8000
+        "http://automod.cc",  # Allow requests from your domain
+    ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,  # Allow specific origins
+        allow_credentials=True,
+        allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+        allow_headers=["*"],  # Allow all headers
+    )
 
     @app.post("/flow/{flow}")
     async def run_flow(flow: str, request: FlowRequest):
