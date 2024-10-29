@@ -29,8 +29,7 @@
             ],
             "justMyCode": false,
             "args": [
-                "+flow=judge",
-                "flow.concurrent=1",
+                "+api=nectar",
             ],
             "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal"

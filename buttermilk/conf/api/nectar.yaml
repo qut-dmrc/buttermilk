@@ -1,0 +1,9 @@
+# @package _global_
+name: bm_api
+job: flows
+
+concurrent: 10
+save:
+  type: bq
+  destination: dmrc-analysis.toxicity.flow
+  schema: buttermilk/schemas/flow.json

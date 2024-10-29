@@ -126,7 +126,7 @@ def main(cfg: DictConfig) -> None:
 
     @app.post("/flow/{flow}")
     async def process_job(flow: str, request: FlowRequest):
-        agent = FlowProcessor(client=request._client, agent=flow, **cfg.save)
+        agent = FlowProcessor(client=request._client, agent=flow, **cfg.save, concurrent=cfg.concurrent)
         result = await agent._process(job=request._job)
         # writer.append_rows(rows=rows)
         return result
