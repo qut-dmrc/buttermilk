@@ -88,7 +88,7 @@ class LC(BaseModel):
 
         if self.template is None:
             return
-        recursive_paths = TEMPLATE_PATHS+ [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
+        recursive_paths = TEMPLATE_PATHS + [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
         loader = FileSystemLoader(searchpath=recursive_paths)
         env = Environment(
             loader=loader,

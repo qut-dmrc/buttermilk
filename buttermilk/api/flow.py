@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 import threading
-from typing import Literal, Optional, Self
+from typing import Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
 import uvicorn
@@ -33,6 +33,7 @@ from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import read_file
 from buttermilk.flows.agent import Agent
+from .runs import get_recent_runs
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
 class FlowProcessor(Agent):
@@ -45,6 +46,10 @@ class FlowProcessor(Agent):
         return job
 
 INPUT_SOURCE = "api"    
+bm = None
+logger = None
+app = FastAPI()
+
 class FlowRequest(BaseModel):
     model: Optional[str] = None
     template: Optional[str] = None
@@ -72,12 +77,13 @@ class FlowRequest(BaseModel):
 
             # Convert the values from lists to single values
             values = {key: value[0] for key, value in values.items()}
-        except ValueError:
+        except:
             pass
+
         try:
             # might be JSON
             values = json.loads(values)
-        except (TypeError, ValueError, json.JSONDecodeError):
+        except:
             pass
     
         # Add any additional vars into the template_vars dict.
@@ -137,26 +143,48 @@ def start_pubsub_listener():
         streaming_pull_future.cancel()
 
 
-bm = None
+bm = BM()
 logger = None
 
-@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def main(cfg: DictConfig) -> None:
-    global bm, logger
+
+@app.post("/flow/{flow}")
+async def run_flow(flow: str, request: Request, flow_request: FlowRequest) -> Job:
+    agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
+    result = await agent.run(job=flow_request._job)
+    # writer.append_rows(rows=rows)
+    return result
+
+@app.post("/html/flow/{flow}")
+async def run_flow_html(flow: str, request: Request, flow_request: FlowRequest) -> str:
+    result = await run_flow(flow, request=request, flow_request=flow_request)
+    
+    # Return the result as HTML, formatted with a jinja2 template
+    response = templates.TemplateResponse(request, "flow_response.html", context={"result": result.outputs, "agent_info": result.agent_info})
+
+    return response
+
+
+@app.get("/runs")
+async def get_runs(request: Request) -> Sequence[Job]:
+    runs = bm.get_recent_runs()
+    return runs
+
+
+def run_app(cfg: DictConfig) -> None:
+    global bm, logger, app 
     bm = BM(cfg=cfg)
     logger = bm.logger
+
     start_trace(resource_attributes={"run_id": bm._run_metadata.run_id}, collection="flow_api", job="pubsub prompter")
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
     listener_thread.start()
         
     # writer = TableWriter(**cfg.save)
-    app = FastAPI()
     templates = Jinja2Templates(directory="buttermilk/api/templates")
 
     # Set up CORS
     origins = [
-        # "*",
         "http://127.0.0.1:8080",
         "http://localhost:8080",  # Frontend running on localhost:3000
         "http://localhost:8000",  # Allow requests from localhost:8000
@@ -170,24 +198,12 @@ def main(cfg: DictConfig) -> None:
         allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
         allow_headers=["*"],  # Allow all headers
     )
-
-    @app.post("/flow/{flow}")
-    async def run_flow(flow: str, request: Request, flow_request: FlowRequest) -> Job:
-        agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
-        result = await agent.run(job=flow_request._job)
-        # writer.append_rows(rows=rows)
-        return result
-
-    @app.post("/html/flow/{flow}")
-    async def run_flow_html(flow: str, request: Request, flow_request: FlowRequest) -> str:
-        result = await run_flow(flow, request=request, flow_request=flow_request)
-        
-        # Return the result as HTML, formatted with a jinja2 template
-        response = templates.TemplateResponse(request, "flow_response.html", context={"result": result.outputs, "agent_info": result.agent_info})
-
-        return response
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
+def main(cfg: DictConfig) -> None:
+    run_app(cfg)
 
 if __name__ == "__main__":
     main()

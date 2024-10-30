@@ -154,17 +154,13 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i : i + n]
 
-def list_files_with_content(directory: str|list[pathlib.Path], filename: str = '', extension: str = '', parent: str ='') -> List[Tuple[str, str]]:
+def list_files(directory: str|list[pathlib.Path], filename: str = '', extension: str = '', parent: str ='') -> List[Tuple[str, str]]:
     """
-    Return a list of tuples containing (filenames matching a pattern, file content)
-    for all files in the given directory.
+    Return a list of matching files in the given directory.
     
     Args:
     directory (str): The path to the directory to search.
     pattern (str): The regex pattern to match filenames against.
-    
-    Returns:
-    List[Tuple[str, str]]: A list of tuples, each containing a matching filename and its content.
     
     Raises:
     ValueError: If the provided directory does not exist.
@@ -178,7 +174,6 @@ def list_files_with_content(directory: str|list[pathlib.Path], filename: str = '
         if not dir.is_dir():
             raise ValueError(f"The provided path '{directory}' is not a valid directory.")
         
-        result = []
         extension = extension or '.*'
         if filename:
             pattern = f'*{parent}*/*{filename}*{extension}'
@@ -187,14 +182,26 @@ def list_files_with_content(directory: str|list[pathlib.Path], filename: str = '
 
         for file_path in dir.rglob(pattern):
             if file_path.is_file():  # and re.search(pattern, file_path.name):
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as file:
-                        content = file.read()
-                    result.append((file_path.name, content))
-                except IOError as e:
-                    logger.warning(f"Could not read file {file_path}: {str(e)}")
-    return result
+                yield file_path
 
+
+def list_files_with_content(directory: str|list[pathlib.Path], filename: str = '', extension: str = '', parent: str ='') -> List[Tuple[str, str]]:
+    """
+    Return a list of tuples containing (filenames matching a pattern, file content)
+    for all files in the given directory.
+    Returns:
+    List[Tuple[str, str]]: A list of tuples, each containing a matching filename and its content.
+    """
+    result = []
+    for file_path in list_files(directory, filename, extension, parent):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+            result.append((file_path.name, content))
+        except IOError as e:
+            logger.warning(f"Could not read file {file_path}: {str(e)}")
+
+    return result
 
 def split(l, num_chunks):
     """Split a list into a number of chunks"""

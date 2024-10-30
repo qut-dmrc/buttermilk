@@ -329,7 +329,8 @@ class BM(Singleton, BaseModel):
         destination=None,
         overwrite=False,
         do_not_return_results=False,
-        save_to_gcs=False,
+        save_to_gcs=False, 
+        df=True
     ) -> pd.DataFrame:
         
         t0 = datetime.datetime.now()
@@ -377,8 +378,11 @@ class BM(Singleton, BaseModel):
 
         if do_not_return_results:
             return True
-        else:
-            # job.result() blocks until the query has finished.
-            result = job.result()
+        
+        # job.result() blocks until the query has finished.
+        result = job.result()
+        if df:
             results_df = result.to_dataframe()
             return results_df
+        else:
+            return result
