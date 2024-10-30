@@ -7,7 +7,7 @@ from pathlib import Path
 import threading
 from typing import Literal, Optional, Self
 from cloudpathlib import AnyPath
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
 import uvicorn
 import hydra
 from omegaconf import DictConfig
@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from promptflow.tracing import start_trace, trace
+from urllib.parse import parse_qs
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,16 +61,41 @@ class FlowRequest(BaseModel):
 
     @model_validator(mode='before')
     def preprocess_data(cls, values):
+        # Check first if the values are coming as utf-8 encoded bytes
+        try:
+            values = values.decode('utf-8')
+        except:
+            pass
+        try:
+            # Might be HTML form data
+            values = parse_qs(values)
+
+            # Convert the values from lists to single values
+            values = {key: value[0] for key, value in values.items()}
+        except ValueError:
+            pass
+        try:
+            # might be JSON
+            values = json.loads(values)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    
         # Add any additional vars into the template_vars dict.
         kwargs = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
         if 'template_vars' not in values:
             values['template_vars'] = {}
         values['template_vars'].update(**kwargs)
-
+        
         if not any([values.get('text'), values.get('uri'), values.get('media_b64')]):
             raise ValueError("At least one of content, uri, or media_b64 must be provided.")
         return values
 
+    @field_validator('text', 'uri', 'media_b64', mode='before')
+    def sanitize_strings(cls, v):
+        if v:
+            return v.strip()
+        return v
+    
     @field_validator('model', mode='before')
     def check_model(cls, value: Optional[str]) -> str:
         if value not in CHATMODELS:
@@ -126,9 +152,12 @@ def main(cfg: DictConfig) -> None:
         
     # writer = TableWriter(**cfg.save)
     app = FastAPI()
+    templates = Jinja2Templates(directory="templates")
 
     # Set up CORS
     origins = [
+        # "*",
+        "http://127.0.0.1:8080",
         "http://localhost:8080",  # Frontend running on localhost:3000
         "http://localhost:8000",  # Allow requests from localhost:8000
         "http://automod.cc",  # Allow requests from your domain
@@ -143,11 +172,20 @@ def main(cfg: DictConfig) -> None:
     )
 
     @app.post("/flow/{flow}")
-    async def run_flow(flow: str, request: FlowRequest):
+    async def run_flow(flow: str, request: FlowRequest) -> Job:
         agent = FlowProcessor(client=request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
         result = await agent.run(job=request._job)
         # writer.append_rows(rows=rows)
         return result
+
+    @app.post("/html/flow/{flow}")
+    async def run_flow_html(flow: str, request: FlowRequest) -> str:
+        result: Job = run_flow(flow, request)
+        
+        # Return the result as HTML, formatted with a jinja2 template
+        response = templates.TemplateResponse("flow_response.html", {"result": result.outputs, "agent_info": result.agent_info})
+
+        return response
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
