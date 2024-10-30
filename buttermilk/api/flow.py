@@ -152,7 +152,7 @@ def main(cfg: DictConfig) -> None:
         
     # writer = TableWriter(**cfg.save)
     app = FastAPI()
-    templates = Jinja2Templates(directory="templates")
+    templates = Jinja2Templates(directory="buttermilk/api/templates")
 
     # Set up CORS
     origins = [
@@ -172,18 +172,18 @@ def main(cfg: DictConfig) -> None:
     )
 
     @app.post("/flow/{flow}")
-    async def run_flow(flow: str, request: FlowRequest) -> Job:
-        agent = FlowProcessor(client=request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
-        result = await agent.run(job=request._job)
+    async def run_flow(flow: str, request: Request, flow_request: FlowRequest) -> Job:
+        agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
+        result = await agent.run(job=flow_request._job)
         # writer.append_rows(rows=rows)
         return result
 
     @app.post("/html/flow/{flow}")
-    async def run_flow_html(flow: str, request: FlowRequest) -> str:
-        result: Job = run_flow(flow, request)
+    async def run_flow_html(flow: str, request: Request, flow_request: FlowRequest) -> str:
+        result = await run_flow(flow, request=request, flow_request=flow_request)
         
         # Return the result as HTML, formatted with a jinja2 template
-        response = templates.TemplateResponse("flow_response.html", {"result": result.outputs, "agent_info": result.agent_info})
+        response = templates.TemplateResponse(request, "flow_response.html", context={"result": result.outputs, "agent_info": result.agent_info})
 
         return response
 
