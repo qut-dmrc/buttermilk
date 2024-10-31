@@ -27,6 +27,8 @@ from buttermilk import BM
 
 from buttermilk.buttermilk import SessionInfo
 from buttermilk.utils.utils import download_limited_async
+import httpx
+from bs4 import BeautifulSoup
 
 class AgentInfo(BaseModel):
     # job: str
@@ -79,8 +81,7 @@ class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     name: Optional[str] = None
     source: str
-    content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
-    uri: Optional[AnyUrl] = None
+    content: Optional[Union[AnyUrl,str]] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
     image: Optional[Union[AnyUrl, Base64Str]] = None  # Allow AnyUrl or base64 string
     video: Optional[Union[AnyUrl, Base64Str]] = None  # Allow AnyUrl or base64 string
     alt_text: Optional[str] = Field(default=None, validation_alias=AliasChoices("alt_text", "alt", "caption"))
@@ -103,10 +104,22 @@ class RecordInfo(BaseModel):
             raise ValueError("InputRecord must have text or image or video or alt_text or uri.")
         return self
     
-    @field_validator("image", "video","uri", mode="before")
+    @field_validator("content", mode="before")
+    async def validate_uri(cls, value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
+        if value and isinstance(value, AnyUrl):
+            obj = await httpx.AsyncClient().get(value)
+
+            # try to extract text from object
+            if obj.headers['Content-Type'].startswith('text/html'):
+                soup = BeautifulSoup(obj.text, 'html.parser')
+                value = soup.get_text()
+        return value
+    
+    @field_validator("image", "video", mode="before")
     async def validate_image(cls, value: Optional[Union[AnyUrl, Base64Str]]) -> Optional[str]:
         if value and isinstance(value, AnyUrl):
-            return await download_limited_async(value)
+            obj = await download_limited_async(value)
+            value = base64.b64encode(obj).decode("utf-8")
         return value
 
     # @field_validator("labels")
@@ -120,18 +133,21 @@ class RecordInfo(BaseModel):
         if isinstance(path, CloudPath):
             return str(path.as_uri())
 
+        
     def as_langchain_message(self, type: Literal["human","system"]='human') -> BaseMessage:
         # Return the fields as a langchain message
         parts = [x for x in [self.text, self.alt_text] if x is not None ]
     
-        if self.imaeg_b64:
-            parts.append(f"![Image](data:image/png;base64,{self.image_b64})")
-        if self.video_b64:
-            parts.append(f"![Video](data:video/mp4;base64,{self.video_b64})")
+        if self.image:
+            parts.append(f"![Image](data:image/png;base64,{self.image})")
+        if self.video:
+            parts.append(f"![Video](data:video/mp4;base64,{self.video})")
 
         content = '\n'.join(parts)
 
         message = BaseMessage(type=type, content=content, id=self.record_id, name=self.name)
+
+        return message
 
 
 ##################################
@@ -189,5 +205,5 @@ class Job(BaseModel):
                 self.metadata = {}
             self.metadata['outputs'] = self.outputs.metadata
             self.outputs.metadata = None
-            
+
         return self

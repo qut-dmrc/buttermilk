@@ -74,6 +74,7 @@ cmap = "^0.3.0"
 google-cloud-bigquery = "^3.26.0"
 proto-plus = "^1.25.0"
 httpx = "^0.27.2"
+beautifulsoup4 = "^4.12.3"
 
 
 [tool.poetry.group.dev.dependencies]
