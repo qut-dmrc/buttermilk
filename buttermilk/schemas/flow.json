@@ -20,8 +20,8 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "record_id",
-        "type": "STRING",
+        "name": "record",
+        "type": "JSON",
         "mode": "NULLABLE"
     },
     {

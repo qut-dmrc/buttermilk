@@ -114,45 +114,36 @@ class LC(BaseModel):
         return self
 
     async def call_async(self, text: Optional[str] = None, *, 
-                         inputs: Optional[dict|RecordInfo] = None, 
-                         image_b64: Optional[str] = None,
+                         record: Optional[RecordInfo] = None,
+                         input_vars: Optional[dict] = None, 
                          model: Optional[str] = None, **kwargs):
         
         local_inputs = self.template_vars.copy()
         local_inputs.update(kwargs)
-
-        content = {}
-        content['text'] = text
-        content['image_b64'] = image_b64
-        if isinstance(inputs, RecordInfo):
-            content.update(inputs.model_dump())
+        if input_vars:
+            local_inputs.update(**input_vars)
 
         if not (model := model or self.model):
             raise ValueError(
-                "You must provide either model name or a default model when initialising."
+                "You must provide either model name or provide a default model on initialisation."
             )
         local_template = self._template.render(**local_inputs)
 
         if model.startswith("o1-preview"):
-            # No system message
-            local_template = local_template + '\n' + content['text']
-            chain = ChatPromptTemplate.from_messages(
-                [("human", local_template)], template_format="jinja2"
-            )
-        elif content:
-            chain = ChatPromptTemplate.from_messages(
-                [
-                    ("system", local_template),
-                    MessagesPlaceholder("content", optional=True),
-                ],
-                template_format="jinja2",
-            )
-            local_inputs["content"] = [HumanMessage(content=content['text'])]
-            # TODO: handle images & multimodal input
+            local_template_type = 'human'
         else:
-            chain = ChatPromptTemplate.from_messages(
-                [("human", local_template)], template_format="jinja2"
+            local_template_type = 'system'
+
+        messages = [(local_template_type, local_template)]
+        if record:
+            messages.append(record.as_langchain_message(type='human'))
+        elif text:
+            messages.append(HumanMessage(content=text))
+
+        chain = ChatPromptTemplate.from_messages(
+                messages, template_format="jinja2"
             )
+        
         chain = chain | self.llm[model] | ChatParser()
 
         results = await self.invoke(chain, input_vars=local_inputs, model=model)

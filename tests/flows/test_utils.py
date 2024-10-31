@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import patch
 from buttermilk.flows.helpers import get_templates, TEMPLATE_PATHS
+from buttermilk.runner._runner_types import Base64Str
 
 @pytest.mark.parametrize(
     "pattern, expected_name, min_length",
@@ -24,3 +25,8 @@ def test_get_templates_default_pattern(pattern, expected_name, min_length):
             break
     # Assert
     assert success
+
+def test_b64_str_validator():
+    assert pytest.raises(ValueError, match="Invalid base64 string") == Base64Str("invalid")
+    assert Base64Str("dGVzdA==").decode() == "test"
+    

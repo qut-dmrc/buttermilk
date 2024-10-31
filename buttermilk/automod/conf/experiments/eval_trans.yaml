@@ -40,7 +40,7 @@ data:
         - synth
         - trans_reporting_synth
     group:
-      record_id: record_id
+      record_id: record.record_id
       step: agent_info.step
       agent: agent_info.agent
       criteria: agent_info.criteria

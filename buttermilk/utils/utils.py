@@ -14,11 +14,32 @@ import requests
 import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath
-
+import httpx
 
 from .log import logger
 
 T = TypeVar("T")
+
+async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False,
+                           max_size: int = 1024 * 1024 * 10, token: Optional[str] = None) -> bytes:
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers, stream=True)
+        
+        if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
+            return b""
+
+        data = []
+        length = 0
+
+        async for chunk in r.aiter_bytes(1024):
+            data.append(chunk)
+            length += len(chunk)
+            if not allow_arbitrarily_large_downloads and length > max_size:
+                return b""
+
+    return b"".join(data)
 
 def download_limited(url, *, allow_arbitrarily_large_downloads=False,
                      max_size: int=1024 * 1024 * 10, token=None) -> bytes:

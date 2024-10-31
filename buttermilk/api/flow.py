@@ -7,7 +7,7 @@ from pathlib import Path
 import threading
 from typing import Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
 import uvicorn
 import hydra
 from omegaconf import DictConfig
@@ -57,7 +57,7 @@ class FlowRequest(BaseModel):
     template_vars: Optional[dict] = Field(default_factory=dict)
     
     text: Optional[str] = None
-    uri: Optional[str] = None
+    uri: Optional[AnyUrl] = None
     media_b64: Optional[str] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=False, extra='allow')
@@ -95,6 +95,7 @@ class FlowRequest(BaseModel):
         
         if not any([values.get('text'), values.get('uri'), values.get('media_b64')]):
             raise ValueError("At least one of content, uri, or media_b64 must be provided.")
+        
         return values
 
     @field_validator('text', 'uri', 'media_b64', mode='before')
@@ -149,7 +150,7 @@ logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = None) -> Job:
+async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = '') -> Job:
     agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
     result = await agent.run(job=flow_request._job)
     # writer.append_rows(rows=rows)
