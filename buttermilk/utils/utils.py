@@ -25,7 +25,7 @@ async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False
     headers = {"Authorization": f"Bearer {token}"} if token else None
 
     async with httpx.AsyncClient() as client:
-        r = await client.get(url, headers=headers, stream=True)
+        r = await client.get(url, headers=headers)
         
         if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
             return b""

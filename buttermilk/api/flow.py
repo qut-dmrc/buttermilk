@@ -26,17 +26,20 @@ from google.cloud import pubsub
 import json
 from buttermilk.lc import LC
 from buttermilk.llms import CHATMODELS
-from buttermilk.runner._runner_types import Job
+from buttermilk.runner._runner_types import Job, RecordInfo, validate_uri_extract_text, validate_uri_or_b64
 from buttermilk.runner import Job
 from buttermilk.runner._runner_types import Result
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import read_file
+
 import httpx
 from buttermilk.flows.agent import Agent
 from .runs import get_recent_runs
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
+
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
 class FlowProcessor(Agent):
     client: Optional[LC] = LC
     
@@ -57,8 +60,8 @@ class FlowRequest(BaseModel):
     template_vars: Optional[dict] = Field(default_factory=dict)
     
     text: Optional[str] = None
-    uri: Optional[AnyUrl] = None
-    media_b64: Optional[str] = None
+    video: Optional[str] = None
+    image: Optional[str] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=False, extra='allow')
 
@@ -93,12 +96,12 @@ class FlowRequest(BaseModel):
             values['template_vars'] = {}
         values['template_vars'].update(**kwargs)
         
-        if not any([values.get('text'), values.get('uri'), values.get('media_b64')]):
-            raise ValueError("At least one of content, uri, or media_b64 must be provided.")
+        if not any([values.get('text'), values.get('image'), values.get('video')]):
+            raise ValueError("At least one of content, video or image must be provided.")
         
         return values
 
-    @field_validator('text', 'uri', 'media_b64', mode='before')
+    @field_validator('text', 'image', 'video', mode='before')
     def sanitize_strings(cls, v):
         if v:
             return v.strip()
@@ -110,17 +113,6 @@ class FlowRequest(BaseModel):
             raise ValueError("Valid model must be provided")
         return value
 
-    # Ensure at least one of the content, uri, or media variables are provided
-    # And make sure that we can form Client and Job objects from the input data.
-    @model_validator(mode='after')
-    def create_models(self) -> Self:
-        self._client = LC(model=self.model, template=self.template, template_vars=self.template_vars)
-
-        inputs = dict(text=self.text, uri=self.uri, media_b64=self.media_b64)
-        inputs = {k:v for k,v in inputs.items() if v}
-        self._job = Job(inputs=inputs, source=INPUT_SOURCE)
-
-        return self
 
 def callback(message):
     data = json.loads(message.data)
@@ -151,7 +143,16 @@ templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = '') -> Job:
-    agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
+
+    # Ensure at least one of the content, uri, or media variables are provided
+    # And make sure that we can form Client and Job objects from the input data.
+    client = LC(model=flow_request.model, template=flow_request.template, template_vars=flow_request.template_vars)
+
+    content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.text), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
+    record = RecordInfo(content=content, image=image, video=video)
+    job = Job(record=record, source=INPUT_SOURCE)
+
+    agent = FlowProcessor(client=client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
     result = await agent.run(job=flow_request._job)
     # writer.append_rows(rows=rows)
     return result

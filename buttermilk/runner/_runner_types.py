@@ -22,6 +22,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic import PositiveInt, ValidationError, validate_call
+
 
 from buttermilk import BM
 
@@ -30,6 +32,47 @@ from buttermilk.utils.utils import download_limited_async
 import httpx
 from bs4 import BeautifulSoup
 
+
+@validate_call
+async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
+    if value:
+        try:
+            _ = AnyUrl(value)
+        except:
+            return value
+        
+        # It's a URL, go fetch
+        obj = await httpx.AsyncClient().get(value)
+
+        # try to extract text from object
+        if obj.headers['Content-Type'].startswith('text/html'):
+            soup = BeautifulSoup(obj.text, 'html.parser')
+            value = soup.get_text()
+        else:
+            # maybe should encode it here?
+            pass 
+    return value
+
+@validate_call
+async def validate_uri_or_b64(value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
+    if value:
+        try:
+            # Check if the string is a valid base64-encoded string
+            base64.b64decode(value, validate=True)
+            return value
+        except:
+            pass
+    
+        try:
+            if isinstance(value, AnyUrl) or AnyUrl(value):
+                # It's a URL, go fetch and encode it
+                obj = await download_limited_async(value)
+                value = base64.b64encode(obj).decode("utf-8")
+                return value
+        except Exception as e:
+            raise ValueError("Invalid URI or base64-encoded string")
+    return None
+        
 class AgentInfo(BaseModel):
     # job: str
     # step: str
@@ -67,23 +110,13 @@ class Result(BaseModel):
         validate_assignment=True
     )
 
-class Base64Str(str):
-    @classmethod
-    def validate(cls, value: str) -> str:
-        try:
-            # Check if the string is a valid base64-encoded string
-            base64.b64decode(value, validate=True)
-            return value
-        except Exception:
-            raise ValueError("Invalid base64-encoded string")
         
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     name: Optional[str] = None
-    source: str
-    content: Optional[Union[AnyUrl,str]] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
-    image: Optional[Union[AnyUrl, Base64Str]] = None  # Allow AnyUrl or base64 string
-    video: Optional[Union[AnyUrl, Base64Str]] = None  # Allow AnyUrl or base64 string
+    content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
+    image: Optional[str] = None  # Allow URL or base64 string
+    video: Optional[str] = None  # Allow URL or base64 string
     alt_text: Optional[str] = Field(default=None, validation_alias=AliasChoices("alt_text", "alt", "caption"))
     ground_truth: Optional[Result] = None
     path:  Optional[str] = ""
@@ -92,36 +125,18 @@ class RecordInfo(BaseModel):
         extra="allow", arbitrary_types_allowed=True, populate_by_name=True
     )
 
-    @AfterValidator
+    @model_validator(mode="after")
     async def vld_input(self) -> Self:
         if (
             self.content is None
             and self.image is None
             and self.alt_text is None
             and self.video is None
-            and self.uri is None
         ):
-            raise ValueError("InputRecord must have text or image or video or alt_text or uri.")
+            raise ValueError("InputRecord must have text or image or video or alt_text.")
+        
         return self
     
-    @field_validator("content", mode="before")
-    async def validate_uri(cls, value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
-        if value and isinstance(value, AnyUrl):
-            obj = await httpx.AsyncClient().get(value)
-
-            # try to extract text from object
-            if obj.headers['Content-Type'].startswith('text/html'):
-                soup = BeautifulSoup(obj.text, 'html.parser')
-                value = soup.get_text()
-        return value
-    
-    @field_validator("image", "video", mode="before")
-    async def validate_image(cls, value: Optional[Union[AnyUrl, Base64Str]]) -> Optional[str]:
-        if value and isinstance(value, AnyUrl):
-            obj = await download_limited_async(value)
-            value = base64.b64encode(obj).decode("utf-8")
-        return value
-
     # @field_validator("labels")
     # def vld_labels(labels):
     #     # ensure labels is a list
