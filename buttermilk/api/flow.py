@@ -32,6 +32,7 @@ from buttermilk.runner._runner_types import Result
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import read_file
+import httpx
 from buttermilk.flows.agent import Agent
 from .runs import get_recent_runs
 
@@ -147,28 +148,34 @@ bm = BM()
 logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
-@app.post("/flow/{flow}")
-async def run_flow(flow: str, request: Request, flow_request: FlowRequest) -> Job:
+@app.api_route("/flow/{flow}", methods=["GET", "POST"])
+async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = None) -> Job:
     agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
     result = await agent.run(job=flow_request._job)
     # writer.append_rows(rows=rows)
     return result
 
-@app.post("/html/flow/{flow}")
-async def run_flow_html(flow: str, request: Request, flow_request: FlowRequest) -> str:
-    result = await run_flow(flow, request=request, flow_request=flow_request)
-    
-    # Return the result as HTML, formatted with a jinja2 template
-    response = templates.TemplateResponse(request, "flow_response.html", context={"result": result.outputs, "agent_info": result.agent_info})
 
-    return response
-
-
-@app.get("/runs")
+@app.api_route("/runs/", methods=["GET", "POST"])
 async def get_runs(request: Request) -> Sequence[Job]:
     runs = get_recent_runs()
     return runs
 
+@app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
+@app.api_route("/html/{route}", methods=["GET", "POST"])
+async def run_route_html(route: str, request: Request, flow: Optional[str] = '') -> HTMLResponse:
+    # Route the request to "/{route}/{flow}" with original args
+    async with httpx.AsyncClient() as client:
+        if request.method == "GET":
+            response = await client.get(f"http://localhost:8000/{route}/{flow}", params=request.query_params)
+        elif request.method == "POST":
+            response = await client.post(f"http://localhost:8000/{route}/{flow}", json=await request.json())
+    # Process the response
+    response_data = response.json()
+    
+    # Render the template with the response data
+    result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": response})
+    return result
 
 def run_app(cfg: DictConfig) -> None:
     global bm, logger, app 
@@ -184,15 +191,18 @@ def run_app(cfg: DictConfig) -> None:
 
     # Set up CORS
     origins = [
-        "http://127.0.0.1:8080",
-        "http://localhost:8080",  # Frontend running on localhost:3000
+        "http://localhost:5000",# Frontend running on localhost:5000
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:8080",# Frontend running on localhost:8080
+        "http://localhost:8080",  
         "http://localhost:8000",  # Allow requests from localhost:8000
+        "http://127.0.0.1:8000",  
         "http://automod.cc",  # Allow requests from your domain
     ]
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,  # Allow specific origins
+        allow_origins=["*"],  # Allow specific origins
         allow_credentials=True,
         allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
         allow_headers=["*"],  # Allow all headers

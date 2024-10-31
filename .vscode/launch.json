@@ -1,204 +1,166 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: FastAPI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["buttermilk.api.flow:app", "--reload"],
+      "jinja": true
+    },
 
-        
+    {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "flow mod debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.api.flow",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["+api=nectar"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "automod: trans",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.automod.mod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [
+        "--multirun",
+        "+experiments=trans",
+        "step.0.init.criteria=trans_simplified,trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored"
 
-        {
-            "name": "Python Debugger: Current File",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "envFile": "${workspaceFolder}/.env",
-            "cwd": "${workspaceFolder}",
-            "justMyCode": false,
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "flow mod debug",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.api.flow",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+api=nectar",
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "automod: trans",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.automod.mod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "--multirun",
-                "+experiments=trans",
-                "step.0.init.criteria=trans_simplified,trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored",
-                
-                // "experiments.model=[haiku]"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "automod: trans synth",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.automod.mod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+experiments=synth",
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "automod: trans eval",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.automod.mod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+experiments=eval_trans",
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "batch automod: ots",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "examples.automod.pfmod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+experiments=ots",
-                "+data=drag_noalt",
-                "+save=bq",
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "batch automod: judge",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.automod.mod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+experiments=judge",
-                "+data=drag",
-                "step.0.init.model=['haiku']",
-                "step.0.init.criteria=[criteria_ordinary]" //,criteria_gelber,criteria_hatefb_factorised]"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "automod: tonepolice zeroshot",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "buttermilk.automod.mod",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-                "+experiments=judge",
-                "+data=tonepolice",
-                "step.0.init.criteria=[criteria_ordinary]"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "automod.cc",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "demo/main.py",
-            "cwd": "/Users/suzor/src/automod/",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "webbot automod",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "src/webbot.py",
-            "cwd": "/Users/suzor/src/automod/modbot",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "justMyCode": false,
-            "args": [
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Test Config",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "cwd": "${workspaceFolder}",
-            "pythonArgs": [
-                "-Xfrozen_modules=off",
-                "-Xdev"
-            ],
-            "env": {
-                "PYDEVD_DISABLE_FILE_VALIDATION": "1",
-                "PYTEST_ADDOPTS": "-n1 --continue-on-collection-errors -rA"
-            },
-            "justMyCode": false,
-            "purpose": [
-                "debug-test"
-            ],
-            "envFile": "${workspaceFolder}/.env",
-            "console": "integratedTerminal"
-        }
-    ]
+        // "experiments.model=[haiku]"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "automod: trans synth",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.automod.mod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["+experiments=synth"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "automod: trans eval",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.automod.mod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["+experiments=eval_trans"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "batch automod: ots",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "examples.automod.pfmod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["+experiments=ots", "+data=drag_noalt", "+save=bq"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "batch automod: judge",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.automod.mod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [
+        "+experiments=judge",
+        "+data=drag",
+        "step.0.init.model=['haiku']",
+        "step.0.init.criteria=[criteria_ordinary]" //,criteria_gelber,criteria_hatefb_factorised]"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "automod: tonepolice zeroshot",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.automod.mod",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [
+        "+experiments=judge",
+        "+data=tonepolice",
+        "step.0.init.criteria=[criteria_ordinary]"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "automod.cc",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "demo/main.py",
+      "cwd": "/Users/suzor/src/automod/",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "webbot automod",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "src/webbot.py",
+      "cwd": "/Users/suzor/src/automod/modbot",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Test Config",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "env": {
+        "PYDEVD_DISABLE_FILE_VALIDATION": "1",
+        "PYTEST_ADDOPTS": "-n1 --continue-on-collection-errors -rA"
+      },
+      "justMyCode": false,
+      "purpose": ["debug-test"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    }
+  ]
 }
