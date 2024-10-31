@@ -103,7 +103,7 @@ class SessionInfo(BaseModel):
     project: str
     job: str
     run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id())
-    save_bucket: str
+    save_bucket: Optional[str] = ''
     save_dir: Optional[str] = ''
 
     ip: str = Field(default_factory=get_ip)

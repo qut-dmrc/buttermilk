@@ -4,20 +4,30 @@ job: testing
 verbose: true
 secret_provider: azure
 logger: gcp
+concurrent: 10
 models_secret: models
 save_dest: gcp
-save_dir:
+
 gcp:
   project: dmrc-analysis
   region: us-central1
   bucket: dmrc-analysis
 
-
-  azure:
-    vault: https://suzorvault.vault.azure.net/
-    resource_group: rg-suzor_ai
+azure:
+  vault: https://suzorvault.vault.azure.net/
+  resource_group: rg-suzor_ai
 
 save:
   type: bq
-  destination: 'dmrc-platforms.testing.unittest'
-  schema: buttermilk/schemas/step.json
+  destination: 'dmrc-analysis.tests.flow'
+  schema: buttermilk/schemas/flow.json
+
+
+aws:
+  secret_name: secret
+  region: us-east-1
+
+website:
+  base_url: https://automod.cc/
+  jobs_table: dmrc-platforms
+  freeze: false

@@ -145,11 +145,11 @@ def start_pubsub_listener():
 
 bm = BM()
 logger = None
-
+templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.post("/flow/{flow}")
 async def run_flow(flow: str, request: Request, flow_request: FlowRequest) -> Job:
-    agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=cfg.save, concurrent=cfg.concurrent)
+    agent = FlowProcessor(client=flow_request._client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
     result = await agent.run(job=flow_request._job)
     # writer.append_rows(rows=rows)
     return result
@@ -166,7 +166,7 @@ async def run_flow_html(flow: str, request: Request, flow_request: FlowRequest) 
 
 @app.get("/runs")
 async def get_runs(request: Request) -> Sequence[Job]:
-    runs = bm.get_recent_runs()
+    runs = get_recent_runs()
     return runs
 
 
@@ -181,7 +181,6 @@ def run_app(cfg: DictConfig) -> None:
     listener_thread.start()
         
     # writer = TableWriter(**cfg.save)
-    templates = Jinja2Templates(directory="buttermilk/api/templates")
 
     # Set up CORS
     origins = [
