@@ -13,17 +13,28 @@ import regex as re
 import requests
 import validators
 import yaml
-from cloudpathlib import AnyPath, CloudPath
+from cloudpathlib import AnyPath, CloudPath, exceptions
 import httpx
 
 from .log import logger
 
 T = TypeVar("T")
 
+async def run_async_newthread(func, *args, **kwargs):
+    import asyncio
+    return await asyncio.to_thread(func, *args, **kwargs)
+
 async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False,
                            max_size: int = 1024 * 1024 * 10, token: Optional[str] = None) -> bytes:
     headers = {"Authorization": f"Bearer {token}"} if token else None
 
+    try:
+        url = CloudPath(url)
+        return await run_async_newthread(url.read_bytes)
+    except exceptions.InvalidPrefixError:
+        # not a cloudpath url
+        pass
+        
     async with httpx.AsyncClient() as client:
         r = await client.get(url, headers=headers)
         

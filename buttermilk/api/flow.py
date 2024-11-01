@@ -151,9 +151,9 @@ async def run_flow(flow: str, request: Request, flow_request: Optional[FlowReque
     content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.text), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
     record = RecordInfo(content=content, image=image, video=video)
     job = Job(record=record, source=INPUT_SOURCE)
-
+ 
     agent = FlowProcessor(client=client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
-    result = await agent.run(job=flow_request._job)
+    result = await agent.run(job=job)
     # writer.append_rows(rows=rows)
     return result
 
