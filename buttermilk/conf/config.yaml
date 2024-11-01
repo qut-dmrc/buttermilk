@@ -4,6 +4,7 @@ secret_provider: azure
 logger: gcp
 verbose: true
 models_secret: models
+concurrent: 10
 gcp:
   project: dmrc-platforms
   region: us-central1

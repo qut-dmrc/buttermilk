@@ -42,7 +42,7 @@ async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Opti
             return value
         
         # It's a URL, go fetch
-        obj = await httpx.AsyncClient().get(value)
+        obj = await download_limited_async(value)
 
         # try to extract text from object
         if obj.headers['Content-Type'].startswith('text/html'):
@@ -126,7 +126,7 @@ class RecordInfo(BaseModel):
     )
 
     @model_validator(mode="after")
-    async def vld_input(self) -> Self:
+    def vld_input(self) -> Self:
         if (
             self.content is None
             and self.image is None
@@ -151,12 +151,23 @@ class RecordInfo(BaseModel):
         
     def as_langchain_message(self, type: Literal["human","system"]='human') -> BaseMessage:
         # Return the fields as a langchain message
-        parts = [x for x in [self.text, self.alt_text] if x is not None ]
-    
-        if self.image:
-            parts.append(f"![Image](data:image/png;base64,{self.image})")
-        if self.video:
-            parts.append(f"![Video](data:video/mp4;base64,{self.video})")
+        parts = [x for x in [self.content, self.alt_text] if x is not None ]
+        # TODO: make multimodal
+        # Example from Claude:
+        message = """"content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": "<base64_encoded_image>"
+                    }
+                }
+            ]"""
+        # if self.image:
+        #     parts.append(f"![Image](data:image/png;base64,{self.image})")
+        # if self.video:
+        #     parts.append(f"![Video](data:video/mp4;base64,{self.video})")
 
         content = '\n'.join(parts)
 

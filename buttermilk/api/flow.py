@@ -44,7 +44,7 @@ class FlowProcessor(Agent):
     client: Optional[LC] = LC
     
     async def process_job(self, job: Job) -> Job:
-        response = await self.client.call_async(**job.inputs)
+        response = await self.client.call_async(record=job.record, input_vars=job.inputs)
         job.outputs = Result(**response)
         job.agent_info = self.agent_info
         return job
