@@ -45,7 +45,7 @@ async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Opti
         
         # It's a URL, go fetch
         obj = await download_limited_async(value)
-
+        
         # try to extract text from object
         if obj.headers['Content-Type'].startswith('text/html'):
             soup = BeautifulSoup(obj.text, 'html.parser')
