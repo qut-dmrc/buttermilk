@@ -32,6 +32,8 @@ from buttermilk.utils.utils import download_limited_async
 import httpx
 from bs4 import BeautifulSoup
 
+from buttermilk.utils.validators import make_list_validator
+
 
 @validate_call
 async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
@@ -94,12 +96,7 @@ class Result(BaseModel):
     scores: Optional[dict|list] = None
     metadata: Optional[dict] = {}
 
-    @field_validator("labels", "reasons", mode="before")
-    def vld_list(labels):
-        # ensure labels is a list
-        if isinstance(labels, str):
-            return [labels]
-        return labels
+    _ensure_list = field_validator("labels", "reasons", mode="before")(make_list_validator())
 
     model_config = ConfigDict(
         extra="allow",
@@ -207,12 +204,7 @@ class Job(BaseModel):
         validate_assignment=True,
         exclude_unset=True
     )
-
-    @field_validator("source", mode="before")
-    def vld_list(v):
-        if isinstance(v, str):
-            return [v]
-        return v
+    _ensure_list = field_validator("source", mode="before")(make_list_validator())
 
     @field_validator("outputs", mode="before")
     def convert_result(v):

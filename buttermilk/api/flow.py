@@ -1,11 +1,12 @@
 import asyncio
+import itertools
 import json
 import os
 import sys
 from pathlib import Path
 
 import threading
-from typing import Literal, Optional, Self, Sequence
+from typing import AsyncGenerator, Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
 import uvicorn
@@ -49,14 +50,48 @@ class FlowProcessor(Agent):
         job.agent_info = self.agent_info
         return job
 
+class MultiFlowOrchestrator(BaseModel):
+    agent: Agent
+    steps: Optional[Sequence] = Field(default_factory=list)
+    multivars: Optional[dict] = Field(default_factory=dict)
+
+    async def process_job(self, job: Job) -> AsyncGenerator[Job, None]:
+        # Generate all permutations of run vars
+        permutations = itertools.product(*(self.multivars[key] for key in self.multivars))
+
+        # Convert the permutations to a list of dictionaries
+        init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
+
+        # Create tasks for all workers
+        workers = [
+            self.agent.process(job, **combination)
+            for combination in permutations
+        ]
+        
+        # Process tasks as they complete
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(worker) for worker in workers]
+            
+            for future in asyncio.as_completed(tasks):
+                try:
+                    result = await future
+                    yield result
+                except Exception as e:
+                    logger.error(f"Worker failed with error: {e}")
+                    continue
+        
+        # All workers are now complete
+        return
+
+
 INPUT_SOURCE = "api"    
 bm = None
 logger = None
 app = FastAPI()
 
 class FlowRequest(BaseModel):
-    model: Optional[str] = None
-    template: Optional[str] = None
+    model: Optional[str|Sequence[str]] = None
+    template: Optional[str|Sequence[str]] = None
     template_vars: Optional[dict] = Field(default_factory=dict)
     
     text: Optional[str] = None

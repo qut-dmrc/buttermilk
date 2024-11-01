@@ -103,11 +103,6 @@ class Agent(BaseModel):
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
 
-    
-    def enqueue(self, job: Job, background_tasks: BackgroundTasks)->bool:
-        background_tasks.add_task(self.run, job)
-        return True
-
     async def run(self, job: Job) -> Job:
         async with self._sem:
             result = await self.process_job(job)
