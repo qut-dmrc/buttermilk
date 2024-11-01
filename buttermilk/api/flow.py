@@ -8,7 +8,7 @@ from pathlib import Path
 import threading
 from typing import AsyncGenerator, Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
+from pydantic import AliasChoices, AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
 import uvicorn
 import hydra
 from omegaconf import DictConfig
@@ -36,14 +36,15 @@ from buttermilk.utils.utils import read_file
 
 import httpx
 from buttermilk.flows.agent import Agent
+from buttermilk.utils.validators import make_list_validator
 from .runs import get_recent_runs
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
+
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
 class FlowProcessor(Agent):
-    client: Optional[LC] = LC
-    
     async def process_job(self, job: Job) -> Job:
         response = await self.client.call_async(record=job.record, input_vars=job.inputs)
         job.outputs = Result(**response)
@@ -51,22 +52,39 @@ class FlowProcessor(Agent):
         return job
 
 class MultiFlowOrchestrator(BaseModel):
-    agent: Agent
+    agents: Optional[Sequence[Agent]] = Field(default_factory=list)
+    flow_obj: Optional[object] = LC
+    n_runs: int = 1
     steps: Optional[Sequence] = Field(default_factory=list)
-    multivars: Optional[dict] = Field(default_factory=dict)
+    agent_vars: Optional[dict] = Field(default_factory=dict)
+    init_vars: Optional[dict] = Field(default_factory=dict)
+    run_vars: Optional[dict] = Field(default_factory=dict)
 
-    async def process_job(self, job: Job) -> AsyncGenerator[Job, None]:
+    async def run_tasks(self, job: Job) -> AsyncGenerator[Job, None]:
+
+        # Get permutations of init_vars and create our agents'
+        permutations = ([{key: value} for key in self.init_vars for value in self.init_vars[key] ])
+        permutations = itertools.product(*permutations)
+        self.agents = [FlowProcessor(**vars) for vars in permutations]
+
+
         # Generate all permutations of run vars
-        permutations = itertools.product(*(self.multivars[key] for key in self.multivars))
+        permutations = ([{key: value} for key in self.run_vars for value in self.run_vars[key] ])
+        permutations = itertools.product(*permutations)
 
         # Convert the permutations to a list of dictionaries
-        init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
+        permutations = [dict(*[items]) for values in permutations for items in values.items()]
 
-        # Create tasks for all workers
-        workers = [
-            self.agent.process(job, **combination)
-            for combination in permutations
-        ]
+        # Multiply by n
+        permutations = permutations * self.n_runs
+        
+        # For each agent,
+        for agent in self.agents:
+            # Create tasks for all workers
+            workers = [
+                agent.process(job, **vars)
+                for vars in permutations
+            ]
         
         # Process tasks as they complete
         async with asyncio.TaskGroup() as tg:
@@ -94,7 +112,7 @@ class FlowRequest(BaseModel):
     template: Optional[str|Sequence[str]] = None
     template_vars: Optional[dict] = Field(default_factory=dict)
     
-    text: Optional[str] = None
+    content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
     video: Optional[str] = None
     image: Optional[str] = None
 
@@ -103,6 +121,8 @@ class FlowRequest(BaseModel):
     _client: LC = PrivateAttr()
     _job: Job = PrivateAttr()
 
+    _ensure_list = field_validator("model", "template", mode="before")(make_list_validator())
+    
     @model_validator(mode='before')
     def preprocess_data(cls, values):
         # Check first if the values are coming as utf-8 encoded bytes
@@ -131,21 +151,22 @@ class FlowRequest(BaseModel):
             values['template_vars'] = {}
         values['template_vars'].update(**kwargs)
         
-        if not any([values.get('text'), values.get('image'), values.get('video')]):
+        if not any([values.get('content'), values.get('image'), values.get('video')]):
             raise ValueError("At least one of content, video or image must be provided.")
         
         return values
 
-    @field_validator('text', 'image', 'video', mode='before')
+    @field_validator('content', 'image', 'video', mode='before')
     def sanitize_strings(cls, v):
         if v:
             return v.strip()
         return v
     
     @field_validator('model', mode='before')
-    def check_model(cls, value: Optional[str]) -> str:
-        if value not in CHATMODELS:
-            raise ValueError("Valid model must be provided")
+    def check_model(cls, value: Optional[Sequence[str]]) ->  Optional[Sequence[str]]:
+        for v in value:
+            if v not in CHATMODELS:
+                raise ValueError(f"Valid model must be provided. {v} is unknown.")
         return value
 
 
@@ -177,21 +198,27 @@ logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = '') -> Job:
+async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
 
     # Ensure at least one of the content, uri, or media variables are provided
     # And make sure that we can form Client and Job objects from the input data.
-    client = LC(model=flow_request.model, template=flow_request.template, template_vars=flow_request.template_vars)
-
-    content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.text), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
+    content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.content), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
     record = RecordInfo(content=content, image=image, video=video)
     job = Job(record=record, source=INPUT_SOURCE)
  
-    agent = FlowProcessor(client=client, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
-    result = await agent.run(job=job)
-    # writer.append_rows(rows=rows)
-    return result
+    init_vars = dict(template=flow_request.template, template_vars=flow_request.template_vars)
+    agent_vars = dict(flow_obj=LC, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
+    run_vars = dict(model=flow_request.model)
 
+    orchestrator = MultiFlowOrchestrator(flow_obj=LC, n_runs=1, agent_vars=agent_vars, init_vars=init_vars, run_vars=run_vars)
+
+    results = []
+
+    async for result in orchestrator.run_tasks(job=job):
+        result.append(result)
+        
+    return results
+    
 
 @app.api_route("/runs/", methods=["GET", "POST"])
 async def get_runs(request: Request) -> Sequence[Job]:
