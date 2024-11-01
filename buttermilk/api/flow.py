@@ -160,7 +160,7 @@ async def run_flow(flow: str, request: Request, flow_request: Optional[FlowReque
 
 @app.api_route("/runs/", methods=["GET", "POST"])
 async def get_runs(request: Request) -> Sequence[Job]:
-    runs = get_recent_runs()
+    runs = get_recent_runs() 
     return runs
 
 @app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])

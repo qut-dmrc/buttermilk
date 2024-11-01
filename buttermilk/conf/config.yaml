@@ -4,8 +4,6 @@ secret_provider: azure
 logger: gcp
 verbose: true
 models_secret: models
-save_dest: gcp
-save_dir:
 gcp:
   project: dmrc-platforms
   region: us-central1
@@ -16,3 +14,7 @@ azure:
 aws:
   secret_name: secret
   region: us-east-1
+save:
+  type: bq
+  destination: dmrc-analysis.toxicity.flow
+  schema: buttermilk/schemas/flow.json
