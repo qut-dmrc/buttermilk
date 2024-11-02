@@ -156,7 +156,15 @@ class FlowRequest(BaseModel):
                 raise ValueError(f"Valid model must be provided. {v} is unknown.")
                 
         # Add any additional vars into the template_vars dict.
-        self.template_vars.update(self.model_extra)
+        extras = []
+        if self.template_vars and self.model_extra:
+            # Template variables is a list of dicts that are run in combinations
+            # When we add other variables, make sure to add them to each existing combination
+            for existing_vars in self.template_vars:
+                existing_vars.update(self.model_extra)
+                extras.append(existing_vars)
+        elif self.model_extra:
+            self.template_vars = [self.model_extra]
         
         return self
 
