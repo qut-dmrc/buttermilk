@@ -231,9 +231,11 @@ async def get_runs_json(request: Request) -> Sequence[Job]:
 async def get_runs_html(request: Request) -> HTMLResponse:
     df = get_recent_runs() 
 
-    df = group_and_filter_jobs(new_data=df, group=bm.cfg.data.runs.group, columns=bm.cfg.data.runs.columns, raise_on_error=False)
+    data = group_and_filter_jobs(new_data=df, group=bm.cfg.data.runs.group, columns=bm.cfg.data.runs.columns, raise_on_error=False)
 
-    return df.to_html(classes=['table', 'table-striped', 'table-hover', 'table-sm'], render_links=True,justify="justify")
+    rendered_result = templates.TemplateResponse(f"runs_html.html", {"request": request, "data": data})
+
+    return HTMLResponse(rendered_result.body.decode('utf-8'), status_code=200)
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:

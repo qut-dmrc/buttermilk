@@ -1,34 +1,18 @@
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-12">
-            <h2 class="mb-4">Runs</h2>
-            
-            <div class="table-responsive">
-                {{ data.to_html(
-                    classes=['table', 'table-striped', 'table-hover', 'table-sm'],
-                    justify='left',
-                    border=0,
-                    escape=False,
-                    index=True,
-                    table_id='runs-table'
-                ) | safe }}
-            </div>
-        </div>
-    </div>
+      <h2 class="mb-4">Runs</h2>
+
+      <div class="table-responsive">
+            {{ data.to_html(
+                  classes=['table', 'table-striped', 'table-hover', 'table-sm'],
+                  justify='right',
+                  border=0,
+                  render_links=True,
+                  escape=False,
+                  index=False,
+                  table_id='runs-table'
+            ) | safe }}
+      </div>
 </div>
 
-<style>
-    .table thead th {
-        background-color: #f8f9fa;
-        border-top: none;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .table tbody tr:hover {
-        background-color: rgba(0,0,0,.075);
-    }
-    #runs-table {
-        font-size: 0.875rem;
-    }
-</style>
 {% endblock %}

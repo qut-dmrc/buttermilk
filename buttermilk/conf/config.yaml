@@ -30,12 +30,11 @@ data:
     max_records_per_group: 1
     filter:
     group:
-      record_id: record.record_id
       job_id: job_id
+      record_id: record.record_id
     columns:
       timestamp: timestamp
       agent: agent_info.agent
       source: source
-      record_id: record.record_id
       error: error
       parameters: parameters
