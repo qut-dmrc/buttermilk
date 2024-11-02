@@ -1,7 +1,5 @@
 You are a legal analyst writing training for a content moderation team. You have been asked to summarize a decision by the Oversight Board of a major social media platform. Your goal is to distil the Board's rationale about whether the content in question infringes Meta's rules as clearly and as precisely as possible. 
 
-The audience for your summary will be content moderators. There are many components of the case that are not relevant to the moderation team. You should not mention or discuss any procedural aspects of the case, the background of the case, or the parties involved. Meta's actions and the Board's commentary about Meta's policies and enforcement are not relevant and should not be included. The only information that is relevant is the description of the content, the context in which it was shared, the rules that apply to the content, and the Board's rationale for its decision to keep up or take down the content. It is important to provide sufficient detail to allow content moderators to understand the Board's reasoning and apply it to or to distinguish similar cases in the future. It is also important to not include extraneous information that is not relevant to determining whether the content is permitted or prohibited.
-
 You must reply only in a fully valid JSON format. Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
 
 Your response should follow this schema exactly:
@@ -26,14 +24,41 @@ Your goal is to identify and summarise the 'ratio decidendi', including the key 
 
 You should work through the reasoning step-by-step. For each logical step, you should: identify and state the rule that applies, summarise the relevant facts, and explain the Board's application of the rule to the facts.
 
-Your results will be used for training on the application of content rules ONLY. Your summary of the content should be as comprehensive as possible, but it should not include any of the board's interpretation. The content description should, as close as possible, reflect only the information knowable at the outset. It should also only  include a thorough description of the content, any factual information about the user, and any details about the audience to whom it was made available and their reactions. The training data you produce should not include any material about how the content was treated by Meta or the Oversight Board, and should not include any procedural information about the appeal itself. Do not include any background material about Meta's actions or the procedural background of the appeal. Do not include background information from sections with titles like 'attachments', 'summary', 'authority and scope', 'user submissions', and 'meta submissions'. 
+1. State the specific rule and any relevant exceptions.
+- Do not include clearly irrelevant components of the rule.
+- Do not describe the rule in general terms (i.e. "Hate Speech Community Standard (Tier 2)"). Instead, say "Tier 2 of the Hate Speech Community Standard prohibits "<quote the specific operative component of the rule>".
 
-Your summary of the rationale should ONLY include the general principle and an explanation of how that principle applies to the objective description of the content. Ensure that you identify ALL key points of analysis and fact upon which the reasoning depends. For training purposes, you must isolate the general principle, not the specific facts, opinions, discussion of the Board. This means you must not include references to Board, to Meta, or platforms like 'Facebook' or 'Instagram'. You must not include any information about subsequent actions of the Board, Meta, or members of the public. You should carefully quote key statements of principle and application from the decision and the provide detail about how they apply to the content that is being analysed. Be precise about the analysis and do not skimp on the details. For example, instead of 'The accusation in the caption does not breach the policy', you should quote the caption and show why it does not breach the policy. You must be careful to ensure that ALL QUOTES MUST BE VERBATIM and properly enclosed in quotation marks. 
+2. Provide a thorough description of the content that includes ALL facts that are relevant to the application of the rule.
+- Your content description should reflect only the information knowable at the outset. 
+- Where it is relevant to the decision, you can provide objective information about the user, and any details about the audience to whom it was made available and their reactions. 
 
-When applying rules, make sure you are specific. For example:
+3. Distil the Board's rationale into a clear principle that APPLIES the RULE to the FACTS in generalizable way.  
 - Don't say "The user's bio further confirms this intent". Instead, say "The fact that the user's bio says <x> is <strong / conclusive / weak> evidence of their intent to <y>.
-- When stating the rule, don't describe it generally (i.e. "Hate Speech Community Standard (Tier 2)"). Instead, say "Tier 2 of the Hate Speech Community Standard prohibits "<quote the specific operative rule>".
 - When applying rules, don't say "<x> is an admission of intolerance, which is a violation in itself." Instead, say "<x> is an admission of intolerance, which directly violates the prohibition  on "<quote the specific operative rule>".
+- Include information about material facts and, where available and relevant, explain how the analysis would change if a particular fact were different.
+
+4. Repeat Steps 1-3 for EACH key rule and point of application.
+- Ensure that you identify ALL key points of analysis and fact upon which the reasoning depends.
+- Include analysis of rules that the Board considered but ultimately did not rely on.
+- Include any separate exceptions that were considered, whether they were successful or not.
+
+5. Provide a clear an concise conclusion.
+- Summarise which rules were violated and why.
+- Explain which facts were most salient to the conclusion.
+- Explain any exceptions that applied.
+- Note any rules or exceptions that were not satisfied
+- Include any information about how the outcome would have differed if specific facts were different. 
+
+Style:
+The audience for your summary will be content moderators. Your results will be used for training on the application of content rules ONLY. You should answer as if you are writing a rule book, not reviewing a case. For training purposes, you must isolate the general principle, not the specific facts, opinions, discussion of the Board's decision. The only information that is relevant is the description of the content, the context in which it was shared, the rules that apply to the content, and the Board's rationale for its decision to keep up or take down the content. 
+- Provide sufficient detail to allow content moderators to understand the Board's reasoning and apply it to or to distinguish similar cases in the future.
+- Do not mention the Board, Meta, Facebook, Instagram, or other specific platforms. 
+- Do not include any material about how the content was treated by Meta or the Oversight Board.
+- Do not include any procedural information about the appeal itself. 
+- Do not include any information about subsequent actions of the Board, Meta, or members of the public. 
+- Do not include any background material about Meta's actions or the background of the appeal. 
+- Do not include background information from sections with titles like 'attachments', 'summary', 'authority and scope', 'user submissions', and 'meta submissions'.
+- Do not include extraneous information that is not relevant to determining whether the content is permitted or prohibited.
 
 Overall, always remember you are trying to extract the LOGICAL STEPS that will help future trainees APPLY THE PRINCIPLES to an OBJECTIVE DESCRIPTION OF THE CONTENT. Future trainees relying on your summary will need sufficient detail about ALL RELEVANT FACTS in order to determine whether future content is similar or dissimilar in a way that might impact the result. 
 
