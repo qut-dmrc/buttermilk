@@ -15,7 +15,7 @@ from omegaconf import DictConfig
 import pandas as pd
 from buttermilk import BM
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from promptflow.tracing import start_trace, trace
@@ -202,18 +202,23 @@ bm = BM()
 logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+    )
+
 @app.api_route("/runs/", methods=["GET", "POST"])
 async def get_runs(request: Request) -> Sequence[Job]:
     runs = get_recent_runs() 
     return runs
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow_json(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> StreamingResponse:
-    async def result_generator() -> AsyncGenerator[Job, None]:
-        async for result in run_flow(flow=flow, request=request, flow_request=flow_request):
-            yield result.model_dump() + "\n"
-
-    return StreamingResponse(result_generator(), media_type="application/json")
+async def run_flow_json(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
+    # return StreamingResponse(run_flow(flow=flow, request=request, flow_request=flow_request), media_type="application/json")
+    results = [ job async for job in run_flow(flow=flow, request=request, flow_request=flow_request)]
+    return results
 
 @app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
 @app.api_route("/html/{route}", methods=["GET", "POST"])
@@ -224,8 +229,8 @@ async def run_route_html(route: str, request: Request, flow: str, flow_request: 
             # Render the template with the response data
             result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": data})
             yield result
-            
-    return StreamingResponse(result_generator(), media_type="application/json")
+
+    return StreamingResponse(result_generator(), media_type="application/html")
 
 def run_app(cfg: DictConfig) -> None:
     global bm, logger, app 
