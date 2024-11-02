@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 import threading
-from typing import AsyncGenerator, Literal, Optional, Self, Sequence
+from typing import Any, AsyncGenerator, Dict, List, Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
-from pydantic import AliasChoices, AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validator
+from pydantic import AliasChoices, AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validate_call
 import uvicorn
 import hydra
 from omegaconf import DictConfig
@@ -32,7 +32,7 @@ from buttermilk.runner import Job
 from buttermilk.runner._runner_types import Result
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
-from buttermilk.utils.utils import read_file
+from buttermilk.utils.utils import expand_dict, read_file
 
 import httpx
 from buttermilk.flows.agent import Agent
@@ -46,45 +46,34 @@ from .runs import get_recent_runs
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
 class FlowProcessor(Agent):
     async def process_job(self, job: Job) -> Job:
-        response = await self.client.call_async(record=job.record, input_vars=job.inputs)
+        response = await self.client.call_async(record=job.record, params=job.parameters)
         job.outputs = Result(**response)
         job.agent_info = self.agent_info
         return job
 
 class MultiFlowOrchestrator(BaseModel):
     agents: Optional[Sequence[Agent]] = Field(default_factory=list)
-    flow_obj: Optional[object] = LC
     n_runs: int = 1
     steps: Optional[Sequence] = Field(default_factory=list)
     agent_vars: Optional[dict] = Field(default_factory=dict)
     init_vars: Optional[dict] = Field(default_factory=dict)
     run_vars: Optional[dict] = Field(default_factory=dict)
 
-    async def run_tasks(self, job: Job) -> AsyncGenerator[Job, None]:
+    async def run_tasks(self, record: RecordInfo, source: str) -> AsyncGenerator[Job, None]:
+        init_combinations = expand_dict(self.init_vars)
+        run_combinations = expand_dict(self.run_vars)
 
-        # Get permutations of init_vars and create our agents'
-        permutations = ([{key: value} for key in self.init_vars for value in self.init_vars[key] ])
-        permutations = itertools.product(*permutations)
-        self.agents = [FlowProcessor(**vars) for vars in permutations]
-
-
-        # Generate all permutations of run vars
-        permutations = ([{key: value} for key in self.run_vars for value in self.run_vars[key] ])
-        permutations = itertools.product(*permutations)
-
-        # Convert the permutations to a list of dictionaries
-        permutations = [dict(*[items]) for values in permutations for items in values.items()]
+        self.agents = [FlowProcessor(**vars, **self.agent_vars) for vars in init_combinations]
 
         # Multiply by n
-        permutations = permutations * self.n_runs
+        permutations = run_combinations * self.n_runs
         
-        # For each agent,
+        # For each agent, create tasks for each job
+        workers = []
         for agent in self.agents:
-            # Create tasks for all workers
-            workers = [
-                agent.process(job, **vars)
-                for vars in permutations
-            ]
+            for vars in permutations:
+                job = Job(record=record, source=INPUT_SOURCE, parameters=vars)
+                workers.append(agent.run(job))
         
         # Process tasks as they complete
         async with asyncio.TaskGroup() as tg:
@@ -110,7 +99,7 @@ app = FastAPI()
 class FlowRequest(BaseModel):
     model: Optional[str|Sequence[str]] = None
     template: Optional[str|Sequence[str]] = None
-    template_vars: Optional[dict] = Field(default_factory=dict)
+    template_vars: Optional[dict|Sequence[dict]] = Field(default_factory=list)
     
     content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
     video: Optional[str] = None
@@ -121,7 +110,7 @@ class FlowRequest(BaseModel):
     _client: LC = PrivateAttr()
     _job: Job = PrivateAttr()
 
-    _ensure_list = field_validator("model", "template", mode="before")(make_list_validator())
+    _ensure_list = field_validator("model", "template", "template_vars", mode="before")(make_list_validator())
     
     @model_validator(mode='before')
     def preprocess_data(cls, values):
@@ -198,24 +187,23 @@ logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow(flow: str, request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
+async def run_flow(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
 
     # Ensure at least one of the content, uri, or media variables are provided
     # And make sure that we can form Client and Job objects from the input data.
     content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.content), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
     record = RecordInfo(content=content, image=image, video=video)
-    job = Job(record=record, source=INPUT_SOURCE)
  
     init_vars = dict(template=flow_request.template, template_vars=flow_request.template_vars)
     agent_vars = dict(flow_obj=LC, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
     run_vars = dict(model=flow_request.model)
 
-    orchestrator = MultiFlowOrchestrator(flow_obj=LC, n_runs=1, agent_vars=agent_vars, init_vars=init_vars, run_vars=run_vars)
+    orchestrator = MultiFlowOrchestrator(n_runs=1, agent_vars=agent_vars, init_vars=init_vars, run_vars=run_vars)
 
     results = []
 
-    async for result in orchestrator.run_tasks(job=job):
-        result.append(result)
+    async for result in orchestrator.run_tasks(record=record, source=INPUT_SOURCE):
+        results.append(result)
         
     return results
     
@@ -227,18 +215,15 @@ async def get_runs(request: Request) -> Sequence[Job]:
 
 @app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
 @app.api_route("/html/{route}", methods=["GET", "POST"])
-async def run_route_html(route: str, request: Request, flow: Optional[str] = '') -> HTMLResponse:
-    # Route the request to "/{route}/{flow}" with original args
-    async with httpx.AsyncClient() as client:
-        if request.method == "GET":
-            response = await client.get(f"http://localhost:8000/{route}/{flow}", params=request.query_params)
-        elif request.method == "POST":
-            response = await client.post(f"http://localhost:8000/{route}/{flow}", json=await request.json())
+async def run_route_html(route: str, request: Request, flow: Literal['judge','summarise'], flow_request: Optional[FlowRequest] = '') -> HTMLResponse:
+    # Route the request to the "/{route}/{flow}" function with original args
+    response = await run_flow(flow=flow, request=request, flow_request=flow_request)
+  
     # Process the response
     response_data = response.json()
     
     # Render the template with the response data
-    result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": response})
+    result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": response_data})
     return result
 
 def run_app(cfg: DictConfig) -> None:
