@@ -19,3 +19,23 @@ save:
   type: bq
   destination: dmrc-analysis.toxicity.flow
   schema: buttermilk/schemas/flow.json
+
+data:
+  runs:
+    type: job
+    name: runs
+    dataset: dmrc-analysis.toxicity.flow
+    last_n_days: 7
+    aggregate: false
+    max_records_per_group: 1
+    filter:
+    group:
+      record_id: record.record_id
+      job_id: job_id
+    columns:
+      timestamp: timestamp
+      agent: agent_info.agent
+      source: source
+      record_id: record.record_id
+      error: error
+      parameters: parameters

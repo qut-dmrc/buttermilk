@@ -53,7 +53,7 @@ def load_jobs(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed:
     return df
 
 
-def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df: Optional[pd.DataFrame] = None, max_records_per_group: int = -1) -> pd.DataFrame:
+def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df: Optional[pd.DataFrame] = None, max_records_per_group: int = -1, raise_on_error=True) -> pd.DataFrame:
 
     # expand and rename columns if we need to
     pairs_to_expand = list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns))
@@ -74,15 +74,20 @@ def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df
                 # Now, try to get the sub-column from the dictionary within the grp column
                 new_data.loc[:, col_name] = pd.json_normalize(new_data[grp])[col].values
             except Exception as e:
-                logger.exception(f"Error extracting column {col} from {grp} in {new_data}: {e} {e.args=}")
-                raise e
+                logger.error(f"Error extracting column {col} from {grp}: {e} {e.args=}")
+                if raise_on_error:
+                    raise e
 
         except ValueError:
             pass  # no group in this column definition
             if col_name != grp:
                 # rename column
                 new_data = new_data.rename(columns={grp: col_name})
-
+        except KeyError as e:
+            logger.error(f"Error extracting column {col} from {grp}: {e} {e.args=}")
+            if raise_on_error:
+                raise e
+    
     # Add columns to group by to the index
     idx_cols = [ c for c in group.keys() if c in new_data.columns]
 
@@ -115,6 +120,15 @@ def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df
         return df
     else:
         # Only return the columns we need
+        cols = [x for x in  idx_cols + list(columns.keys()) if x in new_data.columns]
+        missing_cols = set(idx_cols + list(columns.keys())) - set(cols)
+        if missing_cols:
+            logger.error(f"Missing columns {list(missing_cols)}")
+            if raise_on_error:
+                raise KeyError(f"Missing columns {list(missing_cols)}")
+            else:
+                for c in missing_cols:
+                    new_data[c] = None
         return new_data[idx_cols + list(columns.keys())]
 
 

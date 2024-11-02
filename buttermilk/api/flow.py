@@ -30,6 +30,7 @@ from buttermilk.llms import CHATMODELS
 from buttermilk.runner._runner_types import Job, RecordInfo, validate_uri_extract_text, validate_uri_or_b64
 from buttermilk.runner import Job
 from buttermilk.runner._runner_types import Result
+from buttermilk.runner.helpers import group_and_filter_jobs
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import expand_dict, read_file
@@ -219,9 +220,20 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 @app.api_route("/runs/", methods=["GET", "POST"])
-async def get_runs(request: Request) -> Sequence[Job]:
+async def get_runs_json(request: Request) -> Sequence[Job]:
     runs = get_recent_runs() 
-    return runs
+
+    results = [ Job(**row) for _, row in runs.iterrows()]
+
+    return results
+
+@app.api_route("/html/runs/", methods=["GET", "POST"])
+async def get_runs_html(request: Request) -> HTMLResponse:
+    df = get_recent_runs() 
+
+    df = group_and_filter_jobs(new_data=df, group=bm.cfg.data.runs.group, columns=bm.cfg.data.runs.columns, raise_on_error=False)
+
+    return df.to_html(classes=['table', 'table-striped', 'table-hover', 'table-sm'], render_links=True,justify="justify")
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
@@ -229,15 +241,15 @@ async def run_flow_json(flow: Literal['judge','summarise'], request: Request, fl
     results = [ job async for job in run_flow(flow=flow, request=request, flow_request=flow_request)]
     return results
 
-@app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
-@app.api_route("/html/{route}", methods=["GET", "POST"])
-async def run_route_html(route: str, request: Request, flow: str, flow_request: Optional[FlowRequest] = '') -> StreamingResponse:
+@app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
+@app.api_route("/html/flow", methods=["GET", "POST"])
+async def run_route_html(request: Request, flow: str = '', flow_request: Optional[FlowRequest] = '') -> StreamingResponse:
     async def result_generator() -> AsyncGenerator[str, None]:
-        bm.logger.info(f"Received request for {route} with flow {flow} and flow_request {flow_request}")
+        bm.logger.info(f"Received request for flow {flow} and flow_request {flow_request}")
         try:
             async for data in run_flow(flow=flow, request=request, flow_request=flow_request):
                 # Render the template with the response data
-                rendered_result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": data})
+                rendered_result = templates.TemplateResponse(f"flow_html.html", {"request": request, "data": data})
                 yield rendered_result.body.decode('utf-8')
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))

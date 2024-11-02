@@ -1,7 +1,6 @@
 import pydantic
 import pandas as pd
 from buttermilk import BM
-from buttermilk.runner._runner_types import Job
 
 bm = BM()
 logger = bm.logger
@@ -12,9 +11,5 @@ def get_recent_runs(max_n=50):
     WHERE TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)) 
     ORDER BY TIMESTAMP DESC"""
 
-    rows = bm.run_query(sql, df=False)
-
-    results = [ Job(**row) for row in rows]
-
-    return results
-
+    rows = bm.run_query(sql, df=True)
+    return rows
