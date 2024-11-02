@@ -211,7 +211,7 @@ def callback(message):
 
     try:
         # Run async operations in the loop
-        bm.logger.info(f"Caling flow {task} for Pub/Sub job...")
+        bm.logger.info(f"Calling flow {task} for Pub/Sub job...")
 
         async def process_generator():
             results = []
