@@ -15,7 +15,7 @@ from omegaconf import DictConfig
 import pandas as pd
 from buttermilk import BM
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from promptflow.tracing import start_trace, trace
@@ -159,6 +159,22 @@ class FlowRequest(BaseModel):
         return value
 
 
+async def run_flow(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> AsyncGenerator[Job, None]:
+    # Ensure at least one of the content, uri, or media variables are provided
+    # And make sure that we can form Client and Job objects from the input data.
+    content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.content), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
+    record = RecordInfo(content=content, image=image, video=video)
+ 
+    init_vars = dict(template=flow_request.template, template_vars=flow_request.template_vars)
+    agent_vars = dict(flow_obj=LC, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
+    run_vars = dict(model=flow_request.model)
+
+    orchestrator = MultiFlowOrchestrator(n_runs=1, agent_vars=agent_vars, init_vars=init_vars, run_vars=run_vars)
+
+    async for result in orchestrator.run_tasks(record=record, source=INPUT_SOURCE):
+        yield result
+
+
 def callback(message):
     data = json.loads(message.data)
     message.ack()
@@ -186,45 +202,30 @@ bm = BM()
 logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
-@app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> Sequence[Job]:
-
-    # Ensure at least one of the content, uri, or media variables are provided
-    # And make sure that we can form Client and Job objects from the input data.
-    content, image,video = await asyncio.gather(validate_uri_extract_text(flow_request.content), validate_uri_or_b64(flow_request.image), validate_uri_or_b64(flow_request.video))
-    record = RecordInfo(content=content, image=image, video=video)
- 
-    init_vars = dict(template=flow_request.template, template_vars=flow_request.template_vars)
-    agent_vars = dict(flow_obj=LC, agent=flow, save_params=bm.cfg.save, concurrent=bm.cfg.concurrent)
-    run_vars = dict(model=flow_request.model)
-
-    orchestrator = MultiFlowOrchestrator(n_runs=1, agent_vars=agent_vars, init_vars=init_vars, run_vars=run_vars)
-
-    results = []
-
-    async for result in orchestrator.run_tasks(record=record, source=INPUT_SOURCE):
-        results.append(result)
-        
-    return results
-    
-
 @app.api_route("/runs/", methods=["GET", "POST"])
 async def get_runs(request: Request) -> Sequence[Job]:
     runs = get_recent_runs() 
     return runs
 
+@app.api_route("/flow/{flow}", methods=["GET", "POST"])
+async def run_flow_json(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> StreamingResponse:
+    async def result_generator() -> AsyncGenerator[Job, None]:
+        async for result in run_flow(flow=flow, request=request, flow_request=flow_request):
+            yield result.model_dump() + "\n"
+
+    return StreamingResponse(result_generator(), media_type="application/json")
+
 @app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
 @app.api_route("/html/{route}", methods=["GET", "POST"])
-async def run_route_html(route: str, request: Request, flow: Literal['judge','summarise'], flow_request: Optional[FlowRequest] = '') -> HTMLResponse:
+async def run_route_html(route: str, request: Request, flow: str, flow_request: Optional[FlowRequest] = '') -> HTMLResponse:
     # Route the request to the "/{route}/{flow}" function with original args
-    response = await run_flow(flow=flow, request=request, flow_request=flow_request)
-  
-    # Process the response
-    response_data = response.json()
-    
-    # Render the template with the response data
-    result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": response_data})
-    return result
+    async def result_generator() -> AsyncGenerator[Job, None]:
+        async for data in run_flow(flow=flow, request=request, flow_request=flow_request):
+            # Render the template with the response data
+            result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": data})
+            yield result
+            
+    return StreamingResponse(result_generator(), media_type="application/json")
 
 def run_app(cfg: DictConfig) -> None:
     global bm, logger, app 
