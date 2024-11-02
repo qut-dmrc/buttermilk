@@ -20,22 +20,17 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "record",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
         "name": "source",
         "type": "STRING",
         "mode": "REPEATED"
     },
     {
-        "name": "parameters",
+        "name": "record",
         "type": "JSON",
         "mode": "NULLABLE"
     },
     {
-        "name": "inputs",
+        "name": "parameters",
         "type": "JSON",
         "mode": "NULLABLE"
     },

@@ -3,7 +3,14 @@ import datetime
 import platform
 from typing import Any, AsyncGenerator, Generator, Literal, Optional, Self, Type, Union,Mapping
 
-from langchain_core.messages.base import BaseMessage, BaseMessageChunk
+from langchain_core.messages import BaseMessage, BaseMessageChunk, HumanMessage, AIMessage
+from langchain_core.prompts import (
+    ChatMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+)
 import numpy as np
 import psutil
 import pydantic
@@ -44,15 +51,14 @@ async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Opti
             return value
         
         # It's a URL, go fetch
-        obj = await download_limited_async(value)
-        
+        obj, mimetype = await download_limited_async(value)
+
         # try to extract text from object
-        if obj.headers['Content-Type'].startswith('text/html'):
-            soup = BeautifulSoup(obj.text, 'html.parser')
+        if mimetype.startswith('text/html'):
+            soup = BeautifulSoup(obj, 'html.parser')
             value = soup.get_text()
         else:
-            # maybe should encode it here?
-            pass 
+            value = obj.decode()
     return value
 
 @validate_call
@@ -167,8 +173,11 @@ class RecordInfo(BaseModel):
         #     parts.append(f"![Video](data:video/mp4;base64,{self.video})")
 
         content = '\n'.join(parts)
-
-        message = BaseMessage(type=type, content=content, id=self.record_id, name=self.name)
+        if type == "human":
+            message = HumanMessage(content=content)
+        else:
+            # No idea why, but this one doesn't seem to work with type='human'
+            message = BaseMessage(content=str(content), type=type)#, id=self.record_id, name=self.name)
 
         return message
 
@@ -183,11 +192,10 @@ class Job(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
     run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM()._run_metadata)
 
-    parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
     source: str|list[str]
     
     record: Optional[RecordInfo] = None
-    inputs: dict = Field(default_factory=dict)             # Other data to be processed by the worker
+    parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
 
     # These fields will be fully filled once the record is processed
     agent_info: Optional[AgentInfo] = None

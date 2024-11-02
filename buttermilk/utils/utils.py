@@ -1,9 +1,10 @@
 import datetime
+import itertools
 import json
 import math
 import pathlib
 import uuid
-from typing import Any, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
 from typing import Mapping, Sequence
 import fsspec
 import numpy as np
@@ -25,12 +26,13 @@ async def run_async_newthread(func, *args, **kwargs):
     return await asyncio.to_thread(func, *args, **kwargs)
 
 async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False,
-                           max_size: int = 1024 * 1024 * 10, token: Optional[str] = None) -> bytes:
+                           max_size: int = 1024 * 1024 * 10, token: Optional[str] = None) -> Tuple[bytes, str]:
     headers = {"Authorization": f"Bearer {token}"} if token else None
 
     try:
         url = CloudPath(url)
-        return await run_async_newthread(url.read_bytes)
+        data = await run_async_newthread(url.read_bytes)
+        return data, "application/octet-stream"  # Default for CloudPath
     except exceptions.InvalidPrefixError:
         # not a cloudpath url
         pass
@@ -43,14 +45,16 @@ async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False
 
         data = []
         length = 0
-
+        
         async for chunk in r.aiter_bytes(1024):
             data.append(chunk)
             length += len(chunk)
             if not allow_arbitrarily_large_downloads and length > max_size:
-                return b""
+                raise IOError("File too large, download aborted")
+            
+        mimetype = r.headers.get("Content-Type", "application/octet-stream")
 
-    return b"".join(data)
+        return b"".join(data), mimetype
 
 def download_limited(url, *, allow_arbitrarily_large_downloads=False,
                      max_size: int=1024 * 1024 * 10, token=None) -> bytes:
@@ -286,3 +290,19 @@ def find_all_keys_in_dict(x, search_key):
                 results.extend(result)
 
     return results
+
+def expand_dict(d: Dict[str, Any]) -> List[Dict[str, Any]]:
+    # Separate keys with list values and keys with single values
+    list_keys = {k: v for k, v in d.items() if isinstance(v, list)}
+    single_keys = {k: v for k, v in d.items() if not isinstance(v, list)}
+
+    # Generate all combinations of list values
+    combinations = list(itertools.product(*list_keys.values()))
+
+    # Create a list of dictionaries with all combinations
+    expanded_dicts = [
+        {**single_keys, **dict(zip(list_keys.keys(), combo))}
+        for combo in combinations
+    ]
+
+    return expanded_dicts

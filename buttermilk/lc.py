@@ -115,18 +115,16 @@ class LC(BaseModel):
 
     async def call_async(self, text: Optional[str] = None, *, 
                          record: Optional[RecordInfo] = None,
-                         input_vars: Optional[dict] = None, 
-                         model: Optional[str] = None, **kwargs):
+                         params: Optional[dict] = {}):
         
-        local_inputs = self.template_vars.copy()
-        local_inputs.update(kwargs)
-        if input_vars:
-            local_inputs.update(**input_vars)
-
-        if not (model := model or self.model):
+        if not (model := params.pop('model', None) or self.model):
             raise ValueError(
                 "You must provide either model name or provide a default model on initialisation."
             )
+        
+        local_inputs = self.template_vars.copy()
+        local_inputs.update(**params)
+
         local_template = self._template.render(**local_inputs)
 
         if model.startswith("o1-preview"):

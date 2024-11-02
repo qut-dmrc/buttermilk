@@ -16,7 +16,9 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk.runner._runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
+from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import upload_rows, save
+from buttermilk.utils.log import logger
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -105,15 +107,23 @@ class Agent(BaseModel):
 
     async def run(self, job: Job) -> Job:
         async with self._sem:
-            result = await self.process_job(job)
-            
-            if self.save_params:
-                rows = [result.model_dump()]
-                if self.save_params.type == 'bq':
-                    upload_rows(rows=rows, dataset=self.save_params.destination, schema=self.save_params.db_schema)
-                else:
-                    save(save_dir=self.save_params.destination)
-            return result
+            try:
+                job.agent_info = self.agent_info
+                job = await self.process_job(job=job)
+            except Exception as e:
+                job.error = extract_error_info(e=e)
+                if job.record:
+                    logger.error(
+                        f"Error processing task {self.agent} by {self.agent} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}"
+                    )
+            finally: 
+                if self.save_params:
+                    rows = [job.model_dump()]
+                    if self.save_params.type == 'bq':
+                        upload_rows(rows=rows, dataset=self.save_params.destination, schema=self.save_params.db_schema)
+                    else:
+                        save(save_dir=self.save_params.destination)
+            return job
         
     @abstractmethod
     async def process_job(self, *, job: Job) -> Job:

@@ -25,7 +25,7 @@ class ChatParser(JsonOutputParser):
     # - ignore: ignore the error and return the original string in a dictionary with the key 'response' (default)
 
     on_error: Literal["raise", "warn", "ignore"] = Field(
-        default="ignore", description="Error handling options: raise, warn, or ignore"
+        default="warn", description="Error handling options: raise, warn, or ignore"
     )
 
     def parse_result(self, result: List[Generation], *, partial: bool = False) -> Any:
@@ -55,8 +55,12 @@ class ChatParser(JsonOutputParser):
             try:
                 output = parse_json_markdown(text)
             except (JSONDecodeError, OutputParserException, Exception) as e:
-                logger.error(f"Unable to decode JSON in result: {text}")
-                raise e
+                if self.on_error == "raise":
+                    logger.error(f"Unable to decode JSON in result: {text}")
+                    raise e
+                elif self.on_error == "warn":
+                    logger.warning(f"Unable to decode JSON in result: {text}")
+                return dict(response=text, error="Unable to decode JSON in result")
 
         if not isinstance(output, dict):
             output = dict(response=output)
