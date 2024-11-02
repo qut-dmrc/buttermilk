@@ -8,6 +8,7 @@ from pathlib import Path
 import threading
 from typing import Any, AsyncGenerator, Dict, List, Literal, Optional, Self, Sequence
 from cloudpathlib import AnyPath
+from fastapi.concurrency import run_in_threadpool
 from pydantic import AliasChoices, AnyUrl, BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, validate_call
 import uvicorn
 import hydra
@@ -187,15 +188,48 @@ async def run_flow(flow: Literal['judge','summarise'], request: Request, flow_re
 
 
 def callback(message):
+    results = None
     data = json.loads(message.data)
-    message.ack()
     task = data.pop("task")
+    try:
+        request = FlowRequest(**data)
+        message.ack()
+    except Exception as e:
+        message.nack()
+        logger.error(f"Error parsing Pub/Sub message: {e}")
+    
+    try:
+        # Try to get existing loop
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No loop exists, create new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        should_close_loop = True
+    else:
+        should_close_loop = False
 
-    # Call your FastAPI endpoint to process the job
-    # You can use requests or httpx to make the HTTP call
-    import requests
-    response = requests.post(f"http://localhost:8000/{task}", json=data)
-    bm.logger.info(f"Passed on Pub/Sub job. Received: {response.json()}")
+    try:
+        # Run async operations in the loop
+        bm.logger.info(f"Caling flow {task} for Pub/Sub job...")
+
+        async def process_generator():
+            results = []
+            async for result in run_flow(flow=task, request=request, flow_request=request):
+                results.append(result)
+            return results
+        
+        results = loop.run_until_complete(process_generator())
+        message.ack() 
+        
+    except Exception as e:
+        logger.error(f"Error processing message: {e}")
+        message.nack()
+    finally:
+        if should_close_loop:
+            loop.close()
+    
+    bm.logger.info(f"Passed on Pub/Sub job. Received {len(results)} results")
 
 def start_pubsub_listener():
     subscriber = pubsub.SubscriberClient()
@@ -291,10 +325,11 @@ async def log_cors_failures(request: Request, call_next):
     return response
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def _config(cfg: DictConfig) -> BM:
-    return BM(cfg=cfg)
-
-def main() -> None:
+def main(cfg: DictConfig):
+    global bm, logger, app
+    bm = BM(cfg=cfg)
+    
+    logger = bm.logger
     start_trace(resource_attributes={"run_id": bm._run_metadata.run_id}, collection="flow_api", job="pubsub prompter")
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
@@ -303,7 +338,7 @@ def main() -> None:
     uvicorn.run(app, host="0.0.0.0", port=8000)
     # writer = TableWriter(**cfg.save)
 
+
 if __name__ == "__main__":
-    bm = _config()
-    logger = bm.logger
     main()
+    

@@ -16,13 +16,13 @@ import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 import httpx
+import asyncio
 
 from .log import logger
 
 T = TypeVar("T")
 
 async def run_async_newthread(func, *args, **kwargs):
-    import asyncio
     return await asyncio.to_thread(func, *args, **kwargs)
 
 async def download_limited_async(url, *, allow_arbitrarily_large_downloads=False,
@@ -293,7 +293,7 @@ def find_all_keys_in_dict(x, search_key):
 
 def expand_dict(d: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Separate keys with list values and keys with single values
-    list_keys = {k: v for k, v in d.items() if isinstance(v, list)}
+    list_keys = {k: v for k, v in d.items() if v and isinstance(v, list)}
     single_keys = {k: v for k, v in d.items() if not isinstance(v, list)}
 
     # Generate all combinations of list values
