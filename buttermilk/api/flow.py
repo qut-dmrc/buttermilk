@@ -14,7 +14,7 @@ import hydra
 from omegaconf import DictConfig
 import pandas as pd
 from buttermilk import BM
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -33,12 +33,17 @@ from buttermilk.runner._runner_types import Result
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import expand_dict, read_file
+from buttermilk.utils.log import logger
 
 import httpx
 from buttermilk.flows.agent import Agent
 from buttermilk.utils.validators import make_list_validator
 from .runs import get_recent_runs
 
+
+INPUT_SOURCE = "api"   
+app = FastAPI()
+ 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
@@ -84,17 +89,13 @@ class MultiFlowOrchestrator(BaseModel):
                     result = await future
                     yield result
                 except Exception as e:
-                    logger.error(f"Worker failed with error: {e}")
+                    bm.logger.error(f"Worker failed with error: {e}")
                     continue
         
         # All workers are now complete
         return
 
 
-INPUT_SOURCE = "api"    
-bm = None
-logger = None
-app = FastAPI()
 
 class FlowRequest(BaseModel):
     model: Optional[str|Sequence[str]] = None
@@ -105,8 +106,9 @@ class FlowRequest(BaseModel):
     video: Optional[str] = None
     image: Optional[str] = None
 
-    model_config = ConfigDict(arbitrary_types_allowed=False, extra='allow')
-
+    model_config = ConfigDict(arbitrary_types_allowed=False, extra='allow',
+        populate_by_name=True
+    )
     _client: LC = PrivateAttr()
     _job: Job = PrivateAttr()
 
@@ -134,14 +136,10 @@ class FlowRequest(BaseModel):
         except:
             pass
     
-        # Add any additional vars into the template_vars dict.
-        kwargs = { k: values.pop(k) for k in values.copy().keys() if k not in cls.model_fields.keys() }
-        if 'template_vars' not in values:
-            values['template_vars'] = {}
-        values['template_vars'].update(**kwargs)
+        if not any([values.get('content'), values.get('uri'), values.get('text'), values.get('image'), values.get('video')]):
+            raise ValueError("At least one of content, text, uri, video or image must be provided.")
         
-        if not any([values.get('content'), values.get('image'), values.get('video')]):
-            raise ValueError("At least one of content, video or image must be provided.")
+        
         
         return values
 
@@ -151,12 +149,16 @@ class FlowRequest(BaseModel):
             return v.strip()
         return v
     
-    @field_validator('model', mode='before')
-    def check_model(cls, value: Optional[Sequence[str]]) ->  Optional[Sequence[str]]:
-        for v in value:
+    @model_validator(mode='after')
+    def check_values(self) -> Self:
+        for v in self.model:
             if v not in CHATMODELS:
                 raise ValueError(f"Valid model must be provided. {v} is unknown.")
-        return value
+                
+        # Add any additional vars into the template_vars dict.
+        self.template_vars.update(self.model_extra)
+        
+        return self
 
 
 async def run_flow(flow: Literal['judge','summarise'], request: Request, flow_request: Optional[FlowRequest] = '') -> AsyncGenerator[Job, None]:
@@ -184,7 +186,7 @@ def callback(message):
     # You can use requests or httpx to make the HTTP call
     import requests
     response = requests.post(f"http://localhost:8000/{task}", json=data)
-    logger.info(f"Passed on Pub/Sub job. Received: {response.json()}")
+    bm.logger.info(f"Passed on Pub/Sub job. Received: {response.json()}")
 
 def start_pubsub_listener():
     subscriber = pubsub.SubscriberClient()
@@ -199,7 +201,6 @@ def start_pubsub_listener():
 
 
 bm = BM()
-logger = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 @app.exception_handler(Exception)
@@ -222,52 +223,65 @@ async def run_flow_json(flow: Literal['judge','summarise'], request: Request, fl
 
 @app.api_route("/html/{route}/{flow}", methods=["GET", "POST"])
 @app.api_route("/html/{route}", methods=["GET", "POST"])
-async def run_route_html(route: str, request: Request, flow: str, flow_request: Optional[FlowRequest] = '') -> HTMLResponse:
-    # Route the request to the "/{route}/{flow}" function with original args
-    async def result_generator() -> AsyncGenerator[Job, None]:
-        async for data in run_flow(flow=flow, request=request, flow_request=flow_request):
-            # Render the template with the response data
-            result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": data})
-            yield result
+async def run_route_html(route: str, request: Request, flow: str, flow_request: Optional[FlowRequest] = '') -> StreamingResponse:
+    async def result_generator() -> AsyncGenerator[str, None]:
+        bm.logger.info(f"Received request for {route} with flow {flow} and flow_request {flow_request}")
+        try:
+            async for data in run_flow(flow=flow, request=request, flow_request=flow_request):
+                # Render the template with the response data
+                rendered_result = templates.TemplateResponse(f"{route}_html.html", {"request": request, "data": data})
+                yield rendered_result.body.decode('utf-8')
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    return StreamingResponse(result_generator(), media_type="text/html")
 
-    return StreamingResponse(result_generator(), media_type="application/html")
 
-def run_app(cfg: DictConfig) -> None:
-    global bm, logger, app 
-    bm = BM(cfg=cfg)
-    logger = bm.logger
 
+# Set up CORS
+origins = [
+    "http://localhost:5000",# Frontend running on localhost:5000
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:8080",# Frontend running on localhost:8080
+    "http://localhost:8080",  
+    "http://localhost:8000",  # Allow requests from localhost:8000
+    "http://127.0.0.1:8000",  
+    "http://automod.cc",  # Allow requests from your domain
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow specific origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+
+# Custom middleware to log CORS failures
+@app.middleware("http")
+async def log_cors_failures(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin:
+        bm.logger.debug(f"CORS check for {origin}")
+    
+    response = await call_next(request)
+    return response
+
+@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
+def _config(cfg: DictConfig) -> BM:
+    return BM(cfg=cfg)
+
+def main() -> None:
     start_trace(resource_attributes={"run_id": bm._run_metadata.run_id}, collection="flow_api", job="pubsub prompter")
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
     listener_thread.start()
         
+    uvicorn.run(app, host="0.0.0.0", port=8000)
     # writer = TableWriter(**cfg.save)
 
-    # Set up CORS
-    origins = [
-        "http://localhost:5000",# Frontend running on localhost:5000
-        "http://127.0.0.1:5000",
-        "http://127.0.0.1:8080",# Frontend running on localhost:8080
-        "http://localhost:8080",  
-        "http://localhost:8000",  # Allow requests from localhost:8000
-        "http://127.0.0.1:8000",  
-        "http://automod.cc",  # Allow requests from your domain
-    ]
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Allow specific origins
-        allow_credentials=True,
-        allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
-        allow_headers=["*"],  # Allow all headers
-    )
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def main(cfg: DictConfig) -> None:
-    run_app(cfg)
-
 if __name__ == "__main__":
+    bm = _config()
+    logger = bm.logger
     main()
