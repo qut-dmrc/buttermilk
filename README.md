@@ -9,14 +9,44 @@ Developed by and for @QUT-DMRC scholars, this repo aims to provide standard **fl
 * Make ScholarOps™ easier with opinionated defaults that take care of logging and archiving in standard formats.
 * Create a space for collaboration, experimentation, and evaluation of computational methods for HASS scholars.
 
-```
+```md
 Q: Why 'buttermilk'??
 A: It's cultured and flows...
 ```
 
-# Installation
+```md
+Q: What's MLOps?
+A: A general term for standardised approaches to machine learning workflows that helps you organize your project, collaborate, iteratively improve your analysis and track versioned changes, monitor onging performance, reproduce experiments, and verify and compare results. 
+```
+
+The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
+
+## Usage
+
+So far, we have a few standard pieces that set sensible defaults to make it easy for HASS scholars to use, store, assess, compare, and reproduce complicated AI workflows in their research. 
+
+Working right now:
+
+* Multimodal support for current-generation foundation models (Gemini, Claude, Llama, GPT) and plug-in support for basically any other analysis tool API.
+* A prompt templating system that allows you to evaluate, improve, and reuse components. These will ideally become a collection of versioned prompts that have been carefully evaluated, and come with test cases to monitor if they start to break.
+* Standard cloud logging, flexible data storage, secure project and individual credentials (Azure KeyVault or Google Secrets), built-in database storage (BigQuery), tracing (Promptflow or Langchain).
+* An API and CLI that integrates each modular component and orchestrates complex workflows, including parallel runs and multi-step workflows.
+* Use the same code to run locally, on a remote GPU, or in Azure/Google Compute [and AWS llambda, I guess, but not yet].
+
+Next:
+
+* Some tutorial workbooks showing a full walkthrough of an entire pipeline research run.
+* A pub/sub distributed queue system and an interface to add batch runs
+* A web interface and notebooks with good examples of how to assess, track, and compare performance on individual examples and aggregated runs.
+
+## Very early stages!
+
+We would love your help! Contact [nic](mailto:n.suzor@qut.edu.au) to discuss what you'd like to see, help us plan, or how to contribute!
+
+## Installation
 
 Create a new environment and install using poetry:
+
 ```shell
 conda create --name bm -y -c conda-forge -c pytorch python==3.11 poetry ipykernel google-crc32c
 conda activate bm
@@ -30,9 +60,9 @@ gcloud auth login --update-adc --force
 az login
 ```
 
+Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
 
-
-## Dependencies and example for GPU prediction (on Ubuntu 22.04)
+### Dependencies and example for GPU prediction (on Ubuntu 22.04)
 
 ```shell
 #!/bin/sh
@@ -69,6 +99,7 @@ $INSTALL_DIR/miniconda3/bin/conda create --name bm -y -c conda-forge -c pytorch 
 ```
 
 At this point, log out and back in to activate the environment and check your install:
+
 ```shell
 conda activate bm
 nvidia-smi
@@ -91,9 +122,9 @@ echo -e "HF_HUB_ENABLE_HF_TRANSFER=1\nPOETRY_CACHE_DIR=/mnt/cache/poetry\nHF_HOM
 ```
 
 ### Run
+
 Serially, on a gpu:
 `python -m buttermilk.automod.pfmod +experiments=ots_gpu +data=drag_noalt +save=bq`
 
 Parallel:
 `python -m buttermilk.automod.pfmod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt +save=bq experiments.moderate.init.flow=GoogleModerate,NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o,NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,Comprehend,Perspective,AzureContentSafety,OpenAIModerator,LlamaGuard1Replicate,LlamaGuard1Together,LlamaGuard2Replicate,LlamaGuard2Together,LlamaGuard3Together`
-
