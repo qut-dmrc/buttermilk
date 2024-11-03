@@ -16,14 +16,17 @@ A: It's cultured and flows...
 
 ```md
 Q: What's MLOps?
-A: A general term for standardised approaches to machine learning workflows that helps you organize your project, collaborate, iteratively improve your analysis and track versioned changes, monitor onging performance, reproduce experiments, and verify and compare results. 
+A: A general term for standardised approaches to machine learning workflows that 
+helps you organize your project, collaborate, iteratively improve your analysis 
+and track versioned changes, monitor onging performance, reproduce experiments, 
+and verify and compare results. 
 ```
 
 The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
 ## Usage
 
-So far, we have a few standard pieces that set sensible defaults to make it easy for HASS scholars to use, store, assess, compare, and reproduce complicated AI workflows in their research. 
+So far, we have a few standard pieces that set sensible defaults to make it easy for HASS scholars to use, store, assess, compare, and reproduce complicated AI workflows in their research.
 
 Working right now:
 
