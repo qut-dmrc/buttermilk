@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch
 from buttermilk.flows.helpers import get_templates, TEMPLATE_PATHS
-from buttermilk.runner._runner_types import Base64Str
+from buttermilk._core.runner_types import Base64Str
 
 @pytest.mark.parametrize(
     "pattern, expected_name, min_length",

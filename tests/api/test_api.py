@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from buttermilk.api.flow import app, FlowRequest
-from buttermilk.runner._runner_types import Job
+from buttermilk._core.runner_types import Job
 
 
 client = TestClient(app)

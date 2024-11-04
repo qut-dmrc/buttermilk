@@ -44,11 +44,13 @@ from tenacity import (
 
 from buttermilk import BM
 from buttermilk.exceptions import RateLimit
+from buttermilk._core import Agent
 from buttermilk.flows.helpers import TEMPLATE_PATHS, KeepUndefined
 from buttermilk.llms import LLMs
 from buttermilk.runner import RecordInfo
+from buttermilk._core.runner_types import Job, Result
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 
 
 #########################################
@@ -56,12 +58,15 @@ from buttermilk.utils.log import logger
 ### An interface to langchain chat models
 ###
 #########################################
-class LC(BaseModel):
+
+class LC(Agent):
     model: Optional[str] = None
     template: Optional[str] = None
     template_vars: Optional[dict] = {}
+
     _connections: Optional[dict] = {}
     _template: Optional[Template] = None
+    _llm: Optional[LLMs] = None
 
     class Config:
         extra = "allow"
@@ -72,6 +77,7 @@ class LC(BaseModel):
         # Add misc kwargs to template_vars
         if 'template_vars' not in known_fields.keys():
             known_fields['template_vars'] = {}
+
         known_fields['template_vars'].update(**kwargs)
 
         super().__init__(**known_fields)
@@ -113,6 +119,12 @@ class LC(BaseModel):
 
         return self
 
+    async def process_job(self, job: Job) -> Job:
+        job.agent_info = self.agent_info
+        response = await self.call_async(record=job.record, params=job.parameters)
+        job.outputs = Result(**response)
+        return job
+    
     async def call_async(self, text: Optional[str] = None, *, 
                          record: Optional[RecordInfo] = None,
                          params: Optional[dict] = {}):

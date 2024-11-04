@@ -10,7 +10,7 @@ from google.protobuf.descriptor_pb2 import DescriptorProto
 from google.cloud import bigquery
 import pandas as pd
 from pydantic import BaseModel, Field
-from .log import logger
+from .._core.log import logger
 from google.cloud.bigquery_storage_v1.types import (
     AppendRowsRequest,
     CreateWriteStreamRequest,

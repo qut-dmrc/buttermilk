@@ -13,7 +13,7 @@ from vertexai.generative_models._generative_models import (
 
 from buttermilk.exceptions import RateLimit
 
-from .log import getLogger
+from .._core.log import getLogger
 
 logger = getLogger()
 

@@ -99,9 +99,9 @@ from tqdm.asyncio import tqdm as atqdm
 from buttermilk.buttermilk import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.runner import Job
-from buttermilk.runner._runner_types import AgentInfo, AgentInfo
+from buttermilk._core.runner_types import AgentInfo, AgentInfo
 from buttermilk.utils.errors import extract_error_info
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 
 # The schema for the "runs" table in a BigQuery dataset
 RUNS_SCHEMA = """

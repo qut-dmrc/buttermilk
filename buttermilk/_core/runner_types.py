@@ -190,7 +190,7 @@ class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    run_info: SessionInfo = pydantic.Field(default_factory=lambda: BM()._run_metadata)
+    run_info: Optional[SessionInfo] = pydantic.Field(..., default=None)
 
     source: str|list[str]
     
@@ -231,5 +231,10 @@ class Job(BaseModel):
                 self.metadata = {}
             self.metadata['outputs'] = self.outputs.metadata
             self.outputs.metadata = None
-
+        
+        # Store a copy of the run info in this model's metadata
+        if self.run_info is None:
+            from buttermilk import BM
+            self.run_info = lambda: BM()._run_metadata
+            
         return self

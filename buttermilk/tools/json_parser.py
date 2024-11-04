@@ -14,7 +14,7 @@ from json import JSONDecodeError
 from langchain_core.exceptions import OutputParserException
 from langchain_core.utils.json import parse_json_markdown
 
-from ..utils.log import logger
+from .._core.log import logger
 
 class ChatParser(JsonOutputParser):
     """A safe JSON parser. If all else fails, return the original string as a dictionary with the key 'response'"""

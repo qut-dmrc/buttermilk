@@ -31,7 +31,7 @@ from buttermilk.libs import (
     replicatellama3,
 )
 from buttermilk.exceptions import FatalError
-from buttermilk.lc import LC
+from buttermilk.agents.lc import LC
 from buttermilk.tools.metrics import Metriciser, Scorer
 from buttermilk.utils import col_mapping_hydra_to_local
 
@@ -54,7 +54,7 @@ import tqdm
 
 from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 
 # from azureml.core import Workspace, Experiment
 # from azureml.pipeline.core import Pipeline, PipelineData

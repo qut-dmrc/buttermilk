@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Any, List, Optional
 
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 from buttermilk.utils.utils import make_serialisable, reset_index_and_dedup_columns
 
 import gspread

@@ -27,8 +27,8 @@ from buttermilk.libs import (
     replicatellama3,
 )
 from buttermilk.exceptions import FatalError
-from buttermilk.lc import LC
-from buttermilk.runner._runner_types import Job, RecordInfo, AgentInfo
+from buttermilk.agents.lc import LC
+from buttermilk._core.runner_types import Job, RecordInfo, AgentInfo
 from buttermilk.runner.flow import ResultsSaver, run_flow
 from buttermilk.runner.helpers import group_and_filter_jobs, load_data
 from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
@@ -63,7 +63,7 @@ import tqdm
 
 #from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 
 ### We have a standard runner in datatools.runner that allows us to run
 ### a batch of jobs asynchronously. Consumers take a Job item from a queue,

@@ -22,7 +22,7 @@ from typing import (
 from huggingface_hub import login
 import boto3
 from buttermilk.exceptions import RateLimit
-from buttermilk.runner._runner_types import Job
+from buttermilk._core.runner_types import Job
 import evaluate
 import google.auth
 import numpy as np

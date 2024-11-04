@@ -13,7 +13,7 @@ from google.cloud import bigquery_storage_v1beta2
 from cloudpathlib import CloudPath
 from google.cloud import bigquery, storage
 from .utils import read_file, reset_index_and_dedup_columns, make_serialisable, chunks, scrub_serializable
-from .log import logger
+from .._core.log import logger
 from .bq import construct_dict_from_schema
 
 def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):

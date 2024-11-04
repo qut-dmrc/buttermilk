@@ -2,7 +2,7 @@ import pytest
 import shortuuid
 
 from buttermilk.automod.mod import JobProcessor
-from buttermilk.runner._runner_types import AgentInfo
+from buttermilk._core.runner_types import AgentInfo
 
 @pytest.fixture
 def run_info():

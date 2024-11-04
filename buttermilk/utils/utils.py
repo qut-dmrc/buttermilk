@@ -18,7 +18,7 @@ from cloudpathlib import AnyPath, CloudPath, exceptions
 import httpx
 import asyncio
 
-from .log import logger
+from .._core.log import logger
 
 T = TypeVar("T")
 

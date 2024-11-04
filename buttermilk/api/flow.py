@@ -26,19 +26,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import pubsub
 import json
-from buttermilk.lc import LC
+from buttermilk.agents.lc import LC
 from buttermilk.llms import CHATMODELS
-from buttermilk.runner._runner_types import Job, RecordInfo, validate_uri_extract_text, validate_uri_or_b64
-from buttermilk.runner import Job
-from buttermilk.runner._runner_types import Result
+from buttermilk._core.runner_types import Job, RecordInfo, validate_uri_extract_text, validate_uri_or_b64
+from buttermilk.runner import Job, MultiFlowOrchestrator
+from buttermilk._core.runner_types import Result
 from buttermilk.runner.helpers import group_and_filter_jobs
 from buttermilk.utils.bq import TableWriter
 from buttermilk.utils.save import upload_rows
 from buttermilk.utils.utils import expand_dict, read_file
-from buttermilk.utils.log import logger
+from buttermilk._core.log import logger
 
 import httpx
-from buttermilk.flows.agent import Agent
+from buttermilk.agents.agent import Agent, LC
 from buttermilk.utils.validators import make_list_validator
 from .runs import get_recent_runs
 
@@ -51,51 +51,7 @@ app = FastAPI()
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
-class FlowProcessor(Agent):
-    async def process_job(self, job: Job) -> Job:
-        response = await self.client.call_async(record=job.record, params=job.parameters)
-        job.outputs = Result(**response)
-        job.agent_info = self.agent_info
-        return job
 
-class MultiFlowOrchestrator(BaseModel):
-    agents: Optional[Sequence[Agent]] = Field(default_factory=list)
-    n_runs: int = 1
-    steps: Optional[Sequence] = Field(default_factory=list)
-    agent_vars: Optional[dict] = Field(default_factory=dict)
-    init_vars: Optional[dict] = Field(default_factory=dict)
-    run_vars: Optional[dict] = Field(default_factory=dict)
-
-    async def run_tasks(self, record: RecordInfo, source: str) -> AsyncGenerator[Job, None]:
-        init_combinations = expand_dict(self.init_vars)
-        run_combinations = expand_dict(self.run_vars)
-
-        self.agents = [FlowProcessor(**vars, **self.agent_vars) for vars in init_combinations]
-
-        # Multiply by n
-        permutations = run_combinations * self.n_runs
-        
-        # For each agent, create tasks for each job
-        workers = []
-        for agent in self.agents:
-            for vars in permutations:
-                job = Job(record=record, source=INPUT_SOURCE, parameters=vars)
-                workers.append(agent.run(job))
-        
-        # Process tasks as they complete
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(worker) for worker in workers]
-            
-            for future in asyncio.as_completed(tasks):
-                try:
-                    result = await future
-                    yield result
-                except Exception as e:
-                    bm.logger.error(f"Worker failed with error: {e}")
-                    continue
-        
-        # All workers are now complete
-        return
 
 
 
