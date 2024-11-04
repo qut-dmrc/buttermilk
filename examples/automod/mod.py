@@ -68,9 +68,10 @@ import os
 from hydra import initialize, compose
 from omegaconf import OmegaConf
 
-
-# Print config
-rprint(OmegaConf.to_container(bm.cfg, resolve=True))
+## Run with, e.g.: 
+## ```bash
+## python -m examples.automod.mod +data=drag +step=ordinary +save=bq
+## ```
 
 
 # cfg changes with multiple options selected at runtime, but
@@ -137,10 +138,6 @@ def main(cfg: DictConfig) -> None:
     except Exception as e:
         logger.exception(dict(message=f"Failed run on {cfg.run.platform}", error=str(e)))
     pass
-
-
-
-
 
 if __name__ == "__main__":
     main()

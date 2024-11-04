@@ -17,6 +17,7 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from promptflow.tracing import trace
 from buttermilk._core.runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
+from buttermilk.defaults import BQ_SCHEMA_DIR
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import upload_rows, save
 from buttermilk._core.log import logger
@@ -63,6 +64,9 @@ class SaveInfo(BaseModel):
     @field_validator("db_schema")
     def file_must_exist(cls, v):
         if not os.path.exists(v):
+            f = Path(BQ_SCHEMA_DIR) / v
+            if f.exists():
+                return f.as_posix()
             
             raise ValueError(f"File '{v}' does not exist.")
         return v

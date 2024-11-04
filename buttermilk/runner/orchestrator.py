@@ -28,8 +28,8 @@ class MultiFlowOrchestrator(BaseModel):
     _tasks_completed: int = PrivateAttr(default=0)
     _tasks_failed: int = PrivateAttr(default=0)
 
-    # class Config:
-    #     arbitrary_types_allowed = True
+    class Config:
+        arbitrary_types_allowed = True
 
     @field_serializer('step', 'data')
     def serialize_omegaconf(cls, value):
