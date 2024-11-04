@@ -2,7 +2,8 @@
 
 import pytest
 from unittest.mock import patch
-from buttermilk.flows.helpers import get_templates, TEMPLATE_PATHS
+from buttermilk.flows.helpers import get_templates
+from buttermilk import TEMPLATE_PATHS
 from buttermilk._core.runner_types import Base64Str
 
 @pytest.mark.parametrize(

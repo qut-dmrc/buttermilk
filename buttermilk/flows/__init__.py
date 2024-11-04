@@ -1,4 +1,4 @@
 
-from .helpers import get_templates, TEMPLATE_PATHS
+from .helpers import get_templates
 
-__ALL__ = ['get_templates', 'TEMPLATE_PATHS']
+__ALL__ = ['get_templates']

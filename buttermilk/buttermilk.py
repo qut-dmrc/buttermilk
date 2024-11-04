@@ -198,7 +198,8 @@ class BM(Singleton, BaseModel):
 
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
-            # start_trace(resource_attributes={"run_id": self._run_info.run_id}, collection=self.cfg.name, job=self.cfg.job)
+            if self.cfg.tracing:
+                start_trace(resource_attributes={"run_id": self._run_metadata.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
         
 

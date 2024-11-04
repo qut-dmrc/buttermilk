@@ -5,12 +5,14 @@ import pandas as pd
 from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_validator
 from typing import Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
 from buttermilk import Agent, Job, RecordInfo, logger
+from buttermilk._core.agent import SaveInfo
 from buttermilk.agents.lc import LC
 from buttermilk.runner.helpers import prepare_step_data
 from buttermilk.utils.utils import expand_dict
 
 class MultiFlowOrchestrator(BaseModel):
     
+    save: SaveInfo
     step: DictConfig
     data: ListConfig
 
@@ -50,7 +52,7 @@ class MultiFlowOrchestrator(BaseModel):
         run_combinations = expand_dict(run_combinations)
 
         for init_vars in agent_combinations:
-            agent = agent_type(**init_vars)
+            agent = agent_type(**init_vars, save_params=self.save)
             async for record in data_generator():
                 for run_vars in run_combinations:
                     job = Job(record=record, source=source, parameters=run_vars)
@@ -75,7 +77,7 @@ class MultiFlowOrchestrator(BaseModel):
                 if result.error:
                     logger.error(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
                 else:
-                    logger.info(f"Agent {agent_name} completed job {job_id} successfully: {result}")
+                    logger.info(f"Agent {agent_name} completed job {job_id} successfully.")
 
                 return result
             

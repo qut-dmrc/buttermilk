@@ -3,6 +3,7 @@ job: development
 secret_provider: azure
 logger: gcp
 verbose: true
+tracing: true
 models_secret: models
 concurrent: 10
 gcp:

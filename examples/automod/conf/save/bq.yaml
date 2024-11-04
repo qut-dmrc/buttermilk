@@ -1,3 +1,3 @@
 type: bq
 destination: dmrc-analysis.toxicity.flow
-schema: buttermilk/schemas/flow.json
+schema: flow.json

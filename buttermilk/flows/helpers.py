@@ -1,10 +1,9 @@
 from pathlib import Path
+from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.utils.utils import list_files_with_content, list_files
 from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
 
 
-BASE_DIR = Path(__file__).absolute()
-TEMPLATE_PATHS = [BASE_DIR.parent / "templates"]
 
 def get_templates(pattern: str = '', parent: str='', extension: str=''):
     templates = list_files_with_content(TEMPLATE_PATHS, filename=pattern, parent=parent, extension=extension)

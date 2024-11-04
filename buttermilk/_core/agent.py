@@ -2,6 +2,7 @@ from abc import abstractmethod
 import asyncio
 import datetime
 import json
+import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -58,6 +59,13 @@ class SaveInfo(BaseModel):
     destination: str|cloudpathlib.AnyPath
     db_schema: Optional[str] = Field(..., validation_alias='schema')
     type: Literal['bq', 'gcs']
+
+    @field_validator("db_schema")
+    def file_must_exist(cls, v):
+        if not os.path.exists(v):
+            
+            raise ValueError(f"File '{v}' does not exist.")
+        return v
 
 class Agent(BaseModel):
     """

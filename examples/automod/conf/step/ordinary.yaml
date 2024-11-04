@@ -9,8 +9,8 @@
     model:
       - haiku
       # - o1-preview
-      # - llama31_70b
-      # - gpt4o
-      # - sonnet
-      # - gemini15pro
+      - llama31_70b
+      - gpt4o
+      - sonnet
+      - gemini15pro
   parameters:
