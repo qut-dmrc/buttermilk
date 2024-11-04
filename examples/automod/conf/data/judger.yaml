@@ -1,20 +1,18 @@
-# @package _global_
-data:
-  judger:
-    type: job
-    dataset: dmrc-analysis.toxicity.flow
-    last_n_days: 14
-    max_records_per_group: 32
-    filter:
-      step: judge
-    group:
-    columns:
-      job_id: job_id
-      prediction: outputs.prediction
-      reasons: outputs.reasons
-      labels: outputs.labels
-      outputs: output
-      record: record
-      parameters: parameters
-      inputs: inputs
-      agent_info: agent_info
+judger:
+  type: job
+  dataset: dmrc-analysis.toxicity.flow
+  last_n_days: 14
+  max_records_per_group: 32
+  filter:
+    step: judge
+  group:
+  columns:
+    job_id: job_id
+    prediction: outputs.prediction
+    reasons: outputs.reasons
+    labels: outputs.labels
+    outputs: output
+    record: record
+    parameters: parameters
+    inputs: inputs
+    agent_info: agent_info
