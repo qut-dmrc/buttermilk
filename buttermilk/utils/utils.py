@@ -259,6 +259,8 @@ def get_ip() -> str:
 
 
 def find_key_string_pairs(data):
+    if isinstance(data, str):
+        return
     if isinstance(data, Mapping):
         for key, value in data.items():
             if isinstance(value, str):
