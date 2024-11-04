@@ -12,8 +12,8 @@ class MultiFlowOrchestrator(BaseModel):
     num_runs: int = 1
     concurrent: int = 20
     
-    step_config: Mapping
-    data_config: Sequence[Mapping]
+    step: Mapping
+    data: Sequence[Mapping]
 
     _tasks: Sequence[Coroutine] = PrivateAttr(default_factory=list)
     _dataset: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
@@ -30,12 +30,12 @@ class MultiFlowOrchestrator(BaseModel):
         #   * each Agent (Different classes or instances of classes to resolve a task)
 
         # Get permutations of init variables
-        agent_combinations = self.step_config.agent
+        agent_combinations = self.step.agent
         agent_name = agent_combinations.pop('name', agent_type.__name__)
         agent_combinations = expand_dict(agent_combinations)
 
         # Get permutations of run variables
-        run_combinations = self.step_config.get('parameters')
+        run_combinations = self.step.get('parameters')
         run_combinations = expand_dict(run_combinations)
 
         for init_vars in agent_combinations:
