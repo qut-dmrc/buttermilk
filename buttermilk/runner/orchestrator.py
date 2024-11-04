@@ -7,6 +7,7 @@ from typing import Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator,
 from buttermilk import Agent, Job, RecordInfo, logger
 from buttermilk._core.agent import SaveInfo
 from buttermilk.agents.lc import LC
+from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_data
 from buttermilk.utils.utils import expand_dict
 
@@ -15,14 +16,20 @@ class MultiFlowOrchestrator(BaseModel):
     save: SaveInfo
     step: DictConfig
     data: ListConfig
+    source: str
+    agent_type: type[Agent] = LC
 
     _num_runs: int = 1
     _concurrent: int = 20
     _tasks: Sequence[Coroutine] = PrivateAttr(default_factory=list)
     _dataset: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
 
-    class Config:
-        arbitrary_types_allowed = True
+    _tasks_remaining: int = PrivateAttr(default=0)
+    _tasks_completed: int = PrivateAttr(default=0)
+    _tasks_failed: int = PrivateAttr(default=0)
+
+    # class Config:
+    #     arbitrary_types_allowed = True
 
     @field_serializer('step', 'data')
     def serialize_omegaconf(cls, value):
@@ -73,20 +80,23 @@ class MultiFlowOrchestrator(BaseModel):
                 async with _sem:
                     logger.info(f"Starting task for Agent {agent_name} with job {job_id}.")
                     result = await task
+                    self._tasks_remaining  -= 1
 
                 if result.error:
                     logger.error(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
+                    self._tasks_failed += 1
                 else:
                     logger.info(f"Agent {agent_name} completed job {job_id} successfully.")
+                    self._tasks_completed += 1
 
                 return result
             
             except Exception as e:
-                logger.error(f"Task failed with error: {e}, {e.args=}")
+                raise FatalError(f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}")
 
         for n in range(self._num_runs):
             async with asyncio.TaskGroup() as tg:
-                async for agent_name, job_id, task in self.make_tasks(data_generator=self.data_generator, agent_type=LC,source='batch'):
+                async for agent_name, job_id, task in self.make_tasks(data_generator=self.data_generator, agent_type=self.agent_type, source=self.source):
                     wrapped_task = task_wrapper(agent_name, job_id, task)
                     tg.create_task(wrapped_task)
                     
