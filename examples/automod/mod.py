@@ -17,6 +17,7 @@ from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from pydantic import Field, model_validator
 
+from tqdm.asyncio import tqdm as atqdm
 from buttermilk import BM
 from buttermilk.buttermilk import SessionInfo
 from buttermilk.libs import (
@@ -39,7 +40,7 @@ from buttermilk.utils import (
     make_serialisable,
 )
 
-BASE_DIR = Path(__file__).absolute().parent
+from buttermilk.runner.orchestrator import MultiFlowOrchestrator
 import datetime
 import itertools
 from itertools import cycle
@@ -57,124 +58,62 @@ from typing import (
 )
 
 import cloudpathlib
-import datasets
-import torch
-import tqdm
-
-#from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
-from buttermilk._core.log import logger
+from buttermilk import BM, logger
+from promptflow.tracing import trace, start_trace
+from rich import print as rprint
 
-### We have a standard runner in datatools.runner that allows us to run
-### a batch of jobs asynchronously. Consumers take a Job item from a queue,
-### process it, and return it as a new Job item. The main method to
-### overwrite in any subclass is `.process()`
+import os
 
-class JobProcessor(Consumer):
-    ## We inherit from the Consumer class and override the process method.
-    ## This is a standard pattern for creating a new Consumer class.
-    _client: Optional[LC] = None
-    flow_obj: Any
-
-    @model_validator(mode='after')
-    def init(self) -> Self:
-        self._client = self.flow_obj(**self.init_vars)
-        del self.flow_obj  # Don't keep the class around
-
-        return self
-
-    async def process(self, *, job: Job) -> Job:
-        """ Take a Job, process it, and return a Job."""
-        job = await run_flow(flow=self._client, job=job)
-        job.agent_info = self.agent_info
-        return job
-
-async def run(cfg, step_cfg):
-    """
-    This function runs the jobs asynchronously, and returns a list of
-    results.
-    """
-
-    step_name=step_cfg.name
-
-    # The Orchestrator runs the jobs asynchronously
-    orchestrator = TaskDistributor()
-
-    # First we create a collector to save the results.
-    if step_cfg.save.type == 'bq':
-        # Save to bigquery
-        collector = ResultsSaver(dataset=step_cfg.save.destination, dest_schema=step_cfg.save.schema)
-    else:
-        # default to save to GCS
-        collector = ResultsCollector()
-
-    # Register this collector as the default output queue for all workers.
-    orchestrator.register_collector(collector)
-
-    consumers = []
-
-    if step_name == 'moderate':
-        flow_obj=load_tox_flow
-    elif step_name == 'metrics':
-        flow_obj = Metriciser
-    else:
-        # Generic LLM chain based flow
-        flow_obj = LC
-
-    init_vars = OmegaConf.to_object(step_cfg.init)
-
-    # Convert string values to single item lists
-    string_vars = { k:[v] for k, v in init_vars.items() if isinstance(v, str) or not isinstance(v, Sequence) }
-    init_vars.update(string_vars)
-
-    # Generate all permutations of init_vars
-    permutations = itertools.product(*(init_vars[key] for key in init_vars))
-
-    # Convert the permutations to a list of dictionaries
-    init_vars = [dict(zip(init_vars.keys(), values)) for values in permutations]
-
-    for i, init_dict in enumerate(init_vars):
-        processor = JobProcessor(agent=f'{init_dict.get("model")}{i}', step_name=step_name,
-                                flow_obj=flow_obj, init_vars=init_dict,
-                                run_info=bm._run_metadata)
-        consumers.append(processor)
+from hydra import initialize, compose
+from omegaconf import OmegaConf
 
 
-    for processor in consumers:
-        orchestrator.register_task(consumer=processor)
+# Print config
+rprint(OmegaConf.to_container(bm.cfg, resolve=True))
 
 
-        # load data from generator ... MISSING
-
-        # Add each job to the queue
-        orchestrator.add_job(task_name=processor.agent, job=job)
-
-
-    # Run!
-    results = await orchestrator.run()
-
-    return results
-
+# cfg changes with multiple options selected at runtime, but
+# we want to make sure that run_id (which informs the logging
+# tags and save directories) does not change across processes.
 global_run_id = SessionInfo.make_run_id()
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     global bm, logger, global_run_id
-    # cfg changes with multiple options selected at runtime, but
-    # we want to make sure that run_id (which informs the logging
-    # tags and save directories) does not change across processes.
-    bm = BM(run_id=global_run_id, cfg=cfg)
 
+    # Load the main ButterMilk singleton instance
+    # This takes care of credentials, save paths, and other defaults
+    bm = BM(run_id=global_run_id, cfg=cfg)
     logger = bm.logger
+
+    # Print config to console
+    rprint(OmegaConf.to_container(bm.cfg, resolve=True))
+
 
     try:
         for step_cfg in cfg.step:
+
+            # Create an orchestrator to conduct all combinations of jobs we want to run
+            orchestrator = MultiFlowOrchestrator(step=step_cfg, data=cfg.data, save=cfg.save)
             step_name=step_cfg.name
 
             t0 = datetime.datetime.now()
             try:
+                
+                async def run():
+                    with atqdm(colour='magenta', 
+                                desc=step_name,
+                                bar_format="{desc:20}: {bar:50} | {rate_inv_fmt}",
+                            ) as pbar: 
+                        main_task = asyncio.create_task(orchestrator.run())
+                        while not main_task.done():
+                            pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
+                            pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])
+                            pbar.refresh()
+                            await asyncio.sleep(1)
 
-                asyncio.run(run(cfg, step_cfg=step_cfg))
+                asyncio.run(run())
 
             except KeyboardInterrupt:
                 # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
