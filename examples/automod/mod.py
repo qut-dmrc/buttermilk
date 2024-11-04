@@ -70,7 +70,7 @@ from omegaconf import OmegaConf
 
 ## Run with, e.g.: 
 ## ```bash
-## python -m examples.automod.mod +data=drag +step=ordinary +save=bq
+## python -m examples.automod.mod +data=drag +step=ordinary +save=bq job=<description> source=<desc>
 ## ```
 
 
@@ -96,7 +96,7 @@ def main(cfg: DictConfig) -> None:
         for step_cfg in cfg.step:
 
             # Create an orchestrator to conduct all combinations of jobs we want to run
-            orchestrator = MultiFlowOrchestrator(step=step_cfg, data=cfg.data, save=cfg.save)
+            orchestrator = MultiFlowOrchestrator(step=step_cfg, data=cfg.data, save=cfg.save, source=cfg.source)
             step_name=step_cfg.name
 
             t0 = datetime.datetime.now()
@@ -107,7 +107,7 @@ def main(cfg: DictConfig) -> None:
                                 desc=step_name,
                                 bar_format="{desc:20}: {bar:50} | {rate_inv_fmt}",
                             ) as pbar: 
-                        main_task = asyncio.create_task(orchestrator.run())
+                        main_task = asyncio.create_task(orchestrator.run_tasks())
                         while not main_task.done():
                             pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
                             pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])

@@ -2,7 +2,8 @@ defaults:
   - _self_
 
 name: automod
-job: judge
+job:
+source:
 secret_provider: azure
 logger: gcp
 tracing: true
