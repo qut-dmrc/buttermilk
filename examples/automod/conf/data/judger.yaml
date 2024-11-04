@@ -4,8 +4,9 @@ judger:
   last_n_days: 14
   max_records_per_group: 32
   filter:
-    step: judge
+  #   step: judge
   group:
+    record_id: record.record_id
   columns:
     job_id: job_id
     prediction: outputs.prediction
@@ -14,5 +15,4 @@ judger:
     outputs: output
     record: record
     parameters: parameters
-    inputs: inputs
     agent_info: agent_info

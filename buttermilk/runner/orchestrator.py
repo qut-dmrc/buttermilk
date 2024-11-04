@@ -15,7 +15,7 @@ class MultiFlowOrchestrator(BaseModel):
     
     save: SaveInfo
     step: DictConfig
-    data: ListConfig
+    data: DictConfig
     source: str
     agent_type: type[Agent] = LC
 

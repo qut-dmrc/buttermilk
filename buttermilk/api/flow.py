@@ -221,7 +221,7 @@ async def get_runs_json(request: Request) -> Sequence[Job]:
 async def get_runs_html(request: Request) -> HTMLResponse:
     df = get_recent_runs() 
 
-    data = group_and_filter_jobs(new_data=df, group=bm.cfg.data.runs.group, columns=bm.cfg.data.runs.columns, raise_on_error=False)
+    data = group_and_filter_jobs(data=df, group=bm.cfg.data.runs.group, columns=bm.cfg.data.runs.columns, raise_on_error=False)
 
     rendered_result = templates.TemplateResponse(f"runs_html.html", {"request": request, "data": data})
 
