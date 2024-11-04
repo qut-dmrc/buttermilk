@@ -22,8 +22,6 @@ aws:
   secret_name: secret
   region: us-east-1
 
-data:
-
 step:
 
 run:
