@@ -44,7 +44,7 @@ from tenacity import (
 
 from buttermilk import BM, Agent, BQ_SCHEMA_DIR, TEMPLATE_PATHS, BASE_DIR
 from buttermilk.exceptions import RateLimit
-from buttermilk.flows.helpers import KeepUndefined
+from buttermilk.flows.templating import KeepUndefined
 from buttermilk.llms import LLMs
 from buttermilk import Job, Result,  RecordInfo
 from buttermilk.tools.json_parser import ChatParser
