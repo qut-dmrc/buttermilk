@@ -292,9 +292,12 @@ def find_all_keys_in_dict(x, search_key):
     return results
 
 def expand_dict(d: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not d:
+        return [{}]
+    
     # Separate keys with list values and keys with single values
-    list_keys = {k: v for k, v in d.items() if v and isinstance(v, list)}
-    single_keys = {k: v for k, v in d.items() if not isinstance(v, list)}
+    list_keys = {k: v for k, v in d.items() if v and isinstance(v, Sequence) and not isinstance(v, str)}
+    single_keys = {k: v for k, v in d.items() if not isinstance(v, Sequence) or isinstance(v, str)}
 
     # Generate all combinations of list values
     combinations = list(itertools.product(*list_keys.values()))

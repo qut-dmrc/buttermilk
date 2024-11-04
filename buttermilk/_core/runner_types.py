@@ -234,7 +234,7 @@ class Job(BaseModel):
         
         # Store a copy of the run info in this model's metadata
         if self.run_info is None:
-            from ...buttermilk import BM
-            self.run_info = lambda: BM()._run_metadata
+            from ..buttermilk import BM
+            self.run_info = BM()._run_metadata
             
         return self

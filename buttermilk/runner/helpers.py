@@ -140,7 +140,7 @@ def cache_data(uri: str) -> str:
 
 
 
-async def prepare_step_data(data_cfg) -> pd.DataFrame:
+def prepare_step_data(data_config) -> pd.DataFrame:
     # This works for small datasets that we can easily read and load.
 
     dataset = pd.DataFrame()
@@ -149,7 +149,7 @@ async def prepare_step_data(data_cfg) -> pd.DataFrame:
     dataset_configs = []
 
     # data_cfg is not ordered. Loop through and load the static data first.
-    for data_id, src in data_cfg.items():
+    for src in data_config:
         if src.type == 'job':
             # end of list (dynamic data)
             dataset_configs.append(src)
