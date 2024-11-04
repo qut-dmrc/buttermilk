@@ -42,15 +42,13 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from buttermilk import BM
+from buttermilk import BM, Agent
 from buttermilk.exceptions import RateLimit
-from buttermilk._core import Agent
 from buttermilk.flows.helpers import TEMPLATE_PATHS, KeepUndefined
 from buttermilk.llms import LLMs
-from buttermilk.runner import RecordInfo
-from buttermilk._core.runner_types import Job, Result
+from buttermilk import Job, Result,  RecordInfo
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk._core.log import logger
+from buttermilk import logger
 
 
 #########################################

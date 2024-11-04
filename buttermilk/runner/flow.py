@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 
-from buttermilk.runner import Job, Result
+from buttermilk import Job, Result
 from buttermilk.runner.runner import ResultsCollector
 from buttermilk.utils import save
 from buttermilk.utils.save import upload_rows

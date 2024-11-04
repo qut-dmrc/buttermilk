@@ -98,8 +98,7 @@ from tqdm.asyncio import tqdm as atqdm
 
 from buttermilk.buttermilk import BM
 from buttermilk.exceptions import FatalError
-from buttermilk.runner import Job
-from buttermilk._core.runner_types import AgentInfo, AgentInfo
+from buttermilk._core.runner_types import AgentInfo, AgentInfo, Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk._core.log import logger
 
