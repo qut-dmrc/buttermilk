@@ -137,13 +137,13 @@ class SessionInfo(BaseModel):
             save_dir = (
                 f"gs://{self.save_bucket}/runs/{self.project}/{self.job}/{self.run_id}"
             )
+            del self.save_bucket
         # # Make sure the save directory is a valid path
         try:
             _ = cloudpathlib.AnyPath(save_dir)
         except Exception as e:
             raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
         self.save_dir = save_dir
-        del self.save_bucket
 
         return self
 
