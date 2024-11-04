@@ -131,13 +131,46 @@ def group_and_filter_jobs(new_data: pd.DataFrame, group: dict, columns: dict, df
                     new_data[c] = None
         return new_data[idx_cols + list(columns.keys())]
 
-
-
-
-
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name
         data = cloudpathlib.CloudPath(uri).read_bytes()
         f.write(data)
+    return dataset
+
+
+
+async def prepare_step_data(data_cfg) -> pd.DataFrame:
+    # This works for small datasets that we can easily read and load.
+
+    dataset = pd.DataFrame()
+    fields = []
+    source_list = []
+    dataset_configs = []
+
+    # data_cfg is not ordered. Loop through and load the static data first.
+    for data_id, src in data_cfg.items():
+        if src.type == 'job':
+            # end of list (dynamic data)
+            dataset_configs.append(src)
+        else:
+            # start of list
+            dataset_configs = [src] + dataset_configs
+        source_list.append(src.name)
+
+    for src in dataset_configs:
+        fields.extend(src.columns.keys())
+        df = load_data(src)
+        if src.type != 'job':
+            dataset = pd.concat([dataset, df[src.columns.keys()]])
+        else:
+            # Load and join prior job data
+            dataset = group_and_filter_jobs(dataset, new_data=df, prior_step=src)
+
+    # add index, but don't remove record_id form the columns
+    dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
+
+    # shuffle
+    dataset = dataset.sample(frac=1)
+
     return dataset

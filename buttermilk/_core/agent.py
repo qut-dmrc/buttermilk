@@ -64,7 +64,7 @@ class Agent(BaseModel):
     Receive data, processes it, save the results to BQ, and acknowledge completion.
     """
     name: str
-    concurrent: int = 10            # Max number of async tasks to run
+    concurrent: int = 4            # Max number of async tasks to run
     agent_info: Optional[AgentInfo] = None  # The metadata for this run
     
     save_params: Optional[SaveInfo] = None

@@ -1,8 +1,6 @@
 defaults:
   - _self_
 
-data:
-
 name: automod
 job: judge
 secret_provider: azure
@@ -21,6 +19,10 @@ azure:
 aws:
   secret_name: secret
   region: us-east-1
+
+data:
+
+step:
 
 run:
   platform: local

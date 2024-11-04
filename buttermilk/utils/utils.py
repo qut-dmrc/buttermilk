@@ -305,4 +305,8 @@ def expand_dict(d: Dict[str, Any]) -> List[Dict[str, Any]]:
         for combo in combinations
     ]
 
+    # Guarantee at least a list with an empty dict
+    if len(expanded_dicts) == 0:
+        expanded_dicts = [d]
+
     return expanded_dicts

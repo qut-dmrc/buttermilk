@@ -1,0 +1,16 @@
+- judge:
+    num_runs: 1
+    concurrent: 20
+    agent: 
+      name: lc
+      template: judge
+      criteria: criteria_ordinary
+      formatting: json_rules
+      model:
+        - haiku
+        # - o1-preview
+        # - llama31_70b
+        # - gpt4o
+        # - sonnet
+        # - gemini15pro
+    parameters:

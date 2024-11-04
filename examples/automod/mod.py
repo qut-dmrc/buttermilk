@@ -143,45 +143,11 @@ async def run(cfg, step_cfg):
     for processor in consumers:
         orchestrator.register_task(consumer=processor)
 
-        dataset = pd.DataFrame()
-        fields = []
 
-        source_list = []
-        dataset_configs = []
+        # load data from generator ... MISSING
 
-        # cfg.data is not ordered. Loop through and load the static data first.
-        for data_id, src in cfg.data.items():
-            if src.type == 'job':
-                # end of list
-                dataset_configs.append(src)
-            else:
-                # start of list
-                dataset_configs = [src] + dataset_configs
-            source_list.append(src.name)
-
-        for src in dataset_configs:
-            fields.extend(src.columns.keys())
-            df = load_data(src)
-            if src.type != 'job':
-                dataset = pd.concat([dataset, df[src.columns.keys()]])
-            else:
-                # Load and join prior job data
-                dataset = group_and_filter_jobs(dataset, new_data=df, prior_step=src)
-            
-
-        # add index, but don't remove record_id form the columns
-        dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
-
-        for i in range(step_cfg.num_runs):
-            for idx, row in dataset.sample(frac=1).iterrows():
-                job = Job(record_id=idx,
-                        inputs=make_serialisable(row.to_dict()),
-                        run_info=bm._run_metadata,
-                        source=source_list,
-                        )
-
-                # Add each job to the queue
-                orchestrator.add_job(task_name=processor.agent, job=job)
+        # Add each job to the queue
+        orchestrator.add_job(task_name=processor.agent, job=job)
 
 
     # Run!
