@@ -1,0 +1,8 @@
+trans:
+  name: trans news articles
+  type: file
+  uri: gs://dmrc-platforms/data/tja_train.jsonl
+  columns:
+    record_id: id
+    content: text
+    title: title

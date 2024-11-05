@@ -93,7 +93,8 @@ httpx = "^0.27.2"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-
+[tool.ruff]
+extend-include = ["*.ipynb"]
 
 [tool.pytest.ini_options]
 markers = [

@@ -82,8 +82,7 @@ async def validate_uri_or_b64(value: Optional[Union[AnyUrl, str]]) -> Optional[s
     return None
         
 class AgentInfo(BaseModel):
-    # job: str
-    # step: str
+    flow: str
     agent: str
     model: Optional[str] = None
 
@@ -116,7 +115,7 @@ class Result(BaseModel):
         
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, validation_alias=AliasChoices("name", "title", "heading"))
     content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
     image: Optional[str] = None  # Allow URL or base64 string
     video: Optional[str] = None  # Allow URL or base64 string
@@ -125,7 +124,7 @@ class RecordInfo(BaseModel):
     path:  Optional[str] = ""
 
     model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True
     )
 
     @model_validator(mode="after")

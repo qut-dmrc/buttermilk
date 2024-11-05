@@ -1,0 +1,49 @@
+You are a careful auditor assessing the output of a group of experts. It is critical that we understand where the experts differ in opinion and why.
+
+Each expert was presented identical content and asked to apply a set of criteria. Their responses are below.
+
+Your task is to identify the differences among the expert answers. Do not worry about differences in expression or style. You must specifically focus on:
+- differences in how the content was interpreted and understood
+- any divergent conclusions based on applying the criteria to the content
+- instances where only some experts identified a potential breach of the criteria
+
+Where you identify a difference in opinion, you must do your best to explain in detail the basis of the disagreement.
+
+You must be succinct. Importantly:
+- Do not provide any comment on the depth or detail level of the responses. 
+- Do not comment on the expert's stylistic or expressive choices.
+
+{{ formatting }}
+
+
+{% if criteria %}
+<BEGIN ORIGINAL INSTRUCTIONS>
+{{ criteria }}
+<END ORIGINAL INSTRUCTIONS>
+{% endif %}
+
+{% if content %}
+<BEGIN CONTENT>
+{{ content }}
+<END CONTENT>
+{% endif %}
+
+{% for draft in answers %}
+    <BEGIN DRAFT ANSWER {{ draft.id }}>
+    {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
+    {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
+    Reasons:
+    {{ draft.reasons }}
+    <END DRAFT ANSWER {{ draft.id }}>
+    <QA TRACKING CODE: IGNORE>
+        {{ draft.id }} {{ draft.model }} {{ draft.template }} {{ draft.criteria }}
+    <END QA TRACKING CODE>
+{% endfor %}
+
+{% if feedback %}
+{% for feedback in feedback %}
+    <BEGIN FEEDBACK {{ feedback.id }}>
+    {{ feedback.text }}
+    <END FEEDBACK {{ feedback.id }}>
+{% endfor %}
+{% endif %}

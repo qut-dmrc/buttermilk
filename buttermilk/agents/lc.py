@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 from dataclasses import dataclass
 from random import shuffle
-from typing import Any, List, Optional, Self, TypedDict
+from typing import Any, List, Literal, Optional, Self, TypedDict
 
 import pandas as pd
 import requests
@@ -59,6 +59,7 @@ from buttermilk.utils.utils import scrub_keys
 #########################################
 
 class LC(Agent):
+    name: str = Field(default="lc", init=False)
     model: Optional[str] = None
     template: Optional[str] = None
     template_vars: Optional[dict] = {}
@@ -128,7 +129,14 @@ class LC(Agent):
 
         # Compile inputs and template variables
         local_inputs = self.template_vars.copy()
-        local_inputs.update(**job.parameters)
+
+        for k, v in job.parameters.items():
+            # Load params from content if they match, otherwise add them literally.
+            if v in job.record.model_fields or v in job.record.model_extra:
+                v = getattr(job.record, v)
+            local_inputs[k] = v
+
+
         local_template = self._template.render(**local_inputs)
 
         if model.startswith("o1-preview"):
@@ -190,7 +198,7 @@ class LC(Agent):
         try:
             t0 = time.time()
             try:
-                logger.info(f"Invoking chain with {model}...")
+                logger.debug(f"Invoking chain with {model}...")
                 output = await chain.ainvoke(input=input_vars)
             except Exception as e:
                 t1 = time.time()
@@ -201,7 +209,7 @@ class LC(Agent):
                 # return dict(error=err)
             t1 = time.time()
             elapsed = t1-t0
-            logger.info(f"Invoked chain with {model} in {elapsed:.2f} seconds")
+            logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")
 
 
         except RetryError:

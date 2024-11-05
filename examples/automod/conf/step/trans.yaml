@@ -1,0 +1,121 @@
+- flow: judger
+  num_runs: 1
+  concurrent: 20
+  agent: 
+    name: lc
+    template: judge
+    criteria: 
+      - trans_cte
+      - trans_tja
+      - trans_glaad
+      - trans_hrc
+      - trans_simplified
+      - trans_factored
+    formatting: json_rules
+    model:
+      - haiku
+      # - o1-preview
+      # - llama31_70b
+      # - gpt4o
+      # - sonnet
+      # - gemini15pro
+  parameters:
+- flow: synth
+  num_runs: 1
+  concurrent: 20
+  agent: 
+    name: lc_judge
+    template: synthesise
+    criteria: 
+      - trans_simplified
+    formatting: json_rules
+    model:
+      - haiku
+      # - gpt4o
+      # - sonnet
+      # - gemini15pro
+  parameters:
+    answers: answers
+    meta: meta
+  data:
+    judger:
+      name: previous runs
+      type: job
+      dataset: dmrc-analysis.toxicity.flow
+      max_records_per_group: 1
+      filter:
+        agent_info.flow: judger
+      group:
+        record_id: record.record_id
+        flow: agent_info.flow
+        template: agent_info.template
+        criteria: agent_info.template_vars.criteria
+        model: parameters.model
+      columns:
+        answers:
+          id: job_id
+          model: model
+          criteria: criteria
+          template: template
+          flow: flow
+          reasons: outputs.reasons
+        meta:
+          flow: agent_info.flow
+          template: agent_info.template
+          criteria: agent_info.template_vars.criteria
+          model: parameters.model
+          prediction: outputs.prediction
+          labels: outputs.labels
+          confidence: outputs.confidence
+          timestamp: timestamp
+
+- flow: eval
+  num_runs: 1
+  concurrent: 20
+  agent: 
+    name: lc
+    template: differences
+    criteria: 
+      - trans_simplified
+    formatting: json_reasons
+    model:
+      - haiku
+      # - gpt4o
+      # - sonnet
+      # - gemini15pro
+  parameters:
+    answers: answers
+    meta: meta
+  data:
+    judger:
+      name: previous runs and synth
+      type: job
+      dataset: dmrc-analysis.toxicity.flow
+      max_records_per_group: 1
+      filter:
+        agent_info.flow:
+          - judger
+          - synth
+      group:
+        model: parameters.model
+        record_id: record.record_id
+        flow: agent_info.flow
+        template: agent_info.template
+        criteria: agent_info.template_vars.criteria
+      columns:
+        answers:
+          id: job_id
+          flow: agent_info.flow
+          reasons: outputs.reasons
+          model: model
+          criteria: criteria
+          template: template
+        meta:
+          flow: agent_info.flow
+          template: agent_info.template
+          criteria: agent_info.template_vars.criteria
+          model: parameters.model
+          prediction: outputs.prediction
+          labels: outputs.labels
+          confidence: outputs.confidence
+          timestamp: timestamp

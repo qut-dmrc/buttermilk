@@ -41,7 +41,7 @@ class MultiFlowOrchestrator(BaseModel):
         self._concurrent = self.step.get('concurrent') or self._concurrent
 
         # Prepare the data for the step
-        self._dataset = prepare_step_data(data_config=self.data)
+        self._dataset = prepare_step_data(self.data, self.step.get('data'))
         return self
 
     async def make_tasks(self, data_generator, agent_type: type[Agent], source) -> AsyncGenerator[Tuple[str,str,Job], None]:
@@ -51,7 +51,7 @@ class MultiFlowOrchestrator(BaseModel):
 
         # Get permutations of init variables
         agent_combinations = self.step.agent
-        agent_name = self.step.get('name', agent_type.__name__)
+        flow = self.step.flow
         agent_combinations = expand_dict(agent_combinations)
 
         # Get permutations of run variables
@@ -59,12 +59,12 @@ class MultiFlowOrchestrator(BaseModel):
         run_combinations = expand_dict(run_combinations)
 
         for init_vars in agent_combinations:
-            agent = agent_type(**init_vars, save_params=self.save)
+            agent = agent_type(flow=flow, **init_vars, save_params=self.save)
             async for record in data_generator():
                 for run_vars in run_combinations:
                     job = Job(record=record, source=source, parameters=run_vars)
                     coroutine = agent.run(job)
-                    yield agent_name, job.job_id, coroutine
+                    yield agent.name, job.job_id, coroutine
 
     async def data_generator(self) -> AsyncGenerator[RecordInfo, None]:
         # Generator to yield records from the dataset
@@ -78,15 +78,15 @@ class MultiFlowOrchestrator(BaseModel):
         async def task_wrapper(agent_name, job_id, task):
             try:
                 async with _sem:
-                    logger.info(f"Starting task for Agent {agent_name} with job {job_id}.")
+                    logger.debug(f"Starting task for Agent {agent_name} with job {job_id}.")
                     result = await task
                     self._tasks_remaining  -= 1
 
                 if result.error:
-                    logger.error(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
+                    logger.warning(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
                     self._tasks_failed += 1
                 else:
-                    logger.info(f"Agent {agent_name} completed job {job_id} successfully.")
+                    logger.debug(f"Agent {agent_name} completed job {job_id} successfully.")
                     self._tasks_completed += 1
 
                 return result
@@ -99,6 +99,8 @@ class MultiFlowOrchestrator(BaseModel):
                 async for agent_name, job_id, task in self.make_tasks(data_generator=self.data_generator, agent_type=self.agent_type, source=self.source):
                     wrapped_task = task_wrapper(agent_name, job_id, task)
                     tg.create_task(wrapped_task)
+                    await asyncio.sleep(0)  # Yield control to allow tasks to start processing
+
                     
             # All tasks in this run are now complete
             logger.info(f"Completed run {n+1} of {self._num_runs}")

@@ -19,14 +19,16 @@ You should not refer to the analyst or their response in your answer; just expla
 <END CONTENT>
 {% endif %}
 
+{% if expected %}
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
+{% endif %}
 
 {% for draft in answers %}
 <BEGIN ANALYST ANSWER #: {{ draft.id }}>
-Answer: {{ draft.prediction }}
-Labels: {{ draft.labels }}
+{% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
+{% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
 Reasons:
 {{ draft.reasons }}
 <END ANALYST ANSWER #: {{ draft.id }}>

@@ -1,3 +1,4 @@
+import itertools
 import json
 from tempfile import NamedTemporaryFile
 
@@ -18,20 +19,27 @@ def load_data(data_cfg) -> pd.DataFrame:
         rename_dict = {v: k for k, v in columns.items()}
         df = df.rename(columns=rename_dict)
     elif data_cfg.type == 'job':
-        df = load_jobs(dataset=data_cfg.dataset, filter=data_cfg.filter, last_n_days=data_cfg.last_n_days, exclude_processed=data_cfg.group)
+        df = load_jobs(data_cfg=data_cfg)
 
     return df
 
-def load_jobs(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed: list=[]) -> pd.DataFrame:
-    sql = f"SELECT * FROM `{dataset}` jobs WHERE error IS NULL "
+def load_jobs(data_cfg: Mapping) -> pd.DataFrame:
+    last_n_days=data_cfg.get('last_n_days', 3)
+    
+    sql = f"SELECT * FROM `{data_cfg.dataset}` jobs WHERE error IS NULL "
 
     sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
-    if filter:
-        for field, condition in filter.items():
+    if data_cfg.filter:
+        for field, condition in data_cfg.filter.items():
+            field = field.split('.', 1)
+            if len(field) > 1:
+                comparison_string = f'JSON_VALUE({field[0]}, "$.{field[1]}")'
+            else:
+                comparison_string = field[0]
             if condition and isinstance(condition, str):
-                sql += f" AND {field} = '{condition}' "
+                sql += f' AND {comparison_string} = "{condition}" '
             elif condition and isinstance(condition, Sequence):
-                multi_or = " OR ".join([f"{field} = '{term}'" for term in condition])
+                multi_or = " OR ".join([f'{comparison_string} = "{term}"' for term in condition])
                 sql += f" AND ({multi_or})"
 
     # exclude records already processed if necessary
@@ -51,7 +59,7 @@ def load_jobs(dataset: str, filter: dict = {}, last_n_days=3, exclude_processed:
     return df
 
 
-def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, existing_df: Optional[pd.DataFrame] = None, max_records_per_group: int = -1, raise_on_error=True) -> pd.DataFrame:
+def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, existing_df: Optional[pd.DataFrame] = None, max_records_per_group: int = 1, raise_on_error=True) -> pd.DataFrame:
 
     # expand and rename columns if we need to
     pairs_to_expand = list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns))
@@ -103,9 +111,11 @@ def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, exi
     if max_records_per_group > 0 and idx_cols:
         # Reduce down to n list items per index (but don't aggregate
         # at this time, just keep a random selection of rows)
-        data = data.sample(frac=1).groupby(idx_cols).agg(
+        data = data.sample(frac=1).groupby(level=idx_cols).agg(
                 lambda x: x.tolist()[:max_records_per_group])
-
+    elif idx_cols:
+        data = data.sample(frac=1).groupby(level=idx_cols).agg(
+                lambda x: x.tolist())
 
 
     # Add the columns to the source dataset
@@ -116,8 +126,16 @@ def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, exi
             idx_cols = list(set(idx_cols).difference(group_only_cols))
             data = data.reset_index(level=group_only_cols, drop=True)
 
+
         # Only return the columns we need
-        data = data[columns.keys()]
+        data = data[list(set(columns.keys())-set(idx_cols))]
+
+        # Reduce the groups down again now that we have built our index
+        # This way, we should only have one matching row per group for
+        # each of the records we're processing.
+        data = data.groupby(idx_cols).agg(
+                lambda x: [item for sublist in x for item in sublist])
+                
 
         existing_df = pd.merge(existing_df, data, left_on=idx_cols, right_index=True)
         return existing_df
@@ -143,8 +161,11 @@ def cache_data(uri: str) -> str:
 
 
 
-def prepare_step_data(data_config) -> pd.DataFrame:
+def prepare_step_data(*data_configs) -> pd.DataFrame:
     # This works for small datasets that we can easily read and load.
+    all_configs = {}
+    for conf in data_configs:
+        all_configs.update(conf)
 
     dataset = pd.DataFrame()
     fields = []
@@ -152,7 +173,7 @@ def prepare_step_data(data_config) -> pd.DataFrame:
     dataset_configs = []
 
     # data_cfg is not ordered. Loop through and load the static data first.
-    for name, src in data_config.items():
+    for name, src in all_configs.items():
         if src.type == 'job':
             # end of list (dynamic data)
             dataset_configs.append(src)
@@ -168,7 +189,7 @@ def prepare_step_data(data_config) -> pd.DataFrame:
             dataset = pd.concat([dataset, df[src.columns.keys()]])
         else:
             # Load and join prior job data
-            dataset = group_and_filter_jobs(existing_df=dataset, data=df, group=src.group, columns=src.columns)
+            dataset = group_and_filter_jobs(existing_df=dataset, data=df, group=src.group, columns=src.columns, max_records_per_group=src.max_records_per_group)
 
     # add index, but don't remove record_id form the columns
     dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]

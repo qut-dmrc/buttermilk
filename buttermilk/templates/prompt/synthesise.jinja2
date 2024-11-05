@@ -1,4 +1,3 @@
-
 Your task is to review one or more draft answers and come to a final conclusion.
 
 You are a team leader. Some members of your team have drafted answers to a question, and others have provided feedback on those answers. Your task is to synthesise the information that your team has developed so far and produce the best possible answer to a question. You should generally trust your team members, but they may not always be correct.
@@ -21,8 +20,8 @@ You may be provided with additional feedback to consider. You should incorporate
 
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER {{ draft.id }}>
-    Answer: {{ draft.prediction }}
-    Labels: {{ draft.labels }}
+    {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
+    {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
     Reasons:
     {{ draft.reasons }}
     <END DRAFT ANSWER {{ draft.id }}>
@@ -35,5 +34,3 @@ You may be provided with additional feedback to consider. You should incorporate
     <END FEEDBACK {{ feedback.id }}>
 {% endfor %}
 {% endif %}
-
-
