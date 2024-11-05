@@ -88,7 +88,7 @@ class Agent(BaseModel):
     @model_validator(mode='after')
     def init(self) -> Self:
         # configure agent info
-        self.agent_info = AgentInfo(agent=self.name, **self.model_extra, **self.model_dump(exclude_unset=True, mode='json',exclude_none=True, exclude=["save_params"]))
+        self.agent_info = AgentInfo(agent=self.name, **self.model_extra, **self.model_dump(exclude_unset=True, mode='json',exclude_none=True))
         return self
     
     @field_validator("name", mode="before")

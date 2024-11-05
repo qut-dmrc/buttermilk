@@ -148,7 +148,9 @@ class LC(Agent):
         llm = self.llm[model]
 
         # Add model details to Job object
-        job.parameters['model'] = scrub_keys(llm.copy())
+        job.parameters['connection'] = scrub_keys(self.llm.connections[model])
+        job.parameters['model_params'] = scrub_keys(llm.dict())
+        job.parameters['model'] = model
 
         # Make the chain
         chain = ChatPromptTemplate.from_messages(

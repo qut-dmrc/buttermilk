@@ -1,7 +1,7 @@
 import pytest
 import shortuuid
 
-from buttermilk.automod.mod import JobProcessor
+from examples.automod.mod import JobProcessor
 from buttermilk._core.runner_types import AgentInfo
 
 @pytest.fixture

@@ -115,6 +115,8 @@ def scrub_keys(data: Union[Sequence,Mapping]) -> T:
         return [scrub_keys(v) for v in data]
     elif isinstance(data, Mapping):
         return {k: scrub_keys(v) for k, v in data.items() if not any(x in str(k).lower() for x in ["key", "token", "password", "secret", "credential"])}
+    else:
+        return data
 
 def make_serialisable( rows):
     """Prepare dataframe for export"""

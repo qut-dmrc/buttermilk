@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 from unittest.mock import MagicMock, patch
 
-from buttermilk.automod.pfmod import save_to_bigquery
+from examples.automod.pfmod import save_to_bigquery
 
 # Mock data
 mock_results = pd.DataFrame({
@@ -30,7 +30,7 @@ mock_schema = [
 
 mock_save_cfg = MagicMock(schema=mock_schema, dataset='test_dataset')
 
-@patch('buttermilk.examples.automod.pfmod.upload_rows')
+@patch('examples.automod.pfmod.upload_rows')
 def test_save_to_bigquery(mock_upload_rows):
     """
     Test the save_to_bigquery function.
