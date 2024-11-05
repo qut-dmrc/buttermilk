@@ -77,7 +77,6 @@
     template: differences
     criteria: 
       - trans_simplified
-    formatting: json_reasons
     model:
       - haiku
       # - gpt4o

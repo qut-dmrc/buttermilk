@@ -1,8 +1,13 @@
 from pathlib import Path
+from typing import Mapping, Tuple
+
+import yaml
+from buttermilk._core.runner_types import Job
 from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.utils.utils import list_files_with_content, list_files
 from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
-
+from buttermilk import logger
+import regex as re
 
 
 def get_templates(pattern: str = '', parent: str='', extension: str=''):
@@ -16,3 +21,33 @@ def get_template_names(pattern: str = '', parent: str='', extension: str='jinja2
 class KeepUndefined(Undefined):
     def __str__(self):
         return '{{ ' + self._undefined_name + ' }}'
+    
+def _parse_prompty(string_template) -> str:
+        # Use Promptflow's format and strip the header out
+        pattern = r"-{3,}\n(.*)-{3,}\n(.*)"
+        result = re.search(pattern, string_template, re.DOTALL)
+        if not result:
+            raise ValueError(
+                "Illegal formatting of prompty. The prompt file is in markdown format and can be divided into two "
+                "parts, the first part is in YAML format and contains connection and model information. The second "
+                "part is the prompt template."
+            )
+        _, prompt_template = result.groups()
+        return prompt_template
+
+def make_messages(local_template: str) -> list[Tuple[str,str]]:
+    try:
+        # We'll aim to be compatible with Prompty format
+        from promptflow.core._prompty_utils import parse_chat
+        prompty = _parse_prompty(local_template)
+        messages = parse_chat(prompty)
+
+        # convert to langchain messages
+        messages = [ (message['role'], message['content']) for message in messages]
+
+    except Exception as e:
+        # But will fall back to using full text if necessary
+        logger.warning(f'Unable to decode template as Prompty: {e}, {e.args=}')
+        messages = [('human', local_template)]
+
+    return messages

@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 from dataclasses import dataclass
 from random import shuffle
-from typing import Any, List, Literal, Optional, Self, TypedDict
+from typing import Any, List, Literal, Optional, Self, Tuple, TypedDict
 
 import pandas as pd
 import requests
@@ -44,7 +44,7 @@ from tenacity import (
 
 from buttermilk import BM, Agent, BQ_SCHEMA_DIR, TEMPLATE_PATHS, BASE_DIR
 from buttermilk.exceptions import RateLimit
-from buttermilk.flows.templating import KeepUndefined
+from buttermilk.flows.templating import KeepUndefined, make_messages
 from buttermilk.llms import LLMs
 from buttermilk import Job, Result,  RecordInfo
 from buttermilk.tools.json_parser import ChatParser
@@ -119,14 +119,7 @@ class LC(Agent):
 
         return self
 
-    async def process_job(self, job: Job) -> Job:
-        if not (model := job.parameters.pop('model', None) or self.model):
-            raise ValueError(
-                "You must provide either model name or provide a default model on initialisation."
-            )
-        # Add this agent's details to the Job object
-        job.agent_info = self.agent_info
-
+    def prepare_messages(self, job: Job):
         # Compile inputs and template variables
         local_inputs = self.template_vars.copy()
 
@@ -136,21 +129,31 @@ class LC(Agent):
                 v = getattr(job.record, v)
             local_inputs[k] = v
 
-
         local_template = self._template.render(**local_inputs)
+        messages = make_messages(local_template=local_template)
 
-        if model.startswith("o1-preview"):
-            local_template_type = 'human'
-        else:
-            local_template_type = 'system'
+        return messages
+    
 
-        messages = [(local_template_type, local_template)]
+    async def process_job(self, job: Job) -> Job:
+        if not (model := job.parameters.pop('model', None) or self.model):
+            raise ValueError(
+                "You must provide either model name or provide a default model on initialisation."
+            )
+        
+        messages = self.prepare_messages(job)
+        # Add this agent's details to the Job object
+        job.agent_info = self.agent_info
 
         # Add prompt to Job object
         job.prompt = [ f"{role}:\n{message}" for role, message in messages]
 
-        # Now add content to list of messages (after saving the prompt)
-        messages.append(job.record.as_langchain_message(type='human'))
+        # if there is a placeholder for {record}, add our record to list 
+        # of messages (after saving the prompt)?
+        # TODO: currently there is no code to add a placeholder, we haven't needed it yet.
+        if any(isinstance(x, MessagesPlaceholder) for _, x in messages):
+            record_msg = job.record.as_langchain_message(type='human')
+            messages.append(dict(record=[record_msg]))
 
         # Get model
         llm = self.llm[model]
@@ -167,8 +170,8 @@ class LC(Agent):
         
         chain = chain | llm | ChatParser()
 
-        # Invoke the chain
-        response = await self.invoke(chain, input_vars=local_inputs, model=model)
+        # Invoke the chain  (input_vars have already been inserted into the template)
+        response = await self.invoke(chain, input_vars={}, model=model)
 
         job.outputs = Result(**response)
         return job
