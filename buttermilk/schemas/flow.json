@@ -30,6 +30,11 @@
         "mode": "NULLABLE"
     },
     {
+        "name": "prompt",
+        "type": "STRING",
+        "mode": "REPEATED"
+    },
+    {
         "name": "parameters",
         "type": "JSON",
         "mode": "NULLABLE"

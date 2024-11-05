@@ -1,7 +1,7 @@
 import asyncio
 import datetime
 import platform
-from typing import Any, AsyncGenerator, Generator, Literal, Optional, Self, Type, Union,Mapping
+from typing import Any, AsyncGenerator, Generator, Literal, Optional, Self, Sequence, Tuple, Type, Union,Mapping
 
 from langchain_core.messages import BaseMessage, BaseMessageChunk, HumanMessage, AIMessage
 from langchain_core.prompts import (
@@ -195,6 +195,7 @@ class Job(BaseModel):
     source: str|list[str]
     
     record: Optional[RecordInfo] = None
+    prompt: Optional[Sequence[str]] = Field(default_factory=list)
     parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
 
     # These fields will be fully filled once the record is processed
@@ -212,7 +213,7 @@ class Job(BaseModel):
         validate_assignment=True,
         exclude_unset=True
     )
-    _ensure_list = field_validator("source", mode="before")(make_list_validator())
+    _ensure_list = field_validator("source","prompt", mode="before")(make_list_validator())
 
     @field_validator("outputs", mode="before")
     def convert_result(v):

@@ -49,6 +49,7 @@ from buttermilk.llms import LLMs
 from buttermilk import Job, Result,  RecordInfo
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk import logger
+from buttermilk.utils.utils import scrub_keys
 
 
 #########################################
@@ -118,23 +119,16 @@ class LC(Agent):
         return self
 
     async def process_job(self, job: Job) -> Job:
-        job.agent_info = self.agent_info
-        response = await self.call_async(record=job.record, params=job.parameters)
-        job.outputs = Result(**response)
-        return job
-    
-    async def call_async(self, text: Optional[str] = None, *, 
-                         record: Optional[RecordInfo] = None,
-                         params: Optional[dict] = {}):
-        
-        if not (model := params.pop('model', None) or self.model):
+        if not (model := job.parameters.pop('model', None) or self.model):
             raise ValueError(
                 "You must provide either model name or provide a default model on initialisation."
             )
-        
-        local_inputs = self.template_vars.copy()
-        local_inputs.update(**params)
+        # Add this agent's details to the Job object
+        job.agent_info = self.agent_info
 
+        # Compile inputs and template variables
+        local_inputs = self.template_vars.copy()
+        local_inputs.update(**job.parameters)
         local_template = self._template.render(**local_inputs)
 
         if model.startswith("o1-preview"):
@@ -143,20 +137,32 @@ class LC(Agent):
             local_template_type = 'system'
 
         messages = [(local_template_type, local_template)]
-        if record:
-            messages.append(record.as_langchain_message(type='human'))
-        elif text:
-            messages.append(HumanMessage(content=text))
 
+        # Add prompt to Job object
+        job.prompt = [ f"{role}:\n{message}" for role, message in messages]
+
+        # Now add content to list of messages (after saving the prompt)
+        messages.append(job.record.as_langchain_message(type='human'))
+
+        # Get model
+        llm = self.llm[model]
+
+        # Add model details to Job object
+        job.parameters['model'] = scrub_keys(llm.copy())
+
+        # Make the chain
         chain = ChatPromptTemplate.from_messages(
                 messages, template_format="jinja2"
             )
         
-        chain = chain | self.llm[model] | ChatParser()
+        chain = chain | llm | ChatParser()
 
-        results = await self.invoke(chain, input_vars=local_inputs, model=model)
+        # Invoke the chain
+        response = await self.invoke(chain, input_vars=local_inputs, model=model)
 
-        return results
+        job.outputs = Result(**response)
+        return job
+
 
 
     @retry(

@@ -7,12 +7,20 @@ judger:
   #   step: judge
   group:
     record_id: record.record_id
-  columns:
     job_id: job_id
+  columns:
+    timestamp: timestamp
+    job: run_info.job
+    project: run_info.project
+    model: agent_info.model
+    template: agent_info.template
+    criteria: agent_info.template_vars.criteria
+    content: record.content
     prediction: outputs.prediction
     reasons: outputs.reasons
     labels: outputs.labels
-    outputs: output
+    outputs: outputs
     record: record
     parameters: parameters
     agent_info: agent_info
+    expected: record.groundtruth.answer

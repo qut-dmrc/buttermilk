@@ -108,7 +108,7 @@ def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, exi
 
 
 
-    # Add the column to the source dataset
+    # Add the columns to the source dataset
     if existing_df is not None and existing_df.shape[0]>0:
         if idx_cols:
             # reset index columns that we're not matching on:

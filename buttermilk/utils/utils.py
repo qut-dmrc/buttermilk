@@ -109,6 +109,12 @@ def read_text(filename: Union[pathlib.Path, str]) -> str:
     file = read_file(filename)
     return file.decode()
 
+def scrub_keys(data: Union[Sequence,Mapping]) -> T:
+    # Remove anything that looks like an key or credential from a hierarchical dict or list
+    if isinstance(data, Sequence) and not isinstance(data, str):
+        return [scrub_keys(v) for v in data]
+    elif isinstance(data, Mapping):
+        return {k: scrub_keys(v) for k, v in data.items() if not any(x in str(k).lower() for x in ["key", "token", "password", "secret", "credential"])}
 
 def make_serialisable( rows):
     """Prepare dataframe for export"""
