@@ -15,11 +15,15 @@
     model:
       - haiku
       # - o1-preview
-      # - llama31_70b
-      # - gpt4o
-      # - sonnet
-      # - gemini15pro
+      - llama31_70b
+      - gpt4o
+      - sonnet
+      - gemini15pro
   parameters:
+    record_id: record_id
+    content: content
+    title: title
+  data:
 - flow: synth
   num_runs: 1
   concurrent: 20
@@ -31,9 +35,9 @@
     formatting: json_rules
     model:
       - haiku
-      # - gpt4o
-      # - sonnet
-      # - gemini15pro
+      - gpt4o
+      - sonnet
+      - gemini15pro
   parameters:
     answers: answers
     meta: meta
@@ -79,9 +83,9 @@
       - trans_simplified
     model:
       - haiku
-      # - gpt4o
-      # - sonnet
-      # - gemini15pro
+      - gpt4o
+      - sonnet
+      - gemini15pro
   parameters:
     answers: answers
     meta: meta

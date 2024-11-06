@@ -165,7 +165,8 @@ def prepare_step_data(*data_configs) -> pd.DataFrame:
     # This works for small datasets that we can easily read and load.
     all_configs = {}
     for conf in data_configs:
-        all_configs.update(conf)
+        if conf:
+            all_configs.update(conf)
 
     dataset = pd.DataFrame()
     fields = []

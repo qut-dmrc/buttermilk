@@ -5,4 +5,4 @@ trans:
   columns:
     record_id: id
     content: text
-    title: title
+    title: name

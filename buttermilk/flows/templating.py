@@ -40,14 +40,14 @@ def make_messages(local_template: str) -> list[Tuple[str,str]]:
         # We'll aim to be compatible with Prompty format
         from promptflow.core._prompty_utils import parse_chat
         prompty = _parse_prompty(local_template)
-        messages = parse_chat(prompty)
+        messages = parse_chat(prompty, valid_roles=["system", "user", "human", "placeholder"])
 
         # convert to langchain messages
         messages = [ (message['role'], message['content']) for message in messages]
 
     except Exception as e:
         # But will fall back to using full text if necessary
-        logger.warning(f'Unable to decode template as Prompty: {e}, {e.args=}')
+        logger.debug(f'Unable to decode template as Prompty: {e}, {e.args=}')
         messages = [('human', local_template)]
 
     return messages

@@ -151,7 +151,7 @@ class RecordInfo(BaseModel):
             return str(path.as_uri())
 
         
-    def as_langchain_message(self, type: Literal["human","system"]='human') -> BaseMessage:
+    def as_langchain_message(self, type: Literal["human","system"]='human', components: list[str] = ['content']) -> BaseMessage:
         # Return the fields as a langchain message
         parts = [x for x in [self.content, self.alt_text] if x is not None ]
         # TODO: make multimodal

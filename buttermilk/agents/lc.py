@@ -96,6 +96,11 @@ class LC(Agent):
             return
         recursive_paths = TEMPLATE_PATHS + [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
         loader = FileSystemLoader(searchpath=recursive_paths)
+
+        def placeholder(variable_name):
+            """ Adds a placeholder for an array of messages to be inserted. """
+            return MessagesPlaceholder(variable_name="conversation", optional=True)
+
         env = Environment(
             loader=loader,
             trim_blocks=True,
@@ -119,7 +124,12 @@ class LC(Agent):
 
         return self
 
-    def prepare_messages(self, job: Job):
+    async def process_job(self, job: Job) -> Job:
+        if not (model := job.parameters.pop('model', None) or self.model):
+            raise ValueError(
+                "You must provide either model name or provide a default model on initialisation."
+            )
+        
         # Compile inputs and template variables
         local_inputs = self.template_vars.copy()
 
@@ -132,16 +142,6 @@ class LC(Agent):
         local_template = self._template.render(**local_inputs)
         messages = make_messages(local_template=local_template)
 
-        return messages
-    
-
-    async def process_job(self, job: Job) -> Job:
-        if not (model := job.parameters.pop('model', None) or self.model):
-            raise ValueError(
-                "You must provide either model name or provide a default model on initialisation."
-            )
-        
-        messages = self.prepare_messages(job)
         # Add this agent's details to the Job object
         job.agent_info = self.agent_info
 

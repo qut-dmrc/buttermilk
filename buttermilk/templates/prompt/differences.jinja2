@@ -26,14 +26,15 @@ You will be given a series of responses. Your task is to identify the difference
 - You should focus on differences in reasoning and understanding of the content, not the overall conclusion.
 - Where you identify a difference in opinion, you must identify the specific reasons that experts relied on to reach different conclusions about identical content.
 
-You should be granular and precise in your analysis. For example:
-- do not say: 'Some experts found the content to be offensive'; 
-- instead, say: 'Answers #x and #y concluded that the <specific quote> in the content was hateful towards <specific group>. Most other answers concluded that the content was a bare factual report and not offensive in itself, even though it reported on offensive material. Answer #z did not consider this point.'
- 
 You must specifically focus on:
 - differences in how the content was interpreted and understood
 - any divergent conclusions based on applying the criteria to the content
 - instances where only some experts identified a potential breach of the criteria
+
+You should be granular and precise in your analysis. For example:
+- do not say: 'Some experts found the content to be offensive'; 
+- instead, say: 'Answers #x and #y concluded that the <specific quote> in the content was hateful towards <specific group>. Most other answers concluded that the content was a bare factual report and not offensive in itself, even though it reported on offensive material. Answer #z did not consider this point.'
+
 
 You must be succinct. Importantly:
 - Do not include conclusions where consensus was unanimous.
@@ -46,7 +47,8 @@ You must be succinct. Importantly:
 You should work carefully step-by-step:
 1. Read all of the answers to identify all material findings and analytical points identified across all the responses.
 2. Group similar points from different experts together.
-3. For each point where there is some disagreement:
+3. Exclude any points where there is no significant disagreement between answers.
+4. For each point where there is some disagreement:
     - summarise the majority / minority positions and identify any outliers.
     - explain in detail the differences in reasoning or understanding that led experts to different conclusions.
 
@@ -90,8 +92,5 @@ Analyse the underlying reasons behind differences among the answers below.
     {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
     Reasons:
     {{ draft.reasons }}
-    <END DRAFT ANSWER {{ draft.id }}>
-    <QA TRACKING CODE: IGNORE>
-        {{ draft.id }} {{ draft.model }} {{ draft.template }} {{ draft.criteria }}
-    <END QA TRACKING CODE>
+    <END DRAFT ANSWER {{ draft.id }} {{ draft.model }} {{ draft.template }} {{ draft.criteria }}>
 {% endfor %}
