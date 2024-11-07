@@ -133,7 +133,6 @@
       type: job
       dataset: dmrc-analysis.toxicity.flow
       filter:
-
       join:
         record_id: record.record_id
       agg: false
@@ -145,7 +144,6 @@
         labels: outputs.labels
         reasons: outputs.analysis
         model: parameters.model
-        criteria: criteria
         template: agent_info.template
         prediction: outputs.prediction
         confidence: outputs.confidence

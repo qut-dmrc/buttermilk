@@ -3,9 +3,11 @@ import json
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
+from omegaconf import DictConfig
 import pandas as pd
 
 from buttermilk import BM, logger
+from buttermilk._core.config import DataSource
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from typing import Mapping, Optional, Sequence
 
@@ -66,10 +68,10 @@ def load_jobs(data_cfg: Mapping) -> pd.DataFrame:
     return df
 
 
-def group_and_filter_jobs(*, data: pd.DataFrame, join: dict, group: dict, columns: dict, existing_df: Optional[pd.DataFrame] = None, max_records_per_group: int = 1, raise_on_error=True) -> pd.DataFrame:
+def group_and_filter_jobs(*, data: pd.DataFrame, data_cfg: DataSource, existing_df: Optional[pd.DataFrame] = None,  raise_on_error=True) -> pd.DataFrame:
 
     # expand and rename columns if we need to
-    pairs_to_expand = list(find_key_string_pairs(join)) +list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns)) 
+    pairs_to_expand = list(find_key_string_pairs(data_cfg.join)) + list(find_key_string_pairs(data_cfg.group)) + list(find_key_string_pairs(data_cfg.columns)) 
     
     for col_name, grp in pairs_to_expand:
         try:
@@ -102,67 +104,57 @@ def group_and_filter_jobs(*, data: pd.DataFrame, join: dict, group: dict, column
                 raise e
     
     # Add columns to group by to the index
-    idx_cols = list(join.keys())
-    if group:
-        idx_cols = idx_cols + [ c for c in group if c in data.columns]
-    data = data.set_index(idx_cols, drop=False)
+    idx_cols = list(data_cfg.join.keys()) + list(data_cfg.group.keys())
+    idx_cols = [ c for c in idx_cols if c in data.columns]
+    data = data.set_index(idx_cols, drop=True)
     
     # Stack any nested fields in the mapping
-    if columns:
-        for k, v in columns.items():
+    if data_cfg.columns:
+        for k, v in data_cfg.columns.items():
             if isinstance(v, Mapping):
                 # put all the mapped columns into a dictionary in
                 # a new field named as provided in the step config
                 data.loc[:, k] = data[v.keys()].to_dict(orient='records')
 
-    if max_records_per_group > 0 and idx_cols:
+    if data_cfg.max_records_per_group > 0 and idx_cols:
         # Reduce down to n list items per index (but don't aggregate
         # at this time, just keep a random selection of rows)
-        data = data.sample(frac=1).groupby(level=idx_cols).agg(
-                lambda x: x.tolist()[:max_records_per_group])
+        data = data.sample(frac=1).groupby(level=idx_cols, as_index=True).agg(
+                lambda x: x.tolist()[:data_cfg.max_records_per_group])
     elif idx_cols:
-        data = data.sample(frac=1).groupby(level=idx_cols).agg(
+        data = data.sample(frac=1).groupby(level=idx_cols, as_index=True).agg(
                 lambda x: x.tolist())
 
-
-    # Add the columns to the source dataset
+    # Only return the columns we need
+    if data_cfg.columns and len(data_cfg.columns)>0:
+        cols = [x for x in list(data_cfg.columns.keys()) if x in data.columns]
+        missing_cols = set(data_cfg.columns.keys()) - set(cols)
+        if missing_cols:
+            logger.error(f"Missing columns {list(missing_cols)}")
+            if raise_on_error:
+                raise KeyError(f"Missing columns {list(missing_cols)}")
+            else:
+                for c in missing_cols:
+                    data[c] = None
+        data = data[list(data_cfg.columns.keys())]
+    
+    # Join the columns to the existing dataset
     if existing_df is not None and existing_df.shape[0]>0:
         if idx_cols:
             # reset index columns that we're not matching on:
-            group_cols = [x for x in idx_cols if x not in join.keys()]
-            idx_cols = list(set(idx_cols).difference(group_cols))
-            data = data.reset_index(level=group_cols, drop=True)
+            data = data.reset_index(level=list(data_cfg.group.keys()), drop=False)
 
-
-        # Only return the columns we need
-        if columns and len(columns)>0:
-            data = data[list(set(columns.keys())-set(idx_cols))]
-
-        # Reduce the groups down again now that we have built our index
-        # This way, we should only have one matching row per group for
-        # each of the records we're processing.
-        if idx_cols:
+        # If agg==True, reduce the groups down again now that we have built 
+        # our index. This way, we should only have one matching row per 
+        # group for each of the records we're processing.
+        if idx_cols and data_cfg.agg:
             data = data.groupby(level=idx_cols).agg(
                 lambda x: [item for sublist in x for item in sublist])
                 
-
-        existing_df = pd.merge(existing_df, data, left_on=list(join.keys()), right_index=True)
+        existing_df = pd.merge(existing_df, data, left_on=list(data_cfg.join.keys()), right_index=True)
         return existing_df
     else:
-        # Only return the columns we need
-        if columns and len(columns)>0:
-            cols = [x for x in  idx_cols + list(columns.keys()) if x in data.columns]
-            missing_cols = set(idx_cols + list(columns.keys())) - set(cols)
-            if missing_cols:
-                logger.error(f"Missing columns {list(missing_cols)}")
-                if raise_on_error:
-                    raise KeyError(f"Missing columns {list(missing_cols)}")
-                else:
-                    for c in missing_cols:
-                        data[c] = None
-            return data[idx_cols + list(columns.keys())]
-        else:
-            return data
+        return data
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -205,8 +197,7 @@ def prepare_step_data(*data_configs) -> pd.DataFrame:
         else:
             # Load and join prior job data
             dataset = group_and_filter_jobs(existing_df=dataset, data=df, 
-                                join=src.join, group=src.group, columns=src.columns, 
-                                max_records_per_group=src.max_records_per_group)
+                                data_cfg=src)
 
     # shuffle
     dataset = dataset.sample(frac=1)
