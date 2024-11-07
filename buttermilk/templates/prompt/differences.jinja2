@@ -87,10 +87,10 @@ Analyse the underlying reasons behind differences among the answers below.
 {% endif %}
 
 {% for draft in answers %}
-    <BEGIN DRAFT ANSWER {{ draft.id }}>
+    <BEGIN DRAFT ANSWER {{ draft.job_id[:4] }}-{{ draft.criteria }}>
     {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
     {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
     Reasons:
     {{ draft.reasons }}
-    <END DRAFT ANSWER {{ draft.id }} {{ draft.model }} {{ draft.template }} {{ draft.criteria }}>
+    <END DRAFT ANSWER {{ draft.job_id[:4] }}-{{ draft.criteria }} [ METADATA: {{ draft.model }} {{ draft.template }} {{ draft.criteria }} ]>
 {% endfor %}
