@@ -121,9 +121,6 @@ def group_and_filter_jobs(*, data: pd.DataFrame, data_cfg: DataSource, existing_
         # at this time, just keep a random selection of rows)
         data = data.sample(frac=1).groupby(level=idx_cols, as_index=True).agg(
                 lambda x: x.tolist()[:data_cfg.max_records_per_group])
-    elif idx_cols:
-        data = data.sample(frac=1).groupby(level=idx_cols, as_index=True).agg(
-                lambda x: x.tolist())
 
     # Only return the columns we need
     if data_cfg.columns and len(data_cfg.columns)>0:
