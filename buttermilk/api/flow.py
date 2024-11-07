@@ -268,6 +268,7 @@ async def get_runs_html(request: Request) -> HTMLResponse:
         data=df,
         group=bm.cfg.data.runs.group,
         columns=bm.cfg.data.runs.columns,
+        join=bm.cfg.data.runs.join,
         raise_on_error=False,
     )
 

@@ -1,41 +1,29 @@
+defaults:
+  - _self_
+
 name: default_project
 job: development
-secret_provider: azure
-logger: gcp
+secret_provider:
+logger: 
 verbose: true
 tracing: true
 models_secret: models
 concurrent: 10
+
 gcp:
-  project: dmrc-platforms
-  region: us-central1
-  bucket: dmrc-analysis
+  project: 
+  region: 
+  bucket: 
 azure:
-  vault: https://suzorvault.vault.azure.net/
-  resource_group: rg-suzor_ai
+  vault: 
+  resource_group: 
 aws:
-  secret_name: secret
-  region: us-east-1
+  secret_name: 
+  region:
+
 save:
-  type: bq
-  destination: dmrc-analysis.toxicity.flow
-  schema: buttermilk/schemas/flow.json
+  type: 
+  destination:
+  schema: 
 
 data:
-  runs:
-    type: job
-    name: runs
-    dataset: dmrc-analysis.toxicity.flow
-    last_n_days: 7
-    aggregate: false
-    max_records_per_group: 1
-    filter:
-    group:
-      job_id: job_id
-      record_id: record.record_id
-    columns:
-      timestamp: timestamp
-      agent: agent_info.agent
-      source: source
-      error: error
-      parameters: parameters

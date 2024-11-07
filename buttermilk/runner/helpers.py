@@ -34,13 +34,20 @@ def load_jobs(data_cfg: Mapping) -> pd.DataFrame:
             field = field.split('.', 1)
             if len(field) > 1:
                 comparison_string = f'JSON_VALUE({field[0]}, "$.{field[1]}")'
+                comparison_string_object = f'JSON_QUERY({field[0]}, "$.{field[1]}")'
             else:
                 comparison_string = field[0]
-            if condition and isinstance(condition, str):
+            if condition is [] or condition == ["NOTNULL"]:
+                # Where we're testing a JSON array or record, we need to use JSON_QUERY instead of JSON_VALUE (for strings)
+                sql += f' AND {comparison_string_object} IS NOT NULL '
+            elif not condition or condition == "NOTNULL":
+                sql += f' AND {comparison_string} IS NOT NULL '
+            elif condition and isinstance(condition, str):
                 sql += f' AND {comparison_string} = "{condition}" '
             elif condition and isinstance(condition, Sequence):
                 multi_or = " OR ".join([f'{comparison_string} = "{term}"' for term in condition])
                 sql += f" AND ({multi_or})"
+            
 
     # exclude records already processed if necessary
     # if exclude_processed:
@@ -59,10 +66,10 @@ def load_jobs(data_cfg: Mapping) -> pd.DataFrame:
     return df
 
 
-def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, existing_df: Optional[pd.DataFrame] = None, max_records_per_group: int = 1, raise_on_error=True) -> pd.DataFrame:
+def group_and_filter_jobs(*, data: pd.DataFrame, join: dict, group: dict, columns: dict, existing_df: Optional[pd.DataFrame] = None, max_records_per_group: int = 1, raise_on_error=True) -> pd.DataFrame:
 
     # expand and rename columns if we need to
-    pairs_to_expand = list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns))
+    pairs_to_expand = list(find_key_string_pairs(join)) +list(find_key_string_pairs(group)) + list(find_key_string_pairs(columns)) 
     
     for col_name, grp in pairs_to_expand:
         try:
@@ -95,18 +102,18 @@ def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, exi
                 raise e
     
     # Add columns to group by to the index
-    idx_cols = []
+    idx_cols = list(join.keys())
     if group:
-        idx_cols = [ c for c in group.keys() if c in data.columns]
-        data = data.set_index(idx_cols, drop=False)
+        idx_cols = idx_cols + [ c for c in group if c in data.columns]
+    data = data.set_index(idx_cols, drop=False)
     
-
     # Stack any nested fields in the mapping
-    for k, v in columns.items():
-        if isinstance(v, Mapping):
-            # put all the mapped columns into a dictionary in
-            # a new field named as provided in the step config
-            data.loc[:, k] = data[v.keys()].to_dict(orient='records')
+    if columns:
+        for k, v in columns.items():
+            if isinstance(v, Mapping):
+                # put all the mapped columns into a dictionary in
+                # a new field named as provided in the step config
+                data.loc[:, k] = data[v.keys()].to_dict(orient='records')
 
     if max_records_per_group > 0 and idx_cols:
         # Reduce down to n list items per index (but don't aggregate
@@ -122,35 +129,40 @@ def group_and_filter_jobs(*, data: pd.DataFrame, group: dict, columns: dict, exi
     if existing_df is not None and existing_df.shape[0]>0:
         if idx_cols:
             # reset index columns that we're not matching on:
-            group_only_cols = [x for x in idx_cols if x not in existing_df.columns]
-            idx_cols = list(set(idx_cols).difference(group_only_cols))
-            data = data.reset_index(level=group_only_cols, drop=True)
+            group_cols = [x for x in idx_cols if x not in join.keys()]
+            idx_cols = list(set(idx_cols).difference(group_cols))
+            data = data.reset_index(level=group_cols, drop=True)
 
 
         # Only return the columns we need
-        data = data[list(set(columns.keys())-set(idx_cols))]
+        if columns and len(columns)>0:
+            data = data[list(set(columns.keys())-set(idx_cols))]
 
         # Reduce the groups down again now that we have built our index
         # This way, we should only have one matching row per group for
         # each of the records we're processing.
-        data = data.groupby(idx_cols).agg(
+        if idx_cols:
+            data = data.groupby(level=idx_cols).agg(
                 lambda x: [item for sublist in x for item in sublist])
                 
 
-        existing_df = pd.merge(existing_df, data, left_on=idx_cols, right_index=True)
+        existing_df = pd.merge(existing_df, data, left_on=list(join.keys()), right_index=True)
         return existing_df
     else:
         # Only return the columns we need
-        cols = [x for x in  idx_cols + list(columns.keys()) if x in data.columns]
-        missing_cols = set(idx_cols + list(columns.keys())) - set(cols)
-        if missing_cols:
-            logger.error(f"Missing columns {list(missing_cols)}")
-            if raise_on_error:
-                raise KeyError(f"Missing columns {list(missing_cols)}")
-            else:
-                for c in missing_cols:
-                    data[c] = None
-        return data[idx_cols + list(columns.keys())]
+        if columns and len(columns)>0:
+            cols = [x for x in  idx_cols + list(columns.keys()) if x in data.columns]
+            missing_cols = set(idx_cols + list(columns.keys())) - set(cols)
+            if missing_cols:
+                logger.error(f"Missing columns {list(missing_cols)}")
+                if raise_on_error:
+                    raise KeyError(f"Missing columns {list(missing_cols)}")
+                else:
+                    for c in missing_cols:
+                        data[c] = None
+            return data[idx_cols + list(columns.keys())]
+        else:
+            return data
 
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
@@ -169,7 +181,6 @@ def prepare_step_data(*data_configs) -> pd.DataFrame:
             all_configs.update(conf)
 
     dataset = pd.DataFrame()
-    fields = []
     source_list = []
     dataset_configs = []
 
@@ -184,16 +195,18 @@ def prepare_step_data(*data_configs) -> pd.DataFrame:
         source_list.append(name)
 
     for src in dataset_configs:
-        fields.extend(src.columns.keys())
         df = load_data(src)
         if src.type != 'job':
-            dataset = pd.concat([dataset, df[src.columns.keys()]])
+            if src.columns:
+                dataset = pd.concat([dataset, df[src.columns.keys()]])
+            else:
+                # TODO - also allow joining other datasets that are not jobs.
+                dataset = pd.concat([dataset, df[src.columns.keys()]])
         else:
             # Load and join prior job data
-            dataset = group_and_filter_jobs(existing_df=dataset, data=df, group=src.group, columns=src.columns, max_records_per_group=src.max_records_per_group)
-
-    # add index, but don't remove record_id form the columns
-    dataset = dataset.reset_index().set_index('record_id', drop=False)[fields]
+            dataset = group_and_filter_jobs(existing_df=dataset, data=df, 
+                                join=src.join, group=src.group, columns=src.columns, 
+                                max_records_per_group=src.max_records_per_group)
 
     # shuffle
     dataset = dataset.sample(frac=1)

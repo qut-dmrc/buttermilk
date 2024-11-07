@@ -49,8 +49,10 @@
       max_records_per_group: 1
       filter:
         agent_info.flow: judger
-      group:
+        outputs.reasons: [NOTNULL]
+      join:
         record_id: record.record_id
+      group:
         flow: agent_info.flow
         template: agent_info.template
         criteria: agent_info.template_vars.criteria
@@ -99,26 +101,52 @@
         agent_info.flow:
           - judger
           - synth
+      join:
+        record_id: record_id
       group:
-        model: parameters.model
         record_id: record.record_id
+        model: parameters.model
         flow: agent_info.flow
         template: agent_info.template
         criteria: agent_info.template_vars.criteria
       columns:
         answers:
-          id: job_id
-          flow: agent_info.flow
-          reasons: outputs.reasons
-          model: model
-          criteria: criteria
-          template: template
+        id: job_id
+        flow: agent_info.flow
+        reasons: outputs.reasons
+        model: model
+        criteria: criteria
+        template: template
         meta:
-          flow: agent_info.flow
-          template: agent_info.template
+          template: templaet
           criteria: agent_info.template_vars.criteria
           model: parameters.model
           prediction: outputs.prediction
           labels: outputs.labels
           confidence: outputs.confidence
           timestamp: timestamp
+- flow: analysis
+  data:
+    eval:
+      max_records_per_group: -1
+      name: eval
+      type: job
+      dataset: dmrc-analysis.toxicity.flow
+      filter:
+
+      join:
+        record_id: record.record_id
+      agg: false
+      group:
+        id: job_id
+        flow: agent_info.flow
+        criteria: agent_info.template_vars.criteria
+      columns:
+        labels: outputs.labels
+        reasons: outputs.analysis
+        model: parameters.model
+        criteria: criteria
+        template: agent_info.template
+        prediction: outputs.prediction
+        confidence: outputs.confidence
+        timestamp: timestamp

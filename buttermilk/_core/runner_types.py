@@ -87,7 +87,7 @@ class AgentInfo(BaseModel):
     model: Optional[str] = None
 
     model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True, populate_by_name=True
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,
     )
 
 class Result(BaseModel):
@@ -109,7 +109,9 @@ class Result(BaseModel):
         populate_by_name=True,
         use_enum_values=True,
         json_encoders={np.bool_: lambda v: bool(v)},
-        validate_assignment=True
+        validate_assignment=True,
+        exclude_unset=True,
+        exclude_none=True
     )
 
         
@@ -210,7 +212,8 @@ class Job(BaseModel):
         use_enum_values=True,
         json_encoders={np.bool_: lambda v: bool(v)},
         validate_assignment=True,
-        exclude_unset=True
+        exclude_unset=True,
+        exclude_none=True,
     )
     _ensure_list = field_validator("source","prompt", mode="before")(make_list_validator())
 

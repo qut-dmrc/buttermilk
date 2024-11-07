@@ -76,6 +76,7 @@ proto-plus = "^1.25.0"
 httpx = "^0.27.2"
 beautifulsoup4 = "^4.12.3"
 rich = "^13.9.4"
+hydra-zen = "^0.13.0"
 
 
 [tool.poetry.group.dev.dependencies]
