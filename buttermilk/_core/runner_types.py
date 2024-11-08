@@ -33,7 +33,7 @@ from pydantic import PositiveInt, ValidationError, validate_call
 
 
 from .types import SessionInfo
-from buttermilk.utils.utils import download_limited_async
+from buttermilk.utils.utils import download_limited, download_limited_async
 import httpx
 from bs4 import BeautifulSoup
 
@@ -59,15 +59,19 @@ async def validate_uri_extract_text(value: Optional[Union[AnyUrl, str]]) -> Opti
             value = obj.decode()
     return value
 
+def is_b64(value: str) -> bool:
+    # Check if the string is a valid base64-encoded string
+    try:
+        base64.b64decode(value, validate=True)
+        return True
+    except:
+        return False
+    
 @validate_call
 async def validate_uri_or_b64(value: Optional[Union[AnyUrl, str]]) -> Optional[str]:
     if value:
-        try:
-            # Check if the string is a valid base64-encoded string
-            base64.b64decode(value, validate=True)
+        if is_b64(value):
             return value
-        except:
-            pass
     
         try:
             if isinstance(value, AnyUrl) or AnyUrl(value):
@@ -110,78 +114,121 @@ class Result(BaseModel):
         exclude_none=True
     )
 
+class Media(BaseModel):
+    base_64: Optional[str] = Field(default=None, validation_alias=AliasChoices("base_64", "base64", "b64"))
+    uri: Optional[str] = Field(default=None, validation_alias=AliasChoices("uri", "path", "url"))
+    binary: Optional[bytes] = None
+    mimetype: Optional[str] = None
+    download: Optional[bool] = False
+    
+
+    @field_validator("base64", mode="after")
+    def ensure_b64(cls, values):
+        if values:
+            for n, v in enumerate(values):
+                if not is_b64(v):
+                    raise ValueError(f"Invalid base64 string passed (idx: {n})")
         
+        return values
+    
+    @model_validator(mode="after")
+    def convert(self) -> Self:
+        if self.download:
+            if self.uri and (isinstance(self.uri, AnyUrl) or AnyUrl(self.uri)):
+                # It's a URL, go fetch and encode it
+                obj = download_limited(self.uri)
+                self.base_64 = base64.b64encode(obj).decode("utf-8")
+        elif isinstance(self.uri, CloudPath):
+            self.uri = str(self.uri.as_uri())
+        elif isinstance(self.uri, GSPath):
+            self.uri = str(self.uri.as_uri())
+
+        if self.binary:
+            self.base_64 = base64.b64encode(self.binary).decode("utf-8")
+            del self.binary
+
+        return self
+
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     name: Optional[str] = Field(default=None, validation_alias=AliasChoices("name", "title", "heading"))
-    content: Optional[str] = Field(default=None, validation_alias=AliasChoices("content", "text", "body"))
-    image: Optional[str] = None  # Allow URL or base64 string
-    video: Optional[str] = None  # Allow URL or base64 string
-    alt_text: Optional[str] = Field(default=None, validation_alias=AliasChoices("alt_text", "alt", "caption"))
+    text: Optional[str] = Field(default=None, validation_alias=AliasChoices("text", "content", "body", "alt_text", "alt", "caption"))
+    media: Optional[Media|Sequence[Media]] = Field(default_factory=list, validation_alias=AliasChoices("media", "image", "video", "audio"))
     ground_truth: Optional[Result] = None
-    path:  Optional[str] = ""
+    uri:  Optional[str] =  Field(default=None, validation_alias=AliasChoices("uri","path","url"))
 
+    _ensure_list = field_validator("media", mode="before")(make_list_validator())
+    
     model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True
     )
+
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
         if (
-            self.content is None
-            and self.image is None
-            and self.alt_text is None
-            and self.video is None
+            self.text is None and self.media is None
         ):
             raise ValueError("InputRecord must have text or image or video or alt_text.")
         
         return self
-    
-    # @field_validator("labels")
-    # def vld_labels(labels):
-    #     # ensure labels is a list
-    #     if isinstance(labels, str):
-    #         return [labels]
 
     @field_validator("path")
     def vld_path(path):
         if isinstance(path, CloudPath):
             return str(path.as_uri())
 
-        
-    def as_langchain_message(self, type: Literal["human","system"]='human', components: list[str] = ['content']) -> BaseMessage:
+    def as_langchain_message(self, type: Literal["human","system"]='human') -> BaseMessage:
         # Return the fields as a langchain message
-        parts = [x for x in [self.content, self.alt_text] if x is not None ]
-        # TODO: make multimodal
-        # Example from Claude:
-        message = """"content": [
+
+        if not self.media:
+            BaseMessage(content=self.text, type=type)
+
+        components = []
+        # Prepare input for model consumption
+        if self.text:
+            components.append(
                 {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": "<base64_encoded_image>"
-                    }
+                    "type": "text",
+                    "text": self.text,
                 }
-            ]"""
-        # if self.image:
-        #     parts.append(f"![Image](data:image/png;base64,{self.image})")
-        # if self.video:
-        #     parts.append(f"![Video](data:video/mp4;base64,{self.video})")
+            )
+        for obj in self.media:
+            if obj.base_64:
+                mime_type = mime_type or "image/png"
+                media_message = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{obj.base_64}",
+                        },
+                }
+            elif obj.uri:
+                if mime_type:
+                    media_message = {"type": "media", 'mime_type': obj.mimetype,
+                            'file_uri': obj.uri}
+                else:
+                    media_message = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": obj.uri,
+                        },
+                    }
+            else:
+                raise ValueError("Unknown media attachment provided.")
+            
+            components.append(media_message)
 
-        content = '\n'.join(parts)
-        if type == "human":
-            message = HumanMessage(content=content)
-        else:
-            # No idea why, but this one doesn't seem to work with type='human'
-            message = BaseMessage(content=str(content), type=type)#, id=self.record_id, name=self.name)
-
-        return message
+        return HumanMessage(content=components)
+        
 
 
 ##################################
 # A single unit of work, including
 # a result once we get it.
+#
+# A Job contains all the information that we need to log
+# to know about an agent's operation on a single datum.
+#
 ##################################
 class Job(BaseModel):
     # A unique identifier for this particular unit of work

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import pytest
 from omegaconf import OmegaConf
 
-from buttermilk.runner import Job, AgentInfo, AgentInfo, run_flow
+from buttermilk.runner import Job, AgentInfo, AgentInfo
 
 
 def test_agent_info():

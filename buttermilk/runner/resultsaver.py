@@ -1,9 +1,6 @@
 # A flow takes a job, does something, and returns a job.
 
-from functools import wraps
-from typing import Any, Callable
-
-from pydantic import BaseModel
+from typing import Any
 
 from buttermilk import Job, Result
 from buttermilk.runner.runner import ResultsCollector
@@ -16,7 +13,7 @@ from buttermilk.utils.save import upload_rows
 # Results saver
 #
 ################################
-class ResultsSaver(ResultsCollector):
+class ResultSaver(ResultsCollector):
     """
     Collects results from the output queue and saves them to BigQuery.
 
@@ -57,16 +54,3 @@ class ResultsSaver(ResultsCollector):
             uri = save.save(self.to_save)
             raise e
 
-
-
-async def run_flow(job: Job, flow: callable):
-    response = await flow.call_async(**job.inputs)
-    job.outputs = Result(**response)
-    return job
-
-def flow():
-    def inner(func):
-        @wraps(func)
-        def _impl(job: Job) -> Job:
-            return run_flow(job, func)
-        return _impl

@@ -39,41 +39,6 @@ class Prediction(TypedDict):
     record_id: str
     analysis: str
 
-def prompt_with_media(
-    *, uri=None, mime_type: Optional[str] = None, image_b64: Optional[str] = None, text: Optional[str] = None, detail="auto"
-) -> HumanMessage:
-    # Prepare input for model consumption
-
-
-    text_message = {
-        "type": "text",
-        "text": text or '(see attached)',
-    }
-
-    if uri and not mime_type:
-        media_message = {
-        "type": "image_url",
-        "image_url": {
-            "url": uri,
-        },
-        }
-
-    elif uri:
-        media_message = {"type": "media", 'mime_type': 'video/mp4',
-                              'file_uri': uri}
-    elif image_b64:
-        media_message = {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{image_b64}",
-                    "detail": detail,
-                },
-            }
-    else:
-        return HumanMessage(content=text or '')
-
-    message = HumanMessage(content=[media_message, text_message])
-    return message
 
 class Analyst():
     def __init__(self, *, model: str, template: str = '', system_prompt: str = '', user_prompt: str = '', **kwargs) -> None:

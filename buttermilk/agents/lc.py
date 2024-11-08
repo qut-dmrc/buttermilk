@@ -58,6 +58,7 @@ from buttermilk.utils.utils import scrub_keys
 ###
 #########################################
 
+
 class LC(Agent):
     name: str = Field(default="lc", init=False)
     model: Optional[str] = None

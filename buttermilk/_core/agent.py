@@ -42,6 +42,24 @@ from typing import (
 
 import cloudpathlib
 
+
+# from functools import wraps
+# from typing import Any, Callable
+# from pydantic import BaseModel
+
+# async def run_flow(job: Job, flow: callable):
+#     response = await flow.call_async(**job.inputs)
+#     job.outputs = Result(**response)
+#     return job
+
+# def flow():
+#     def inner(func):
+#         @wraps(func)
+#         def _impl(job: Job) -> Job:
+#             return run_flow(job, func)
+#         return _impl
+
+
 #########
 # Agent
 #
@@ -55,6 +73,7 @@ import cloudpathlib
 # langchain based template processed by an interchangeable LLM Chat model.
 #
 ##########
+
 
 class SaveInfo(BaseModel):
     destination: str|cloudpathlib.AnyPath
