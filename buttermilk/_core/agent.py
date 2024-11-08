@@ -77,7 +77,7 @@ class Agent(BaseModel):
     """
     name: str
     concurrency: Optional[int] = 4            # Max number of async tasks to run
-    agent_info: Optional[AgentInfo] = None  # The metadata for this run
+    _agent_info: Optional[AgentInfo] = None  # The metadata for this run
     
     save_params: Optional[SaveInfo] = None
 
@@ -91,7 +91,7 @@ class Agent(BaseModel):
         params = self.model_dump(exclude_unset=True, mode='json',exclude_none=True)
         if self.model_extra:
             params.update(self.model_extra)
-        self.agent_info = AgentInfo(**params)
+        self._agent_info = AgentInfo(**params)
         return self
     
     @field_validator("save_params", mode="before")
@@ -117,7 +117,7 @@ class Agent(BaseModel):
     async def run(self, job: Job) -> Job:
         async with self._sem:
             try:
-                job.agent_info = self.agent_info
+                job.agent_info = self._agent_info
                 job = await self.process_job(job=job)
             except Exception as e:
                 job.error = extract_error_info(e=e)

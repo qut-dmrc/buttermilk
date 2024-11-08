@@ -143,7 +143,7 @@ class LC(Agent):
         messages = make_messages(local_template=local_template)
 
         # Add this agent's details to the Job object
-        job.agent_info = self.agent_info
+        job.agent_info = self._agent_info
 
         # Add prompt to Job object
         job.prompt = [ f"{role}:\n{message}" for role, message in messages]
