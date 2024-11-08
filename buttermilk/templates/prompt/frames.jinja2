@@ -10,19 +10,20 @@ You must reply only in a fully valid JSON format. Ensure each field is accuratel
 
 Your response should include these fields:
 ```json
-"framing": [List of JSON dictionaries, ensuring that each statement has its own dictionary:
-            {
-                "speaker_name": "<STRING>",
-                "speaker_affiliation": "<STRING>",
-                "solution_adressee": "<STRING>",
-                "statement": "<STRING>",
-                "problem_definition": "<STRING>",
-                "blame_attribution": "<STRING>",
-                "moral_evaluation": "<STRING>",
-                "recommendation": "<STRING>",
-            },
-            ... other statements ...
-        }
+{
+    "framing": [List of JSON dictionaries, ensuring that each statement has its own dictionary:
+        {
+            "statement": "<STRING>",
+            "speaker_name": "<STRING>",
+            "speaker_affiliation": "<STRING>",
+            "solution_adressee": "<STRING>",
+            "problem_definition": "<STRING>",
+            "blame_attribution": "<STRING>",
+            "moral_evaluation": "<STRING>",
+            "recommendation": "<STRING>",
+        },
+        ... other statements ...
+    ]
 }
 ```
 Ensure the response follows JSON formatting rules precisely; non-compliant responses will not be accepted.

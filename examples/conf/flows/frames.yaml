@@ -1,0 +1,9 @@
+- name: frame
+  num_runs: 1
+  concurrency: 20
+  agent: 
+    name: lc
+    template: frames
+    model:
+      - gpt4o
+      - sonnet

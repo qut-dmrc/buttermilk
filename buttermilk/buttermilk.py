@@ -11,8 +11,6 @@ import datetime
 import itertools
 import json
 import logging
-import os
-import platform
 import sys
 import types
 from dataclasses import dataclass
@@ -32,20 +30,14 @@ from typing import (
     Union,
 )
 
-import cloudpathlib
 import coloredlogs
-import fsspec
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
 import pandas as pd
-import psutil
 import pydantic
-import requests
 import shortuuid
-import yaml
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from cloudpathlib import AnyPath, CloudPath
 from dotenv import load_dotenv
 from google.cloud import bigquery, storage
 from google.cloud.logging.handlers import CloudLoggingHandler
@@ -63,6 +55,8 @@ from pydantic import (
     root_validator,
 )
 
+from ._core.config import Project
+from ._core.types import SessionInfo
 from .utils import save, get_ip
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -99,77 +93,10 @@ class Singleton:
         """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
         return self
 
-class SessionInfo(BaseModel):
-    project: str
-    job: str
-    run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id())
-    save_bucket: Optional[str] = ''
-    save_dir: Optional[str] = ''
-
-    ip: str = Field(default_factory=get_ip)
-    node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
-    save_dir: str
-
-    model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
-    )
-
-    @property
-    def __str__(self) -> str:
-        return self.run_id
-
-    @pydantic.model_validator(mode="after")
-    def get_save_dir(self) -> Self:
-        if self.save_dir:
-            if isinstance(self.save_dir, str):
-                save_dir = self.save_dir
-            elif isinstance(self.save_dir, (Path)):
-                save_dir = self.save_dir.as_posix()
-            elif isinstance(self.save_dir, (CloudPath)):
-                save_dir = self.save_dir.as_uri()
-            else:
-                raise ValueError(
-                    f"save_path must be a string, Path, or CloudPath, got {type(self.save_dir)}"
-                )
-        else:
-            # Get the save directory from the configuration or use a default
-            save_dir = (
-                f"gs://{self.save_bucket}/runs/{self.project}/{self.job}/{self.run_id}"
-            )
-            del self.save_bucket
-        # # Make sure the save directory is a valid path
-        try:
-            _ = cloudpathlib.AnyPath(save_dir)
-        except Exception as e:
-            raise ValueError(f"Invalid cloud save directory: {save_dir}. Error: {e}")
-        self.save_dir = save_dir
-
-        return self
-
-    @classmethod
-    def make_run_id(cls) -> str:
-        global _REGISTRY
-        if run_id := _REGISTRY.get("run_id"):
-            return run_id
-
-        # Create a unique identifier for this run
-        node_name = platform.uname().node
-        username = psutil.Process().username()
-        # get rid of windows domain if present
-        username = str.split(username, "\\")[-1]
-
-        # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
-        run_time = datetime.datetime.now(
-            datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
-
-        run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-        _REGISTRY["run_id"] = run_id
-        return run_id
     
 class BM(Singleton, BaseModel):
 
-    cfg: Any = Field(default_factory=dict, validate_default=True)
+    cfg: Project = Field(default_factory=dict, validate_default=True)
     _clients: dict[str, Any] = {}
     _run_metadata: SessionInfo = PrivateAttr()
 
@@ -194,7 +121,7 @@ class BM(Singleton, BaseModel):
 
 
     def model_post_init(self, __context: Any) -> None:
-        self._run_metadata = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.gcp.bucket)
+        self._run_metadata = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.save_dest.bucket)
 
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
@@ -213,8 +140,8 @@ class BM(Singleton, BaseModel):
             pass
 
         auth = DefaultAzureCredential()
-        vault_uri = self.cfg["azure"]["vault"]
-        models_secret = self.cfg["models_secret"]
+        vault_uri = self.cfg.secret_provider.vault
+        models_secret = self.cfg.secret_provider.models_secret
         secrets = SecretClient(vault_uri, credential=auth)
         contents = secrets.get_secret(models_secret).value
         if not contents:
@@ -309,7 +236,7 @@ class BM(Singleton, BaseModel):
     @property
     def gcs(self) -> storage.Client:
         if self._clients.get('gcs') is None:
-            self._clients['gcs'] = storage.Client(project=self.cfg.gcp.project)
+            self._clients['gcs'] = storage.Client(project=self.cfg.save_dest.project)
         return self._clients['gcs']
 
     def save(self, data, basename='', extension='.jsonl', **kwargs):
@@ -321,7 +248,7 @@ class BM(Singleton, BaseModel):
     @property
     def bq(self) -> bigquery.Client:
         if self._clients.get('bq') is None:
-            self._clients['bq'] = bigquery.Client(project=self.cfg.gcp.project)
+            self._clients['bq'] = bigquery.Client(project=self.cfg.save_dest.gcp.project)
         return self._clients['bq']
 
     def run_query(

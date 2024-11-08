@@ -32,9 +32,7 @@ from pydantic import (
 from pydantic import PositiveInt, ValidationError, validate_call
 
 
-from buttermilk import BM
-
-from buttermilk.buttermilk import SessionInfo
+from .types import SessionInfo
 from buttermilk.utils.utils import download_limited_async
 import httpx
 from bs4 import BeautifulSoup
@@ -82,9 +80,7 @@ async def validate_uri_or_b64(value: Optional[Union[AnyUrl, str]]) -> Optional[s
     return None
         
 class AgentInfo(BaseModel):
-    flow: str
-    agent: str
-    model: Optional[str] = None
+    name: str
 
     model_config = ConfigDict(
         extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,

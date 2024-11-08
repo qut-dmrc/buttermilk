@@ -16,11 +16,11 @@ from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from promptflow.tracing import trace
-from buttermilk._core.runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
+from .runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
 from buttermilk.defaults import BQ_SCHEMA_DIR
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import upload_rows, save
-from buttermilk._core.log import logger
+from .log import logger
 
 BASE_DIR = Path(__file__).absolute().parent
 import datetime
@@ -75,9 +75,8 @@ class Agent(BaseModel):
     """
     Receive data, processes it, save the results to BQ, and acknowledge completion.
     """
-    flow: str
     name: str
-    concurrent: int = 4            # Max number of async tasks to run
+    concurrency: Optional[int] = 4            # Max number of async tasks to run
     agent_info: Optional[AgentInfo] = None  # The metadata for this run
     
     save_params: Optional[SaveInfo] = None
@@ -89,7 +88,10 @@ class Agent(BaseModel):
     @model_validator(mode='after')
     def init(self) -> Self:
         # configure agent info
-        self.agent_info = AgentInfo(agent=self.name, **self.model_extra, **self.model_dump(exclude_unset=True, mode='json',exclude_none=True, exclude=["name"]))
+        params = self.model_dump(exclude_unset=True, mode='json',exclude_none=True)
+        if self.model_extra:
+            params.update(self.model_extra)
+        self.agent_info = AgentInfo(**params)
         return self
     
     @field_validator("save_params", mode="before")
@@ -105,10 +107,10 @@ class Agent(BaseModel):
         return value
     
     @model_validator(mode="after")
-    def validate_concurrent(self) -> Self:
-        if self.concurrent < 1:
-            raise ValueError("concurrent must be at least 1")
-        self._sem = asyncio.Semaphore(value=self.concurrent)
+    def validate_concurrency(self) -> Self:
+        if self.concurrency < 1:
+            raise ValueError("concurrency must be at least 1")
+        self._sem = asyncio.Semaphore(value=self.concurrency)
         return self
 
     @trace
