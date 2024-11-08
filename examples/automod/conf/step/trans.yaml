@@ -1,8 +1,8 @@
 - flow: judger
-  num_runs: 1
+  num_runs: 2
   concurrent: 20
   agent: 
-    name: lc
+    name: lc_judge
     template: judge
     criteria: 
       - trans_cte
@@ -13,12 +13,8 @@
       - trans_factored
     formatting: json_rules
     model:
-      - haiku
-      # - o1-preview
-      - llama31_70b
       - gpt4o
       - sonnet
-      - gemini15pro
   parameters:
     record_id: record_id
     content: content
@@ -30,14 +26,11 @@
   agent: 
     name: lc_judge
     template: synthesise
-    criteria: 
-      - trans_simplified
+    criteria: trans_simplified
     formatting: json_rules
     model:
-      - haiku
       - gpt4o
       - sonnet
-      - gemini15pro
   parameters:
     answers: answers
     meta: meta
@@ -46,10 +39,14 @@
       name: previous runs
       type: job
       dataset: dmrc-analysis.toxicity.flow
-      max_records_per_group: 1
+      max_records_per_group: 2
+      agg: true
       filter:
         agent_info.flow: judger
         outputs.reasons: [NOTNULL]
+        parameters.model:
+          - gpt4o
+          - sonnet
       join:
         record_id: record.record_id
       group:
@@ -61,8 +58,8 @@
         answers:
           id: job_id
           model: model
-          criteria: criteria
-          template: template
+          criteria: agent_info.template_vars.criteria
+          template: agent_info.template
           flow: flow
           reasons: outputs.reasons
         meta:
@@ -79,15 +76,13 @@
   num_runs: 1
   concurrent: 20
   agent: 
-    name: lc
+    name: lc_eval
     template: differences
     criteria: 
       - trans_simplified
     model:
-      - haiku
       - gpt4o
       - sonnet
-      - gemini15pro
   parameters:
     answers: answers
     meta: meta
@@ -96,29 +91,33 @@
       name: previous runs and synth
       type: job
       dataset: dmrc-analysis.toxicity.flow
-      max_records_per_group: 1
+      max_records_per_group: 2
       filter:
         agent_info.flow:
           - judger
           - synth
+        outputs.reasons: [NOTNULL]
+        parameters.model:
+          - gpt4o
+          - sonnet
+          - gemini15pro
       join:
-        record_id: record_id
-      group:
         record_id: record.record_id
+      agg: true
+      group:
         model: parameters.model
         flow: agent_info.flow
         template: agent_info.template
-        criteria: agent_info.template_vars.criteria
       columns:
         answers:
-        id: job_id
-        flow: agent_info.flow
-        reasons: outputs.reasons
-        model: model
-        criteria: criteria
-        template: template
+          job_id: job_id
+          flow: flow
+          reasons: outputs.reasons
+          model: parameters.model
+          criteria: agent_info.template_vars.criteria
+          template: agent_info.template
         meta:
-          template: templaet
+          template: template
           criteria: agent_info.template_vars.criteria
           model: parameters.model
           prediction: outputs.prediction
@@ -133,18 +132,22 @@
       type: job
       dataset: dmrc-analysis.toxicity.flow
       filter:
+        agent_info.flow: eval
+        outputs.analysis: [NOTNULL]
       join:
         record_id: record.record_id
       agg: false
       group:
         id: job_id
         flow: agent_info.flow
-        criteria: agent_info.template_vars.criteria
       columns:
-        labels: outputs.labels
-        reasons: outputs.analysis
+        analysis: outputs.analysis
         model: parameters.model
-        template: agent_info.template
-        prediction: outputs.prediction
-        confidence: outputs.confidence
         timestamp: timestamp
+        # orig_flow: meta.flow
+        # orig_criteria: meta.criteria
+        # orig_model: meta.model
+        # orig_prediction: meta.prediction
+        # orig_labels: meta.labels
+        # orig_confidence: meta.confidence
+        # orig_timestamp: meta.timestamp

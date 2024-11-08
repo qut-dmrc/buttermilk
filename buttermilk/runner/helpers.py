@@ -106,7 +106,7 @@ def group_and_filter_jobs(*, data: pd.DataFrame, data_cfg: DataSource, existing_
     # Add columns to group by to the index
     idx_cols = list(data_cfg.join.keys()) + list(data_cfg.group.keys())
     idx_cols = [ c for c in idx_cols if c in data.columns]
-    data = data.set_index(idx_cols, drop=True)
+    data = data.set_index(idx_cols, drop=False)
     
     # Stack any nested fields in the mapping
     if data_cfg.columns:
@@ -138,15 +138,16 @@ def group_and_filter_jobs(*, data: pd.DataFrame, data_cfg: DataSource, existing_
     # Join the columns to the existing dataset
     if existing_df is not None and existing_df.shape[0]>0:
         if idx_cols:
+                
             # reset index columns that we're not matching on:
-            data = data.reset_index(level=list(data_cfg.group.keys()), drop=False)
+            data = data.reset_index(level=list(data_cfg.group.keys()), drop=True)
 
-        # If agg==True, reduce the groups down again now that we have built 
-        # our index. This way, we should only have one matching row per 
-        # group for each of the records we're processing.
-        if idx_cols and data_cfg.agg:
-            data = data.groupby(level=idx_cols).agg(
-                lambda x: [item for sublist in x for item in sublist])
+            # If agg==True, reduce the groups down again now that we have built 
+            # our index. This way, we should only have one matching row per 
+            # group for each of the records we're processing.
+            if data_cfg.agg:
+                data = data.groupby(level=list(data_cfg.join.keys())).agg(
+                    lambda x: [item for sublist in x for item in sublist])
                 
         existing_df = pd.merge(existing_df, data, left_on=list(data_cfg.join.keys()), right_index=True)
         return existing_df

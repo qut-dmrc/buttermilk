@@ -1,5 +1,6 @@
 
 from functools import cached_property
+import json
 import google.auth
 from pydantic import BaseModel, ConfigDict
 import googleapiclient.discovery
@@ -8,6 +9,8 @@ import humanfriendly
 import numpy as np
 import pandas as pd
 from typing import Any, List, Optional
+
+import yaml
 
 from buttermilk._core.log import logger
 from buttermilk.utils.utils import make_serialisable, reset_index_and_dedup_columns
@@ -114,3 +117,19 @@ class GSheet(BaseModel):
 
         logger.info(f"Saved to {spreadsheet.url}")
         return spreadsheet
+
+
+def format_strings(df, convert_json_columns: list = []):
+    for col in convert_json_columns:
+        # convert json columns
+        df[col] = df[col].apply(lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False)
+        )
+
+    # for all the columns in the dataframe that are text columns, ensure that no cells are longer than 50,000 characters
+    for col in df.select_dtypes(include=[object]).columns:  # type: ignore
+        try:
+            df[col] = df[col].str.slice(0, 50000)
+        except:
+            continue
+
+    return df
