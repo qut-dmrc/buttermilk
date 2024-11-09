@@ -1,6 +1,6 @@
 import re
 import pytest
-from buttermilk.flows.templating import make_messages 
+from buttermilk.utils.templating import make_messages 
 
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC

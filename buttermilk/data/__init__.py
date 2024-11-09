@@ -1,5 +1,4 @@
 from .loaders import LoaderGCS
+from .recordmaker import RecordMaker, RecordMakerDF, RecordMakerCloudStorageFiles
 
-ALL = {
-    "gcs": LoaderGCS,
-}
+ALL = ["LoaderGCS", "RecordMaker", "RecordMakerDF", "RecordMakerCloudStorageFiles"]

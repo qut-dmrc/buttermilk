@@ -1,0 +1,5 @@
+- name: osb all cases
+  type: plaintext
+  uri: gs://dmrc-platforms/data/osb/*.md
+  columns:
+        

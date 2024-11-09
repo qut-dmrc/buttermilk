@@ -3,9 +3,9 @@ defaults:
 
 name: automod
 job:
-source:
 logger: gcp
-tracing: true
+tracing: 
+  enabled: true
 verbose: false
 save_dest:
   type: gcp
@@ -17,7 +17,6 @@ secret_provider:
   vault: https://suzorvault.vault.azure.net/
   resource_group: rg-suzor_ai
   models_secret: models
-step:
 
 run:
   platform: local

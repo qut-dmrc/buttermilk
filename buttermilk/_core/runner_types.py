@@ -33,6 +33,8 @@ from pydantic import (
 )
 from pydantic import PositiveInt, ValidationError, validate_call
 
+from buttermilk._core.config import SaveInfo
+
 
 from .types import SessionInfo
 from buttermilk.utils.utils import download_limited, download_limited_async, read_file
@@ -87,6 +89,7 @@ async def validate_uri_or_b64(value: Optional[Union[AnyUrl, str]]) -> Optional[s
         
 class AgentInfo(BaseModel):
     name: str
+    save_params: Optional[SaveInfo] = None
 
     model_config = ConfigDict(
         extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,

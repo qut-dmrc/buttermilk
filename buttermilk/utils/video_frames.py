@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import validate_call
 
 @validate_call
-def process_video(video_path: Path, seconds_per_frame: float = 2):
+def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
     """ Extract frames from video for use in analysis."""
     
     base64Frames = []

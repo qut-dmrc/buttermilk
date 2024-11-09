@@ -1,0 +1,21 @@
+- name: summarise
+  num_runs: 2
+  concurrent: 20
+  agent: 
+    name: lc
+    template: summarise_osb
+    model:
+      - gpt4o
+      - llama32_90b_vision_instruct
+      - gemini15pro
+  data_generator:
+    - _target_: buttermilk.data.RecordMakerCloudStorageFiles
+      name: osb all cases
+      type: plaintext
+      glob: gs://dmrc-platforms/data/osb/*.md
+  save:
+    type: bq
+    destination: dmrc-analysis.toxicity.flow
+    schema: buttermilk/schemas/flow.json
+            
+
