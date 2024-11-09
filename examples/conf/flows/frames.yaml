@@ -2,8 +2,8 @@
   num_runs: 1
   concurrency: 20
   agent: 
+    _target_: buttermilk.agents.LC
     name: lc
     template: frames
-    model:
-      - gpt4o
-      - sonnet
+    model: gemini15pro
+    #gpt4o

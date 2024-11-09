@@ -130,7 +130,8 @@ class LC(Agent):
             raise ValueError(
                 "You must provide either model name or provide a default model on initialisation."
             )
-        
+        params = {}
+
         # Compile inputs and template variables
         local_inputs = self.template_vars.copy()
 
@@ -149,13 +150,7 @@ class LC(Agent):
         # Add prompt to Job object
         job.prompt = [ f"{role}:\n{message}" for role, message in messages]
 
-        # if there is a placeholder for {record}, add our record to list 
-        # of messages (after saving the prompt)?
-        # TODO: currently there is no code to add a placeholder, we haven't needed it yet.
-        if any(isinstance(x, MessagesPlaceholder) for _, x in messages):
-            record_msg = job.record.as_langchain_message(type='human')
-            messages.append(dict(record=[record_msg]))
-
+        
         # Get model
         llm = self.llm[model]
 
@@ -164,15 +159,30 @@ class LC(Agent):
         job.parameters['model_params'] = scrub_keys(llm.dict())
         job.parameters['model'] = model
 
+
+        if any([x == 'placeholder' and y == '{record}' for x, y in messages]):
+            record_msg = job.record.as_langchain_message(type='human')
+            #params['record']=[record_msg]
+            # testing
+            messages = [messages[0],record_msg]
+
         # Make the chain
         chain = ChatPromptTemplate.from_messages(
                 messages, template_format="jinja2"
             )
         
+        # # if there is a placeholder for {record}, add our record to list 
+        # # of messages
+        # for msg in chain.messages:
+        #     if isinstance(msg, MessagesPlaceholder):
+        #         if msg.variable_name == 'record':
+        #             record_msg = job.record.as_langchain_message(type='human')
+        #             params['record']=[record_msg]
+            
         chain = chain | llm | ChatParser()
 
         # Invoke the chain  (input_vars have already been inserted into the template)
-        response = await self.invoke(chain, input_vars={}, model=model)
+        response = await self.invoke(chain, input_vars=params, model=model)
 
         job.outputs = Result(**response)
         return job
@@ -207,7 +217,7 @@ class LC(Agent):
             except Exception as e:
                 t1 = time.time()
                 elapsed = t1-t0
-                err = f"Error invoking chain with {model}: {e} after {elapsed:.2f} seconds. {e.args=}"
+                err = f"Error invoking chain with {model}: {str(e)[:1000]} after {elapsed:.2f} seconds."
                 logger.error(err)
                 raise e
                 # return dict(error=err)

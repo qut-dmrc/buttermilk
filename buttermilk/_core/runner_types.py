@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from pathlib import Path
 import platform
 from typing import Any, AsyncGenerator, Generator, Literal, Optional, Self, Sequence, Tuple, Type, Union,Mapping
 
@@ -26,6 +27,7 @@ from pydantic import (
     Field,
     RootModel,
     TypeAdapter,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -33,7 +35,7 @@ from pydantic import PositiveInt, ValidationError, validate_call
 
 
 from .types import SessionInfo
-from buttermilk.utils.utils import download_limited, download_limited_async
+from buttermilk.utils.utils import download_limited, download_limited_async, read_file
 import httpx
 from bs4 import BeautifulSoup
 
@@ -114,55 +116,72 @@ class Result(BaseModel):
         exclude_none=True
     )
 
-class Media(BaseModel):
-    base_64: Optional[str] = Field(default=None, validation_alias=AliasChoices("base_64", "base64", "b64"))
-    uri: Optional[str] = Field(default=None, validation_alias=AliasChoices("uri", "path", "url"))
-    binary: Optional[bytes] = None
-    mimetype: Optional[str] = None
-    download: Optional[bool] = False
-    
+class MediaObj(BaseModel):
+    mime: str = Field(default='image/png', alias=AliasChoices("mime", "mimetype", "type", "mime_type"))
+    data: Optional[bytes] = Field(default=None, alias=AliasChoices("data", "content"))
+    uri: Optional[str] = Field(default=None, alias=AliasChoices("uri", "path", "url"))
+    base_64: Optional[str] = Field(default=None, alias=AliasChoices("base_64", "b64", "b64_data"))
 
-    @field_validator("base64", mode="after")
-    def ensure_b64(cls, values):
-        if values:
-            for n, v in enumerate(values):
-                if not is_b64(v):
-                    raise ValueError(f"Invalid base64 string passed (idx: {n})")
-        
-        return values
-    
+    model_config = ConfigDict(
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True, exclude=['data','base64']
+    )
+
+    @computed_field
+    @property
+    def len(self) -> int:
+        """ We exclude the potentially large fields from the export. Instead just indicate the length 
+            and the mimetype+uri so the user knows data was passed in. """
+        if self.base_64:
+            return len(self.base_64)
+        else:
+            return -1
+
     @model_validator(mode="after")
-    def convert(self) -> Self:
-        if self.download:
-            if self.uri and (isinstance(self.uri, AnyUrl) or AnyUrl(self.uri)):
-                # It's a URL, go fetch and encode it
-                obj = download_limited(self.uri)
-                self.base_64 = base64.b64encode(obj).decode("utf-8")
-        elif isinstance(self.uri, CloudPath):
-            self.uri = str(self.uri.as_uri())
-        elif isinstance(self.uri, GSPath):
-            self.uri = str(self.uri.as_uri())
-
-        if self.binary:
-            self.base_64 = base64.b64encode(self.binary).decode("utf-8")
-            del self.binary
-
+    def vld_input(self) -> Self:
+        if not (self.data or self.uri or self.base_64):
+            raise ValueError("MediaObj must have data, a uri, or a base64 string.")
+        if self.data and not self.base_64:
+            self.base_64 = base64.b64encode(self.data).decode("utf-8")
         return self
+
+    @field_validator("uri")
+    def vld_path(path):
+        if isinstance(path, CloudPath):
+            return path.as_uri()
+        elif isinstance(path, Path):
+            return path.as_posix()
+        return path
+
+    def as_content_part(self):
+        if self.base_64:
+            part = {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{self.mime};base64,{self.base_64}",
+                    },
+            }
+        else:
+            part = {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": self.uri,
+                    },
+            }
+        return part
 
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    name: Optional[str] = Field(default=None, validation_alias=AliasChoices("name", "title", "heading"))
-    text: Optional[str] = Field(default=None, validation_alias=AliasChoices("text", "content", "body", "alt_text", "alt", "caption"))
-    media: Optional[Media|Sequence[Media]] = Field(default_factory=list, validation_alias=AliasChoices("media", "image", "video", "audio"))
+    name: Optional[str] = Field(default=None, alias=AliasChoices("name", "title", "heading"))
+    text: Optional[str] = Field(default=None, alias=AliasChoices("text", "content", "body", "alt_text", "alt", "caption"))
+    media: Optional[MediaObj|Sequence[MediaObj]] = Field(default_factory=list, alias=AliasChoices("media", "image", "video", "audio"))
     ground_truth: Optional[Result] = None
-    uri:  Optional[str] =  Field(default=None, validation_alias=AliasChoices("uri","path","url"))
-
+    uri:  Optional[str] =  Field(default=None, alias=AliasChoices("uri","path","url"))
+    
     _ensure_list = field_validator("media", mode="before")(make_list_validator())
     
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True
+        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True, 
     )
-
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -173,10 +192,14 @@ class RecordInfo(BaseModel):
         
         return self
 
-    @field_validator("path")
+    @field_validator("uri")
     def vld_path(path):
         if isinstance(path, CloudPath):
-            return str(path.as_uri())
+            return path.as_uri()
+        elif isinstance(path, Path):
+            return path.as_posix()
+        return path
+
 
     def as_langchain_message(self, type: Literal["human","system"]='human') -> BaseMessage:
         # Return the fields as a langchain message
@@ -186,37 +209,16 @@ class RecordInfo(BaseModel):
 
         components = []
         # Prepare input for model consumption
-        if self.text:
+        if text := self.text or 'see attached':
             components.append(
                 {
                     "type": "text",
-                    "text": self.text,
+                    "text": text,
                 }
             )
+
         for obj in self.media:
-            if obj.base_64:
-                mime_type = mime_type or "image/png"
-                media_message = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{obj.base_64}",
-                        },
-                }
-            elif obj.uri:
-                if mime_type:
-                    media_message = {"type": "media", 'mime_type': obj.mimetype,
-                            'file_uri': obj.uri}
-                else:
-                    media_message = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": obj.uri,
-                        },
-                    }
-            else:
-                raise ValueError("Unknown media attachment provided.")
-            
-            components.append(media_message)
+            components.append(obj.as_content_part())
 
         return HumanMessage(content=components)
         
@@ -244,7 +246,7 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: Optional[AgentInfo] = None
-    outputs: Optional[Result] = None     
+    outputs: Optional[Any|Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = Field(default_factory=dict)
     
@@ -264,10 +266,7 @@ class Job(BaseModel):
     def convert_result(v):
         if v and isinstance(v, Mapping):
             return Result(**v)
-        elif isinstance(v, Result):
-            return v
-        else:
-            raise ValueError(f'Job constructor expected outputs as type Result, got {type(v)}.')
+        return v
     
         
     @model_validator(mode="after")

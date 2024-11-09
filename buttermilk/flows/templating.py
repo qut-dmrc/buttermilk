@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Mapping, Optional, Tuple
 
 import yaml
-from buttermilk._core.runner_types import Job
 from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.utils.utils import list_files_with_content, list_files
 from jinja2 import BaseLoader, Environment, FileSystemLoader, Undefined
@@ -51,4 +50,5 @@ def make_messages(local_template: str) -> list[Tuple[str,str]]:
         messages = [('human', local_template)]
 
     return messages
+
 
