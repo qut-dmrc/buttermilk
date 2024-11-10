@@ -3,26 +3,26 @@ import random
 from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_validator
-from typing import Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
+from typing import Any, Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, Flow
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.exceptions import FatalError
-from buttermilk.runner.helpers import prepare_step_data
+from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.utils import expand_dict
-from buttermilk.data.recordmaker import RecordMakerDF
+from buttermilk.data.recordmaker import RecordMaker, RecordMakerDF
 
 class MultiFlowOrchestrator(BaseModel):
-    data_generator: AsyncGenerator = Field(default_factory=RecordMakerDF)
     flow: Flow
+    source: str
 
     _num_runs: int = 1
     _concurrent: int = 20
     _tasks: Sequence[Coroutine] = PrivateAttr(default_factory=list)
-    _dataset: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
-
+    _dataset: Any = PrivateAttr(default_factory=None)
+    _data_generator: Any = PrivateAttr(default=None)
 
     _tasks_remaining: int = PrivateAttr(default=0)
     _tasks_completed: int = PrivateAttr(default=0)
@@ -41,26 +41,24 @@ class MultiFlowOrchestrator(BaseModel):
         self._concurrent = self.flow.concurrency or self._concurrent
 
         # Prepare the data for the step
-        # self._dataset = prepare_step_data(self.flow.data)
+        self._dataset = prepare_step_df(self.flow.data)
+        self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
         return self
 
-    async def make_tasks(self, data_generator, agent_type: type[Agent], source) -> AsyncGenerator[Tuple[str,str,Job], None]:
+    async def make_tasks(self, agent_type: type[Agent], source) -> AsyncGenerator[Tuple[str,str,Job], None]:
         # create and run a separate job for:
-        #   * each record in the data_generator
+        #   * each record in  self._data_generator
         #   * each Agent (Different classes or instances of classes to resolve a task)
 
         # Get permutations of init variables
-        agent_combinations = self.flow.agent
-        flow = self.flow
-        agent_combinations = expand_dict(agent_combinations)
+        agent_combinations = expand_dict(self.flow.agent.model_dump())
 
         # Get permutations of run variables
-        run_combinations = self.flow.parameters
-        run_combinations = expand_dict(run_combinations)
+        run_combinations = expand_dict(self.flow.parameters)
 
         for init_vars in agent_combinations:
-            agent = agent_type(flow=flow, **init_vars)
-            async for record in data_generator():
+            agent = globals()[self.flow.agent.type](**init_vars)
+            async for record in self._data_generator():
                 for run_vars in run_combinations:
                     job = Job(record=record, source=source, parameters=run_vars)
                     coroutine = agent.run(job)
@@ -91,7 +89,7 @@ class MultiFlowOrchestrator(BaseModel):
 
         for n in range(self._num_runs):
             async with asyncio.TaskGroup() as tg:
-                async for agent_name, job_id, task in self.make_tasks(data_generator=self._data_generator, agent_type=self.agent_type, source=self.source):
+                async for agent_name, job_id, task in self.make_tasks(agent_type=LC, source=self.source):
                     wrapped_task = task_wrapper(agent_name, job_id, task)
                     tg.create_task(wrapped_task)
                     await asyncio.sleep(0)  # Yield control to allow tasks to start processing

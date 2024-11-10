@@ -36,7 +36,7 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "automod: trans",
+      "name": "automod: osbcases",
       "type": "debugpy",
       "request": "launch",
       "module": "examples.automod.mod",
@@ -44,9 +44,8 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "--multirun",
-        "+experiments=trans",
-        "step.0.init.criteria=trans_simplified,trans_cte,trans_glaad,trans_hrc,trans_tja,trans_factored"
+        "+flows=summarise_osb",
+        "job=debug"
 
         // "experiments.model=[haiku]"
       ],

@@ -22,13 +22,17 @@ def load_data(data_cfg) -> pd.DataFrame:
         df = df.rename(columns=rename_dict)
     elif data_cfg.type == 'job':
         df = load_jobs(data_cfg=data_cfg)
-
+    elif data_cfg.type == 'plaintext':
+        # Load all files in a directory
+        df = read_all_files(data_cfg.uri, data_cfg.glob, columns=data_cfg.columns)
+    else:
+        raise ValueError(f"Unknown data type: {data_cfg.type}")
     return df
 
-def load_jobs(data_cfg: Mapping) -> pd.DataFrame:
-    last_n_days=data_cfg.get('last_n_days', 3)
+def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
+    last_n_days=data_cfg.last_n_days
     
-    sql = f"SELECT * FROM `{data_cfg.dataset}` jobs WHERE error IS NULL "
+    sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL "
 
     sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
     if data_cfg.filter:
@@ -163,41 +167,51 @@ def cache_data(uri: str) -> str:
 
 
 
-def prepare_step_data(*data_configs) -> pd.DataFrame:
+def prepare_step_df(data_configs) -> pd.DataFrame:
     # This works for small datasets that we can easily read and load.
-    all_configs = {}
-    for conf in data_configs:
-        if conf:
-            all_configs.update(conf)
 
     dataset = pd.DataFrame()
     source_list = []
     dataset_configs = []
 
     # data_cfg is not ordered. Loop through and load the static data first.
-    for name, src in all_configs.items():
+    for src in data_configs:
         if src.type == 'job':
             # end of list (dynamic data)
             dataset_configs.append(src)
         else:
             # start of list
             dataset_configs = [src] + dataset_configs
-        source_list.append(name)
+        source_list.append(src.name)
 
     for src in dataset_configs:
         df = load_data(src)
-        if src.type != 'job':
+        if src.type == 'job':
+            # Load and join prior job data
+            dataset = group_and_filter_jobs(existing_df=dataset, data=df, 
+                                data_cfg=src)
+        else:
             if src.columns:
                 dataset = pd.concat([dataset, df[src.columns.keys()]])
             else:
                 # TODO - also allow joining other datasets that are not jobs.
                 dataset = pd.concat([dataset, df[src.columns.keys()]])
-        else:
-            # Load and join prior job data
-            dataset = group_and_filter_jobs(existing_df=dataset, data=df, 
-                                data_cfg=src)
-
     # shuffle
     dataset = dataset.sample(frac=1)
 
     return dataset
+
+def read_all_files(uri, pattern, columns: dict[str,str]):
+    filelist = cloudpathlib.GSPath(uri).glob(pattern)
+        # Read each file into a DataFrame and store in a list
+    dataset = pd.DataFrame(columns=columns.keys())
+    for file in filelist:
+        logger.debug(f"Reading {file.name} from {file.parent}...")
+        content = file.read_bytes().decode('utf-8')
+        dataset.loc[-1] = pd.Series(data=(file.stem, content))
+        break
+
+    # Concatenate all DataFrames into a single DataFrame
+    return dataset
+
+    

@@ -86,14 +86,17 @@ CloudProvider = Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault"
 class CloudProviderCfg(BaseModel):
     type: CloudProvider
 
-    model_config = ConfigDict(
-        extra="allow", 
-        arbitrary_types_allowed=True, 
-        populate_by_name=True, 
-        exclude_none=True, 
-        exclude_unset=True, 
+    class Config:
+        # Exclude fields with None values when serializing
+        exclude_none = True
+        arbitrary_types_allowed=True
+        populate_by_name=True
+        # Ignore extra fields not defined in the model
+        extra = "allow"
+        exclude_none=True
+        exclude_unset=True
         include_extra=True
-    )
+    
 
 class SaveInfo(CloudProviderCfg):
     destination: str|cloudpathlib.AnyPath
@@ -110,12 +113,11 @@ class SaveInfo(CloudProviderCfg):
         return v
 
 class AgentInfo(BaseModel):
-    name: str
-    save_params: Optional[SaveInfo] = None
+    type: str
 
     model_config = ConfigDict(
         extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,
-    )
+    ) # type: ignore
 
 
 class DataSource(BaseModel):
@@ -128,12 +130,14 @@ class DataSource(BaseModel):
     agg: Optional[bool] = Field(default=False)
     group: Optional[Mapping[str, str]] = Field(default_factory=dict)
     columns: Optional[Mapping[str, str]] = Field(default_factory=dict)
+    last_n_days: Optional[int] = Field(7)
 
 class Flow(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = 1
     agent: AgentInfo
+    save: Optional[SaveInfo] = None
     data: Optional[Sequence[Any]] = Field(default_factory=list)
     parameters: Optional[Mapping] = Field(default_factory=dict)
 
@@ -156,10 +160,14 @@ class Project(BaseModel):
     flows: list[Flow] = Field(default_factory=list)
     tracing: Optional[Tracing] = Field(default_factory=Tracing)
     verbose: bool = True
-    cloud: list[CloudProviderCfg] = Field(default_factory=list)
     run: RunCfg
 
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True, populate_by_name=True,          exclude_none=True, exclude_unset=True,)
+    class Config:
+        extra="forbid"
+        arbitrary_types_allowed=True
+        populate_by_name=True
+        exclude_none=True
+        exclude_unset=True
 
 
 
@@ -170,5 +178,4 @@ class Project(BaseModel):
 
 if __name__ == '__main__':
     Config = builds(Project, populate_full_signature=True)
-    Config
     pass

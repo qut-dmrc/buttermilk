@@ -19,6 +19,7 @@ from pydantic import Field, model_validator
 
 from tqdm.asyncio import tqdm as atqdm
 from buttermilk import BM
+from buttermilk._core.config import Project
 from buttermilk.buttermilk import SessionInfo
 from buttermilk.libs import (
     HFInferenceClient,
@@ -29,21 +30,9 @@ from buttermilk.libs import (
 )
 from buttermilk.exceptions import FatalError
 from buttermilk.agents.lc import LC
-from buttermilk._core.runner_types import Job, RecordInfo, AgentInfo
-from buttermilk.runner.helpers import group_and_filter_jobs, load_data
-from buttermilk.runner.runner import Consumer, ResultsCollector, TaskDistributor
-from buttermilk.tools.metrics import Metriciser, Scorer
-from buttermilk.utils import (
-    col_mapping_hydra_to_local,
-    find_key_string_pairs,
-    make_serialisable,
-)
 
 from buttermilk.runner.orchestrator import MultiFlowOrchestrator
 import datetime
-import itertools
-from itertools import cycle
-from tempfile import NamedTemporaryFile
 from typing import (
     Any,
     AsyncGenerator,
@@ -57,12 +46,9 @@ from typing import (
 )
 
 import cloudpathlib
-from buttermilk.utils.flows import col_mapping_hydra_to_pf
 from buttermilk import BM, logger
-from promptflow.tracing import trace, start_trace
 from rich import print as rprint
 
-import os
 
 from hydra import initialize, compose
 from omegaconf import OmegaConf
@@ -79,23 +65,23 @@ from omegaconf import OmegaConf
 global_run_id = SessionInfo.make_run_id()
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
-def main(cfg: DictConfig) -> None:
+def main(cfg: Project) -> None:
     global bm, logger, global_run_id
-
+    # Print config to console
+    rprint(OmegaConf.to_container(cfg, resolve=True))
+    
     # Load the main ButterMilk singleton instance
     # This takes care of credentials, save paths, and other defaults
-    bm = BM(run_id=global_run_id, cfg=cfg)
+    bm = BM(cfg=cfg)
     logger = bm.logger
 
-    # Print config to console
-    rprint(OmegaConf.to_container(bm.cfg, resolve=True))
 
 
     try:
-        for step_cfg in cfg.step:
+        for step_cfg in cfg.flows:
 
             # Create an orchestrator to conduct all combinations of jobs we want to run
-            orchestrator = MultiFlowOrchestrator(step=step_cfg, data=cfg.data, save=cfg.save, source=cfg.source)
+            orchestrator = MultiFlowOrchestrator(flow=step_cfg, source=cfg.job)
             step_name=step_cfg.name
 
             t0 = datetime.datetime.now()
@@ -139,4 +125,7 @@ def main(cfg: DictConfig) -> None:
     pass
 
 if __name__ == "__main__":
+    # Config = builds(Project, populate_full_signature=True)
+    
+    pass
     main()
