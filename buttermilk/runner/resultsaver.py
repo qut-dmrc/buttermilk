@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from buttermilk import Job, Result
+from buttermilk._core.runner_types import Job, Result
 from buttermilk.runner.runner import ResultsCollector
 from buttermilk.utils import save
 from buttermilk.utils.save import upload_rows

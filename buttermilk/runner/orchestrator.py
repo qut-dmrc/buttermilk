@@ -4,14 +4,15 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_validator
 from typing import Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
-from buttermilk import Agent, Job, RecordInfo, logger
+from buttermilk import logger
+from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, Flow
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_data
 from buttermilk.utils.utils import expand_dict
 from buttermilk.data.recordmaker import RecordMakerDF
-
 
 class MultiFlowOrchestrator(BaseModel):
     data_generator: AsyncGenerator = Field(default_factory=RecordMakerDF)
@@ -36,8 +37,8 @@ class MultiFlowOrchestrator(BaseModel):
     
     @model_validator(mode='after')
     def get_data(self) -> Self:
-        self._num_runs = self.step.get('num_runs') or self._num_runs
-        self._concurrent = self.step.get('concurrent') or self._concurrent
+        self._num_runs = self.flow.num_runs or self._num_runs
+        self._concurrent = self.flow.concurrency or self._concurrent
 
         # Prepare the data for the step
         # self._dataset = prepare_step_data(self.flow.data)
@@ -49,12 +50,12 @@ class MultiFlowOrchestrator(BaseModel):
         #   * each Agent (Different classes or instances of classes to resolve a task)
 
         # Get permutations of init variables
-        agent_combinations = self.step.agent
-        flow = self.step.flow
+        agent_combinations = self.flow.agent
+        flow = self.flow
         agent_combinations = expand_dict(agent_combinations)
 
         # Get permutations of run variables
-        run_combinations = self.step.get('parameters', {})
+        run_combinations = self.flow.parameters
         run_combinations = expand_dict(run_combinations)
 
         for init_vars in agent_combinations:
