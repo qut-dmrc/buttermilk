@@ -3,7 +3,8 @@ defaults:
 
 name: automod
 job:
-logger: gcp
+logger: 
+  type: gcp
 tracing: 
   enabled: true
 verbose: false

@@ -102,6 +102,30 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 extend-include = ["*.ipynb"]
 
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+ignore = []
+
+# Same as Black.
+line-length = 88
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.11
+target-version = "py311"
+
+[tool.ruff.format]
+# Enable formatting
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.isort]
+known-first-party = ["buttermilk"]
+combine-as-imports = true
+
 [tool.pytest.ini_options]
 markers = [
   "integration: integration tests, don't run by default",

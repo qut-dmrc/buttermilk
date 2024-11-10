@@ -38,7 +38,6 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 from promptflow.tracing import trace
 
-from .runner_types import AgentInfo, Job, RecordInfo, Result, AgentInfo
 from buttermilk.defaults import BQ_SCHEMA_DIR
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import upload_rows, save
@@ -82,12 +81,19 @@ import cloudpathlib
 #         return _impl
 
 
-CloudProvider = TypeVar(Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault", "local"])
+CloudProvider = Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault", "local"]
 
 class CloudProviderCfg(BaseModel):
     type: CloudProvider
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True, include_extra=True)
 
+    model_config = ConfigDict(
+        extra="allow", 
+        arbitrary_types_allowed=True, 
+        populate_by_name=True, 
+        exclude_none=True, 
+        exclude_unset=True, 
+        include_extra=True
+    )
 
 class SaveInfo(CloudProviderCfg):
     destination: str|cloudpathlib.AnyPath
@@ -103,89 +109,13 @@ class SaveInfo(CloudProviderCfg):
             raise ValueError(f"File '{v}' does not exist.")
         return v
 
-
-#########
-# Agent
-#
-# A simple class with a function that process a job.
-# 
-# It takes a Job with Inputs and returns a Job with Inputs and Outputs.
-# The completed Job is stored in a database (BigQuery) for tracing and analysis.
-#
-# The primary type of Job is a "flow" which is a sequence of steps that process data
-# using a model or client of some sort. In the standard implementation, this is a 
-# langchain based template processed by an interchangeable LLM Chat model.
-#
-##########
-
-
-class Agent(BaseModel):
-    """
-    Receive data, processes it, save the results to BQ, and acknowledge completion.
-    """
+class AgentInfo(BaseModel):
     name: str
-    concurrency: Optional[int] = 4            # Max number of async tasks to run
-    _agent_info: Optional[AgentInfo] = None  # The metadata for this run
-    
+    save_params: Optional[SaveInfo] = None
 
-    _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
-
-    model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
-    
-    @model_validator(mode='after')
-    def init(self) -> Self:
-        # configure agent info
-        params = self.model_dump(exclude_unset=True, mode='json',exclude_none=True)
-        if self.model_extra:
-            params.update(self.model_extra)
-        self._agent_info = AgentInfo(**params)
-        return self
-    
-    @field_validator("save_params", mode="before")
-    def validate_save_params(cls, value: Optional[SaveInfo|Mapping]) -> SaveInfo:
-        if not isinstance(value, SaveInfo):
-            return SaveInfo(**value)
-        return value
-    
-    @field_validator("name", mode="before")
-    def validate_agent(cls, value: Optional[str|int]) -> str:
-        # Make a unique worker name for identification and logging
-        value =  f"{value}_{shortuuid.uuid()[:6]}"
-        return value
-    
-    @model_validator(mode="after")
-    def validate_concurrency(self) -> Self:
-        if self.concurrency < 1:
-            raise ValueError("concurrency must be at least 1")
-        self._sem = asyncio.Semaphore(value=self.concurrency)
-        return self
-
-    @trace
-    async def run(self, job: Job) -> Job:
-        async with self._sem:
-            try:
-                job.agent_info = self._agent_info
-                job = await self.process_job(job=job)
-            except Exception as e:
-                job.error = extract_error_info(e=e)
-                if job.record:
-                    logger.error(
-                        f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}"
-                    )
-            finally: 
-                if self.save_params:
-                    rows = [job.model_dump()]
-                    if self.save_params.type == 'bq':
-                        upload_rows(rows=rows, dataset=self.save_params.destination, schema=self.save_params.db_schema)
-                    else:
-                        save(save_dir=self.save_params.destination)
-            return job
-    
-    async def process_job(self, *, job: Job) -> Job:
-        """ Take a Job with Inputs, process it, and 
-        return a Job with Inputs and Outputs."""
-        raise NotImplementedError()
-    
+    model_config = ConfigDict(
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,
+    )
 
 
 class DataSource(BaseModel):
@@ -203,7 +133,7 @@ class Flow(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = 1
-    agent: "Agent"
+    agent: AgentInfo
     data: Optional[Sequence[Any]] = Field(default_factory=list)
     parameters: Optional[Mapping] = Field(default_factory=dict)
 
@@ -222,7 +152,7 @@ class Project(BaseModel):
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg
     save_dest: CloudProviderCfg
-    logger: CloudProvider
+    logger: CloudProviderCfg
     flows: list[Flow] = Field(default_factory=list)
     tracing: Optional[Tracing] = Field(default_factory=Tracing)
     verbose: bool = True

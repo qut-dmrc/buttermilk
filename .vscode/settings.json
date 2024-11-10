@@ -1,12 +1,14 @@
 {
-  "python.testing.pytestArgs": ["."],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true
+    },
   "notebook.formatOnSave.enabled": true,
-  "editor.formatOnSave": true,
-  "editor.defaultFormatter": "charliermarsh.ruff",
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.ruff": "explicit",
     "source.organizeImports.ruff": "explicit"
-  }
+  },
+  "python.analysis.typeCheckingMode": "standard"
 }
