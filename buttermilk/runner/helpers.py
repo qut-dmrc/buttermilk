@@ -3,9 +3,15 @@ import json
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
+import gcsfs
 from omegaconf import DictConfig
 import pandas as pd
 
+import asyncio
+import aiofiles
+import pandas as pd
+from cloudpathlib import GSPath
+from typing import Dict, Tuple 
 from buttermilk import BM, logger
 from buttermilk._core.config import DataSource
 from buttermilk.utils.flows import col_mapping_hydra_to_local
@@ -13,9 +19,9 @@ from typing import Mapping, Optional, Sequence
 
 from buttermilk.utils.utils import find_key_string_pairs
 
-def load_data(data_cfg: DataSource) -> pd.DataFrame:
+async def load_data(data_cfg: DataSource) -> pd.DataFrame:
     if data_cfg.type == 'file':
-        df = pd.read_json(data_cfg.uri, lines=True, orient='records')
+        df = pd.read_json(data_cfg.path, lines=True, orient='records')
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(data_cfg.columns)
         rename_dict = {v: k for k, v in columns.items()}
@@ -24,7 +30,7 @@ def load_data(data_cfg: DataSource) -> pd.DataFrame:
         df = load_jobs(data_cfg=data_cfg)
     elif data_cfg.type == 'plaintext':
         # Load all files in a directory
-        df = read_all_files(data_cfg.path, data_cfg.glob, columns=data_cfg.columns)
+        df = await read_all_files(data_cfg.path, data_cfg.glob, columns=data_cfg.columns)
     else:
         raise ValueError(f"Unknown data type: {data_cfg.type}")
     return df
@@ -168,7 +174,7 @@ def cache_data(uri: str) -> str:
 
 
 
-def prepare_step_df(data_configs) -> pd.DataFrame:
+async def prepare_step_df(data_configs) -> pd.DataFrame:
     # This works for small datasets that we can easily read and load.
 
     dataset = pd.DataFrame()
@@ -186,7 +192,7 @@ def prepare_step_df(data_configs) -> pd.DataFrame:
         source_list.append(src.name)
 
     for src in dataset_configs:
-        df = load_data(src)
+        df = await load_data(src)
         if src.type == 'job':
             # Load and join prior job data
             dataset = group_and_filter_jobs(existing_df=dataset, data=df, 
@@ -202,7 +208,7 @@ def prepare_step_df(data_configs) -> pd.DataFrame:
 
     return dataset
 
-def read_all_files(uri, pattern, columns: dict[str,str]):
+async def read_all_files(uri, pattern, columns: dict[str,str]):
     filelist = cloudpathlib.GSPath(uri).glob(pattern)
         # Read each file into a DataFrame and store in a list
     dataset = pd.DataFrame(columns=columns.keys())
@@ -210,7 +216,32 @@ def read_all_files(uri, pattern, columns: dict[str,str]):
         logger.debug(f"Reading {file.name} from {file.parent}...")
         content = file.read_bytes().decode('utf-8')
         dataset.loc[len(dataset)] = (file.stem, content)
-
+        break
     return dataset
 
+
+# async def read_all_files(uri: str, pattern: str, columns: Dict[str, str]) -> pd.DataFrame:
+#     filelist = GSPath(uri).glob(pattern)
     
+#     # for testing only
+#     filelist = [x for i, x in enumerate(filelist) if i <= 20]
+    
+#     fs = gcsfs.GCSFileSystem(asynchronous=True)
+
+#     _sem = asyncio.Semaphore(4) 
+#     async def read_file(file: cloudpathlib.CloudPath) -> Tuple[str, str]:
+#         async with _sem:
+#             logger.debug(f"Reading {file.name} from {file.parent}...")
+#             content = await fs.read_text(file.as_uri(), encoding='utf-8')
+#             return file.stem, content
+
+#     # Create a list of tasks for reading files concurrently
+#     tasks = [read_file(file) for file in filelist]
+    
+#     # Run tasks concurrently and gather results
+#     results = await asyncio.gather(*tasks)
+    
+#     # Create a DataFrame from the results
+#     dataset = pd.DataFrame(results, columns=columns.keys())
+    
+#     return dataset

@@ -41,12 +41,13 @@ from tenacity import (
     wait_random,
     wait_random_exponential,
 )
+import regex as re
 
 from buttermilk import BM, BQ_SCHEMA_DIR, TEMPLATE_PATHS, BASE_DIR
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.exceptions import RateLimit
-from buttermilk.utils.templating import KeepUndefined, make_messages
+from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk import logger
@@ -114,7 +115,12 @@ class LC(Agent):
             try:
                 # Try to load a template if it's passed in by filename, otherwise use it
                 # as a plain string replacement.
-                self.template_vars[k] = env.get_template(self.template_vars[k] + '.jinja2').render()
+                tpl = env.get_template(self.template_vars[k] + '.jinja2').render()
+                 
+                # Remove the metadata from the template if it's in there.
+                tpl = _parse_prompty(tpl)
+                
+                self.template_vars[k] = tpl
             except TemplateNotFound as e:
                 # Treat template as a string
                 pass
@@ -131,54 +137,45 @@ class LC(Agent):
             raise ValueError(
                 "You must provide either model name or provide a default model on initialisation."
             )
-        params = {}
-
+      
         # Compile inputs and template variables
         local_inputs = self.template_vars.copy()
 
+        params = {}
         for k, v in job.parameters.items():
-            # Load params from content if they match, otherwise add them literally.
-            if v in job.record.model_fields or v in job.record.model_extra:
-                v = getattr(job.record, v)
-            local_inputs[k] = v
+            # Load params from content if they match, otherwise add them literally in the vars when we pass off.
+            if v == 'record':
+                # Add in the record as a placeholder message, but don't pass it in right away
+                params[k] = [job.record.as_langchain_message(type='human')]
+            elif v in job.record.model_fields or v in job.record.model_extra:
+                # This is the only type we pass in the first time rendering (jinja2)
+                local_inputs[k] = getattr(job.record, v)
+            else:
+                # everything else is kept for a simple f-string replace later.
+                params[k] = v
 
-        local_template = self._template.render(**local_inputs)
+        local_template = self._template.render(**local_inputs, **params)
+        local_template = _parse_prompty(local_template)
         messages = make_messages(local_template=local_template)
 
-        # Add this agent's details to the Job object
-        job.agent_info = self._agent_info
+
+        # From this point, langchain expects single braces for replacement instead of double
+        lc_messages = []
+        for source, message in messages:
+            message = re.sub(r"{{\s+","{", message)
+            message = re.sub(r"\s+}}","}", message)
+            lc_messages.append((source, message))
 
         # Add prompt to Job object
-        job.prompt = [ f"{role}:\n{message}" for role, message in messages]
+        job.prompt = [ f"{role}:\n{message}" for role, message in lc_messages]
 
-        
         # Get model
         llm = self.llm[model]
 
-        # Add model details to Job object
-        job.parameters['connection'] = scrub_keys(self.llm.connections[model])
-        job.parameters['model_params'] = scrub_keys(llm.dict())
-        job.parameters['model'] = model
-
-
-        if any([x == 'placeholder' and y == '{record}' for x, y in messages]):
-            record_msg = job.record.as_langchain_message(type='human')
-            #params['record']=[record_msg]
-            # testing
-            messages = [messages[0],record_msg]
-
         # Make the chain
         chain = ChatPromptTemplate.from_messages(
-                messages, template_format="jinja2"
+                lc_messages, template_format="f-string"
             )
-        
-        # # if there is a placeholder for {record}, add our record to list 
-        # # of messages
-        # for msg in chain.messages:
-        #     if isinstance(msg, MessagesPlaceholder):
-        #         if msg.variable_name == 'record':
-        #             record_msg = job.record.as_langchain_message(type='human')
-        #             params['record']=[record_msg]
             
         chain = chain | llm | ChatParser()
 
@@ -186,6 +183,15 @@ class LC(Agent):
         response = await self.invoke(chain, input_vars=params, model=model)
 
         job.outputs = Result(**response)
+
+        # Add this agent's details to the Job object
+        job.agent_info = self._agent_info
+
+        # Add model details to Job object
+        job.parameters['connection'] = scrub_keys(self.llm.connections[model])
+        job.parameters['model_params'] = scrub_keys(llm.dict())
+        job.parameters['model'] = model
+
         return job
 
 

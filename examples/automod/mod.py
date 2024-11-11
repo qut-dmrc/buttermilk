@@ -75,31 +75,33 @@ def main(cfg: Project) -> None:
     bm = BM(cfg=cfg)
     logger = bm.logger
     
-    for step_cfg in cfg.flows:
+    async def run():
+        _continue = True
+        for step_cfg in cfg.flows:
+            if _continue:
 
-        # Create an orchestrator to conduct all combinations of jobs we want to run
-        orchestrator = MultiFlowOrchestrator(flow=step_cfg, source=cfg.job)
-        step_name=step_cfg.name
+                # Create an orchestrator to conduct all combinations of jobs we want to run
+                orchestrator = MultiFlowOrchestrator(flow=step_cfg, source=cfg.job)
+                step_name=step_cfg.name
+            
+                with atqdm(colour='magenta', 
+                        desc=step_name,
+                    ) as pbar: 
+                    main_task = asyncio.create_task(run_tasks(task_generator=orchestrator.make_tasks(), num_runs=step_cfg.num_runs, max_concurrency=cfg.run.max_concurrency))
 
-        
-        async def run():
-            with atqdm(colour='magenta', 
-                    desc=step_name,
-                ) as pbar: 
-                main_task = asyncio.create_task(run_tasks(task_generator=orchestrator.make_tasks(), num_runs=step_cfg.num_runs, max_concurrency=cfg.run.max_concurrency))
+                    while not main_task.done():
+                        pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
+                        pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])
+                        pbar.refresh()
+                        await asyncio.sleep(1)
 
-                while not main_task.done():
-                    pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
-                    pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])
-                    pbar.refresh()
-                    await asyncio.sleep(1)
+                # exiting here, check for clean exit
+                pass
+                # set _continue = False  if loop failed
 
-
-        asyncio.run(run())
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
-    # Config = builds(Project, populate_full_signature=True)
-    
-    pass
     main()
+    pass

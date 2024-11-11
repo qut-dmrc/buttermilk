@@ -45,7 +45,7 @@
       "justMyCode": false,
       "args": [
         "+flows=summarise_osb",
-        "job=debug"
+        "job=batch"
 
         // "experiments.model=[haiku]"
       ],

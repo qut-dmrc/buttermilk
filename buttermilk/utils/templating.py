@@ -26,13 +26,9 @@ def _parse_prompty(string_template) -> str:
         pattern = r"-{3,}\n(.*)-{3,}\n(.*)"
         result = re.search(pattern, string_template, re.DOTALL)
         if not result:
-            raise ValueError(
-                "Illegal formatting of prompty. The prompt file is in markdown format and can be divided into two "
-                "parts, the first part is in YAML format and contains connection and model information. The second "
-                "part is the prompt template."
-            )
-        _, prompt_template = result.groups()
-        return prompt_template
+            return string_template
+        else:
+            return result.group(2)
 
 def make_messages(local_template: str) -> list[Tuple[str,str]]:
     try:

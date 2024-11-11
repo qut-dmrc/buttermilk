@@ -39,16 +39,19 @@ class MultiFlowOrchestrator(BaseModel):
     def get_data(self) -> Self:
         self._num_runs = self.flow.num_runs or self._num_runs
         self._concurrent = self.flow.concurrency or self._concurrent
-
-        # Prepare the data for the step
-        self._dataset = prepare_step_df(self.flow.data)
-        self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
         return self
+
+    async def prepare_data(self):
+        # Prepare the data for the step
+        self._dataset = await prepare_step_df(self.flow.data)
+        self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
 
     async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
         # create and run a separate job for:
         #   * each record in  self._data_generator
         #   * each Agent (Different classes or instances of classes to resolve a task)
+        
+        await self.prepare_data()
 
         # Get permutations of init variables
         agent_combinations = expand_dict(self.flow.agent.model_dump())

@@ -301,13 +301,16 @@ class BM(Singleton, BaseModel):
 
         bytes_billed = job.total_bytes_billed
         cache_hit = job.cache_hit
-
-        approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
-        bytes_billed = humanfriendly.format_size(bytes_billed)
-
+        
+        if bytes_billed:
+            approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
+            bytes_billed = humanfriendly.format_size(bytes_billed)
+            approx_cost = humanfriendly.format_number(approx_cost)
+        else:
+            approx_cost = "unknown"
         time_taken = datetime.datetime.now() - t0
         self.logger.info(
-            f"Query stats: Ran in {time_taken} seconds, cache hit: {cache_hit}, billed {bytes_billed}, approx cost ${approx_cost:0.2}."
+            f"Query stats: Ran in {time_taken} seconds, cache hit: {cache_hit}, billed {bytes_billed}, approx cost ${approx_cost}."
         )
 
         if do_not_return_results:
