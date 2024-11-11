@@ -53,6 +53,8 @@ from rich import print as rprint
 from hydra import initialize, compose
 from omegaconf import OmegaConf
 
+from buttermilk.runner.runloop import run_tasks
+
 ## Run with, e.g.: 
 ## ```bash
 ## python -m examples.automod.mod +data=drag +step=ordinary +save=bq job=<description> source=<desc>
@@ -67,62 +69,34 @@ global_run_id = SessionInfo.make_run_id()
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: Project) -> None:
     global bm, logger, global_run_id
-    # Print config to console
-    rprint(OmegaConf.to_container(cfg, resolve=True))
     
     # Load the main ButterMilk singleton instance
     # This takes care of credentials, save paths, and other defaults
     bm = BM(cfg=cfg)
     logger = bm.logger
+    
+    for step_cfg in cfg.flows:
+
+        # Create an orchestrator to conduct all combinations of jobs we want to run
+        orchestrator = MultiFlowOrchestrator(flow=step_cfg, source=cfg.job)
+        step_name=step_cfg.name
+
+        
+        async def run():
+            with atqdm(colour='magenta', 
+                    desc=step_name,
+                ) as pbar: 
+                main_task = asyncio.create_task(run_tasks(task_generator=orchestrator.make_tasks(), num_runs=step_cfg.num_runs, max_concurrency=cfg.run.max_concurrency))
+
+                while not main_task.done():
+                    pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
+                    pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])
+                    pbar.refresh()
+                    await asyncio.sleep(1)
 
 
+        asyncio.run(run())
 
-    try:
-        for step_cfg in cfg.flows:
-
-            # Create an orchestrator to conduct all combinations of jobs we want to run
-            orchestrator = MultiFlowOrchestrator(flow=step_cfg, source=cfg.job)
-            step_name=step_cfg.name
-
-            t0 = datetime.datetime.now()
-            try:
-                
-                async def run():
-                    with atqdm(colour='magenta', 
-                                desc=step_name,
-                                bar_format="{desc:20}: {bar:50} | {rate_inv_fmt}",
-                            ) as pbar: 
-                        main_task = asyncio.create_task(orchestrator.run_tasks())
-                        while not main_task.done():
-                            pbar.total = sum([orchestrator._tasks_remaining, orchestrator._tasks_completed, orchestrator._tasks_failed])
-                            pbar.n = sum([orchestrator._tasks_completed, orchestrator._tasks_failed])
-                            pbar.refresh()
-                            await asyncio.sleep(1)
-
-                asyncio.run(run())
-
-            except KeyboardInterrupt:
-                # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.
-                logger.info(
-                    "Keyboard interrupt. Quitting run."
-                )
-                break
-
-            except Exception as e:
-                logger.exception(dict(message=f"Failed step {step_name} on run {global_run_id} on {cfg.run.platform}", error=str(e)))
-
-            finally:
-                t1 = datetime.datetime.now()
-                logger.info(f"Completed step {step_name} on run {global_run_id} in {format_timespan(t1-t0)}."
-                    )
-
-    except KeyboardInterrupt:
-        # Second time; quit immediately.
-        raise FatalError("Keyboard interrupt. Aborting immediately.")
-
-    except Exception as e:
-        logger.exception(dict(message=f"Failed run on {cfg.run.platform}", error=str(e)))
-    pass
 
 if __name__ == "__main__":
     # Config = builds(Project, populate_full_signature=True)

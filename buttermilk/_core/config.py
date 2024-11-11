@@ -99,8 +99,9 @@ class CloudProviderCfg(BaseModel):
     
 
 class SaveInfo(CloudProviderCfg):
-    destination: str|cloudpathlib.AnyPath
+    destination: Optional[str|cloudpathlib.AnyPath] = None
     db_schema: Optional[str] = Field(..., validation_alias='schema')
+    dataset: Optional[str] = Field(default=None)
 
     @field_validator("db_schema")
     def file_must_exist(cls, v):
@@ -111,35 +112,72 @@ class SaveInfo(CloudProviderCfg):
             
             raise ValueError(f"File '{v}' does not exist.")
         return v
+    
+    @model_validator(mode='after')
+    def check_destination(self) -> Self:
+        if not self.destination and not self.dataset:
+            raise ValueError("Nowhere to save to! Either destination or dataset must be provided.")
+        return self
 
 class AgentInfo(BaseModel):
     type: str
 
-    model_config = ConfigDict(
-        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_none=True, exclude_unset=True,
-    ) # type: ignore
+    # Optional because it will be added when the agent is instantiated.
+    flow: Optional[str] = Field(default=None, validation_alias=AliasChoices("flow", "name"))
 
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+        populate_by_name = True
+        exclude_none = True
+        exclude_unset = True
+        
 
 class DataSource(BaseModel):
     name: str
     max_records_per_group: int = -1
     type: Literal["job", "file", "bq", "generator", "plaintext"]
     path: str = Field(..., validation_alias=AliasChoices("path", "dataset", "uri", "func"))
-    filter: Optional[Mapping[str, str]] = Field(default_factory=dict)
+    glob: str = Field(default="**/*")
+    filter: Optional[Mapping[str, str|Sequence[str]|None]] = Field(default_factory=dict)
     join: Optional[Mapping[str, str]] = Field(default_factory=dict)
     agg: Optional[bool] = Field(default=False)
     group: Optional[Mapping[str, str]] = Field(default_factory=dict)
-    columns: Optional[Mapping[str, str]] = Field(default_factory=dict)
-    last_n_days: Optional[int] = Field(7)
+    columns: Optional[Mapping[str, str|Mapping]] = Field(default_factory=dict)
+    last_n_days: int = Field(default=7)
 
+    class Config:
+        extra = "forbid"
+        arbitrary_types_allowed = False
+        populate_by_name = True
+        exclude_none = True
+        exclude_unset = True
+        
 class Flow(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = 1
     agent: AgentInfo
-    save: Optional[SaveInfo] = None
-    data: Optional[Sequence[Any]] = Field(default_factory=list)
+    save: SaveInfo
+    data: Optional[Sequence[DataSource]] = Field(default_factory=list)
     parameters: Optional[Mapping] = Field(default_factory=dict)
+
+    class Config:
+        extra = "forbid"
+        arbitrary_types_allowed = False
+        populate_by_name = True
+        exclude_none = True
+        exclude_unset = True
+
+    @field_validator("data", mode="before")
+    def convert_data(cls, value):
+        datasources = []
+        for source in value:
+            if not isinstance(source, DataSource):
+                source = DataSource(**source)
+            datasources.append(source)
+        return datasources
+    
 
 class Tracing(BaseModel):
     enabled: bool = False
@@ -148,6 +186,7 @@ class Tracing(BaseModel):
 
 class RunCfg(BaseModel):
     platform: str = 'local'
+    max_concurrency: int = -1
     parameters: Mapping[str, Any] = Field(default_factory=dict)
 
 class Project(BaseModel):

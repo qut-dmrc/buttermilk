@@ -2,7 +2,7 @@ import pandas as pd
 import shortuuid
 import pandas as pd
 import json
-from cloudpathlib import GSPath
+from cloudpathlib import AnyPath, GSPath
 import pickle
 import io
 from tenacity import retry, wait_exponential_jitter,  retry_if_exception_type, stop_after_attempt
@@ -16,7 +16,7 @@ from .utils import read_file, reset_index_and_dedup_columns, make_serialisable, 
 from .._core.log import logger
 from .bq import construct_dict_from_schema
 
-def save(data, save_dir: CloudPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
+def save(data, save_dir: AnyPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
     from .utils import reset_index_and_dedup_columns
 
     # Failsafe save routine. We should be able to find some way of dumping the data.
@@ -259,15 +259,15 @@ def read_pickle(filename):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_text(data, *, save_dir=None, uri=None, base_name=None, extension="html"):
+def upload_text(data, *, save_dir=None, uri=None, basename=None, extension="html"):
     gcs = storage.Client()
     if not uri:
         # Create a random URI in our GCS directory
-        if base_name:
-            base_name = f"{shortuuid.uuid()[:6]}_{base_name}"
+        if basename:
+            basename = f"{basename}_{shortuuid.uuid()[:6]}"
         else:
-            base_name = f"{shortuuid.uuid()}"
-        uri = f"{save_dir}/{base_name}.{extension}"
+            basename = f"{shortuuid.uuid()}"
+        uri = f"{save_dir}/{basename}.{extension}"
 
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs)

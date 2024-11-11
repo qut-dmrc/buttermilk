@@ -58,8 +58,9 @@ class Agent(BaseModel):
     Receive data, processes it, save the results to BQ, and acknowledge completion.
     """
     name: str
+    type: str
     concurrency: int = Field(default=4)            # Max number of async tasks to run
-    save_params: Optional[SaveInfo] = None       # Where to save the results
+    save: SaveInfo                                 # Where to save the results
     _agent_info: Optional[AgentInfo] = None  # The metadata for this run
     
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
@@ -75,7 +76,7 @@ class Agent(BaseModel):
         self._agent_info = AgentInfo(**params)
         return self
     
-    @field_validator("save_params", mode="before")
+    @field_validator("save", mode="before")
     def validate_save_params(cls, value: Optional[SaveInfo|Mapping]) -> Optional[SaveInfo]:
         if value is None or isinstance(value, SaveInfo):
             return value
@@ -107,12 +108,12 @@ class Agent(BaseModel):
                         f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}"
                     )
             finally: 
-                if self.save_params:
+                if self.save:
                     rows = [job.model_dump()]
-                    if self.save_params.type == 'bq':
-                        upload_rows(rows=rows, dataset=self.save_params.destination, schema=self.save_params.db_schema)
+                    if self.save.type == 'bq':
+                        save(data=rows, dataset=self.save.dataset, schema=self.save.db_schema, save_dir=self.save.destination)
                     else:
-                        save(save_dir=self.save_params.destination)
+                        save(data=rows, save_dir=self.save.destination)
             return job
     
     async def process_job(self, *, job: Job) -> Job:

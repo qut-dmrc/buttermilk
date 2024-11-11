@@ -61,6 +61,7 @@ from buttermilk.utils.utils import scrub_keys
 
 class LC(Agent):
     name: str = Field(default="lc", init=False)
+    flow: Optional[str] = Field(default=None, init=False, description="The name of the flow or step in the process that this agent is responsible for.")
     model: Optional[str] = None
     template: Optional[str] = None
     template_vars: Optional[dict] = {}

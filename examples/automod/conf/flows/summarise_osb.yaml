@@ -1,13 +1,16 @@
-- name: summarise
-  num_runs: 2
-  concurrent: 20
+- name: summarise OSB cases
+  num_runs: 1
+  concurrency: 20
   agent: 
     type: LC
     template: summarise_osb
     model:
-      - gpt4o
-      - llama32_90b_vision_instruct
-      - gemini15pro
+      - haiku
+      # - gpt4o
+      # # - llama32_90b_vision_instruct
+      # - sonnet
+      # - gemini15pro
+
   data:
     - name: osb all cases
       type: plaintext
@@ -19,7 +22,59 @@
 
   save:
     type: bq
-    destination: dmrc-analysis.toxicity.flow
+    dataset: dmrc-analysis.toxicity.flow
     schema: buttermilk/schemas/flow.json
-            
+
+- name: synthesise OSB cases
+  num_runs: 1
+  concurrency: 20
+  agent: 
+    type: LC
+    template: synthesise
+    instructions: summarise_osb
+    model:
+      - gpt4o
+      - sonnet
+  parameters:
+    answers: answers
+    meta: meta
+  data:
+    - name: osb all cases
+      type: plaintext
+      uri: "gs://dmrc-platforms/data/osb/"
+      glob: "*.md"
+      columns:
+        record_id: stem
+        text: text
+    - name: synthesise previous runs
+      type: job
+      dataset: dmrc-analysis.toxicity.flow
+      max_records_per_group: 2
+      agg: true
+      filter:
+        agent_info.flow: summarise OSB cases
+        parameters.model:
+          # - gpt4o
+          # - sonnet
+      join:
+        record_id: record.record_id
+      group:
+        flow: agent_info.flow
+        template: agent_info.template
+        model: parameters.model
+      columns:
+        answers:
+          id: job_id
+          text: outputs
+        meta:
+          flow: agent_info.flow
+          template: agent_info.template
+          agent_info: agent_info
+          model: parameters.model
+          timestamp: timestamp
+
+  save:
+    type: bq
+    dataset: dmrc-analysis.toxicity.flow
+    schema: buttermilk/schemas/flow.json
 

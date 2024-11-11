@@ -176,7 +176,7 @@ class RecordInfo(BaseModel):
     _ensure_list = field_validator("media", mode="before")(make_list_validator())
     
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True, 
+        extra="allow", arbitrary_types_allowed=True, populate_by_name=True, exclude_unset=True, exclude_none=True, 
     )
 
     @model_validator(mode="after")

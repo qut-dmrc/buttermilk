@@ -13,7 +13,7 @@ from typing import Mapping, Optional, Sequence
 
 from buttermilk.utils.utils import find_key_string_pairs
 
-def load_data(data_cfg) -> pd.DataFrame:
+def load_data(data_cfg: DataSource) -> pd.DataFrame:
     if data_cfg.type == 'file':
         df = pd.read_json(data_cfg.uri, lines=True, orient='records')
         # convert column_mapping to work for our dataframe
@@ -24,7 +24,7 @@ def load_data(data_cfg) -> pd.DataFrame:
         df = load_jobs(data_cfg=data_cfg)
     elif data_cfg.type == 'plaintext':
         # Load all files in a directory
-        df = read_all_files(data_cfg.uri, data_cfg.glob, columns=data_cfg.columns)
+        df = read_all_files(data_cfg.path, data_cfg.glob, columns=data_cfg.columns)
     else:
         raise ValueError(f"Unknown data type: {data_cfg.type}")
     return df
@@ -67,6 +67,7 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
     sql += " ORDER BY RAND() "
 
     bm = BM()
+
     df = bm.run_query(sql)
 
     return df
@@ -208,10 +209,9 @@ def read_all_files(uri, pattern, columns: dict[str,str]):
     for file in filelist:
         logger.debug(f"Reading {file.name} from {file.parent}...")
         content = file.read_bytes().decode('utf-8')
-        dataset.loc[-1] = pd.Series(data=(file.stem, content))
+        dataset.loc[len(dataset)] = (file.stem, content)
         break
 
-    # Concatenate all DataFrames into a single DataFrame
     return dataset
 
     

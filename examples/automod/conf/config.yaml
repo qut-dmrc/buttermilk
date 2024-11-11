@@ -21,3 +21,4 @@ secret_provider:
 
 run:
   platform: local
+  max_concurrency: 32

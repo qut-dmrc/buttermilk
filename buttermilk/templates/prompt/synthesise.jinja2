@@ -4,11 +4,13 @@ You are a team leader. Some members of your team have drafted answers to a quest
 
 You may be provided with additional feedback to consider. You should incorporate this feedback into your final answer where it is helpful and relevant.
 
+{% if formatting %}
 {{ formatting }}
+{% endif %}
 
-{% if criteria %}
+{% if instructions %}
 <BEGIN ORIGINAL INSTRUCTIONS>
-{{ criteria }}
+{{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
@@ -22,8 +24,10 @@ You may be provided with additional feedback to consider. You should incorporate
     <BEGIN DRAFT ANSWER {{ draft.id }}>
     {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
     {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
-    Reasons:
-    {{ draft.reasons }}
+    {% if draft.reasons %}Reasons:
+        {{ draft.reasons }}
+    {% endif %}
+    {{ draft.text }}
     <END DRAFT ANSWER {{ draft.id }}>
 {% endfor %}
 

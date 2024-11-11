@@ -26,6 +26,7 @@
   agent: 
     name: lc_judge
     template: synthesise
+    instructions: judge
     criteria: trans_simplified
     formatting: json_rules
     model:

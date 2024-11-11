@@ -45,7 +45,7 @@ class MultiFlowOrchestrator(BaseModel):
         self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
         return self
 
-    async def make_tasks(self, source) -> AsyncGenerator[Coroutine, None]:
+    async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
         # create and run a separate job for:
         #   * each record in  self._data_generator
         #   * each Agent (Different classes or instances of classes to resolve a task)
@@ -57,10 +57,12 @@ class MultiFlowOrchestrator(BaseModel):
         run_combinations = expand_dict(self.flow.parameters)
 
         for init_vars in agent_combinations:
+            if not init_vars.get('flow'):
+                init_vars['flow'] = self.flow.name
             agent: Agent = globals()[self.flow.agent.type](**init_vars, save=self.flow.save)
             async for record in self._data_generator():
                 for run_vars in run_combinations:
-                    job = Job(record=record, source=source, parameters=run_vars)
+                    job = Job(record=record, source=self.source, parameters=run_vars)
                     coroutine = agent.run(job)
                     coroutine = self.task_wrapper(task=coroutine, job_id=job.job_id, agent_name=agent.name)
                     yield coroutine
@@ -70,7 +72,7 @@ class MultiFlowOrchestrator(BaseModel):
         try:
             logger.debug(f"Starting task for Agent {agent_name} with job {job_id}.")
             result = await task
-            self._tasks_remaining  -= 1
+            self._tasks_remaining -= 1
 
             if result.error:
                 logger.warning(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
@@ -84,41 +86,3 @@ class MultiFlowOrchestrator(BaseModel):
         except Exception as e:
             raise FatalError(f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}")
         
-
-    async def run_tasks(self) -> AsyncGenerator[Job, None]:
-        _sem = asyncio.Semaphore(self._concurrent)
-
-        async def task_wrapper(agent_name, job_id, task):
-            try:
-                async with _sem:
-                    logger.debug(f"Starting task for Agent {agent_name} with job {job_id}.")
-                    result = await task
-                    self._tasks_remaining  -= 1
-
-                if result.error:
-                    logger.warning(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
-                    self._tasks_failed += 1
-                else:
-                    logger.debug(f"Agent {agent_name} completed job {job_id} successfully.")
-                    self._tasks_completed += 1
-
-                return result
-            
-            except Exception as e:
-                raise FatalError(f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}")
-
-        for n in range(self._num_runs):
-            async with asyncio.TaskGroup() as tg:
-                async for agent_name, job_id, task in self.make_tasks(source=self.source):
-                    wrapped_task = task_wrapper(agent_name, job_id, task)
-                    tg.create_task(wrapped_task)
-                    await asyncio.sleep(0)  # Yield control to allow tasks to start processing
-
-                    
-            # All tasks in this run are now complete
-            logger.info(f"Completed run {n+1} of {self._num_runs}")
-
-            
-        # All runs are now complete
-        logger.info("All tasks have completed.")
-

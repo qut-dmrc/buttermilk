@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from logging import getLogger
 from pathlib import Path
+from rich import print as rprint
 from typing import (
     Any,
     ClassVar,
@@ -128,7 +129,14 @@ class BM(Singleton, BaseModel):
             if self.cfg.tracing:
                 start_trace(resource_attributes={"run_id": self._run_metadata.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
-        
+            
+            # Print config to consoleand save to default save dir
+            try:
+                cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
+                rprint(cfg_export)
+                save.upload_text(data=json.dumps(cfg_export, indent=4), basename="config", extension="json", save_dir=self._run_metadata.save_dir)
+            except Exception as e:
+                self.logger.error(f"Could not save config to default save dir: {e}")
 
     @cached_property
     def _connections_azure(self) -> dict:
@@ -248,7 +256,7 @@ class BM(Singleton, BaseModel):
     @property
     def bq(self) -> bigquery.Client:
         if self._clients.get('bq') is None:
-            self._clients['bq'] = bigquery.Client(project=self.cfg.save_dest.gcp.project)
+            self._clients['bq'] = bigquery.Client(project=self.cfg.save_dest.project)
         return self._clients['bq']
 
     def run_query(
@@ -291,8 +299,6 @@ class BM(Singleton, BaseModel):
         job_config = bigquery.QueryJobConfig(**job_config)
         job = self.bq.query(sql, job_config=job_config)
 
-        result = job.result()  # blocks until job is finished
-
         bytes_billed = job.total_bytes_billed
         cache_hit = job.cache_hit
 
@@ -310,7 +316,10 @@ class BM(Singleton, BaseModel):
         # job.result() blocks until the query has finished.
         result = job.result()
         if df:
-            results_df = result.to_dataframe()
-            return results_df
+            if result.total_rows > 0:
+                results_df = result.to_dataframe()
+                return results_df
+            else:
+                return pd.DataFrame()
         else:
             return result
