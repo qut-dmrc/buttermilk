@@ -1,32 +1,32 @@
-# - name: summarise OSB cases
-#   num_runs: 1
-#   concurrency: 20
-#   agent: 
-#     type: LC
-#     template: summarise
-#     instructions: summarise_osb
-#     model:
-#       # - haiku
-#       - gpt4o
-#       # - llama32_90b_vision_instruct
-#       - sonnet
-#       - gemini15pro
-#   parameters:
-#     record: record
+- name: summarise OSB cases
+  num_runs: 1
+  concurrency: 20
+  agent: 
+    type: LC
+    template: summarise
+    instructions: summarise_osb
+    model:
+      # - haiku
+      - gpt4o
+      # - llama32_90b_vision_instruct
+      - sonnet
+      - gemini15pro
+  parameters:
+    record: record
 
-#   data:
-#     - name: osb all cases
-#       type: plaintext
-#       uri: "gs://dmrc-platforms/data/osb/"
-#       glob: "*.md"
-#       columns:
-#         record_id: stem
-#         text: text
+  data:
+    - name: osb all cases
+      type: plaintext
+      uri: "gs://dmrc-platforms/data/osb/"
+      glob: "*.md"
+      columns:
+        record_id: stem
+        text: text
 
-#   save:
-#     type: bq
-#     dataset: dmrc-analysis.toxicity.flow
-#     schema: buttermilk/schemas/flow.json
+  save:
+    type: bq
+    dataset: dmrc-analysis.toxicity.flow
+    schema: buttermilk/schemas/flow.json
 
 - name: synthesise OSB cases
   num_runs: 1

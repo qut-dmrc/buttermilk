@@ -15,7 +15,8 @@ from google.generativeai.types.generation_types import (
     BlockedPromptException,
     StopCandidateException,
 )
-from jinja2 import Environment, FileSystemLoader, Template, TemplateNotFound
+from jinja2 import FileSystemLoader, Template, TemplateNotFound
+from jinja2.sandbox import SandboxedEnvironment
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import (
     ChatMessagePromptTemplate,
@@ -30,7 +31,7 @@ from promptflow.client import PFClient
 from promptflow.connections import CustomConnection
 from promptflow.core import ToolProvider, tool
 from promptflow.tracing import trace
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from pyparsing import cached_property
 from tenacity import (
     RetryError,
@@ -51,7 +52,7 @@ from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_mess
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk import logger
-from buttermilk.utils.utils import scrub_keys
+from buttermilk.utils.utils import read_file, read_text, scrub_keys
 
 #########################################
 ###
@@ -66,9 +67,11 @@ class LC(Agent):
     model: Optional[str] = None
     template: Optional[str] = None
     template_vars: Optional[dict] = {}
-
+    
+    _env: Optional[SandboxedEnvironment] = None
     _connections: Optional[dict] = {}
     _template: Optional[Template] = None
+    _template_messages: Optional[List[Tuple[str,str]]] = PrivateAttr(default_factory=list)
     _llm: Optional[LLMs] = None
 
     class Config:
@@ -91,45 +94,48 @@ class LC(Agent):
 
     @model_validator(mode="after")
     def load_connections_and_template(self) -> Self:
-        bm = BM()
         if not self._connections:
+            bm = BM()
             self._connections = bm._connections_azure
 
-        if self.template is None:
-            return
         recursive_paths = TEMPLATE_PATHS + [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
         loader = FileSystemLoader(searchpath=recursive_paths)
 
         def placeholder(variable_name):
             """ Adds a placeholder for an array of messages to be inserted. """
-            return MessagesPlaceholder(variable_name="conversation", optional=True)
+            return MessagesPlaceholder(variable_name=variable_name, optional=True)
 
-        env = Environment(
+        self._env = SandboxedEnvironment(
             loader=loader,
             trim_blocks=True,
             keep_trailing_newline=True,
             undefined=KeepUndefined,
         )
 
-        for k in self.template_vars.keys():
+        for k,v in self.template_vars.items():
             try:
                 # Try to load a template if it's passed in by filename, otherwise use it
                 # as a plain string replacement.
-                tpl = env.get_template(self.template_vars[k] + '.jinja2').render()
-                 
-                # Remove the metadata from the template if it's in there.
-                tpl = _parse_prompty(tpl)
-                
-                self.template_vars[k] = tpl
+                filename = self._env.get_template(f'{v}.jinja2').filename
+                var = read_text(filename)
+                var = _parse_prompty(var)
+                self._env.globals[k] = self._env.from_string(var).render()
             except TemplateNotFound as e:
                 # Treat template as a string
-                pass
-        try:
-            self._template = env.get_template(self.template + '.jinja2')
-        except TemplateNotFound as e:
-            # Treat template as a string
-            self._template = env.from_string(self.template)
+                self._env.globals[k] = v
+        
+        # Load the template, reading it into a list of messages with smaller templates
+        filename = self._env.get_template(f'{self.template}.jinja2').filename
+        tpl = read_text(filename)
+        messages = make_messages(local_template=tpl)
 
+        for role, msg in messages:
+            msg = self._env.from_string(msg).render()
+            self._template_messages.append((role, msg))
+
+        # Note that unfilled variables should still be left in to render again, but they don't always seem to work...
+        # self._template = self._env.get_template() #, globals=self.template_vars)
+        
         return self
 
     async def process_job(self, job: Job) -> Job:
@@ -137,50 +143,22 @@ class LC(Agent):
             raise ValueError(
                 "You must provide either model name or provide a default model on initialisation."
             )
-      
-        # Compile inputs and template variables
-        local_inputs = self.template_vars.copy()
 
         params = {}
         for k, v in job.parameters.items():
             # Load params from content if they match, otherwise add them literally in the vars when we pass off.
             if v == 'record':
-                # Add in the record as a placeholder message, but don't pass it in right away
+                # Add in the record as a placeholder message
                 params[k] = [job.record.as_langchain_message(type='human')]
             elif v in job.record.model_fields or v in job.record.model_extra:
-                # This is the only type we pass in the first time rendering (jinja2)
-                local_inputs[k] = getattr(job.record, v)
+                params[k] = getattr(job.record, v)
             else:
-                # everything else is kept for a simple f-string replace later.
                 params[k] = v
 
-        local_template = self._template.render(**local_inputs, **params)
-        local_template = _parse_prompty(local_template)
-        messages = make_messages(local_template=local_template)
+        response = await self.invoke(input_vars=params, model=model)
 
-
-        # From this point, langchain expects single braces for replacement instead of double
-        lc_messages = []
-        for source, message in messages:
-            message = re.sub(r"{{\s+","{", message)
-            message = re.sub(r"\s+}}","}", message)
-            lc_messages.append((source, message))
-
-        # Add prompt to Job object
-        job.prompt = [ f"{role}:\n{message}" for role, message in lc_messages]
-
-        # Get model
-        llm = self.llm[model]
-
-        # Make the chain
-        chain = ChatPromptTemplate.from_messages(
-                lc_messages, template_format="f-string"
-            )
-            
-        chain = chain | llm | ChatParser()
-
-        # Invoke the chain  (input_vars have already been inserted into the template)
-        response = await self.invoke(chain, input_vars=params, model=model)
+        # # Add prompt to Job object
+        # job.prompt = [ f"{role}:\n{message}" for role, message in messages]
 
         job.outputs = Result(**response)
 
@@ -189,7 +167,7 @@ class LC(Agent):
 
         # Add model details to Job object
         job.parameters['connection'] = scrub_keys(self.llm.connections[model])
-        job.parameters['model_params'] = scrub_keys(llm.dict())
+        job.parameters['model_params'] = scrub_keys(self.llm[model].dict())
         job.parameters['model'] = model
 
         return job
@@ -215,7 +193,13 @@ class LC(Agent):
         stop=stop_after_attempt(4),
     )
     @trace
-    async def invoke(self, chain, input_vars, model) -> dict[str, str]:
+    async def invoke(self, input_vars, model) -> dict[str, str]:
+
+        # Make the chain
+        chain = ChatPromptTemplate(self._template_messages, template_format='jinja2')
+        chain = chain | self.llm[model] | ChatParser()
+
+        # Invoke the chain 
         try:
             t0 = time.time()
             try:
