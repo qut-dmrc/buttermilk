@@ -210,7 +210,6 @@ def read_all_files(uri, pattern, columns: dict[str,str]):
         logger.debug(f"Reading {file.name} from {file.parent}...")
         content = file.read_bytes().decode('utf-8')
         dataset.loc[len(dataset)] = (file.stem, content)
-        break
 
     return dataset
 
