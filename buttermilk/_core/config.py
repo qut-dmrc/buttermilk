@@ -120,19 +120,6 @@ class SaveInfo(CloudProviderCfg):
             raise ValueError("Nowhere to save to! Either destination or dataset must be provided.")
         return self
 
-class AgentInfo(BaseModel):
-    type: str
-
-    # Optional because it will be added when the agent is instantiated.
-    flow: Optional[str] = Field(default=None, validation_alias=AliasChoices("flow", "name"))
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-        populate_by_name = True
-        exclude_none = True
-        exclude_unset = True
-        
 
 class DataSource(BaseModel):
     name: str
@@ -158,7 +145,7 @@ class Flow(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = 1
-    agent: AgentInfo
+    agent: Agent
     save: SaveInfo
     data: Optional[Sequence[DataSource]] = Field(default_factory=list)
     parameters: Optional[Mapping] = Field(default_factory=dict)

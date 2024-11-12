@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_vali
 from typing import Any, Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import AgentInfo, DataSource, Flow, Project, SaveInfo
+from buttermilk._core.config import DataSource, Flow, Project, SaveInfo
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.buttermilk import BM
@@ -49,7 +49,7 @@ class Creek(BaseModel):
                 yield f"Error: {e}"
 
     async def run(self, record: RecordInfo):
-        lc_judge = AgentInfo(type="LC", name="judger", template="judge", criteria="simplified", formatting="json_rules", model=["gpt4o", "sonnet"])
+        lc_judge = Agent(type="LC", name="judger", template="judge", criteria="simplified", formatting="json_rules", model=["gpt4o", "sonnet"])
         save_data = SaveInfo(type="bq", dataset= "dmrc-analysis.toxicity.flow", db_schema="buttermilk/schemas/flow.json")
 
         judger = Flow(name="judger", concurrency=20, agent=lc_judge, save=save_data,parameters={"content": record.text})
@@ -57,7 +57,7 @@ class Creek(BaseModel):
             yield result
 
         answers = self.make_answers()
-        lc_synth = AgentInfo(type="LC", name="synth", template="synthesise", criteria="simplified", formatting="json_rules", model=["sonnet"])
+        lc_synth = Agent(type="LC", name="synth", template="synthesise", criteria="simplified", formatting="json_rules", model=["sonnet"])
         synth = Flow(name="synth", concurrency=20, agent=lc_synth, save=save_data)
         async for result in self.run_flow(flow=synth, record=record):
             yield result

@@ -41,7 +41,6 @@ class SessionInfo(pydantic.BaseModel):
     job: str
     run_id: str = Field(default_factory=lambda: SessionInfo.make_run_id())
     save_bucket: Optional[str] = ''
-    save_dir: Optional[str] = ''
 
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)

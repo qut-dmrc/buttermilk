@@ -16,7 +16,7 @@ from pydantic import (
 )
 
 
-from buttermilk._core.config import AgentInfo, SaveInfo
+from buttermilk._core.config import SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.defaults import BQ_SCHEMA_DIR
 
@@ -55,17 +55,24 @@ import cloudpathlib
 
 class Agent(BaseModel):
     """
-    Receive data, processes it, save the results to BQ, and acknowledge completion.
+    Receive data, processes it, save the results, yield, and acknowledge completion.
     """
     name: str
     type: str
     concurrency: int = Field(default=4)            # Max number of async tasks to run
     save: SaveInfo                                 # Where to save the results
-    _agent_info: Optional[AgentInfo] = None  # The metadata for this run
-    
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
 
-    model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
+
+
+    class Config:
+        extra = "ignore"
+        arbitrary_types_allowed = True
+        populate_by_name = True
+        exclude_none = True
+        exclude_unset = True
+        
+  
     
     @model_validator(mode='after')
     def init(self) -> Self:
@@ -73,7 +80,6 @@ class Agent(BaseModel):
         params = self.model_dump(exclude_unset=True, mode='json',exclude_none=True)
         if self.model_extra:
             params.update(self.model_extra)
-        self._agent_info = AgentInfo(**params)
         return self
     
     @field_validator("save", mode="before")

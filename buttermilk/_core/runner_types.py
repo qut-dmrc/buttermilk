@@ -33,7 +33,7 @@ from pydantic import (
 )
 from pydantic import PositiveInt, ValidationError, validate_call
 
-from .config import AgentInfo, SaveInfo
+from .config import SaveInfo
 
 
 from .types import SessionInfo
@@ -231,17 +231,17 @@ class RecordInfo(BaseModel):
 class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=lambda: shortuuid.uuid())
-    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc))
-    run_info: Optional[SessionInfo] = None
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc), description="The date and time a job was created.")
+    source: str = Field(..., description="Where this particular job came from")
 
-    source: str|list[str]
-    
-    record: Optional[RecordInfo] = None
+    run_info: Optional[SessionInfo] = Field(None, description="Information about the context in which this job runs")
+
+    record: Optional[RecordInfo] = Field(default=None, description="The data the job will process.")
     prompt: Optional[Sequence[str]] = Field(default_factory=list)
-    parameters: Optional[dict[str, Any]] = Field(default_factory=dict)     # Additional options for the worker
+    parameters: Optional[Mapping] = Field(default_factory=dict, description="Additional options for the worker")
 
     # These fields will be fully filled once the record is processed
-    agent_info: Optional[AgentInfo] = None
+    agent_info: Optional[Agent] = None
     outputs: Optional[Any|Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = Field(default_factory=dict)
