@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import pubsub
 import json  
 
+from buttermilk._core.config import DataSource
 from buttermilk.agents.lc import LC
 from buttermilk.llms import CHATMODELS
 from buttermilk._core.runner_types import (
@@ -262,15 +263,16 @@ async def get_runs_json(request: Request) -> Sequence[Job]:
 
 @app.api_route("/html/runs/", methods=["GET", "POST"])
 async def get_runs_html(request: Request) -> HTMLResponse:
-    df = get_recent_runs()
-
-    data = group_and_filter_jobs(
-        data=df,
-        group=bm.cfg.data.runs.group,
-        columns=bm.cfg.data.runs.columns,
-        data_cfg.join=bm.cfg.data.runs.join,
-        raise_on_error=False,
-    )
+    data = get_recent_runs()
+    
+    # data = group_and_filter_jobs(
+    #     data=df,
+    #     group=bm.cfg.data.runs.group,
+    #     columns=bm.cfg.data.runs.columns,
+    #     data_cfg=DataSource(),
+    #     join=bm.cfg.data.runs.join,
+    #     raise_on_error=False,
+    # )
 
     rendered_result = templates.TemplateResponse(
         f"runs_html.html", {"request": request, "data": data}

@@ -28,6 +28,8 @@ class MultiFlowOrchestrator(BaseModel):
     _tasks_completed: int = PrivateAttr(default=0)
     _tasks_failed: int = PrivateAttr(default=0)
 
+    _agents: list[Agent] = PrivateAttr(default_factory=list)
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -36,7 +38,7 @@ class MultiFlowOrchestrator(BaseModel):
         return OmegaConf.to_container(value, resolve=True)
     
     @model_validator(mode='after')
-    def get_data(self) -> Self:
+    def set_vars(self) -> Self:
         self._num_runs = self.flow.num_runs or self._num_runs
         self._concurrent = self.flow.concurrency or self._concurrent
         return self
@@ -46,23 +48,28 @@ class MultiFlowOrchestrator(BaseModel):
         self._dataset = await prepare_step_df(self.flow.data)
         self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
 
-    async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
-        # create and run a separate job for:
-        #   * each record in  self._data_generator
-        #   * each Agent (Different classes or instances of classes to resolve a task)
-        
+        await self.make_agents()
         await self.prepare_data()
 
+    async def make_agents(self):
         # Get permutations of init variables
         agent_combinations = expand_dict(self.flow.agent.model_dump())
-
-        # Get permutations of run variables
-        run_combinations = expand_dict(self.flow.parameters)
 
         for init_vars in agent_combinations:
             if not init_vars.get('flow'):
                 init_vars['flow'] = self.flow.name
             agent: Agent = globals()[self.flow.agent.type](**init_vars, save=self.flow.save)
+            self._agents.append(agent) 
+
+    async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
+        # create and run a separate job for 
+        #   * each record in  self._data_generator
+        #   * each Agent (Different classes or instances of classes to resolve a task)
+
+        # Get permutations of run variables
+        run_combinations = expand_dict(self.flow.parameters)
+
+        for agent in self._agents:
             async for record in self._data_generator():
                 for run_vars in run_combinations:
                     job = Job(record=record, source=self.source, parameters=run_vars)

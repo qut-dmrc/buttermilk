@@ -157,7 +157,7 @@ class LC(Agent):
                 # Add in the record as a placeholder message, 
                 # but don't do the conversion until the next step
                 placeholders[k] = job.record
-            elif v in job.record.model_fields or v in job.record.model_extra:
+            elif isinstance(v, str) and (v in job.record.model_fields.keys() or v in job.record.model_extra.keys()):
                 params[k] = getattr(job.record, v)
             else:
                 params[k] = v
