@@ -38,7 +38,7 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
 def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
     last_n_days=data_cfg.last_n_days
     
-    sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL "
+    sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL AND (JSON_VALUE(outputs, '$.error') IS NULL) "
 
     sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
     if data_cfg.filter:
@@ -216,7 +216,6 @@ async def read_all_files(uri, pattern, columns: dict[str,str]):
         logger.debug(f"Reading {file.name} from {file.parent}...")
         content = file.read_bytes().decode('utf-8')
         dataset.loc[len(dataset)] = (file.stem, content)
-        break
     return dataset
 
 

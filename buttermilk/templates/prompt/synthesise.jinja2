@@ -1,3 +1,13 @@
+---
+description: Synthesise answers
+inputs:
+  - instructions
+  - content
+  - answers
+prompt_placeholder: false
+---
+
+system:
 Your task is to review one or more draft answers and come to a final conclusion.
 
 You are a team leader. Some members of your team have drafted answers to a question, and others have provided feedback on those answers. Your task is to synthesise the information that your team has developed so far and produce the best possible answer to a question. You should generally trust your team members, but they may not always be correct.
@@ -20,6 +30,8 @@ You may be provided with additional feedback to consider. You should incorporate
 <END CONTENT>
 {% endif %}
 
+
+user:
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER {{ draft.id }}>
     {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}

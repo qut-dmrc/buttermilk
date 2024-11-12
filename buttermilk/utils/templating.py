@@ -32,10 +32,6 @@ def _parse_prompty(string_template) -> str:
 
 def make_messages(local_template: str) -> list[Tuple[str,str]]:
 
-    # From this point, langchain expects single braces for replacement instead of double
-    local_template = re.sub(r"{{\s+","{", local_template)
-    local_template = re.sub(r"\s+}}","}", local_template)
-    
     try:
         # We'll aim to be compatible with Prompty format
         from promptflow.core._prompty_utils import parse_chat
@@ -50,7 +46,7 @@ def make_messages(local_template: str) -> list[Tuple[str,str]]:
 
     except Exception as e:
         # But will fall back to using full text if necessary
-        logger.debug(f'Unable to decode template as Prompty: {e}, {e.args=}')
+        logger.warning(f'Unable to decode template as Prompty: {e}, {e.args=}')
         messages = [('human', local_template)]
 
     return messages

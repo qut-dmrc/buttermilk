@@ -7,7 +7,7 @@ logger:
   type: gcp
 tracing: 
   enabled: true
-verbose: false
+verbose: true
 save_dest:
   type: gcp
   project: dmrc-analysis

@@ -81,7 +81,7 @@ import cloudpathlib
 #         return _impl
 
 
-CloudProvider = Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault", "local"]
+CloudProvider = Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault", "local", "gsheets"]
 
 class CloudProviderCfg(BaseModel):
     type: CloudProvider
@@ -100,17 +100,18 @@ class CloudProviderCfg(BaseModel):
 
 class SaveInfo(CloudProviderCfg):
     destination: Optional[str|cloudpathlib.AnyPath] = None
-    db_schema: Optional[str] = Field(..., validation_alias='schema')
+    db_schema: Optional[str] = Field(default=None, validation_alias=AliasChoices("db_schema", 'schema'))
     dataset: Optional[str] = Field(default=None)
 
     @field_validator("db_schema")
     def file_must_exist(cls, v):
-        if not os.path.exists(v):
-            f = Path(BQ_SCHEMA_DIR) / v
-            if f.exists():
-                return f.as_posix()
-            
-            raise ValueError(f"File '{v}' does not exist.")
+        if v:
+            if not os.path.exists(v):
+                f = Path(BQ_SCHEMA_DIR) / v
+                if f.exists():
+                    return f.as_posix()
+                
+                raise ValueError(f"File '{v}' does not exist.")
         return v
     
     @model_validator(mode='after')

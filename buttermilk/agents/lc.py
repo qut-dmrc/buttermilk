@@ -17,7 +17,15 @@ from google.generativeai.types.generation_types import (
 )
 from jinja2 import FileSystemLoader, Template, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    BaseMessage,
+    ChatMessage,
+    HumanMessage,
+    SystemMessage,
+    convert_to_messages,
+)
 from langchain_core.prompts import (
     ChatMessagePromptTemplate,
     ChatPromptTemplate,
@@ -124,18 +132,15 @@ class LC(Agent):
                 # Treat template as a string
                 self._env.globals[k] = v
         
-        # Load the template, reading it into a list of messages with smaller templates
-        filename = self._env.get_template(f'{self.template}.jinja2').filename
-        tpl = read_text(filename)
-        messages = make_messages(local_template=tpl)
-
-        for role, msg in messages:
-            msg = self._env.from_string(msg).render()
-            self._template_messages.append((role, msg))
-
         # Note that unfilled variables should still be left in to render again, but they don't always seem to work...
         # self._template = self._env.get_template() #, globals=self.template_vars)
         
+        logger.debug(f"Loading template {self.template}.")
+        # Convert template into a list of messages with smaller string templates
+        filename = self._env.get_template(f'{self.template}.jinja2').filename
+        self._template = read_text(filename)
+        self._template_messages = make_messages(self._template)
+
         return self
 
     async def process_job(self, job: Job) -> Job:
@@ -145,22 +150,33 @@ class LC(Agent):
             )
 
         params = {}
+        placeholders = {}
         for k, v in job.parameters.items():
             # Load params from content if they match, otherwise add them literally in the vars when we pass off.
             if v == 'record':
-                # Add in the record as a placeholder message
-                params[k] = [job.record.as_langchain_message(type='human')]
+                # Add in the record as a placeholder message, 
+                # but don't do the conversion until the next step
+                placeholders[k] = job.record
             elif v in job.record.model_fields or v in job.record.model_extra:
                 params[k] = getattr(job.record, v)
             else:
                 params[k] = v
 
-        response = await self.invoke(input_vars=params, model=model)
 
-        # # Add prompt to Job object
-        # job.prompt = [ f"{role}:\n{message}" for role, message in messages]
+        logger.debug(f"Rendering template with {len(self._template_messages)} messages.")
+        local_messages = []
+        for role, msg in self._template_messages:
+            msg = self._env.from_string(msg).render(**params)
 
-        job.outputs = Result(**response)
+            # From this point, langchain expects single braces for replacement instead of double
+            # we could do this with a custom template class, but it's easier to just do it here.
+            msg = re.sub(r"{{\s+([a-zA-Z0-9_]+)\s+}}", r"{\1}", msg)
+
+            local_messages.append((role, msg))
+            # local_messages.append(ChatMessage(content=msg, role=role))
+
+        # Add prompt to Job object
+        job.prompt = [ f"{role}:\n{msg}" for role, msg in local_messages]
 
         # Add this agent's details to the Job object
         job.agent_info = self._agent_info
@@ -169,6 +185,12 @@ class LC(Agent):
         job.parameters['connection'] = scrub_keys(self.llm.connections[model])
         job.parameters['model_params'] = scrub_keys(self.llm[model].dict())
         job.parameters['model'] = model
+
+        logger.debug(f"Invoking agent {self.name} for job {job.job_id} with model {model}...")
+        response = await self.invoke(prompt_messages=local_messages, input_vars=params, model=model, placeholders=placeholders)
+
+        logger.debug(f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(response)} length.")
+        job.outputs = Result(**response)
 
         return job
 
@@ -193,10 +215,15 @@ class LC(Agent):
         stop=stop_after_attempt(4),
     )
     @trace
-    async def invoke(self, input_vars, model) -> dict[str, str]:
+    async def invoke(self, *, prompt_messages, input_vars, placeholders, model) -> dict[str, str]:
+        
+        # Filling placeholders
+        for k, v in placeholders.items():
+            input_vars[k] = [v.as_langchain_message(type='human')]
 
         # Make the chain
-        chain = ChatPromptTemplate(self._template_messages, template_format='jinja2')
+        logger.debug(f"Assembling the chain with model: {model}.")
+        chain = ChatPromptTemplate(prompt_messages, template_format='jinja2')
         chain = chain | self.llm[model] | ChatParser()
 
         # Invoke the chain 
@@ -215,7 +242,6 @@ class LC(Agent):
             t1 = time.time()
             elapsed = t1-t0
             logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")
-
 
         except RetryError:
             output = dict(error="Retry timeout querying LLM")

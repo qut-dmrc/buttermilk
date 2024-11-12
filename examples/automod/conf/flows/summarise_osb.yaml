@@ -1,5 +1,5 @@
 - name: summarise OSB cases
-  num_runs: 1
+  num_runs: 3
   concurrency: 20
   agent: 
     type: LC
@@ -16,11 +16,10 @@
 
   data:
     - name: osb all cases
-      type: plaintext
-      uri: "gs://dmrc-platforms/data/osb/"
-      glob: "*.md"
+      type: file
+      uri: "gs://dmrc-platforms/data/osb/cases.json"
       columns:
-        record_id: stem
+        record_id: record_id
         text: text
 
   save:
@@ -39,19 +38,20 @@
       - gpt4o
       - sonnet
   parameters:
+    content: text
     answers: answers
   data:
     - name: osb all cases
-      type: plaintext
-      uri: "gs://dmrc-platforms/data/osb/"
-      glob: "*.md"
+      type: file
+      uri: "gs://dmrc-platforms/data/osb/cases.json"
       columns:
-        record_id: stem
+        record_id: record_id
         text: text
     - name: synthesise previous runs
       type: job
       dataset: dmrc-analysis.toxicity.flow
-      max_records_per_group: 2
+      max_records_per_group: 4
+      last_n_days: 1
       agg: true
       filter:
         agent_info.flow: summarise OSB cases
@@ -81,3 +81,43 @@
     dataset: dmrc-analysis.toxicity.flow
     schema: buttermilk/schemas/flow.json
 
+- name: export
+  agent: 
+    type: GSheetExporter
+    sheet_name: OSB summaries
+  save:
+    type: gsheets
+    destination: new
+  data:
+    - name: osb all cases
+      type: file
+      uri: "gs://dmrc-platforms/data/osb/cases.json"
+      columns:
+        record_id: record_id
+        text: text
+    - name: eval
+      type: job
+      dataset: dmrc-analysis.toxicity.flow
+      max_records_per_group: -1
+      filter:
+        agent_info.flow: synthesise OSB cases
+      join:
+        record_id: record.record_id
+      agg: false
+      group:
+        id: job_id
+        flow: agent_info.flow
+      columns:
+        model: parameters.model
+        timestamp: timestamp
+        title: outputs.title
+        date: outputs.date
+        content: outputs.content
+        reasons: outputs.reasons
+        recommendations: outputs.recommendations
+        result: outputs.result
+        type: outputs.type
+        topics: outputs.topics
+        standards: outputs.standards
+        location: outputs.location
+        outputs: outputs
