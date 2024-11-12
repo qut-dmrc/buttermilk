@@ -31,7 +31,7 @@ from pydantic import (
     root_validator,)
 from cloudpathlib import AnyPath, CloudPath
 import shortuuid
-
+from tempfile import mkdtemp
 from ..utils import save, get_ip
 
 _global_run_id = ''
@@ -61,7 +61,7 @@ class SessionInfo(pydantic.BaseModel):
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(default_factory=lambda: psutil.Process().username().split("\\")[-1])
-
+    save_dir: str = Field(default=None, validate_default=True)
     model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
     )
@@ -69,9 +69,11 @@ class SessionInfo(pydantic.BaseModel):
     def __str__(self):
         return _global_run_id
     
-    @pydantic.field_validator("save_dir")
+    @pydantic.field_validator("save_dir", mode="before")
     def get_save_dir(cls, save_dir) -> str:
-        if isinstance(save_dir, str):
+        if not save_dir:
+            save_dir = mkdtemp()
+        elif isinstance(save_dir, str):
             pass
         elif isinstance(save_dir, Path):
             save_dir = save_dir.as_posix()

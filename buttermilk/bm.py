@@ -123,31 +123,11 @@ class BM(Singleton, BaseModel):
     cfg: Project = Field(None, validate_default=True)
 
     _clients: dict[str, Any] = {}
-    _run_metadata: SessionInfo = PrivateAttr()
+    _run_metadata: SessionInfo = PrivateAttr(default_factory=lambda: SessionInfo())
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    # @field_validator('cfg', mode='before')
-    # def get_config(cls, v):
-    #     if _REGISTRY.get('cfg'):
-    #         if v:
-    #             logger.debug("Config passed in but we already have one loaded. Overwriting.")
-    #             _REGISTRY['cfg'] = v
-
-    #         return _REGISTRY['cfg']
-    #     elif v:
-    #         _REGISTRY['cfg'] = v
-    #         return v
-    #     else:
-    #         with initialize(version_base=None, config_path="conf"):
-    #             v = compose(config_name="config")
-    #         _REGISTRY['cfg'] = v
-    #         return v
-
-
     def model_post_init(self, __context: Any) -> None:
-        self._run_metadata = SessionInfo(project=self.cfg.name, job=self.cfg.job, save_bucket=self.cfg.save_dest.bucket)
-
         if not _REGISTRY.get('init'):
             self.setup_logging(verbose=self.cfg.verbose)
             if self.cfg.tracing:
@@ -156,9 +136,9 @@ class BM(Singleton, BaseModel):
             
             # Print config to console and save to default save dir
             try:
-                cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
-                rprint(cfg_export)
-                save.upload_text(data=json.dumps(cfg_export, indent=4), basename="config", extension="json", save_dir=self._run_metadata.save_dir)
+                # cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
+                rprint(self.cfg)
+                save.upload_text(data=self.cfg.model_dump_json(indent=4), basename="config", extension="json", save_dir=self._run_metadata.save_dir)
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
