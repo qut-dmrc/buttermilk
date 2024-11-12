@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from logging import getLogger
 from pathlib import Path
+import hydra
 from rich import print as rprint
 from typing import (
     Any,
@@ -26,6 +27,7 @@ from typing import (
     MutableMapping,
     Optional,
     Self,
+    Sequence,
     Type,
     TypeVar,
     Union,
@@ -56,7 +58,9 @@ from pydantic import (
     root_validator,
 )
 
-from ._core.config import Project
+from ._core.log import logger
+from ._core.flow import Flow
+from ._core.config import CloudProviderCfg, RunCfg, Tracing
 from ._core.types import SessionInfo
 from .utils import save, get_ip
 
@@ -65,7 +69,6 @@ CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
-from buttermilk._core.log import logger
 
 _REGISTRY = {}
 
@@ -94,31 +97,52 @@ class Singleton:
         """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
         return self
 
-    
+class Project(BaseModel):
+    name: str
+    job: str
+    connections: Sequence[str] = Field(default_factory=list)
+    secret_provider: CloudProviderCfg
+    save_dest: CloudProviderCfg
+    logger: CloudProviderCfg
+    flows: list[Flow] = Field(default_factory=list)
+    tracing: Optional[Tracing] = Field(default_factory=Tracing)
+    verbose: bool = True
+    run: RunCfg
+
+    class Config:
+        extra="forbid"
+        arbitrary_types_allowed=False
+        populate_by_name=True
+        exclude_none=True
+        exclude_unset=True
+
+
+
 class BM(Singleton, BaseModel):
 
-    cfg: Project = Field(default_factory=dict, validate_default=True)
+    cfg: Project = Field(None, validate_default=True)
+
     _clients: dict[str, Any] = {}
     _run_metadata: SessionInfo = PrivateAttr()
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    @field_validator('cfg', mode='before')
-    def get_config(cls, v):
-        if _REGISTRY.get('cfg'):
-            if v:
-                logger.debug("Config passed in but we already have one loaded. Overwriting.")
-                _REGISTRY['cfg'] = v
+    # @field_validator('cfg', mode='before')
+    # def get_config(cls, v):
+    #     if _REGISTRY.get('cfg'):
+    #         if v:
+    #             logger.debug("Config passed in but we already have one loaded. Overwriting.")
+    #             _REGISTRY['cfg'] = v
 
-            return _REGISTRY['cfg']
-        elif v:
-            _REGISTRY['cfg'] = v
-            return v
-        else:
-            with initialize(version_base=None, config_path="conf"):
-                v = compose(config_name="config")
-            _REGISTRY['cfg'] = v
-            return v
+    #         return _REGISTRY['cfg']
+    #     elif v:
+    #         _REGISTRY['cfg'] = v
+    #         return v
+    #     else:
+    #         with initialize(version_base=None, config_path="conf"):
+    #             v = compose(config_name="config")
+    #         _REGISTRY['cfg'] = v
+    #         return v
 
 
     def model_post_init(self, __context: Any) -> None:
@@ -130,7 +154,7 @@ class BM(Singleton, BaseModel):
                 start_trace(resource_attributes={"run_id": self._run_metadata.run_id}, collection=self.cfg.name, job=self.cfg.job)
             _REGISTRY['init'] = True
             
-            # Print config to consoleand save to default save dir
+            # Print config to console and save to default save dir
             try:
                 cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
                 rprint(cfg_export)
@@ -326,3 +350,8 @@ class BM(Singleton, BaseModel):
                 return pd.DataFrame()
         else:
             return result
+
+
+
+if __name__ == '__main__':
+    pass

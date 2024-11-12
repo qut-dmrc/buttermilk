@@ -1,7 +1,7 @@
 from google.cloud.storage.client import Client
 import pytest
 
-from buttermilk.buttermilk import BM
+from buttermilk.bm import BM
 from buttermilk.utils.save import upload_binary
 from buttermilk.utils.utils import read_file
 

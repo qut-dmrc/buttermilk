@@ -33,9 +33,6 @@ from pydantic import (
 )
 from pydantic import PositiveInt, ValidationError, validate_call
 
-from .config import SaveInfo
-
-
 from .types import SessionInfo
 from buttermilk.utils.utils import download_limited, download_limited_async, read_file
 import httpx
@@ -241,7 +238,7 @@ class Job(BaseModel):
     parameters: Optional[Mapping] = Field(default_factory=dict, description="Additional options for the worker")
 
     # These fields will be fully filled once the record is processed
-    agent_info: Optional[Agent] = None
+    agent_info: Optional[Any] = None
     outputs: Optional[Any|Result] = None     
     error: Optional[dict[str, Any]] = None
     metadata: Optional[dict] = Field(default_factory=dict)
@@ -275,7 +272,7 @@ class Job(BaseModel):
         
         # Store a copy of the run info in this model's metadata
         if self.run_info is None:
-            from ..buttermilk import BM
+            from ..bm import BM
             run_info = BM()._run_metadata
             self.run_info = run_info
         return self

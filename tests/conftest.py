@@ -5,7 +5,7 @@ from pytest import MarkDecorator
 
 @pytest.fixture(scope="session")
 def bm() -> Generator["BM", Any, None]:
-    from buttermilk.buttermilk import BM
+    from buttermilk.bm import BM
     from hydra import initialize, compose
     with initialize(version_base=None, config_path="conf", ):
         cfg = compose(config_name="config")

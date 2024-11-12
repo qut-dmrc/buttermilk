@@ -1,6 +1,6 @@
 
 from cloudpathlib import CloudPath
-from buttermilk.buttermilk import BM
+from buttermilk.bm import BM
 from buttermilk.utils.save import upload_text
 
 

@@ -1,3 +1,5 @@
+# @package __global__
+
 defaults:
   - _self_
 

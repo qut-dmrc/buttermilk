@@ -21,7 +21,8 @@
       "envFile": "${workspaceFolder}/.env",
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "args": ["job=testing"]
     },
     {
       "name": "flow mod debug",

@@ -11,7 +11,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, Flow, Project, SaveInfo
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
-from buttermilk.buttermilk import BM
+from buttermilk.bm import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.runner.orchestrator import MultiFlowOrchestrator
