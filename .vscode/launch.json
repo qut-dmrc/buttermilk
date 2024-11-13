@@ -37,6 +37,18 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "creek debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.creek",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["hydra.verbose=true"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "automod: osbcases",
       "type": "debugpy",
       "request": "launch",

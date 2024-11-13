@@ -33,14 +33,12 @@ You may be provided with additional feedback to consider. You should incorporate
 
 user:
 {% for draft in answers %}
-    <BEGIN DRAFT ANSWER {{ draft.id }}>
-    {% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
-    {% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
-    {% if draft.reasons %}Reasons:
-        {{ draft.reasons }}
-    {% endif %}
-    {{ draft.text }}
-    <END DRAFT ANSWER {{ draft.id }}>
+    <BEGIN DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('criteria') }}>
+    {% if draft.get('prediction') %}Answer: {{ draft['prediction'] }}{% endif %}
+    {% if draft.get('labels') %}Labels: {{ draft['labels'] }}{% endif %}
+    Reasons:
+    {{ draft['reasons'] }}
+    <END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('criteria') }} [ METADATA: {{ draft.get('model') }} {{ draft.get('template') }} {{ draft.get('criteria') }} ]>
 {% endfor %}
 
 {% if feedback %}

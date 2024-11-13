@@ -1,200 +1,217 @@
-import datetime
-from pathlib import Path
 import time
-from dataclasses import dataclass
-from random import shuffle
-from typing import Any, List, Literal, Optional, Self, Tuple, TypedDict
+from collections.abc import Mapping, Sequence
+from typing import Any, Self
 
-import pandas as pd
+import regex as re
 import requests
 import urllib3
-from anthropic import APIConnectionError as AnthropicAPIConnectionError
-from anthropic import RateLimitError as AnthropicRateLimitError
+from anthropic import (
+    APIConnectionError as AnthropicAPIConnectionError,
+    RateLimitError as AnthropicRateLimitError,
+)
 from google.api_core.exceptions import ResourceExhausted
-from google.generativeai.types.generation_types import (
-    BlockedPromptException,
-    StopCandidateException,
-)
-from jinja2 import FileSystemLoader, Template, TemplateNotFound
+from jinja2 import FileSystemLoader, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
-from langchain_core.messages import (
-    AIMessage,
-    AnyMessage,
-    BaseMessage,
-    ChatMessage,
-    HumanMessage,
-    SystemMessage,
-    convert_to_messages,
-)
 from langchain_core.prompts import (
-    ChatMessagePromptTemplate,
     ChatPromptTemplate,
-    HumanMessagePromptTemplate,
     MessagesPlaceholder,
-    SystemMessagePromptTemplate,
 )
-from openai import APIConnectionError as OpenAIAPIConnectionError
-from openai import RateLimitError as OpenAIRateLimitError
-from promptflow.client import PFClient
-from promptflow.connections import CustomConnection
-from promptflow.core import ToolProvider, tool
+from openai import (
+    APIConnectionError as OpenAIAPIConnectionError,
+    RateLimitError as OpenAIRateLimitError,
+)
 from promptflow.tracing import trace
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-from pyparsing import cached_property
+from pydantic import Field, PrivateAttr, model_validator
 from tenacity import (
     RetryError,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential_jitter,
     wait_random,
-    wait_random_exponential,
 )
-import regex as re
 
-from buttermilk import BM, BQ_SCHEMA_DIR, TEMPLATE_PATHS, BASE_DIR
+from buttermilk import BM, TEMPLATE_PATHS, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, RecordInfo, Result
+from buttermilk._core.runner_types import Job, Result
 from buttermilk.exceptions import RateLimit
-from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk import logger
-from buttermilk.utils.utils import read_file, read_text, scrub_keys
+from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages
+from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
 
 #########################################
 ###
-### An interface to langchain chat models
+# An interface to langchain chat models
 ###
 #########################################
 
 
 class LC(Agent):
-    name: str = Field(default="lc", init=False)
-    flow: Optional[str] = Field(default=None, init=False, description="The name of the flow or step in the process that this agent is responsible for.")
-    model: Optional[str] = None
-    template: Optional[str] = None
-    template_vars: Optional[dict] = {}
-    
-    _env: Optional[SandboxedEnvironment] = None
-    _connections: Optional[dict] = {}
-    _template: Optional[Template] = None
-    _template_messages: Optional[List[Tuple[str,str]]] = PrivateAttr(default_factory=list)
-    _llm: Optional[LLMs] = None
+    name: str = Field(
+        ...,
+        init=False,
+        description="The name of the flow or step in the process that this agent is responsible for.",
+    )
 
-    class Config:
-        extra = "allow"
-
-    def __init__(self, **kwargs):
-        known_fields = {field: kwargs.pop(field) for field in self.model_fields.keys() if field in kwargs.keys()}
-
-        # Add misc kwargs to template_vars
-        if 'template_vars' not in known_fields.keys():
-            known_fields['template_vars'] = {}
-
-        known_fields['template_vars'].update(**kwargs)
-
-        super().__init__(**known_fields)
-
-    @cached_property
-    def llm(self):
-        return LLMs(connections=self._connections)
+    _connections: dict | None = PrivateAttr(default=dict)
+    _llms: LLMs | None = PrivateAttr(default=dict)
 
     @model_validator(mode="after")
-    def load_connections_and_template(self) -> Self:
-        if not self._connections:
-            bm = BM()
-            self._connections = bm._connections_azure
+    def load_connections(self) -> Self:
+        bm = BM()
+        self._connections = bm._connections_azure
+        self._llms = LLMs(connections=self._connections)
 
-        recursive_paths = TEMPLATE_PATHS + [ x for p in TEMPLATE_PATHS for x in p.rglob('*') if x.is_dir()] 
-        loader = FileSystemLoader(searchpath=recursive_paths)
+        return self
 
+    def load_template_vars(
+        self,
+        template: str,
+        inputs: dict,
+    ):
         def placeholder(variable_name):
-            """ Adds a placeholder for an array of messages to be inserted. """
+            """Adds a placeholder for an array of messages to be inserted."""
             return MessagesPlaceholder(variable_name=variable_name, optional=True)
 
-        self._env = SandboxedEnvironment(
+        recursive_paths = TEMPLATE_PATHS + [
+            x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
+        ]
+        loader = FileSystemLoader(searchpath=recursive_paths)
+
+        env = SandboxedEnvironment(
             loader=loader,
             trim_blocks=True,
             keep_trailing_newline=True,
             undefined=KeepUndefined,
         )
 
-        for k,v in self.template_vars.items():
-            try:
+        # Convert template into a list of messages with smaller string templates
+        filename = env.get_template(f"{template}.jinja2").filename
+        logger.debug(f"Loading template {template} from {filename}.")
+        tpl_text = read_text(filename)
+        template_messages = make_messages(tpl_text)
+        params = {}
+        # Load template variables
+        for k, v in inputs.items():
+            if v and isinstance(v, str):
                 # Try to load a template if it's passed in by filename, otherwise use it
                 # as a plain string replacement.
-                filename = self._env.get_template(f'{v}.jinja2').filename
-                var = read_text(filename)
-                var = _parse_prompty(var)
-                self._env.globals[k] = self._env.from_string(var).render()
-            except TemplateNotFound as e:
-                # Treat template as a string
-                self._env.globals[k] = v
-        
-        # Note that unfilled variables should still be left in to render again, but they don't always seem to work...
-        # self._template = self._env.get_template() #, globals=self.template_vars)
-        
-        logger.debug(f"Loading template {self.template}.")
-        # Convert template into a list of messages with smaller string templates
-        filename = self._env.get_template(f'{self.template}.jinja2').filename
-        self._template = read_text(filename)
-        self._template_messages = make_messages(self._template)
 
-        return self
-
-    async def process_job(self, job: Job) -> Job:
-        if not (model := job.parameters.pop('model', None) or self.model):
-            raise ValueError(
-                "You must provide either model name or provide a default model on initialisation."
-            )
-
-        params = {}
-        placeholders = {}
-        for k, v in job.parameters.items():
-            # Load params from content if they match, otherwise add them literally in the vars when we pass off.
-            if v == 'record':
-                # Add in the record as a placeholder message, 
-                # but don't do the conversion until the next step
-                placeholders[k] = job.record
-            elif isinstance(v, str) and (v in job.record.model_fields.keys() or v in job.record.model_extra.keys()):
-                params[k] = getattr(job.record, v)
+                try:
+                    filename = env.get_template(f"{v}.jinja2").filename
+                    var = read_text(filename)
+                    var = _parse_prompty(var)
+                    env.globals[k] = env.from_string(var).render()
+                    logger.debug(f"Loaded template variable {k} from {filename}.")
+                except TemplateNotFound:
+                    # Leave the value as is and pass it in separately
+                    params[k] = v
             else:
                 params[k] = v
 
+        logger.debug(
+            f"Loaded {len(inputs.keys())} template variables: {inputs.keys()}.",
+        )
 
-        logger.debug(f"Rendering template with {len(self._template_messages)} messages.")
+        logger.debug(f"Rendering template with {len(template_messages)} messages.")
         local_messages = []
-        for role, msg in self._template_messages:
-            msg = self._env.from_string(msg).render(**params)
+        for role, msg in template_messages:
+            content = env.from_string(msg).render(**params)
 
             # From this point, langchain expects single braces for replacement instead of double
             # we could do this with a custom template class, but it's easier to just do it here.
-            msg = re.sub(r"{{\s+([a-zA-Z0-9_]+)\s+}}", r"{\1}", msg)
+            content = re.sub(r"{{\s+([a-zA-Z0-9_]+)\s+}}", r"{\1}", content)
 
-            local_messages.append((role, msg))
-            # local_messages.append(ChatMessage(content=msg, role=role))
+            local_messages.append((role, content))
+
+        return local_messages
+
+    async def process_job(
+        self,
+        *,
+        job: Job,
+        model: str,
+        template: str,
+        additional_data: dict = None,
+        **kwargs,
+    ) -> Job:
+        job.parameters = dict(model=model, **kwargs)
+
+        additional_data = additional_data or {}
+
+        def resolve_value(value):
+            """Recursively resolve values from different data sources."""
+            if isinstance(value, str):
+                # Handle special "record" case
+                if value.lower() == "record":
+                    return job.record
+
+                # Handle dot notation
+                if "." in value:
+                    locator, field = value.split(".", maxsplit=1)
+                    if locator in additional_data:
+                        return find_in_nested_dict(additional_data[locator], field)
+                    if locator == "record":
+                        return find_in_nested_dict(job.record.model_dump(), field)
+
+                # Handle direct record field reference
+                if value in job.record.model_fields or value in job.record.model_extra:
+                    return getattr(job.record, value)
+
+                return value
+
+            if isinstance(value, Sequence) and not isinstance(value, str):
+                return [resolve_value(item) for item in value]
+
+            if isinstance(value, dict):
+                return {k: resolve_value(v) for k, v in value.items()}
+
+            return value
+
+        # Process all kwargs
+        model_inputs = {}
+        placeholders = {}
+
+        for key, value in kwargs.items():
+            resolved_value = resolve_value(value)
+            if value == "record":  # Special case for full record placeholder
+                placeholders[key] = resolved_value
+            else:
+                model_inputs[key] = resolved_value
+
+        # Construct list of messages from the templates
+        local_messages = self.load_template_vars(
+            template=template,
+            inputs=model_inputs,
+        )
 
         # Add prompt to Job object
-        job.prompt = [ f"{role}:\n{msg}" for role, msg in local_messages]
+        job.prompt = [f"{role}:\n{msg}" for role, msg in local_messages]
 
         # Add this agent's details to the Job object
-        job.agent_info = self._agent_info
+        job.agent_info = self.model_dump(exclude=["_llms"])
 
         # Add model details to Job object
-        job.parameters['connection'] = scrub_keys(self.llm.connections[model])
-        job.parameters['model_params'] = scrub_keys(self.llm[model].dict())
-        job.parameters['model'] = model
+        job.parameters["connection"] = scrub_keys(self._connections[model])
+        job.parameters["model_params"] = scrub_keys(self._llms[model].dict())
+        job.parameters["model"] = model
 
-        logger.debug(f"Invoking agent {self.name} for job {job.job_id} with model {model}...")
-        response = await self.invoke(prompt_messages=local_messages, input_vars=params, model=model, placeholders=placeholders)
+        logger.debug(
+            f"Invoking agent {self.name} for job {job.job_id} with model {model} and parameters: {job.parameters}...",
+        )
+        response = await self.invoke(
+            prompt_messages=local_messages,
+            input_vars=model_inputs,
+            model=model,
+            placeholders=placeholders,
+        )
 
-        logger.debug(f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(response)} length.")
+        logger.debug(
+            f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(response)} length.",
+        )
         job.outputs = Result(**response)
 
         return job
-
-
 
     @retry(
         retry=retry_if_exception_type(
@@ -215,39 +232,47 @@ class LC(Agent):
         stop=stop_after_attempt(4),
     )
     @trace
-    async def invoke(self, *, prompt_messages, input_vars, placeholders, model) -> dict[str, str]:
-        
+    async def invoke(
+        self,
+        *,
+        prompt_messages: list[tuple[str, str]],
+        input_vars: dict[str, Any],
+        placeholders: Mapping,
+        model: str,
+    ) -> dict[str, str]:
         # Filling placeholders
         for k, v in placeholders.items():
-            input_vars[k] = [v.as_langchain_message(type='human')]
+            input_vars[k] = [v.as_langchain_message(type="human")]
 
         # Make the chain
         logger.debug(f"Assembling the chain with model: {model}.")
-        chain = ChatPromptTemplate(prompt_messages, template_format='jinja2')
-        chain = chain | self.llm[model] | ChatParser()
+        chain = ChatPromptTemplate(prompt_messages, template_format="jinja2")
+        chain = chain | self._llms[model] | ChatParser()
 
-        # Invoke the chain 
+        elapsed = 0
+        t0 = time.time()
+
+        # Invoke the chain
         try:
-            t0 = time.time()
             try:
                 logger.debug(f"Invoking chain with {model}...")
                 output = await chain.ainvoke(input=input_vars)
             except Exception as e:
                 t1 = time.time()
-                elapsed = t1-t0
+                elapsed = t1 - t0
                 err = f"Error invoking chain with {model}: {str(e)[:1000]} after {elapsed:.2f} seconds."
                 logger.error(err)
                 raise e
                 # return dict(error=err)
             t1 = time.time()
-            elapsed = t1-t0
+            elapsed = t1 - t0
             logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")
 
         except RetryError:
             output = dict(error="Retry timeout querying LLM")
-        if 'metadata' not in output:
-            output['metadata'] = {}
-        output['metadata']['seconds_elapsed'] = elapsed
+        if "metadata" not in output:
+            output["metadata"] = dict()
+        output["metadata"]["seconds_elapsed"] = elapsed
 
         return output
 
@@ -255,7 +280,8 @@ class LC(Agent):
 if __name__ == "__main__":
     lc = LC(
         model=["fake"],
-        template="judge.jinja2", criteria="criteria_ordinary",
+        template="judge.jinja2",
+        criteria="criteria_ordinary",
     )
     result = lc(
         content="What's 2+2?",

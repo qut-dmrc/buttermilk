@@ -231,7 +231,7 @@ class Job(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc), description="The date and time a job was created.")
     source: str = Field(..., description="Where this particular job came from")
 
-    run_info: Optional[SessionInfo] = Field(None, description="Information about the context in which this job runs")
+    run_info: Optional[SessionInfo] = Field(default=None, description="Information about the context in which this job runs")
 
     record: Optional[RecordInfo] = Field(default=None, description="The data the job will process.")
     prompt: Optional[Sequence[str]] = Field(default_factory=list)
@@ -253,14 +253,13 @@ class Job(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
-    _ensure_list = field_validator("source","prompt", mode="before")(make_list_validator())
+    _ensure_list = field_validator("prompt", mode="before")(make_list_validator())
 
     @field_validator("outputs", mode="before")
     def convert_result(v):
         if v and isinstance(v, Mapping):
             return Result(**v)
         return v
-    
         
     @model_validator(mode="after")
     def move_metadata(self) -> Self:
@@ -270,9 +269,4 @@ class Job(BaseModel):
             self.metadata['outputs'] = self.outputs.metadata
             self.outputs.metadata = None
         
-        # Store a copy of the run info in this model's metadata
-        if self.run_info is None:
-            from ..bm import BM
-            run_info = BM()._run_metadata
-            self.run_info = run_info
         return self

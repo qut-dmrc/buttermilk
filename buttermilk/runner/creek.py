@@ -1,93 +1,126 @@
 import asyncio
-from functools import partial
-import random
+from collections.abc import AsyncGenerator, Mapping, Sequence
+from typing import (
+    Any,
+)
+
 import hydra
-from omegaconf import DictConfig, ListConfig, OmegaConf
-import pandas as pd
-from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_validator
-from typing import Any, Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
+from pydantic import BaseModel
+
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource, Flow, Project, SaveInfo
+from buttermilk._core.config import SaveInfo
 from buttermilk._core.runner_types import Job, RecordInfo
-from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
-from buttermilk.exceptions import FatalError
-from buttermilk.runner.helpers import prepare_step_df
-from buttermilk.runner.orchestrator import MultiFlowOrchestrator
-from buttermilk.utils.utils import expand_dict
-from buttermilk.data.recordmaker import RecordMaker, RecordMakerDF
+from buttermilk.utils.utils import find_in_nested_dict
 
 """ A little stream. Runs several flow stages over a single record and streams results."""
+
+
 class Creek(BaseModel):
-    # flows: dict[str, Sequence[Flow]]
     source: str
-    
-    _data: list = []
+    flows: list[Agent]
+
+    _data: dict = {}
 
     class Config:
         arbitrary_types_allowed = True
 
-    async def record_generator(self, record: RecordInfo) -> AsyncGenerator[RecordInfo, None]:
-        # Just yield one record
-        yield record
+    async def run_flows(self, record: RecordInfo) -> AsyncGenerator[Any, None]:
+        save_data = SaveInfo(
+            type="bq",
+            dataset="dmrc-analysis.toxicity.flow",
+            db_schema="buttermilk/schemas/flow.json",
+        )
 
-    async def run_flow(self, record: RecordInfo, flow: Flow) -> AsyncGenerator[str, None]:
-        orchestrator = MultiFlowOrchestrator(flow=flow, source=self.source)
-        await orchestrator.make_agents()
-        orchestrator._data_generator = partial(self.record_generator, record=record)
-        tasks = [x async for x in orchestrator.make_tasks()]
-        for result in asyncio.as_completed(tasks):
-            try:
-                result = await result
-                if result.error:
-                    yield f"Error: {result.error}"
-                else:
-                    self._data.append(result)
-                    yield result.outputs
-            except Exception as e:
-                yield f"Error: {e}"
+        for agent in self.flows:
+            agent.save = save_data
+            self._data[agent.name] = {}
 
-    async def run(self, record: RecordInfo):
-        lc_judge = Agent(type="LC", name="judger", template="judge", criteria="simplified", formatting="json_rules", model=["gpt4o", "sonnet"])
-        save_data = SaveInfo(type="bq", dataset= "dmrc-analysis.toxicity.flow", db_schema="buttermilk/schemas/flow.json")
+            tasks = []
+            for variant in agent.make_combinations():
+                # Create a new job and task for every combination of variables
+                # this agent is configured to run.
+                job = Job(record=record, source=self.source)
+                task = agent.process_job(job=job, additional_data=self._data, **variant)
+                tasks.append(task)
 
-        judger = Flow(name="judger", concurrency=20, agent=lc_judge, save=save_data,parameters={"content": record.text})
-        async for result in self.run_flow(flow=judger, record=record):
-            yield result
+            for task in asyncio.as_completed(tasks):
+                try:
+                    result = await task
+                    if result.error:
+                        yield f"Error: {result.error}"
+                    else:
+                        try:
+                            if agent.outputs:
+                                for key, values in agent.outputs.items():
+                                    if key not in self._data[agent.name]:
+                                        self._data[agent.name][key] = []
+                                    self._data[agent.name][key].append(
+                                        self.extract(values, result),
+                                    )
+                        except Exception as e:
+                            logger.exception(e)
+                        yield result.outputs
+                except Exception as e:
+                    logger.exception(e)
+                    raise
 
-        answers = self.make_answers()
-        lc_synth = Agent(type="LC", name="synth", template="synthesise", criteria="simplified", formatting="json_rules", model=["sonnet"])
-        synth = Flow(name="synth", concurrency=20, agent=lc_synth, save=save_data)
-        async for result in self.run_flow(flow=synth, record=record):
-            yield result
-        
-    def make_answers(self) -> list[dict[str,str]]:
+    def make_answers(self) -> list[dict[str, str]]:
         answers = []
         for rec in self._data:
-            answer = dict(
-                id=rec.job_id,
-                model=rec.parameters['model'],
-                template=rec.agent_info.template,
-                reasons=rec.outputs.reasons,
-            )
+            answer = {
+                "id": rec.job_id,
+                "model": rec.parameters["model"],
+                "template": rec.agent_info.template,
+                "reasons": rec.outputs.reasons,
+            }
             answers.append(answer)
         return answers
 
-@hydra.main(version_base="1.3", config_path="../../examples/conf", config_name="config")
-def main(cfg: Project) -> None:
-    from rich import print as rprint
-    bm = BM(cfg=cfg)
-    creek = Creek(source="test")
-    text =  """An image depicting a caricature of a Jewish man with an exaggerated hooked nose and a Star of David marked with "Jude" (resembling Holocaust-era badges), holding a music box labeled "media." A monkey labeled "BLM" sits on the man's shoulder."""
+    def extract(self, values: Any, result: Job):
+        """Get data out of hierarchical results object according to outputs schema."""
+        data = None
+        if isinstance(values, str):
+            data = find_in_nested_dict(result.model_dump(), values)
+        elif isinstance(values, Sequence):
+            data = [find_in_nested_dict(result.model_dump(), v) for v in values]
+        elif isinstance(values, Mapping):
+            data = {}
+            for key, item in values.items():
+                data[key] = find_in_nested_dict(result.model_dump(), item)
 
-    async def test_run_flow(creek):
-        async for response in creek.run(record=RecordInfo(content=text)):
+        return data
+
+
+class Tester(BaseModel):
+    name: str
+
+
+class _CFG(BaseModel):
+    bm: BM
+    flows: Creek
+
+
+@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
+def main(cfg: _CFG) -> None:
+    from rich import print as rprint
+
+    # Hydra will automatically instantiate the objects
+    # This should work, but doesn't?
+    objs = hydra.utils.instantiate(cfg)
+    creek = objs.flows
+
+    text = """An image depicting a caricature of a Jewish man with an exaggerated hooked nose and a Star of David marked with "Jude" (resembling Holocaust-era badges), holding a music box labeled "media." A monkey labeled "BLM" sits on the man's shoulder."""
+
+    record = RecordInfo(text=text)
+
+    async def test_run_flow(creek: Creek):
+        async for response in creek.run_flows(record=record):
             rprint(response)
-            pass
 
     asyncio.run(test_run_flow(creek))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

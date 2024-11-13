@@ -13,7 +13,5 @@
 			"path": "../../automod"
 		}	],
 	"settings": {
-		"python.defaultInterpreterPath": "/opt/conda/envs/bm/bin/python",
-		"python.terminal.activateEnvironment": true
 	}
 }

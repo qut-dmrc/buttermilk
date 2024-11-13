@@ -1,0 +1,66 @@
+_target_: buttermilk.runner.creek.Creek
+source: hate development
+flows:
+  - _target_: buttermilk.agents.lc.LC
+    name: judger
+    num_runs: 2
+    concurrency: 20
+    parameters:
+      template: judge
+      criteria: criteria_ordinary
+      formatting: json_rules
+      model:
+        - haiku
+        # - gpt4o
+        # - llama31_70b
+        # - sonnet
+        # - gemini15pro 
+      record: record
+    outputs:
+      answers:
+        job_id: job_id
+        model: parameters.model
+        criteria: agent_info.parameters.criteria
+        template: agent_info.parameters.template
+        reasons: outputs.reasons
+  - _target_: buttermilk.agents.lc.LC
+    name: synth
+    num_runs: 1
+    concurrency: 20
+    parameters:
+      template: synthesise
+      instructions: judge
+      criteria: criteria_ordinary
+      formatting: json_rules
+      model:
+        - haiku
+        # - gpt4o
+        # - sonnet
+      record: record
+      answers: judger.answers
+    outputs:
+      answers:
+        job_id: job_id
+        model: parameters.model
+        criteria: agent_info.parameters.criteria
+        template: agent_info.parameters.template
+        reasons: outputs.reasons
+
+
+  # - _target_: buttermilk.agents.lc.LC
+  #   name: eval
+  #   num_runs: 1
+  #   concurrency: 20
+  #   parameters:
+  #     template: differences
+  #     criteria: criteria_ordinary
+  #     model:
+  #       - haiku
+  #       # - gpt4o
+  #       # - sonnet
+  #     record: record
+  #     answers:
+  #       - judger.answers
+  #       - synth.answers
+  #   outputs:
+  #     outputs: outputs

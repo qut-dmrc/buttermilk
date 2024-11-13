@@ -71,6 +71,27 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
 
 _REGISTRY = {}
+_CONFIG = "config"  # registry key for config object
+
+_MODELS_SECRET = 'models'
+class ConfigRegistry:
+    _instance = None
+    _config: Optional[DictConfig] = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = ConfigRegistry()
+        return cls._instance
+
+    @classmethod
+    def set_config(cls, cfg: DictConfig):
+        instance = cls.get_instance()
+        instance._config = cfg
+
+    @classmethod
+    def get_config(cls) -> Optional[DictConfig]:
+        return cls.get_instance()._config
 
 _ = load_dotenv()
 
@@ -116,16 +137,30 @@ class Project(BaseModel):
         exclude_none=True
         exclude_unset=True
 
+    @model_validator(mode="after")
+    def register(self) -> Self:
+        global _REGISTRY
+        if not _REGISTRY.get(_CONFIG):
+            _REGISTRY[_CONFIG] = self
+        return self
 
 
 class BM(Singleton, BaseModel):
 
-    cfg: Project = Field(None, validate_default=True)
+    cfg: Optional[Project] = Field(None, validate_default=True)
 
     _clients: dict[str, Any] = {}
     _run_metadata: SessionInfo = PrivateAttr(default_factory=lambda: SessionInfo())
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
+    @field_validator("cfg")
+    def load_config(cls, v):
+        global _REGISTRY
+        if not v:
+            return _REGISTRY[_CONFIG]
+        return v
+
 
     def model_post_init(self, __context: Any) -> None:
         if not _REGISTRY.get('init'):
@@ -138,7 +173,8 @@ class BM(Singleton, BaseModel):
             try:
                 # cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
                 rprint(self.cfg)
-                save.upload_text(data=self.cfg.model_dump_json(indent=4), basename="config", extension="json", save_dir=self._run_metadata.save_dir)
+                rprint(self._run_metadata)
+                save.save(data=[self.cfg.model_dump(), self._run_metadata.model_dump()], basename="config", extension="json", save_dir=self._run_metadata.save_dir)
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
@@ -153,9 +189,8 @@ class BM(Singleton, BaseModel):
 
         auth = DefaultAzureCredential()
         vault_uri = self.cfg.secret_provider.vault
-        models_secret = self.cfg.secret_provider.models_secret
         secrets = SecretClient(vault_uri, credential=auth)
-        contents = secrets.get_secret(models_secret).value
+        contents = secrets.get_secret(_MODELS_SECRET).value
         if not contents:
             raise ValueError("Could not load secrets from Azure vault")
         try:

@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_vali
 from typing import Any, Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource, Flow
+from buttermilk._core.config import DataSource
+from buttermilk._core.flow import Flow
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.exceptions import FatalError
@@ -43,13 +44,12 @@ class MultiFlowOrchestrator(BaseModel):
         self._concurrent = self.flow.concurrency or self._concurrent
         return self
 
-    async def prepare_data(self):
-        # Prepare the data for the step
+    async def prepare(self):
+        # Prepare the data and agents for the step
         self._dataset = await prepare_step_df(self.flow.data)
         self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
 
-        await self.make_agents()
-        await self.prepare_data()
+        self._agents = [x async for x in self.make_agents() ]
 
     async def make_agents(self):
         # Get permutations of init variables
@@ -59,7 +59,8 @@ class MultiFlowOrchestrator(BaseModel):
             if not init_vars.get('flow'):
                 init_vars['flow'] = self.flow.name
             agent: Agent = globals()[self.flow.agent.type](**init_vars, save=self.flow.save)
-            self._agents.append(agent) 
+            yield agent
+
 
     async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
         # create and run a separate job for 

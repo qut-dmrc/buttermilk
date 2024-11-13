@@ -1,5 +1,10 @@
 ---
 
+prompt_placeholder: true
+inputs:
+  - formatting
+  - criteria
+  - record
 ---
 
 # System:
@@ -22,13 +27,5 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {{ criteria }}
 <END CRITERIA>
 
-# User:
-{% if record_id %}
-<BEGIN CONTENT: {{ record_id }}>
-{% endif %}
-{{ title }}
-
-{{ content }}
-{% if record_id %}
-<END CONTENT: {{ record_id }}>
-{% endif %}
+placeholder:
+{record}

@@ -96,6 +96,7 @@ from pydantic import (
 )
 from tqdm.asyncio import tqdm as atqdm
 
+from buttermilk._core.agent import Agent
 from buttermilk.bm import BM
 from buttermilk.exceptions import FatalError
 from buttermilk._core.runner_types import  Job

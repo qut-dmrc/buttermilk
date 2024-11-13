@@ -81,7 +81,7 @@ import cloudpathlib
 #         return _impl
 
 
-CloudProvider = Literal["gcp", "bq", "aws", "azure", "hashicorp", "env", "vault", "local", "gsheets"]
+CloudProvider = Literal["gcp", "bq", "aws", "azure", "env", "local", "gsheets"]
 
 class CloudProviderCfg(BaseModel):
     type: CloudProvider
