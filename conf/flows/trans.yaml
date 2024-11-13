@@ -1,23 +1,32 @@
-hate:
+defaults:
+  - _self_
+
+trans:
   _target_: buttermilk.runner.creek.Creek
-  source: hate development
+  source: api development
   steps:
-    - _target_: buttermilk.agents.lc.LC
-      name: judger
+    - name: judger
+      _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
-      parameters:
+      save: ${save}
+      parameters: 
         template: judge
-        criteria: criteria_ordinary
+        criteria: 
+          - trans_cte
+          - trans_tja
+          - trans_glaad
+          - trans_hrc
+          - trans_simplified
+          - trans_factored
         formatting: json_rules
         model:
-          # - haiku
           - gpt4o
-          - llama31_70b
           - sonnet
-          - gemini15pro 
       inputs:
-        record: record
+        record_id: record.record_id
+        content: record.text
+        title: record.title
       outputs:
         answers:
           job_id: job_id
@@ -25,23 +34,23 @@ hate:
           criteria: agent_info.parameters.criteria
           template: agent_info.parameters.template
           reasons: outputs.reasons
-    - _target_: buttermilk.agents.lc.LC
-      name: synth
+      
+    - name: synth
+      _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
       parameters:
         template: synthesise
         instructions: judge
-        criteria: criteria_ordinary
+        criteria: trans_simplified
         formatting: json_rules
         model:
-          # - haiku
           - gpt4o
           - sonnet
       inputs:
         content: record.text
-        record: record
-        answers: judger.answers
+        answers:
+          - judger.answers
       outputs:
         answers:
           job_id: job_id
@@ -49,16 +58,17 @@ hate:
           criteria: agent_info.parameters.criteria
           template: agent_info.parameters.template
           reasons: outputs.reasons
-
-    - _target_: buttermilk.agents.lc.LC
-      name: eval
+      
+    
+    - name: eval 
+      _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
       parameters:
         template: differences
-        criteria: criteria_ordinary
+        criteria: 
+          - trans_simplified
         model:
-          # - haiku
           - gpt4o
           - sonnet
       inputs:

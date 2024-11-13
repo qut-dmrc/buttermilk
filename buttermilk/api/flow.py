@@ -1,63 +1,45 @@
 import asyncio
-import itertools
 import json
-import os
-import sys
-from pathlib import Path
-
 import threading
-from typing import Any, AsyncGenerator, Dict, List, Literal, Optional, Self, Sequence
-from cloudpathlib import AnyPath
-from fastapi.concurrency import run_in_threadpool
+from collections.abc import AsyncGenerator, Mapping, Sequence
+from typing import (
+    Literal,
+    Self,
+)
+from urllib.parse import parse_qs
+
+import hydra
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from google.cloud import pubsub
+from promptflow.tracing import start_trace
 from pydantic import (
     AliasChoices,
-    AnyUrl,
     BaseModel,
     ConfigDict,
     Field,
     PrivateAttr,
     field_validator,
     model_validator,
-    validate_call,
 )
-import uvicorn
-import hydra
-from omegaconf import DictConfig
-import pandas as pd
+
 from buttermilk import BM
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from promptflow.tracing import start_trace, trace
-from urllib.parse import parse_qs
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from google.cloud import pubsub
-import json  
-
-from buttermilk._core.config import DataSource
-from buttermilk.agents.lc import LC
-from buttermilk.llms import CHATMODELS
+from buttermilk._core.log import logger
 from buttermilk._core.runner_types import (
     Job,
     RecordInfo,
     validate_uri_extract_text,
     validate_uri_or_b64,
 )
-from buttermilk.runner import MultiFlowOrchestrator
-from buttermilk._core.runner_types import Result
-from buttermilk.runner.helpers import group_and_filter_jobs
-from buttermilk.utils.bq import TableWriter
-from buttermilk.utils.save import upload_rows
-from buttermilk.utils.utils import expand_dict, read_file
-from buttermilk._core.log import logger
-
-import httpx
+from buttermilk.agents.lc import LC
+from buttermilk.llms import CHATMODELS
+from buttermilk.runner.creek import Creek
 from buttermilk.utils.validators import make_list_validator
-from .runs import get_recent_runs
 
+from .runs import get_recent_runs
 
 INPUT_SOURCE = "api"
 app = FastAPI()
@@ -70,24 +52,27 @@ app = FastAPI()
 
 
 class FlowRequest(BaseModel):
-    model: Optional[str | Sequence[str]] = None
-    template: Optional[str | Sequence[str]] = None
-    template_vars: Optional[dict | Sequence[dict]] = Field(default_factory=list)
+    model: str | Sequence[str] | None = None
+    template: str | Sequence[str] | None = None
+    template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
 
-    content: Optional[str] = Field(
-        default=None, validation_alias=AliasChoices("content", "text", "body")
+    content: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("content", "text", "body"),
     )
-    video: Optional[str] = None
-    image: Optional[str] = None
+    video: str | None = None
+    image: str | None = None
 
     model_config = ConfigDict(
-        arbitrary_types_allowed=False, extra="allow", populate_by_name=True
+        arbitrary_types_allowed=False,
+        extra="allow",
+        populate_by_name=True,
     )
     _client: LC = PrivateAttr()
     _job: Job = PrivateAttr()
 
     _ensure_list = field_validator("model", "template", "template_vars", mode="before")(
-        make_list_validator()
+        make_list_validator(),
     )
 
     @model_validator(mode="before")
@@ -119,10 +104,10 @@ class FlowRequest(BaseModel):
                 values.get("text"),
                 values.get("image"),
                 values.get("video"),
-            ]
+            ],
         ):
             raise ValueError(
-                "At least one of content, text, uri, video or image must be provided."
+                "At least one of content, text, uri, video or image must be provided.",
             )
 
         return values
@@ -156,7 +141,7 @@ class FlowRequest(BaseModel):
 async def run_flow(
     flow: Literal["judge", "summarise"],
     request: Request,
-    flow_request: Optional[FlowRequest] = "",
+    flow_request: FlowRequest | None = "",
 ) -> AsyncGenerator[Job, None]:
     # Ensure at least one of the content, uri, or media variables are provided
     # And make sure that we can form Client and Job objects from the input data.
@@ -169,7 +154,13 @@ async def run_flow(
     model = flow_request.model[0]
     template_vars = flow_request.template_vars[0]
     template = flow_request.template[0]
-    agent = LC(flow=flow, name="apilcagent", template=template, template_vars=template_vars, model=model)
+    agent = LC(
+        flow=flow,
+        name="apilcagent",
+        template=template,
+        template_vars=template_vars,
+        model=model,
+    )
     run_vars = dict()
 
     # orchestrator = MultiFlowOrchestrator(
@@ -210,7 +201,9 @@ def callback(message):
         async def process_generator():
             results = []
             async for result in run_flow(
-                flow=task, request=request, flow_request=request
+                flow=task,
+                request=request,
+                flow_request=request,
             ):
                 results.append(result)
             return results
@@ -264,7 +257,7 @@ async def get_runs_json(request: Request) -> Sequence[Job]:
 @app.api_route("/html/runs/", methods=["GET", "POST"])
 async def get_runs_html(request: Request) -> HTMLResponse:
     data = get_recent_runs()
-    
+
     # data = group_and_filter_jobs(
     #     data=df,
     #     group=bm.cfg.data.runs.group,
@@ -275,7 +268,8 @@ async def get_runs_html(request: Request) -> HTMLResponse:
     # )
 
     rendered_result = templates.TemplateResponse(
-        f"runs_html.html", {"request": request, "data": data}
+        "runs_html.html",
+        {"request": request, "data": data},
     )
 
     return HTMLResponse(rendered_result.body.decode("utf-8"), status_code=200)
@@ -285,7 +279,7 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 async def run_flow_json(
     flow: Literal["judge", "summarise"],
     request: Request,
-    flow_request: Optional[FlowRequest] = "",
+    flow_request: FlowRequest | None = "",
 ) -> Sequence[Job]:
     # return StreamingResponse(run_flow(flow=flow, request=request, flow_request=flow_request), media_type="application/json")
     results = [
@@ -298,19 +292,24 @@ async def run_flow_json(
 @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
 @app.api_route("/html/flow", methods=["GET", "POST"])
 async def run_route_html(
-    request: Request, flow: str = "", flow_request: Optional[FlowRequest] = ""
+    request: Request,
+    flow: str = "",
+    flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:
     async def result_generator() -> AsyncGenerator[str, None]:
         bm.logger.info(
-            f"Received request for flow {flow} and flow_request {flow_request}"
+            f"Received request for flow {flow} and flow_request {flow_request}",
         )
         try:
             async for data in run_flow(
-                flow=flow, request=request, flow_request=flow_request
+                flow=flow,
+                request=request,
+                flow_request=flow_request,
             ):
                 # Render the template with the response data
                 rendered_result = templates.TemplateResponse(
-                    f"flow_html.html", {"request": request, "data": data}
+                    "flow_html.html",
+                    {"request": request, "data": data},
                 )
                 yield rendered_result.body.decode("utf-8")
         except Exception as e:
@@ -350,10 +349,21 @@ async def log_cors_failures(request: Request, call_next):
     return response
 
 
+class _CFG(BaseModel):
+    bm: BM
+    save: Mapping
+    flows: dict[str, Creek]
+
+
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def main(cfg: DictConfig):
+def main(cfg: _CFG):
     global bm, logger, app
-    bm = BM(cfg=cfg)
+
+    # Hydra will automatically instantiate the objects
+    objs = hydra.utils.instantiate(cfg)
+
+    bm = objs.BM()
+    flows = objs.flows
 
     logger = bm.logger
     start_trace(

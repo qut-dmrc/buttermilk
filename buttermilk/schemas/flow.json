@@ -40,6 +40,11 @@
         "mode": "NULLABLE"
     },
     {
+        "name": "inputs",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
         "name": "outputs",
         "type": "JSON",
         "mode": "NULLABLE"

@@ -135,7 +135,6 @@ class LC(Agent):
         additional_data: dict = None,
         **kwargs,
     ) -> Job:
-        job.parameters = dict(model=model, **kwargs)
 
         additional_data = additional_data or {}
 
@@ -168,11 +167,23 @@ class LC(Agent):
 
             return value
 
-        # Process all kwargs
+        # Process all inputs into two categories.
+        # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
+        # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
+        # Then there are also extra **kwargs sent to this method.
+        # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
+        # We need to resolve all inputs into a mapping that can be passed to the model.
+
+        # First, log that we received extra **kwargs
+        job.inputs.update(**kwargs)
+
+        # Now create a dictionary for the substantive value of the inputs
         model_inputs = {}
+
+        # and a separate dictionary for complete prompt messages that we will not pass to the templating function
         placeholders = {}
 
-        for key, value in kwargs.items():
+        for key, value in job.inputs.items():
             resolved_value = resolve_value(value)
             if value == "record":  # Special case for full record placeholder
                 placeholders[key] = resolved_value
@@ -185,7 +196,7 @@ class LC(Agent):
             inputs=model_inputs,
         )
 
-        # Add prompt to Job object
+        # Record final prompt in Job object (minus placeholders, which can contain large binary data)
         job.prompt = [f"{role}:\n{msg}" for role, msg in local_messages]
 
         # Add this agent's details to the Job object
@@ -262,8 +273,7 @@ class LC(Agent):
                 elapsed = t1 - t0
                 err = f"Error invoking chain with {model}: {str(e)[:1000]} after {elapsed:.2f} seconds."
                 logger.error(err)
-                raise e
-                # return dict(error=err)
+                return dict(error=err)
             t1 = time.time()
             elapsed = t1 - t0
             logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")

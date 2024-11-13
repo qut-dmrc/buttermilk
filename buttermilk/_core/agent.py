@@ -55,6 +55,7 @@ class Agent(BaseModel):
             "init",
         ),
     )
+    inputs: dict[str, Any] = Field(default=dict)
     outputs: dict[str, Any] | None = Field(
         default=dict,
         description="Data to pass on to next steps.",
@@ -97,11 +98,11 @@ class Agent(BaseModel):
         return self
 
     @trace
-    async def run(self, *, vars: dict, job: Job) -> Job:
+    async def run(self, *, parameters: dict, job: Job) -> Job:
         async with self._sem:
             try:
                 job.agent_info = self.model_dump()
-                job = await self.process_job(job=job, vars=vars)
+                job = await self.process_job(job=job, vars=parameters)
             except Exception as e:
                 job.error = extract_error_info(e=e)
                 if job.record:
@@ -126,10 +127,18 @@ class Agent(BaseModel):
         self,
         *,
         job: Job,
-        additional_data: dict = None,
+        additional_data: Any = None,
         **kwargs,
     ) -> Job:
-        """Take a Job with Inputs, process it, and
-        return a Job with Inputs and Outputs.
+        """Take a Job with Inputs, process it, and return a Job.
+
+        Inputs:
+            job: Job with Inputs
+            additional_data: Any additional data to pass to the agent
+            **kwargs: Additional variables to pass to the agent
+
+        Outputs:
+            Job with Inputs and Outputs
+
         """
         raise NotImplementedError

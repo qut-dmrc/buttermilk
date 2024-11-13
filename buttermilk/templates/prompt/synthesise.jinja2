@@ -40,7 +40,6 @@ user:
     {{ draft['reasons'] }}
     <END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('criteria') }} [ METADATA: {{ draft.get('model') }} {{ draft.get('template') }} {{ draft.get('criteria') }} ]>
 {% endfor %}
-
 {% if feedback %}
 {% for feedback in feedback %}
     <BEGIN FEEDBACK {{ feedback.id }}>

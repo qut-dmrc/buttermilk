@@ -1,0 +1,3 @@
+type: bq
+dataset: dmrc-analysis.toxicity.flow
+db_schema: buttermilk/schemas/flow.json

@@ -44,7 +44,9 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["hydra.verbose=true"],
+      "args": ["hydra.verbose=true",
+              "+flows=[hate,trans]",
+            ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

@@ -19,7 +19,7 @@ from buttermilk.utils.utils import find_in_nested_dict
 
 class Creek(BaseModel):
     source: str
-    flows: list[Agent]
+    steps: list[Agent]
 
     _data: dict = {}
 
@@ -33,7 +33,7 @@ class Creek(BaseModel):
             db_schema="buttermilk/schemas/flow.json",
         )
 
-        for agent in self.flows:
+        for agent in self.steps:
             agent.save = save_data
             self._data[agent.name] = {}
 
@@ -64,19 +64,6 @@ class Creek(BaseModel):
                         yield result.outputs
                 except Exception as e:
                     logger.exception(e)
-                    raise
-
-    def make_answers(self) -> list[dict[str, str]]:
-        answers = []
-        for rec in self._data:
-            answer = {
-                "id": rec.job_id,
-                "model": rec.parameters["model"],
-                "template": rec.agent_info.template,
-                "reasons": rec.outputs.reasons,
-            }
-            answers.append(answer)
-        return answers
 
     def extract(self, values: Any, result: Job):
         """Get data out of hierarchical results object according to outputs schema."""
@@ -93,13 +80,10 @@ class Creek(BaseModel):
         return data
 
 
-class Tester(BaseModel):
-    name: str
-
-
 class _CFG(BaseModel):
     bm: BM
-    flows: Creek
+    save: Mapping
+    flows: dict[str, Creek]
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -109,7 +93,7 @@ def main(cfg: _CFG) -> None:
     # Hydra will automatically instantiate the objects
     # This should work, but doesn't?
     objs = hydra.utils.instantiate(cfg)
-    creek = objs.flows
+    creek = objs.flows["trans"]
 
     text = """An image depicting a caricature of a Jewish man with an exaggerated hooked nose and a Star of David marked with "Jude" (resembling Holocaust-era badges), holding a music box labeled "media." A monkey labeled "BLM" sits on the man's shoulder."""
 

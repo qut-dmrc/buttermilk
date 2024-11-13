@@ -1,7 +1,6 @@
 defaults:
   - _self_
   - local
-  - flows/hate
 
 
 bm:

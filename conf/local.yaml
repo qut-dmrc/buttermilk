@@ -2,6 +2,7 @@
 
 defaults:
   - _self_
+  - save: bq.yaml
 
 bm:
   cfg:
@@ -17,6 +18,7 @@ bm:
       project: dmrc-analysis
       region: us-central1
       bucket: dmrc-analysis
+      
     secret_provider: 
       type: azure
       vault: https://suzorvault.vault.azure.net/
