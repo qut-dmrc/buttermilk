@@ -1,9 +1,12 @@
 import asyncio
 import copy
+import datetime
 from collections.abc import Mapping
 from typing import Any, Self
 
+import numpy as np
 import shortuuid
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
     AliasChoices,
@@ -43,10 +46,10 @@ class Agent(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
-    save: SaveInfo | None = Field(default=None)  # Where to save the results
-    parameters: dict[str, Any] | None = Field(
+    save: SaveInfo | None = Field(None)  # Where to save the results
+    parameters: dict[str, str | list | dict] | None = Field(
         default=dict,
-        description="Combinations of variables to  to pass to process job",
+        description="Combinations of variables to pass to process job",
         validation_alias=AliasChoices(
             "parameters",
             "params",
@@ -55,9 +58,11 @@ class Agent(BaseModel):
             "init",
         ),
     )
-    inputs: dict[str, Any] = Field(default=dict)
-    outputs: dict[str, Any] | None = Field(
-        default=dict,
+    inputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+    )
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
         description="Data to pass on to next steps.",
     )
     _agent_id: str = PrivateAttr(None)
@@ -65,10 +70,17 @@ class Agent(BaseModel):
 
     class Config:
         extra = "forbid"
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = False
         populate_by_name = True
         exclude_none = True
         exclude_unset = True
+
+        json_encoders = {
+            np.bool_: bool,
+            datetime.datetime: lambda v: v.isoformat(),
+            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        }
 
     @model_validator(mode="after")
     def add_extra_params(self) -> Self:
@@ -98,11 +110,11 @@ class Agent(BaseModel):
         return self
 
     @trace
-    async def run(self, *, parameters: dict, job: Job) -> Job:
+    async def run(self, *, job: Job, **kwargs) -> Job:
         async with self._sem:
             try:
-                job.agent_info = self.model_dump()
-                job = await self.process_job(job=job, vars=parameters)
+                job.agent_info = self.model_dump(mode="json")
+                job = await self.process_job(job=job, **kwargs)
             except Exception as e:
                 job.error = extract_error_info(e=e)
                 if job.record:

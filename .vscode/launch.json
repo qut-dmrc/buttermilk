@@ -32,7 +32,9 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["+api=nectar"],
+      "args": [
+         "+flows=[hate,trans]",
+       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

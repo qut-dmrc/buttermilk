@@ -24,6 +24,7 @@ trans:
           - gpt4o
           - sonnet
       inputs:
+        record: record
         record_id: record.record_id
         content: record.text
         title: record.title
@@ -48,6 +49,7 @@ trans:
           - gpt4o
           - sonnet
       inputs:
+        record: record
         content: record.text
         answers:
           - judger.answers

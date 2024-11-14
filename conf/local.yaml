@@ -25,6 +25,11 @@ bm:
       resource_group: rg-suzor_ai
       models_secret: models
 
+    pubsub:
+      type: gcp
+      project: dmrc-platforms
+      subscription: flow-sub
+
     run:
       platform: local
       max_concurrency: 32

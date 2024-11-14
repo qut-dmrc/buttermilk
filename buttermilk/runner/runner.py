@@ -1,5 +1,4 @@
-"""
-This module provides a robust framework for collecting and/or processing data in an asynchronous manner. It uses a producer-consumer model, where multiple Consumer instances (which must be subclassed) handle data processing, and the Distributor manages the overall execution, result collection, and storage. This design is ideal for large-scale, parallelizable data tasks.
+"""This module provides a robust framework for collecting and/or processing data in an asynchronous manner. It uses a producer-consumer model, where multiple Consumer instances (which must be subclassed) handle data processing, and the Distributor manages the overall execution, result collection, and storage. This design is ideal for large-scale, parallelizable data tasks.
 
 Core Classes:
 
@@ -52,40 +51,28 @@ Example:
     ```Python
 
     ```
+
 """
 
 import asyncio
 import datetime
 import json
-import os
-import pickle
-import sys
 import time
-import uuid
-from abc import ABC, abstractmethod
-from asyncio import Queue, QueueEmpty, TaskGroup, gather
-from functools import cached_property, wraps
+from abc import abstractmethod
+from asyncio import Queue, QueueEmpty, TaskGroup
+from collections.abc import AsyncGenerator, Coroutine
+from functools import cached_property
 from pathlib import Path
-from random import random
 from typing import (
     Any,
-    AsyncGenerator,
-    Coroutine,
-    List,
-    Optional,
     Self,
-    Sequence,
-    Type,
-    Union,
 )
 
-import numpy as np
 import pandas as pd
-import requests
 import shortuuid
 from cloudpathlib import CloudPath
 from humanfriendly import format_timespan
-from promptflow.tracing import start_trace, trace
+from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -97,11 +84,11 @@ from pydantic import (
 from tqdm.asyncio import tqdm as atqdm
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.log import logger
+from buttermilk._core.runner_types import Job
 from buttermilk.bm import BM
 from buttermilk.exceptions import FatalError
-from buttermilk._core.runner_types import  Job
 from buttermilk.utils.errors import extract_error_info
-from buttermilk._core.log import logger
 
 # The schema for the "runs" table in a BigQuery dataset
 RUNS_SCHEMA = """
@@ -119,8 +106,7 @@ RUNS_TABLE = "dmrc-platforms.scrapers.runs"
 #
 ################################
 class Consumer(BaseModel):
-    """
-    Abstract base class for data processing workers (consumers).
+    """Abstract base class for data processing workers (consumers).
 
     Each consumer takes data from an input queue, processes it, and sends the results to an output queue.
 
@@ -137,13 +123,16 @@ class Consumer(BaseModel):
     Methods:
         process(record: Job) -> AsyncGenerator[Job, None]: Process the data (to be implemented by subclasses). This method may add recursive tasks by yielding additional records to be processed by another step.
         run(self) -> None: Run the worker asynchronously until finished or told to stop.
+
     """
 
-    agent: Optional[str] = ''      # This is model, or client, or whatever is used to get the result
-    step_name: str      # This is the step in the process that includes this particular task
+    agent: str | None = (
+        ""  # This is model, or client, or whatever is used to get the result
+    )
+    step_name: str  # This is the step in the process that includes this particular task
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
-    task_num: Optional[int] = None
+    task_num: int | None = None
     run_info: Agent
     init_vars: dict = {}  # Vars to use when initialising the client
     concurrent: int = 1  # Number of async tasks to run
@@ -151,29 +140,24 @@ class Consumer(BaseModel):
     # flag to stop the task or to indicate the queue has finished
     done: bool = False
 
-    model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @field_validator("agent", mode="before")
-    def validate_agent(cls, value: Optional[str|int]) -> str:
+    def validate_agent(cls, value: str | int | None) -> str:
         return str(value)
-    
+
     @model_validator(mode="after")
     def validate_concurrent(self) -> Self:
         if self.concurrent < 1:
             raise ValueError("concurrent must be at least 1")
 
         # Make a unique worker name for identification and logging
-        self.agent =  "_".join([x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x])
+        self.agent = "_".join([
+            x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x
+        ])
 
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
-
-    @property
-    def agent_info(self) -> Agent:
-        agent_info = Agent(agent=self.agent,
-                      step=self.step_name, **self.init_vars)
-
-        return agent_info
 
     @computed_field
     @cached_property
@@ -208,7 +192,7 @@ class Consumer(BaseModel):
         except Exception as e:
             # If we hit here, all remaining tasks for this worker will be canceled.
             logger.error(
-                f"Canceling worker {self.agent} and remaining tasks after hitting error: {e} {e.args=}"
+                f"Canceling worker {self.agent} and remaining tasks after hitting error: {e} {e.args=}",
             )
 
         finally:
@@ -216,8 +200,7 @@ class Consumer(BaseModel):
             self.pbar.close()
 
     async def process_wrapper(self):
-        """
-        Wrapper for the process method.
+        """Wrapper for the process method.
 
         This method is used to catch and log any errors that occur during processing.
         """
@@ -239,7 +222,7 @@ class Consumer(BaseModel):
 
                 finally:
                     job.timestamp = pd.to_datetime(datetime.datetime.now())
-                    job.agent_info = self.agent_info
+                    job.agent_info = self.model_dump()
                     job.run_info = self.run_info
 
                     await self.output_queue.put(job)
@@ -251,14 +234,12 @@ class Consumer(BaseModel):
 
         except Exception as e:
             logger.error(
-                f"Error processing task {self.agent} by {self.agent} with job {job.job_id}. Error: {e or type(e)} {e.args=}"
+                f"Error processing task {self.agent} by {self.agent} with job {job.job_id}. Error: {e or type(e)} {e.args=}",
             )
-
 
     @abstractmethod
     async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
-        """
-        Abstract method for data processing.
+        """Abstract method for data processing.
 
         This method MUST be implemented by subclasses. It should take a data record,
         process it, and return the processed result.
@@ -282,7 +263,7 @@ class ResultsCollector(BaseModel):
     batch_size: int = 50  # rows
 
     # # The URI or path to save all results from this run
-    batch_path: Union[CloudPath, Path] = None
+    batch_path: CloudPath | Path = None
 
     @model_validator(mode="after")
     def get_path(self) -> Self:
@@ -351,14 +332,14 @@ class ResultsCollector(BaseModel):
             self.to_save = []
         return uri
 
+
 ################################
 #
 # Distributor class
 #
 ################################
 class TaskDistributor(BaseModel):
-    """
-    Adds tasks to the Queue. Maintains several queues at a time, identified by a task name.
+    """Adds tasks to the Queue. Maintains several queues at a time, identified by a task name.
 
     Accepts results on behalf of collectors.
 
@@ -368,15 +349,18 @@ class TaskDistributor(BaseModel):
 
     _consumers: dict[str, Consumer] = {}
     shutdown: bool = False
-    _tasks: List[Coroutine] = []
+    _tasks: list[Coroutine] = []
     total_tasks: int = 0
-    _collector: Optional[ResultsCollector] = None
+    _collector: ResultsCollector | None = None
     bm: BM = Field(default_factory=lambda: BM())
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def register_collector(
-        self, collector: Optional[ResultsCollector] = None, /, **kwargs
+        self,
+        collector: ResultsCollector | None = None,
+        /,
+        **kwargs,
     ):
         """Add a results saving worker and its input/outqut queues."""
         if not collector:
@@ -403,15 +387,11 @@ class TaskDistributor(BaseModel):
 
     def add_job(self, task_name: str, job: Job):
         """Add a task to the corresponding queue."""
-
         self._consumers[task_name].input_queue.put_nowait(job)
         self.total_tasks += 1
 
     async def run(self):
-        """
-        Starts the run, managing the consumers and collecting results.
-        """
-
+        """Starts the run, managing the consumers and collecting results."""
         t0 = time.perf_counter()
         try:
             global_pbar = atqdm(
@@ -435,10 +415,12 @@ class TaskDistributor(BaseModel):
                         self._tasks.append(tg.create_task(w.run()))
 
                     while (
-                        not self.shutdown                   # Global shutdown flag not set
-                        and not self._collector.shutdown    # Collector has not stopped
-                        and len(self._consumers) > 0        # Consumers still alive
-                        and not all([w.done for w in self._consumers.values()])  # Consumers still working
+                        not self.shutdown  # Global shutdown flag not set
+                        and not self._collector.shutdown  # Collector has not stopped
+                        and len(self._consumers) > 0  # Consumers still alive
+                        and not all([
+                            w.done for w in self._consumers.values()
+                        ])  # Consumers still working
                     ):
                         await asyncio.sleep(0.1)
                         for w in self._consumers.values():
@@ -447,7 +429,7 @@ class TaskDistributor(BaseModel):
                             if w.done and not w.input_queue.empty():
                                 # at least one of our consumers has died prematurely. We'll keep going with the others though.
                                 logger.warning(
-                                    f"Consumer {w.agent} died with {w.input_queue.qsize()} items left in the queue of type `{w.agent}. Continuing other tasks."
+                                    f"Consumer {w.agent} died with {w.input_queue.qsize()} items left in the queue of type `{w.agent}. Continuing other tasks.",
                                 )
                                 continue
                         self._collector.pbar.refresh()
@@ -458,7 +440,7 @@ class TaskDistributor(BaseModel):
             except KeyboardInterrupt:
                 # we have been interrupted. Abort gracefully if possible -- the first time, just stop any consumers getting new jobs and wait for them. The second time, abort immediately.
                 logger.info(
-                    "Keyboard interrupt. Finishing existing jobs and quitting. Interrupt again to quit immediately."
+                    "Keyboard interrupt. Finishing existing jobs and quitting. Interrupt again to quit immediately.",
                 )
 
             self.shutdown = True
@@ -483,10 +465,8 @@ class TaskDistributor(BaseModel):
                 )
         except Exception as e:
             logger.exception(
-                f"Received unhandled exception! {e} {e.args=}"
+                f"Received unhandled exception! {e} {e.args=}",
             )
         finally:
             time_taken = time.perf_counter() - t0
             logger.info(f"Run finished in {format_timespan(time_taken)}.")
-
-

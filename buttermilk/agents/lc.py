@@ -1,7 +1,9 @@
+import datetime
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any, Self
 
+import numpy as np
 import regex as re
 import requests
 import urllib3
@@ -16,12 +18,17 @@ from langchain_core.prompts import (
     ChatPromptTemplate,
     MessagesPlaceholder,
 )
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
 from promptflow.tracing import trace
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import (
+    Field,
+    PrivateAttr,
+    model_validator,
+)
 from tenacity import (
     RetryError,
     retry,
@@ -56,6 +63,20 @@ class LC(Agent):
     _connections: dict | None = PrivateAttr(default=dict)
     _llms: LLMs | None = PrivateAttr(default=dict)
 
+    class Config:
+        extra = "forbid"
+        arbitrary_types_allowed = False
+        populate_by_name = True
+        exclude_none = True
+        exclude_unset = True
+
+        json_encoders = {
+            np.bool_: bool,
+            datetime.datetime: lambda v: v.isoformat(),
+            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        }
+
     @model_validator(mode="after")
     def load_connections(self) -> Self:
         bm = BM()
@@ -67,7 +88,7 @@ class LC(Agent):
     def load_template_vars(
         self,
         template: str,
-        inputs: dict,
+        **inputs,
     ):
         def placeholder(variable_name):
             """Adds a placeholder for an array of messages to be inserted."""
@@ -135,7 +156,6 @@ class LC(Agent):
         additional_data: dict = None,
         **kwargs,
     ) -> Job:
-
         additional_data = additional_data or {}
 
         def resolve_value(value):
@@ -177,34 +197,35 @@ class LC(Agent):
         # First, log that we received extra **kwargs
         job.inputs.update(**kwargs)
 
-        # Now create a dictionary for the substantive value of the inputs
-        model_inputs = {}
+        # Create a dictionary for complete prompt messages that we will not pass to the templating function
+        placeholders = {"record": job.record}
 
-        # and a separate dictionary for complete prompt messages that we will not pass to the templating function
-        placeholders = {}
+        # And combine all sources of inputs into one dict
+        all_params = {**job.parameters, **job.inputs}
 
-        for key, value in job.inputs.items():
+        # but remove 'template', we deal with that explicitly, it's always required.
+        _ = all_params.pop("template", None)
+
+        input_vars = {}
+        for key, value in all_params.items():
             resolved_value = resolve_value(value)
             if value == "record":  # Special case for full record placeholder
                 placeholders[key] = resolved_value
             else:
-                model_inputs[key] = resolved_value
+                input_vars[key] = resolved_value
 
         # Construct list of messages from the templates
         local_messages = self.load_template_vars(
             template=template,
-            inputs=model_inputs,
+            **input_vars,
         )
 
         # Record final prompt in Job object (minus placeholders, which can contain large binary data)
         job.prompt = [f"{role}:\n{msg}" for role, msg in local_messages]
 
-        # Add this agent's details to the Job object
-        job.agent_info = self.model_dump(exclude=["_llms"])
-
         # Add model details to Job object
-        job.parameters["connection"] = scrub_keys(self._connections[model])
-        job.parameters["model_params"] = scrub_keys(self._llms[model].dict())
+        job.agent_info["connection"] = scrub_keys(self._connections[model])
+        job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
         job.parameters["model"] = model
 
         logger.debug(
@@ -212,7 +233,7 @@ class LC(Agent):
         )
         response = await self.invoke(
             prompt_messages=local_messages,
-            input_vars=model_inputs,
+            input_vars=input_vars,
             model=model,
             placeholders=placeholders,
         )
@@ -220,6 +241,9 @@ class LC(Agent):
         logger.debug(
             f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(response)} length.",
         )
+        error = response.pop("error", None)
+        if error:
+            job.error[self.name] = error
         job.outputs = Result(**response)
 
         return job
@@ -262,7 +286,7 @@ class LC(Agent):
 
         elapsed = 0
         t0 = time.time()
-
+        output = {}
         # Invoke the chain
         try:
             try:
@@ -271,9 +295,9 @@ class LC(Agent):
             except Exception as e:
                 t1 = time.time()
                 elapsed = t1 - t0
-                err = f"Error invoking chain with {model}: {str(e)[:1000]} after {elapsed:.2f} seconds."
+                err = f"Error invoking chain with {model} after {elapsed:.2f} seconds: {str(e)[:1000]} "
                 logger.error(err)
-                return dict(error=err)
+                output = dict(error=err)
             t1 = time.time()
             elapsed = t1 - t0
             logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")

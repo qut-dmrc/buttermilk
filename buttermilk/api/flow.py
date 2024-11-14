@@ -25,6 +25,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from rich import print as rprint
 
 from buttermilk import BM
 from buttermilk._core.log import logger
@@ -43,8 +44,9 @@ from .runs import get_recent_runs
 
 INPUT_SOURCE = "api"
 app = FastAPI()
+flows = dict()
 
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "text": "Republicans are arseholes."}'
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Republicans are arseholes."}'
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
 
@@ -120,9 +122,10 @@ class FlowRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_values(self) -> Self:
-        for v in self.model:
-            if v not in CHATMODELS:
-                raise ValueError(f"Valid model must be provided. {v} is unknown.")
+        if self.model:
+            for v in self.model:
+                if v not in CHATMODELS:
+                    raise ValueError(f"Valid model must be provided. {v} is unknown.")
 
         # Add any additional vars into the template_vars dict.
         extras = []
@@ -223,7 +226,10 @@ def callback(message):
 
 def start_pubsub_listener():
     subscriber = pubsub.SubscriberClient()
-    subscription_path = subscriber.subscription_path(bm.cfg.gcp.project, "flow-sub")
+    subscription_path = subscriber.subscription_path(
+        bm.cfg.pubsub.project,
+        bm.cfg.pubsub.subscription,
+    )
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}...")
 
@@ -233,7 +239,7 @@ def start_pubsub_listener():
         streaming_pull_future.cancel()
 
 
-bm = BM()
+bm = None
 templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 
@@ -277,16 +283,30 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["judge", "summarise"],
+    flow: Literal["hate", "trans"],
     request: Request,
     flow_request: FlowRequest | None = "",
-) -> Sequence[Job]:
-    # return StreamingResponse(run_flow(flow=flow, request=request, flow_request=flow_request), media_type="application/json")
-    results = [
-        job
-        async for job in run_flow(flow=flow, request=request, flow_request=flow_request)
-    ]
-    return results
+) -> StreamingResponse:
+    if flow not in flows:
+        raise HTTPException(status_code=403, detail="Flow not valid")
+
+    async def result_generator() -> AsyncGenerator[str, None]:
+        bm.logger.info(
+            f"Received request for flow {flow} and flow_request {flow_request}",
+        )
+        content, image, video = await asyncio.gather(
+            validate_uri_extract_text(flow_request.content),
+            validate_uri_or_b64(flow_request.image),
+            validate_uri_or_b64(flow_request.video),
+        )
+        media = [x for x in [image, video] if x]
+        record = RecordInfo(text=content, media=media)
+        async for data in flows[flow].run_flows(record=record):
+            if data:
+                rprint(data)
+                yield data.model_dump(mode="json")
+
+    return StreamingResponse(result_generator(), media_type="application/json")
 
 
 @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
@@ -355,14 +375,14 @@ class _CFG(BaseModel):
     flows: dict[str, Creek]
 
 
-@hydra.main(version_base="1.3", config_path="../conf", config_name="config")
+@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: _CFG):
-    global bm, logger, app
+    global bm, logger, app, flows
 
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
 
-    bm = objs.BM()
+    bm = objs.bm
     flows = objs.flows
 
     logger = bm.logger

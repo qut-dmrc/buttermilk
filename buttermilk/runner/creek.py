@@ -26,7 +26,10 @@ class Creek(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    async def run_flows(self, record: RecordInfo) -> AsyncGenerator[Any, None]:
+    async def run_flows(
+        self,
+        record: RecordInfo,
+    ) -> AsyncGenerator[Any, None]:
         save_data = SaveInfo(
             type="bq",
             dataset="dmrc-analysis.toxicity.flow",
@@ -41,15 +44,23 @@ class Creek(BaseModel):
             for variant in agent.make_combinations():
                 # Create a new job and task for every combination of variables
                 # this agent is configured to run.
-                job = Job(record=record, source=self.source)
-                task = agent.process_job(job=job, additional_data=self._data, **variant)
+                job = Job(
+                    record=record,
+                    source=self.source,
+                    inputs=agent.inputs,
+                    parameters=variant,
+                )
+                task = agent.run(job=job, additional_data=self._data, **variant)
                 tasks.append(task)
 
             for task in asyncio.as_completed(tasks):
+                result = None
                 try:
                     result = await task
                     if result.error:
-                        yield f"Error: {result.error}"
+                        logger.error(
+                            f"Agent {agent.name} failed with error: {result.error}",
+                        )
                     else:
                         try:
                             if agent.outputs:
@@ -60,10 +71,13 @@ class Creek(BaseModel):
                                         self.extract(values, result),
                                     )
                         except Exception as e:
-                            logger.exception(e)
-                        yield result.outputs
+                            error_msg = f"Response data not formatted as expected: {e}, {e.args=}"
+                            logger.error(error_msg)
+                    yield result
                 except Exception as e:
-                    logger.exception(e)
+                    msg = f"Unknown error in run_flows: {e}, {e.args=}"
+                    logger.exception(msg)
+                    continue
 
     def extract(self, values: Any, result: Job):
         """Get data out of hierarchical results object according to outputs schema."""

@@ -14,6 +14,7 @@ import shortuuid
 from bs4 import BeautifulSoup
 from cloudpathlib import CloudPath
 from langchain_core.messages import BaseMessage, HumanMessage
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
     AliasChoices,
     AnyUrl,
@@ -107,7 +108,12 @@ class Result(BaseModel):
         arbitrary_types_allowed=True,
         populate_by_name=True,
         use_enum_values=True,
-        json_encoders={np.bool_: lambda v: bool(v)},
+        json_encoders={
+            np.bool_: bool,
+            datetime.datetime: lambda v: v.isoformat(),
+            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        },
         validate_assignment=True,
         exclude_unset=True,
         exclude_none=True,
@@ -275,29 +281,41 @@ class Job(BaseModel):
         description="The data the job will process.",
     )
     prompt: Sequence[str] | None = Field(default_factory=list)
-    parameters: Mapping | None = Field(
+    parameters: dict | None = Field(
         default_factory=dict,
         description="Additional options for the worker",
     )
-    inputs: Any | Mapping | None = None
+    inputs: Any | dict | None = Field(default_factory=dict)
 
     # These fields will be fully filled once the record is processed
-    agent_info: Any | None = None
-    outputs: Any | Result | None = None
-    error: dict[str, Any] | None = None
+    agent_info: dict | None = Field(default_factory=dict)
+    outputs: dict | Result | None = Field(
+        default_factory=dict,
+        description="The results of the job",
+    )
+    error: dict[str, Any] | None = Field(default_factory=dict)
     metadata: dict | None = Field(default_factory=dict)
 
     model_config = ConfigDict(
         extra="forbid",
-        arbitrary_types_allowed=True,
+        arbitrary_types_allowed=False,
         populate_by_name=True,
         use_enum_values=True,
-        json_encoders={np.bool_: bool},
+        json_encoders={
+            np.bool_: bool,
+            datetime.datetime: lambda v: v.isoformat(),
+            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        },
         validate_assignment=True,
         exclude_unset=True,
         exclude_none=True,
     )
     _ensure_list = field_validator("prompt", mode="before")(make_list_validator())
+
+    # @field_serializer('flow')
+    # def serialize_omegaconf(cls, value):
+    #     return OmegaConf.to_container(value, resolve=True)
 
     @field_validator("outputs", mode="before")
     def convert_result(v):
