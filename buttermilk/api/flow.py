@@ -301,10 +301,14 @@ async def run_flow_json(
         )
         media = [x for x in [image, video] if x]
         record = RecordInfo(text=content, media=media)
-        async for data in flows[flow].run_flows(record=record):
+        async for data in flows[flow].run_flows(
+            record=record,
+            run_info=bm._run_metadata,
+        ):
             if data:
                 rprint(data)
-                yield data.model_dump(mode="json")
+                data = data.model_dump_json()
+                yield data
 
     return StreamingResponse(result_generator(), media_type="application/json")
 
