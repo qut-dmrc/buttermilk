@@ -11,72 +11,22 @@ from typing import (
 import numpy as np
 import pydantic
 import shortuuid
-from bs4 import BeautifulSoup
 from cloudpathlib import CloudPath
 from langchain_core.messages import BaseMessage, HumanMessage
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
     AliasChoices,
-    AnyUrl,
     BaseModel,
     ConfigDict,
     Field,
     computed_field,
     field_validator,
     model_validator,
-    validate_call,
 )
 
-from buttermilk.utils.utils import download_limited_async
 from buttermilk.utils.validators import make_list_validator
 
 from .types import SessionInfo
-
-
-@validate_call
-async def validate_uri_extract_text(value: AnyUrl | str | None) -> str | None:
-    if value:
-        try:
-            _ = AnyUrl(value)
-        except:
-            return value
-
-        # It's a URL, go fetch
-        obj, mimetype = await download_limited_async(value)
-
-        # try to extract text from object
-        if mimetype.startswith("text/html"):
-            soup = BeautifulSoup(obj, "html.parser")
-            value = soup.get_text()
-        else:
-            value = obj.decode()
-    return value
-
-
-def is_b64(value: str) -> bool:
-    # Check if the string is a valid base64-encoded string
-    try:
-        base64.b64decode(value, validate=True)
-        return True
-    except:
-        return False
-
-
-@validate_call
-async def validate_uri_or_b64(value: AnyUrl | str | None) -> str | None:
-    if value:
-        if is_b64(value):
-            return value
-
-        try:
-            if isinstance(value, AnyUrl) or AnyUrl(value):
-                # It's a URL, go fetch and encode it
-                obj = await download_limited_async(value)
-                value = base64.b64encode(obj).decode("utf-8")
-                return value
-        except Exception:
-            raise ValueError("Invalid URI or base64-encoded string")
-    return None
 
 
 class Result(BaseModel):

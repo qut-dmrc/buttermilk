@@ -4,9 +4,7 @@ import threading
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from typing import (
     Literal,
-    Self,
 )
-from urllib.parse import parse_qs
 
 import hydra
 import uvicorn
@@ -17,28 +15,19 @@ from fastapi.templating import Jinja2Templates
 from google.cloud import pubsub
 from promptflow.tracing import start_trace
 from pydantic import (
-    AliasChoices,
     BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
 )
-from rich import print as rprint
 
 from buttermilk import BM
 from buttermilk._core.log import logger
 from buttermilk._core.runner_types import (
     Job,
     RecordInfo,
-    validate_uri_extract_text,
-    validate_uri_or_b64,
 )
 from buttermilk.agents.lc import LC
-from buttermilk.llms import CHATMODELS
+from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.creek import Creek
-from buttermilk.utils.validators import make_list_validator
+from buttermilk.utils.media import validate_uri_extract_text, validate_uri_or_b64
 
 from .runs import get_recent_runs
 
@@ -53,94 +42,6 @@ flows = dict()
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
 
 
-class FlowRequest(BaseModel):
-    model: str | Sequence[str] | None = None
-    template: str | Sequence[str] | None = None
-    template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
-
-    content: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("content", "text", "body"),
-    )
-    video: str | None = None
-    image: str | None = None
-
-    model_config = ConfigDict(
-        arbitrary_types_allowed=False,
-        extra="allow",
-        populate_by_name=True,
-    )
-    _client: LC = PrivateAttr()
-    _job: Job = PrivateAttr()
-
-    _ensure_list = field_validator("model", "template", "template_vars", mode="before")(
-        make_list_validator(),
-    )
-
-    @model_validator(mode="before")
-    def preprocess_data(cls, values):
-        # Check first if the values are coming as utf-8 encoded bytes
-        try:
-            values = values.decode("utf-8")
-        except:
-            pass
-        try:
-            # Might be HTML form data
-            values = parse_qs(values)
-
-            # Convert the values from lists to single values
-            values = {key: value[0] for key, value in values.items()}
-        except:
-            pass
-
-        try:
-            # might be JSON
-            values = json.loads(values)
-        except:
-            pass
-
-        if not any(
-            [
-                values.get("content"),
-                values.get("uri"),
-                values.get("text"),
-                values.get("image"),
-                values.get("video"),
-            ],
-        ):
-            raise ValueError(
-                "At least one of content, text, uri, video or image must be provided.",
-            )
-
-        return values
-
-    @field_validator("content", "image", "video", mode="before")
-    def sanitize_strings(cls, v):
-        if v:
-            return v.strip()
-        return v
-
-    @model_validator(mode="after")
-    def check_values(self) -> Self:
-        if self.model:
-            for v in self.model:
-                if v not in CHATMODELS:
-                    raise ValueError(f"Valid model must be provided. {v} is unknown.")
-
-        # Add any additional vars into the template_vars dict.
-        extras = []
-        if self.template_vars and self.model_extra:
-            # Template variables is a list of dicts that are run in combinations
-            # When we add other variables, make sure to add them to each existing combination
-            for existing_vars in self.template_vars:
-                existing_vars.update(self.model_extra)
-                extras.append(existing_vars)
-        elif self.model_extra:
-            self.template_vars = [self.model_extra]
-
-        return self
-
-
 async def run_flow(
     flow: Literal["judge", "summarise"],
     request: Request,
@@ -153,7 +54,7 @@ async def run_flow(
         validate_uri_or_b64(flow_request.image),
         validate_uri_or_b64(flow_request.video),
     )
-    record = RecordInfo(content=content, image=image, video=video)
+    record = RecordInfo(content=content, media=[image, video])
     model = flow_request.model[0]
     template_vars = flow_request.template_vars[0]
     template = flow_request.template[0]
@@ -290,27 +191,10 @@ async def run_flow_json(
     if flow not in flows:
         raise HTTPException(status_code=403, detail="Flow not valid")
 
-    async def result_generator() -> AsyncGenerator[str, None]:
-        bm.logger.info(
-            f"Received request for flow {flow} and flow_request {flow_request}",
-        )
-        content, image, video = await asyncio.gather(
-            validate_uri_extract_text(flow_request.content),
-            validate_uri_or_b64(flow_request.image),
-            validate_uri_or_b64(flow_request.video),
-        )
-        media = [x for x in [image, video] if x]
-        record = RecordInfo(text=content, media=media)
-        async for data in flows[flow].run_flows(
-            record=record,
-            run_info=bm._run_metadata,
-        ):
-            if data:
-                rprint(data)
-                data = data.model_dump_json()
-                yield data
-
-    return StreamingResponse(result_generator(), media_type="application/json")
+    return StreamingResponse(
+        flow_stream(flows[flow], flow_request),
+        media_type="application/json",
+    )
 
 
 @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
@@ -320,15 +204,18 @@ async def run_route_html(
     flow: str = "",
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:
+    if flow not in flows:
+        raise HTTPException(status_code=403, detail="Flow not valid")
+
     async def result_generator() -> AsyncGenerator[str, None]:
-        bm.logger.info(
+        logger.info(
             f"Received request for flow {flow} and flow_request {flow_request}",
         )
         try:
-            async for data in run_flow(
-                flow=flow,
-                request=request,
+            async for data in flow_stream(
+                flows[flow],
                 flow_request=flow_request,
+                return_json=False,
             ):
                 # Render the template with the response data
                 rendered_result = templates.TemplateResponse(

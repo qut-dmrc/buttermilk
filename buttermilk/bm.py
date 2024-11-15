@@ -44,6 +44,8 @@ from pydantic import (
 )
 from rich import print as rprint
 
+from buttermilk.exceptions import FatalError
+
 from ._core.config import CloudProviderCfg, RunCfg, Tracing
 from ._core.flow import Flow
 from ._core.log import logger
@@ -153,7 +155,12 @@ class BM(Singleton, BaseModel):
     def load_config(cls, v):
         global _REGISTRY
         if not v:
-            return _REGISTRY[_CONFIG]
+            try:
+                return _REGISTRY[_CONFIG]
+            except KeyError as e:
+                raise FatalError(
+                    "BM() called without config information before it was initialised.",
+                ) from e
         return v
 
     def model_post_init(self, __context: Any) -> None:
@@ -224,7 +231,9 @@ class BM(Singleton, BaseModel):
 
         warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
         warnings.filterwarnings(
-            action="ignore", module="msal", category=DeprecationWarning
+            action="ignore",
+            module="msal",
+            category=DeprecationWarning,
         )
         warnings.filterwarnings(
             action="ignore",

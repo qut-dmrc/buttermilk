@@ -1,6 +1,6 @@
 {% block content %}
       <div class="row">
-        <h2 class="float-end">{{ data.agent_info.agent }}, {{ data.agent_info.model }} 
+        <h2 class="float-end">{{ data.parameters.template }}, {{ data.parameters.model }} {data.parameters.get('criteria')}
         </h2>
         <div class="float-end response">
           <p>Prediction: <span class="{{ 'predicted_true' if data.outputs.prediction else 'predicted_false' }}">
@@ -14,6 +14,7 @@
           {% for reason in data.outputs.reasons %}
             <p>{{ reason }}</p>
           {% endfor %}
+          {{ data.job_id }}
         </div>
       </div>
 {% endblock %}

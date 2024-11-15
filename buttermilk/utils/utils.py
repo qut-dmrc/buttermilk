@@ -339,6 +339,9 @@ def find_key_string_pairs(data):
 
 
 def find_in_nested_dict(result: dict, value: str) -> object:
+    # Handle lists of dicts too
+    if isinstance(result, Sequence) and not isinstance(result, str):
+        return [find_in_nested_dict(item, value=value) for item in result]
     nested = value.split(".")
     for n in nested:
         result = result.get(n, {})
