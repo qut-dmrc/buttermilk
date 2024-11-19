@@ -1,0 +1,34 @@
+summarise_osb:
+  _target_: buttermilk.runner.creek.Creek
+  source: osb development
+  steps:
+    - name: summarise
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 2
+      concurrency: 20
+      parameters: 
+        template: summarise
+        instructions: summarise_osb
+        model:
+          - gpt4o
+          - sonnet
+          - gemini15pro
+
+      save:
+        type: bq
+        dataset: dmrc-analysis.toxicity.flow
+        schema: flow.json
+
+    - name: synthesise
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      concurrency: 20
+      parameters: 
+        template: synthesise
+        instructions: summarise_osb
+        model:
+          - gpt4o
+          - sonnet
+        content: record.text
+        answers: summarise
+     

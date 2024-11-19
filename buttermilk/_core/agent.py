@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from typing import Any, Self
 
 import numpy as np
+import pandas as pd
 import shortuuid
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
@@ -140,6 +141,7 @@ class Agent(BaseModel):
         *,
         job: Job,
         additional_data: Any = None,
+        dataset: pd.DataFrame = None,
         **kwargs,
     ) -> Job:
         """Take a Job with Inputs, process it, and return a Job.

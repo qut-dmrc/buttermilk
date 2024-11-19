@@ -4,6 +4,9 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+    
+    
+    
     {
       "name": "Python Debugger: FastAPI",
       "type": "debugpy",
@@ -33,21 +36,23 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[hate,trans]",
+         "+flows=[osb,summarise_osb,hate,trans]",
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
     {
-      "name": "creek debug",
+      "name": "cli debug",
       "type": "debugpy",
       "request": "launch",
-      "module": "buttermilk.runner.creek",
+      "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[hate,trans]",
+              "+flows=[summarise_osb]",
+              "+flow=summarise_osb",
+              "+record.uri=gs://dmrc-platforms/data/osb/FB-2AHD01LX.md"
             ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

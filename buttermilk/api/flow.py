@@ -22,12 +22,9 @@ from buttermilk import BM
 from buttermilk._core.log import logger
 from buttermilk._core.runner_types import (
     Job,
-    RecordInfo,
 )
-from buttermilk.agents.lc import LC
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.creek import Creek
-from buttermilk.utils.media import validate_uri_extract_text, validate_uri_or_b64
 
 from .runs import get_recent_runs
 
@@ -41,39 +38,16 @@ flows = dict()
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
 
+# gcloud pubsub topics publish TOPIC_ID --message='{"task": "summarise_osb", "uri": "gs://dmrc-platforms/data/osb/FB-515JVE4X.md", "record_id": "FB-515JVE4X"}
 
-async def run_flow(
-    flow: Literal["judge", "summarise"],
-    request: Request,
-    flow_request: FlowRequest | None = "",
-) -> AsyncGenerator[Job, None]:
-    # Ensure at least one of the content, uri, or media variables are provided
-    # And make sure that we can form Client and Job objects from the input data.
-    content, image, video = await asyncio.gather(
-        validate_uri_extract_text(flow_request.content),
-        validate_uri_or_b64(flow_request.image),
-        validate_uri_or_b64(flow_request.video),
-    )
-    record = RecordInfo(content=content, media=[image, video])
-    model = flow_request.model[0]
-    template_vars = flow_request.template_vars[0]
-    template = flow_request.template[0]
-    agent = LC(
-        flow=flow,
-        name="apilcagent",
-        template=template,
-        template_vars=template_vars,
-        model=model,
-    )
-    run_vars = dict()
-
-    # orchestrator = MultiFlowOrchestrator(
-    #     step=step, save=bm.cfg.save, data=None, source="api"
-    # )
-
-    job = Job(record=record, source="api", parameters=run_vars)
-    result = await agent.run(job)
-    yield result
+# gsutil ls "gs://dmrc-platforms/data/osb/*md" | while read -r uri; do
+#     filename=$(basename "$uri")
+#     echo "About to send:"
+#     echo "{\"task\": \"summarise_osb\", \"uri\": \"$uri\", \"record_id\": \"${filename%.*}\"}"
+#     echo "Press RETURN to send, or Ctrl+C to abort"
+#     read
+#     gcloud pubsub topics publish flow --message="{\"task\": \"summarise_osb\", \"uri\": \"$uri\", \"record_id\": \"${filename%.*}\"}"
+# done
 
 
 def callback(message):
@@ -86,43 +60,27 @@ def callback(message):
     except Exception as e:
         message.nack()
         logger.error(f"Error parsing Pub/Sub message: {e}")
+        return
 
     try:
-        # Try to get existing loop
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        # No loop exists, create new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        should_close_loop = True
-    else:
-        should_close_loop = False
-
-    try:
-        # Run async operations in the loop
         bm.logger.info(f"Calling flow {task} for Pub/Sub job...")
 
         async def process_generator():
             results = []
-            async for result in run_flow(
-                flow=task,
-                request=request,
-                flow_request=request,
-            ):
+            async for result in flow_stream(flows[task], request):
                 results.append(result)
             return results
 
-        results = loop.run_until_complete(process_generator())
+        results = asyncio.run(
+            process_generator(),
+        )
         message.ack()
 
     except Exception as e:
         logger.error(f"Error processing message: {e}")
         message.nack()
-    finally:
-        if should_close_loop:
-            loop.close()
 
-    bm.logger.info(f"Passed on Pub/Sub job. Received {len(results)} results")
+    bm.logger.info("Passed on Pub/Sub job.")
 
 
 def start_pubsub_listener():
@@ -184,7 +142,7 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["hate", "trans"],
+    flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb"],
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:

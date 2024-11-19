@@ -186,19 +186,17 @@ class BM(Singleton, BaseModel):
         try:
             contents = Path(CONFIG_CACHE_PATH).read_text()
         except Exception:
-            pass
-
-        auth = DefaultAzureCredential()
-        vault_uri = self.cfg.secret_provider.vault
-        secrets = SecretClient(vault_uri, credential=auth)
-        contents = secrets.get_secret(_MODELS_SECRET).value
-        if not contents:
-            raise ValueError("Could not load secrets from Azure vault")
-        try:
-            Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
-            Path(CONFIG_CACHE_PATH).write_text(contents)
-        except Exception:
-            pass
+            auth = DefaultAzureCredential()
+            vault_uri = self.cfg.secret_provider.vault
+            secrets = SecretClient(vault_uri, credential=auth)
+            contents = secrets.get_secret(_MODELS_SECRET).value
+            if not contents:
+                raise ValueError("Could not load secrets from cache or Azure vault")
+            try:
+                Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
+                Path(CONFIG_CACHE_PATH).write_text(contents)
+            except Exception:
+                pass
 
         connections = json.loads(contents)
         connections = {conn["name"]: conn for conn in connections}

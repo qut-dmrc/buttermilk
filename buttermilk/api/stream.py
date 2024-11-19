@@ -39,11 +39,12 @@ class FlowRequest(BaseModel):
     model: str | Sequence[str] | None = None
     template: str | Sequence[str] | None = None
     template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
-
+    record_id: str | None = None
     content: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("content", "text", "body"),
+        validation_alias=AliasChoices("content", "text", "body", "uri", "url"),
     )
+    source: str | Sequence[str] | None = None
     video: str | bytes | None = None
     image: str | bytes | None = None
 
@@ -55,7 +56,13 @@ class FlowRequest(BaseModel):
     _client: LC = PrivateAttr()
     _job: Job = PrivateAttr()
 
-    _ensure_list = field_validator("model", "template", "template_vars", mode="before")(
+    _ensure_list = field_validator(
+        "model",
+        "template",
+        "template_vars",
+        "source",
+        mode="before",
+    )(
         make_list_validator(),
     )
 
@@ -138,10 +145,14 @@ async def flow_stream(
         validate_uri_or_b64(flow_request.video),
     )
     media = [x for x in [image, video] if x]
-    record = RecordInfo(text=content, media=media)
+    if flow_request.record_id:
+        record = RecordInfo(text=content, media=media, record_id=flow_request.record_id)
+    else:
+        record = RecordInfo(text=content, media=media)
     async for data in flow.run_flows(
         record=record,
         run_info=bm._run_metadata,
+        source=flow_request.source,
     ):
         if data:
             rprint(data)

@@ -1,0 +1,34 @@
+# defaults:
+#   - _self_
+
+osb:
+  _target_: buttermilk.runner.creek.Creek
+  source: api development
+  steps:
+    - name: search
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      concurrency: 2
+      save: ${save}
+      parameters: 
+        template: osb
+        model:
+          - gpt4o
+      inputs:
+        dataset: osbcasesfull
+      outputs:
+        response: response
+        uri: uri
+  data:
+    - name: osbcasesfull
+      type: file
+      uri: gs://dmrc-platforms/data/osb/01_osb_cases.json
+      columns:
+        record_id: record_id
+        text: text
+    # - name: osbcasessummary
+    #   type: file
+    #   uri: gs://dmrc-platforms/data/osb/02_osb_summaries.json
+    #   columns:
+    #     record_id: id
+    #     content: text

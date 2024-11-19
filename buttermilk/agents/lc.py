@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Self
 
 import numpy as np
+import pandas as pd
 import regex as re
 import requests
 import urllib3
@@ -156,7 +157,6 @@ class LC(Agent):
         additional_data: dict = None,
         **kwargs,
     ) -> Job:
-        additional_data = additional_data or {}
 
         def resolve_value(value):
             """Recursively resolve values from different data sources."""
@@ -169,6 +169,8 @@ class LC(Agent):
                 if "." in value:
                     locator, field = value.split(".", maxsplit=1)
                     if locator in additional_data:
+                        if isinstance(additional_data[locator], pd.DataFrame):
+                            return additional_data[locator][field].values
                         return find_in_nested_dict(additional_data[locator], field)
                     if locator == "record":
                         return find_in_nested_dict(job.record.model_dump(), field)
@@ -177,6 +179,13 @@ class LC(Agent):
                 if value in job.record.model_fields or value in job.record.model_extra:
                     return getattr(job.record, value)
 
+                # handle entire dataset
+                if value in additional_data:
+                    if isinstance(additional_data[value], pd.DataFrame):
+                        return additional_data[value].to_dict(orient="records")
+                    return additional_data[value]
+
+                # No match
                 return value
 
             if isinstance(value, Sequence) and not isinstance(value, str):
@@ -239,7 +248,7 @@ class LC(Agent):
         )
 
         logger.debug(
-            f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(response)} length.",
+            f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(str(response.values()))} characters.",
         )
         error = response.pop("error", None)
         if error:

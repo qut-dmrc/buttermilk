@@ -13,6 +13,7 @@ from buttermilk.utils.utils import find_key_string_pairs
 
 async def load_data(data_cfg: DataSource) -> pd.DataFrame:
     if data_cfg.type == "file":
+        logger.debug(f"Reading data from {data_cfg.path}")
         df = pd.read_json(data_cfg.path, lines=True, orient="records")
         # convert column_mapping to work for our dataframe
         columns = col_mapping_hydra_to_local(data_cfg.columns)
@@ -81,7 +82,7 @@ def group_and_filter_jobs(
     *,
     data: pd.DataFrame,
     data_cfg: DataSource,
-    existing_df: pd.DataFrame | None = None,
+    existing_dfs: pd.DataFrame | None = None,
     raise_on_error=True,
 ) -> pd.DataFrame:
     # expand and rename columns if we need to
@@ -158,7 +159,7 @@ def group_and_filter_jobs(
         data = data[list(data_cfg.columns.keys())]
 
     # Join the columns to the existing dataset
-    if existing_df is not None and existing_df.shape[0] > 0:
+    if existing_dfs is not None and existing_dfs.shape[0] > 0:
         if idx_cols:
             # reset index columns that we're not matching on:
             data = data.reset_index(level=list(data_cfg.group.keys()), drop=True)
@@ -171,13 +172,13 @@ def group_and_filter_jobs(
                     lambda x: [item for sublist in x for item in sublist],
                 )
 
-        existing_df = pd.merge(
-            existing_df,
+        existing_dfs = pd.merge(
+            existing_dfs,
             data,
             left_on=list(data_cfg.join.keys()),
             right_index=True,
         )
-        return existing_df
+        return existing_dfs
     return data
 
 
@@ -189,10 +190,10 @@ def cache_data(uri: str) -> str:
     return dataset
 
 
-async def prepare_step_df(data_configs) -> pd.DataFrame:
+async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFrame]:
     # This works for small datasets that we can easily read and load.
-
-    dataset = pd.DataFrame()
+    datasets = {}
+    df = pd.DataFrame()
     source_list = []
     dataset_configs = []
 
@@ -210,16 +211,17 @@ async def prepare_step_df(data_configs) -> pd.DataFrame:
         df = await load_data(src)
         if src.type == "job":
             # Load and join prior job data
-            dataset = group_and_filter_jobs(existing_df=dataset, data=df, data_cfg=src)
+            df = group_and_filter_jobs(existing_dfs=df, data=df, data_cfg=src)
         elif src.columns:
-            dataset = pd.concat([dataset, df[src.columns.keys()]])
+            df = pd.concat([df, df[src.columns.keys()]])
         else:
             # TODO - also allow joining other datasets that are not jobs.
-            dataset = pd.concat([dataset, df[src.columns.keys()]])
-    # shuffle
-    dataset = dataset.sample(frac=1)
+            df = pd.concat([df, df[src.columns.keys()]])
+        # shuffle
+        df = df.sample(frac=1)
 
-    return dataset
+        datasets[src.name] = df
+    return datasets
 
 
 async def read_all_files(uri, pattern, columns: dict[str, str]):

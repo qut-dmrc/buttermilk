@@ -26,13 +26,12 @@ async def run_tasks(
             t1 = time.perf_counter()
 
             try:
-                async with asyncio.TaskGroup() as tg:
-                    async with _sem:
-                        async for wrapped_task in task_generator:
-                            tg.create_task(wrapped_task)
-                            await asyncio.sleep(
-                                0,
-                            )  # Yield control to allow tasks to start processing
+                async with asyncio.TaskGroup() as tg, _sem:
+                    async for wrapped_task in task_generator:
+                        tg.create_task(wrapped_task)
+                        await asyncio.sleep(
+                            0,
+                        )  # Yield control to allow tasks to start processing
 
             except KeyboardInterrupt:
                 # we have been interrupted. Abort gracefully if possible -- the first time. The second time, abort immediately.

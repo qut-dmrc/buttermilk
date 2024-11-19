@@ -1,5 +1,4 @@
 import datetime
-import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import (
@@ -80,12 +79,15 @@ class SaveInfo(CloudProviderCfg):
     @field_validator("db_schema")
     def file_must_exist(cls, v):
         if v:
-            if not os.path.exists(v):
-                f = Path(BQ_SCHEMA_DIR) / v
-                if f.exists():
-                    return f.as_posix()
-
-                raise ValueError(f"File '{v}' does not exist.")
+            try:
+                if Path(v).exists():
+                    return v.as_posix()
+            except Exception:
+                pass
+            f = Path(BQ_SCHEMA_DIR) / v
+            if f.exists():
+                return f.as_posix()
+            raise ValueError(f"File '{v}' does not exist.")
         return v
 
     @model_validator(mode="after")

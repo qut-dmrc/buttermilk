@@ -11,7 +11,7 @@ from typing import (
 import numpy as np
 import pydantic
 import shortuuid
-from cloudpathlib import CloudPath
+from cloudpathlib import AnyPath, CloudPath
 from langchain_core.messages import BaseMessage, HumanMessage
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
@@ -24,24 +24,25 @@ from pydantic import (
     model_validator,
 )
 
+from buttermilk.utils.utils import remove_punctuation
 from buttermilk.utils.validators import make_list_validator
 
 from .types import SessionInfo
 
 
 class Result(BaseModel):
-    category: str | int | None = None
+    category: str | int | None = Field(default=None)
     prediction: bool | int | None = Field(
         default=None,
         validation_alias=AliasChoices("prediction", "prediction", "pred"),
     )
-    result: float | str | None = None
+    result: float | str | None = Field(default=None)
     labels: list[str] | None = Field(
         default=[],
         validation_alias=AliasChoices("labels", "label"),
     )
-    confidence: float | str | None = None
-    severity: float | str | None = None
+    confidence: float | str | None = Field(default=None)
+    severity: float | str | None = Field(default=None)
     reasons: list | None = Field(
         default=[],
         validation_alias=AliasChoices("reasoning", "reason"),
@@ -68,6 +69,12 @@ class Result(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
+
+    def model_dump(self, **kwargs):
+        # Use the default model_dump method with exclude_none and exclude_unset
+        data = super().model_dump(**kwargs, exclude_none=True, exclude_unset=True)
+        # Remove keys with empty values
+        return {k: v for k, v in data.items() if v}
 
 
 class MediaObj(BaseModel):
@@ -169,6 +176,12 @@ class RecordInfo(BaseModel):
                 "InputRecord must have text or image or video or alt_text.",
             )
 
+        if not self.record_id:
+            if self.name:
+                self.record_id = remove_punctuation(self.name)
+            elif self.uri:
+                self.record_id = AnyPath(self.uri).stem
+
         return self
 
     @field_validator("uri")
@@ -219,7 +232,10 @@ class Job(BaseModel):
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
         description="The date and time a job was created.",
     )
-    source: str = Field(..., description="Where this particular job came from")
+    source: Sequence[str] = Field(
+        ...,
+        description="Where this particular job came from",
+    )
 
     run_info: SessionInfo | None = Field(
         default=None,
@@ -239,7 +255,7 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    outputs: dict | Result | None = Field(
+    outputs: Result | None = Field(
         default_factory=dict,
         description="The results of the job",
     )
@@ -261,7 +277,9 @@ class Job(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
-    _ensure_list = field_validator("prompt", mode="before")(make_list_validator())
+    _ensure_list = field_validator("prompt", "source", mode="before")(
+        make_list_validator(),
+    )
 
     # @field_serializer('flow')
     # def serialize_omegaconf(cls, value):
