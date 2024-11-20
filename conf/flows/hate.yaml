@@ -6,6 +6,7 @@ hate:
       name: judger
       num_runs: 1
       concurrency: 20
+      save: ${save}
       parameters:
         template: judge
         criteria: criteria_ordinary
@@ -29,6 +30,7 @@ hate:
       name: synth
       num_runs: 1
       concurrency: 20
+      save: ${save}
       parameters:
         template: synthesise
         instructions: judge
@@ -54,6 +56,7 @@ hate:
       name: eval
       num_runs: 1
       concurrency: 20
+      save: ${save}
       parameters:
         template: differences
         criteria: criteria_ordinary

@@ -36,7 +36,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[osb,summarise_osb,hate,trans]",
+         "+flows=[osb,summarise_osb,hate,trans,describer]",
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -50,7 +50,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[summarise_osb]",
+              "+flows=[summarise_osb,test]",
               "+flow=summarise_osb",
               "+record.uri=gs://dmrc-platforms/data/osb/FB-2AHD01LX.md"
             ],

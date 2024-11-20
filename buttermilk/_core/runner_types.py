@@ -185,12 +185,13 @@ class RecordInfo(BaseModel):
         return self
 
     @field_validator("uri")
-    def vld_path(path):
+    @classmethod
+    def vld_path(cls, path: object) -> str:
         if isinstance(path, CloudPath):
             return path.as_uri()
         if isinstance(path, Path):
             return path.as_posix()
-        return path
+        return str(path)
 
     def as_langchain_message(
         self,

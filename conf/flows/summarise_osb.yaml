@@ -1,3 +1,7 @@
+
+# defaults:
+  # - save: /save/bq.yaml
+  
 summarise_osb:
   _target_: buttermilk.runner.creek.Creek
   source: osb development
@@ -6,6 +10,7 @@ summarise_osb:
       _target_: buttermilk.agents.lc.LC
       num_runs: 2
       concurrency: 20
+      save: ${save}
       parameters: 
         template: summarise
         instructions: summarise_osb
@@ -14,15 +19,11 @@ summarise_osb:
           - sonnet
           - gemini15pro
 
-      save:
-        type: bq
-        dataset: dmrc-analysis.toxicity.flow
-        schema: flow.json
-
     - name: synthesise
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
+      save: ${save}
       parameters: 
         template: synthesise
         instructions: summarise_osb

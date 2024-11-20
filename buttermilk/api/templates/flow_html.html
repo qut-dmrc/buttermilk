@@ -1,14 +1,18 @@
 {% block content %}
       <div class="row">
-        <h2 class="float-end">{{ data.parameters.template }}, {{ data.parameters.model }} {data.parameters.get('criteria')}
+        <h2 class="float-end">{{ data.parameters.get('template', '') }}, {{ data.parameters.get('model', '') }} {{data.parameters.get('criteria', '')}}
         </h2>
         <div class="float-end response">
-          <p>Prediction: <span class="{{ 'predicted_true' if data.outputs.prediction else 'predicted_false' }}">
-            {{ 'true' if data.outputs.prediction else 'false' }}
-                {{ '&#10004;' if data.outputs.prediction  else '&#10008;' }}
-              </span>
-          </p>
-          {% if data.outputs.labels %}
+            {% if 'prediction' in data.outputs %}
+              <p>Prediction: <span class="{{ 'predicted_true' if data.outputs.prediction else 'predicted_false' }}">
+                {{ 'true' if data.outputs.prediction else 'false' }}
+                    {{ '&#10004;' if data.outputs.prediction  else '&#10008;' }}
+                  </span>
+              </p>
+              {% else %}
+              <p>&nbsp;</p>
+            {% endif %}
+            {% if data.outputs.labels %}
           <p>Labels: {{ ", ".join(data.outputs.labels) }}</p>
           {% endif %}
           {% for reason in data.outputs.reasons %}

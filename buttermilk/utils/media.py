@@ -12,6 +12,7 @@ async def validate_uri_extract_text(value: AnyUrl | str | None) -> str | None:
     if value:
         try:
             _ = AnyUrl(value)
+            assert _.scheme and _.host
         except:
             return value
 

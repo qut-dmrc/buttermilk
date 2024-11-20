@@ -1,0 +1,29 @@
+describe:
+  _target_: buttermilk.runner.creek.Creek
+  source: api development
+  steps: 
+    - name: describe
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 3
+      concurrency: 20
+      parameters:
+        template: describe
+        model:
+          - gpt4v
+          - gemini15pro
+      inputs:
+        record: record
+    - name: describe_synth
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      concurrency: 20
+      parameters:
+        template: describe
+        model:
+          - gpt4v
+          - gemini15pro
+      inputs:
+        record: record
+        answers: describe.outputs
+      outputs:
+        record: outputs

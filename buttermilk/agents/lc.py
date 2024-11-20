@@ -189,7 +189,8 @@ class LC(Agent):
                 return value
 
             if isinstance(value, Sequence) and not isinstance(value, str):
-                return [resolve_value(item) for item in value]
+                # combine lists
+                return [x for item in value for x in resolve_value(item)]
 
             if isinstance(value, dict):
                 return {k: resolve_value(v) for k, v in value.items()}

@@ -142,7 +142,7 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb"],
+    flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb", "test"],
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:

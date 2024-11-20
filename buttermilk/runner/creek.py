@@ -8,13 +8,15 @@ from pydantic import BaseModel, Field, field_validator
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk._core.types import SessionInfo
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.utils import find_in_nested_dict
 
-""" A little stream. Runs several flow stages over a single record and streams results."""
+""" A little stream. Runs several flow stages over a single record 
+    and streams results.
+"""
 
 
 class Creek(BaseModel):
@@ -45,17 +47,11 @@ class Creek(BaseModel):
         run_info: SessionInfo,
         source: str | Sequence[str] | None,
     ) -> AsyncGenerator[Any, None]:
-        save_data = SaveInfo(
-            type="bq",
-            dataset="dmrc-analysis.toxicity.flow",
-            db_schema="flow.json",
-        )
 
         if self._data is None:
             await self.load_data()
 
         for agent in self.steps:
-            agent.save = save_data
             async for result in self.run_step(
                 agent=agent,
                 record=record,
@@ -70,7 +66,7 @@ class Creek(BaseModel):
         record: RecordInfo,
         run_info: SessionInfo,
         source: Sequence[str] = [],
-    ):
+    ) -> AsyncGenerator:
         self._data[agent.name] = []
         source = [self.source, *source] if source else [self.source]
         tasks = []
