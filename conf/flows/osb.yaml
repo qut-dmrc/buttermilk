@@ -13,7 +13,8 @@ osb:
       parameters: 
         template: osb
         model:
-          - gpt4o
+          - gemini15pro
+          - gpt4o_osb
       inputs:
         dataset: osbcasesfull
       outputs:

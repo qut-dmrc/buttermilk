@@ -45,7 +45,11 @@ class FlowRequest(BaseModel):
     record_id: str | None = None
     content: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("content", "text", "body", "uri", "url"),
+        validation_alias=AliasChoices("content", "text", "body"),
+    )
+    uri: str | bytes | None = Field(
+        default=None,
+        validation_alias=AliasChoices("uri", "url", "link"),
     )
     source: str | Sequence[str] | None = None
     video: str | bytes | None = None

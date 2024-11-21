@@ -1,6 +1,8 @@
 import base64
+from pathlib import Path
 
 from bs4 import BeautifulSoup
+from cloudpathlib import AnyPath
 from pydantic import AnyUrl, validate_call
 
 from buttermilk._core.runner_types import MediaObj
@@ -52,3 +54,20 @@ async def validate_uri_or_b64(value: AnyUrl | str | None) -> MediaObj | None:
         except Exception:
             raise ValueError("Invalid URI or base64-encoded string")
     return None
+
+async def download_and_convert(input_path: str|AnyPath):
+    path = AnyPath(input_path) if not isinstance(input_path, AnyPath) else input_path
+    
+    extension = path.suffix
+
+    # Guess mime type from extension
+    # ...
+    mimetype = ''
+
+    if isinstance(path, AnyUrl) or AnyUrl(path):
+        # It's a URL, go fetch and encode it
+        obj = await download_limited_async(path)
+        value = base64.b64encode(obj).decode("utf-8")
+        return MediaObj(base_64=value, mime=mimetype)
+    else:
+        # TODO: finish this.

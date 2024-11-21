@@ -3,6 +3,9 @@
         <h2 class="float-end">{{ data.parameters.get('template', '') }}, {{ data.parameters.get('model', '') }} {{data.parameters.get('criteria', '')}}
         </h2>
         <div class="float-end response">
+            {% if data.error %}
+            <p class="alert">{{data.error}}</p>
+            {% endif %}
             {% if 'prediction' in data.outputs %}
               <p>Prediction: <span class="{{ 'predicted_true' if data.outputs.prediction else 'predicted_false' }}">
                 {{ 'true' if data.outputs.prediction else 'false' }}
@@ -21,6 +24,7 @@
           {% for key, value in data.outputs.model_extra.items() %}
           <p>{{ key }}: {{ value }}</p>
           {{ data.job_id }}
+          {% endfor %}
         </div>
       </div>
 {% endblock %}

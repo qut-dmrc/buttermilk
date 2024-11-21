@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import datetime
 from collections.abc import Mapping, Sequence
@@ -152,7 +153,7 @@ class RecordInfo(BaseModel):
         default=None,
         alias=AliasChoices("text", "content", "body", "alt_text", "alt", "caption"),
     )
-    media: MediaObj | Sequence[MediaObj] | None = Field(
+    media: MediaObj | list[MediaObj] = Field(
         default_factory=list,
         alias=AliasChoices("media", "image", "video", "audio"),
     )
@@ -192,6 +193,26 @@ class RecordInfo(BaseModel):
         if isinstance(path, Path):
             return path.as_posix()
         return str(path)
+
+    async def load_contents(self) -> None:
+        # If we have a URI, download it.
+        # If it's a webpage, extract the text.
+        # If it's a binary object, convert it to base64.
+        # Try to guess the mime type from the extension if possible.
+        tasks = []
+        resolved_objects = []
+        if self.uri:
+            tasks.append(download_and_convert(self.uri))
+        for obj in self.media:
+            if obj.uri and not obj.base_64:
+                tasks.append(download_and_convert(self.uri))
+            else:
+                resolved_objects.append(obj)
+
+        if tasks:
+            resolved_objects = [*resolved_objects, await asyncio.gather(tasks)]
+
+        self.media = resolved_objects
 
     def as_langchain_message(
         self,
