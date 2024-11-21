@@ -58,12 +58,8 @@ You must reply only in a fully valid JSON format.
 {% raw %}
 ```json
 {
-    "analysis": [
-        { "heading": <STRING: a short description of the key point>
-          "reasons": <STRING: your detailed summary of differences in reasoning across the answers on this key point>
-        }, 
-        ... <other key points> ...
-    ]
+    "reasons": [ ARRAY of STRING: <Each element should represent ONE SINGLE STEP in logical reasoning. Each step should comprise one to five sentences of text presenting a clear logical analysis.>, 
+    ..., <other STRING elements representing EACH remaining logical steps>, ...]
 }
 ```
 {% endraw %}

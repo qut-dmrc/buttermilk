@@ -319,15 +319,3 @@ class LC(Agent):
         output["metadata"]["seconds_elapsed"] = elapsed
 
         return output
-
-
-if __name__ == "__main__":
-    lc = LC(
-        model=["fake"],
-        template="judge.jinja2",
-        criteria="criteria_ordinary",
-    )
-    result = lc(
-        content="What's 2+2?",
-    )
-    print(result)

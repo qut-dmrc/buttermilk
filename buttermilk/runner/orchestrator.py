@@ -1,19 +1,19 @@
-import asyncio
-import random
-from omegaconf import DictConfig, ListConfig, OmegaConf
-import pandas as pd
-from pydantic import BaseModel, Field, PrivateAttr, field_serializer, model_validator
-from typing import Any, Coroutine, Mapping, Optional, Self, Sequence, AsyncGenerator, Tuple
+from collections.abc import AsyncGenerator, Coroutine, Sequence
+from typing import Any, Self
+
+import shortuuid
+from omegaconf import OmegaConf
+from pydantic import BaseModel, PrivateAttr, field_serializer, model_validator
+
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource
 from buttermilk._core.flow import Flow
-from buttermilk._core.runner_types import Job, RecordInfo
-from buttermilk.agents.lc import LC
+from buttermilk._core.runner_types import Job
+from buttermilk.data.recordmaker import RecordMakerDF
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.utils import expand_dict
-from buttermilk.data.recordmaker import RecordMaker, RecordMakerDF
+
 
 class MultiFlowOrchestrator(BaseModel):
     flow: Flow
@@ -34,11 +34,11 @@ class MultiFlowOrchestrator(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    @field_serializer('flow')
+    @field_serializer("flow")
     def serialize_omegaconf(cls, value):
         return OmegaConf.to_container(value, resolve=True)
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def set_vars(self) -> Self:
         self._num_runs = self.flow.num_runs or self._num_runs
         self._concurrent = self.flow.concurrency or self._concurrent
@@ -49,35 +49,43 @@ class MultiFlowOrchestrator(BaseModel):
         self._dataset = await prepare_step_df(self.flow.data)
         self._data_generator = RecordMakerDF(dataset=self._dataset).record_generator
 
-        self._agents = [x async for x in self.make_agents() ]
+        self._agents = [x async for x in self.make_agents()]
 
     async def make_agents(self):
         # Get permutations of init variables
         agent_combinations = expand_dict(self.flow.agent.model_dump())
 
         for init_vars in agent_combinations:
-            if not init_vars.get('flow'):
-                init_vars['flow'] = self.flow.name
-            agent: Agent = globals()[self.flow.agent.type](**init_vars, save=self.flow.save)
+            if not init_vars.get("flow"):
+                init_vars["flow"] = self.flow.name
+            agent: Agent = globals()[self.flow.agent.type](
+                **init_vars, save=self.flow.save
+            )
             yield agent
 
-
     async def make_tasks(self) -> AsyncGenerator[Coroutine, None]:
-        # create and run a separate job for 
+        # create and run a separate job for
         #   * each record in  self._data_generator
         #   * each Agent (Different classes or instances of classes to resolve a task)
 
         # Get permutations of run variables
         run_combinations = expand_dict(self.flow.parameters)
 
-        for agent in self._agents:
-            async for record in self._data_generator():
+        async for record in self._data_generator():
+            flow_id = shortuuid.uuid()
+            for agent in self._agents:
                 for run_vars in run_combinations:
-                    job = Job(record=record, source=self.source, parameters=run_vars)
+                    job = Job(
+                        flow_id=flow_id,
+                        record=record,
+                        source=self.source,
+                        parameters=run_vars,
+                    )
                     coroutine = agent.run(job)
-                    coroutine = self.task_wrapper(task=coroutine, job_id=job.job_id, agent_name=agent.name)
+                    coroutine = self.task_wrapper(
+                        task=coroutine, job_id=job.job_id, agent_name=agent.name
+                    )
                     yield coroutine
-
 
     async def task_wrapper(self, *, agent_name, job_id, task):
         try:
@@ -93,7 +101,8 @@ class MultiFlowOrchestrator(BaseModel):
                 self._tasks_completed += 1
 
             return result
-        
-        except Exception as e:
-            raise FatalError(f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}")
 
+        except Exception as e:
+            raise FatalError(
+                f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}"
+            )

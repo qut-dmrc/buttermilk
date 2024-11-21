@@ -43,6 +43,8 @@ class Creek(BaseModel):
 
     async def run_flows(
         self,
+        *,
+        flow_id: str,
         record: RecordInfo,
         run_info: SessionInfo,
         source: str | Sequence[str] | None,
@@ -57,13 +59,16 @@ class Creek(BaseModel):
                 record=record,
                 run_info=run_info,
                 source=source,
+                flow_id=flow_id,
             ):
                 yield result
 
     async def run_step(
         self,
+        *,
         agent: Agent,
         record: RecordInfo,
+        flow_id: str,
         run_info: SessionInfo,
         source: Sequence[str] = [],
     ) -> AsyncGenerator:
@@ -74,6 +79,7 @@ class Creek(BaseModel):
             # Create a new job and task for every combination of variables
             # this agent is configured to run.
             job = Job(
+                flow_id=flow_id,
                 record=record,
                 source=source,
                 inputs=agent.inputs,

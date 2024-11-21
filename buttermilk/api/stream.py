@@ -6,6 +6,7 @@ from typing import (
 )
 from urllib.parse import parse_qs
 
+import shortuuid
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -17,12 +18,12 @@ from pydantic import (
 )
 from rich import print as rprint
 
+from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
 from buttermilk._core.runner_types import (
     Job,
     RecordInfo,
 )
-from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.creek import Creek
@@ -36,6 +37,8 @@ bm = None
 
 
 class FlowRequest(BaseModel):
+    flow_id: str = Field(default_factory=shortuuid.uuid, init=False)
+
     model: str | Sequence[str] | None = None
     template: str | Sequence[str] | None = None
     template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
@@ -53,7 +56,7 @@ class FlowRequest(BaseModel):
         extra="allow",
         populate_by_name=True,
     )
-    _client: LC = PrivateAttr()
+    _client: Agent = PrivateAttr()
     _job: Job = PrivateAttr()
 
     _ensure_list = field_validator(

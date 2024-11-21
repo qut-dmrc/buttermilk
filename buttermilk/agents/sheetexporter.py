@@ -95,7 +95,7 @@ class GSheetExporter(Agent):
         answers = format_strings(job.inpu, convert_json_columns=['outputs'])
         answers.info()
 
-        sheet = gsheet.save_gsheet(df=answers,  sheet_name="evals", title="results")
+        sheet = gsheet.save_gsheet(df=answers, sheet_name="evals", title="results")
         sheet_id = sheet.id
 
         if not (model := job.parameters.pop('model', None) or self.model):

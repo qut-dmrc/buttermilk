@@ -18,6 +18,8 @@
           {% for reason in data.outputs.reasons %}
             <p>{{ reason }}</p>
           {% endfor %}
+          {% for key, value in data.outputs.model_extra.items() %}
+          <p>{{ key }}: {{ value }}</p>
           {{ data.job_id }}
         </div>
       </div>

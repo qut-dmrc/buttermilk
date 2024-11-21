@@ -45,7 +45,7 @@ class Result(BaseModel):
     severity: float | str | None = Field(default=None)
     reasons: list | None = Field(
         default=[],
-        validation_alias=AliasChoices("reasoning", "reason"),
+        validation_alias=AliasChoices("reasoning", "reason", "analysis", "answer"),
     )
     scores: dict | list | None = None
     metadata: dict | None = {}
@@ -229,6 +229,7 @@ class RecordInfo(BaseModel):
 class Job(BaseModel):
     # A unique identifier for this particular unit of work
     job_id: str = pydantic.Field(default_factory=shortuuid.uuid)
+    flow_id: str
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
         description="The date and time a job was created.",

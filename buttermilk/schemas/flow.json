@@ -5,6 +5,11 @@
         "mode": "REQUIRED"
     },
     {
+        "name": "flow_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
         "name": "timestamp",
         "type": "TIMESTAMP",
         "mode": "REQUIRED"
