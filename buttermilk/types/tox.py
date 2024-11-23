@@ -1,6 +1,5 @@
 
 import datetime
-from typing import Any, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -10,42 +9,23 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    RootModel,
-    TypeAdapter,
-    field_validator,
-    model_validator,
-    validator,
-)
-
-from buttermilk.flows.common.config import COL_PREDICTION
-from buttermilk.utils import read_yaml
-
-import datetime
-from typing import Any, AsyncGenerator, Generator, Optional, Self, Type, Union
-
-import numpy as np
-import shortuuid
-from cloudpathlib import CloudPath, GSPath
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    RootModel,
     TypeAdapter,
     field_validator,
     model_validator,
 )
+
+from buttermilk.defaults import COL_PREDICTION
+
 
 class Score(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     measure: str
-    score: Optional[float] = Field(default=None, validation_alias="scores")
-    confidence: Optional[float|str] = None
-    severity: Optional[float] = None
-    result: Optional[bool] = None
-    labels: Optional[list[str]] = Field(default=[], validation_alias="label")
+    score: float | None = Field(default=None, validation_alias="scores")
+    confidence: float | str | None = None
+    severity: float | None = None
+    result: bool | None = None
+    labels: list[str] | None = Field(default=[], validation_alias="label")
     reasons: list[str] = Field(default=[], validation_alias="reason")
 
     @field_validator("labels")
@@ -56,39 +36,38 @@ class Score(BaseModel):
         return []
 
 
-
 class Reasons(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     heading: str
     reasoning: str = Field(..., validation_alias=AliasChoices("reason", "reasons"))
-    confidence: Optional[str] = None
+    confidence: str | None = None
 
 
 class EvalRecord(BaseModel):
     eval_id: str = Field(default_factory=lambda: shortuuid.uuid())
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.utcnow)
 
-    record_id: Optional[str] = None
+    record_id: str | None = None
 
-    metadata: Optional[dict] = {}
+    metadata: dict | None = {}
 
-    model: Optional[str] = None     # The model used for the evaluation
-    process: Optional[str] = None   # The process followed for the evaluation
-    standard: Optional[str] = None  # The standard used for the evaluation
-    source: Optional[str] = None
+    model: str | None = None  # The model used for the evaluation
+    process: str | None = None  # The process followed for the evaluation
+    standard: str | None = None  # The standard used for the evaluation
+    source: str | None = None
 
     reasons: list[Reasons] = Field(default=[], validation_alias="reason")
-    prediction: Optional[Union[bool, None]] = Field(default=None, validation_alias="result")
+    prediction: bool | None = Field(default=None, validation_alias="result")
     scores: list[Score] = []
     labels: list[str] = Field(default=[], validation_alias="label")
 
-    error: Optional[str] = None
-    response: Optional[str] = (
+    error: str | None = None
+    response: str | None = (
         None  # when we receive an invalid response, log it in this field
     )
 
-    metadata: Optional[dict] = {}
+    metadata: dict | None = {}
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
@@ -99,7 +78,7 @@ class EvalRecord(BaseModel):
 
     @field_validator("prediction")
     @classmethod
-    def validate_result(cls, v) -> Union[bool, None]:
+    def validate_result(cls, v) -> bool | None:
         if v is None:
             return None
         return TypeAdapter(bool).validate_python(v)
@@ -166,4 +145,3 @@ class EvalRecord(BaseModel):
         record["timestamp"] = pd.to_datetime(record["timestamp"])
 
         return record
-

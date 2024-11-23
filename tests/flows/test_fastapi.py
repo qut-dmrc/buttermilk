@@ -1,36 +1,41 @@
 import json
-from typing import Optional
-from fastapi import FastAPI
-from pydantic import BaseModel
+
 import pytest
-import asyncio
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
-from buttermilk.api.flow import agent
+from pydantic import BaseModel
 
 
 class TestJob(BaseModel):
     input: int
-    output: Optional[int] = None
+    output: int | None = None
+
+
 class TestAgent(BaseModel):
     async def process(self, *, job: TestJob) -> TestJob:
         job.output = 2 * job.input
         return job
 
 
-## TEST
-## curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"input":4}'
+# TEST
+# curl -X 'POST' 'http://127.0.0.1:8000/flow' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"input":4}'
 
 app = FastAPI()
+
 
 @app.post("/flow")
 async def run_flow(job: TestJob):
     result = await agent.process(job=job)
     return result
+
+
 # bm = None
 # logger = None
 
+
 agent = TestAgent()
+
 
 @pytest.fixture
 def client():
@@ -43,6 +48,7 @@ async def test_run_flow(client):
         response = await ac.post("/flow", json={"input": 4})
         assert response.status_code == 200
         assert response.json() == {"input": 4, "output": 8}
+
 
 @pytest.mark.asyncio
 async def test_pubsub_callback(client, monkeypatch):

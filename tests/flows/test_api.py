@@ -7,9 +7,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
-from testdata.jobs_summarise import jobs
 
 from buttermilk.api import stream
+
+from .testdata.jobs_summarise import jobs
 
 app = FastAPI()
 flows = ["summarise_osb"]

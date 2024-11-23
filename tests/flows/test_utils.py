@@ -1,10 +1,10 @@
 
 
 import pytest
-from unittest.mock import patch
+from pydantic import Base64Str
+
 from buttermilk.utils.templating import get_templates
-from buttermilk import TEMPLATE_PATHS
-from buttermilk._core.runner_types import Base64Str
+
 
 @pytest.mark.parametrize(
     "pattern, expected_name, min_length",
@@ -17,7 +17,7 @@ from buttermilk._core.runner_types import Base64Str
 def test_get_templates_default_pattern(pattern, expected_name, min_length):
     # Act
     result = get_templates(pattern)
-    
+
     success = False
 
     for filename, content in result:
@@ -27,7 +27,9 @@ def test_get_templates_default_pattern(pattern, expected_name, min_length):
     # Assert
     assert success
 
+
 def test_b64_str_validator():
-    assert pytest.raises(ValueError, match="Invalid base64 string") == Base64Str("invalid")
+    assert pytest.raises(ValueError, match="Invalid base64 string") == Base64Str(
+        "invalid"
+    )
     assert Base64Str("dGVzdA==").decode() == "test"
-    
