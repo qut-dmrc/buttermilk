@@ -32,6 +32,12 @@ You must reply only in a fully valid JSON format.
 
 <BEGIN CASE DATA>
 {% for case in dataset %}
-    <BEGIN CASE {{ case.record_id }}>{{case.text}}<END DRAFT ANSWER {{ case.record_id }} >
+    <BEGIN CASE {{ case.record_id }}>{{case}}<END DRAFT ANSWER {{ case.record_id }} >
 {% endfor %}
 <END CASE DATA>
+
+placeholder:
+{record}
+
+placeholder:
+{q}

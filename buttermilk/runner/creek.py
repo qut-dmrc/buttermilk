@@ -48,6 +48,7 @@ class Creek(BaseModel):
         record: RecordInfo,
         run_info: SessionInfo,
         source: str | Sequence[str] | None,
+        q: str | None = None,
     ) -> AsyncGenerator[Any, None]:
 
         if self._data is None:
@@ -60,6 +61,7 @@ class Creek(BaseModel):
                 run_info=run_info,
                 source=source,
                 flow_id=flow_id,
+                q=q,
             ):
                 yield result
 
@@ -70,6 +72,7 @@ class Creek(BaseModel):
         record: RecordInfo,
         flow_id: str,
         run_info: SessionInfo,
+        q: str | None = None,
         source: Sequence[str] = [],
     ) -> AsyncGenerator:
         self._data[agent.name] = []
@@ -88,6 +91,7 @@ class Creek(BaseModel):
             )
             task = agent.run(
                 job=job,
+                q=q,
                 additional_data=self._data,
                 **variant,
             )

@@ -51,6 +51,7 @@ proto-plus = "^1.25.0"
 httpx = "^0.27.2"
 beautifulsoup4 = "^4.12.3"
 rich = "^13.9.4"
+promptflow-tools = "^1.4.0"
 
 [tool.poetry.group.ml.dependencies]
 torch = "^2.5.1"
@@ -87,7 +88,6 @@ plotly = "^5.24.1"
 gradio = "^5.4.0"
 gspread = "^6.1.2"
 openpyxl = "^3.1.5"
-promptflow-tools = {git = "https://github.com/microsoft/promptflow.git", rev = "main", subdirectory = "src/promptflow-tools"}
 langchain-prompty = "^0.0.2"
 
 

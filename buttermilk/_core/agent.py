@@ -62,6 +62,9 @@ class Agent(BaseModel):
     inputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
     )
+    datasets: dict = Field(
+        default_factory=dict,
+    )
     outputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
         description="Data to pass on to next steps.",

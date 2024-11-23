@@ -5436,23 +5436,17 @@ version = "1.4.0"
 description = "Prompt flow built-in tools"
 optional = false
 python-versions = "<4.0,>=3.8"
-files = []
-develop = false
+files = [
+    {file = "promptflow_tools-1.4.0-py3-none-any.whl", hash = "sha256:d502013bc4a2565c14b310f7966155b2c44d4695628a8b034a8cc63a5f0c3abb"},
+]
 
 [package.dependencies]
 google-search-results = "2.4.1"
 openai = ">=1.0.0"
-promptflow = ">=1.6.0"
+promptflow = "*"
 
 [package.extras]
 azure = ["azure-mgmt-cognitiveservices (==13.5.0)"]
-
-[package.source]
-type = "git"
-url = "https://github.com/microsoft/promptflow.git"
-reference = "main"
-resolved_reference = "9aa2fe07f37897dafb852e7966717bc67c5cba9b"
-subdirectory = "src/promptflow-tools"
 
 [[package]]
 name = "promptflow-tracing"
@@ -8338,4 +8332,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10 || ^3.11"
-content-hash = "eede5708eb9ab15dab54f802f60bf0576534437d124ea9c93d69601beeea8e4e"
+content-hash = "cf2d60db9a70d7c368dd6faecd466efd196dd11d2bfeebb941b0c3ebc79f3945"

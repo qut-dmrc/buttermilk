@@ -217,12 +217,13 @@ class RecordInfo(BaseModel):
     def as_langchain_message(
         self,
         type: Literal["human", "system"] = "human",
-    ) -> BaseMessage:
+    ) -> BaseMessage | None:
         # Return the fields as a langchain message
 
         if not self.media:
-            BaseMessage(content=self.text, type=type)
-
+            if self.text:
+                return BaseMessage(content=self.text, type=type)
+            return None
         components = []
         # Prepare input for model consumption
         if text := self.text or "see attached":
@@ -269,16 +270,16 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: Sequence[str] | None = Field(default_factory=list)
+    prompt: str = Field(default_factory=str)
     parameters: dict | None = Field(
         default_factory=dict,
         description="Additional options for the worker",
     )
-    inputs: Any | dict | None = Field(default_factory=dict)
+    inputs: dict = Field(default_factory=dict)
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    outputs: Result | None = Field(
+    outputs: Result = Field(
         default_factory=dict,
         description="The results of the job",
     )
@@ -300,7 +301,7 @@ class Job(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
-    _ensure_list = field_validator("prompt", "source", mode="before")(
+    _ensure_list = field_validator("source", mode="before")(
         make_list_validator(),
     )
 

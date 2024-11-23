@@ -42,6 +42,10 @@ class FlowRequest(BaseModel):
     model: str | Sequence[str] | None = None
     template: str | Sequence[str] | None = None
     template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
+    q: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("q", "query", "question", "prompt"),
+    )
     record_id: str | None = None
     content: str | None = Field(
         default=None,
@@ -102,10 +106,11 @@ class FlowRequest(BaseModel):
                 values.get("text"),
                 values.get("image"),
                 values.get("video"),
+                values.get("q"),
             ],
         ):
             raise ValueError(
-                "At least one of content, text, uri, video or image must be provided.",
+                "At least one of query, content, text, uri, video or image must be provided.",
             )
 
         return values
@@ -150,6 +155,7 @@ async def flow_stream(
         run_info=bm._run_metadata,
         source=flow_request.source,
         flow_id=flow_request.flow_id,
+        q=flow_request.q,
     ):
         if data:
             if return_json:

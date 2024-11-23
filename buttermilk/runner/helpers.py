@@ -213,10 +213,10 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
             # Load and join prior job data
             df = group_and_filter_jobs(existing_dfs=df, data=df, data_cfg=src)
         elif src.columns:
-            df = pd.concat([df, df[src.columns.keys()]])
+            df = df[src.columns.keys()]
         else:
             # TODO - also allow joining other datasets that are not jobs.
-            df = pd.concat([df, df[src.columns.keys()]])
+            df = df
         # shuffle
         df = df.sample(frac=1)
 

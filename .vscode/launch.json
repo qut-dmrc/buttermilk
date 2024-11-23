@@ -50,9 +50,9 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[summarise_osb,test]",
-              "+flow=summarise_osb",
-              "+record.uri=gs://dmrc-platforms/data/osb/FB-2AHD01LX.md"
+              "+flows=[osb_small]",
+              "+flow=osb",
+              "+q=${input:query}"           // Will prompt for query
             ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -182,5 +182,13 @@
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     }
-  ]
+  ],
+  "inputs": [
+        {
+            "id": "query",
+            "type": "promptString", 
+            "description": "Enter search query",
+            "default": ""
+        }
+  ],
 }

@@ -40,7 +40,7 @@ from tenacity import (
 
 from buttermilk import BM, TEMPLATE_PATHS, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -155,6 +155,7 @@ class LC(Agent):
         model: str,
         template: str,
         additional_data: dict = None,
+        q: str | None = None,
         **kwargs,
     ) -> Job:
 
@@ -167,9 +168,14 @@ class LC(Agent):
 
         # First, log that we received extra **kwargs
         job.inputs.update(**kwargs)
+        if q:
+            job.prompt = q
 
         # Create a dictionary for complete prompt messages that we will not pass to the templating function
-        placeholders = {"record": job.record}
+        placeholders = {
+            "record": job.record,
+            "q": ChatPromptTemplate.from_messages([q]),
+        }
 
         # And combine all sources of inputs into one dict
         all_params = {**job.parameters, **job.inputs}
@@ -190,9 +196,6 @@ class LC(Agent):
             template=template,
             **input_vars,
         )
-
-        # Record final prompt in Job object (minus placeholders, which can contain large binary data)
-        job.prompt = [f"{role}:\n{msg}" for role, msg in local_messages]
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._connections[model])
@@ -248,7 +251,11 @@ class LC(Agent):
     ) -> dict[str, str]:
         # Filling placeholders
         for k, v in placeholders.items():
-            input_vars[k] = [v.as_langchain_message(type="human")]
+            if isinstance(v, RecordInfo):
+                if rendered := v.as_langchain_message(type="human"):
+                    input_vars[k] = [rendered]
+            elif v:
+                input_vars[k] = v
 
         # Make the chain
         logger.debug(f"Assembling the chain with model: {model}.")

@@ -1,5 +1,6 @@
-# defaults:
-#   - _self_
+
+defaults:
+  - _self_
 
 osb:
   _target_: buttermilk.runner.creek.Creek
@@ -15,8 +16,7 @@ osb:
         model:
           - gemini15pro
           - gpt4o_osb
-      inputs:
-        dataset: osbcasesfull
+        dataset: osbcasessummary
       outputs:
         response: response
         uri: uri
@@ -24,12 +24,6 @@ osb:
     - name: osbcasesfull
       type: file
       uri: gs://dmrc-platforms/data/osb/01_osb_cases.json
-      columns:
-        record_id: record_id
-        text: text
-    # - name: osbcasessummary
-    #   type: file
-    #   uri: gs://dmrc-platforms/data/osb/02_osb_summaries.json
-    #   columns:
-    #     record_id: id
-    #     content: text
+    - name: osbcasessummary
+      type: file
+      uri: gs://dmrc-platforms/data/osb/case_summaries_20241120.jsonl
