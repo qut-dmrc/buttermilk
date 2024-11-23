@@ -1,7 +1,7 @@
 import datetime
 import time
 from collections.abc import Mapping, Sequence
-from typing import Any, Self
+from typing import Self
 
 import numpy as np
 import pandas as pd
@@ -174,7 +174,7 @@ class LC(Agent):
         # Create a dictionary for complete prompt messages that we will not pass to the templating function
         placeholders = {
             "record": job.record,
-            "q": ChatPromptTemplate.from_messages([q]),
+            "q": [q],
         }
 
         # And combine all sources of inputs into one dict
@@ -207,7 +207,6 @@ class LC(Agent):
         )
         response = await self.invoke(
             prompt_messages=local_messages,
-            input_vars=input_vars,
             model=model,
             placeholders=placeholders,
         )
@@ -245,11 +244,11 @@ class LC(Agent):
         self,
         *,
         prompt_messages: list[tuple[str, str]],
-        input_vars: dict[str, Any],
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-        # Filling placeholders
+        input_vars = {}
+        # Fill placeholders
         for k, v in placeholders.items():
             if isinstance(v, RecordInfo):
                 if rendered := v.as_langchain_message(type="human"):
