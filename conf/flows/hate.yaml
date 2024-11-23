@@ -9,7 +9,8 @@ hate:
       save: ${save}
       parameters:
         template: judge
-        criteria: criteria_ordinary
+        criteria: 
+          - criteria_ordinary
         formatting: json_rules
         model:
           # - haiku

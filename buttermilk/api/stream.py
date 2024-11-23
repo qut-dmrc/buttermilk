@@ -51,7 +51,7 @@ class FlowRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
-    source: str | Sequence[str] | None = None
+    source: str | Sequence[str]
     video: str | bytes | None = None
     image: str | bytes | None = None
 
@@ -123,17 +123,6 @@ class FlowRequest(BaseModel):
                 if v not in CHATMODELS:
                     raise ValueError(f"Valid model must be provided. {v} is unknown.")
 
-        # Add any additional vars into the template_vars dict.
-        extras = []
-        if self.template_vars and self.model_extra:
-            # Template variables is a list of dicts that are run in combinations
-            # When we add other variables, make sure to add them to each existing combination
-            for existing_vars in self.template_vars:
-                existing_vars.update(self.model_extra)
-                extras.append(existing_vars)
-        elif self.model_extra:
-            self.template_vars = [self.model_extra]
-
         return self
 
 
@@ -144,7 +133,7 @@ async def flow_stream(
 ) -> AsyncGenerator[str, None]:
     bm = BM()
     logger.info(
-        f"Received request for flow {flow} and flow_request {flow_request}",
+        f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
     content, image, video = await asyncio.gather(
         validate_uri_extract_text(flow_request.content),
@@ -160,9 +149,11 @@ async def flow_stream(
         record=record,
         run_info=bm._run_metadata,
         source=flow_request.source,
+        flow_id=flow_request.flow_id,
     ):
         if data:
-            rprint(data)
             if return_json:
-                data = data.model_dump_json()
-            yield data
+                yield data.model_dump_json()
+            else:
+                yield data
+            rprint(data.outputs)

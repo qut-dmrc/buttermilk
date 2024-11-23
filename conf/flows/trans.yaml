@@ -45,7 +45,7 @@ trans:
         formatting: json_rules
         model:
           - gpt4o
-          - sonnet
+          # - sonnet
       inputs:
         record: record
         content: record.text
@@ -71,14 +71,14 @@ trans:
           - trans_simplified
         model:
           - gpt4o
-          - sonnet
+          # - sonnet
       inputs:
         content: record.text
         answers:
           - judger.answers
           - synth.answers
       outputs:
-          analysis: outputs.analysis
+          analysis: outputs.reasons
           model: parameters.model
           timestamp: timestamp
           job_id: job_id

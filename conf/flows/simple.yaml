@@ -1,0 +1,24 @@
+simple:
+  _target_: buttermilk.runner.creek.Creek
+  source: hate development
+  steps:
+    - _target_: buttermilk.agents.lc.LC
+      name: judger
+      num_runs: 1
+      concurrency: 20
+      save: ${save}
+      parameters:
+        template: judge
+        criteria: criteria_ordinary
+        formatting: json_rules
+        model:
+          - gpt4o
+      inputs:
+        record: record
+      outputs:
+        answers:
+          job_id: job_id
+          model: parameters.model
+          criteria: agent_info.parameters.criteria
+          template: agent_info.parameters.template
+          reasons: outputs.reasons

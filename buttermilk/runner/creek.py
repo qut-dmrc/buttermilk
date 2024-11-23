@@ -118,6 +118,7 @@ class Creek(BaseModel):
                     )
                     logger.error(error_msg)
             yield result
+            await asyncio.sleep(0)
 
     def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):
         """Update the data object with the outputs of the agent."""

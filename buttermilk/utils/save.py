@@ -1,22 +1,40 @@
+import io
+import json
+import pickle
+import tempfile
+
+import google.cloud.storage
 import pandas as pd
 import shortuuid
-import pandas as pd
-import json
-from cloudpathlib import AnyPath, GSPath
-import pickle
-import io
-from tenacity import retry, wait_exponential_jitter,  retry_if_exception_type, stop_after_attempt
-import google.cloud.storage
-import tempfile
-from google.api_core.exceptions import AlreadyExists, ClientError, GoogleAPICallError
-from google.cloud import bigquery_storage_v1beta2
-from cloudpathlib import CloudPath
+from cloudpathlib import AnyPath, CloudPath, GSPath
+from cloudpathlib.exceptions import InvalidPrefixError
+from google.api_core.exceptions import ClientError, GoogleAPICallError
 from google.cloud import bigquery, storage
-from .utils import read_file, reset_index_and_dedup_columns, make_serialisable, chunks, scrub_serializable
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
 from .._core.log import logger
 from .bq import construct_dict_from_schema
+from .utils import (
+    chunks,
+    make_serialisable,
+    reset_index_and_dedup_columns,
+    scrub_serializable,
+)
 
-def save(data, save_dir: AnyPath|str ='', uri: CloudPath|str ='', basename: str ='', extension:str ='',**params):
+
+def save(
+    data,
+    save_dir: AnyPath | str = "",
+    uri: CloudPath | str = "",
+    basename: str = "",
+    extension: str = "",
+    **params,
+):
     from .utils import reset_index_and_dedup_columns
 
     # Failsafe save routine. We should be able to find some way of dumping the data.
@@ -36,10 +54,8 @@ def save(data, save_dir: AnyPath|str ='', uri: CloudPath|str ='', basename: str 
             return destination
     except Exception as e:
         logger.error(
-            msg=f"Critical failure. Unable to upload to data BigQuery: {str(e)}"
+            msg=f"Critical failure. Unable to upload to data BigQuery: {e!s}",
         )
-        pass
-
 
     if not uri:
         try:
@@ -49,10 +65,12 @@ def save(data, save_dir: AnyPath|str ='', uri: CloudPath|str ='', basename: str 
             if extension:
                 basename = basename + extension
             uri = save_dir / basename
+        except InvalidPrefixError:
+            pass
         except Exception as e:
             logger.warning(
-            f"Error saving data to cloud uri: {e} {e.args=}, {params}"
-        )
+                f"Error saving data to cloud uri: {e} {e.args=}, {params}",
+            )
 
     if isinstance(uri, CloudPath):
         uri = uri.as_uri()
@@ -62,49 +80,49 @@ def save(data, save_dir: AnyPath|str ='', uri: CloudPath|str ='', basename: str 
         # Try to upload to GCS
         if isinstance(data, pd.DataFrame):
             return upload_dataframe_json(data=data, uri=uri)
-        else:
-            try:
-                df = pd.DataFrame(data)
-                return upload_dataframe_json(data=df, uri=uri)
-            except Exception as e:
-                logger.warning(
-                f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}"
+        try:
+            df = pd.DataFrame(data)
+            return upload_dataframe_json(data=df, uri=uri)
+        except Exception as e:
+            logger.warning(
+                f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}",
             )
 
         upload_methods = [
-                upload_json,
-                upload_binary,
-            ]
-
+            upload_json,
+            upload_binary,
+        ]
 
     # save to disk as a last resort
     upload_methods.extend(
         [
             dump_to_disk,
             dump_pickle,
-        ]
+        ],
     )
 
     for method in upload_methods:
         try:
             logger.debug(f"Trying to save data using {method.__name__}.")
-            destination = method(data=data, uri=uri)
+            destination = method(data=data, uri=uri, save_dir=save_dir)
             logger.info(
-                f"Saved data using {method.__name__} to: {destination}."
+                f"Saved data using {method.__name__} to: {destination}.",
             )
             return destination
         except (GoogleAPICallError, ClientError) as e:
             logger.warning(
-                f"Error saving data to {uri} using {method.__name__}: {e} {e.args=}"
+                f"Error saving data to {uri} using {method.__name__}: {e} {e.args=}",
             )
         except Exception as e:
             logger.warning(
-                f"Could not save data using {method.__name__}: {e} {e.args=}"
+                f"Could not save data using {method.__name__}: {e} {e.args=}",
             )
 
-    raise IOError(
-        f"Critical failure. Unable to save using any method in {upload_methods}"
+    raise OSError(
+        f"Critical failure. Unable to save using any method in {upload_methods}",
     )
+
+
 @retry(
     retry=retry_if_exception_type((GoogleAPICallError, ClientError)),
     # Wait interval:  10 seconds first, increasing exponentially up to a max of two minutes between retries
@@ -116,7 +134,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
 
-    if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
+    if uri[-5:] != ".json" and uri[-6:] != ".jsonl":
         uri = uri + ".jsonl"
 
     if any(data.columns.duplicated()):
@@ -128,7 +146,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
             rows = scrub_serializable(rows)
             # Try to upload as newline delimited json
             json_data = "\n".join([json.dumps(row) for row in rows])
-            json_data = json_data.encode('utf-8')
+            json_data = json_data.encode("utf-8")
             blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
 
             # Try to upload as binary from a file like object
@@ -137,7 +155,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
                 return uri
         except Exception as e:
             logger.warning(
-                f"Error saving data to {uri} in upload_dataframe_json using BytesIO: {e} {e.args=}"
+                f"Error saving data to {uri} in upload_dataframe_json using BytesIO: {e} {e.args=}",
             )
             # use pandas to upload to GCS
             data.to_json(uri, orient="records", lines=True)
@@ -160,12 +178,16 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
 
     if isinstance(rows, pd.DataFrame):
         # deduplicate columns
-        rows.columns = [x[1] if x[1] not in rows.columns[:x[0]] else f"{x[1]}_{list(rows.columns[:x[0]]).count(x[1])}" for x in enumerate(rows.columns)]
+        rows.columns = [
+            x[1]
+            if x[1] not in rows.columns[: x[0]]
+            else f"{x[1]}_{list(rows.columns[: x[0]]).count(x[1])}"
+            for x in enumerate(rows.columns)
+        ]
 
         bq_rows = rows.to_dict(orient="records")
     else:
         bq_rows = rows.copy()
-
 
     # Handle other conversions required for bigquery
     bq_rows = [construct_dict_from_schema(schema, row) for row in bq_rows]
@@ -178,8 +200,8 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
     try:
         table = bq.get_table(dataset)
     except Exception as e:
-        msg=f"Unable to save rows. Table {dataset} does not exist or there was some other problem getting the table: {e} {e.args=}"
-        raise IOError(msg)
+        msg = f"Unable to save rows. Table {dataset} does not exist or there was some other problem getting the table: {e} {e.args=}"
+        raise OSError(msg)
 
     logger.debug(f"Inserting {len(bq_rows)} rows to BigQuery table {dataset}.")
 
@@ -189,10 +211,10 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
 
     if not errors:
         logger.info(
-            f"Successfully pushed {len(bq_rows)} rows to BigQuery table {dataset}."
+            f"Successfully pushed {len(bq_rows)} rows to BigQuery table {dataset}.",
         )
     else:
-        raise IOError(f"Google BigQuery returned an error result: {str(errors)[:1000]}")
+        raise OSError(f"Google BigQuery returned an error result: {str(errors)[:1000]}")
 
     return dataset
 
@@ -222,28 +244,39 @@ def upload_binary(data=None, *, save_dir=None, uri=None, filename=None, extensio
     if isinstance(data, io.BufferedIOBase):
         blob.upload_from_file(file_obj=data)
         return uri
-    else:
-        # Try to upload as binary from a file like object
-        with io.BytesIO(data) as b:
-            blob.upload_from_file(file_obj=b)
-            return uri
+    # Try to upload as binary from a file like object
+    with io.BytesIO(data) as b:
+        blob.upload_from_file(file_obj=b)
+        return uri
+
 
 def dump_to_disk(data, **kwargs):
-    with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".jsonl") as out:
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=kwargs.get("save_dir"),
+        mode="w",
+        suffix=".jsonl",
+    ) as out:
         if isinstance(data, pd.DataFrame):
             data.to_json(out)
         else:
             out.write(json.dumps(data))
-        logger.warning(f"Successfully dumped to pickle on disk: {out.name}.")
+        logger.warning(f"Successfully dumped to json on disk: {out.name}.")
         return out.name
 
+
 def dump_pickle(data, **kwargs):
-    filename = f"data-dumped-{shortuuid.uuid()}.pickle"
-    with open(filename, "wb") as f:
-        pickle.dump(data, f)
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        dir=kwargs.get("save_dir"),
+        mode="w",
+        suffix=".pickle",
+    ) as out:
+        pickle.dump(data, out)
 
     logger.warning(f"Successfully dumped to pickle on disk: {filename}.")
     return filename
+
 
 def read_pickle(filename):
     with io.BytesIO() as incoming:
@@ -273,15 +306,16 @@ def upload_text(data, *, save_dir=None, uri=None, basename=None, extension="html
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs)
     blob.upload_from_string(data)
     logger.debug(
-        f"Successfully uploaded file {uri} with {len(data)} lines written."
+        f"Successfully uploaded file {uri} with {len(data)} lines written.",
     )
 
     return uri
 
+
 def upload_json(data, *, save_dir=None, uri=None, filename=None):
     filename = filename or shortuuid.uuid()
     uri = uri or f"{save_dir}/{filename}.jsonl"
-    if not uri[-5:] == ".json" and not uri[-6:] == ".jsonl":
+    if uri[-5:] != ".json" and uri[-6:] != ".jsonl":
         uri = uri + ".jsonl"
 
     # make sure the data is serializable first
