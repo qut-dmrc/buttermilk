@@ -14,8 +14,10 @@ osb:
       parameters: 
         template: osb
         model:
-          - gemini15pro
-          - gpt4o_osb
+          # - gemini15pro
+          # - gpt4o_osb
+          - llama32_90b_vision_instruct
+          - llama31_405b_instruct
           - haiku
           - sonnet
         dataset: osbcasessummary
