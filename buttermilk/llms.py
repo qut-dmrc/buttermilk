@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import cached_property
 
 # There are 'old' and 'new' harm categories. Use the new ones.
 # see google/generativeai/types/safety_types.py
@@ -79,10 +78,10 @@ CHATMODELS = [
     "gemini15pro",
 ]
 CHEAP_CHAT_MODELS = ["haiku", "llama31_8b"]
-MULTIMODAL_MODELS = ["gemini15pro, gpt4o"]
+MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet"]
 
 
-def _Gemini(*args, **kwargs):
+def VertexNoFilter(*args, **kwargs):
     return ChatVertexAI(
         *args,
         **kwargs,
@@ -105,9 +104,9 @@ class LLMs(BaseModel):
     class Config:
         use_enum_values = True
 
-    @cached_property
-    def _get_models(self) -> list:
-        return list(self.connections.keys())
+    @property
+    def all_model_names(self) -> Enum:
+        return Enum("AllModelNames", list(self.connections.keys()))
 
     def __getattr__(self, __name: str) -> LLM:
         if __name in self.models:
@@ -128,7 +127,7 @@ if __name__ == "__main__":
     from buttermilk import BM
 
     bm = BM()
-    llm = LLMs(connections=bm.get_secret)["haiku"]
+    llm = LLMs()["haiku"]
     import pprint
 
     pprint.pprint(llm.invoke("hi what model are you?"))

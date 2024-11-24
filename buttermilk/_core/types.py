@@ -39,7 +39,7 @@ _global_run_id = _make_run_id()
 
 
 class SessionInfo(pydantic.BaseModel):
-    run_id: str = Field(default_factory=lambda: _make_run_id())
+    run_id: str = Field(default_factory=_make_run_id)
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(

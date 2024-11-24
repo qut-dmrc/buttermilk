@@ -6,7 +6,7 @@ defaults:
 
 bm:
   cfg:
-    name: automod
+    name: buttermilk
     job: debugging
     logger: 
       type: gcp

@@ -62,7 +62,9 @@ class Analyst:
             # load prompty as a flow
             prompty = Prompty.load(BASE_DIR / template)
             template = convert_prompt_template(
-                prompty._template, api="chat", inputs=self.tpl_variables
+                prompty._template,
+                api="chat",
+                inputs=self.tpl_variables,
             )
 
             # convert to a list of messages and roles expected by langchain
@@ -76,7 +78,7 @@ class Analyst:
                 self.langchain_template.append(("user", user_prompt))
         else:
             raise ValueError(
-                "Either prompt_template_path or system_prompt must be provided"
+                "Either prompt_template_path or system_prompt must be provided",
             )
 
     @tool
@@ -93,7 +95,7 @@ class Analyst:
             prompt_with_media(uri=media_attachment_uri, text=content),
         ]
 
-        llm = LLMs(connections=self.connections)[self.model]
+        llm = LLMs()[self.model]
         tpl = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
         chain = tpl | llm | ChatParser()

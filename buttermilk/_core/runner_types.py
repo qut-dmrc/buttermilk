@@ -216,7 +216,7 @@ class RecordInfo(BaseModel):
 
     def as_langchain_message(
         self,
-        type: Literal["human", "system"] = "human",
+        type: Literal["user", "system"] = "user",
     ) -> BaseMessage | None:
         # Return the fields as a langchain message
 
@@ -279,8 +279,8 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    outputs: Result = Field(
-        default_factory=dict,
+    outputs: Result | None = Field(
+        default=None,
         description="The results of the job",
     )
     error: dict[str, Any] | None = Field(default_factory=dict)

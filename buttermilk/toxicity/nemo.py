@@ -86,9 +86,9 @@ class NemoLangchain(Nemo):
 
     def init_client(self) -> None:
         bm = BM()
-        llm = LLMs(connections=bm._llm_connections)[self.model]
+        llm = LLMs()[self.model]
         template_text = read_yaml(
-            Path(__file__).parent / "templates/nemo_self_check.yaml"
+            Path(__file__).parent / "templates/nemo_self_check.yaml",
         )
         prompt_name = "nemo_self_check"
 
@@ -99,7 +99,8 @@ class NemoLangchain(Nemo):
             ("human", template_text[prompt_name][criteria]),
         ]
         langchain_template = ChatPromptTemplate.from_messages(
-            messages, template_format="jinja2"
+            messages,
+            template_format="jinja2",
         )
 
         chain = langchain_template | llm | ChatParser()

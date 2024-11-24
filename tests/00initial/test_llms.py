@@ -1,15 +1,23 @@
-from langchain.prompts import ChatPromptTemplate
 import pytest
+from langchain.prompts import ChatPromptTemplate
 
-from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS
+from buttermilk.bm import BM
+from buttermilk.llms import CHEAP_CHAT_MODELS, LLMs
+
 
 @pytest.fixture(scope="session")
-def llms(bm):
-    from buttermilk.llms import LLMs
-    yield LLMs(connections=bm._llm_connections)
+def llms(bm: BM):
+    return LLMs()
+
+
+@pytest.fixture
+def all_models(llms):
+    for model in llms.model_names:
+        yield llms[model]
+
 
 @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
-def test_cheap_llm(llms, cheapchatmodel: str     ):
+def test_cheap_llm(llms, cheapchatmodel: str):
     llm = llms[cheapchatmodel]
     assert llm
 
@@ -19,9 +27,8 @@ def test_cheap_llm(llms, cheapchatmodel: str     ):
     assert answer
 
 
-@pytest.mark.parametrize("cheapchatmodel", CHATMODELS)
-def test_all_llm(llms, cheapchatmodel: str     ):
-    llm = llms[cheapchatmodel]
+def test_all_llm(llms, all_models):
+    llm = all_models
     assert llm
 
     q = "hi! what's your name?"

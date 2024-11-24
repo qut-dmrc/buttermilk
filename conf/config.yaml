@@ -8,10 +8,6 @@ bm:
   cfg:
     name: default_project
     job: development
-    secret_provider:
-      type: azure
-      vault: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-      resource_group: 
 
     save_dest:
       type: gcp
@@ -24,6 +20,7 @@ bm:
     verbose: true
     tracing: 
       enabled: true
+      
     run:
       platform: local
       max_concurrency: 16

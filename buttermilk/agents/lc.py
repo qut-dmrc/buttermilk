@@ -81,8 +81,7 @@ class LC(Agent):
     @model_validator(mode="after")
     def load_connections(self) -> Self:
         bm = BM()
-        self._connections = bm._llm_connections
-        self._llms = LLMs(connections=self._connections)
+        self._llms = bm.llms
 
         return self
 
@@ -168,14 +167,14 @@ class LC(Agent):
 
         # First, log that we received extra **kwargs
         job.inputs.update(**kwargs)
-        if q:
-            job.prompt = q
 
         # Create a dictionary for complete prompt messages that we will not pass to the templating function
-        placeholders = {
-            "record": job.record,
-            "q": [q],
-        }
+        placeholders = {}
+        placeholders["record"] = job.record
+
+        if q:
+            job.prompt = q
+            placeholders["q"] = [q]
 
         # And combine all sources of inputs into one dict
         all_params = {**job.parameters, **job.inputs}
@@ -198,7 +197,7 @@ class LC(Agent):
         )
 
         # Add model details to Job object
-        job.agent_info["connection"] = scrub_keys(self._connections[model])
+        job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
         job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
         job.parameters["model"] = model
 
@@ -251,9 +250,9 @@ class LC(Agent):
         # Fill placeholders
         for k, v in placeholders.items():
             if isinstance(v, RecordInfo):
-                if rendered := v.as_langchain_message(type="human"):
+                if rendered := v.as_langchain_message(type="user"):
                     input_vars[k] = [rendered]
-            elif v:
+            elif v and v[0]:
                 input_vars[k] = v
 
         # Make the chain

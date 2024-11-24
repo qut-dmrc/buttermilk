@@ -21,9 +21,7 @@ class _CFG(BaseModel):
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: _CFG) -> None:
-
     # Hydra will automatically instantiate the objects
-    # This should work, but doesn't?
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
     params = {k: v for k, v in cfg.items() if k in {"record", "q"} and v}

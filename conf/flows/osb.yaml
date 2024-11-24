@@ -15,7 +15,9 @@ osb:
         template: osb
         model:
           - gemini15pro
-          - gpt4o
+          - gpt4o_osb
+          - haiku
+          - sonnet
         dataset: osbcasessummary
   data:
     - name: osbcasesfull

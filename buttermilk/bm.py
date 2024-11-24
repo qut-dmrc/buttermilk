@@ -12,7 +12,6 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
-from functools import cached_property
 from pathlib import Path
 from typing import (
     Any,
@@ -43,6 +42,7 @@ from pydantic import (
 from rich import print as rprint
 
 from buttermilk.exceptions import FatalError
+from buttermilk.llms import LLMs
 from buttermilk.utils.keys import SecretsManager
 
 from ._core.config import CloudProviderCfg, RunCfg, Tracing
@@ -52,6 +52,7 @@ from ._core.types import SessionInfo
 from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
+_MODELS_KEY = "models"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
@@ -59,8 +60,6 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
 _REGISTRY = {}
 _CONFIG = "config"  # registry key for config object
-
-_MODELS_SECRET = "models"
 
 
 class ConfigRegistry:
@@ -166,7 +165,11 @@ class BM(Singleton, BaseModel):
         if not _REGISTRY.get("init"):
             self.setup_logging(verbose=self.cfg.verbose)
             if self.cfg.tracing:
-                start_trace(resource_attributes={"run_id": self._run_metadata.run_id}, collection=self.cfg.name, job=self.cfg.job)
+                start_trace(
+                    resource_attributes={"run_id": self._run_metadata.run_id},
+                    collection=self.cfg.name,
+                    job=self.cfg.job,
+                )
             _REGISTRY["init"] = True
 
             # Print config to console and save to default save dir
@@ -174,7 +177,12 @@ class BM(Singleton, BaseModel):
                 # cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
                 rprint(self.cfg)
                 rprint(self._run_metadata)
-                save.save(data=[self.cfg.model_dump(), self._run_metadata.model_dump()], basename="config", extension="json", save_dir=self._run_metadata.save_dir)
+                save.save(
+                    data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
+                    basename="config",
+                    extension="json",
+                    save_dir=self._run_metadata.save_dir,
+                )
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
@@ -192,20 +200,6 @@ class BM(Singleton, BaseModel):
             secret_class=secret_class,
             version=version,
         )
-
-    @cached_property
-    def _llm_connections(self) -> dict:
-        # Model definitions are stored in cloud secrets, and loaded here.
-
-        try:
-            contents = Path(CONFIG_CACHE_PATH).read_text()
-        except Exception:
-            contents = self.get_secret(secret_class=_MODELS_SECRET)
-
-        connections = json.loads(contents)
-        connections = {conn["name"]: conn for conn in connections}
-
-        return connections
 
     @property
     def logger(self) -> logging.Logger:
@@ -316,6 +310,20 @@ class BM(Singleton, BaseModel):
         result = save.save(data=data, save_dir=self._run_metadata.save_dir, basename=basename, extension=extension, **kwargs)
         logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
         return result
+
+    @property
+    def llms(self) -> LLMs:
+        if self._clients.get("llms") is None:
+            try:
+                contents = Path(CONFIG_CACHE_PATH).read_text(encoding="utf-8")
+            except Exception:
+                contents = self.get_secret(secret_class=_MODELS_KEY)
+
+            connections = json.loads(contents)
+            connections = {conn["name"]: conn for conn in connections}
+
+            self._clients["llms"] = LLMs(connections=connections)
+        return self._clients["llms"]
 
     @property
     def bq(self) -> bigquery.Client:

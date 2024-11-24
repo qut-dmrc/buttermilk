@@ -63,6 +63,9 @@ class FlowRequest(BaseModel):
         arbitrary_types_allowed=False,
         extra="allow",
         populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+        use_enum_values=True,
     )
     _client: Agent = PrivateAttr()
     _job: Job = PrivateAttr()

@@ -49,7 +49,7 @@ class Agent(BaseModel):
     concurrency: int = Field(default=4)  # Max number of async tasks to run
     save: SaveInfo | None = Field(None)  # Where to save the results
     parameters: dict[str, str | list | dict] | None = Field(
-        default=dict,
+        default_factory=dict,
         description="Combinations of variables to pass to process job",
         validation_alias=AliasChoices(
             "parameters",
@@ -69,7 +69,7 @@ class Agent(BaseModel):
         default_factory=dict,
         description="Data to pass on to next steps.",
     )
-    _agent_id: str = PrivateAttr(None)
+    _agent_id: str | None = PrivateAttr(None)
     _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
 
     class Config:

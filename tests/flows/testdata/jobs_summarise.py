@@ -37,7 +37,7 @@ job1 = dict(
             "name": "gemini15pro",
             "connection": "API",
             "model": "gemini-1.5-pro-002",
-            "obj": "_Gemini",
+            "obj": "VertexNoFilter",
             "configs": {
                 "model": "gemini-1.5-pro-002",
                 "temperature": 1.0,
