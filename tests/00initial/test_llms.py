@@ -6,7 +6,7 @@ from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS
 @pytest.fixture(scope="session")
 def llms(bm):
     from buttermilk.llms import LLMs
-    yield LLMs(connections=bm._connections_azure)
+    yield LLMs(connections=bm._llm_connections)
 
 @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
 def test_cheap_llm(llms, cheapchatmodel: str     ):

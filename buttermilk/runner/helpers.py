@@ -21,6 +21,8 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
         df = df.rename(columns=rename_dict)
     elif data_cfg.type == "job":
         df = load_jobs(data_cfg=data_cfg)
+    elif data_cfg.type == "bq":
+        df = load_bq(data_cfg=data_cfg)
     elif data_cfg.type == "plaintext":
         # Load all files in a directory
         df = await read_all_files(
@@ -30,6 +32,17 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
         )
     else:
         raise ValueError(f"Unknown data type: {data_cfg.type}")
+    return df
+
+
+def load_bq(data_cfg: DataSource) -> pd.DataFrame:
+    sql = f"SELECT * FROM `{data_cfg.path}`"
+    sql += " ORDER BY RAND() "
+
+    bm = BM()
+
+    df = bm.run_query(sql)
+
     return df
 
 
@@ -215,8 +228,9 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
         elif src.columns:
             df = df[src.columns.keys()]
         else:
-            # TODO - also allow joining other datasets that are not jobs.
+            # TODO @nicsuzor: group and limit by max_records_per_group
             df = df
+
         # shuffle
         df = df.sample(frac=1)
 

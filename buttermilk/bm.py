@@ -27,8 +27,6 @@ import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
-from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
 from dotenv import load_dotenv
 from google.cloud import bigquery, storage
 from google.cloud.logging.handlers import CloudLoggingHandler
@@ -45,6 +43,7 @@ from pydantic import (
 from rich import print as rprint
 
 from buttermilk.exceptions import FatalError
+from buttermilk.utils.keys import SecretsManager
 
 from ._core.config import CloudProviderCfg, RunCfg, Tracing
 from ._core.flow import Flow
@@ -147,8 +146,8 @@ class BM(Singleton, BaseModel):
     cfg: Project | None = Field(None, validate_default=True)
 
     _clients: dict[str, Any] = {}
-    _run_metadata: SessionInfo = PrivateAttr(default_factory=lambda: SessionInfo())
-
+    _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
+    _secret_manager: SecretsManager = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("cfg")
@@ -179,24 +178,29 @@ class BM(Singleton, BaseModel):
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
+    def get_secret(
+        self,
+        secret_name: str = None,
+        secret_class: str = None,
+        version="latest",
+    ):
+        if not hasattr(self, "_secret_manager"):
+            self._secret_manager = SecretsManager(**self.cfg.secret_provider)
+
+        return self._secret_manager.get_secret(
+            secret_name=secret_name,
+            secret_class=secret_class,
+            version=version,
+        )
+
     @cached_property
-    def _connections_azure(self) -> dict:
-        # Model definitions are stored in Azure Secrets, and loaded here.
+    def _llm_connections(self) -> dict:
+        # Model definitions are stored in cloud secrets, and loaded here.
 
         try:
             contents = Path(CONFIG_CACHE_PATH).read_text()
         except Exception:
-            auth = DefaultAzureCredential()
-            vault_uri = self.cfg.secret_provider.vault
-            secrets = SecretClient(vault_uri, credential=auth)
-            contents = secrets.get_secret(_MODELS_SECRET).value
-            if not contents:
-                raise ValueError("Could not load secrets from cache or Azure vault")
-            try:
-                Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
-                Path(CONFIG_CACHE_PATH).write_text(contents)
-            except Exception:
-                pass
+            contents = self.get_secret(secret_class=_MODELS_SECRET)
 
         connections = json.loads(contents)
         connections = {conn["name"]: conn for conn in connections}

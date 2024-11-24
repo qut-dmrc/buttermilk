@@ -81,7 +81,7 @@ class LC(Agent):
     @model_validator(mode="after")
     def load_connections(self) -> Self:
         bm = BM()
-        self._connections = bm._connections_azure
+        self._connections = bm._llm_connections
         self._llms = LLMs(connections=self._connections)
 
         return self
@@ -312,7 +312,7 @@ def resolve_value(value, job, additional_data):
         # handle entire dataset
         if value in additional_data:
             if isinstance(additional_data[value], pd.DataFrame):
-                return additional_data[value].to_dict(orient="records")
+                return additional_data[value].astype(str).to_dict(orient="records")
             return additional_data[value]
 
         # No match

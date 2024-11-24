@@ -128,7 +128,7 @@ if __name__ == "__main__":
     from buttermilk import BM
 
     bm = BM()
-    llm = LLMs(connections=bm._connections_azure)["haiku"]
+    llm = LLMs(connections=bm.get_secret)["haiku"]
     import pprint
 
     pprint.pprint(llm.invoke("hi what model are you?"))

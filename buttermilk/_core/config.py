@@ -54,7 +54,6 @@ class CloudProviderCfg(BaseModel):
         populate_by_name = True
         # Ignore extra fields not defined in the model
         extra = "allow"
-        exclude_none = True
         exclude_unset = True
         include_extra = True
 
