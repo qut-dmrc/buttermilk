@@ -1,20 +1,33 @@
 import pytest
 from langchain.prompts import ChatPromptTemplate
 
-from buttermilk.llms import LLMs
+from buttermilk.bm import BM
+from buttermilk.llms import CHEAP_CHAT_MODELS, LLMs
+
+
+@pytest.fixture(scope="session")
+def llms(bm: BM):
+    return bm.llms
 
 
 @pytest.fixture
-def llms() -> LLMs:
-    return LLMs()
+def all_models(llms: LLMs):
+    for model in llms.model_names:
+        yield model
 
 
-@pytest.fixture(params=AllModelNames)
-def all_models(request):
-    return request.param.name
+@pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
+def test_cheap_llm(llms, cheapchatmodel: str):
+    llm = llms[cheapchatmodel]
+    assert llm
+
+    q = "hi! what's your name?"
+    chain = ChatPromptTemplate.from_messages([("human", q)]) | llm
+    answer = chain.invoke({})
+    assert answer
 
 
-def test_llm(llms, all_models):
+def test_all_llm(llms, all_models):
     llm = llms[all_models]
     assert llm
 

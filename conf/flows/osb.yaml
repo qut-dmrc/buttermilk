@@ -9,15 +9,15 @@ osb:
     - name: search
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
-      concurrency: 2
+      concurrency: 20
       save: ${save}
       parameters: 
         template: osb
         model:
-          # - gemini15pro
-          # - gpt4o_osb
-          - llama32_90b_vision_instruct
-          - llama31_405b_instruct
+          - gemini15pro
+          - gpt4o_osb
+          # - llama32_90b_vision_instruct
+          # - llama31_405b_instruct
           - haiku
           - sonnet
         dataset: osbcasessummary
