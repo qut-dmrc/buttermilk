@@ -54,14 +54,23 @@ GEMINI_SAFETY_SETTINGS_NONE = {
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
 
+# Generate with:
+# ```sh
+# cat .cache/buttermilk/models.json | jq ".[].name"
+# ```
 CHATMODELS = [
-    "llama31_70b",
+    "llama31_405b-azure",
+    "llama31_405b_instruct",
     "llama31_8b",
-    "llama31_405b",
+    "llama32_90b_vision_instruct",
+    "llama32_90b_vision_instruct_azure",
+    "llama31_70b",
+    "o1-preview",
     "gpt4o",
-    "opus",
-    "haiku",
+    "gpt4o_osb",
     "sonnet",
+    "sonnetvertex",
+    "haiku",
     "gemini15pro",
 ]
 CHEAP_CHAT_MODELS = ["haiku", "llama31_8b"]
