@@ -4,21 +4,14 @@ from enum import Enum
 # see google/generativeai/types/safety_types.py
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
 from langchain_anthropic import ChatAnthropic
-from langchain_community.chat_models.azureml_endpoint import (
-    AzureMLChatOnlineEndpoint,
-    CustomOpenAIChatContentFormatter,
-)
-from langchain_community.llms import HuggingFaceHub, Replicate
-from langchain_community.llms.fake import FakeListLLM
 from langchain_core.language_models.llms import LLM
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_google_vertexai import (
-    ChatVertexAI,
-    HarmBlockThreshold as VertexHarmBlockThreshold,
-    HarmCategory as VertexHarmCategory,
-)
+
+# from langchain_google_vertexai import (
+#     ChatVertexAI,
+#     HarmBlockThreshold as VertexHarmBlockThreshold,
+#     HarmCategory as VertexHarmCategory,
+# )
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from langchain_together import Together
 from pydantic import BaseModel
 
 # from ..libs.hf import Llama2ChatMod
@@ -26,14 +19,8 @@ from pydantic import BaseModel
 
 MODEL_CLASSES = [
     ChatAnthropic,
-    Replicate,
-    HuggingFaceHub,
-    FakeListLLM,
-    ChatGoogleGenerativeAI,
-    ChatVertexAI,
     ChatOpenAI,
     AzureChatOpenAI,
-    Together,
 ]
 
 
@@ -45,13 +32,13 @@ class LLMTypes(Enum):
     llama = "llama"
 
 
-VERTEX_SAFETY_SETTINGS = {
-    VertexHarmCategory.HARM_CATEGORY_UNSPECIFIED: VertexHarmBlockThreshold.BLOCK_NONE,
-    VertexHarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: VertexHarmBlockThreshold.BLOCK_NONE,
-    VertexHarmCategory.HARM_CATEGORY_HATE_SPEECH: VertexHarmBlockThreshold.BLOCK_NONE,
-    VertexHarmCategory.HARM_CATEGORY_HARASSMENT: VertexHarmBlockThreshold.BLOCK_NONE,
-    VertexHarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: VertexHarmBlockThreshold.BLOCK_NONE,
-}
+# VERTEX_SAFETY_SETTINGS = {
+#     VertexHarmCategory.HARM_CATEGORY_UNSPECIFIED: VertexHarmBlockThreshold.BLOCK_NONE,
+#     VertexHarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: VertexHarmBlockThreshold.BLOCK_NONE,
+#     VertexHarmCategory.HARM_CATEGORY_HATE_SPEECH: VertexHarmBlockThreshold.BLOCK_NONE,
+#     VertexHarmCategory.HARM_CATEGORY_HARASSMENT: VertexHarmBlockThreshold.BLOCK_NONE,
+#     VertexHarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: VertexHarmBlockThreshold.BLOCK_NONE,
+# }
 
 GEMINI_SAFETY_SETTINGS = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
@@ -94,7 +81,7 @@ def VertexNoFilter(*args, **kwargs):
 def _Llama(*args, **kwargs):
     default_opts = {"content_formatter": CustomOpenAIChatContentFormatter()}
     default_opts.update(**kwargs)
-    return AzureMLChatOnlineEndpoint(*args, **default_opts)
+    return AzureChatOpenAI(*args, **default_opts)
 
 
 class LLMs(BaseModel):

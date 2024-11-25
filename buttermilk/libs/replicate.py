@@ -1,4 +1,3 @@
-from langchain_community.llms import Replicate
 
 
 # Replicate allows us to access llama through a hosted api service

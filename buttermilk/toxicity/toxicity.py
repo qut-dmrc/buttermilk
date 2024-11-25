@@ -2,88 +2,57 @@ from __future__ import annotations
 
 import abc
 import os
-from enum import Enum, EnumMeta, IntEnum, StrEnum
 from io import StringIO
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
-    AsyncGenerator,
     ClassVar,
-    List,
     Literal,
-    LiteralString,
-    Optional,
     Self,
-    Sequence,
-    Tuple,
-    Union,
 )
 
-from huggingface_hub import login
 import boto3
-from buttermilk.exceptions import RateLimit
-from buttermilk._core.runner_types import Job
 import evaluate
 import google.auth
-import numpy as np
 import openai
 import pandas as pd
-import psutil
-import requests
 import torch
 import transformers
-import urllib3
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig, AutoModelForSequenceClassification
-
-from anthropic import APIConnectionError as AnthropicAPIConnectionError
-from anthropic import RateLimitError as AnthropicRateLimitError
-from azure.ai.contentsafety import BlocklistClient, ContentSafetyClient
+from azure.ai.contentsafety import ContentSafetyClient
 from azure.ai.contentsafety.models import (
     AnalyzeTextOptions,
     AnalyzeTextOutputType,
-    TextCategory,
 )
 from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
-from azure.cognitiveservices.vision.contentmoderator.models import Screen
 from azure.core.credentials import AzureKeyCredential
-from google.api_core.exceptions import ResourceExhausted
-from google.generativeai.types.generation_types import (
-    BlockedPromptException,
-    StopCandidateException,
-)
-from openai import APIConnectionError as OpenAIAPIConnectionError
-from openai import RateLimitError as OpenAIRateLimitError
-from transformers import pipeline
 from googleapiclient import discovery
-from langchain_community.llms import Replicate
-from langchain_core.language_models.llms import LLM
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_together import Together
+from huggingface_hub import login
 from msrest.authentication import CognitiveServicesCredentials
 from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    TypeAdapter,
-    field_validator,
     model_validator,
-    root_validator,
 )
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-    wait_random_exponential,
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
 )
-import datasets
-from buttermilk.utils.errors import extract_error_info
-from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
-from buttermilk.libs import HFInferenceClient, hf_pipeline
+
 from buttermilk import logger
+from buttermilk.libs import hf_pipeline
+from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
+
 from ..types.tox import EvalRecord, Score
-TEMPLATE_DIR = Path(__file__).parent / 'templates'
+
+if TYPE_CHECKING:
+    from buttermilk._core.runner_types import Job
+
+TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
 PerspectiveAttributes = Literal[
@@ -104,7 +73,7 @@ PerspectiveAttributesExperimental = Literal[
     "THREAT_EXPERIMENTAL",
     "SEXUALLY_EXPLICIT",
     "FLIRTATION",
-    ## These are 'bridging' attributes: https://medium.com/jigsaw/announcing-experimental-bridging-attributes-in-perspective-api-578a9d59ac37
+    # These are 'bridging' attributes: https://medium.com/jigsaw/announcing-experimental-bridging-attributes-in-perspective-api-578a9d59ac37
     "AFFINITY_EXPERIMENTAL",
     "COMPASSION_EXPERIMENTAL",
     "CURIOSITY_EXPERIMENTAL",
@@ -121,7 +90,7 @@ class ToxicityModel(BaseModel):
     process_chain: str
     standard: str
     client: Any = None
-    info_url: Optional[str] = None
+    info_url: str | None = None
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
@@ -137,7 +106,7 @@ class ToxicityModel(BaseModel):
 
     def init_client(self) -> None:
         if self.client is None:
-            raise NotImplementedError()
+            raise NotImplementedError
 
     def run(self, job: Job) -> Job:
         response = self.moderate(content=job.record.content, record_id=job.record.record_id)
@@ -145,10 +114,10 @@ class ToxicityModel(BaseModel):
             raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
 
         # add identifying info in
-        response.model=self.model
-        response.process=self.process_chain
-        response.standard=self.standard
-        response.record_id=job.record.record_id
+        response.model = self.model
+        response.process = self.process_chain
+        response.standard = self.standard
+        response.record_id = job.record.record_id
 
         output = job.model_copy()
         output.result = response
@@ -174,7 +143,9 @@ class ToxicityModel(BaseModel):
     # )
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> EvalRecord:
         return self.client.__call__(prompt, **self.call_options, **kwargs)
 
@@ -183,7 +154,7 @@ class ToxicityModel(BaseModel):
         raise NotImplementedError
 
     @trace
-    def moderate_batch(self, dataset, **kwargs):# -> Generator[Any, Any, None]:
+    def moderate_batch(self, dataset, **kwargs):  # -> Generator[Any, Any, None]:
         # if isinstance(self.client, transformers.Pipeline):
         #     # prepare batch
         #     dataset['text'] = dataset['text'].apply(self.make_prompt)
@@ -196,8 +167,12 @@ class ToxicityModel(BaseModel):
         if isinstance(dataset, pd.DataFrame):
             for _, row in dataset.iterrows():
                 # TODO: get this from the config instead
-                record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(content=row['content'],record_id=record_id, **kwargs)
+                record_id = row.get("id", row.get("record_id", row.get("name")))
+                output = self.moderate(
+                    content=row["content"],
+                    record_id=record_id,
+                    **kwargs,
+                )
                 output = output.model_dump()
 
                 output = scrub_serializable(output)
@@ -205,22 +180,31 @@ class ToxicityModel(BaseModel):
         else:
             for row in dataset:
                 # TODO: get this from the config instead
-                record_id = row.get('id',row.get('record_id',row.get('name')))
-                output = self.moderate(content=row['content'],record_id=record_id, **kwargs)
+                record_id = row.get("id", row.get("record_id", row.get("name")))
+                output = self.moderate(
+                    content=row["content"],
+                    record_id=record_id,
+                    **kwargs,
+                )
                 output = output.model_dump()
 
                 output = scrub_serializable(output)
                 yield output
 
-
     async def moderate_async(
-            self, text: str, record_id:str, **kwargs
-        ) -> EvalRecord:
-            return self.moderate(content=text, record_id=record_id, **kwargs)
+        self,
+        text: str,
+        record_id: str,
+        **kwargs,
+    ) -> EvalRecord:
+        return self.moderate(content=text, record_id=record_id, **kwargs)
 
     @trace
     def moderate(
-        self, content: str, record_id: str=None, **kwargs
+        self,
+        content: str,
+        record_id: str = None,
+        **kwargs,
     ) -> EvalRecord:
         prompt = self.make_prompt(content)
 
@@ -229,34 +213,34 @@ class ToxicityModel(BaseModel):
         try:
             output = self.interpret(response)
         except ValueError as e:
-            err_msg = f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
-            output = EvalRecord(
-                error=err_msg, response=response)
+            err_msg = (
+                f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
+            )
+            output = EvalRecord(error=err_msg, response=response)
             logger.error(err_msg)
         output = self.add_output_info(output, record_id=record_id)
         return output
 
-
     @trace
     @abc.abstractmethod
     def interpret(self, response: Any) -> EvalRecord:
-        raise NotImplementedError()
-
+        raise NotImplementedError
 
     def add_output_info(self, record: EvalRecord, record_id=None, **kwargs) -> EvalRecord:
         # add identifying info in
-        record.model=self.model
-        record.process=self.process_chain
-        record.standard=self.standard
+        record.model = self.model
+        record.process = self.process_chain
+        record.standard = self.standard
         if record_id is not None:
-            record.record_id=record_id
+            record.record_id = record_id
 
         return record
+
 
 class _HF(ToxicityModel):
     process_chain: str = "local transformers"
     model: str
-    device: Union[str, torch.device] = Field(
+    device: str | torch.device = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA or auto)",
     )
@@ -268,30 +252,48 @@ class _HF(ToxicityModel):
     def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model,
+            trust_remote_code=True,
+        )
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+            self.tokenizer.pad_token_id = (
+                self.tokenizer.eos_token_id
+            )  # Set a padding token
 
-        self.client = AutoModelForCausalLM.from_pretrained(self.model, trust_remote_code=True).to(self.device)
-
+        self.client = AutoModelForCausalLM.from_pretrained(
+            self.model,
+            trust_remote_code=True,
+        ).to(self.device)
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
+        input_ids = self.tokenizer([prompt], padding="longest", return_tensors="pt").to(
+            self.device,
+        )["input_ids"]
 
-        input_ids = self.tokenizer([prompt], padding="longest", return_tensors="pt").to(self.device)['input_ids']
-
-        output = self.client.generate(input_ids=input_ids, **self.options, **self.call_options, **kwargs)
+        output = self.client.generate(
+            input_ids=input_ids,
+            **self.options,
+            **self.call_options,
+            **kwargs,
+        )
         prompt_len = input_ids.shape[-1]
-        response = self.tokenizer.decode(output[0][prompt_len:], skip_special_tokens=True)
+        response = self.tokenizer.decode(
+            output[0][prompt_len:],
+            skip_special_tokens=True,
+        )
         try:
-            result = response[0][0]['generated_text'].strip()
-            return str(result[len(prompt):])
+            result = response[0][0]["generated_text"].strip()
+            return str(result[len(prompt) :])
         except:
             try:
                 result = response.generations[0][0].text.strip()
-                return str(result[len(prompt):])
+                return str(result[len(prompt) :])
             except:
                 result = response.strip()
                 return result
@@ -328,16 +330,23 @@ class Perspective(ToxicityModel):
             outcome.scores.append(score)
             if score.score and score.score > 0.5:
                 outcome.labels.append(key)
-                if key.lower() in ["toxicity", "severe_toxicity","toxicity_experimental", "severe_toxicity_experimental"]:
+                if key.lower() in [
+                    "toxicity",
+                    "severe_toxicity",
+                    "toxicity_experimental",
+                    "severe_toxicity_experimental",
+                ]:
                     outcome.prediction = True
 
         return outcome
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
-        if not (attributes := kwargs.get('attributes')):
+        if not (attributes := kwargs.get("attributes")):
             # get all
             attributes = (
                 PerspectiveAttributes.__args__
@@ -378,10 +387,13 @@ class Comprehend(ToxicityModel):
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         return self.client.detect_toxic_content(
-            LanguageCode="en", TextSegments=[{"Text": prompt}]
+            LanguageCode="en",
+            TextSegments=[{"Text": prompt}],
         )
 
     @trace
@@ -444,10 +456,13 @@ class AzureContentSafety(ToxicityModel):
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         request = AnalyzeTextOptions(
-            text=prompt, output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS
+            text=prompt,
+            output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS,
         )
         return self.client.analyze_text(request)
 
@@ -473,8 +488,10 @@ class AzureContentSafety(ToxicityModel):
                     score_labels.append(measure)
 
                 severity_score = severity
-            except Exception as e:
-                raise ValueError(f"Unable to interpret Azure content safety score: {item}.")
+            except Exception:
+                raise ValueError(
+                    f"Unable to interpret Azure content safety score: {item}.",
+                )
 
             if measure is not None:
                 outcome.scores.append(
@@ -482,7 +499,7 @@ class AzureContentSafety(ToxicityModel):
                         measure=measure,
                         score=severity_score,
                         labels=score_labels,
-                    )
+                    ),
                 )
 
         return outcome
@@ -509,7 +526,6 @@ class AzureModerator(ToxicityModel):
             ReviewRecommended is either true or false depending on the internal score thresholds. Customers should assess whether to use this value or decide on custom thresholds based on their content policies.
     """
 
-
     def init_client(self) -> None:
         SUBSCRIPTION_KEY = os.environ["AZURE_CONTENT_MODERATOR_KEY"]
         ENDPOINT = os.environ.get(
@@ -526,7 +542,9 @@ class AzureModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         text_stream = StringIO(prompt)
         response = self.client.text_moderation.screen_text(
@@ -568,7 +586,7 @@ class AzureModerator(ToxicityModel):
             "original_text",
             "classification",
             "normalized_text",
-            "auto_corrected_text"
+            "auto_corrected_text",
         ]
         outcome.metadata = {
             x: response[x] for x in response.keys() if x not in _result_keys
@@ -585,17 +603,22 @@ class REGARD(ToxicityModel):
 
     def init_client(self) -> None:
         if torch.cuda.is_available():
-            self.client = evaluate.load("regard", module_type="measurement",device = "cuda")
+            self.client = evaluate.load(
+                "regard",
+                module_type="measurement",
+                device="cuda",
+            )
         else:
             self.client = evaluate.load("regard", module_type="measurement")
-
 
     def make_prompt(self, content: str) -> str:
         return content
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         result = self.client.compute(data=[prompt])
         return result
@@ -629,19 +652,20 @@ class HONEST(ToxicityModel):
         self.client = evaluate.load("honest", "en")
 
     def make_prompt(self, content: str) -> list[str]:
-        return content.split(' ')
+        return content.split(" ")
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         result = self.client.compute(predictions=prompt)
         return result
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
-        outcome = EvalRecord(
-        )
+        outcome = EvalRecord()
         outcome.scores = [Score(measure="honest", score=response["honest_score"])]
         outcome.prediction = response["honest_score"] > 0.5
         if outcome.prediction:
@@ -654,7 +678,7 @@ class LFTW(ToxicityModel):
     model: str = "facebook/roberta-hate-speech-dynabench-r4-target"
     process_chain: str = "hf_transformers"
     standard: str = "lftw_r4_target"
-    device: Union[str, torch.device] = Field(
+    device: str | torch.device = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA or auto)",
     )
@@ -667,21 +691,27 @@ class LFTW(ToxicityModel):
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+            self.tokenizer.pad_token_id = (
+                self.tokenizer.eos_token_id
+            )  # Set a padding token
         cfg = AutoConfig.from_pretrained(self.model)
         self.classes = cfg.id2label
-        self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(self.device)
-
+        self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(
+            self.device,
+        )
 
     def make_prompt(self, content: str) -> str:
         return content
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
-
-        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)['input_ids']
+        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)[
+            "input_ids"
+        ]
         with torch.no_grad():
             response = self.client(input_ids=input_ids, **self.options, **kwargs)
         logits = response.logits
@@ -693,11 +723,12 @@ class LFTW(ToxicityModel):
     @trace
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
-        outcome = EvalRecord(
-        )
-        outcome.scores = [Score(measure=response['label'], confidence=response["confidence"])]
-        outcome.prediction = response['label'] == "hate"
-        outcome.labels = [response['label'] ]
+        outcome = EvalRecord()
+        outcome.scores = [
+            Score(measure=response["label"], confidence=response["confidence"]),
+        ]
+        outcome.prediction = response["label"] == "hate"
+        outcome.labels = [response["label"]]
 
         return outcome
 
@@ -707,8 +738,10 @@ class GPTJT(ToxicityModel):
     model: str = "togethercomputer/GPT-JT-Moderation-6B"
     process_chain: str = "hf_transformers"
     standard: str = "gpt-jt-mod-v1"
-    template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "gpt-jt-mod-v1.txt"))
-    device: Union[str, torch.device] = Field(
+    template: str = Field(
+        default_factory=lambda: read_text(TEMPLATE_DIR / "gpt-jt-mod-v1.txt"),
+    )
+    device: str | torch.device = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )
@@ -726,8 +759,10 @@ class GPTJT(ToxicityModel):
 
     def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
-        self.client = hf_pipeline(hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
-                device=self.device, max_new_tokens=3
+        self.client = hf_pipeline(
+            hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
+            device=self.device,
+            max_new_tokens=3,
         )
 
     def make_prompt(self, content: str) -> str:
@@ -736,42 +771,45 @@ class GPTJT(ToxicityModel):
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         response = self.client(prompt)
 
         if len(response) > 1:
             raise ValueError("Expected only one result from model")
-        result = response[0]['generated_text']
-        if result.startswith(prompt):
-            result = result[len(prompt):]
+        result = response[0]["generated_text"]
+        result = result.removeprefix(prompt)
 
         return result.strip()
 
     @trace
     def interpret(self, response: Any) -> EvalRecord:
-
         # Load the message info into the output
-        outcome = EvalRecord(
-        )
+        outcome = EvalRecord()
         try:
             outcome.response = str(response)
             outcome.scores = [
                 Score(
-                    measure=self.standard, score=self.ResponseMap[response], labels=[response]
-                )
+                    measure=self.standard,
+                    score=self.ResponseMap[response],
+                    labels=[response],
+                ),
             ]
 
             outcome.prediction = self.ResponseMap[response] >= 2
             outcome.labels = [response]
         except Exception as e:
-            raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
+            raise ValueError(
+                f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}",
+            )
 
         return outcome
 
 
 ###
-# todo: add https://github.com/unitaryai/detoxify
+# TODO: add https://github.com/unitaryai/detoxify
 ####
 
 
@@ -782,7 +820,7 @@ class OpenAIModerator(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        openai.api_type = 'openai'
+        openai.api_type = "openai"
         self.client = openai.moderations
 
     def make_prompt(self, content: str) -> str:
@@ -790,7 +828,9 @@ class OpenAIModerator(ToxicityModel):
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
         return self.client.create(input=prompt, model=self.model)
 
@@ -801,8 +841,7 @@ class OpenAIModerator(ToxicityModel):
         result = response.results[0].dict()
 
         # Load the message info into the output
-        outcome = EvalRecord(
-        )
+        outcome = EvalRecord()
         outcome.scores = [
             Score(measure=k, score=v) for k, v in result["category_scores"].items()
         ]
@@ -812,6 +851,7 @@ class OpenAIModerator(ToxicityModel):
 
         return outcome
 
+
 class ShieldGemma(ToxicityModel):
     model: str = "google/shieldgemma-27b"
     process_chain: str = "local transformers"
@@ -819,10 +859,10 @@ class ShieldGemma(ToxicityModel):
     client: transformers.Pipeline = None
     tokenizer: Any = None
     classes: Any = None
-    _tpl: str = ''
-    _criteria: str = ''
+    _tpl: str = ""
+    _criteria: str = ""
     criteria: str
-    device: Union[str, torch.device] = Field(
+    device: str | torch.device = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA or auto)",
     )
@@ -830,24 +870,28 @@ class ShieldGemma(ToxicityModel):
     def init_client(self) -> None:
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.client = AutoModelForCausalLM.from_pretrained(self.model, device_map="auto", torch_dtype=torch.bfloat16)
+        self.client = AutoModelForCausalLM.from_pretrained(
+            self.model,
+            device_map="auto",
+            torch_dtype=torch.bfloat16,
+        )
         vocab = self.tokenizer.get_vocab()
-        self.classes = [vocab['Yes'], vocab['No']]
+        self.classes = [vocab["Yes"], vocab["No"]]
 
         template = read_yaml(TEMPLATE_DIR / "shieldgemma.yaml")
-        self._criteria = template['criteria'][self.criteria]
-        self._tpl = template['template']
-
+        self._criteria = template["criteria"][self.criteria]
+        self._tpl = template["template"]
 
     def make_prompt(self, text):
-        prompt =  self._tpl.format(text=text, criteria=self._criteria)
+        prompt = self._tpl.format(text=text, criteria=self._criteria)
         return prompt
 
     @trace
     def call_client(
-        self, prompt: str, **kwargs
+        self,
+        prompt: str,
+        **kwargs,
     ) -> Any:
-
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
         with torch.no_grad():
@@ -871,7 +915,7 @@ class ShieldGemma(ToxicityModel):
             prediction=False,
         )
 
-        score = response['score']
+        score = response["score"]
         outcome.scores = [Score(measure="GemmaGuardDefault", score=score)]
         if score > 0.5:
             outcome.labels.append("violating")
@@ -885,8 +929,10 @@ class ShieldGemma(ToxicityModel):
 class ShieldGemma2b(ShieldGemma):
     model: str = "google/shieldgemma-2b"
 
+
 class ShieldGemma9b(ShieldGemma):
     model: str = "google/shieldgemma-9b"
+
 
 class ToxicChat(ToxicityModel):
     model: str = "toxicchat"
