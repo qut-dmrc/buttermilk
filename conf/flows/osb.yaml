@@ -16,6 +16,7 @@ osb:
         model:
           - gemini15pro
           - gpt4o_osb
+          - llama31_70b
           # - llama32_90b_vision_instruct
           # - llama31_405b_instruct
           - haiku

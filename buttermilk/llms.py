@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import TYPE_CHECKING
 
 # There are 'old' and 'new' harm categories. Use the new ones.
 # see google/generativeai/types/safety_types.py
@@ -8,11 +9,12 @@ from langchain_core.language_models.llms import LLM
 
 # from langchain_google_vertexai import (
 #     ChatVertexAI,
-#     HarmBlockThreshold as VertexHarmBlockThreshold,
-#     HarmCategory as VertexHarmCategory,
 # )
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    _ = [HarmBlockThreshold, HarmCategory]
 
 # from ..libs.hf import Llama2ChatMod
 # from ..libs.replicate import replicatellama3
