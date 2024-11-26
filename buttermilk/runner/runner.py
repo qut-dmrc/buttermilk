@@ -62,7 +62,6 @@ from abc import abstractmethod
 from asyncio import Queue, QueueEmpty, TaskGroup
 from collections.abc import AsyncGenerator, Coroutine
 from functools import cached_property
-from pathlib import Path
 from typing import (
     Any,
     Self,
@@ -70,9 +69,7 @@ from typing import (
 
 import pandas as pd
 import shortuuid
-from cloudpathlib import CloudPath
 from humanfriendly import format_timespan
-from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -245,92 +242,6 @@ class Consumer(BaseModel):
         process it, and return the processed result.
         """
         yield job
-
-
-################################
-#
-# Results collector
-#
-################################
-class ResultsCollector(BaseModel):
-    """A simple collector that receives results from a queue and collates them."""
-
-    bm: BM = Field(default_factory=lambda: BM())
-    results: Queue[Job] = Field(default_factory=Queue)
-    shutdown: bool = False
-    n_results: int = 0
-    to_save: list = []
-    batch_size: int = 50  # rows
-
-    # # The URI or path to save all results from this run
-    batch_path: CloudPath | Path = None
-
-    @model_validator(mode="after")
-    def get_path(self) -> Self:
-        if self.batch_path is None:
-            self.batch_path = CloudPath(self.bm.save_dir)
-        return self
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @computed_field
-    @cached_property
-    def pbar(self) -> atqdm:
-        return atqdm(
-            total=self.batch_size,
-            dynamic_ncols=False,
-            desc="Save buffer",
-            bar_format="{desc:20}: {bar:20}",
-            colour="#6610f2",  # (indigo)
-            position=1,
-        )
-
-    async def run(self):
-        try:
-            # Collect results
-            while not self.shutdown or not self.results.empty():
-                await asyncio.sleep(delay=1)
-                try:
-                    result = self.results.get_nowait()
-                    self.pbar.update(1)
-                    self.pbar.refresh()
-                except QueueEmpty:
-                    await asyncio.sleep(3.0)
-                    continue
-
-                # Add result to the batch
-                row_data = self.process(result)
-                self.to_save.append(row_data)
-                self.n_results += 1
-
-                if len(self.to_save) >= self.batch_size:
-                    # Save the batch of results when batch size is reached
-                    self.save_with_trace()
-
-        except Exception as e:  # Log any errors that occur during result collection
-            logger.error(f"Unable to collect results: {e} {e.args=}")
-            raise e
-
-        finally:
-            self.shutdown = True
-            self.save_with_trace()  # Save any remaining results in the batch
-
-    # Turn a Job with results into a record dict to save
-    def process(self, response: Job) -> dict[str, Any]:
-        if isinstance(response, Job):
-            return response.model_dump()
-        return response
-
-    @trace
-    def save_with_trace(self, **kwargs):
-        return self._save(**kwargs)
-
-    def _save(self):
-        if self.to_save:
-            _save_path = self.batch_path / f"results_{self.n_results}.json"
-            uri = self.bm.save(data=self.to_save, uri=_save_path.as_uri())
-            self.to_save = []
-        return uri
 
 
 ################################
