@@ -24,9 +24,9 @@ You may be provided with additional feedback to consider. You should incorporate
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if content %}
+{% if content or q %}
 <BEGIN CONTENT>
-{{ content }}
+{{ content or q }}
 <END CONTENT>
 {% endif %}
 

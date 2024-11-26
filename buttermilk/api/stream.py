@@ -31,7 +31,7 @@ from buttermilk.utils.media import (
     validate_uri_extract_text,
     validate_uri_or_b64,
 )
-from buttermilk.utils.validators import make_list_validator
+from buttermilk.utils.validators import make_list_validator, make_uri_validator
 
 bm = None
 
@@ -51,7 +51,7 @@ class FlowRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("content", "text", "body"),
     )
-    uri: str | bytes | None = Field(
+    uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
@@ -79,6 +79,8 @@ class FlowRequest(BaseModel):
     )(
         make_list_validator(),
     )
+
+    _ensure_uri = field_validator("uri", mode="before")(make_uri_validator())
 
     @model_validator(mode="before")
     def preprocess_data(cls, values):
@@ -143,12 +145,15 @@ async def flow_stream(
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
-    content, image, video = await asyncio.gather(
+    content, uri, image, video = await asyncio.gather(
         validate_uri_extract_text(flow_request.content),
+        validate_uri_extract_text(flow_request.uri),
         validate_uri_or_b64(flow_request.image),
         validate_uri_or_b64(flow_request.video),
     )
+    content = "\n".join([x for x in [content, uri] if x])
     media = [x for x in [image, video] if x]
+
     if flow_request.record_id:
         record = RecordInfo(text=content, media=media, record_id=flow_request.record_id)
     else:

@@ -216,12 +216,14 @@ class RecordInfo(BaseModel):
 
     def as_langchain_message(
         self,
-        type: Literal["user", "system"] = "user",
+        type: Literal["user", "human", "system"] = "user",
     ) -> BaseMessage | None:
         # Return the fields as a langchain message
 
         if not self.media:
             if self.text:
+                if type in {"user", "human"}:
+                    return HumanMessage(content=self.text)
                 return BaseMessage(content=self.text, type=type)
             return None
         components = []

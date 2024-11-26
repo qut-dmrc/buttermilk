@@ -113,7 +113,7 @@ class Agent(BaseModel):
         self._agent_id = f"{self.name}_{shortuuid.uuid()[:6]}"
         return self
 
-    @trace(args_to_ignore=None)
+    @trace
     async def run(self, *, job: Job, **kwargs) -> Job:
         async with self._sem:
             try:

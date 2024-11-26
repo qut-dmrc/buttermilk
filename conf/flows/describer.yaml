@@ -11,6 +11,7 @@ describe:
         model:
           - gpt4v
           - gemini15pro
+          - sonnet
       inputs:
         record: record
     - name: describe_synth
@@ -22,6 +23,7 @@ describe:
         model:
           - gpt4v
           - gemini15pro
+          - sonnect
       inputs:
         record: record
         answers: describe.outputs

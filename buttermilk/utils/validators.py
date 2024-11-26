@@ -1,24 +1,52 @@
 # validators.py
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, TypeVar
+
+import httpx
+import pydantic
 from cloudpathlib import CloudPath
-from pydantic import BaseModel, field_validator
 
 T = TypeVar("T")
 
+
 def make_list_validator() -> Callable[[Any], list]:
     """Convert single items to list if not already a list"""
+
     def validator(v: Any) -> list:
         if isinstance(v, str):
             return [v]
         return v if isinstance(v, list) else [v]
+
     return validator
+
+
+def make_uri_validator() -> Callable[[Any], str]:
+    """Convert input to string URI if possible"""
+
+    def validator(path: Any) -> str:
+        if isinstance(path, bytes):
+            path = path.decode("utf-8")
+
+        if isinstance(path, httpx.URL):
+            return str(path)
+        if isinstance(path, pydantic.AnyUrl):
+            return str(path)
+        if isinstance(path, CloudPath):
+            return str(path.as_uri())
+        if isinstance(path, Path):
+            return str(path.as_posix())
+        return path
+
+    return validator
+
 
 def make_path_validator() -> Callable[[Any], str]:
     """Convert CloudPath to string URI"""
+
     def validator(path: Any) -> str:
         if isinstance(path, CloudPath):
             return str(path.as_uri())
         return path
+
     return validator
-
-

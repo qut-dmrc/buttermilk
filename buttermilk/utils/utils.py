@@ -29,7 +29,7 @@ async def run_async_newthread(func, *args, **kwargs):
 
 
 async def download_limited_async(
-    url,
+    url: str | httpx.URL | pydantic.AnyUrl | AnyPath,
     *,
     allow_arbitrarily_large_downloads=False,
     max_size: int = 1024 * 1024 * 10,
@@ -44,6 +44,9 @@ async def download_limited_async(
     except exceptions.InvalidPrefixError:
         # not a cloudpath url
         pass
+
+    if not isinstance(url, httpx.URL):
+        url = httpx.URL(str(url))
 
     async with httpx.AsyncClient() as client:
         r = await client.get(url, headers=headers)
