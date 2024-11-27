@@ -103,7 +103,13 @@ extend-include = ["*.ipynb"]
 
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
 lint.select = ["E", "F"]
-lint.ignore = []
+lint.ignore = [
+    "RET504",  # Unnecessary variable assignment before return
+    "RET503",  # Multiple returns 
+    "E501",    # Line too long 
+    "TRY003", "EM101",   # No f-strings or string literals in exceptions
+    "RET505",  # Unnecessary else after return
+] 
 lint.isort.combine-as-imports = true
 lint.isort.known-first-party = ["buttermilk"]
 # Same as Black.

@@ -1,34 +1,33 @@
 defaults:
+  - describer
   - _self_
 
-describe:
+params:
+  template: frames
+  model:
+    - gpt4o
+    - gemini15pro
+    - sonnet
+    - llama32_90b_vision_instruct_azure
+
+frames:
   _target_: buttermilk.runner.creek.Creek
   source: api development
   steps: 
-    - name: describe
+    - name: frames
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
-      parameters: 
-        template: describe
-        model:
-          - gpt4v
-          - gemini15pro
-          - sonnet
+      parameters: ${flows.params}
       inputs:
         record: record
-    - name: describe_synth
+    - name: frames_synth
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       concurrency: 20
-      parameters: 
-        template: describe
-        model:
-          - gpt4v
-          - gemini15pro
-          - sonnet
+      parameters: ${flows.params}
       inputs:
         record: record
-        answers: describe.outputs
+        answers: frames.outputs
       outputs:
         record: outputs

@@ -2,6 +2,8 @@ import hydra
 import pytest
 from pytest import MarkDecorator
 
+from buttermilk.utils.utils import read_file
+
 
 @pytest.fixture(scope="session")
 def bm() -> "BM":
@@ -17,6 +19,11 @@ def bm() -> "BM":
 @pytest.fixture(scope="session")
 def logger(BM):
     return BM.logger
+
+
+@pytest.fixture(scope="session")
+def image_bytes() -> bytes:
+    return read_file("tests/data/smoking.png")
 
 
 def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:

@@ -1,0 +1,39 @@
+toxicity:
+  source: Drag queens paper
+  steps:
+  data:
+    - name: record
+      type: file
+      path: gs://dmrc-platforms/data/drag_train.jsonl
+      columns:
+        record_id: id
+        content: text
+        groundtruth: expected
+    - name: cots
+      type: job
+      path: dmrc-analysis.toxicity.flow
+      last_n_days: 90
+      max_records_per_group: -1
+      agg: false
+      filter:
+        # step: judge
+      join:
+        record_id: record.record_id
+      group:
+        job_id: job_id
+      columns:
+        timestamp: timestamp
+        job: run_info.job
+        project: run_info.project
+        model: agent_info.model
+        template: agent_info.template
+        criteria: agent_info.template_vars.criteria
+        content: record.text
+        prediction: outputs.prediction
+        reasons: outputs.reasons
+        labels: outputs.labels
+        outputs: outputs
+        record: record
+        parameters: parameters
+        agent_info: agent_info
+        # expected: record.groundtruth.answer

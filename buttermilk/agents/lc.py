@@ -250,7 +250,7 @@ class LC(Agent):
         # Fill placeholders
         for k, v in placeholders.items():
             if isinstance(v, RecordInfo):
-                if rendered := v.as_langchain_message(type="user"):
+                if rendered := v.as_langchain_message(role="user"):
                     input_vars[k] = [rendered]
             elif v and v[0]:
                 input_vars[k] = v

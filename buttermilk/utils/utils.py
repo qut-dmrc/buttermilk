@@ -1,8 +1,10 @@
 import asyncio
+import base64
 import datetime
 import itertools
 import json
 import math
+import mimetypes
 import pathlib
 import uuid
 from collections.abc import Mapping, Sequence
@@ -24,6 +26,25 @@ from .._core.log import logger
 T = TypeVar("T")
 
 
+def is_uri(value: Any) -> bool:
+    # Check if the string is a valid URI
+    try:
+        x = pydantic.AnyUrl(value)
+    except:
+        return False
+    else:
+        return not (not x.scheme or not x.host)
+
+
+def is_b64(value: Any) -> bool:
+    # Check if the string is a valid base64-encoded string
+    try:
+        base64.b64decode(value, validate=True)
+    except:
+        return False
+    return True
+
+
 async def run_async_newthread(func, *args, **kwargs):
     return await asyncio.to_thread(func, *args, **kwargs)
 
@@ -31,7 +52,7 @@ async def run_async_newthread(func, *args, **kwargs):
 async def download_limited_async(
     url: str | httpx.URL | pydantic.AnyUrl | AnyPath,
     *,
-    allow_arbitrarily_large_downloads=False,
+    allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
 ) -> tuple[bytes, str]:
@@ -55,7 +76,7 @@ async def download_limited_async(
             not allow_arbitrarily_large_downloads
             and int(r.headers.get("Content-Length", 0)) > max_size
         ):
-            return b""
+            raise OSError("File too large, download aborted")
 
         data = []
         length = 0
@@ -66,7 +87,10 @@ async def download_limited_async(
             if not allow_arbitrarily_large_downloads and length > max_size:
                 raise OSError("File too large, download aborted")
 
-        mimetype = r.headers.get("Content-Type", "application/octet-stream")
+        mimetype = r.headers.get("Content-Type")
+        if not mimetype or mimetype == "application/octet-stream":
+            # Try to guess the mimetype from the content
+            mimetype = mimetypes.guess_type(url.path)[0] or "application/octet-stream"
 
         return b"".join(data), mimetype
 
@@ -77,21 +101,27 @@ def download_limited(
     allow_arbitrarily_large_downloads=False,
     max_size: int = 1024 * 1024 * 10,
     token=None,
-) -> bytes:
+    timeout=300,
+) -> tuple[bytes, str]:
     if token:
         # add Authorization: Bearer to the request
         headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers, stream=True)
+        r = requests.get(url, headers=headers, stream=True, timeout=timeout)
     else:
-        r = requests.get(url, stream=True)
+        r = requests.get(url, stream=True, timeout=timeout)
     if (
         not allow_arbitrarily_large_downloads
         and int(r.headers.get("Content-Length", 0)) > max_size
     ):
-        return b""
+        raise OSError("File too large, download aborted")
 
     data = []
     length = 0
+
+    mimetype = r.headers.get("Content-Type")
+    if not mimetype or mimetype == "application/octet-stream":
+        # Try to guess the mimetype from the content
+        mimetype = mimetypes.guess_type(url.path)[0] or "application/octet-stream"
 
     for chunk in r.iter_content(1024):
         data.append(chunk)
@@ -99,7 +129,7 @@ def download_limited(
         if not allow_arbitrarily_large_downloads and length > max_size:
             return b""
 
-    return b"".join(data)
+    return b"".join(data), mimetype
 
 
 def read_file(

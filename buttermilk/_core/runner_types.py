@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import datetime
 from collections.abc import Mapping, Sequence
@@ -25,7 +24,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk.utils.utils import remove_punctuation
+from buttermilk.utils.utils import is_uri, remove_punctuation
 from buttermilk.utils.validators import make_list_validator
 
 from .types import SessionInfo
@@ -81,13 +80,27 @@ class Result(BaseModel):
 class MediaObj(BaseModel):
     mime: str = Field(
         default="image/png",
-        alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
+        validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
     )
-    data: bytes | None = Field(default=None, alias=AliasChoices("data", "content"))
-    uri: str | None = Field(default=None, alias=AliasChoices("uri", "path", "url"))
+
+    text: str = Field(
+        default="",
+        validation_alias=AliasChoices("text", "alt", "caption", "alt_text"),
+    )
+
+    data: bytes | None = Field(
+        default=None,
+        validation_alias=AliasChoices("data", "content"),
+    )
+
+    uri: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("uri", "path", "url"),
+    )
+
     base_64: str | None = Field(
         default=None,
-        alias=AliasChoices("base_64", "b64", "b64_data"),
+        validation_alias=AliasChoices("base_64", "b64", "b64_data"),
     )
 
     model_config = ConfigDict(
@@ -102,9 +115,9 @@ class MediaObj(BaseModel):
     @computed_field
     @property
     def len(self) -> int:
-        """We exclude the potentially large fields from the export. Instead just indicate the length
-        and the mimetype+uri so the user knows data was passed in.
-        """
+        # We exclude the potentially large fields from the export. Instead
+        # just indicate the length and the mimetype+uri so the user knows
+        # data was passed in.
         if self.base_64:
             return len(self.base_64)
         return -1
@@ -115,6 +128,10 @@ class MediaObj(BaseModel):
             raise ValueError("MediaObj must have data, a uri, or a base64 string.")
         if self.data and not self.base_64:
             self.base_64 = base64.b64encode(self.data).decode("utf-8")
+
+            # Strip binary data away once it's converted to b64
+            self.data = None
+
         return self
 
     @field_validator("uri")
@@ -124,6 +141,15 @@ class MediaObj(BaseModel):
         if isinstance(path, Path):
             return path.as_posix()
         return path
+
+    def as_image_url(self) -> dict:
+        return {
+            "type": "image_url",
+            "image_url": {"url": self.uri},
+        }
+
+    def as_text(self) -> dict:
+        return {"type": "text", "text": self.text}
 
     def as_content_part(self):
         if self.base_64:
@@ -147,18 +173,28 @@ class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     name: str | None = Field(
         default=None,
-        alias=AliasChoices("name", "title", "heading"),
+        validation_alias=AliasChoices("name", "title", "heading"),
     )
     text: str | None = Field(
         default=None,
-        alias=AliasChoices("text", "content", "body", "alt_text", "alt", "caption"),
+        validation_alias=AliasChoices(
+            "text",
+            "content",
+            "body",
+            "alt_text",
+            "alt",
+            "caption",
+        ),
     )
-    media: MediaObj | list[MediaObj] = Field(
+    media: list[MediaObj] = Field(
         default_factory=list,
-        alias=AliasChoices("media", "image", "video", "audio"),
+        validation_alias=AliasChoices("media", "image", "video", "audio"),
     )
     ground_truth: Result | None = None
-    uri: str | None = Field(default=None, alias=AliasChoices("uri", "path", "url"))
+    uri: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("uri", "path", "url"),
+    )
 
     _ensure_list = field_validator("media", mode="before")(make_list_validator())
 
@@ -188,58 +224,40 @@ class RecordInfo(BaseModel):
     @field_validator("uri")
     @classmethod
     def vld_path(cls, path: object) -> str:
+        if not is_uri(path):
+            raise ValueError(f"Invalid URI: {path}")
         if isinstance(path, CloudPath):
             return path.as_uri()
         if isinstance(path, Path):
             return path.as_posix()
         return str(path)
 
-    async def load_contents(self) -> None:
-        # If we have a URI, download it.
-        # If it's a webpage, extract the text.
-        # If it's a binary object, convert it to base64.
-        # Try to guess the mime type from the extension if possible.
-        tasks = []
-        resolved_objects = []
-        if self.uri:
-            tasks.append(download_and_convert(self.uri))
-        for obj in self.media:
-            if obj.uri and not obj.base_64:
-                tasks.append(download_and_convert(self.uri))
-            else:
-                resolved_objects.append(obj)
-
-        if tasks:
-            resolved_objects = [*resolved_objects, await asyncio.gather(tasks)]
-
-        self.media = resolved_objects
-
     def as_langchain_message(
         self,
-        type: Literal["user", "human", "system"] = "user",
+        role: Literal["user", "human", "system"] = "user",
     ) -> BaseMessage | None:
-        # Return the fields as a langchain message
+        components = self.as_openai_message(role=role)["content"]
+        if role in {"user", "human"}:
+            return HumanMessage(content=components)
+        return BaseMessage(content=components, type=role)
 
-        if not self.media:
-            if self.text:
-                if type in {"user", "human"}:
-                    return HumanMessage(content=self.text)
-                return BaseMessage(content=self.text, type=type)
-            return None
-        components = []
+    def as_openai_message(
+        self,
+        role: Literal["user", "human", "system"] = "user",
+    ) -> dict:
         # Prepare input for model consumption
-        if text := self.text or "see attached":
-            components.append(
-                {
-                    "type": "text",
-                    "text": text,
-                },
-            )
+        components = [obj.as_content_part() for obj in self.media]
 
-        for obj in self.media:
-            components.append(obj.as_content_part())
+        if not self.media and not self.text:
+            raise OSError("No text or media provided for {self.record_id}")
+        if self.text:
+            components.append({"type": "text", "text": self.text})
 
-        return HumanMessage(content=components)
+        message = {
+            "role": role,
+            "content": components,
+        }
+        return message
 
 
 ##################################

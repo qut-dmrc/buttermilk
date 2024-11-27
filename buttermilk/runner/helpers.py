@@ -19,6 +19,7 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
         columns = col_mapping_hydra_to_local(data_cfg.columns)
         rename_dict = {v: k for k, v in columns.items()}
         df = df.rename(columns=rename_dict)
+
     elif data_cfg.type == "job":
         df = load_jobs(data_cfg=data_cfg)
     elif data_cfg.type == "bq":
@@ -32,6 +33,7 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
         )
     else:
         raise ValueError(f"Unknown data type: {data_cfg.type}")
+
     return df
 
 
@@ -206,7 +208,6 @@ def cache_data(uri: str) -> str:
 async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFrame]:
     # This works for small datasets that we can easily read and load.
     datasets = {}
-    df = pd.DataFrame()
     source_list = []
     dataset_configs = []
 
@@ -220,21 +221,30 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
             dataset_configs = [src] + dataset_configs
         source_list.append(src.name)
 
+    combined_df = pd.DataFrame()
     for src in dataset_configs:
-        df = await load_data(src)
+        new_df = await load_data(src)
         if src.type == "job":
             # Load and join prior job data
-            df = group_and_filter_jobs(existing_dfs=df, data=df, data_cfg=src)
-        elif src.columns:
-            df = df[src.columns.keys()]
+            new_df = group_and_filter_jobs(
+                existing_dfs=combined_df,
+                data=new_df,
+                data_cfg=src,
+            )
         else:
             # TODO @nicsuzor: group and limit by max_records_per_group
-            df = df
+            pass
+
+        if src.columns:
+            new_df = new_df[src.columns.keys()]
 
         # shuffle
-        df = df.sample(frac=1)
+        new_df = new_df.sample(frac=1)
 
-        datasets[src.name] = df
+        # Also hold the combined data for next iteration
+        combined_df = new_df.copy()
+
+        datasets[src.name] = new_df
     return datasets
 
 

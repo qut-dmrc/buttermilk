@@ -22,14 +22,14 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
 from buttermilk._core.runner_types import (
     Job,
+    MediaObj,
     RecordInfo,
 )
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.creek import Creek
 from buttermilk.utils.media import (
-    validate_uri_extract_text,
-    validate_uri_or_b64,
+    download_and_convert,
 )
 from buttermilk.utils.validators import make_list_validator, make_uri_validator
 
@@ -145,14 +145,15 @@ async def flow_stream(
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
-    content, uri, image, video = await asyncio.gather(
-        validate_uri_extract_text(flow_request.content),
-        validate_uri_extract_text(flow_request.uri),
-        validate_uri_or_b64(flow_request.image),
-        validate_uri_or_b64(flow_request.video),
+    objects = await asyncio.gather(
+        download_and_convert(flow_request.content),
+        download_and_convert(flow_request.uri),
+        download_and_convert(flow_request.image),
+        download_and_convert(flow_request.video),
     )
-    content = "\n".join([x for x in [content, uri] if x])
-    media = [x for x in [image, video] if x]
+
+    media = [x for x in objects if isinstance(x, MediaObj)]
+    content = "\n".join([x for x in objects if isinstance(x, str)])
 
     if flow_request.record_id:
         record = RecordInfo(text=content, media=media, record_id=flow_request.record_id)
