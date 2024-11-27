@@ -21,9 +21,19 @@ def test_all_llm(llms, model):
     answer = chain.invoke({})
     assert answer
 
-def test_multimodal_input_b64(llms, image_bytes):
-    message = RecordInfo(media=[MediaObj(mime="image/png", data=image_bytes)])
-    openai_message = message.as_openai_message(role="system")
+
+@pytest.mark.parametrize("model", CHATMODELS)
+def test_multimodal_input_b64(llms, model, image_bytes):
+    llm = llms[model]
+    message = RecordInfo(
+        text="Hi, can you tell me what this is?",
+        media=[MediaObj(mime="image/png", data=image_bytes)],
+    ).as_openai_message(role="human")
+
+    chain = ChatPromptTemplate.from_messages([message]) | llm
+    answer = chain.invoke({})
+    assert answer
+
 
 @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
 def test_cheap_llm(llms, cheapchatmodel: str):

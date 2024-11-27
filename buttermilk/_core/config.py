@@ -41,7 +41,9 @@ BASE_DIR = Path(__file__).absolute().parent
 #         return _impl
 
 
-CloudProvider = Literal["gcp", "bq", "aws", "azure", "env", "local", "gsheets"]
+CloudProvider = Literal[
+    "gcp", "bq", "aws", "azure", "env", "local", "gsheets", "vertex"
+]
 
 
 class CloudProviderCfg(BaseModel):

@@ -122,7 +122,7 @@ class Project(BaseModel):
     save_dest: CloudProviderCfg
     logger: CloudProviderCfg
     pubsub: CloudProviderCfg
-    clouds: list[CloudProviderCfg]
+    clouds: list[CloudProviderCfg] = Field(default_factory=list)
     flows: list[Flow] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
     verbose: bool = True

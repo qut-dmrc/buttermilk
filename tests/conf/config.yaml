@@ -19,7 +19,7 @@ bm:
       project: dmrc-analysis
       region: us-central1
       bucket: dmrc-analysis
-
+      
     secret_provider: 
       type: gcp
       project: dmrc-platforms
