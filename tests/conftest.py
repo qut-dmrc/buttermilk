@@ -23,7 +23,7 @@ def logger(BM):
 
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
-    return read_file("tests/data/smoking.png")
+    return read_file("tests/data/Rijksmuseum_(25621972346).jpg")
 
 
 def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:

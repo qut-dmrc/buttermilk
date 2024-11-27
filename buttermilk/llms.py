@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import TYPE_CHECKING
 
+import vertexai
 from anthropic import AnthropicVertex
 
 # There are 'old' and 'new' harm categories. Use the new ones.
@@ -67,9 +68,10 @@ GEMINI_SAFETY_SETTINGS_NONE = {
 # ```
 CHATMODELS = [
     "llama31_405b-azure",
-    "llama31_405b_instruct",
+    "llama31_405b",
     "llama31_8b",
-    "llama32_90b_vision_instruct",
+    "llama32_11b",
+    "llama32_90b",
     "llama32_90b_vision_instruct_azure",
     "llama31_70b",
     "o1-preview",
@@ -92,6 +94,23 @@ def VertexNoFilter(*args, **kwargs):
         _raise_on_blocked=False,
         response_mime_type="application/json",
     )
+
+
+def VertexMAAS(
+    project_id: str,
+    region: str,
+    staging_bucket: str,
+    model_name: str,
+    *args,
+    **kwargs,
+):
+    _ = vertexai.init(
+        project=project_id,
+        location=region,
+        staging_bucket=staging_bucket,
+    )
+    model = ChatVertexAI(model_name=model_name, *args, **kwargs)
+    return model
 
 
 def _Llama(*args, **kwargs):

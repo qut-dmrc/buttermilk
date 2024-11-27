@@ -28,7 +28,7 @@ def test_multimodal_input_b64(llms, model, image_bytes):
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
         media=[MediaObj(mime="image/png", data=image_bytes)],
-    ).as_openai_message(role="human")
+    ).as_langchain_message(role="human")
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
