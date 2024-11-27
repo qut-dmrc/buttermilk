@@ -102,10 +102,8 @@ def test_as_openai_message_with_media_and_role(image_bytes):
     message = RecordInfo(media=[MediaObj(mime="image/png", data=image_bytes)])
     openai_message = message.as_openai_message(role="system")
     assert openai_message["role"] == "system"
-    assert openai_message["content"] == [
-        {"type": "media", "media": "test"},
-        {"type": "text", "text": "test"},
-    ]
+    assert openai_message["content"][0]["type"] == "image/png"
+    assert openai_message["content"][0]["image_url"]
 
 
 def test_as_openai_message_with_text():

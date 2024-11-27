@@ -50,7 +50,7 @@ google-cloud-secret-manager = "^2.21.1"
 anthropic = {extras = ["vertex"], version = "^0.39.0"}
 langchain-openai = "^0.2.9"
 langchain-anthropic = "^0.3.0"
-google-cloud-aiplatform = "^1.73.0"
+google-cloud-aiplatform = {extras = ["langchain", "reasoningengine"], version = "^1.73.0"}
 openinference-instrumentation-langchain = "^0.1.29"
 
 [tool.poetry.group.ml.dependencies]

@@ -1,6 +1,7 @@
 import pytest
 from langchain.prompts import ChatPromptTemplate
 
+from buttermilk._core.runner_types import MediaObj, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS
 
@@ -20,6 +21,9 @@ def test_all_llm(llms, model):
     answer = chain.invoke({})
     assert answer
 
+def test_multimodal_input_b64(llms, image_bytes):
+    message = RecordInfo(media=[MediaObj(mime="image/png", data=image_bytes)])
+    openai_message = message.as_openai_message(role="system")
 
 @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
 def test_cheap_llm(llms, cheapchatmodel: str):

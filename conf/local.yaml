@@ -19,6 +19,12 @@ bm:
       region: us-central1
       bucket: dmrc-analysis
 
+    clouds:
+      - type: vertex
+        project: dmrc-platforms
+        region: us-central1
+        bucket: dmrc-analysis
+
     secret_provider: 
       type: gcp
       project: dmrc-platforms

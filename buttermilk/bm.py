@@ -26,6 +26,7 @@ import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
+import vertexai
 from dotenv import load_dotenv
 from google.cloud import bigquery, storage
 from google.cloud.logging.handlers import CloudLoggingHandler
@@ -121,6 +122,7 @@ class Project(BaseModel):
     save_dest: CloudProviderCfg
     logger: CloudProviderCfg
     pubsub: CloudProviderCfg
+    clouds: list[CloudProviderCfg]
     flows: list[Flow] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
     verbose: bool = True
@@ -183,6 +185,16 @@ class BM(Singleton, BaseModel):
                     extension="json",
                     save_dir=self._run_metadata.save_dir,
                 )
+
+                # initialize vertexai
+                for cloud in self.cfg.clouds:
+                    if cloud.type == "vertex":
+                        vertexai.init(
+                            project=cloud.project,
+                            location=cloud.region,
+                            staging_bucket=cloud.bucket,
+                        )
+
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
