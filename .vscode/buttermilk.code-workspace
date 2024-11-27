@@ -11,7 +11,11 @@
 		{
 			"name": "automod.cc",
 			"path": "../../automod"
-		}	],
+		},
+		{
+			"path": "../../automod.cc"
+		}
+	],
 	"settings": {
 	}
 }
