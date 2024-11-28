@@ -24,11 +24,39 @@ def test_all_llm(llms, model):
 
 
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
-def test_multimodal_input_b64(llms, model, image_bytes):
+def test_multimodal_input_b64_image(llms, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
-        media=[MediaObj(mime="image/png", data=image_bytes)],
+        media=[MediaObj(mime="image/jpg", data=image_bytes)],
+    ).as_langchain_message(role="human")
+
+    chain = ChatPromptTemplate.from_messages([message]) | llm
+    answer = chain.invoke({})
+    rprint(answer)
+    assert answer
+
+
+@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
+def test_multimodal_input_video_uri(llms, model, video_url):
+    llm = llms[model]
+    message = RecordInfo(
+        text="Hi, can you tell me what this is?",
+        media=[MediaObj(mime="video/mp4", uri=video_url)],
+    ).as_langchain_message(role="human")
+
+    chain = ChatPromptTemplate.from_messages([message]) | llm
+    answer = chain.invoke({})
+    rprint(answer)
+    assert answer
+
+
+@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
+def test_multimodal_input_b64_video(llms, model, video_bytes):
+    llm = llms[model]
+    message = RecordInfo(
+        text="Hi, can you tell me what this is?",
+        media=[MediaObj(mime="video/mp4", data=video_bytes)],
     ).as_langchain_message(role="human")
 
     chain = ChatPromptTemplate.from_messages([message]) | llm

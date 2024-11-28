@@ -151,14 +151,24 @@ class MediaObj(BaseModel):
     def as_text(self) -> dict:
         return {"type": "text", "text": self.text}
 
-    def as_content_part(self):
+    def as_content_part(self, model_type="openai"):
         if self.base_64:
-            part = {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{self.mime};base64,{self.base_64}",
-                },
-            }
+            if model_type == "openai":
+                part = {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{self.mime};base64,{self.base_64}",
+                    },
+                }
+            elif model_type == "anthropic":
+                part = {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": self.mime,
+                        "data": self.base_64,
+                    },
+                }
         else:
             part = {
                 "type": "image_url",
@@ -167,6 +177,27 @@ class MediaObj(BaseModel):
                 },
             }
         return part
+
+        """ Anthropic expects: 
+        messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image1_media_type,
+                        "data": image1_data,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": "Describe this image."
+                }
+            ],
+        }
+    ],"""
 
 
 class RecordInfo(BaseModel):

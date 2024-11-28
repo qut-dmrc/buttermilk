@@ -26,6 +26,27 @@ def image_bytes() -> bytes:
     return read_file("tests/data/Rijksmuseum_(25621972346).jpg")
 
 
+@pytest.fixture(scope="session")
+def video_bytes(video_url: str) -> bytes:
+    return read_file(video_url)
+
+
+VIDEO_URIS = [
+    (
+        "web",
+        "https://file-examples.com/storage/feb06822a967475629bfe71/2017/04/file_example_MP4_480_1_5MG.mp4",
+    ),
+    ("gcs", "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4"),
+]
+
+
+@pytest.fixture(
+    scope="session", params=[x[1] for x in VIDEO_URIS], ids=[x[0] for x in VIDEO_URIS]
+)
+def video_url(request) -> str:
+    return request.param
+
+
 def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:
     """Convenience for pytest.mark.skipif() in case no GPU is available.
 
