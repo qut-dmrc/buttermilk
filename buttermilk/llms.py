@@ -2,7 +2,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 import vertexai
-from anthropic import AnthropicVertex
+from anthropic import AnthropicVertex, AsyncAnthropicVertex
 
 # There are 'old' and 'new' harm categories. Use the new ones.
 # see google/generativeai/types/safety_types.py
@@ -76,14 +76,13 @@ CHATMODELS = [
     "llama31_70b",
     "o1-preview",
     "gpt4o",
-    "gpt4o_osb",
     "sonnet",
     "sonnetvertex",
     "haiku",
     "gemini15pro",
 ]
 CHEAP_CHAT_MODELS = ["haiku", "llama31_8b"]
-MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet"]
+MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b"]
 
 
 def VertexNoFilter(*args, **kwargs):
@@ -96,20 +95,35 @@ def VertexNoFilter(*args, **kwargs):
     )
 
 
+def LangChainAnthropicVertex(
+    region: str, project_id: str, model_name: str, *args, **kwargs
+):
+    llm = ChatAnthropic(model_name=model_name, *args, **kwargs)
+    llm._client = AnthropicVertex(region=region, project_id=project_id)
+    llm._async_client = AsyncAnthropicVertex(region=region, project_id=project_id)
+    return llm
+
+
 def VertexMAAS(
-    project_id: str,
-    region: str,
+    project: str,
+    location: str,
     staging_bucket: str,
     model_name: str,
     *args,
     **kwargs,
 ):
     _ = vertexai.init(
-        project=project_id,
-        location=region,
+        project=project,
+        location=location,
         staging_bucket=staging_bucket,
     )
-    model = ChatVertexAI(model_name=model_name, *args, **kwargs)
+    model = ChatVertexAI(
+        model_name=model_name,
+        api_endpoint="us-east5-aiplatform.googleapis.com",
+        location="us-east5",
+        *args,
+        **kwargs,
+    )
     return model
 
 

@@ -1,9 +1,10 @@
 import pytest
 from langchain.prompts import ChatPromptTemplate
+from rich import print as rprint
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
 from buttermilk.bm import BM
-from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS
+from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 
 
 @pytest.fixture(scope="session")
@@ -22,7 +23,7 @@ def test_all_llm(llms, model):
     assert answer
 
 
-@pytest.mark.parametrize("model", CHATMODELS)
+@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 def test_multimodal_input_b64(llms, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
@@ -32,6 +33,7 @@ def test_multimodal_input_b64(llms, model, image_bytes):
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
+    rprint(answer)
     assert answer
 
 

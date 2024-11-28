@@ -264,10 +264,11 @@ def dump_pickle(data, **kwargs):
     with tempfile.NamedTemporaryFile(
         delete=False,
         dir=kwargs.get("save_dir"),
-        mode="w",
+        mode="wb",
         suffix=".pickle",
     ) as out:
         pickle.dump(data, out)
+        filename = out.name
 
     logger.warning(f"Successfully dumped to pickle on disk: {filename}.")
     return filename
