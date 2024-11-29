@@ -104,24 +104,25 @@ class Creek(BaseModel):
             except Exception as e:
                 msg = f"Unknown error in run_flows: {e}, {e.args=}"
                 logger.exception(msg)
-                raise
-            if result.error:
-                logger.error(
-                    f"Agent {agent.name} failed with error: {result.error}",
-                )
-            else:
-                try:
-                    self.incorporate_outputs(
-                        step_name=agent.name,
-                        result=result,
-                        output_map=agent.outputs,
+                # raise
+            if result:
+                if result.error:
+                    logger.error(
+                        f"Agent {agent.name} failed with error: {result.error}",
                     )
-                except Exception as e:
-                    error_msg = (
-                        f"Response data not formatted as expected: {e}, {e.args=}"
-                    )
-                    logger.error(error_msg)
-            yield result
+                else:
+                    try:
+                        self.incorporate_outputs(
+                            step_name=agent.name,
+                            result=result,
+                            output_map=agent.outputs,
+                        )
+                    except Exception as e:
+                        error_msg = (
+                            f"Response data not formatted as expected: {e}, {e.args=}"
+                        )
+                        logger.error(error_msg)
+                yield result
             await asyncio.sleep(0)
 
     def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):

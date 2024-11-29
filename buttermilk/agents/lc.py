@@ -184,7 +184,12 @@ class LC(Agent):
 
         input_vars = {}
         for key, value in all_params.items():
-            resolved_value = resolve_value(value, job, additional_data=additional_data)
+            if not (
+                resolved_value := resolve_value(
+                    value, job, additional_data=additional_data
+                )
+            ):
+                continue
             if value == "record":  # Special case for full record placeholder
                 placeholders[key] = resolved_value
             else:
@@ -305,11 +310,13 @@ def resolve_value(value, job, additional_data):
                 return find_in_nested_dict(job.record.model_dump(), field)
 
         # Handle direct record field reference
-        if value in job.record.model_fields or value in job.record.model_extra:
+        if job.record and (
+            value in job.record.model_fields or value in job.record.model_extra
+        ):
             return getattr(job.record, value)
 
         # handle entire dataset
-        if value in additional_data:
+        if additional_data and value in additional_data:
             if isinstance(additional_data[value], pd.DataFrame):
                 return additional_data[value].astype(str).to_dict(orient="records")
             return additional_data[value]

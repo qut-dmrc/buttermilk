@@ -37,6 +37,8 @@ def is_uri(value: Any) -> bool:
 
 
 def is_b64(value: Any) -> bool:
+    if not value:
+        return False
     # Check if the string is a valid base64-encoded string
     try:
         base64.b64decode(value, validate=True)

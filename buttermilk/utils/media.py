@@ -15,11 +15,16 @@ async def download_and_convert(obj: Any, mimetype: str | None = None) -> MediaOb
     # If it's a webpage, extract the text.
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
+    if not obj:
+        return None
+    uri = None
+
     mimetype = mimetype or "application/octet-stream"
-    if is_b64(obj):
+    if obj and is_b64(obj):
         return MediaObj(base_64=obj, mime=mimetype)
 
     if is_uri(obj):
+        uri = obj
         obj, detected_mimetype = await download_limited_async(obj)
         if not mimetype or mimetype == "application/octet-stream":
             mimetype = detected_mimetype
@@ -29,11 +34,19 @@ async def download_and_convert(obj: Any, mimetype: str | None = None) -> MediaOb
         obj = extract_main_content(obj)
         mimetype = "text/plain"
 
-    if mimetype.startswith("text/"):
-        return MediaObj(text=obj, mime=mimetype)
+    if (mimetype.startswith("text/")) or (
+        mimetype == "application/octet-stream" and isinstance(obj, str)
+    ):
+        if mimetype == "application/octet-stream":
+            mimetype = "text/plain"
+        return MediaObj(text=obj, mime=mimetype, uri=uri)
 
     # By default, encode the object as base64
-    return MediaObj(mime=mimetype, base_64=base64.b64encode(obj).decode("utf-8"))
+    return MediaObj(
+        mime=mimetype,
+        base_64=base64.b64encode(obj).decode("utf-8"),
+        uri=uri,
+    )
 
 
 def extract_main_content(html: bytes | str) -> str:

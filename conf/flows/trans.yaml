@@ -23,14 +23,16 @@ trans:
         model:
           - gpt4o
           - sonnet
+          - gemini15pro
+          - llama32_90b
       inputs:
         record: record
       outputs:
         answers:
           job_id: job_id
           model: parameters.model
-          criteria: agent_info.parameters.criteria
-          template: agent_info.parameters.template
+          criteria: parameters.criteria
+          template: parameters.template
           reasons: outputs.reasons
       
     - name: synth
@@ -54,8 +56,8 @@ trans:
         answers:
           job_id: job_id
           model: parameters.model
-          criteria: agent_info.parameters.criteria
-          template: agent_info.parameters.template
+          criteria: parameters.criteria
+          template: parameters.template
           reasons: outputs.reasons
     
     - name: eval 

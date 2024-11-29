@@ -24,6 +24,7 @@ from pydantic import (
     model_validator,
 )
 
+from buttermilk import logger
 from buttermilk.utils.utils import is_uri, remove_punctuation
 from buttermilk.utils.validators import make_list_validator
 
@@ -124,7 +125,7 @@ class MediaObj(BaseModel):
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
-        if not (self.data or self.uri or self.base_64):
+        if not (self.data or self.text or self.uri or self.base_64):
             raise ValueError("MediaObj must have data, a uri, or a base64 string.")
         if self.data and not self.base_64:
             self.base_64 = base64.b64encode(self.data).decode("utf-8")
@@ -152,6 +153,7 @@ class MediaObj(BaseModel):
         return {"type": "text", "text": self.text}
 
     def as_content_part(self, model_type="openai"):
+        part = None
         if self.base_64:
             if model_type == "openai":
                 part = {
@@ -169,13 +171,17 @@ class MediaObj(BaseModel):
                         "data": self.base_64,
                     },
                 }
-        else:
+        elif self.mime.startswith("text/"):
+            part = {"type": "text", "text": self.text}
+        elif self.uri:  # try as imageurl?
             part = {
                 "type": "image_url",
                 "image_url": {
                     "url": self.uri,
                 },
             }
+        elif self.text:  # not explicitly text, but we have text?
+            part = {"type": "text", "text": self.text}
         return part
 
         """ Anthropic expects: 
@@ -267,20 +273,23 @@ class RecordInfo(BaseModel):
         self,
         role: Literal["user", "human", "system"] = "user",
     ) -> BaseMessage | None:
-        components = self.as_openai_message(role=role)["content"]
-        if role in {"user", "human"}:
-            return HumanMessage(content=components)
-        return BaseMessage(content=components, type=role)
+        components = self.as_openai_message(role=role)
+        if components and (components := components["content"]):
+            if role in {"user", "human"}:
+                return HumanMessage(content=components)
+            return BaseMessage(content=components, type=role)
+        return None
 
     def as_openai_message(
         self,
         role: Literal["user", "human", "system"] = "user",
-    ) -> dict:
+    ) -> dict | None:
         # Prepare input for model consumption
         components = [obj.as_content_part() for obj in self.media]
 
         if not self.media and not self.text:
-            raise OSError("No text or media provided for {self.record_id}")
+            logger.warning("No text or media provided for {self.record_id}")
+            return None
         if self.text:
             components.append({"type": "text", "text": self.text})
 

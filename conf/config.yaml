@@ -15,11 +15,11 @@ bm:
       region: us-central1
       bucket: bucket_name
 
-      clouds:
-        - type: vertex
-          project: gcp_project_id
-          region: us-central1
-          bucket: dmrc-analysis
+    clouds:
+      - type: vertex
+        project: gcp_project_id
+        region: us-central1
+        bucket: dmrc-analysis
           
     logger: 
       type: gcp

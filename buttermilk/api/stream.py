@@ -152,13 +152,16 @@ async def flow_stream(
         download_and_convert(flow_request.video),
     )
 
-    media = [x for x in objects if isinstance(x, MediaObj)]
+    media = [x for x in objects if x and isinstance(x, MediaObj)]
     content = "\n".join([x for x in objects if isinstance(x, str)])
-
-    if flow_request.record_id:
-        record = RecordInfo(text=content, media=media, record_id=flow_request.record_id)
-    else:
-        record = RecordInfo(text=content, media=media)
+    record = None
+    if media or content:
+        if flow_request.record_id:
+            record = RecordInfo(
+                text=content, media=media, record_id=flow_request.record_id
+            )
+        else:
+            record = RecordInfo(text=content, media=media)
     async for data in flow.run_flows(
         record=record,
         run_info=bm._run_metadata,

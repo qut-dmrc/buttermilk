@@ -1,4 +1,3 @@
-import asyncio
 import copy
 import datetime
 from collections.abc import Mapping
@@ -70,7 +69,6 @@ class Agent(BaseModel):
         description="Data to pass on to next steps.",
     )
     _agent_id: str | None = PrivateAttr(None)
-    _sem: asyncio.Semaphore = PrivateAttr()  # Semaphore for limiting concurrent tasks
 
     class Config:
         extra = "forbid"
@@ -107,37 +105,33 @@ class Agent(BaseModel):
 
     @model_validator(mode="after")
     def validate_concurrency(self) -> Self:
-        if self.concurrency < 1:
-            raise ValueError("concurrency must be at least 1")
-        self._sem = asyncio.Semaphore(value=self.concurrency)
         self._agent_id = f"{self.name}_{shortuuid.uuid()[:6]}"
         return self
 
     @trace
     async def run(self, *, job: Job, **kwargs) -> Job:
-        async with self._sem:
-            try:
-                job.agent_info = self.model_dump(mode="json")
-                job = await self.process_job(job=job, **kwargs)
-            except Exception as e:
-                job.error = extract_error_info(e=e)
-                if job.record:
-                    logger.error(
-                        f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+        try:
+            job.agent_info = self.model_dump(mode="json")
+            job = await self.process_job(job=job, **kwargs)
+        except Exception as e:
+            job.error = extract_error_info(e=e)
+            if job.record:
+                logger.error(
+                    f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                )
+        finally:
+            if self.save:
+                rows = [job.model_dump()]
+                if self.save.type == "bq":
+                    save(
+                        data=rows,
+                        dataset=self.save.dataset,
+                        schema=self.save.db_schema,
+                        save_dir=self.save.destination,
                     )
-            finally:
-                if self.save:
-                    rows = [job.model_dump()]
-                    if self.save.type == "bq":
-                        save(
-                            data=rows,
-                            dataset=self.save.dataset,
-                            schema=self.save.db_schema,
-                            save_dir=self.save.destination,
-                        )
-                    else:
-                        save(data=rows, save_dir=self.save.destination)
-            return job
+                else:
+                    save(data=rows, save_dir=self.save.destination)
+        return job
 
     async def process_job(
         self,
