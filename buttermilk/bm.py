@@ -204,8 +204,8 @@ class BM(Singleton, BaseModel):
         secret_class: str = None,
         version="latest",
     ):
-        if not hasattr(self, "_secret_manager"):
-            self._secret_manager = SecretsManager(**self.cfg.secret_provider)
+        if not getattr(self, "_secret_manager"):
+            self._secret_manager = SecretsManager(**self.cfg.secret_provider.model_dump())
 
         return self._secret_manager.get_secret(
             secret_name=secret_name,
