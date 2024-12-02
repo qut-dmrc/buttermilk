@@ -39,7 +39,7 @@ def test_debug(capsys, logger_new):
     assert "debug" not in str.lower(captured.err)
 
 
-def test_info(capsys, logger_new, gc):
+def test_info(capsys, logger_new, bm):
     logger_new.info(LOG_TEXT)
     captured = capsys.readouterr()
     assert LOG_TEXT in captured.err
@@ -47,7 +47,7 @@ def test_info(capsys, logger_new, gc):
 
     # sleep 5 seconds to allow the last class to write to the cloud service
     time.sleep(5)
-    entries = gc.logging.list_entries(
+    entries = bm._clients['gcslogging'].list_entries(
         order_by=google.cloud.logging.DESCENDING, max_results=100
     )
     for entry in entries:
@@ -57,8 +57,8 @@ def test_info(capsys, logger_new, gc):
     raise IOError(f"Info message not found in log: {LOG_TEXT}")
 
 
-def test_cloud_loger_debug(gc):
-    entries = gc.logging.list_entries(
+def test_cloud_loger_debug(bm):
+    entries = bm._clients['gcslogging'].list_entries(
         order_by=google.cloud.logging.DESCENDING, max_results=100
     )
     for entry in entries:

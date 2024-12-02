@@ -54,9 +54,9 @@ class Test00Setup:
 
         assert gc.bq.create_table(table=new_table, exists_ok=True)
 
-    def test_save_dir(self, gc):
-        assert "/runs/testing/" in gc.save_dir
-        assert CloudPath(gc.save_dir)
+    def test_save_dir(self, bm):
+        assert "/runs/testing/" in bm.save_dir
+        assert CloudPath(bm.save_dir)
 
 
     def test_hf_login(self):

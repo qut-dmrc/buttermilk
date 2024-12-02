@@ -285,9 +285,9 @@ class BM(Singleton, BaseModel):
         else:
             logger.setLevel(logging.INFO)
 
-        client = google.cloud.logging.Client()
+        self._clients['gcslogging'] = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=client,
+            client=self._clients['gcslogging'],
             resource=resource,
             name=self.cfg.name,
             labels=self._run_metadata.model_dump(),

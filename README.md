@@ -51,7 +51,8 @@ We would love your help! Contact [nic](mailto:n.suzor@qut.edu.au) to discuss wha
 Create a new environment and install using poetry:
 
 ```shell
-conda create --name bm -y -c conda-forge -c pytorch python==3.11 poetry ipykernel google-crc32c
+conda create --name bm -y -c conda-forge -c defaults python==3.11 poetry ipykernel google-crc32c
+
 conda activate bm
 poetry install --with dev
 ```

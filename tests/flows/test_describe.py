@@ -8,7 +8,7 @@ from buttermilk.utils.media import download_and_convert
 
 @pytest.fixture
 def describer():
-    agent = LC(name="testdescriber", template="describe", inputs={"record": "record"})
+    agent = LC(name="testdescriber", inputs={"record": "record"})
     return agent
 
 
