@@ -52,6 +52,7 @@ langchain-openai = "^0.2.9"
 langchain-anthropic = "^0.3.0"
 google-cloud-aiplatform = {extras = ["langchain", "reasoningengine"], version = "^1.73.0"}
 openinference-instrumentation-langchain = "^0.1.29"
+anyio = "^4.6.2.post1"
 
 [tool.poetry.group.ml.dependencies]
 torch = "^2.5.1"

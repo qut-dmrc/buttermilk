@@ -94,6 +94,8 @@ class SaveInfo(CloudProviderCfg):
     @model_validator(mode="after")
     def check_destination(self) -> Self:
         if not self.destination and not self.dataset:
+            if self.type == "gsheets":
+                return self  # We'll create a new sheet when we need to
             raise ValueError(
                 "Nowhere to save to! Either destination or dataset must be provided.",
             )

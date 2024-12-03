@@ -83,3 +83,19 @@ trans:
           timestamp: timestamp
           job_id: job_id
           record_id: record.record_id
+
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      save:
+        type: gsheet
+      parameters:
+        sheet_name: evals
+        title: Trans Guidelines Judger
+      inputs:
+        job_id: job_id
+        timestamp: timestamp
+        record: record
+        answers: judger.answers
+        synthesis: synth.answers
+        differences: eval.analysis
+        model: eval.model

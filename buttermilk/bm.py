@@ -146,9 +146,7 @@ class Project(BaseModel):
 class BM(Singleton, BaseModel):
     cfg: Project | None = Field(None, validate_default=True)
 
-    _clients: dict[str, Any] = {}
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
-    _secret_manager: SecretsManager = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("cfg")
@@ -204,14 +202,13 @@ class BM(Singleton, BaseModel):
         secret_class: str = None,
         version="latest",
     ):
-        if not getattr(self, "_secret_manager"):
-            self._secret_manager = SecretsManager(**self.cfg.secret_provider.model_dump())
-
-        return self._secret_manager.get_secret(
+        contents = self.secret_manager.get_secret(
             secret_name=secret_name,
             secret_class=secret_class,
             version=version,
         )
+
+        return contents
 
     @property
     def logger(self) -> logging.Logger:
@@ -285,9 +282,9 @@ class BM(Singleton, BaseModel):
         else:
             logger.setLevel(logging.INFO)
 
-        self._clients['gcslogging'] = google.cloud.logging.Client()
+        _REGISTRY['gcslogging'] = google.cloud.logging.Client()
         cloudHandler = CloudLoggingHandler(
-            client=self._clients['gcslogging'],
+            client=_REGISTRY['gcslogging'],
             resource=resource,
             name=self.cfg.name,
             labels=self._run_metadata.model_dump(),
@@ -313,9 +310,15 @@ class BM(Singleton, BaseModel):
 
     @property
     def gcs(self) -> storage.Client:
-        if self._clients.get("gcs") is None:
-            self._clients["gcs"] = storage.Client(project=self.cfg.save_dest.project)
-        return self._clients["gcs"]
+        if _REGISTRY.get("gcs") is None:
+            _REGISTRY["gcs"] = storage.Client(project=self.cfg.save_dest.project)
+        return _REGISTRY["gcs"]
+    
+    @property
+    def secret_manager(self) -> SecretsManager:
+        if _REGISTRY.get("secret_manager") is None:
+            _REGISTRY["secret_manager"] = SecretsManager(**self.cfg.secret_provider.model_dump())
+        return _REGISTRY["secret_manager"]
 
     def save(self, data, basename="", extension=".jsonl", **kwargs):
         """Failsafe save method."""
@@ -325,23 +328,23 @@ class BM(Singleton, BaseModel):
 
     @property
     def llms(self) -> LLMs:
-        if self._clients.get("llms") is None:
+        if _REGISTRY.get("llms") is None:
             try:
                 contents = Path(CONFIG_CACHE_PATH).read_text(encoding="utf-8")
+                connections = json.loads(contents)
             except Exception:
-                contents = self.get_secret(secret_class=_MODELS_KEY)
+                connections = self.get_secret(secret_class=_MODELS_KEY)
 
-            connections = json.loads(contents)
             connections = {conn["name"]: conn for conn in connections}
 
-            self._clients["llms"] = LLMs(connections=connections)
-        return self._clients["llms"]
+            _REGISTRY["llms"] = LLMs(connections=connections)
+        return _REGISTRY["llms"]
 
     @property
     def bq(self) -> bigquery.Client:
-        if self._clients.get("bq") is None:
-            self._clients["bq"] = bigquery.Client(project=self.cfg.save_dest.project)
-        return self._clients["bq"]
+        if _REGISTRY.get("bq") is None:
+            _REGISTRY["bq"] = bigquery.Client(project=self.cfg.save_dest.project)
+        return _REGISTRY["bq"]
 
     def run_query(
         self,

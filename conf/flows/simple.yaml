@@ -12,7 +12,7 @@ simple:
         criteria: criteria_ordinary
         formatting: json_rules
         model:
-          - gpt4o
+          - haiku
       inputs:
         record: record
       outputs:
@@ -22,3 +22,19 @@ simple:
           criteria: agent_info.parameters.criteria
           template: agent_info.parameters.template
           reasons: outputs.reasons
+
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      save:
+        type: gsheets
+        sheet_name: evals
+        title: Trans Guidelines Judger
+      inputs:
+        job_id: judger.job_id
+        timestamp: timestamp
+        record: record
+        answers: judger.answers
+        model: judger.answers.model
+        criteria: judger.answers.criteria
+        template: judger.answers.template
+        reasons: judger.answers.reasons

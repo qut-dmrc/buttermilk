@@ -158,48 +158,20 @@ class LC(Agent):
         **kwargs,
     ) -> Job:
 
-        # Process all inputs into two categories.
-        # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
-        # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
-        # Then there are also extra **kwargs sent to this method.
-        # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
-        # We need to resolve all inputs into a mapping that can be passed to the model.
-
-        # First, log that we received extra **kwargs
-        job.inputs.update(**kwargs)
-
-        # Create a dictionary for complete prompt messages that we will not pass to the templating function
-        placeholders = {}
-        placeholders["record"] = job.record
-
-        if q:
-            job.prompt = q
-            placeholders["q"] = [q]
-
-        # And combine all sources of inputs into one dict
-        all_params = {**job.parameters, **job.inputs}
-
-        # but remove 'template', we deal with that explicitly, it's always required.
-        _ = all_params.pop("template", None)
-
-        input_vars = {}
-        for key, value in all_params.items():
-            if not (
-                resolved_value := resolve_value(
-                    value, job, additional_data=additional_data
-                )
-            ):
-                continue
-            if value == "record":  # Special case for full record placeholder
-                placeholders[key] = resolved_value
-            else:
-                input_vars[key] = resolved_value
-
+        input_vars, placeholders = await self.prepare_inputs(
+            job=job,
+            additional_data=additional_data,
+            **kwargs,
+        )
         # Construct list of messages from the templates
         local_messages = self.load_template_vars(
             template=template,
             **input_vars,
         )
+
+        if q:
+            job.prompt = q
+            placeholders["q"] = [q]
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
@@ -291,51 +263,3 @@ class LC(Agent):
 
         return output
 
-
-def resolve_value(value, job, additional_data):
-    """Recursively resolve values from different data sources."""
-    if isinstance(value, str):
-        # Handle special "record" case
-        if value.lower() == "record":
-            return job.record
-
-        # Handle dot notation
-        if "." in value:
-            locator, field = value.split(".", maxsplit=1)
-            if locator in additional_data:
-                if isinstance(additional_data[locator], pd.DataFrame):
-                    return additional_data[locator][field].values
-                return find_in_nested_dict(additional_data[locator], field)
-            if locator == "record":
-                return find_in_nested_dict(job.record.model_dump(), field)
-
-        # Handle direct record field reference
-        if job.record and (
-            value in job.record.model_fields or value in job.record.model_extra
-        ):
-            return getattr(job.record, value)
-
-        # handle entire dataset
-        if additional_data and value in additional_data:
-            if isinstance(additional_data[value], pd.DataFrame):
-                return additional_data[value].astype(str).to_dict(orient="records")
-            return additional_data[value]
-
-        # No match
-        return value
-
-    if isinstance(value, Sequence) and not isinstance(value, str):
-        # combine lists
-        return [
-            x
-            for item in value
-            for x in resolve_value(item, job, additional_data=additional_data)
-        ]
-
-    if isinstance(value, dict):
-        return {
-            k: resolve_value(v, job, additional_data=additional_data)
-            for k, v in value.items()
-        }
-
-    return value
