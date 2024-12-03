@@ -8,7 +8,7 @@ from buttermilk.agents.sheetexporter import GSheetExporter
 
 @pytest.fixture
 def flow() -> Agent:
-    return GSheetExporter(save=SaveInfo(type="gsheets"), sheet_name="testing_gsheet_export")
+    return GSheetExporter(save=SaveInfo(type="gsheets", sheet_name="testing_gsheet_export", sheet_id=None))
 
 @pytest.mark.anyio
 async def test_gsheet_exporter(flow: Agent):
@@ -36,4 +36,4 @@ async def test_gsheet_exporter(flow: Agent):
     )
     result = await flow.process_job(job=job)
 
-    assert result.outputs['uri']
+    assert result.outputs.sheet_url

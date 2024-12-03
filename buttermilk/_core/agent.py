@@ -1,7 +1,7 @@
 import copy
 import datetime
 from collections.abc import Mapping
-from typing import Any, Self
+from typing import Any, Self, Sequence
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ from buttermilk._core.config import SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
-from buttermilk.utils.utils import expand_dict
+from buttermilk.utils.utils import expand_dict, find_in_nested_dict
 
 from .log import logger
 
@@ -134,6 +134,7 @@ class Agent(BaseModel):
                     save(data=rows, save_dir=self.save.destination)
 
         return job
+    
     async def prepare_inputs(self,
         job: Job,
         additional_data: dict = None,
@@ -193,6 +194,13 @@ class Agent(BaseModel):
             Job with Inputs and Outputs
 
         """
+
+        # Todo: move this to the class properly
+        input_vars, placeholders = await self.prepare_inputs(
+            job=job,
+            additional_data=additional_data,
+            **kwargs,
+        )
         raise NotImplementedError
 
 
@@ -206,7 +214,7 @@ def resolve_value(value, job, additional_data):
         # Handle dot notation
         if "." in value:
             locator, field = value.split(".", maxsplit=1)
-            if locator in additional_data:
+            if additional_data and locator in additional_data:
                 if isinstance(additional_data[locator], pd.DataFrame):
                     return additional_data[locator][field].values
                 return find_in_nested_dict(additional_data[locator], field)

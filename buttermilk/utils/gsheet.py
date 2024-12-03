@@ -37,7 +37,7 @@ class GSheet(BaseModel):
             "sheets", "v4", credentials=credentials
         )
     @cached_property
-    def gspread(self):
+    def gspread_client(self):
         """Produce a gspread client."""
         import google.auth
         import gspread
@@ -61,7 +61,7 @@ class GSheet(BaseModel):
         title: Optional[str] = None,
         sheet_id: Optional[str] = None,
         uri: Optional[str] = None,
-    ):
+    ) -> gspread.spreadsheet.Spreadsheet:
 
         # drop the index so we can save it.
         df = reset_index_and_dedup_columns(df)
@@ -70,11 +70,11 @@ class GSheet(BaseModel):
         df = pd.DataFrame(df.to_dict())
 
         if sheet_id:
-            spreadsheet = self.gspread.open_by_key(key=sheet_id)
+            spreadsheet = self.gspread_client.open_by_key(key=sheet_id)
         elif uri:
-            spreadsheet = self.gspread.open_by_url(url=uri)
+            spreadsheet = self.gspread_client.open_by_url(url=uri)
         else:
-            spreadsheet = self.gspread.create(title=title)
+            spreadsheet = self.gspread_client.create(title=title)
 
         if not sheet_name:
             worksheet = spreadsheet.get_worksheet(0)

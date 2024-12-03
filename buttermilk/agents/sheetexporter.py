@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from random import shuffle
 from typing import Any, List, Literal, Optional, Self, Tuple, TypedDict
 
+import shortuuid
+
 from buttermilk.utils.gsheet import GSheet
 import pandas as pd
 import requests
@@ -79,17 +81,24 @@ class GSheetExporter(Agent):
         *,
         job: Job,
         additional_data: Any = None,
-        dataset: pd.DataFrame = None,
         **kwargs,
     ) -> Job:
          
         # save the input data from this step to a spreadsheet so that we can compare later.
         from buttermilk.utils.gsheet import GSheet, format_strings
-
+        input_vars, placeholders = await self.prepare_inputs(
+                    job=job,
+                    additional_data=additional_data,
+                    **kwargs,
+                )
+        # combine input vars and placeholders in this instance
+        input_vars.update(placeholders)
+        dataset = pd.DataFrame(input_vars, index=[shortuuid.uuid()])
         answers = format_strings(dataset, convert_json_columns=job.inputs.keys())
+        sheet_id = kwargs.get('sheet_id', getattr(self.save, 'sheet_id'))
 
-        sheet = self._gsheet.save_gsheet(df=answers, sheet_id=self.save.sheet_id, sheet_name=self.save.sheet_name, title=self.save.title, **job.parameters)
-        
-        job.outputs = dict(sheet_id=sheet.sheet_id, sheet_url=sheet.url)
+        sheet = self._gsheet.save_gsheet(df=answers, sheet_id=sheet_id, **job.parameters)
+        job.outputs = dict(sheet_id=sheet.id, sheet_url=sheet.url, **job.parameters)
+        logger.info(f"Saved to sheet {job.outputs}")
 
         return job
