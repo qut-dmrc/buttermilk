@@ -71,6 +71,8 @@ class GSheetExporter(Agent):
     name: str = Field(default="gsheetexporter", init=False)
     flow: Optional[str] = Field(default=None, init=False, description="The name of the flow or step in the process that this agent is responsible for.")
 
+    convert_json_columns: list[str] = Field(default=[], description="List of columns to convert to JSON.")
+
     _gsheet: GSheet = PrivateAttr(default_factory=GSheet)
 
     class Config:
@@ -94,11 +96,17 @@ class GSheetExporter(Agent):
         # combine input vars and placeholders in this instance
         input_vars.update(placeholders)
         dataset = pd.DataFrame(input_vars, index=[shortuuid.uuid()])
-        answers = format_strings(dataset, convert_json_columns=job.inputs.keys())
-        sheet_id = kwargs.get('sheet_id', getattr(self.save, 'sheet_id'))
+        answers = format_strings(dataset, convert_json_columns=self.convert_json_columns)
+        
+        params = {}
+        if job.parameters:
+            params.update(job.parameters)
+        if self.save:
+            params.update(self.save.model_dump())
 
-        sheet = self._gsheet.save_gsheet(df=answers, sheet_id=sheet_id, **job.parameters)
-        job.outputs = dict(sheet_id=sheet.id, sheet_url=sheet.url, **job.parameters)
+        sheet = self._gsheet.save_gsheet(df=answers, **params)
+        params["sheet_id"]= sheet.id
+        job.outputs = dict(sheet_url=sheet.url, **params)
         logger.info(f"Saved to sheet {job.outputs}")
 
         return job

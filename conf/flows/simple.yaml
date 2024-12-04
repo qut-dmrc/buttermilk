@@ -25,15 +25,15 @@ simple:
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - reasons
       save:
         type: gsheets
+        sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
         sheet_name: evals
         title: Trans Guidelines Judger
       inputs:
-        job_id: judger.job_id
-        timestamp: timestamp
-        record: record
-        answers: judger.answers
+        job_id: judger.answers.job_id
         model: judger.answers.model
         criteria: judger.answers.criteria
         template: judger.answers.template

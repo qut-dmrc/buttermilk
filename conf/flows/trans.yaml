@@ -28,12 +28,11 @@ trans:
       inputs:
         record: record
       outputs:
-        answers:
-          job_id: job_id
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
-          reasons: outputs.reasons
+        job_id: job_id
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
+        reasons: outputs.reasons
       
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -51,14 +50,17 @@ trans:
       inputs:
         content: record
         answers:
-          - judger.answers
+          - job_id: judger.job_id
+            model: judger.parameters.model
+            criteria: judger.parameters.criteria
+            template: judger.parameters.template
+            reasons: judger.outputs.reasons
       outputs:
-        answers:
-          job_id: job_id
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
-          reasons: outputs.reasons
+        job_id: job_id
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
+        reasons: outputs.reasons
     
     - name: eval 
       _target_: buttermilk.agents.lc.LC
@@ -75,8 +77,16 @@ trans:
       inputs:
         content: record
         answers:
-          - judger.answers
-          - synth.answers
+          - job_id: judger.job_id
+            model: judger.parameters.model
+            criteria: judger.parameters.criteria
+            template: judger.parameters.template
+            reasons: judger.outputs.reasons
+          - job_id: synth.job_id
+            model: synth.parameters.model
+            criteria: synth.parameters.criteria
+            template: synth.parameters.template
+            reasons: synth.outputs.reasons
       outputs:
           analysis: outputs.reasons
           model: parameters.model
@@ -86,16 +96,27 @@ trans:
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - reasons
       save:
-        type: gsheet
-      parameters:
+        type: gsheets
+        sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
         sheet_name: evals
         title: Trans Guidelines Judger
       inputs:
-        job_id: job_id
-        timestamp: timestamp
+        models:
+          - judger.answers.model
+          - synth.answers.model
+          - eval.model
+        criteria: judger.answers.criteria
+        template: 
+          - judger.answers.template
+          - synth.answers.template
+        reasons: 
+          - judger.answers.reasons
+          - synth.answers.reasons
         record: record
         answers: judger.answers
         synthesis: synth.answers
         differences: eval.analysis
-        model: eval.model
+        eval_model: eval.model

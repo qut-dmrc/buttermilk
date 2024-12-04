@@ -61,6 +61,7 @@ class GSheet(BaseModel):
         title: Optional[str] = None,
         sheet_id: Optional[str] = None,
         uri: Optional[str] = None,
+        **kwargs,
     ) -> gspread.spreadsheet.Spreadsheet:
 
         # drop the index so we can save it.
@@ -121,9 +122,10 @@ class GSheet(BaseModel):
 
 def format_strings(df, convert_json_columns: list = []):
     for col in convert_json_columns:
-        # convert json columns
-        df[col] = df[col].apply(lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False)
-        )
+        if col in df.columns:
+            # convert json columns
+            df[col] = df[col].apply(lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False)
+            )
 
     # for all the columns in the dataframe that are text columns, ensure that no cells are longer than 50,000 characters
     for col in df.select_dtypes(include=[object]).columns:  # type: ignore

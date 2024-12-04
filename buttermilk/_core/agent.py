@@ -155,11 +155,8 @@ class Agent(BaseModel):
         placeholders = {}
         placeholders["record"] = job.record
 
-        # And combine all sources of inputs into one dict
+        # And combine all sources of inputs into one dict for this method only
         all_params = {**job.parameters, **job.inputs}
-
-        # but remove 'template', we deal with that explicitly, it's always required.
-        _ = all_params.pop("template", None)
 
         input_vars = {}
         for key, value in all_params.items():

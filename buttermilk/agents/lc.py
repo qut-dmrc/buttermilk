@@ -152,7 +152,6 @@ class LC(Agent):
         *,
         job: Job,
         model: str,
-        template: str,
         additional_data: dict = None,
         q: str | None = None,
         **kwargs,
@@ -165,7 +164,6 @@ class LC(Agent):
         )
         # Construct list of messages from the templates
         local_messages = self.load_template_vars(
-            template=template,
             **input_vars,
         )
 
