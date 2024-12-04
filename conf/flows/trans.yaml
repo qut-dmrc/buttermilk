@@ -97,7 +97,10 @@ trans:
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
       convert_json_columns:
-        - reasons
+        - answers
+        - synthesis
+        - differences
+        - analysis
       save:
         type: gsheets
         sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
@@ -105,18 +108,17 @@ trans:
         title: Trans Guidelines Judger
       inputs:
         models:
-          - judger.answers.model
-          - synth.answers.model
+          - judger.model
+          - synth.model
           - eval.model
-        criteria: judger.answers.criteria
+        criteria: 
+          - judger.criteria
+          - synth.criteria
         template: 
-          - judger.answers.template
-          - synth.answers.template
-        reasons: 
-          - judger.answers.reasons
-          - synth.answers.reasons
+          - judger.template
+          - synth.template
         record: record
-        answers: judger.answers
-        synthesis: synth.answers
+        answers: judger.reasons
+        synthesis: synth.reasons
         differences: eval.analysis
         eval_model: eval.model
