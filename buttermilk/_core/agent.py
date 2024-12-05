@@ -1,7 +1,7 @@
 import copy
 import datetime
 from collections.abc import Mapping
-from typing import Any, Self, Sequence
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -89,7 +89,7 @@ class Agent(BaseModel):
         convert_omegaconf_objects(),
     )
     @model_validator(mode="after")
-    def add_extra_params(self) -> Self:
+    def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
         return self
@@ -108,7 +108,7 @@ class Agent(BaseModel):
         return SaveInfo(**value)
 
     @model_validator(mode="after")
-    def validate_concurrency(self) -> Self:
+    def validate_concurrency(self) -> "Agent":
         self._agent_id = f"{self.name}_{shortuuid.uuid()[:6]}"
         return self
 

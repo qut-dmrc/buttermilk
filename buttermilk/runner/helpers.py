@@ -261,33 +261,51 @@ async def read_all_files(uri, pattern, columns: dict[str, str]):
     return dataset
 
 
-# async def read_all_files(uri: str, pattern: str, columns: Dict[str, str]) -> pd.DataFrame:
-#     filelist = GSPath(uri).glob(pattern)
+def parse_flow_vars(input_map: Mapping,
+    *,
+    job: Job,
+    additional_data: dict = {},
+    **kwargs,
+) -> Mapping: 
+    # Take an input map of variable names to a dot-separated JSON path.
+    # Returns a dict of variables with their corresponding content, sourced from 
+    # datasets provided in additional_data or records in job.
 
-#     # for testing only
-#     filelist = [x for i, x in enumerate(filelist) if i <= 20]
+    import jq
 
-#     fs = gcsfs.GCSFileSystem(asynchronous=True)
+    vars = {}
 
-#     _sem = asyncio.Semaphore(4)
-#     async def read_file(file: cloudpathlib.CloudPath) -> Tuple[str, str]:
-#         async with _sem:
-#             logger.debug(f"Reading {file.name} from {file.parent}...")
-#             content = await fs.read_text(file.as_uri(), encoding='utf-8')
-#             return file.stem, content
+    all_data_sources = job.model_dump()
+    for key, df in additional_data.items():
+        all_data_sources[key] = df.to_records(index=False)
 
-#     # Create a list of tasks for reading files concurrently
-#     tasks = [read_file(file) for file in filelist]
+    def descend(map, path):
+        if isinstance(path, str):
+            # We have reached the end of the tree, this last path is a plain string
+            # Use this final leaf as the locator for the data to insert here
+            value = jq.all(path, all_data_sources)
+            return value
+        elif isinstance(path, Sequence):
+            # The key here is made up of multiple records
+            # Descend recurisvely and fill it out.
+            value = [descend(path, x) for x in path]
+            return value
+        elif isinstance(path, Mapping):
+            # The data here is another layer of a key:value mapping
+            # Descend recurisvely and fill it out.
+            value = {k: descend(map=k, path=v) for k, v in path.items()}
+            return value
+        else:
+            raise ValueError(f'Unknown type in map: {type(path)} @ {map}')
 
-#     # Run tasks concurrently and gather results
-#     results = await asyncio.gather(*tasks)
+    for var, locator in input_map.items():
+        vars[var] = descend(var, locator)
+        
+    return vars
 
-#     # Create a DataFrame from the results
-#     dataset = pd.DataFrame(results, columns=columns.keys())
 
-#     return dataset
 
-## TODO: @NS fix this method and do it properly this time.
+
 def prepare_flow_inputs(
     *,
     job: Job,
@@ -329,7 +347,6 @@ def prepare_flow_inputs(
 def resolve_value(match_key, job, additional_data):
     """Recursively resolve values from different data sources."""
     if isinstance(match_key, str):
-        if match_key in 
         # Handle dot notation
         if "." in match_key:
             locator, field = match_key.split(".", maxsplit=1)

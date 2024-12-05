@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator, Coroutine, Sequence
-from typing import Any, Self
+from typing import Any
 
 import shortuuid
 from omegaconf import OmegaConf
@@ -39,7 +39,7 @@ class MultiFlowOrchestrator(BaseModel):
         return OmegaConf.to_container(value, resolve=True)
 
     @model_validator(mode="after")
-    def set_vars(self) -> Self:
+    def set_vars(self) -> "MultiFlowOrchestrator":
         self._num_runs = self.flow.num_runs or self._num_runs
         self._concurrent = self.flow.concurrency or self._concurrent
         return self

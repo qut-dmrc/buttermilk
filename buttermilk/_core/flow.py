@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, AsyncGenerator, Generator, Literal, Optional, Self, Sequence, Tuple, Type, TypeVar, Union,Mapping
+from typing import Any, AsyncGenerator, Generator, Literal, Optional, Sequence, Tuple, Type, TypeVar, Union,Mapping
 from cloudpathlib import CloudPath, GSPath
 import cloudpathlib
 from pydantic import (
@@ -57,7 +57,6 @@ from typing import (
     Literal,
     Mapping,
     Optional,
-    Self,
     Sequence,
     Type,
     TypeVar,

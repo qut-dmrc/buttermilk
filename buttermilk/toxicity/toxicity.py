@@ -9,7 +9,6 @@ from typing import (
     Any,
     ClassVar,
     Literal,
-    Self,
 )
 
 import boto3
@@ -97,7 +96,7 @@ class ToxicityModel(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def validate_model(self) -> Self:
+    def validate_model(self) -> "ToxicityModel":
         if self.client is None:
             self.init_client(**self.options)
             if self.client is None:

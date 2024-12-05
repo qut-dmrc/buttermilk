@@ -1,7 +1,6 @@
 import datetime
 import time
 from collections.abc import Mapping, Sequence
-from typing import Self
 
 import numpy as np
 import pandas as pd
@@ -79,7 +78,7 @@ class LC(Agent):
         }
 
     @model_validator(mode="after")
-    def load_connections(self) -> Self:
+    def load_connections(self) -> "LC":
         bm = BM()
         self._llms = bm.llms
 

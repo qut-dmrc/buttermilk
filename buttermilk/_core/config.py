@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import (
     Any,
     Literal,
-    Self,
 )
 
 import cloudpathlib
@@ -92,7 +91,7 @@ class SaveInfo(CloudProviderCfg):
         return v
 
     @model_validator(mode="after")
-    def check_destination(self) -> Self:
+    def check_destination(self) -> "SaveInfo":
         if not self.destination and not self.dataset:
             if self.type == "gsheets":
                 return self  # We'll create a new sheet when we need to

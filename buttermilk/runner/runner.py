@@ -64,7 +64,6 @@ from collections.abc import AsyncGenerator, Coroutine
 from functools import cached_property
 from typing import (
     Any,
-    Self,
 )
 
 import pandas as pd
@@ -144,7 +143,7 @@ class Consumer(BaseModel):
         return str(value)
 
     @model_validator(mode="after")
-    def validate_concurrent(self) -> Self:
+    def validate_concurrent(self) -> "Consumer":
         if self.concurrent < 1:
             raise ValueError("concurrent must be at least 1")
 

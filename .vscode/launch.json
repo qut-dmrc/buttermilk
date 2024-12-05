@@ -135,7 +135,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[hate]", "flows.hate.steps.0.parameters.model=['haiku']", "flows.hate.steps.1.parameters.model=['haiku']", "flows.hate.steps.2.parameters.model=['haiku']", 
+         "+flows=[hate]", "+llm=lite",
          "+flow=hate",
          "+q=${input:query}"           // Will prompt for query
        ],

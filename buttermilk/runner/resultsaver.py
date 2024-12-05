@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Self
+from typing import Any
 
 from cloudpathlib import CloudPath
 from promptflow.tracing import trace
@@ -37,7 +37,7 @@ class ResultsCollector(BaseModel):
     batch_path: CloudPath | Path = None
 
     @model_validator(mode="after")
-    def get_path(self) -> Self:
+    def get_path(self) -> "ResultsCollector":
         if self.batch_path is None:
             self.batch_path = CloudPath(self.bm.save_dir)
         return self

@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import (
     Any,
     Literal,
-    Self,
 )
 
 import numpy as np
@@ -124,7 +123,7 @@ class MediaObj(BaseModel):
         return -1
 
     @model_validator(mode="after")
-    def vld_input(self) -> Self:
+    def vld_input(self) -> "MediaObj":
         if not (self.data or self.text or self.uri or self.base_64):
             raise ValueError("MediaObj must have data, a uri, or a base64 string.")
         if self.data and not self.base_64:
@@ -244,7 +243,7 @@ class RecordInfo(BaseModel):
     )
 
     @model_validator(mode="after")
-    def vld_input(self) -> Self:
+    def vld_input(self) -> "RecordInfo":
         if self.text is None and self.media is None:
             raise ValueError(
                 "InputRecord must have text or image or video or alt_text.",
@@ -379,7 +378,7 @@ class Job(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def move_metadata(self) -> Self:
+    def move_metadata(self) -> "Job":
         if self.outputs and hasattr(self.outputs, "metadata") and self.outputs.metadata:
             if self.metadata is None:
                 self.metadata = {}

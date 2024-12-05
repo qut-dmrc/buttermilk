@@ -1,6 +1,5 @@
 from functools import lru_cache
 import json
-from typing import Self
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient

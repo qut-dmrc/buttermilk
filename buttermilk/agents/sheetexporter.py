@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 from dataclasses import dataclass
 from random import shuffle
-from typing import Any, List, Literal, Optional, Self, Tuple, TypedDict
+from typing import Any, List, Literal, Optional, Tuple, TypedDict
 
 import shortuuid
 

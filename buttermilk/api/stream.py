@@ -1,9 +1,6 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator, Sequence
-from typing import (
-    Self,
-)
 from urllib.parse import parse_qs
 
 import shortuuid
@@ -127,7 +124,7 @@ class FlowRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def check_values(self) -> Self:
+    def check_values(self) -> "FlowRequest":
         if self.model:
             for v in self.model:
                 if v not in CHATMODELS:

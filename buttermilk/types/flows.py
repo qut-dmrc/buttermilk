@@ -1,4 +1,4 @@
-from typing import Optional, Self, TypedDict
+from typing import Optional, TypedDict
 from pydantic import BaseModel
 
 class JobResult(BaseModel):

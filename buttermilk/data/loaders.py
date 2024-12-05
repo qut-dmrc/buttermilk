@@ -1,6 +1,6 @@
 
 import random
-from typing import AsyncGenerator, Self, Sequence
+from typing import AsyncGenerator, Sequence
 from cloudpathlib import GSPath
 import gcsfs
 from pydantic import BaseModel, Field, PrivateAttr, model_validator

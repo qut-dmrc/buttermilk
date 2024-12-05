@@ -12,12 +12,7 @@ hate:
         criteria: 
           - criteria_ordinary
         formatting: json_rules
-        model:
-          # - haiku
-          - gpt4o
-          - llama31_70b
-          - sonnet
-          - gemini15pro 
+        model: ${llm}
       inputs:
         record: record
       outputs:
@@ -37,10 +32,7 @@ hate:
         instructions: judge
         criteria: criteria_ordinary
         formatting: json_rules
-        model:
-          # - haiku
-          - gpt4o
-          - sonnet
+        model: ${llm}
       inputs:
         content: record.text
         record: record
@@ -65,10 +57,7 @@ hate:
       parameters:
         template: differences
         criteria: criteria_ordinary
-        model:
-          # - haiku
-          - gpt4o
-          - sonnet
+        model: ${llm}
       inputs:
         content: record.text
         answers:
@@ -107,18 +96,17 @@ hate:
         record_id: record.record_id
         job_id: job_id
         timestamp: timestamp
-        models:
-          - judger.model
-          - synth.model
-          - eval.model
-        criteria: 
-          - judger.criteria
-          - synth.criteria
-        template: 
-          - judger.template
-          - synth.template
         record: record
-        answers:  judger.reasons
-        synthesis: synth.reasons
-        differences: eval.reasons
-        eval_model: eval.model
+        zeroshot: 
+          model: judger.model
+          criteria: judger.criteria
+          template: judger.template
+          reasons: judger.reasons
+        synthesis: 
+          model: synth.model
+          criteria: synth.criteria
+          template: synth.template
+          reasons: synth.reasons
+        differences: 
+          reasons: eval.reasons
+          model: eval.model

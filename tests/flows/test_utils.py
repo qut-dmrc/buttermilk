@@ -33,3 +33,5 @@ def test_b64_str_validator():
         "invalid"
     )
     assert Base64Str("dGVzdA==").decode() == "test"
+
+def jstest_input_map():
