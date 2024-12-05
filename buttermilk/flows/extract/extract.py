@@ -108,7 +108,7 @@ class Analyst:
             output["record_id"] = record_id
 
         output["timestamp"] = pd.to_datetime(
-            datetime.datetime.now(tz=datetime.UTC),
+            datetime.datetime.now(tz=datetime.timezone.utc),
         ).isoformat()
 
         for k in Prediction.__required_keys__:

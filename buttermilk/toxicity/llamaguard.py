@@ -1,6 +1,6 @@
 
 import os
-from enum import Enum, EnumMeta, StrEnum
+from enum import Enum, EnumMeta
 from pathlib import Path
 from typing import (
     Any,
@@ -26,7 +26,7 @@ from ..types.tox import EvalRecord, Score
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
-class LlamaGuardTemplate(StrEnum):
+class LlamaGuardTemplate(Enum):
     LLAMAGUARD1 = "llamaguard1"
     LLAMAGUARD2 = "llamaguard2"
     LLAMAGUARD3 = "llamaguard3"

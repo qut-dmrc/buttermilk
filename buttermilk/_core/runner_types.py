@@ -312,7 +312,7 @@ class Job(BaseModel):
     job_id: str = pydantic.Field(default_factory=shortuuid.uuid)
     flow_id: str
     timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
+        default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc),
         description="The date and time a job was created.",
     )
     source: Sequence[str] = Field(

@@ -29,7 +29,7 @@ def _make_run_id() -> str:
     username = str.split(username, "\\")[-1]
 
     # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
-    run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
+    run_time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
 
     run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
     return run_id
