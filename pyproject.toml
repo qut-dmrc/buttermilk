@@ -8,11 +8,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10.0,<3.12"
 shortuuid = "^1.0.13"
-psutil = "~5.9.5"
-cloudpathlib = "~0.20.0"
+psutil = "^5.9.5"
+cloudpathlib = "^0.20.0"
 requests = "^2.32.3"
 pathlib = "^1.0.1"
-pillow = "~11.0.0"
+pillow = "^11.0.0"
 pyyaml = "^6.0.2"
 urllib3 = "^2.2.2"
 azureml-core = "^1.57.0"
@@ -22,7 +22,7 @@ hydra-core = "^1.3.2"
 azure-keyvault = "^4.2.0"
 pydantic = "^2.8.2"
 coloredlogs = "^15.0.1"
-google-cloud-logging = "~3.11.2"
+google-cloud-logging = "^3.11.2"
 json-repair = "^0.28.3"
 boto3 = "^1.35.7"
 azure-ai-contentsafety = "^1.0.0"
@@ -40,7 +40,7 @@ httpx = "^0.27.2"
 beautifulsoup4 = "^4.12.3"
 rich = "^13.9.4"
 promptflow-tools = "^1.4.0"
-google-cloud-secret-manager = "~2.21.1"
+google-cloud-secret-manager = "^2.21.1"
 anthropic = {extras = ["vertex"], version = "^0.39.0"}
 
 [tool.poetry.group.ml.dependencies]
@@ -137,20 +137,20 @@ filterwarnings = [
     "ignore:Passing field metadata as keyword arguments is deprecated"
     ]
 
-[tool.deps.disabled]
+# [tool.deps.disabled]
 
-google-cloud-aiplatform = {extras = ["evaluation"], version = "~1.70.0"}
-google-cloud-bigquery-storage = "<3.0.0"
-google-cloud-storage = "<3.0.0"
-db-dtypes = "^1.3.0"
-google-cloud-pubsub = "~2.26.1"
-scikit-learn = "^1.5.2"
-google-cloud-bigquery = "~3.26.0"
-langchain-openai = ">=0.2.8"
-langchain-anthropic = ">=0.3.0"
-#google-cloud-aiplatform = {extras = ["langchain", "reasoningengine"], version = ">=1.70.0"}
-openinference-instrumentation-langchain = ">=0.1.25"
-anyio = "~3.7.1"
-google-cloud-language = "~2.14.0"
-langchain = ">0.3"
-langchain-google-vertexai = ">2.0.0"
+# google-cloud-aiplatform = {extras = ["evaluation"], version = "~1.70.0"}
+# google-cloud-bigquery-storage = "<3.0.0"
+# google-cloud-storage = "<3.0.0"
+# db-dtypes = "^1.3.0"
+# google-cloud-pubsub = "~2.26.1"
+# scikit-learn = "^1.5.2"
+# google-cloud-bigquery = "~3.26.0"
+# langchain-openai = ">=0.2.8"
+# langchain-anthropic = ">=0.3.0"
+# #google-cloud-aiplatform = {extras = ["langchain", "reasoningengine"], version = ">=1.70.0"}
+# openinference-instrumentation-langchain = ">=0.1.25"
+# anyio = "~3.7.1"
+# google-cloud-language = "~2.14.0"
+# langchain = ">0.3"
+# langchain-google-vertexai = ">2.0.0"

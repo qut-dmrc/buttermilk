@@ -287,6 +287,7 @@ async def read_all_files(uri, pattern, columns: dict[str, str]):
 
 #     return dataset
 
+## TODO: @NS fix this method and do it properly this time.
 def prepare_flow_inputs(
     *,
     job: Job,
@@ -316,7 +317,7 @@ def prepare_flow_inputs(
         ):
             continue
         if value == 'record':
-            placeholders[key] = value
+            placeholders[key] = job.record
         else:
             input_vars[key] = resolved_value
     job.parameters = input_vars
@@ -325,16 +326,13 @@ def prepare_flow_inputs(
     return job
 
 
-def resolve_value(value, job, additional_data):
+def resolve_value(match_key, job, additional_data):
     """Recursively resolve values from different data sources."""
-    if isinstance(value, str):
-        # Handle special "record" case
-        if value.lower() == "record":
-            return job.record
-
+    if isinstance(match_key, str):
+        if match_key in 
         # Handle dot notation
-        if "." in value:
-            locator, field = value.split(".", maxsplit=1)
+        if "." in match_key:
+            locator, field = match_key.split(".", maxsplit=1)
             if additional_data and locator in additional_data:
                 if isinstance(additional_data[locator], pd.DataFrame):
                     found = additional_data[locator][field].values
@@ -349,39 +347,39 @@ def resolve_value(value, job, additional_data):
                         found = OmegaConf.to_object(found)
                     return found
                 else:
-                    logger.debug(f"No record provided; tried to extract {value}")
+                    logger.debug(f"No record provided; tried to extract {match_key}")
                     return None
 
         # Handle direct record field reference
         if job.record and (
-            value in job.record.model_fields or value in job.record.model_extra
+            match_key in job.record.model_fields or match_key in job.record.model_extra
         ):
-            return getattr(job.record, value)
+            return getattr(job.record, match_key)
 
         # handle entire dataset
-        if additional_data and value in additional_data:
-            if isinstance(additional_data[value], pd.DataFrame):
-                return additional_data[value].astype(str).to_dict(orient="records")
+        if additional_data and match_key in additional_data:
+            if isinstance(additional_data[match_key], pd.DataFrame):
+                return additional_data[match_key].astype(str).to_dict(orient="records")
             
-            found = additional_data[value]
+            found = additional_data[match_key]
             if isinstance(found, (DictConfig,ListConfig)):
                 found = OmegaConf.to_object(found)
             return found
 
         # No match
-        return value
+        return match_key
 
-    if isinstance(value, Sequence) and not isinstance(value, str):
+    if isinstance(match_key, Sequence) and not isinstance(match_key, str):
         values = []
-        for item in value:
+        for item in match_key:
             values.append(resolve_value(item, job, additional_data=additional_data))
         return values
 
-    if isinstance(value, Mapping):
+    if isinstance(match_key, Mapping):
         values = {
             k: resolve_value(v, job, additional_data=additional_data)
-            for k, v in value.items()
+            for k, v in match_key.items()
         }
         return values
 
-    return value
+    return match_key

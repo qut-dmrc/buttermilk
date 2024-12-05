@@ -29,6 +29,7 @@ trans:
         record: record
       outputs:
         job_id: job_id
+        flow_id: flow_id
         model: parameters.model
         criteria: parameters.criteria
         template: parameters.template
@@ -57,6 +58,7 @@ trans:
             reasons: judger.outputs.reasons
       outputs:
         job_id: job_id
+        flow_id: flow_id
         model: parameters.model
         criteria: parameters.criteria
         template: parameters.template
@@ -81,12 +83,12 @@ trans:
             model: judger.parameters.model
             criteria: judger.parameters.criteria
             template: judger.parameters.template
-            reasons: judger.outputs.reasons
+            reasons: judger.reasons
           - job_id: synth.job_id
             model: synth.parameters.model
             criteria: synth.parameters.criteria
             template: synth.parameters.template
-            reasons: synth.outputs.reasons
+            reasons: synth.reasons
       outputs:
           analysis: outputs.reasons
           model: parameters.model
