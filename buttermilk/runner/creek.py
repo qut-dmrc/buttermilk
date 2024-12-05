@@ -11,7 +11,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk._core.types import SessionInfo
-from buttermilk.runner.helpers import prepare_step_df, prepare_flow_inputs
+from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
 from buttermilk.utils.utils import find_in_nested_dict
 
 """ A little stream. Runs several flow stages over a single record 
@@ -75,7 +75,7 @@ class Creek(BaseModel):
         q: str | None = None,
         source: Sequence[str] = [],
     ) -> AsyncGenerator:
-        self._data[agent.name] = []
+        self._data[agent.name] = {}
         source = [self.source, *source] if source else [self.source]
         tasks = []
         for variant in agent.make_combinations():
@@ -87,8 +87,20 @@ class Creek(BaseModel):
                 source=source,
                 run_info=run_info,
             )
-            job = prepare_flow_inputs(job=job, additional_data=self._data, **agent.inputs, **variant)
-            
+
+            # Process all inputs into two categories.
+            # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
+            # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
+            # Then there are also extra **kwargs sent to this method.
+            # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
+            # We need to resolve all inputs into a mapping that can be passed to the agent.
+
+            # After this method, job.parameters will include all variables that will be passed
+            # during the initital construction of the job - including template variables and static values
+            # job.inputs will include all variables and formatted placeholders etc that will not be passed
+            # to the templating function and will be sent direct instead
+            job.inputs = parse_flow_vars(agent.inputs, job=job, additional_data=self._data)
+            job.parameters = parse_flow_vars(variant, job=job, additional_data=self._data)
             task = agent.run(
                 job=job,
                 q=q,
@@ -128,23 +140,16 @@ class Creek(BaseModel):
     def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):
         """Update the data object with the outputs of the agent."""
         if output_map:
-            output = {}
-            for key, values in output_map.items():
-                output[key] = self.extract(values, result)
-            self._data[step_name].append(output)
+            output = parse_flow_vars(output_map, job=result, additional_data=self._data)
+            for k,v in output.items():
+                if isinstance(v, Sequence):
+                    self._data[step_name][k] = self._data[step_name].get(k, []) 
+                    self._data[step_name][k].extend(v)
+                else:
+                    self._data[step_name][k] = self._data[step_name].get(k, [])  
+                    self._data[step_name][k].append(v)
         else:
-            self._data[step_name].append(result.outputs.model_dump())
+            self._data[step_name]['outputs'] = self._data[step_name].get('outputs', [])  
+            self._data[step_name]['outputs'].append(result.outputs.model_dump())
 
-    def extract(self, values: Any, result: Job):
-        """Get data out of hierarchical results object according to outputs schema."""
-        data = None
-        if isinstance(values, str):
-            data = find_in_nested_dict(result.model_dump(), values)
-        elif isinstance(values, Sequence):
-            data = [find_in_nested_dict(result.model_dump(), v) for v in values]
-        elif isinstance(values, Mapping):
-            data = {}
-            for key, item in values.items():
-                data[key] = find_in_nested_dict(result.model_dump(), item)
-
-        return data
+        pass

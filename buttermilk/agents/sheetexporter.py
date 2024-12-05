@@ -38,9 +38,6 @@ from langchain_core.prompts import (
 )
 from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import RateLimitError as OpenAIRateLimitError
-from promptflow.client import PFClient
-from promptflow.connections import CustomConnection
-from promptflow.core import ToolProvider, tool
 from promptflow.tracing import trace
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from pyparsing import cached_property

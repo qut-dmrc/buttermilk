@@ -3,6 +3,7 @@
 defaults:
   - _self_
   - save: bq
+  - llm: lite
 
 bm:
   cfg:

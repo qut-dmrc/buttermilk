@@ -261,34 +261,52 @@ async def read_all_files(uri, pattern, columns: dict[str, str]):
     return dataset
 
 
-def parse_flow_vars(input_map: Mapping,
+def parse_flow_vars(var_map: Mapping,
     *,
     job: Job,
     additional_data: dict = {},
     **kwargs,
-) -> Mapping: 
+) -> dict: 
+    
     # Take an input map of variable names to a dot-separated JSON path.
     # Returns a dict of variables with their corresponding content, sourced from 
     # datasets provided in additional_data or records in job.
 
-    import jq
-
     vars = {}
 
     all_data_sources = job.model_dump()
-    for key, df in additional_data.items():
-        all_data_sources[key] = df.to_records(index=False)
+    for key, value in additional_data.items():
+        if value and isinstance(value, pd.DataFrame):
+            all_data_sources[key] = value.to_records(index=False)
+        else:
+            all_data_sources[key] = value
 
+    def resolve_var(match_key: str, data_dict: dict):
+        """Find a key in dot notation from a hierarchical dict."""
+        if not data_dict:
+            return None
+
+        if "." in match_key:
+            next_level, locator = match_key.split(".", maxsplit=1)
+            return resolve_var(match_key=locator, data_dict=data_dict.get(next_level, {}))
+        else:
+            # return the name of the key if we can't find a value. It will be used as 
+            # a literal string.
+            return data_dict.get(match_key, match_key)
+        
     def descend(map, path):
         if isinstance(path, str):
             # We have reached the end of the tree, this last path is a plain string
             # Use this final leaf as the locator for the data to insert here
-            value = jq.all(path, all_data_sources)
+            value = resolve_var(path, all_data_sources)
+            #value = jq.all(path, all_data_sources)
             return value
         elif isinstance(path, Sequence):
             # The key here is made up of multiple records
             # Descend recurisvely and fill it out.
-            value = [descend(path, x) for x in path]
+            value = []
+            for x in path:
+                value.extend(descend(map=map, path=x))
             return value
         elif isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
@@ -298,105 +316,25 @@ def parse_flow_vars(input_map: Mapping,
         else:
             raise ValueError(f'Unknown type in map: {type(path)} @ {map}')
 
-    for var, locator in input_map.items():
+    for var, locator in var_map.items():
         vars[var] = descend(var, locator)
         
     return vars
 
 
 
+        # # Handle direct record field reference
+        # if job.record and (
+        #     match_key in job.record.model_fields or match_key in job.record.model_extra
+        # ):
+        #     return getattr(job.record, match_key)
 
-def prepare_flow_inputs(
-    *,
-    job: Job,
-    additional_data: dict = {},
-    **kwargs,
-) -> Job: 
-    
-    # Process all inputs into two categories.
-    # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
-    # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
-    # Then there are also extra **kwargs sent to this method.
-    # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
-    # We need to resolve all inputs into a mapping that can be passed to the agent.
-
-    # After this method, job.parameters will include all variables that will be passed
-    # during the initital construction of the job - including template variables and static values
-    # job.inputs will include all variables and formatted placeholders etc that will not be passed
-    # to the templating function and will be sent direct instead
-
-    input_vars = {}
-    placeholders = {}
-    for key, value in kwargs.items():
-        if not (
-            resolved_value := resolve_value(
-                value, job, additional_data=additional_data
-            )
-        ):
-            continue
-        if value == 'record':
-            placeholders[key] = job.record
-        else:
-            input_vars[key] = resolved_value
-    job.parameters = input_vars
-    job.inputs = placeholders
-    
-    return job
-
-
-def resolve_value(match_key, job, additional_data):
-    """Recursively resolve values from different data sources."""
-    if isinstance(match_key, str):
-        # Handle dot notation
-        if "." in match_key:
-            locator, field = match_key.split(".", maxsplit=1)
-            if additional_data and locator in additional_data:
-                if isinstance(additional_data[locator], pd.DataFrame):
-                    found = additional_data[locator][field].values
-                    if isinstance(found, (DictConfig,ListConfig)):
-                        found = OmegaConf.to_object(found)
-                    return found
-                return find_in_nested_dict(additional_data[locator], field)
-            if locator == "record":
-                if job.record:
-                    found = find_in_nested_dict(job.record.model_dump(), field)
-                    if isinstance(found, (DictConfig,ListConfig)):
-                        found = OmegaConf.to_object(found)
-                    return found
-                else:
-                    logger.debug(f"No record provided; tried to extract {match_key}")
-                    return None
-
-        # Handle direct record field reference
-        if job.record and (
-            match_key in job.record.model_fields or match_key in job.record.model_extra
-        ):
-            return getattr(job.record, match_key)
-
-        # handle entire dataset
-        if additional_data and match_key in additional_data:
-            if isinstance(additional_data[match_key], pd.DataFrame):
-                return additional_data[match_key].astype(str).to_dict(orient="records")
+        # # handle entire dataset
+        # if additional_data and match_key in additional_data:
+        #     if isinstance(additional_data[match_key], pd.DataFrame):
+        #         return additional_data[match_key].astype(str).to_dict(orient="records")
             
-            found = additional_data[match_key]
-            if isinstance(found, (DictConfig,ListConfig)):
-                found = OmegaConf.to_object(found)
-            return found
-
-        # No match
-        return match_key
-
-    if isinstance(match_key, Sequence) and not isinstance(match_key, str):
-        values = []
-        for item in match_key:
-            values.append(resolve_value(item, job, additional_data=additional_data))
-        return values
-
-    if isinstance(match_key, Mapping):
-        values = {
-            k: resolve_value(v, job, additional_data=additional_data)
-            for k, v in match_key.items()
-        }
-        return values
-
-    return match_key
+        #     found = additional_data[match_key]
+        #     if isinstance(found, (DictConfig,ListConfig)):
+        #         found = OmegaConf.to_object(found)
+        #     return found

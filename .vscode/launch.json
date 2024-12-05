@@ -50,8 +50,8 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[simple]",
-              "+flow=simple",
+              "+flows=[hate]",
+              "+flow=hate",
               "+q=${input:query}"           // Will prompt for query
             ],
       "envFile": "${workspaceFolder}/.env",

@@ -1,3 +1,6 @@
+defaults:
+  - _self_
+
 hate:
   _target_: buttermilk.runner.creek.Creek
   source: hate development
@@ -16,11 +19,13 @@ hate:
       inputs:
         record: record
       outputs:
-        job_id: job_id
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-        reasons: outputs.reasons
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
+            reasons: outputs.reasons
 
     - _target_: buttermilk.agents.lc.LC
       name: synth
@@ -36,18 +41,15 @@ hate:
       inputs:
         content: record.text
         record: record
-        answers:
-          - job_id: judger.job_id
-            model: judger.model
-            criteria: judger.criteria
-            template: judger.template
-            reasons: judger.reasons
+        answers: judger.answers
       outputs:
-        job_id: job_id
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-        reasons: outputs.reasons
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
+            reasons: outputs.reasons
 
     - _target_: buttermilk.agents.lc.LC
       name: eval
@@ -61,23 +63,13 @@ hate:
       inputs:
         content: record.text
         answers:
-          - job_id: judger.job_id
-            model: judger.model
-            criteria: judger.criteria
-            template: judger.template
-            reasons: judger.reasons
-          - job_id: synth.job_id
-            model: synth.model
-            criteria: synth.criteria
-            template: synth.template
-            reasons: synth.reasons
+          - judger.answers
+          - synth.answers
       outputs:
-          reasons: outputs.reasons
-          model: parameters.model
-          timestamp: timestamp
-          job_id: job_id
-          flow_id: flow_id
-          record_id: record.record_id
+        differences: outputs.reasons
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
@@ -85,7 +77,6 @@ hate:
         - answers
         - synthesis
         - differences
-        - analysis
       save:
         type: gsheets
         sheet_id: null
@@ -97,16 +88,6 @@ hate:
         job_id: job_id
         timestamp: timestamp
         record: record
-        zeroshot: 
-          model: judger.model
-          criteria: judger.criteria
-          template: judger.template
-          reasons: judger.reasons
-        synthesis: 
-          model: synth.model
-          criteria: synth.criteria
-          template: synth.template
-          reasons: synth.reasons
-        differences: 
-          reasons: eval.reasons
-          model: eval.model
+        zeroshot: judger.answers
+        synthesis: synth.answers
+        differences: eval.differences
