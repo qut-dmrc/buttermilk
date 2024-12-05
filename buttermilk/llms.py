@@ -77,7 +77,7 @@ CHATMODELS = [
     "o1-preview",
     "gpt4o",
     "sonnet",
-    "sonnetvertex",
+    "sonnetanthropic",
     "haiku",
     "gemini15pro",
 ]

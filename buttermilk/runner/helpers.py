@@ -3,12 +3,14 @@ from collections.abc import Mapping, Sequence
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
+from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 
 from buttermilk import BM, logger
 from buttermilk._core.config import DataSource
+from buttermilk._core.runner_types import Job
 from buttermilk.utils.flows import col_mapping_hydra_to_local
-from buttermilk.utils.utils import find_key_string_pairs
+from buttermilk.utils.utils import find_in_nested_dict, find_key_string_pairs
 
 
 async def load_data(data_cfg: DataSource) -> pd.DataFrame:
@@ -284,3 +286,102 @@ async def read_all_files(uri, pattern, columns: dict[str, str]):
 #     dataset = pd.DataFrame(results, columns=columns.keys())
 
 #     return dataset
+
+def prepare_flow_inputs(
+    *,
+    job: Job,
+    additional_data: dict = {},
+    **kwargs,
+) -> Job: 
+    
+    # Process all inputs into two categories.
+    # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
+    # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
+    # Then there are also extra **kwargs sent to this method.
+    # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
+    # We need to resolve all inputs into a mapping that can be passed to the agent.
+
+    # After this method, job.parameters will include all variables that will be passed
+    # during the initital construction of the job - including template variables and static values
+    # job.inputs will include all variables and formatted placeholders etc that will not be passed
+    # to the templating function and will be sent direct instead
+
+    input_vars = {}
+    placeholders = {}
+    for key, value in kwargs.items():
+        if not (
+            resolved_value := resolve_value(
+                value, job, additional_data=additional_data
+            )
+        ):
+            continue
+        if value == 'record':
+            placeholders[key] = value
+        else:
+            input_vars[key] = resolved_value
+    job.parameters = input_vars
+    job.inputs = placeholders
+    
+    return job
+
+
+def resolve_value(value, job, additional_data):
+    """Recursively resolve values from different data sources."""
+    if isinstance(value, str):
+        # Handle special "record" case
+        if value.lower() == "record":
+            return job.record
+
+        # Handle dot notation
+        if "." in value:
+            locator, field = value.split(".", maxsplit=1)
+            if additional_data and locator in additional_data:
+                if isinstance(additional_data[locator], pd.DataFrame):
+                    found = additional_data[locator][field].values
+                    if isinstance(found, (DictConfig,ListConfig)):
+                        found = OmegaConf.to_object(found)
+                    return found
+                return find_in_nested_dict(additional_data[locator], field)
+            if locator == "record":
+                if job.record:
+                    found = find_in_nested_dict(job.record.model_dump(), field)
+                    if isinstance(found, (DictConfig,ListConfig)):
+                        found = OmegaConf.to_object(found)
+                    return found
+                else:
+                    logger.debug(f"No record provided; tried to extract {value}")
+                    return None
+
+        # Handle direct record field reference
+        if job.record and (
+            value in job.record.model_fields or value in job.record.model_extra
+        ):
+            return getattr(job.record, value)
+
+        # handle entire dataset
+        if additional_data and value in additional_data:
+            if isinstance(additional_data[value], pd.DataFrame):
+                return additional_data[value].astype(str).to_dict(orient="records")
+            
+            found = additional_data[value]
+            if isinstance(found, (DictConfig,ListConfig)):
+                found = OmegaConf.to_object(found)
+            return found
+
+        # No match
+        return value
+
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        values = []
+        for item in value:
+            values.append(resolve_value(item, job, additional_data=additional_data))
+        return values
+
+    if isinstance(value, Mapping):
+        values = {
+            k: resolve_value(v, job, additional_data=additional_data)
+            for k, v in value.items()
+        }
+        return values
+
+    return value

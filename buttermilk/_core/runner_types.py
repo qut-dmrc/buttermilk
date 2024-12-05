@@ -26,7 +26,7 @@ from pydantic import (
 
 from buttermilk import logger
 from buttermilk.utils.utils import is_uri, remove_punctuation
-from buttermilk.utils.validators import make_list_validator
+from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
 from .types import SessionInfo
 
@@ -363,6 +363,9 @@ class Job(BaseModel):
     )
     _ensure_list = field_validator("source", mode="before")(
         make_list_validator(),
+    )
+    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
     )
 
     # @field_serializer('flow')

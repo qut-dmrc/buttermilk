@@ -13,6 +13,7 @@ from typing import Any, TypeVar
 import fsspec
 import httpx
 import numpy as np
+from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 import pydantic
 import regex as re
@@ -374,16 +375,27 @@ def find_key_string_pairs(data):
 
 
 def find_in_nested_dict(result: dict, value: str) -> object:
-    # Handle lists of dicts too
+    # Loop through supplied object, looking for keys that match
+    # 'value'. Note that 'value' might be in dotted notation,
+    # in which case we will descend each level of the 'result'
+    # dictionary, consuming one level of 'value.split(".")'
+    if isinstance(result, Mapping) and value in result:
+        found = result[value]
+        if isinstance(found, (DictConfig,ListConfig)):
+            return OmegaConf.to_object(found)
+        return found
+    
     if isinstance(result, Sequence) and not isinstance(result, str):
-        return [find_in_nested_dict(item, value=value) for item in result]
-    nested = value.split(".")
-    for n in nested:
-        result = result.get(n, {})
-    if result:
-        return result
-    raise ValueError(f"Unable to find key {value} in dict.")
+        # Handle lists of dicts too
+        found = [find_in_nested_dict(item, value=value) for item in result]
+        return [x for x in found if x ]
+    
+    if '.' in value:
+        nested = value.split(".", maxsplit=1)
+        return find_in_nested_dict(result.get(nested[0], {}), value=nested[1])
 
+    
+    return None
 
 def find_all_keys_in_dict(x, search_key):
     results = []

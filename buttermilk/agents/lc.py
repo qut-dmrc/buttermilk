@@ -152,24 +152,16 @@ class LC(Agent):
         *,
         job: Job,
         model: str,
-        additional_data: dict = None,
         q: str | None = None,
         **kwargs,
     ) -> Job:
 
-        input_vars, placeholders = await self.prepare_inputs(
-            job=job,
-            additional_data=additional_data,
-            **kwargs,
-        )
         # Construct list of messages from the templates
-        local_messages = self.load_template_vars(
-            **input_vars,
-        )
+        local_messages = self.load_template_vars(**job.parameters, **job.inputs)
 
         if q:
             job.prompt = q
-            placeholders["q"] = [q]
+            job.inputs["q"] = [q]
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
@@ -182,7 +174,7 @@ class LC(Agent):
         response = await self.invoke(
             prompt_messages=local_messages,
             model=model,
-            placeholders=placeholders,
+            placeholders=job.inputs,
         )
 
         logger.debug(

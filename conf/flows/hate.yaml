@@ -21,12 +21,12 @@ hate:
       inputs:
         record: record
       outputs:
-        answers:
-          job_id: job_id
-          model: parameters.model
-          criteria: agent_info.parameters.criteria
-          template: agent_info.parameters.template
-          reasons: outputs.reasons
+        job_id: job_id
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
+        reasons: outputs.reasons
+
     - _target_: buttermilk.agents.lc.LC
       name: synth
       num_runs: 1
@@ -44,14 +44,18 @@ hate:
       inputs:
         content: record.text
         record: record
-        answers: judger.answers
-      outputs:
         answers:
-          job_id: job_id
-          model: parameters.model
-          criteria: agent_info.parameters.criteria
-          template: agent_info.parameters.template
-          reasons: outputs.reasons
+          - job_id: judger.job_id
+            model: judger.model
+            criteria: judger.criteria
+            template: judger.template
+            reasons: judger.reasons
+      outputs:
+        job_id: job_id
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
+        reasons: outputs.reasons
 
     - _target_: buttermilk.agents.lc.LC
       name: eval
@@ -68,11 +72,53 @@ hate:
       inputs:
         content: record.text
         answers:
-          - judger.answers
-          - synth.answers
+          - job_id: judger.job_id
+            model: judger.model
+            criteria: judger.criteria
+            template: judger.template
+            reasons: judger.reasons
+          - job_id: synth.job_id
+            model: synth.model
+            criteria: synth.criteria
+            template: synth.template
+            reasons: synth.reasons
       outputs:
-          analysis: outputs.analysis
+          reasons: outputs.reasons
           model: parameters.model
           timestamp: timestamp
           job_id: job_id
+          flow_id: flow_id
           record_id: record.record_id
+
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - answers
+        - synthesis
+        - differences
+        - analysis
+      save:
+        type: gsheets
+        sheet_id: null
+        sheet_name: evals
+        title: Hatespeech flow
+      inputs:
+        flow_id: flow_id
+        record_id: record.record_id
+        job_id: job_id
+        timestamp: timestamp
+        models:
+          - judger.model
+          - synth.model
+          - eval.model
+        criteria: 
+          - judger.criteria
+          - synth.criteria
+        template: 
+          - judger.template
+          - synth.template
+        record: record
+        answers:  judger.reasons
+        synthesis: synth.reasons
+        differences: eval.reasons
+        eval_model: eval.model

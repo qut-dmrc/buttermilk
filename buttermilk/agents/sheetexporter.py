@@ -88,25 +88,23 @@ class GSheetExporter(Agent):
          
         # save the input data from this step to a spreadsheet so that we can compare later.
         from buttermilk.utils.gsheet import GSheet, format_strings
-        input_vars, placeholders = await self.prepare_inputs(
-                    job=job,
-                    additional_data=additional_data,
-                    **kwargs,
-                )
-        # combine input vars and placeholders in this instance
-        input_vars.update(placeholders)
-        dataset = pd.DataFrame(input_vars, index=[shortuuid.uuid()])
-        answers = format_strings(dataset, convert_json_columns=self.convert_json_columns)
         
-        params = {}
+        # combine input vars and params together in this instance
+        inputs = {}
+        inputs.update(job.inputs)
         if job.parameters:
-            params.update(job.parameters)
+            inputs.update(job.parameters)
+        dataset = pd.DataFrame.from_records([inputs])
+        contents = format_strings(dataset, convert_json_columns=self.convert_json_columns)
+        
+        save_params = {}
         if self.save:
-            params.update(self.save.model_dump())
+            save_params = self.save.model_dump()
 
-        sheet = self._gsheet.save_gsheet(df=answers, **params)
-        params["sheet_id"]= sheet.id
-        job.outputs = dict(sheet_url=sheet.url, **params)
+        sheet = self._gsheet.save_gsheet(df=contents, **save_params)
+        save_params["sheet_id"]= sheet.id
+        job.outputs = dict(sheet_url=sheet.url, **save_params)
+
         logger.info(f"Saved to sheet {job.outputs}")
 
         return job

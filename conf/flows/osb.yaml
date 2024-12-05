@@ -14,14 +14,37 @@ osb:
       parameters: 
         template: osb
         model:
-          - gemini15pro
-          - gpt4o_osb
-          - llama31_70b
-          # - llama32_90b_vision_instruct
-          # - llama31_405b_instruct
-          - haiku
+          - gpt4o
           - sonnet
+          - gemini15pro
+          - llama32_90b
+          - gemini15pro
+          - haiku
         dataset: osbcasessummary
+
+    # - _target_: buttermilk.agents.lc.LC
+    #   name: synth
+    #   num_runs: 1
+    #   concurrency: 20
+    #   save: ${save}
+    #   parameters:
+    #     template: synthesise
+    #     instructions: osb
+    #     model:
+    #       # - haiku
+    #       - gpt4o
+    #       - sonnet
+    #   inputs:
+    #     answers:
+    #       - job_id: search.job_id
+    #         model: search.outputs.model
+    #         reasons: search.outputs.reasons
+    #   outputs:
+    #     job_id: job_id
+    #     model: parameters.model
+    #     criteria: parameters.criteria
+    #     template: parameters.template
+    #     reasons: outputs.reasons
   data:
     - name: osbcasesfull
       type: file

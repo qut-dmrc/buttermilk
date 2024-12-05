@@ -11,7 +11,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk._core.types import SessionInfo
-from buttermilk.runner.helpers import prepare_step_df
+from buttermilk.runner.helpers import prepare_step_df, prepare_flow_inputs
 from buttermilk.utils.utils import find_in_nested_dict
 
 """ A little stream. Runs several flow stages over a single record 
@@ -85,10 +85,10 @@ class Creek(BaseModel):
                 flow_id=flow_id,
                 record=record,
                 source=source,
-                inputs=agent.inputs,
-                parameters=variant,
                 run_info=run_info,
             )
+            job = prepare_flow_inputs(job=job, additional_data=self._data, **agent.inputs, **variant)
+            
             task = agent.run(
                 job=job,
                 q=q,

@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import (
     Any,
     ClassVar,
-    Self,
     TypeVar,
 )
 
@@ -136,7 +135,7 @@ class Project(BaseModel):
         exclude_unset = True
 
     @model_validator(mode="after")
-    def register(self) -> Self:
+    def register(self) -> "Project":
         global _REGISTRY
         if not _REGISTRY.get(_CONFIG):
             _REGISTRY[_CONFIG] = self

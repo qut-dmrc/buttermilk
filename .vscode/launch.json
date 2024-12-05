@@ -127,42 +127,18 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "automod: tonepolice zeroshot",
+      "name": "tonepolice full run",
       "type": "debugpy",
       "request": "launch",
-      "module": "examples.automod.mod",
+      "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+experiments=judge",
-        "+data=tonepolice",
-        "step.0.init.criteria=[criteria_ordinary]"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "automod.cc",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "demo/main.py",
-      "cwd": "/Users/suzor/src/automod/",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": [],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "webbot automod",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "src/webbot.py",
-      "cwd": "/Users/suzor/src/automod/modbot",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": [],
+         "+flows=[hate]", "flows.hate.steps.0.parameters.model=['haiku']", "flows.hate.steps.1.parameters.model=['haiku']", "flows.hate.steps.2.parameters.model=['haiku']", 
+         "+flow=hate",
+         "+q=${input:query}"           // Will prompt for query
+       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
