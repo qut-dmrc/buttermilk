@@ -7,7 +7,7 @@ hate:
   steps:
     - _target_: buttermilk.agents.lc.LC
       name: judger
-      num_runs: 2
+      num_runs: 1
       concurrency: 20
       save: ${save}
       parameters:

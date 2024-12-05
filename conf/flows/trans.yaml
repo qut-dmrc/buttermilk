@@ -28,12 +28,13 @@ trans:
       inputs:
         record: record
       outputs:
-        job_id: job_id
-        flow_id: flow_id
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-        reasons: outputs.reasons
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
+            reasons: outputs.reasons
       
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -49,20 +50,17 @@ trans:
           - gpt4o
           - sonnet
       inputs:
-        content: record
-        answers:
-          - job_id: judger.job_id
-            model: judger.parameters.model
-            criteria: judger.parameters.criteria
-            template: judger.parameters.template
-            reasons: judger.outputs.reasons
+        content: record.text
+        record: record
+        answers: judger.answers
       outputs:
-        job_id: job_id
-        flow_id: flow_id
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-        reasons: outputs.reasons
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
+            reasons: outputs.reasons
     
     - name: eval 
       _target_: buttermilk.agents.lc.LC
@@ -79,22 +77,13 @@ trans:
       inputs:
         content: record
         answers:
-          - job_id: judger.job_id
-            model: judger.parameters.model
-            criteria: judger.parameters.criteria
-            template: judger.parameters.template
-            reasons: judger.reasons
-          - job_id: synth.job_id
-            model: synth.parameters.model
-            criteria: synth.parameters.criteria
-            template: synth.parameters.template
-            reasons: synth.reasons
+          - judger.answers
+          - synth.answer
       outputs:
-          analysis: outputs.reasons
-          model: parameters.model
-          timestamp: timestamp
-          job_id: job_id
-          record_id: record.record_id
+        differences: outputs.reasons
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter

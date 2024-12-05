@@ -135,7 +135,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[hate]", "+llm=lite",
+         "+flows=[hate]", "llm=full",
          "+flow=hate",
          "+q=${input:query}"           // Will prompt for query
        ],
