@@ -25,13 +25,11 @@ import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
-import vertexai
-from dotenv import load_dotenv
+
 from google.cloud import bigquery, storage
-from google.cloud.logging.handlers import CloudLoggingHandler
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
+from google.cloud import aiplatform
 from omegaconf import DictConfig
-from promptflow.tracing import start_trace
 from pydantic import (
     BaseModel,
     Field,
@@ -81,8 +79,6 @@ class ConfigRegistry:
     def get_config(cls) -> DictConfig | None:
         return cls.get_instance()._config
 
-
-_ = load_dotenv()
 
 T = TypeVar("T", bound="BM")
 
@@ -164,6 +160,7 @@ class BM(Singleton, BaseModel):
         if not _REGISTRY.get("init"):
             self.setup_logging(verbose=self.cfg.verbose)
             if self.cfg.tracing:
+                from promptflow.tracing import start_trace
                 start_trace(
                     resource_attributes={"run_id": self._run_metadata.run_id},
                     collection=self.cfg.name,
@@ -186,7 +183,7 @@ class BM(Singleton, BaseModel):
                 # initialize vertexai
                 for cloud in self.cfg.clouds:
                     if cloud.type == "vertex":
-                        vertexai.init(
+                        aiplatform.init(
                             project=cloud.project,
                             location=cloud.region,
                             staging_bucket=cloud.bucket,
