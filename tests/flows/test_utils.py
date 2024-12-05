@@ -49,6 +49,7 @@ def test_input_map():
     assert len(vars['answers'][0]['reasons']) == 4
     assert len(vars['answers'][1]['reasons']) == 3
     assert vars['answers'][1]['flow_id'] != TEST_FLOW_ID
+    
     assert vars['flow_id'] != TEST_FLOW_ID
     pass
 

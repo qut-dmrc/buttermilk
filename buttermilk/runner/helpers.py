@@ -306,7 +306,11 @@ def parse_flow_vars(var_map: Mapping,
             # Descend recurisvely and fill it out.
             value = []
             for x in path:
-                value.extend(descend(map=map, path=x))
+                sub_value = descend(map=map, path=x)
+                if isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
+                    value.extend(sub_value)
+                else:
+                    value.append(sub_value)
             return value
         elif isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
