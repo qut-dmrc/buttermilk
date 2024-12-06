@@ -114,9 +114,9 @@ class Project(BaseModel):
     job: str
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg
-    save_dest: CloudProviderCfg
-    logger: CloudProviderCfg
-    pubsub: CloudProviderCfg
+    save_dest: CloudProviderCfg = Field(default=None)
+    logger: CloudProviderCfg = Field(default=None)
+    pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     flows: list[Flow] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
