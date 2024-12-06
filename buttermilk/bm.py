@@ -50,7 +50,7 @@ from ._core.types import SessionInfo
 from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
-_MODELS_KEY = "models"
+_MODELS_CFG_KEY = "models_secret"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
@@ -196,11 +196,13 @@ class BM(Singleton, BaseModel):
         self,
         secret_name: str = None,
         secret_class: str = None,
+        cfg_key: str = None,
         version="latest",
     ):
         contents = self.secret_manager.get_secret(
             secret_name=secret_name,
             secret_class=secret_class,
+            cfg_key=cfg_key,
             version=version,
         )
 
@@ -329,7 +331,7 @@ class BM(Singleton, BaseModel):
                 contents = Path(CONFIG_CACHE_PATH).read_text(encoding="utf-8")
                 connections = json.loads(contents)
             except Exception:
-                connections = self.get_secret(secret_class=_MODELS_KEY)
+                connections = self.get_secret(cfg_key=_MODELS_CFG_KEY)
 
             connections = {conn["name"]: conn for conn in connections}
 

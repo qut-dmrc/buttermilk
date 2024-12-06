@@ -32,11 +32,11 @@ class SecretsManager(CloudProviderCfg):
         self,
         secret_name: str = None,
         secret_class: str = None,
+        cfg_key: str = None,        # Get the secret name from the config passed in earlier
         version: str = "latest",
     ) -> str | None:
         """Retrieve latest version of a secret by ID"""
-        if secret_class and not secret_name:
-            secret_name = secret_class
+        secret_name =  secret_name or secret_class or getattr(self, cfg_key)
         
         _client = self.client
 
