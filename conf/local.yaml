@@ -13,6 +13,7 @@ bm:
     clouds:
       - type: gcp
         quota_project_id: prosocial-443205
+        project: prosocial-443205
         bucket: prosocial-data
       - type: vertex
         project: prosocial-443205
