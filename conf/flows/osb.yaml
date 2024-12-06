@@ -46,17 +46,6 @@ osb:
     #     template: parameters.template
     #     reasons: outputs.reasons
   data:
-    - name: osbcasesfull
-      type: file
-      uri: gs://dmrc-platforms/data/osb/01_osb_cases.json
     - name: osbcasessummary
-      type: bq
-      dataset: dmrc-platforms.osb.case_summaries
-      columns:
-        record_id: record_id
-        title: title
-        content: content
-        reasons: reasons
-        standards: standards
-        topics: topics
-        recommendations: recommendations
+      type: file
+      uri: gs://prosocial-public/osb/02_osb_summaries_20241120.jsonl

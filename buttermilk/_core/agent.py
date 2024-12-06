@@ -125,7 +125,7 @@ class Agent(BaseModel):
                 )
         finally:
             if self.save:
-                rows = [job.model_dump()]
+                rows = [job.model_dump(mode="json")]
                 if self.save.type == "bq":
             
                     save(

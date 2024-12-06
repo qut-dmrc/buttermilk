@@ -277,7 +277,7 @@ def parse_flow_vars(var_map: Mapping,
     all_data_sources = job.model_dump()
     for key, value in additional_data.items():
         if isinstance(value, pd.DataFrame):
-            all_data_sources[key] = value.to_records(index=False)
+            all_data_sources[key] = value.to_records(index=False).tolist()
         else:
             all_data_sources[key] = value
 
