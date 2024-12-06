@@ -2897,42 +2897,6 @@ omegaconf = ">=2.2,<2.4"
 packaging = "*"
 
 [[package]]
-name = "hydra-joblib-launcher"
-version = "1.2.0"
-description = "Joblib Launcher for Hydra apps"
-optional = false
-python-versions = "*"
-files = [
-    {file = "hydra-joblib-launcher-1.2.0.tar.gz", hash = "sha256:b4dc8b990221a0df048c094954356c6532585557e708e8198c46a877b379a6d5"},
-    {file = "hydra_joblib_launcher-1.2.0-py3-none-any.whl", hash = "sha256:57bfd042b015056157297de93e8ec1c6bc75fd39bd3b300e1599db0c5d992eee"},
-]
-
-[package.dependencies]
-hydra-core = ">=1.1.0.dev7"
-joblib = ">=0.14.0"
-
-[[package]]
-name = "hydra-zen"
-version = "0.13.0"
-description = "Configurable, reproducible, and scalable workflows in Python, via Hydra"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "hydra_zen-0.13.0-py3-none-any.whl", hash = "sha256:6050b62be96d2a47b2abf0e9c0ebcce1e9a4e259e173870338ab049b833f26cf"},
-    {file = "hydra_zen-0.13.0.tar.gz", hash = "sha256:1b53d74aa1f0baa04fafdac6aba7a94ae40929e7b0a5a5081d8740f74322052d"},
-]
-
-[package.dependencies]
-hydra-core = ">=1.2.0"
-omegaconf = ">=2.2.1"
-typing-extensions = ">=4.1.0,<4.6.0 || >4.6.0"
-
-[package.extras]
-beartype = ["beartype (>=0.8.0)"]
-pydantic = ["pydantic (>=1.10.14,<2.0.0)"]
-test = ["hypothesis (>=6.28.0)", "pytest (>=3.8)", "pytest-trio (>=0.8.0)"]
-
-[[package]]
 name = "idna"
 version = "3.10"
 description = "Internationalized Domain Names in Applications (IDNA)"
@@ -5045,6 +5009,21 @@ files = [
 
 [package.dependencies]
 tqdm = "*"
+
+[[package]]
+name = "promptflow-tracing"
+version = "1.16.2"
+description = "Prompt flow tracing"
+optional = false
+python-versions = "<4.0,>=3.8"
+files = [
+    {file = "promptflow_tracing-1.16.2-py3-none-any.whl", hash = "sha256:7157dfa520c7a218c17c9a6073673fa504bd35ac2b47eccf4a938fcbd8441c4d"},
+]
+
+[package.dependencies]
+openai = "*"
+opentelemetry-sdk = ">=1.22.0,<2.0.0"
+tiktoken = ">=0.4.0"
 
 [[package]]
 name = "propcache"
@@ -7672,4 +7651,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.12"
-content-hash = "edec0109d2a80487e90d7bcd08556aeef17f1eb9b98d194dc2b7b05839e7bc9b"
+content-hash = "ee26536d53f373381100219e6d3f7cb7554d1b77c12d323b9e1e2bbe062117e1"

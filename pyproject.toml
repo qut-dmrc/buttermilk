@@ -43,6 +43,7 @@ anthropic = {extras = ["vertex"], version = "^0.39.0"}
 jq = "^1.8.0"
 google-cloud-aiplatform = "^1.74.0"
 langchain-google-vertexai = "^2.0.8"
+promptflow-tracing = "^1.16.2"
 
 [tool.poetry.group.ml.dependencies]
 torch = "^2.5.1"
