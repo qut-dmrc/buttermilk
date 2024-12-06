@@ -11,6 +11,7 @@ import datetime
 import json
 import logging
 import sys
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import (
@@ -166,6 +167,7 @@ class BM(Singleton, BaseModel):
                     credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
                     self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
                     self.setup_logging(verbose=self.cfg.verbose)
+                    os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', self._gcp_project)
                     self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self._run_metadata.save_dir}") 
                 if cloud.type == "vertex":
                     # initialize vertexai

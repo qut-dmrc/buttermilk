@@ -9,6 +9,16 @@ bm:
   cfg:
     name: buttermilk
     job: debugging
+
+    clouds:
+      - type: gcp
+        quota_project_id: prosocial-443205
+        bucket: prosocial-data
+      - type: vertex
+        project: prosocial-443205
+        region: us-central1
+        bucket: prosocial-public
+
     logger: 
       type: gcp
       project: prosocial-443205
@@ -21,15 +31,6 @@ bm:
       project: dmrc-analysis
       region: us-central1
       bucket: dmrc-analysis
-
-    clouds:
-      - type: gcp
-        project: prosocial-443205
-        region: us-central1
-      - type: vertex
-        project: dmrc-platforms
-        region: us-central1
-        bucket: dmrc-analysis
 
     secret_provider: 
       type: gcp
