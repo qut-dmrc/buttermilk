@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import (
     Any,
     ClassVar,
+    Optional,
     TypeVar,
 )
 from google import auth
@@ -139,7 +140,7 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Project = Field(None, validate_default=True)
+    cfg: Optional[Project] = Field(None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
     _gcp_project: str = PrivateAttr(default=None)
