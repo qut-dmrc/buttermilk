@@ -11,6 +11,8 @@ bm:
     job: debugging
     logger: 
       type: gcp
+      project: prosocial-443205
+      location: us-central1
     tracing: 
       enabled: false
     verbose: true
@@ -21,6 +23,9 @@ bm:
       bucket: dmrc-analysis
 
     clouds:
+      - type: gcp
+        project: prosocial-443205
+        region: us-central1
       - type: vertex
         project: dmrc-platforms
         region: us-central1

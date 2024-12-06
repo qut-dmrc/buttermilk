@@ -18,7 +18,7 @@ from typing import (
     ClassVar,
     TypeVar,
 )
-
+from google import auth
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
@@ -139,7 +139,7 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Project | None = Field(None, validate_default=True)
+    cfg: Project = Field(None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
@@ -158,21 +158,27 @@ class BM(Singleton, BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if not _REGISTRY.get("init"):
-            self.setup_logging(verbose=self.cfg.verbose)
-            if self.cfg.tracing:
-                from promptflow.tracing import start_trace
-                start_trace(
-                    resource_attributes={"run_id": self._run_metadata.run_id},
-                    collection=self.cfg.name,
-                    job=self.cfg.job,
-                )
+            for cloud in self.cfg.clouds:
+                if cloud.type == "gcp":
+                    # authenticate to GCP
+                    credentials, project_id = auth.default(quota_project_id=cloud.quota_project_id)
+                    self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
+                    self.setup_logging(verbose=self.cfg.verbose)
+                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {project_id}, save dir: {self._run_metadata.save_dir}") 
+                if cloud.type == "vertex":
+                    # initialize vertexai
+                    aiplatform.init(
+                        project=cloud.project,
+                        location=cloud.region,
+                        staging_bucket=cloud.bucket,
+                    )
             _REGISTRY["init"] = True
 
             # Print config to console and save to default save dir
+            rprint(self.cfg)
+            rprint(self._run_metadata)
+
             try:
-                # cfg_export = OmegaConf.to_container(_REGISTRY['cfg'], resolve=True)
-                rprint(self.cfg)
-                rprint(self._run_metadata)
                 save.save(
                     data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
                     basename="config",
@@ -180,18 +186,17 @@ class BM(Singleton, BaseModel):
                     save_dir=self._run_metadata.save_dir,
                 )
 
-                # initialize vertexai
-                for cloud in self.cfg.clouds:
-                    if cloud.type == "vertex":
-                        aiplatform.init(
-                            project=cloud.project,
-                            location=cloud.region,
-                            staging_bucket=cloud.bucket,
-                        )
-
             except Exception as e:
                 self.logger.error(f"Could not save config to default save dir: {e}")
 
+            if self.cfg.tracing:
+                from promptflow.tracing import start_trace
+                start_trace(
+                    resource_attributes={"run_id": self._run_metadata.run_id},
+                    collection=self.cfg.name,
+                    job=self.cfg.job,
+                )
+                
     def get_secret(
         self,
         secret_name: str = None,
@@ -267,8 +272,8 @@ class BM(Singleton, BaseModel):
         resource = google.cloud.logging.Resource(
             type="generic_task",
             labels={
-                "project_id": "dmrc-platforms",
-                "location": "us-central1",
+                "project_id": self.cfg.logger.project,
+                "location": self.cfg.logger.location,
                 "namespace": self.cfg.name,
                 "job": self.cfg.job,
                 "task_id": self._run_metadata.run_id,
@@ -280,7 +285,7 @@ class BM(Singleton, BaseModel):
         else:
             logger.setLevel(logging.INFO)
 
-        _REGISTRY['gcslogging'] = google.cloud.logging.Client()
+        _REGISTRY['gcslogging'] = google.cloud.logging.Client(project=self.cfg.logger.get('project'))
         cloudHandler = CloudLoggingHandler(
             client=_REGISTRY['gcslogging'],
             resource=resource,
