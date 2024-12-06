@@ -113,7 +113,7 @@ class Project(BaseModel):
     name: str
     job: str
     connections: Sequence[str] = Field(default_factory=list)
-    secret_provider: CloudProviderCfg
+    secret_provider: CloudProviderCfg = Field(default=None)
     save_dest: CloudProviderCfg = Field(default=None)
     logger: CloudProviderCfg = Field(default=None)
     pubsub: CloudProviderCfg = Field(default=None)
