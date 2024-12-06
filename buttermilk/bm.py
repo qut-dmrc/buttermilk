@@ -142,6 +142,7 @@ class BM(Singleton, BaseModel):
     cfg: Project = Field(None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
+    _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("cfg")
@@ -161,10 +162,10 @@ class BM(Singleton, BaseModel):
             for cloud in self.cfg.clouds:
                 if cloud.type == "gcp":
                     # authenticate to GCP
-                    credentials, project_id = auth.default(quota_project_id=cloud.quota_project_id)
+                    credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
                     self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
                     self.setup_logging(verbose=self.cfg.verbose)
-                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {project_id}, save dir: {self._run_metadata.save_dir}") 
+                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self._run_metadata.save_dir}") 
                 if cloud.type == "vertex":
                     # initialize vertexai
                     aiplatform.init(
@@ -285,7 +286,7 @@ class BM(Singleton, BaseModel):
         else:
             logger.setLevel(logging.INFO)
 
-        _REGISTRY['gcslogging'] = google.cloud.logging.Client(project=self.cfg.logger.get('project'))
+        _REGISTRY['gcslogging'] = google.cloud.logging.Client(project=self.cfg.logger.project)
         cloudHandler = CloudLoggingHandler(
             client=_REGISTRY['gcslogging'],
             resource=resource,
@@ -314,7 +315,7 @@ class BM(Singleton, BaseModel):
     @property
     def gcs(self) -> storage.Client:
         if _REGISTRY.get("gcs") is None:
-            _REGISTRY["gcs"] = storage.Client(project=self.cfg.save_dest.project)
+            _REGISTRY["gcs"] = storage.Client(project=_gcp_project)
         return _REGISTRY["gcs"]
     
     @property
@@ -346,7 +347,7 @@ class BM(Singleton, BaseModel):
     @property
     def bq(self) -> bigquery.Client:
         if _REGISTRY.get("bq") is None:
-            _REGISTRY["bq"] = bigquery.Client(project=self.cfg.save_dest.project)
+            _REGISTRY["bq"] = bigquery.Client(project=self._gcp_project)
         return _REGISTRY["bq"]
 
     def run_query(
