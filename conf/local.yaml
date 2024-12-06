@@ -12,7 +12,7 @@ bm:
     logger: 
       type: gcp
     tracing: 
-      enabled: true
+      enabled: false
     verbose: true
     save_dest:
       type: gcp

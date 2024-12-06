@@ -38,12 +38,10 @@ proto-plus = "^1.25.0"
 httpx = "^0.27.2"
 beautifulsoup4 = "^4.12.3"
 rich = "^13.9.4"
-promptflow-tools = "^1.4.0"
 google-cloud-secret-manager = "^2.21.1"
 anthropic = {extras = ["vertex"], version = "^0.39.0"}
 jq = "^1.8.0"
 google-cloud-aiplatform = "^1.74.0"
-promptflow-core = "^1.16.2"
 
 [tool.poetry.group.ml.dependencies]
 torch = "^2.5.1"
@@ -87,7 +85,9 @@ google-cloud-bigquery = "^3.27.0"
 langchain-openai = "^0.2.11"
 langchain = "^0.3.9"
 langchain-google-vertexai = "^2.0.8"
-promptflow-tracing = "^1.16.2"
+#promptflow-tracing = "^1.16.2"
+#promptflow-core = "^1.16.2"
+#promptflow-tools = "^1.4.0"
 
 
 [tool.poetry.group.video.dependencies]
