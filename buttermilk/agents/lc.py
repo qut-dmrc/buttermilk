@@ -61,7 +61,6 @@ class LC(Agent):
     )
 
     _connections: dict | None = PrivateAttr(default=dict)
-    _llms: LLMs | None = PrivateAttr(default=dict)
 
     class Config:
         extra = "forbid"
@@ -76,13 +75,6 @@ class LC(Agent):
             ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
-
-    @model_validator(mode="after")
-    def load_connections(self) -> "LC":
-        bm = BM()
-        self._llms = bm.llms
-
-        return self
 
     def load_template_vars(
         self,
@@ -154,7 +146,9 @@ class LC(Agent):
         q: str | None = None,
         **kwargs,
     ) -> Job:
-
+        
+        bm = BM()
+        
         # Construct list of messages from the templates
         local_messages = self.load_template_vars(**job.parameters, **job.inputs)
 
@@ -163,8 +157,8 @@ class LC(Agent):
             job.inputs["q"] = [q]
 
         # Add model details to Job object
-        job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
-        job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
+        job.agent_info["connection"] = scrub_keys(bm.llms.connections[model])
+        job.agent_info["model_params"] = scrub_keys(bm.llms[model].dict())
         job.parameters["model"] = model
 
         logger.debug(
@@ -212,6 +206,8 @@ class LC(Agent):
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
+        bm = BM()
+        
         input_vars = {}
         # Fill placeholders
         for k, v in placeholders.items():
@@ -224,7 +220,7 @@ class LC(Agent):
         # Make the chain
         logger.debug(f"Assembling the chain with model: {model}.")
         chain = ChatPromptTemplate(prompt_messages, template_format="jinja2")
-        chain = chain | self._llms[model] | ChatParser()
+        chain = chain | bm.llms[model] | ChatParser()
 
         elapsed = 0
         t0 = time.time()
