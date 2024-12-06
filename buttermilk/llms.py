@@ -6,7 +6,10 @@ from anthropic import AnthropicVertex, AsyncAnthropicVertex
 # There are 'old' and 'new' harm categories. Use the new ones.
 # see google/generativeai/types/safety_types.py
 from google.generativeai.types import HarmBlockThreshold, HarmCategory
-from langchain_anthropic import ChatAnthropic
+try:
+    from langchain_anthropic import ChatAnthropic
+except:
+    pass
 from langchain_core.language_models.llms import LLM
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
@@ -19,7 +22,6 @@ if TYPE_CHECKING:
 # from ..libs.replicate import replicatellama3
 
 MODEL_CLASSES = [
-    ChatAnthropic,
     ChatOpenAI,
     AzureChatOpenAI,
     AnthropicVertex,
@@ -27,12 +29,13 @@ MODEL_CLASSES = [
 ]
 
 
-class LLMTypes(Enum):
+class MLPlatformTypes(Enum):
     openai = "openai"
     google_genai = "google-genai"
     google_vertexai = "google-vertexai"
     anthropic = "anthropic"
     llama = "llama"
+    azure = "azure"
 
 
 # VERTEX_SAFETY_SETTINGS = {
