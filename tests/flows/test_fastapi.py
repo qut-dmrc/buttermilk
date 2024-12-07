@@ -4,15 +4,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
-from pydantic import BaseModel
 
 
-class TestJob(BaseModel):
+class TestJob():
     input: int
     output: int | None = None
 
 
-class TestAgent(BaseModel):
+class TestAgent():
     async def process(self, *, job: TestJob) -> TestJob:
         job.output = 2 * job.input
         return job
