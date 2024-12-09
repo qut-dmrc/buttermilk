@@ -2,7 +2,7 @@ outputs
 multirun
 connections.json*
 *.jsonl
-
+*local*.yaml
 __pycache__/
 .promptflow
 !.promptflow/flow.tools.json
@@ -10,7 +10,6 @@ __pycache__/
 .ruff_cache/
 .*
 .venv
-config.yml
 .idea
 .env
 .ipynb_checkpoints
