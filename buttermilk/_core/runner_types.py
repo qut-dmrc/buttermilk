@@ -211,15 +211,21 @@ class RecordInfo(BaseModel):
         default=None,
         validation_alias=AliasChoices("name", "title", "heading"),
     )
+    description: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("description", "desc"),
+    )
+    caption: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("caption", "alt", "alt_text"),
+    )
+    transcript: str  | None = Field(default=None)
     text: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "text",
             "content",
             "body",
-            "alt_text",
-            "alt",
-            "caption",
         ),
     )
     media: list[MediaObj] = Field(
@@ -289,8 +295,8 @@ class RecordInfo(BaseModel):
         if not self.media and not self.text:
             logger.warning("No text or media provided for {self.record_id}")
             return None
-        if self.text:
-            components.append({"type": "text", "text": self.text})
+        text = self.text or 'see attached media'
+        components.append({"type": "text", "text": text})
 
         message = {
             "role": role,

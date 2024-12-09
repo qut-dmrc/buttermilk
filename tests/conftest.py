@@ -20,6 +20,9 @@ def bm() -> "BM":
 def logger(BM):
     return BM.logger
 
+@pytest.fixture
+def anyio_backend():
+    return 'asyncio'
 
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:

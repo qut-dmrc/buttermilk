@@ -150,11 +150,15 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        model: str,
+        model: str = '',
         q: str | None = None,
         **kwargs,
     ) -> Job:
 
+        model = model or job.parameters.pop('model')
+        if not model:
+            raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
+        
         # Construct list of messages from the templates
         local_messages = self.load_template_vars(**job.parameters, **job.inputs)
 

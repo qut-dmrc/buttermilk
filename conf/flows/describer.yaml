@@ -17,18 +17,18 @@ describe:
           - sonnet
       inputs:
         record: record
-    - name: describe_synth
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 1
-      concurrency: 20
-      parameters: 
-        template: describe
-        model:
-          - gpt4v
-          - gemini15pro
-          - sonnet
-      inputs:
-        record: record
-        answers: describe.outputs
-      outputs:
-        record: outputs
+    # - name: describe_synth
+    #   _target_: buttermilk.agents.lc.LC
+    #   num_runs: 1
+    #   concurrency: 20
+    #   parameters: 
+    #     template: synthesise
+    #     model:
+    #       - gpt4v
+    #       - gemini15pro
+    #       - sonnet
+    #   inputs:
+    #     record: record
+    #     answers: describe.outputs
+    #   outputs:
+    #     record: outputs

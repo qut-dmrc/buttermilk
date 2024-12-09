@@ -321,8 +321,12 @@ def parse_flow_vars(var_map: Mapping,
             raise ValueError(f'Unknown type in map: {type(path)} @ {map}')
 
     for var, locator in var_map.items():
-        vars[var] = descend(var, locator)
-        
+        if locator == 'record':
+            # substitue the input record from the job
+            vars[var] = job.record
+        else:
+            vars[var] = descend(var, locator)
+            
     return vars
 
 
