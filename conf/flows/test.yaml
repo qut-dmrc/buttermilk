@@ -1,5 +1,5 @@
 test:
-  _target_: buttermilk.runner.creek.Creek
+  _target_: buttermilk.runner.flow.Flow
   source: osb development
   steps:
     - name: test

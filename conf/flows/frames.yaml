@@ -11,7 +11,7 @@ params:
     - llama32_90b_vision_instruct_azure
 
 frames:
-  _target_: buttermilk.runner.creek.Creek
+  _target_: buttermilk.runner.flow.Flow
   source: api development
   steps: 
     - name: frames

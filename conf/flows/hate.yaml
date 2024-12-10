@@ -2,7 +2,7 @@ defaults:
   - _self_
 
 hate:
-  _target_: buttermilk.runner.creek.Creek
+  _target_: buttermilk.runner.flow.Flow
   source: hate development
   steps:
     - _target_: buttermilk.agents.lc.LC

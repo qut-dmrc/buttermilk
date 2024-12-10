@@ -3,7 +3,7 @@ defaults:
   - _self_
 
 osb:
-  _target_: buttermilk.runner.creek.Creek
+  _target_: buttermilk.runner.flow.Flow
   source: api development
   steps:
     - name: search

@@ -1,5 +1,5 @@
 simple:
-  _target_: buttermilk.runner.creek.Creek
+  _target_: buttermilk.runner.flow.Flow
   source: hate development
   steps:
     - name: describer
