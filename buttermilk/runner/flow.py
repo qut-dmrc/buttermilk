@@ -14,12 +14,12 @@ from buttermilk._core.types import SessionInfo
 from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
 from buttermilk.utils.utils import find_in_nested_dict
 
-""" A little stream. Runs several flow stages over a single record 
+""" A flow ties several stages together, runs them over a single record, 
     and streams results.
 """
 
 
-class Creek(BaseModel):
+class Flow(BaseModel):
     source: str | Sequence[str] | None
     steps: list[Agent]
 

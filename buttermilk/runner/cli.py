@@ -7,13 +7,13 @@ from rich import print as rprint
 
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.bm import BM
-from buttermilk.runner.creek import Creek
+from buttermilk.runner.flow import Flow
 
 
 class _CFG(BaseModel):
     bm: BM
     save: Mapping
-    flows: dict[str, Creek]
+    flows: dict[str, Flow]
     flow: str
     q: str
     record: dict
@@ -28,9 +28,9 @@ def main(cfg: _CFG) -> None:
     record = FlowRequest(**params, source="cli")
     flow = cfg.flow
 
-    async def run_flow(creek: Creek):
+    async def run_flow(flow: Flow):
         async for response in flow_stream(
-            flow=creek,
+            flow=flow,
             flow_request=record,
         ):
             rprint(response)

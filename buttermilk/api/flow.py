@@ -24,7 +24,7 @@ from buttermilk._core.runner_types import (
     Job,
 )
 from buttermilk.api.stream import FlowRequest, flow_stream
-from buttermilk.runner.creek import Creek
+from buttermilk.runner.flow import Flow
 
 from .runs import get_recent_runs
 
@@ -32,7 +32,7 @@ INPUT_SOURCE = "api"
 app = FastAPI()
 flows = dict()
 
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Republicans are arseholes."}'
+# curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
 
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": "haiku", "template":"judge", "formatting": "json_rules", "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
 
@@ -40,14 +40,6 @@ flows = dict()
 
 # gcloud pubsub topics publish TOPIC_ID --message='{"task": "summarise_osb", "uri": "gs://dmrc-platforms/data/osb/FB-515JVE4X.md", "record_id": "FB-515JVE4X"}
 
-# gsutil ls "gs://dmrc-platforms/data/osb/*md" | while read -r uri; do
-#     filename=$(basename "$uri")
-#     echo "About to send:"
-#     echo "{\"task\": \"summarise_osb\", \"uri\": \"$uri\", \"record_id\": \"${filename%.*}\"}"
-#     echo "Press RETURN to send, or Ctrl+C to abort"
-#     read
-#     gcloud pubsub topics publish flow --message="{\"task\": \"summarise_osb\", \"uri\": \"$uri\", \"record_id\": \"${filename%.*}\"}"
-# done
 
 
 def callback(message):
@@ -122,15 +114,6 @@ async def get_runs_json(request: Request) -> Sequence[Job]:
 @app.api_route("/html/runs/", methods=["GET", "POST"])
 async def get_runs_html(request: Request) -> HTMLResponse:
     data = get_recent_runs()
-
-    # data = group_and_filter_jobs(
-    #     data=df,
-    #     group=bm.cfg.data.runs.group,
-    #     columns=bm.cfg.data.runs.columns,
-    #     data_cfg=DataSource(),
-    #     join=bm.cfg.data.runs.join,
-    #     raise_on_error=False,
-    # )
 
     rendered_result = templates.TemplateResponse(
         "runs_html.html",
@@ -221,7 +204,7 @@ async def log_cors_failures(request: Request, call_next):
 class _CFG(BaseModel):
     bm: BM
     save: Mapping
-    flows: dict[str, Creek]
+    flows: dict[str, Flow]
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -238,7 +221,7 @@ def main(cfg: _CFG):
     start_trace(
         resource_attributes={"run_id": bm._run_metadata.run_id},
         collection="flow_api",
-        job="pubsub prompter",
+        job="api/pubsub prompter",
     )
 
     listener_thread = threading.Thread(target=start_pubsub_listener)

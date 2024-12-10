@@ -90,6 +90,9 @@ trans:
         sheet_name: evals
         title: Trans Guidelines Judger
       inputs:
+        flow_id: flow_id
+        job_id: job_id
+        timestamp: timestamp
         models:
           - judger.model
           - synth.model
@@ -101,7 +104,10 @@ trans:
           - judger.template
           - synth.template
         record: record
-        answers: judger.reasons
-        synthesis: synth.reasons
-        differences: eval.analysis
-        eval_model: eval.model
+        answers:
+          - judger.answers
+        synthesis:
+          - synth.answers
+        differences:
+          - differences: eval.differences
+            model: eval.model

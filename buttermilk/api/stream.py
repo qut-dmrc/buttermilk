@@ -24,7 +24,7 @@ from buttermilk._core.runner_types import (
 )
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
-from buttermilk.runner.creek import Creek
+from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import (
     download_and_convert,
 )
@@ -134,7 +134,7 @@ class FlowRequest(BaseModel):
 
 
 async def flow_stream(
-    flow: Creek,
+    flow: Flow,
     flow_request: FlowRequest,
     return_json=True,
 ) -> AsyncGenerator[str, None]:
