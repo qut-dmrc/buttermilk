@@ -167,7 +167,7 @@ class BM(Singleton, BaseModel):
                     os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
                     credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
                     self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
-                    self.setup_logging(verbose=self.cfg.verbose)
+                    self.setup_logging(verbose=self.cfg.logger.verbose)
                     self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self._run_metadata.save_dir}") 
                 if cloud.type == "vertex":
                     # initialize vertexai
@@ -318,7 +318,7 @@ class BM(Singleton, BaseModel):
     @property
     def gcs(self) -> storage.Client:
         if _REGISTRY.get("gcs") is None:
-            _REGISTRY["gcs"] = storage.Client(project=_gcp_project)
+            _REGISTRY["gcs"] = storage.Client(project=self._gcp_project)
         return _REGISTRY["gcs"]
     
     @property

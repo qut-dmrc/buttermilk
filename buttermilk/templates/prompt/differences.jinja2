@@ -83,12 +83,13 @@ Analyse the underlying reasons behind differences among the answers below.
 {{ content }}
 <END CONTENT>
 {% endif %}
-
-{% for draft in answers %}
-    <BEGIN DRAFT ANSWER: {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }}>
-    {% if draft.get('prediction') %}Answer: {{ draft['prediction'] }}{% endif %}
-    {% if draft.get('labels') %}Labels: {{ draft['labels'] }}{% endif %}
-    Reasons:
-    {{ draft['reasons'] }}
-    <END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }} ]>
-{% endfor %}
+{% if answers %}
+  {% for draft in answers %}
+<BEGIN DRAFT ANSWER: {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }}>
+{% if draft.get('prediction') %}Answer: {{ draft['prediction'] }}{% endif %}
+{% if draft.get('labels') %}Labels: {{ draft['labels'] }}{% endif %}
+Reasons:
+{{ draft['reasons'] }}
+<END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }} ]>
+  {% endfor %}
+{% endif %}

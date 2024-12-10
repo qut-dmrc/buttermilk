@@ -10,9 +10,11 @@ bm:
     job: debugging
     logger: 
       type: gcp
+      project: prosocial-443205
+      location: us-central1
+      verbose: true
     tracing: 
       enabled: true
-    verbose: true
 
     clouds:
       - type: gcp

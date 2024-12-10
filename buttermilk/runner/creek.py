@@ -139,7 +139,10 @@ class Creek(BaseModel):
 
     def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):
         """Update the data object with the outputs of the agent."""
-        if output_map:
+        if result.error:
+            # don't add failed jobs
+            return
+        elif output_map:
             output = parse_flow_vars(output_map, job=result, additional_data=self._data)
             for k,v in output.items():
                 if isinstance(v, Sequence):

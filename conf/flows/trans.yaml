@@ -20,11 +20,7 @@ trans:
           - trans_simplified
           - trans_factored
         formatting: json_rules
-        model:
-          - gpt4o
-          - sonnet
-          - gemini15pro
-          - llama32_90b
+        model: ${llm}
       inputs:
         record: record
       outputs:
@@ -46,9 +42,7 @@ trans:
         instructions: judge
         criteria: trans_simplified
         formatting: json_rules
-        model:
-          - gpt4o
-          - sonnet
+        model: ${llm}
       inputs:
         content: record.text
         record: record
@@ -71,14 +65,12 @@ trans:
         template: differences
         criteria: 
           - trans_simplified
-        model:
-          - gpt4o
-          - sonnet
+        model: ${llm}
       inputs:
-        content: record
+        content: record.text
         answers:
           - judger.answers
-          - synth.answer
+          - synth.answers
       outputs:
         differences: outputs.reasons
         model: parameters.model

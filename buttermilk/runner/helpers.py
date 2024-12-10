@@ -307,25 +307,30 @@ def parse_flow_vars(var_map: Mapping,
             value = []
             for x in path:
                 sub_value = descend(map=map, path=x)
-                if isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
+                if sub_value and isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
                     value.extend(sub_value)
-                else:
+                elif sub_value:
                     value.append(sub_value)
             return value
         elif isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
             # Descend recurisvely and fill it out.
-            value = {k: descend(map=k, path=v) for k, v in path.items()}
+            value = {k: descend(map=k, path=v) for k, v in path.items() if v}
             return value
         else:
             raise ValueError(f'Unknown type in map: {type(path)} @ {map}')
 
     for var, locator in var_map.items():
         if locator == 'record':
-            # substitue the input record from the job
-            vars[var] = job.record
+            if job.record:
+                # substitue the input record from the job
+                # but don't add empty values
+                vars[var] = job.record
         else:
-            vars[var] = descend(var, locator)
+            value = descend(var, locator)
+            # Don't add empty values to the input dict
+            if value:
+                vars[var] = value
             
     return vars
 
