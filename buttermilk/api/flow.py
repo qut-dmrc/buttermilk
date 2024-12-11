@@ -125,13 +125,13 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb", "test"],
+    flow: Literal["hate", "simple", "trans", "osb", "osbfulltext", "summarise_osb", "test"],
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:
     if flow not in flows:
         raise HTTPException(status_code=403, detail="Flow not valid")
-
+    
     return StreamingResponse(
         flow_stream(flows[flow], flow_request),
         media_type="application/json",

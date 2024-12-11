@@ -2,19 +2,19 @@ simple:
   _target_: buttermilk.runner.flow.Flow
   source: hate development
   steps:
-    - name: describer
-      _target_: buttermilk.agents.describer.Describer
-      parameters: 
-        template: describe
-        model:
-          - gemini15pro
-      inputs:
-        record: record
-      outputs:
-        name: title
-        description: description
-        caption: caption
-        transcript: transcript
+    # - name: describer
+    #   _target_: buttermilk.agents.describer.Describer
+    #   parameters: 
+    #     template: describe
+    #     model:
+    #       - gemini15pro
+    #   inputs:
+    #     record: record
+    #   outputs:
+    #     name: title
+    #     description: description
+    #     caption: caption
+    #     transcript: transcript
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1
@@ -24,8 +24,7 @@ simple:
         template: judge
         criteria: criteria_ordinary
         formatting: json_rules
-        model:
-          - haiku
+        model: ${llm}
       inputs:
         record: record
       outputs:
@@ -35,18 +34,3 @@ simple:
           template: parameters.template
           reasons: outputs.reasons
 
-    - name: export
-      _target_: buttermilk.agents.sheetexporter.GSheetExporter
-      convert_json_columns:
-        - reasons
-      save:
-        type: gsheets
-        sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
-        sheet_name: evals
-        title: Trans Guidelines Judger
-      inputs:
-        job_id: judger.answers.job_id
-        model: judger.answers.model
-        criteria: judger.answers.criteria
-        template: judger.answers.template
-        reasons: judger.answers.reasons

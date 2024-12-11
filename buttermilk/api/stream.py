@@ -52,7 +52,7 @@ class FlowRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
-    source: str | Sequence[str]
+    source: str | Sequence[str] = []
     video: str | bytes | None = None
     image: str | bytes | None = None
 
@@ -139,6 +139,8 @@ async def flow_stream(
     return_json=True,
 ) -> AsyncGenerator[str, None]:
     bm = BM()
+    if not flow_request.source:
+        flow_request.source = [bm.cfg.job]
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
