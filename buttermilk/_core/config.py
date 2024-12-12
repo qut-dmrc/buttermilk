@@ -137,3 +137,5 @@ class RunCfg(BaseModel):
     platform: str = "local"
     max_concurrency: int = -1
     parameters: Mapping[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)

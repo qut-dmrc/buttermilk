@@ -50,7 +50,6 @@ google-cloud-language = "^2.15.1"
 
 [tool.poetry.group.ml.dependencies]
 torch = "^2.5.1"
-accelerate = "^0.33.0"
 evaluate = "^0.4.2"
 einops = "^0.8.0"
 hf-transfer = "^0.1.8"
