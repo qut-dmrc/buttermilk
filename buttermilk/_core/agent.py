@@ -47,7 +47,7 @@ class Agent(BaseModel):
     name: str
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
-    save: SaveInfo | None = Field(None)  # Where to save the results
+    save: SaveInfo | None = Field(default=None)  # Where to save the results
     parameters: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
         description="Combinations of variables to pass to process job",
@@ -116,7 +116,8 @@ class Agent(BaseModel):
     async def run(self, *, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
-            job = await self.process_job(job=job, **kwargs)
+            job.parameters.update(**kwargs)
+            job = await self.process_job(job=job)
         except Exception as e:
             job.error = extract_error_info(e=e)
             if job.record:

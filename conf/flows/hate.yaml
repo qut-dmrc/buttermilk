@@ -5,6 +5,16 @@ hate:
   _target_: buttermilk.runner.flow.Flow
   source: hate development
   steps:
+    - name: describe
+      _target_: buttermilk.agents.describer.Describer
+      num_runs: 1
+      parameters: 
+        template: describe
+        model:
+          - gemini15pro
+      inputs:
+        record: record
+
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1

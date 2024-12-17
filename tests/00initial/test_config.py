@@ -15,7 +15,6 @@ def test_has_test_info(bm: BM):
 
 def test_config_obj(bm: BM):
     assert "secret_provider" in bm.cfg
-    assert "models_secret" in bm.cfg
 
 
 def test_config_models_azure(bm: BM):

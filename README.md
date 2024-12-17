@@ -61,7 +61,6 @@ Authenticate to cloud providers, where all your secrets are stored.
 
 ```shell
 gcloud auth login --update-adc --force
-az login
 gcloud config set project [projectid]
 gcloud auth application-default set-quota-project [project]
 ```

@@ -36,7 +36,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[simple,osb,summarise_osb,hate,trans,describer]", "llm=full",
+         "+flows=[simple,osb,summarise_osb,hate,trans,describer]", "llm=lite",
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

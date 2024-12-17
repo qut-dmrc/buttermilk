@@ -12,7 +12,8 @@ LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
 @pytest.fixture(scope="function")
 def logger_new(bm):
-    logger = bm.setup_logging()
+    bm.setup_logging()
+    logger = bm.logger
     yield logger
 
     logger.info("Tearing test logger_new down.")

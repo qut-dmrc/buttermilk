@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - local
-
+  - llm: lite
 
 bm:
   _target_: buttermilk.BM

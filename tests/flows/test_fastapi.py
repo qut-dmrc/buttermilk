@@ -1,12 +1,13 @@
 import json
 
+from pydantic import BaseModel
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
 
-class TestJob():
+class TestJob(BaseModel):
     input: int
     output: int | None = None
 

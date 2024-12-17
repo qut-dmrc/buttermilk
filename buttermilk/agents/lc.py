@@ -56,7 +56,6 @@ from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
 class LC(Agent):
     name: str = Field(
         ...,
-        init=False,
         description="The name of the flow or step in the process that this agent is responsible for.",
     )
 
@@ -85,14 +84,10 @@ class LC(Agent):
         return self
 
     def load_template_vars(
-        self,
+        self, *, 
         template: str,
         **inputs,
     ):
-        def placeholder(variable_name):
-            """Adds a placeholder for an array of messages to be inserted."""
-            return MessagesPlaceholder(variable_name=variable_name, optional=True)
-
         recursive_paths = TEMPLATE_PATHS + [
             x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
         ]
@@ -150,12 +145,10 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        model: str = '',
-        q: str | None = None,
-        **kwargs,
+        q: str | None = None
     ) -> Job:
 
-        model = model or job.parameters.pop('model')
+        model = job.parameters.pop('model')
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
         

@@ -104,8 +104,7 @@ class Flow(BaseModel):
             task = agent.run(
                 job=job,
                 q=q,
-                additional_data=self._data,
-                **variant,
+                additional_data=self._data
             )
             tasks.append(task)
 

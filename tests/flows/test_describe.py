@@ -1,6 +1,7 @@
 import pytest
 
 from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk.agents.describer import Describer
 from buttermilk.agents.lc import LC
 from buttermilk.llms import MULTIMODAL_MODELS
 from buttermilk.runner.helpers import parse_flow_vars
@@ -9,7 +10,7 @@ from buttermilk.utils.media import download_and_convert
 
 @pytest.fixture
 def describer():
-    agent = LC(name="testdescriber", parameters={"template": "describe"}, inputs={"record": "record"})
+    agent = Describer(name="testdescriber", inputs={"record": "record"})
     return agent
 
 

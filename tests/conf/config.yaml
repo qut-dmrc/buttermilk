@@ -7,7 +7,7 @@ bm:
   _target_: buttermilk.BM
   cfg:
     name: buttermilk
-    job: debugging
+    job: testing
     logger: 
       type: gcp
       project: prosocial-443205

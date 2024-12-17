@@ -5,10 +5,19 @@ trans:
   _target_: buttermilk.runner.flow.Flow
   source: api development
   steps: 
+    - name: describe
+      _target_: buttermilk.agents.describer.Describer
+      num_runs: 1
+      parameters: 
+        template: describe
+        model:
+          - gemini15pro
+      inputs:
+        record: record
+
     - name: judger
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
-      concurrency: 20
       save: ${save}
       parameters: 
         template: judge
@@ -35,7 +44,6 @@ trans:
     - name: synth
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
-      concurrency: 20
       save: ${save}
       parameters:
         template: synthesise
@@ -59,7 +67,6 @@ trans:
     - name: eval 
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
-      concurrency: 20
       save: ${save}
       parameters:
         template: differences

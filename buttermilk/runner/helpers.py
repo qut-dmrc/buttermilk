@@ -265,7 +265,6 @@ def parse_flow_vars(var_map: Mapping,
     *,
     job: Job,
     additional_data: dict = {},
-    **kwargs,
 ) -> dict: 
     
     # Take an input map of variable names to a dot-separated JSON path.

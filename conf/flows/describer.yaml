@@ -1,7 +1,7 @@
 defaults:
   - _self_
 
-describe:
+describer:
   _target_: buttermilk.runner.flow.Flow
   source: api development
   steps: 
@@ -12,7 +12,7 @@ describe:
       parameters: 
         template: describe
         model:
-          - gpt4v
+          - gpt4o
           - gemini15pro
           - sonnet
       inputs:

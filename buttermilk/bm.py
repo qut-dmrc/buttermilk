@@ -141,7 +141,7 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Project] = Field(None, validate_default=True)
+    cfg: Optional[Project] = Field(default=None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
     _gcp_project: str = PrivateAttr(default=None)

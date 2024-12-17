@@ -16,23 +16,16 @@ import pytest
 from omegaconf import OmegaConf
 
 from buttermilk._core.runner_types import Job
+from buttermilk._core.types import SessionInfo
 
 
-def test_agent_info():
-    agent_info = AgentInfo(
+def test_session_info():
+    agent_info = SessionInfo(
         agent="test_agent", agent_version="1.0", parameters={"param1": "value1"}
     )
     assert agent_info.agent == "test_agent"
     assert agent_info.agent_version == "1.0"
-
-
-def test_run_info():
-    run_info = AgentInfo(
-        run_id="test_run", experiment_name="exp1", parameters={"param2": "value2"}
-    )
-    assert run_info.run_id == "test_run"
-    assert run_info.experiment_name == "exp1"
-    assert run_info.parameters == {"param2": "value2"}
+    assert run_info.parameters == {"param1": "value1"}
 
 
 def test_prediction_result():
@@ -151,8 +144,8 @@ def expected_rows():
     return 20
 
 
-def test_load_data(data_cfg, expected_rows):
+async def test_load_data(data_cfg, expected_rows):
     from buttermilk.runner import load_data
 
-    data = load_data(data_cfg)
+    data = await load_data(data_cfg)
     assert data.shape[0] == expected_rows

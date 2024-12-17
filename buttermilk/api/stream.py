@@ -170,7 +170,7 @@ async def flow_stream(
     ):
         if data:
             if return_json:
-                yield data.model_dump_json()
+                yield data.outputs.model_dump_json()
             else:
-                yield data
+                yield data.outputs
             rprint(data.outputs)
