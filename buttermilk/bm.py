@@ -333,8 +333,6 @@ class BM(Singleton, BaseModel):
                 except Exception as e:
                     logger.error(f'Unable to cache connections: {e}, {e.args}')
 
-            connections = {conn["name"]: conn for conn in connections}
-
             _REGISTRY["llms"] = LLMs(connections=connections)
         return _REGISTRY["llms"]
 

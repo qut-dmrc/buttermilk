@@ -10,7 +10,7 @@ except:
     pass
 from langchain_core.language_models.llms import LLM
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, PrivateAttr
 
 if TYPE_CHECKING:
     _ = [HarmBlockThreshold, HarmCategory]
@@ -25,6 +25,18 @@ MODEL_CLASSES = [
     ChatVertexAI,
 ]
 
+class LLMCapabilities(BaseModel):
+    chat: bool = True
+    image: bool = False
+    video: bool = False
+    audio: bool = False
+
+class LLMConfig(BaseModel):
+    model: str = Field(..., description="The full identifier of this particular model (passed to constructor/API)")
+    connection:  str = Field(..., description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)")
+    obj: str = Field(..., description="Name of the model object to instantiate")
+    capabilities: LLMCapabilities = Field(default_factory=LLMCapabilities, description="Capabilities of the model (particularly multi-modal)")
+    configs: dict = Field(default={}, description="Options to pass to the constructor")
 
 class MLPlatformTypes(Enum):
     openai = "openai"
@@ -48,7 +60,7 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # ```
 CHATMODELS = [
     "llama31_405b",
-    "llama31_8b",
+    "llama32_11b",
     "llama32_90b",
     "gpt4o",
     "sonnet",
@@ -56,7 +68,7 @@ CHATMODELS = [
     "gemini15pro",
 ]
 CHEAP_CHAT_MODELS = ["haiku", 
-    "llama31_8b",]
+    "llama32_11b",]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b"]
 
 
@@ -107,8 +119,9 @@ def _Llama(*args, **kwargs):
 
 
 class LLMs(BaseModel):
-    connections: dict
-    models: dict = {}
+    connections: dict[str, LLMConfig] = Field(default=[], description="A dict of dicts each specifying connection information and parameters for an LLM.")
+    
+    models: dict = Field(default={}, description="Holds the instantiated model objects")
 
     class Config:
         use_enum_values = True
@@ -122,21 +135,11 @@ class LLMs(BaseModel):
             return self.models[__name]
 
         model_config = self.connections[__name]
-        model_name = model_config["name"]
-        self.models[model_name] = globals()[model_config["obj"]](
-            **model_config["configs"],
+        self.models[__name] = globals()[model_config.obj](
+            **model_config.configs,
         )
         return self.models[__name]
 
-    def __getitem__(self, __name: str) -> LLM:
+
+    def __getitem__(self, __name: str):
         return self.__getattr__(__name)
-
-
-if __name__ == "__main__":
-    from buttermilk import BM
-
-    bm = BM()
-    llm = LLMs()["haiku"]
-    import pprint
-
-    pprint.pprint(llm.invoke("hi what model are you?"))
