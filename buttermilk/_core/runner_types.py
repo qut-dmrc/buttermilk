@@ -24,6 +24,7 @@ from pydantic import (
 )
 
 from buttermilk import logger
+from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.utils import is_uri, remove_punctuation
 from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
@@ -274,11 +275,21 @@ class RecordInfo(BaseModel):
             return path.as_posix()
         return str(path)
 
+    def update_from(self, result: dict, fields: list):
+        if not fields or fields == 'record':
+            fields = list(result.keys())
+
+        update_data = {f: result[f] for f in fields if f in self.model_fields and f in result}
+
+        self.__dict__.update(**update_data)
+
+
     def as_langchain_message(
         self,
+        model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
     ) -> BaseMessage | None:
-        components = self.as_openai_message(role=role)
+        components = self.as_openai_message(role=role, model_capabilities=model_capabilities)
         if components and (components := components["content"]):
             if role in {"user", "human"}:
                 return HumanMessage(content=components)
@@ -287,13 +298,20 @@ class RecordInfo(BaseModel):
 
     def as_openai_message(
         self,
+        model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
     ) -> dict | None:
         # Prepare input for model consumption
-        components = [obj.as_content_part() for obj in self.media]
+        components = []
+        for obj in self.media:
+            # attach media objects if the model supports them
+            if ((obj.mime.startswith('image') and model_capabilities.image) or 
+            (obj.mime.startswith('video') and model_capabilities.video) or
+            (obj.mime.startswith('audio') and model_capabilities.audio)):
+                components.append(obj.as_content_part())
 
-        if not self.media and not self.text:
-            logger.warning("No text or media provided for {self.record_id}")
+        if not components and not self.text:
+            logger.warning("No text or model compatible media provided for {self.record_id}")
             return None
         text = self.text or 'see attached media'
         components.append({"type": "text", "text": text})

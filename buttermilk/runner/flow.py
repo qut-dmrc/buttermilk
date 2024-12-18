@@ -123,6 +123,8 @@ class Flow(BaseModel):
                     )
                 else:
                     try:
+                        if update_record := agent.outputs.pop('record', {}):
+                            result.record.update_from(result.output, fields=update_record)
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,
@@ -144,7 +146,7 @@ class Flow(BaseModel):
         elif output_map:
             output = parse_flow_vars(output_map, job=result, additional_data=self._data)
             for k,v in output.items():
-                if isinstance(v, Sequence):
+                if isinstance(v, Sequence) and not isinstance(v, str):
                     self._data[step_name][k] = self._data[step_name].get(k, []) 
                     self._data[step_name][k].extend(v)
                 else:

@@ -41,7 +41,7 @@ from buttermilk import BM, TEMPLATE_PATHS, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.exceptions import RateLimit
-from buttermilk.llms import LLMs
+from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages
 from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
@@ -210,10 +210,11 @@ class LC(Agent):
         model: str,
     ) -> dict[str, str]:
         input_vars = {}
+        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
         # Fill placeholders
         for k, v in placeholders.items():
             if isinstance(v, RecordInfo):
-                if rendered := v.as_langchain_message(role="user"):
+                if rendered := v.as_langchain_message(role="user", model_capabilities=model_capabilities):
                     input_vars[k] = [rendered]
             elif v and v[0]:
                 input_vars[k] = v

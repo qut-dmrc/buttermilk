@@ -10,6 +10,8 @@ simple:
           - gemini15pro
       inputs:
         record: record
+      outputs:
+        record: record
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1
