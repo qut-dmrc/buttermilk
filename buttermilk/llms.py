@@ -80,23 +80,21 @@ def LangChainAnthropicVertex(
 
 
 def VertexMAAS(
+    model_name: str, *,
     project: str,
     location: str,
     staging_bucket: str,
-    model_name: str,
-    *args,
     **kwargs,
 ):
-    _ = vertexai.init(
-        project=project,
-        location=location,
-        staging_bucket=staging_bucket,
-    )
+    # _ = vertexai.init(
+    #     project=project,
+    #     location=location,
+    #     staging_bucket=staging_bucket,
+    # )
     model = ChatVertexAI(
         model_name=model_name,
-        api_endpoint="us-east5-aiplatform.googleapis.com",
-        location="us-east5",
-        *args,
+        project=project,
+        location=location,
         **kwargs,
     )
     return model
