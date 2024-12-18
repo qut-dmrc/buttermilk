@@ -5,7 +5,7 @@ trans:
   _target_: buttermilk.runner.flow.Flow
   source: api development
   steps: 
-    - name: describe
+    - name: describer
       _target_: buttermilk.agents.describer.Describer
       num_runs: 1
       parameters: 

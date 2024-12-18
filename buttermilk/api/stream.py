@@ -3,6 +3,7 @@ import json
 from collections.abc import AsyncGenerator, Sequence
 from urllib.parse import parse_qs
 
+from fastapi import HTTPException
 import shortuuid
 from pydantic import (
     AliasChoices,
@@ -169,6 +170,8 @@ async def flow_stream(
         q=flow_request.q,
     ):
         if data:
+            if data.error:
+                raise HTTPException(status_code=500, detail=str(data.error))
             if return_json:
                 yield data.outputs.model_dump_json()
             else:

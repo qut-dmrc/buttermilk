@@ -200,22 +200,6 @@ class BM(Singleton, BaseModel):
                     collection=self.cfg.name,
                     job=self.cfg.job,
                 )
-                
-    def get_secret(
-        self,
-        secret_name: str = None,
-        secret_class: str = None,
-        cfg_key: str = None,
-        version="latest",
-    ):
-        contents = self.secret_manager.get_secret(
-            secret_name=secret_name,
-            secret_class=secret_class,
-            cfg_key=cfg_key,
-            version=version,
-        )
-
-        return contents
 
     @property
     def logger(self) -> logging.Logger:
@@ -340,7 +324,14 @@ class BM(Singleton, BaseModel):
                 contents = Path(CONFIG_CACHE_PATH).read_text(encoding="utf-8")
                 connections = json.loads(contents)
             except Exception:
-                connections = self.get_secret(cfg_key=_MODELS_CFG_KEY)
+                connections = self.secret_manager.get_secret(
+                    cfg_key=_MODELS_CFG_KEY,
+                )
+                try:
+                    Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True,exist_ok=True)
+                    Path(CONFIG_CACHE_PATH).write_text(json.dumps(connections), encoding="utf-8")
+                except Exception as e:
+                    logger.error(f'Unable to cache connections: {e}, {e.args}')
 
             connections = {conn["name"]: conn for conn in connections}
 
@@ -360,7 +351,7 @@ class BM(Singleton, BaseModel):
         overwrite=False,
         do_not_return_results=False,
         save_to_gcs=False,
-        df=True,
+        return_df=True,
     ) -> pd.DataFrame:
         t0 = datetime.datetime.now()
 
@@ -412,8 +403,8 @@ class BM(Singleton, BaseModel):
 
         # job.result() blocks until the query has finished.
         result = job.result()
-        if df:
-            if result.total_rows > 0:
+        if return_df:
+            if result.total_rows and result.total_rows > 0:
                 results_df = result.to_dataframe()
                 return results_df
             return pd.DataFrame()

@@ -34,7 +34,7 @@ class SecretsManager(CloudProviderCfg):
         secret_class: str = None,
         cfg_key: str = None,        # Get the secret name from the config passed in earlier
         version: str = "latest",
-    ) -> str | None:
+    ) -> str:
         """Retrieve latest version of a secret by ID"""
         secret_name =  secret_name or secret_class or getattr(self, cfg_key)
         
@@ -46,8 +46,7 @@ class SecretsManager(CloudProviderCfg):
             response = _client.access_secret_version(request={"name": name})
             response = response.payload.data.decode("UTF-8")
         except Exception as e:
-            logger.error(f"Unable to access secret {name}: {e}")
-            return None
+            raise IOError(f"Unable to access secret {name}: {e}, {e.args}")
 
         try:
             response = json.loads(response)

@@ -2,19 +2,14 @@ simple:
   _target_: buttermilk.runner.flow.Flow
   source: hate development
   steps:
-    # - name: describer
-    #   _target_: buttermilk.agents.describer.Describer
-    #   parameters: 
-    #     template: describe
-    #     model:
-    #       - gemini15pro
-    #   inputs:
-    #     record: record
-    #   outputs:
-    #     name: title
-    #     description: description
-    #     caption: caption
-    #     transcript: transcript
+    - name: describer
+      _target_: buttermilk.agents.describer.Describer
+      parameters: 
+        template: describe
+        model:
+          - gemini15pro
+      inputs:
+        record: record
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1
