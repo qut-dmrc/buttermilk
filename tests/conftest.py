@@ -5,6 +5,7 @@ from pytest import MarkDecorator
 from buttermilk.llms import LLMs
 from buttermilk.utils.utils import read_file
 from buttermilk import BM
+from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS
 
 @pytest.fixture(scope="session")
 def bm() -> BM:
@@ -24,6 +25,15 @@ def logger(BM):
 @pytest.fixture(scope="session")
 def llms(bm: BM) -> LLMs:
     return bm.llms
+
+
+@pytest.fixture(params=MULTIMODAL_MODELS)
+def multimodal_llm(request, bm: BM, model):
+    return bm.llms[request.param]
+
+@pytest.fixture(params=CHATMODELS)
+def llm(request, bm: BM, model):
+    return bm.llms[request.param]
 
 @pytest.fixture
 def anyio_backend():

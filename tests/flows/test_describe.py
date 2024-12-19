@@ -9,7 +9,7 @@ from buttermilk.runner.helpers import parse_flow_vars
 from buttermilk.utils.media import download_and_convert
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture
 def describer(llm):
     agent = Describer(name="testdescriber", 
                       parameters={"template": "describe", "model": llm},
