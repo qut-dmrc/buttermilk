@@ -7,10 +7,6 @@ from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 
 
-@pytest.fixture(scope="session")
-def llms(bm: BM):
-    return bm.llms
-
 
 @pytest.mark.parametrize("model", CHATMODELS)
 def test_all_llm(llms, model):

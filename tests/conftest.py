@@ -2,11 +2,12 @@ import hydra
 import pytest
 from pytest import MarkDecorator
 
+from buttermilk.llms import LLMs
 from buttermilk.utils.utils import read_file
-
+from buttermilk import BM
 
 @pytest.fixture(scope="session")
-def bm() -> "BM":
+def bm() -> BM:
     from hydra import compose, initialize
 
     with initialize(version_base=None, config_path="conf"):
@@ -19,6 +20,10 @@ def bm() -> "BM":
 @pytest.fixture(scope="session")
 def logger(BM):
     return BM.logger
+
+@pytest.fixture(scope="session")
+def llms(bm: BM) -> LLMs:
+    return bm.llms
 
 @pytest.fixture
 def anyio_backend():
