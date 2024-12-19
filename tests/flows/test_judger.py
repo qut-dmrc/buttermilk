@@ -1,27 +1,30 @@
 import pytest
 
+from buttermilk._core.runner_types import RecordInfo
+from buttermilk.agents.lc import LC
+from buttermilk.bm import BM
 from buttermilk.llms import CHEAP_CHAT_MODELS
+from buttermilk.utils.media import download_and_convert
 
 
-@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-def test_judger_ordinary(bm, fight_no_more_forever, model):
-    judger = Judger(
-        standards_path="criteria_ordinary.jinja2",
-        model=model,
-        connections=bm._llm_connections,
-    )
-    output = judger(content=fight_no_more_forever["text"])
-    assert output
-    assert not output[COL_PREDICTION]
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def judger(request):
+    agent = LC(name="testjudger", 
+                      parameters={"template": "judge", "model": request.param, "criteria": "criteria_ordinary", "formatting": "json_rules"},
+                      inputs={"record": "record"},
+                      outputs={"record": "record"})
+    return agent
 
+@pytest.fixture
+def single_step_flow(judger):
+    from buttermilk.runner.flow import Flow
+    return Flow(source="testing", steps=[judger])
 
-@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-def test_judger_vaw(bm, fight_no_more_forever, model):
-    judger = Judger(
-        standards_path="criteria_vaw.jinja2",
-        model=model,
-        connections=bm._llm_connections,
-    )
-    output = judger(content=fight_no_more_forever)
-    assert output
-    assert not output[COL_PREDICTION]
+@pytest.mark.anyio
+async def test_run_flow_judge(single_step_flow,  fight_no_more_forever, bm: BM):
+    async for result in single_step_flow.run_flows(flow_id="testflow", source='testing', record=fight_no_more_forever, run_info=bm._run_metadata):
+        assert result
+        assert isinstance(result.record, RecordInfo)
+        assert result.outputs.prediction is False
+        assert len(result.outputs.reasons) > 0
+        assert "joseph" in " ".join(result.outputs.reasons).lower()
