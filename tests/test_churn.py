@@ -7,7 +7,7 @@
 # multiple time periods. We sample from prior answers to inform
 # current predictions, adjusting for randomness and specificity.
 ##
-# The basic unit is a Prediction, which has identifiers about the
+# The basic unit is a Job, which has identifiers about the
 # question, source data, agent; an answer; and a unique identifier.
 
 from datetime import UTC, datetime
@@ -17,6 +17,8 @@ from omegaconf import OmegaConf
 
 from buttermilk._core.runner_types import Job
 from buttermilk._core.types import SessionInfo
+from buttermilk.agents.describer import Describer
+from buttermilk.agents.lc import LC
 
 
 def test_session_info():
@@ -84,7 +86,7 @@ def test_prediction_result_optional_fields():
     assert result.confidence is None
 
 
-def test_single_flow(sample_job):
+def test_flow(sample_job):
     prediction = run_flow(sample_job)
     assert isinstance(prediction, Job)
     assert prediction.agent_info.agent == "test_agent"
@@ -101,15 +103,6 @@ class TestSynthesis:
         example = examples[0]
         assert example["record_id"] == "record1"
         assert example["parameters"] == {"param3": "value3"}
-
-
-@pytest.fixture
-def flow():
-    return Judger(
-        model="fake", template_path="judge.jinja2", criteria="criteria_ordinary.jinja2"
-    )
-    # lc = LangChainMulti(models=["haiku"], template_path="judge.jinja2", other_templates={"criteria": "criteria_ordinary.jinja2"})
-    # return lc
 
 
 DATA_CONFIGS = [
