@@ -28,11 +28,11 @@ def llms(bm: BM) -> LLMs:
 
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def multimodal_llm(request, bm: BM, model):
+def multimodal_llm(request, bm: BM):
     return bm.llms[request.param]
 
 @pytest.fixture(params=CHATMODELS)
-def llm(request, bm: BM, model):
+def llm(request, bm: BM):
     return bm.llms[request.param]
 
 @pytest.fixture

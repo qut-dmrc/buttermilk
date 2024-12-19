@@ -294,6 +294,8 @@ def parse_flow_vars(var_map: Mapping,
             return data_dict.get(match_key, match_key)
         
     def descend(map, path):
+        if path is None:
+            return None
         if isinstance(path, str):
             # We have reached the end of the tree, this last path is a plain string
             # Use this final leaf as the locator for the data to insert here
