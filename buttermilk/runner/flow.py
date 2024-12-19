@@ -124,7 +124,7 @@ class Flow(BaseModel):
                 else:
                     try:
                         if update_record := agent.outputs.pop('record', {}):
-                            result.record.update_from(result.output, fields=update_record)
+                            result.record.update_from(result.outputs, fields=update_record)
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,

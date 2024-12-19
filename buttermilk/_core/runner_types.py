@@ -275,13 +275,15 @@ class RecordInfo(BaseModel):
             return path.as_posix()
         return str(path)
 
-    def update_from(self, result: dict, fields: list):
-        if not fields or fields == 'record':
-            fields = list(result.keys())
+    def update_from(self, result: Result, fields: list|str|None = None):
+        update_dict = result.model_dump()
+        if fields and fields != 'record':
+            update_dict = {f: update_dict[f] for f in fields}
+            
+        # exclude null values
+        update_dict = {k:v for k, v in update_dict.items() if v}
 
-        update_data = {f: result[f] for f in fields if f in self.model_fields and f in result}
-
-        self.__dict__.update(**update_data)
+        self.__dict__.update(**update_dict)
 
 
     def as_langchain_message(

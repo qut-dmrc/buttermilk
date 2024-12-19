@@ -29,6 +29,7 @@ async def test_run_flow_describe(flow,  image_bytes, bm: BM):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert "night watch" in str(result.record.description).lower()
+        assert "night watch" in str(result.record.title).lower()
 
 @pytest.mark.anyio
 async def test_painting(bm, describer, image_bytes):
