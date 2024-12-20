@@ -30,30 +30,8 @@ from buttermilk.utils.validators import convert_omegaconf_objects, make_list_val
 
 from .types import SessionInfo
 
-
-class ModResult(BaseModel):
-    category: str | int | None = Field(default=None)
-    prediction: bool | int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("prediction", "prediction", "pred"),
-    )
-    result: float | str | None = Field(default=None)
-    labels: list[str] | None = Field(
-        default=[],
-        validation_alias=AliasChoices("labels", "label"),
-    )
-    confidence: float | str | None = Field(default=None)
-    severity: float | str | None = Field(default=None)
-    reasons: list | None = Field(
-        default=[],
-        validation_alias=AliasChoices("reasoning", "reason", "analysis", "answer"),
-    )
-    scores: dict | list | None = None
-    metadata: dict | None = {}
-
-    _ensure_list = field_validator("labels", "reasons", mode="before")(
-        make_list_validator(),
-    )
+class FlowResult(BaseModel):
+    """ A generic abstract data class for results. """
 
     model_config = ConfigDict(
         extra="allow",
@@ -77,6 +55,30 @@ class ModResult(BaseModel):
         # Remove keys with empty values
         return {k: v for k, v in data.items() if v}
 
+
+class ModResult(FlowResult):
+    category: str | int | None = Field(default=None)
+    prediction: bool | int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("prediction", "prediction", "pred"),
+    )
+    result: float | str | None = Field(default=None)
+    labels: list[str] | None = Field(
+        default=[],
+        validation_alias=AliasChoices("labels", "label"),
+    )
+    confidence: float | str | None = Field(default=None)
+    severity: float | str | None = Field(default=None)
+    reasons: list | None = Field(
+        default=[],
+        validation_alias=AliasChoices("reasoning", "reason", "analysis", "answer"),
+    )
+    scores: dict | list | None = None
+    metadata: dict | None = {}
+
+    _ensure_list = field_validator("labels", "reasons", mode="before")(
+        make_list_validator(),
+    )
 
 class MediaObj(BaseModel):
     mime: str = Field(
