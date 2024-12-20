@@ -54,7 +54,7 @@ import regex as re
 
 from buttermilk import BM, BQ_SCHEMA_DIR, TEMPLATE_PATHS, BASE_DIR
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, RecordInfo, Result
+from buttermilk._core.runner_types import Job, RecordInfo, ModResult
 from buttermilk.exceptions import RateLimit
 from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages
 from buttermilk.llms import LLMs

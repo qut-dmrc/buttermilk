@@ -31,7 +31,7 @@ from buttermilk.utils.validators import convert_omegaconf_objects, make_list_val
 from .types import SessionInfo
 
 
-class Result(BaseModel):
+class ModResult(BaseModel):
     category: str | int | None = Field(default=None)
     prediction: bool | int | None = Field(
         default=None,
@@ -233,7 +233,7 @@ class RecordInfo(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("media", "image", "video", "audio"),
     )
-    ground_truth: Result | None = None
+    ground_truth: ModResult | None = None
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "path", "url"),
@@ -275,7 +275,7 @@ class RecordInfo(BaseModel):
             return path.as_posix()
         return str(path)
 
-    def update_from(self, result: Result, fields: list|str|None = None):
+    def update_from(self, result: ModResult, fields: list|str|None = None):
         update_dict = result.model_dump()
         if fields and fields != 'record':
             update_dict = {f: update_dict[f] for f in fields}
@@ -364,7 +364,7 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    outputs: Result | None = Field(
+    outputs: ModResult | None = Field(
         default=None,
         description="The results of the job",
     )
@@ -400,7 +400,7 @@ class Job(BaseModel):
     @field_validator("outputs", mode="before")
     def convert_result(v):
         if v and isinstance(v, Mapping):
-            return Result(**v)
+            return ModResult(**v)
         return v
 
     @model_validator(mode="after")

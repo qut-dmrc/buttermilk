@@ -39,7 +39,7 @@ from tenacity import (
 
 from buttermilk import BM, TEMPLATE_PATHS, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, RecordInfo, Result
+from buttermilk._core.runner_types import Job, RecordInfo, ModResult
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -179,7 +179,7 @@ class LC(Agent):
         error = response.pop("error", None)
         if error:
             job.error[self.name] = error
-        job.outputs = Result(**response)
+        job.outputs = ModResult(**response)
 
         return job
 
