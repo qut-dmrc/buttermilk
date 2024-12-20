@@ -2,6 +2,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from anthropic import AnthropicVertex, AsyncAnthropicVertex
+from google.cloud import aiplatform
 
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 try:
@@ -60,7 +61,7 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # ```
 CHATMODELS = [
     "llama31_405b",
-    "llama32_11b",
+    "llama31_8b",
     "llama32_90b",
     "gpt4o",
     "sonnet",
@@ -68,7 +69,7 @@ CHATMODELS = [
     "gemini15pro",
 ]
 CHEAP_CHAT_MODELS = ["haiku", 
-    "llama32_11b",]
+    "llama31_8b",]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b"]
 
 
@@ -98,11 +99,10 @@ def VertexMAAS(
     staging_bucket: str,
     **kwargs,
 ):
-    # _ = vertexai.init(
-    #     project=project,
-    #     location=location,
-    #     staging_bucket=staging_bucket,
-    # )
+    _ = aiplatform.init(project=project,
+        location=location,
+        staging_bucket=staging_bucket,
+    )
     model = ChatVertexAI(
         model_name=model_name,
         project=project,
@@ -110,6 +110,13 @@ def VertexMAAS(
         **kwargs,
     )
     return model
+    MODEL_LOCATION = "us-central1"
+    MAAS_ENDPOINT = f"{MODEL_LOCATION}-aiplatform.googleapis.com"
+
+    client = openai.OpenAI(
+        base_url=f"https://{MAAS_ENDPOINT}/v1beta1/projects/{PROJECT_ID}/locations/{LOCATION}/endpoints/openapi",
+        api_key=credentials.token,
+    )
 
 
 def _Llama(*args, **kwargs):
