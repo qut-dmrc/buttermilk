@@ -7,7 +7,7 @@ import pandas as pd
 import shortuuid
 from cloudpathlib import CloudPath
 from datasets import load_dataset
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk._core.runner_types import FlowResult, RecordInfo
 from buttermilk.bm import BM, logger
@@ -48,31 +48,56 @@ class DataPipe(BaseModel):
 
 class CloudStorageDatasetPipe(DataPipe):
     """Loads datasets from Cloud Storage, converting to Hugging Face Datasets."""
-
-    uri: str  # URI of the dataset on Cloud Storage
     format: str = (
-        "csv"  # Format of the data (e.g., "csv", "json", "parquet"). Defaults to CSV.
+        "csv"  # Format of the data (e.g., "csv", "jsonl", "parquet"). Defaults to CSV.
     )
-    read_kwargs: Dict[str, Any] = {}  # Keyword arguments for Pandas read functions
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    read_kwargs: Dict[str, Any] = Field(default={}, description="Keyword arguments for Pandas read functions")
+    columns: Dict[str, str] = Field(default={}, description="Rename dict for column names")
+    
+    @model_validator(mode="after")
+    def load_data(self) -> "CloudStorageDatasetPipe":
         # Load data from Cloud Storage using pandas.
+
+        uri = self.get_uri()
+
         try:
             if self.format == "csv":
-                _data = pd.read_csv(self.uri, **self.read_kwargs)
-            elif self.format == "json":
-                _data = pd.read_json(self.uri, **self.read_kwargs)
+                _data = pd.read_csv(uri, **self.read_kwargs)
+            elif self.format == "jsonl":
+                read_kwargs = {"orient": "records", "lines": True}
+                read_kwargs.update(**self.read_kwargs)
+                _data = pd.read_json(uri, **read_kwargs)
             elif self.format == "parquet":
-                _data = pd.read_parquet(self.uri, **self.read_kwargs)
+                _data = pd.read_parquet(uri, **self.read_kwargs)
             else:
                 raise ValueError(f"Unsupported format: {self.format}")
+            
+            _data = self.transform(_data)
+
+            # shuffle
+            _data = _data.sample(frac=1)
+
+            # rename columns
+            _data.rename(columns=self.columns, inplace=True)
+
+            # add source name
+            _data.loc[:, "source"] = self.source
 
             self._dataset = Dataset.from_pandas(_data, **self.dataset_kwargs)
+
+            return self
 
         except Exception as e:
             raise RuntimeError(f"Error loading dataset: {e}") from e
 
+    def get_uri(self) -> str:
+        """Override as required to specify the correct URI."""
+        return self.uri
+    
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Override this method to add any data processing steps required 
+        to generate a RecordInfo object from each dataframe row."""
+        return data
 
 class HuggingFaceDatasetPipe(DataPipe):
     """Loads datasets directly from the Hugging Face Hub."""
