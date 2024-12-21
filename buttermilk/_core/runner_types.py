@@ -235,7 +235,7 @@ class RecordInfo(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("media", "image", "video", "audio"),
     )
-    ground_truth: ModResult | None = None
+    ground_truth: FlowResult | None = None
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "path", "url"),
