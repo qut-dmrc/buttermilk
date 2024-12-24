@@ -51,6 +51,8 @@ anyio = "^4.7.0"
 langchain-openai = "^0.2.14"
 langchain-anthropic = "^0.3.1"
 slack-bolt = "^1.21.2"
+google-cloud-bigquery-storage = "^2.27.0"
+google-generativeai = "^0.7.2"
 
 
 [tool.poetry.group.ml]
@@ -65,7 +67,6 @@ loky = "^3.4.1"
 transformers = "^4.44.2"
 peft = "^0.12.0"
 azure-ai-ml = "1.18.0"
-google-generativeai = "^0.7.2"
 
 [tool.poetry.group.dev]
 optional = true
