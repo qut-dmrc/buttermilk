@@ -16,7 +16,8 @@ from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import download_and_convert
-from buttermilk.utils.validators import make_list_validator, make_uri_validator
+from buttermilk.utils.validators import (make_list_validator,
+                                         make_uri_validator, sanitize_html)
 
 bm = None
 
@@ -105,10 +106,11 @@ class FlowRequest(BaseModel):
 
         return values
 
-    @field_validator("content", "image", "video", mode="before")
+    @field_validator("q", "uri", "text", "image", "video", mode="before")
     def sanitize_strings(cls, v):
         if v:
-            return v.strip()
+            v = v.strip()
+            v = sanitize_html(v) 
         return v
 
     @model_validator(mode="after")

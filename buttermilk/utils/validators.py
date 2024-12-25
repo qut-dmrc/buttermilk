@@ -4,9 +4,11 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import httpx
-from omegaconf import DictConfig, ListConfig, OmegaConf
 import pydantic
+from bleach import clean
 from cloudpathlib import CloudPath
+from markdown_it import MarkdownIt
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 T = TypeVar("T")
 
@@ -60,3 +62,14 @@ def make_path_validator() -> Callable[[Any], str]:
         return path
 
     return validator
+
+def sanitize_html(value: str) -> str:
+    """Sanitizes HTML input."""
+    cleaned = clean(value, tags=[], attributes={}, strip=True) # Allow no tags/attributes
+    return cleaned
+
+def sanitize_markdown(value: str) -> str:
+    """Sanitizes Markdown, converting it to safe HTML."""
+    md = MarkdownIt('commonmark', {'breaks':True,'html':True})
+    html_output = md.render(value)
+    return html_output
