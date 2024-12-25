@@ -2,10 +2,7 @@ import base64
 import datetime
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import (
-    Any,
-    Literal,
-)
+from typing import Any, Literal
 
 import numpy as np
 import pydantic
@@ -13,20 +10,14 @@ import shortuuid
 from cloudpathlib import AnyPath, CloudPath
 from langchain_core.messages import BaseMessage, HumanMessage
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    computed_field,
-    field_validator,
-    model_validator,
-)
+from pydantic import (AliasChoices, BaseModel, ConfigDict, Field,
+                      computed_field, field_validator, model_validator)
 
 from buttermilk import logger
 from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.utils import is_uri, remove_punctuation
-from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
+from buttermilk.utils.validators import (convert_omegaconf_objects,
+                                         make_list_validator)
 
 from .types import SessionInfo
 
@@ -292,7 +283,7 @@ class RecordInfo(BaseModel):
         role: Literal["user", "human", "system"] = "user",
     ) -> BaseMessage | None:
         components = self.as_openai_message(role=role, model_capabilities=model_capabilities)
-        if components and (components := components["content"]):
+        if components and (components := components.get("content")):
             if role in {"user", "human"}:
                 return HumanMessage(content=components)
             return BaseMessage(content=components, type=role)

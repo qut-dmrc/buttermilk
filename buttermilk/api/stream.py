@@ -3,32 +3,19 @@ import json
 from collections.abc import AsyncGenerator, Sequence
 from urllib.parse import parse_qs
 
-from fastapi import HTTPException
 import shortuuid
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
+from fastapi import HTTPException
+from pydantic import (AliasChoices, AnyUrl, BaseModel, ConfigDict, Field,
+                      PrivateAttr, field_validator, model_validator)
 from rich import print as rprint
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import (
-    Job,
-    MediaObj,
-    RecordInfo,
-)
+from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
-from buttermilk.utils.media import (
-    download_and_convert,
-)
+from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.validators import make_list_validator, make_uri_validator
 
 bm = None
@@ -45,7 +32,7 @@ class FlowRequest(BaseModel):
         validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
-    content: str | None = Field(
+    text: str | None = Field(
         default=None,
         validation_alias=AliasChoices("content", "text", "body"),
     )
@@ -131,6 +118,14 @@ class FlowRequest(BaseModel):
                 if v not in CHATMODELS:
                     raise ValueError(f"Valid model must be provided. {v} is unknown.")
 
+        if isinstance(self.text, AnyUrl):
+            if self.uri:
+                raise ValueError("You should only pass one URL in at a time.")
+            else:
+                # Move the URL to the correct field
+                self.uri = self.text
+                self.text = None
+
         return self
 
 
@@ -146,7 +141,7 @@ async def flow_stream(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
     objects = await asyncio.gather(
-        download_and_convert(flow_request.content),
+        download_and_convert(flow_request.text),
         download_and_convert(flow_request.uri),
         download_and_convert(flow_request.image),
         download_and_convert(flow_request.video),

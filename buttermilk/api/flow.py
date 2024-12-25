@@ -2,9 +2,7 @@ import asyncio
 import json
 import threading
 from collections.abc import AsyncGenerator, Mapping, Sequence
-from typing import (
-    Literal,
-)
+from typing import Literal
 
 import hydra
 import uvicorn
@@ -14,15 +12,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import pubsub
 from promptflow.tracing import start_trace
-from pydantic import (
-    BaseModel,
-)
+from pydantic import BaseModel
 
 from buttermilk import BM
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import (
-    Job,
-)
+from buttermilk._core.runner_types import Job
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.flow import Flow
 
@@ -148,8 +142,8 @@ async def run_route_html(
         raise HTTPException(status_code=403, detail="Flow not valid")
 
     async def result_generator() -> AsyncGenerator[str, None]:
-        logger.info(
-            f"Received request for flow {flow} and flow_request {flow_request}",
+        logger.debug(
+            f"Received request for HTML flow {flow} and flow_request {flow_request}",
         )
         try:
             async for data in flow_stream(
