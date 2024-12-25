@@ -304,7 +304,7 @@ class RecordInfo(BaseModel):
                 components.append(obj.as_content_part())
 
         if not components and not self.text:
-            logger.warning("No text or model compatible media provided for {self.record_id}")
+            logger.warning(f"No text or model compatible media provided for {self.record_id}")
             return None
         text = self.text or 'see attached media'
         components.append({"type": "text", "text": text})

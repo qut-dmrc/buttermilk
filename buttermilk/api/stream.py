@@ -35,15 +35,14 @@ class FlowRequest(BaseModel):
     record_id: str | None = None
     text: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("content", "text", "body"),
+        validation_alias=AliasChoices("text", "body"),
     )
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
+    content: bytes | None = Field(default=None, validation_alias=AliasChoices("content", "video","image"))
     source: str | Sequence[str] = []
-    video: str | bytes | None = None
-    image: str | bytes | None = None
 
     model_config = ConfigDict(
         arbitrary_types_allowed=False,
@@ -95,18 +94,16 @@ class FlowRequest(BaseModel):
                 values.get("content"),
                 values.get("uri"),
                 values.get("text"),
-                values.get("image"),
-                values.get("video"),
                 values.get("q"),
             ],
         ):
             raise ValueError(
-                "At least one of query, content, text, uri, video or image must be provided.",
+                "At least one of query, content, text, or uri must be provided.",
             )
 
         return values
 
-    @field_validator("q", "uri", "text", "image", "video", mode="before")
+    @field_validator("q", "uri", "text", mode="before")
     def sanitize_strings(cls, v):
         if v:
             v = v.strip()
@@ -142,11 +139,10 @@ async def flow_stream(
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
+    
     objects = await asyncio.gather(
-        download_and_convert(flow_request.text),
+        download_and_convert(flow_request.content),
         download_and_convert(flow_request.uri),
-        download_and_convert(flow_request.image),
-        download_and_convert(flow_request.video),
     )
 
     media = [x for x in objects if x and isinstance(x, MediaObj)]
