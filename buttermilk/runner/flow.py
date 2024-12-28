@@ -121,7 +121,7 @@ class Flow(BaseModel):
                     )
                 else:
                     try:
-                        if result.outputs and (update_record := agent.outputs.pop('record', {})):
+                        if (update_record := agent.outputs.pop('record', {})):
                             result.record = result.record or RecordInfo()
                             result.record.update_from(result.outputs, fields=update_record)
 
