@@ -7,7 +7,6 @@ from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 
 
-
 @pytest.mark.parametrize("model", CHATMODELS)
 def test_all_llm(llms, model):
     llm = llms[model]
@@ -25,7 +24,7 @@ def test_multimodal_input_b64_image(llms, model, image_bytes):
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
         media=[MediaObj(mime="image/jpg", data=image_bytes)],
-    ).as_langchain_message(role="human")
+    ).as_langchain_message(role="human", model_capabilities=llms[model].capabilities)
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
@@ -39,7 +38,7 @@ def test_multimodal_input_video_uri(llms, model, video_url):
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
         media=[MediaObj(mime="video/mp4", uri=video_url)],
-    ).as_langchain_message(role="human")
+    ).as_langchain_message(role="human", model_capabilities=llms[model].capabilities)
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
@@ -53,7 +52,7 @@ def test_multimodal_input_b64_video(llms, model, video_bytes):
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
         media=[MediaObj(mime="video/mp4", data=video_bytes)],
-    ).as_langchain_message(role="human")
+    ).as_langchain_message(role="human", model_capabilities=llms[model].capabilities)
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})

@@ -1,8 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Mapping, Sequence
-from typing import (
-    Any,
-)
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -123,8 +121,10 @@ class Flow(BaseModel):
                     )
                 else:
                     try:
-                        if update_record := agent.outputs.pop('record', {}):
+                        if result.outputs and (update_record := agent.outputs.pop('record', {})):
+                            result.record = result.record or RecordInfo()
                             result.record.update_from(result.outputs, fields=update_record)
+
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,

@@ -155,6 +155,7 @@ async def flow_stream(
             )
         else:
             record = RecordInfo(text=content, media=media)
+
     async for data in flow.run_flows(
         record=record,
         run_info=bm._run_metadata,
@@ -165,8 +166,11 @@ async def flow_stream(
         if data:
             if data.error:
                 raise HTTPException(status_code=500, detail=str(data.error))
-            if return_json:
-                yield data.outputs.model_dump_json()
+            if data.outputs:
+                if return_json:
+                    yield data.outputs.model_dump_json()
+                else:
+                    yield data.outputs
+                rprint(data.outputs)
             else:
-                yield data.outputs
-            rprint(data.outputs)
+                logger.info(f"No data to return from {flow} (completed successfully).")
