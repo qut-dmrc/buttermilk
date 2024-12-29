@@ -199,9 +199,9 @@ class MediaObj(BaseModel):
 
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    name: str | None = Field(
+    title: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("name", "title", "heading"),
+        validation_alias=AliasChoices("title", "name", "heading"),
     )
     description: str | None = Field(
         default=None,
@@ -248,8 +248,8 @@ class RecordInfo(BaseModel):
             )
 
         if not self.record_id:
-            if self.name:
-                self.record_id = remove_punctuation(self.name)
+            if self.title:
+                self.record_id = remove_punctuation(self.title)
             elif self.uri:
                 self.record_id = AnyPath(self.uri).stem
 

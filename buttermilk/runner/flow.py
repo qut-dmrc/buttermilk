@@ -107,14 +107,8 @@ class Flow(BaseModel):
             tasks.append(task)
 
         for task in asyncio.as_completed(tasks):
-            result = None
             try:
-                result = await task
-            except Exception as e:
-                msg = f"Unknown error in run_flows: {e}, {e.args=}"
-                logger.exception(msg)
-                # raise
-            if result:
+                result: Job = await task
                 if result.error:
                     logger.error(
                         f"Agent {agent.name} failed with error: {result.error}",
@@ -136,6 +130,10 @@ class Flow(BaseModel):
                         )
                         logger.error(error_msg)
                 yield result
+            except Exception as e:
+                msg = f"Unknown error in run_flows: {e}, {e.args=}"
+                logger.exception(msg)
+                # raise
             await asyncio.sleep(0)
 
     def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):

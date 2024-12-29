@@ -28,8 +28,8 @@ async def test_run_flow_describe(flow,  image_bytes, bm: BM):
     async for result in flow.run_flows(flow_id="testflow", source='testing', record=record, run_info=bm._run_metadata):
         assert result
         assert isinstance(result.record, RecordInfo)
-        assert "night watch" in str(result.record.description).lower()
-        assert "night watch" in str(result.record.name).lower()
+        assert "painting" in str(result.record.description).lower()
+        assert "night watch" in str(result.record.title).lower()
 
 @pytest.mark.anyio
 async def test_run_flow_describe_no_media(flow, lady_macbeth: RecordInfo, bm: BM):

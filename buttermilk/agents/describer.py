@@ -23,7 +23,7 @@ class Describer(LC):
 
         # Skip processing if we already have information about the 
         # media object (job.record).
-        if job.record.name and (job.record.description or job.record.caption or job.record.transcript):
+        if job.record.title and (job.record.description or job.record.caption or job.record.transcript):
             logger.debug(
                 f"Not invoking agent {self.name} for job {job.job_id}, media captions already exist.",
             )
