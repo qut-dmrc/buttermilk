@@ -1,5 +1,5 @@
 services:
-  dev:
+  prosocialdev:
     image: us-central1-docker.pkg.dev/prosocial-443205/reg/prosocialdev:latest
     command: /bin/sh -c "while sleep 1000; do :; done"
     shm_size: 2g

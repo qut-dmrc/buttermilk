@@ -1,12 +1,12 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
-	"name": "dmrcdev",
+	"name": "prosocialdev",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	// "image": "us-central1-docker.pkg.dev/prosocial-443205/reg/prosocialbase:latest",
     "dockerComposeFile": "docker-compose.yml",
-    "service": "ns",
-    "workspaceFolder": "/workspaces/dev",
+    "service": "prosocialdev",
+    "workspaceFolder": "/src/buttermilk",
     "shutdownAction": "stopCompose",
     "remoteUser": "debian",
     "containerEnv": {
