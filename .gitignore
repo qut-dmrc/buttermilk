@@ -25,6 +25,10 @@ authorized_keys
 *.egg-info
 .eggs
 core
+
+# exceptions
+!.devcontainer
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
