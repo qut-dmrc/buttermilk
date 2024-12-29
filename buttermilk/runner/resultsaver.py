@@ -133,7 +133,7 @@ class ResultSaver(ResultsCollector):
                 self.to_save = []  # Clear the batch after saving
         except Exception as e:
             # emergency save
-            uri = save.save(self.to_save)
+            uri = self.bm.save(self.to_save)
             raise e
 
 

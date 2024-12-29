@@ -13,7 +13,7 @@ def gcs() -> Client:
 # Presumably this fails where default credentials have not yet been saved.
 def test_save_binary_no_bm_init(gcs):
     try:
-        with open("datatools/tests/data/sample_image.png", "rb") as img:
+        with open("tests/data/Rijksmuseum_(25621972346).jpg", "rb") as img:
             uri = upload_binary(img)
             uploaded_bytes = img.seek(0).to_bytes()
             assert uri is not None

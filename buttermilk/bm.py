@@ -183,7 +183,7 @@ class BM(Singleton, BaseModel):
             rprint(self._run_metadata)
 
             try:
-                save.save(
+                self.save(
                     data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
                     basename="config",
                     extension="json",
@@ -203,6 +203,13 @@ class BM(Singleton, BaseModel):
     @property
     def save_dir(self) -> str:
         return self._run_metadata.save_dir
+    
+    def save(self, data, save_dir=None, **kwargs):
+        """Failsafe save method."""
+        save_dir = save_dir or self.save_dir
+        result =  save.save(data=data, save_dir=save_dir, **kwargs)
+        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
+        return result
     
     @property
     def logger(self) -> logging.Logger:
@@ -313,12 +320,6 @@ class BM(Singleton, BaseModel):
         if _REGISTRY.get("secret_manager") is None:
             _REGISTRY["secret_manager"] = SecretsManager(**self.cfg.secret_provider.model_dump())
         return _REGISTRY["secret_manager"]
-
-    def save(self, data, basename="", extension=".jsonl", **kwargs):
-        """Failsafe save method."""
-        result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
-        return result
 
     @property
     def llms(self) -> LLMs:

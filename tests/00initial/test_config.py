@@ -44,7 +44,7 @@ def test_upload_text(bm):
     uploaded.unlink(missing_ok=False)
 
 
-def test_singleton():
+def test_singleton(bm):
     obj1 = BM()
     obj2 = BM()
 

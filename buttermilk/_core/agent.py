@@ -19,8 +19,8 @@ from pydantic import (
 
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.runner_types import Job
+from buttermilk.bm import BM
 from buttermilk.utils.errors import extract_error_info
-from buttermilk.utils.save import save
 from buttermilk.utils.utils import expand_dict, find_in_nested_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
@@ -129,14 +129,14 @@ class Agent(BaseModel):
                 rows = [job.model_dump(mode="json")]
                 if self.save.type == "bq":
             
-                    save(
+                    BM().save(
                         data=rows,
                         dataset=self.save.dataset,
                         schema=self.save.db_schema,
                         save_dir=self.save.destination,
                     )
                 elif self.save:
-                    save(data=rows, save_dir=self.save.destination)
+                    BM().save(data=rows, save_dir=self.save.destination)
 
         return job
     
