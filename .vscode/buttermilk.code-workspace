@@ -6,9 +6,18 @@
 		},
 		{
 			"name": "automod.cc",
-			"path": "../../automod.cc"
+			"path": "../../automod"
 		}
 	],
 	"settings": {
+			"python.terminal.activateEnvironment": true,
+			"python.editor.formatOnSave": true,
+			"python.editor.codeActionsOnSave": {
+				"source.organizeImports": true
+			},
+			"notebook.formatOnSave.enabled": true,
+			"notebook.codeActionsOnSave": {
+				"source.organizeImports": "explicit"
+			}
 	}
 }
