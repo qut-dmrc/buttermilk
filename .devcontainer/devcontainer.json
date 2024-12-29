@@ -10,7 +10,35 @@
     "shutdownAction": "stopCompose",
     "remoteUser": "debian",
     "containerEnv": {
-        "CONDA_ENV_NAME": "python311"
+        "VENV_PATH": "/venv"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "eamodio.gitlens",
+                "github.copilot",
+                "github.copilot-chat",
+                "github.vscode-pull-request-github",
+                "ms-python.debugpy",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "redhat.vscode-yaml",
+                "ms-python.black-formatter"
+            ],
+            "settings": {
+                "python.terminal.activateEnvironment": true,
+                "python.defaultInterpreterPath": "${containerEnv:VENV_PATH}",
+                "python.editor.formatOnSave": true,
+                "python.editor.codeActionsOnSave": {
+                    "source.organizeImports": true
+                },
+                "notebook.formatOnSave.enabled": true,
+                "notebook.codeActionsOnSave": {
+                    "source.organizeImports": "explicit"
+                }
+            }
+        }
     }
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
