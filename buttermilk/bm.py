@@ -141,7 +141,7 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Project] = Field(default=None, validate_default=True)
+    cfg: Project = Field(default=None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
     _gcp_project: str = PrivateAttr(default=None)
@@ -168,7 +168,7 @@ class BM(Singleton, BaseModel):
                     credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
                     self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
                     self.setup_logging(verbose=self.cfg.logger.verbose)
-                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self._run_metadata.save_dir}") 
+                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
                 if cloud.type == "vertex":
                     # initialize vertexai
                     aiplatform.init(
@@ -187,7 +187,7 @@ class BM(Singleton, BaseModel):
                     data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
                     basename="config",
                     extension="json",
-                    save_dir=self._run_metadata.save_dir,
+                    save_dir=self.save_dir,
                 )
 
             except Exception as e:
@@ -200,7 +200,10 @@ class BM(Singleton, BaseModel):
                     collection=self.cfg.name,
                     job=self.cfg.job,
                 )
-
+    @property
+    def save_dir(self) -> str:
+        return self._run_metadata.save_dir
+    
     @property
     def logger(self) -> logging.Logger:
         global logger
@@ -287,7 +290,7 @@ class BM(Singleton, BaseModel):
 
         logger.info(
             dict(
-                message=f"Logging setup for: {self._run_metadata.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self._run_metadata.save_dir}",
+                message=f"Logging setup for: {self._run_metadata.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",
                 **self._run_metadata.model_dump(),
             ),
         )
@@ -313,7 +316,7 @@ class BM(Singleton, BaseModel):
 
     def save(self, data, basename="", extension=".jsonl", **kwargs):
         """Failsafe save method."""
-        result = save.save(data=data, save_dir=self._run_metadata.save_dir, basename=basename, extension=extension, **kwargs)
+        result = save.save(data=data, save_dir=self.save_dir, basename=basename, extension=extension, **kwargs)
         logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
         return result
 
@@ -361,7 +364,7 @@ class BM(Singleton, BaseModel):
         if save_to_gcs:
             # Tell BigQuery to save the results to a specific GCS location
             gcs_results_uri = (
-                f"{self._run_metadata.save_dir}/query_{shortuuid.uuid()}/*.json"
+                f"{self.save_dir}/query_{shortuuid.uuid()}/*.json"
             )
             export_command = f"""   EXPORT DATA OPTIONS(
                         uri='{gcs_results_uri}',

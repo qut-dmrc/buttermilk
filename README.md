@@ -60,10 +60,10 @@ poetry install --with dev
 Authenticate to cloud providers, where all your secrets are stored.
 
 ```shell
-GOOGLE_CLOUD_PROJECT_ID=[project]
-gcloud auth login --update-adc --enable-gdrive-access --project ${GOOGLE_CLOUD_PROJECT_ID} --billing-project ${GOOGLE_CLOUD_PROJECT_ID}
-gcloud auth application-default set-quota-project ${GOOGLE_CLOUD_PROJECT_ID}
-gcloud config set project ${GOOGLE_CLOUD_PROJECT_ID}
+GOOGLE_CLOUD_PROJECT=[project]
+gcloud auth login --update-adc --enable-gdrive-access --project ${GOOGLE_CLOUD_PROJECT} --billing-project ${GOOGLE_CLOUD_PROJECT}
+gcloud auth application-default set-quota-project ${GOOGLE_CLOUD_PROJECT}
+gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 ```
 
 Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
