@@ -36,6 +36,12 @@ def save(
     **params,
 ):
     from .utils import reset_index_and_dedup_columns
+    if not save_dir:
+        try:
+            from buttermilk import BM
+            save_dir = BM().save_dir
+        except Exception as e:
+            logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")
 
     # Failsafe save routine. We should be able to find some way of dumping the data.
     # Try multiple methods in order until we get a result.
