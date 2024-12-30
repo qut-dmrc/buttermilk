@@ -1,3 +1,5 @@
+from hashlib import md5
+from cloudpathlib import CloudPath
 from google.cloud.storage.client import Client
 import pytest
 
@@ -10,24 +12,23 @@ def gcs() -> Client:
     from google.cloud import bigquery, storage
     return storage.Client()
 
-# Presumably this fails where default credentials have not yet been saved.
-def test_save_binary_no_bm_init(gcs):
+def test_save_binary(bm):
+    save_dir = bm.save_dir
+    assert save_dir
+
     try:
         with open("tests/data/Rijksmuseum_(25621972346).jpg", "rb") as img:
-            uri = upload_binary(img)
-            uploaded_bytes = img.seek(0).to_bytes()
+            uri = upload_binary(img, save_dir=save_dir)
+            img.seek(0)
+            uploaded_bytes = img.read()
             assert uri is not None
 
         downloaded = read_file(uri)
-        assert downloaded == img
+        assert md5(downloaded).hexdigest() == md5(uploaded_bytes).hexdigest()
     finally:
         # delete
-        gcs._delete_resource(uri)
+        CloudPath(uri).unlink()
     pass
-
-def test_save_binary(bm: BM, gcs):
-    assert bm
-    test_save_binary_no_bm_init(gcs=gcs)
 
 
 def test_logger_initialised(bm):
