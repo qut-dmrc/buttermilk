@@ -45,3 +45,14 @@ bm:
     run:
       platform: local
       max_concurrency: 4
+
+flows:
+  test:
+    _target_: buttermilk.runner.flow.Flow
+    source: bm testing
+    steps:
+      - name: test
+        _target_: buttermilk.agents.testagent.TestAgent
+        num_runs: 2
+        concurrency: 2
+        parameters: 

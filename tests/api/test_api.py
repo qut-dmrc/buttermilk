@@ -5,13 +5,14 @@ from fastapi.testclient import TestClient
 
 from buttermilk._core.runner_types import Job
 from buttermilk.api.flow import app
+from buttermilk.api.stream import FlowRequest
 
 client = TestClient(app)
 
 
 @pytest.fixture
 def flow_request_data():
-    return {
+    req_cfg = {
         "model": "haiku",
         "template": "judge",
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
@@ -19,10 +20,12 @@ def flow_request_data():
         "uri": None,
         "media_b64": None,
     }
+    req = FlowRequest(**req_cfg)
+    return req.model_dump()
 
 
 def test_run_flow(bm: Any, flow_request_data: dict[str, Any]):
-    response = client.post("/flow/test_flow", json=flow_request_data)
+    response = client.post("/flow/test", json=flow_request_data)
     assert response.status_code == 200
     json_response = response.json()
     assert "outputs" in json_response

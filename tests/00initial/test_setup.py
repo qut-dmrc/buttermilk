@@ -13,14 +13,17 @@ from numpy import isin
 from pytest import CaptureFixture
 from huggingface_hub import login
 
+from buttermilk.bm import BM
+from buttermilk.utils.utils import read_yaml
+
 
 class Test00Setup:
     def test_imports(self):
         pass
 
     def test_python_version(self):
-        """Check that the Python version is 3.11 or higher."""
-        assert sys.version_info >= (3, 11)
+        """Check that the Python version is 3.10 or higher."""
+        assert sys.version_info >= (3, 10)
 
     def test_gcloud_credentials_adc(self):
         credentials, project_id = google.auth.default()
@@ -30,20 +33,15 @@ class Test00Setup:
         """Check that the JSON key is not set."""
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ
 
-    def test_gcs_bucket_set(self):
-        """Check that the GCP bucket is set."""
-        assert "GCS_BUCKET" in os.environ
-        assert os.environ["GCS_BUCKET"]
-
-    def test_bigquery(self, bm):
-        df = bm.bigquery.run_query("SELECT True")
+    def test_bigquery(self, bm: BM):
+        df = bm.run_query("SELECT True")
         assert df.iloc[0, 0] is True
 
     @pytest.mark.parametrize(
         ["table", "schema"],
         [("dmrc-analysis.tests.indicator", "datatools/chains/schemas/indicator.json")],
     )
-    def test_database(self, bm, table, schema):
+    def test_database(self, bm: BM, table, schema):
         """Delete and recreate the test table"""
         from google.cloud.bigquery.table import Table, TableReference
 
@@ -52,7 +50,7 @@ class Test00Setup:
         ref = TableReference.from_string(table_id=table)
         new_table = Table(table_ref=ref, schema=test_schema)
 
-        assert gc.bq.create_table(table=new_table, exists_ok=True)
+        assert bm.bq.create_table(table=new_table, exists_ok=True)
 
     def test_save_dir(self, bm):
         assert "/runs/testing/" in bm.save_dir

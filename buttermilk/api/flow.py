@@ -14,8 +14,7 @@ from google.cloud import pubsub
 from promptflow.tracing import start_trace
 from pydantic import BaseModel
 
-from buttermilk import BM
-from buttermilk._core.log import logger
+from buttermilk import BM, logger
 from buttermilk._core.runner_types import Job
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.flow import Flow
@@ -48,7 +47,7 @@ def callback(message):
         return
 
     try:
-        bm.logger.info(f"Calling flow {task} for Pub/Sub job...")
+        logger.info(f"Calling flow {task} for Pub/Sub job...")
 
         async def process_generator():
             results = []
@@ -65,7 +64,7 @@ def callback(message):
         logger.error(f"Error processing message: {e}")
         message.nack()
 
-    bm.logger.info("Passed on Pub/Sub job.")
+    logger.info("Passed on Pub/Sub job.")
 
 
 def start_pubsub_listener():
@@ -188,7 +187,7 @@ app.add_middleware(
 async def log_cors_failures(request: Request, call_next):
     origin = request.headers.get("origin")
     if origin:
-        bm.logger.debug(f"CORS check for {origin}")
+        logger.debug(f"CORS check for {origin}")
 
     response = await call_next(request)
     return response
@@ -210,7 +209,7 @@ def main(cfg: _CFG):
     bm = objs.bm
     flows = objs.flows
 
-    logger = bm.logger
+    logger = logger
     start_trace(
         resource_attributes={"run_id": bm._run_metadata.run_id},
         collection="flow_api",
