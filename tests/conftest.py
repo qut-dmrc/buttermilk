@@ -7,7 +7,7 @@ from buttermilk.utils.utils import read_file
 from buttermilk import BM
 from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def bm() -> BM:
     from hydra import compose, initialize
 

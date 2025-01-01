@@ -14,6 +14,8 @@ trans:
           - gemini15pro
       inputs:
         record: record
+      outputs:
+        record: record
 
     - name: judger
       _target_: buttermilk.agents.lc.LC

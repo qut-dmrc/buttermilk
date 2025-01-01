@@ -18,6 +18,7 @@ from typing import (
     Any,
     ClassVar,
     Optional,
+    Self,
     TypeVar,
 )
 from google import auth
@@ -82,7 +83,7 @@ class ConfigRegistry:
         return cls.get_instance()._config
 
 
-T = TypeVar("T", bound="BM")
+T = TypeVar("T")
 
 
 def _convert_to_hashable_type(element: Any) -> Any:
@@ -106,7 +107,7 @@ class Singleton:
             _REGISTRY[key] = super().__new__(cls)
         return _REGISTRY[key]
 
-    def __deepcopy__(self, memo: dict[int, Any]) -> Any:
+    def __deepcopy__(self, memo: dict[int, Any]| None = None):
         """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
         return self
 
@@ -141,7 +142,7 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Project = Field(default=None, validate_default=True)
+    cfg: Optional[Project] = Field(default=None, validate_default=True)
 
     _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
     _gcp_project: str = PrivateAttr(default=None)

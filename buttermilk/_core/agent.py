@@ -44,7 +44,11 @@ from .log import logger
 class Agent(BaseModel):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
-    name: str
+    name: str = Field(
+        ...,
+        description="The name of the flow or step in the process that this agent is responsible for.",
+    )
+
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
     save: SaveInfo | None = Field(default=None)  # Where to save the results

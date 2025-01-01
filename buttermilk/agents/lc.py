@@ -54,34 +54,11 @@ from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
 
 
 class LC(Agent):
-    name: str = Field(
-        ...,
-        description="The name of the flow or step in the process that this agent is responsible for.",
-    )
 
-    _connections: dict | None = PrivateAttr(default=dict)
-    _llms: LLMs | None = PrivateAttr(default=dict)
-
-    class Config:
-        extra = "forbid"
-        arbitrary_types_allowed = False
-        populate_by_name = True
-        exclude_none = True
-        exclude_unset = True
-
-        json_encoders = {
-            np.bool_: bool,
-            datetime.datetime: lambda v: v.isoformat(),
-            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-        }
-
-    @model_validator(mode="after")
-    def load_connections(self) -> "LC":
+    @property
+    def _llms(self) -> LLMs:
         bm = BM()
-        self._llms = bm.llms
-
-        return self
+        return bm.llms
 
     def load_template_vars(
         self, *, 
