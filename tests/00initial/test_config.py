@@ -14,11 +14,11 @@ def test_has_test_info(bm: BM):
 
 
 def test_config_obj(bm: BM):
-    assert "secret_provider" in bm.cfg
+    assert "save_dest" in bm.cfg
 
 
-def test_config_models_azure(bm: BM):
-    models = bm._llm_connections
+def test_config_llms(bm: BM):
+    models = bm.llms
     assert models
 
 

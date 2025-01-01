@@ -791,6 +791,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "alt-pytest-asyncio", marker = "python_full_version >= '3.11'" },
+    { name = "anyio" },
     { name = "cmap" },
     { name = "fsspec" },
     { name = "gcsfs" },
@@ -888,6 +889,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "alt-pytest-asyncio", marker = "python_full_version >= '3.11'", specifier = ">=0.9.1,<1.0.0" },
+    { name = "anyio", specifier = ">=4.7.0" },
     { name = "cmap", specifier = ">=0.3.0,<1.0.0" },
     { name = "fsspec", specifier = ">=2024.6.1,<2025.0.0" },
     { name = "gcsfs", specifier = ">=2024.6.1,<2025.0.0" },

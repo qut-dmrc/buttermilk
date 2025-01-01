@@ -158,4 +158,5 @@ dev = [
     "opencv-python<5.0.0.0,>=4.10.0.84",
     "moviepy<2.0.0,>=1.0.3",
     "promptflow-tracing<2.0.0,>=1.16.2",
+    "anyio>=4.7.0",
 ]

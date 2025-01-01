@@ -48,7 +48,8 @@ def test_info(capsys, logger_new, bm):
 
     # sleep 5 seconds to allow the last class to write to the cloud service
     time.sleep(5)
-    entries = bm._clients['gcslogging'].list_entries(
+    client = google.cloud.logging.Client(project=bm.cfg.logger.project)
+    entries = client.list_entries(
         order_by=google.cloud.logging.DESCENDING, max_results=100
     )
     for entry in entries:
@@ -59,7 +60,8 @@ def test_info(capsys, logger_new, bm):
 
 
 def test_cloud_loger_debug(bm):
-    entries = bm._clients['gcslogging'].list_entries(
+    client = google.cloud.logging.Client(project=bm.cfg.logger.project)
+    entries = client.list_entries(
         order_by=google.cloud.logging.DESCENDING, max_results=100
     )
     for entry in entries:
