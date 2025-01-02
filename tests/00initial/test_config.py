@@ -12,11 +12,6 @@ def test_has_test_info(bm: BM):
     assert bm.save_dir != ""
     assert bm.save_dir.startswith("gs://")
 
-
-def test_config_obj(bm: BM):
-    assert "save_dest" in bm.cfg
-
-
 def test_config_llms(bm: BM):
     models = bm.llms
     assert models

@@ -152,7 +152,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "env": {
         "PYDEVD_DISABLE_FILE_VALIDATION": "1",
-        "PYTEST_ADDOPTS": "-n1 --continue-on-collection-errors -rA"
+        "PYTEST_ADDOPTS": "-n1"
       },
       "justMyCode": false,
       "purpose": ["debug-test"],

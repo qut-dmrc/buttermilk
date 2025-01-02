@@ -24,6 +24,31 @@ and verify and compare results.
 
 The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
+## Flows and jobs
+We think of predictions not as individual runs of links on chains,
+but instead as inherently stochastic insights into problems that
+are not always well-defined, by agents with varying capabilities.
+
+Accordingly, Buttermilk's Flows provide a methodology for repeatedly
+querying agents about a dataset from multiple perspectives over
+multiple time periods. We sample from prior answers to inform
+current predictions, adjusting for randomness and specificity.
+
+* A **Flow** is a predefined pipeline consisting of one or more steps
+to process data and pass it on.
+
+* A **Job** is the basic unit of work containing all information required
+to run one record through one step of processing. Jobs are designed to 
+include all the information necessary to run and trace a single
+atomic step of work. They can be run basically anywhere, and saving a job
+to a database or to disk provides all information required to understand
+and reproduce a single result.
+
+* A **Dataset** contains many **Record** objects, each with a unique 
+`record_id`. Records are immutable and may include text and binary data 
+as well as adequate metadata.
+
+
 ## Usage
 
 So far, we have a few standard pieces that set sensible defaults to make it easy for HASS scholars to use, store, assess, compare, and reproduce complicated AI workflows in their research.
@@ -48,89 +73,19 @@ We would love your help! Contact [nic](mailto:n.suzor@qut.edu.au) to discuss wha
 
 ## Installation
 
-Create a new environment and install using poetry:
+Create a new environment and install using uv:
 
 ```shell
-conda create --name bm -y -c conda-forge -c defaults python==3.11 poetry ipykernel google-crc32c
-
-conda activate bm
-poetry install --with dev
+uv install
 ```
 
-Authenticate to cloud providers, where all your secrets are stored.
+Authenticate to cloud providers, where your relevant secrets are stored.
 
 ```shell
-GOOGLE_CLOUD_PROJECT=[project]
+GOOGLE_CLOUD_PROJECT=<project>
 gcloud auth login --update-adc --enable-gdrive-access --project ${GOOGLE_CLOUD_PROJECT} --billing-project ${GOOGLE_CLOUD_PROJECT}
 gcloud auth application-default set-quota-project ${GOOGLE_CLOUD_PROJECT}
 gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 ```
 
 Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
-
-### Dependencies and example for GPU prediction (on Ubuntu 22.04)
-
-```shell
-#!/bin/sh
-export USER=ubuntu
-export DEBIAN_FRONTEND=noninteractive
-export INSTALL_DIR=/mnt  # change as appropriate
-
-apt update && apt -y --no-install-recommends install neovim git zsh tmux curl pigz gnupg less nmap openssh-server python3 python3-pip rsync htop build-essential gcc g++ make psmisc keychain bmon jnettop ca-certificates ncdu software-properties-common
-
-# nvidia toolkit and nvidia driver
-# Use an image with this preinstalled, lots easier.
-#wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb && sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update && sudo apt-get -y install cuda-toolkit-12-4
-#sudo apt install -y cuda-drivers
-
-
-# install gcloud sdk
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && apt-get update -y && apt-get install google-cloud-cli -y
-
-# azure cli
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
-# miniconda
-mkdir -p $INSTALL_DIR/miniconda3 && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $INSTALL_DIR/miniconda3/miniconda.sh && bash $INSTALL_DIR/miniconda3/miniconda.sh -b -u -p $INSTALL_DIR/miniconda3 && rm $INSTALL_DIR/miniconda3/miniconda.sh && $INSTALL_DIR/miniconda3/bin/conda init
-
-
-# Change cache location (our GPU machine has limited space on /)
-echo -e "export XDG_CACHE_HOME=$INSTALL_DIR/cache\nexport POETRY_CACHE_DIR=$INSTALL_DIR/cache/poetry"|tee -a /home/$USER/.bashrc
-echo -e "envs_dirs:\n  - $INSTALL_DIR/miniconda3/envs\npkgs_dirs:\n  - $INSTALL_DIR/miniconda3/pkgs" | tee /home/$USER/.condarc
-
-mkdir -p $INSTALL_DIR/src $INSTALL_DIR/cache && chown -R $USER $INSTALL_DIR/cache $INSTALL_DIR/miniconda3 $INSTALL_DIR/src
-
-# create environment
-$INSTALL_DIR/miniconda3/bin/conda create --name bm -y -c conda-forge -c pytorch -c nvidia python==3.11 poetry ipykernel google-crc32c pytorch torchvision torchaudio pytorch-cuda=12.4 && chown -R ubuntu $INSTALL_DIR/miniconda3/envs
-```
-
-At this point, log out and back in to activate the environment and check your install:
-
-```shell
-conda activate bm
-nvidia-smi
-
-export INSTALL_DIR=/mnt  # change as appropriate
-# checkout repository
-mkdir -p $INSTALL_DIR/src && cd $INSTALL_DIR/src && git clone https://github.com/qut-dmrc/buttermilk.git
-
-# install dependencies
-cd buttermilk
-POETRY_CACHE_DIR=/mnt/cache/poetry poetry install --with dev
-# set up cloud connections
-az login
-gcloud auth login --enable-gdrive-access --update-adc --force
-pf config set connection.provider=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
-pf config set trace.destination=azureml://subscriptions/7e7e056a-4224-4e26-99d2-1e3f9a688c50/resourcegroups/rg-suzor_ai/providers/Microsoft.MachineLearningServices/workspaces/automod
-
-# probably need to set some environment variables
-echo -e "HF_HUB_ENABLE_HF_TRANSFER=1\nPOETRY_CACHE_DIR=/mnt/cache/poetry\nHF_HOME=/mnt/cache/hf\nPF_WORKER_COUNT=24\nPF_BATCH_METHOD=fork" | tee -a /mnt/src/buttermilk/.env
-```
-
-### Run
-
-Serially, on a gpu:
-`python -m examples.automod.pfmod +experiments=ots_gpu +data=drag_noalt +save=bq`
-
-Parallel:
-`python -m examples.automod.pfmod --multirun hydra/launcher=joblib +experiments=ots +data=drag_noalt +save=bq experiments.moderate.init.flow=GoogleModerate,NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o,NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b,Comprehend,Perspective,AzureContentSafety,OpenAIModerator,LlamaGuard1Replicate,LlamaGuard1Together,LlamaGuard2Replicate,LlamaGuard2Together,LlamaGuard3Together`
