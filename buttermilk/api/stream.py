@@ -156,24 +156,24 @@ async def flow_stream(
         else:
             record = RecordInfo(text=text, media=media)
 
-    async for data in flow.run_flows(
+    async for job in flow.run_flows(
         record=record,
         run_info=bm._run_metadata,
         source=flow_request.source,
         flow_id=flow_request.flow_id,
         q=flow_request.q,
     ):
-        if data:
+        if job:
             # if data.error:
             #     raise HTTPException(status_code=500, detail=str(data.error))
-            if data.outputs:
+            if job.outputs:
                 if return_json:
-                    yield data.outputs.model_dump_json()
+                    yield job.model_dump_json()
                 else:
-                    yield data.outputs
-                rprint(data.outputs)
+                    yield job
+                rprint(job.outputs)
             else:
                 logger.info(f"No data to return from {flow} (completed successfully).")
             # update record in case it has been changed
-            if data.record:
-                record = data.record
+            if job.record:
+                record = job.record
