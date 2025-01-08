@@ -102,9 +102,9 @@ class FlowRequest(BaseModel):
 
         return values
 
-    @field_validator("q", "uri", "text", mode="before")
+    @field_validator("q", "text", mode="before")
     def sanitize_strings(cls, v):
-        if v:
+        if v and isinstance(v, str):
             v = v.strip()
             v = sanitize_html(v) 
         return v
