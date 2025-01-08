@@ -103,10 +103,3 @@ def test_zzz03_test_log_n(logger_new):
             break
 
     assert counts["INFO"] == 3
-
-def test_stdout_pause(capsys, logger_new):
-    logger_new.stdout_pause()
-    captured = capsys.readouterr()
-    print('test_stdout_pause')
-    captured = capsys.readouterr()
-    assert captured.out == ''

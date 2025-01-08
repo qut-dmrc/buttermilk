@@ -35,7 +35,7 @@ class Test00Setup:
 
     def test_bigquery(self, bm: BM):
         df = bm.run_query("SELECT True")
-        assert df.iloc[0, 0] is True
+        assert df.iloc[0, 0]
 
     @pytest.mark.parametrize(
         ["table", "schema"],

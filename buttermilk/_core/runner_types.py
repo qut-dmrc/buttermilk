@@ -267,7 +267,9 @@ class RecordInfo(BaseModel):
         return str(path)
 
     def update_from(self, result: Result, fields: list|str|None = None):
-        update_dict = result.model_dump()
+        update_dict = {}
+        if result:
+            update_dict = result.model_dump()
         if fields and fields != 'record':
             update_dict = {f: update_dict[f] for f in fields}
             

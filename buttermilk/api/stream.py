@@ -146,15 +146,16 @@ async def flow_stream(
     )
 
     media = [x for x in objects if x and isinstance(x, MediaObj)]
-    content = "\n".join([x for x in objects if isinstance(x, str)])
+    contents = [flow_request.text] + [x for x in objects if isinstance(x, str)]
+    text = "\n".join([x for x in contents if x])
     record = None
-    if media or content:
+    if media or text:
         if flow_request.record_id:
             record = RecordInfo(
-                text=content, media=media, record_id=flow_request.record_id
+                text=text, media=media, record_id=flow_request.record_id
             )
         else:
-            record = RecordInfo(text=content, media=media)
+            record = RecordInfo(text=text, media=media)
 
     async for data in flow.run_flows(
         record=record,
@@ -174,3 +175,6 @@ async def flow_stream(
                 rprint(data.outputs)
             else:
                 logger.info(f"No data to return from {flow} (completed successfully).")
+            # update record in case it has been changed
+            if data.record:
+                record = data.record

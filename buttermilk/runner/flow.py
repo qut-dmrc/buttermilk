@@ -115,14 +115,14 @@ class Flow(BaseModel):
                     )
                 else:
                     try:
-                        if (update_record := agent.outputs.pop('record', {})):
-                            result.record = result.record or RecordInfo()
+                        output_map = dict(**agent.outputs)
+                        if (update_record := output_map.pop('record', {})):
                             result.record.update_from(result.outputs, fields=update_record)
 
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,
-                            output_map=agent.outputs,
+                            output_map=output_map,
                         )
                     except Exception as e:
                         error_msg = (
@@ -152,6 +152,7 @@ class Flow(BaseModel):
                     self._data[step_name][k].append(v)
         else:
             self._data[step_name]['outputs'] = self._data[step_name].get('outputs', [])  
-            self._data[step_name]['outputs'].append(result.outputs.model_dump())
+            if result.outputs:
+                self._data[step_name]['outputs'].append(result.outputs.model_dump())
 
         pass
