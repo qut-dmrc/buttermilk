@@ -301,24 +301,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/39/83/325bf5e02504dbd8b4faa98197a44cdf8a325ef259b48326a2b6f17f8383/azure_core-1.32.0-py3-none-any.whl", hash = "sha256:eac191a0efb23bfa83fddf321b27b122b4ec847befa3091fa736a5c32c50d7b4", size = 198855 },
 ]
 
-[package.optional-dependencies]
-aio = [
-    { name = "aiohttp" },
-]
-
-[[package]]
-name = "azure-cosmos"
-version = "4.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/be/7c/a4e7810f85e7f83d94265ef5ff0fb1efad55a768de737d940151ea2eec45/azure_cosmos-4.9.0.tar.gz", hash = "sha256:c70db4cbf55b0ff261ed7bb8aa325a5dfa565d3c6eaa43d75d26ae5e2ad6d74f", size = 1824155 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/61/dc/380f843744535497acd0b85aacb59565c84fc28bf938c8d6e897a858cd95/azure_cosmos-4.9.0-py3-none-any.whl", hash = "sha256:3b60eaa01a16a857d0faf0cec304bac6fa8620a81bc268ce760339032ef617fe", size = 303157 },
-]
-
 [[package]]
 name = "azure-graphrbac"
 version = "0.61.2"
@@ -535,11 +517,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fe/f6/5a94fa935933c8483bf27af0140e09640bd4ee5b2f346e71eee06c197482/azure_storage_blob-12.24.0.tar.gz", hash = "sha256:eaaaa1507c8c363d6e1d1342bd549938fdf1adec9b1ada8658c8f5bf3aea844e", size = 569613 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/f8/ef0f76f8c424bedd20c685409836ddfb42ac76fd8a0f21c3c3659cf7207d/azure_storage_blob-12.24.0-py3-none-any.whl", hash = "sha256:4f0bb4592ea79a2d986063696514c781c9e62be240f09f6397986e01755bc071", size = 408579 },
-]
-
-[package.optional-dependencies]
-aio = [
-    { name = "azure-core", extra = ["aio"] },
 ]
 
 [[package]]
@@ -766,12 +743,11 @@ dependencies = [
     { name = "langchain-anthropic" },
     { name = "langchain-google-vertexai" },
     { name = "langchain-openai" },
+    { name = "marshmallow" },
     { name = "numpy" },
     { name = "pathlib" },
     { name = "pillow" },
-    { name = "promptflow", extra = ["azure"] },
-    { name = "promptflow-core" },
-    { name = "promptflow-tracing" },
+    { name = "promptflow" },
     { name = "proto-plus" },
     { name = "psutil" },
     { name = "pydantic" },
@@ -865,12 +841,11 @@ requires-dist = [
     { name = "langchain-anthropic", specifier = ">=0.3.1,<1.0.0" },
     { name = "langchain-google-vertexai", specifier = ">=2.0.9,<3.0.0" },
     { name = "langchain-openai", specifier = ">=0.2.14,<1.0.0" },
+    { name = "marshmallow", specifier = "==3.23.2" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pathlib", specifier = ">=1.0.1,<2.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
-    { name = "promptflow", extras = ["azure"], specifier = ">=1.16.2,<2.0.0" },
-    { name = "promptflow-core", specifier = ">=1.16.2" },
-    { name = "promptflow-tracing", specifier = ">=1.16.2" },
+    { name = "promptflow", specifier = ">=0.17" },
     { name = "proto-plus", specifier = ">=1.25.0,<2.0.0" },
     { name = "psutil", specifier = ">=5.9.5,<6.0.0" },
     { name = "pydantic", specifier = ">=2.8.2,<3.0.0" },
@@ -910,7 +885,7 @@ dev = [
     { name = "opencv-python", specifier = ">=4.10.0.84,<5.0.0.0" },
     { name = "openpyxl", specifier = ">=3.1.5,<4.0.0" },
     { name = "plotly", specifier = ">=5.24.1,<6.0.0" },
-    { name = "promptflow-tracing", specifier = ">=1.16.2,<2.0.0" },
+    { name = "promptflow-tracing", specifier = ">=1.16.2" },
     { name = "pytest", specifier = ">=8.3.2,<9.0.0" },
     { name = "pytest-cov", specifier = ">=5.0.0,<6.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.0,<4.0.0" },
@@ -2762,14 +2737,14 @@ wheels = [
 
 [[package]]
 name = "marshmallow"
-version = "3.24.1"
+version = "3.23.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/16/da376d6fa50c6e56f4ff881c78bfc12b54a31a820d8d2756b424e0d547c1/marshmallow-3.24.1.tar.gz", hash = "sha256:efdcb656ac8788f0e3d1d938f8dc0f237bf1a99aff8f6dfbffa594981641cea0", size = 176262 }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/0f/33b98679f185f5ce58620595b32d4cf8e2fa5fb56d41eb463826558265c6/marshmallow-3.23.2.tar.gz", hash = "sha256:c448ac6455ca4d794773f00bae22c2f351d62d739929f761dce5eacb5c468d7f", size = 176929 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/49/e7bc58bb89e5bfc0224e3f95036a14778981b6d483802678c11b8e0b036d/marshmallow-3.24.1-py3-none-any.whl", hash = "sha256:ddb5c9987017d37be351c184e4e867e7bf55f7331f4da730dedad6b7af662cdd", size = 49320 },
+    { url = "https://files.pythonhosted.org/packages/64/38/8d37b19f6c882482cae7ba8db6d02fce3cba7b3895c93fc80352b30a18f5/marshmallow-3.23.2-py3-none-any.whl", hash = "sha256:bcaf2d6fd74fb1459f8450e85d994997ad3e70036452cbfa4ab685acb19479b3", size = 49326 },
 ]
 
 [[package]]
@@ -3051,7 +3026,7 @@ name = "nvidia-cudnn-cu12"
 version = "9.1.0.70"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas-cu12" },
+    { name = "nvidia-cublas-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/fd/713452cd72343f682b1c7b9321e23829f00b842ceaedcda96e742ea0b0b3/nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl", hash = "sha256:165764f44ef8c61fcdfdfdbe769d687e06374059fbb388b6c89ecb0e28793a6f", size = 664752741 },
@@ -3062,7 +3037,7 @@ name = "nvidia-cufft-cu12"
 version = "11.2.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/8a/0e728f749baca3fbeffad762738276e5df60851958be7783af121a7221e7/nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_aarch64.whl", hash = "sha256:5dad8008fc7f92f5ddfa2101430917ce2ffacd86824914c82e28990ad7f00399", size = 211422548 },
@@ -3083,9 +3058,9 @@ name = "nvidia-cusolver-cu12"
 version = "11.6.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas-cu12" },
-    { name = "nvidia-cusparse-cu12" },
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-cublas-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
+    { name = "nvidia-cusparse-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/46/6b/a5c33cf16af09166845345275c34ad2190944bcc6026797a39f8e0a282e0/nvidia_cusolver_cu12-11.6.1.9-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d338f155f174f90724bbde3758b7ac375a70ce8e706d70b018dd3375545fc84e", size = 127634111 },
@@ -3097,7 +3072,7 @@ name = "nvidia-cusparse-cu12"
 version = "12.3.1.170"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-nvjitlink-cu12", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/96/a9/c0d2f83a53d40a4a41be14cea6a0bf9e668ffcf8b004bd65633f433050c0/nvidia_cusparse_cu12-12.3.1.170-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9d32f62896231ebe0480efd8a7f702e143c98cfaa0e8a76df3386c1ba2b54df3", size = 207381987 },
@@ -3560,28 +3535,6 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/42/95/45d68efb1a3251a5692072997a5e34fbefac3cdebe5dfa737a7211ddf269/promptflow-1.17.0-py3-none-any.whl", hash = "sha256:a0c16b70b75c826f7831b135e9a225268a37ba8cf938a97518240a0461be727a", size = 19685 },
-]
-
-[package.optional-dependencies]
-azure = [
-    { name = "promptflow-azure" },
-]
-
-[[package]]
-name = "promptflow-azure"
-version = "1.17.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-ai-ml" },
-    { name = "azure-core" },
-    { name = "azure-cosmos" },
-    { name = "azure-identity" },
-    { name = "azure-storage-blob", extra = ["aio"] },
-    { name = "promptflow-devkit" },
-    { name = "pyjwt" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/5a/ba1a26aba4cc8dee4d26a13838296dcd88745acb8e0d35ea2c7d0226cc8f/promptflow_azure-1.17.0-py3-none-any.whl", hash = "sha256:7a9e81bc5551753a44594447048acc05cbf37a01f423be69be5323cf0aab5197", size = 725398 },
 ]
 
 [[package]]
@@ -4849,7 +4802,7 @@ name = "triton"
 version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "filelock" },
+    { name = "filelock", marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/98/29/69aa56dc0b2eb2602b553881e34243475ea2afd9699be042316842788ff5/triton-3.1.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6b0dd10a925263abbe9fa37dcde67a5e9b2383fc269fdf59f5657cac38c5d1d8", size = 209460013 },

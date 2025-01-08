@@ -34,10 +34,14 @@ def make_messages(local_template: str) -> list[Tuple[str,str]]:
 
     try:
         # We'll aim to be compatible with Prompty format
-        from promptflow.core._prompty_utils import parse_chat
+        # First we strip the header information from the markdown
         prompty = _parse_prompty(local_template)
+
+        # Next we use Prompty's format to set roles within the template
+        from promptflow.core._prompty_utils import parse_chat
         lc_messages = parse_chat(prompty, valid_roles=["system", "user", "human", "placeholder"])
 
+        # Finally we export it out to Langchain's format.
         messages = []
         for message in lc_messages:
             role = message['role']

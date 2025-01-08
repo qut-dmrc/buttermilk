@@ -109,10 +109,10 @@ dependencies = [
     "uvicorn<1.0.0,>=0.34.0",
     "google-cloud-pubsub<3.0.0,>=2.27.1",
     "bleach<7.0.0,>=6.2.0",
-    "promptflow[azure]<2.0.0,>=1.16.2",
-    "promptflow-tracing>=1.16.2",
-    "promptflow-core>=1.16.2",
     "numpy>=1.26.4",
+    "promptflow>=0.17.dev0",
+    "promptflow-tracing>=1.17.dev0",
+    "marshmallow==3.23.2",
 ]
 name = "buttermilk"
 version = "0.2.1"
@@ -158,6 +158,6 @@ dev = [
     "langchain-google-vertexai<3.0.0,>=2.0.8",
     "opencv-python<5.0.0.0,>=4.10.0.84",
     "moviepy<2.0.0,>=1.0.3",
-    "promptflow-tracing<2.0.0,>=1.16.2",
+    "promptflow-tracing>=1.16.2",
     "anyio>=4.7.0",
 ]
