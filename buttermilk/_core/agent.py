@@ -120,8 +120,7 @@ class Agent(BaseModel):
     async def run(self, *, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
-            job.parameters.update(**kwargs)
-            job = await self.process_job(job=job)
+            job = await self.process_job(job=job, **kwargs)
         except Exception as e:
             job.error = extract_error_info(e=e)
             if job.record:

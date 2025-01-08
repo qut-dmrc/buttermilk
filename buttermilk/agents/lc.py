@@ -122,7 +122,8 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        q: str | None = None
+        q: str | None = None,
+        additional_data: dict[str, dict] = {},
     ) -> Job:
 
         model = job.parameters.pop('model')
@@ -130,7 +131,7 @@ class LC(Agent):
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
         
         # Construct list of messages from the templates
-        local_messages = self.load_template_vars(**job.parameters, **job.inputs)
+        local_messages = self.load_template_vars(**job.parameters, **job.inputs, **additional_data)
 
         if q:
             job.prompt = q
