@@ -137,6 +137,6 @@ class RunCfg(BaseModel):
     platform: str = "local"
     max_concurrency: int = -1
     parameters: Mapping[str, Any] = Field(default_factory=dict)
-    flow_api: str = "http://localhost:8000/flow/"
+    flow_api: str = "http://localhost:8000/flow"
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)

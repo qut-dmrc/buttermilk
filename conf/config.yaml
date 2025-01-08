@@ -30,4 +30,4 @@ bm:
     run:
       platform: local
       max_concurrency: 16
-      flow_api: http://flow:8000/flow/
+      flow_api: http://flow:8000/flow
