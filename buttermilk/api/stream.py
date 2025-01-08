@@ -4,7 +4,6 @@ from collections.abc import AsyncGenerator, Sequence
 from urllib.parse import parse_qs
 
 import shortuuid
-from fastapi import HTTPException
 from pydantic import (AliasChoices, AnyUrl, BaseModel, ConfigDict, Field,
                       PrivateAttr, field_validator, model_validator)
 from rich import print as rprint
@@ -165,8 +164,8 @@ async def flow_stream(
         q=flow_request.q,
     ):
         if data:
-            if data.error:
-                raise HTTPException(status_code=500, detail=str(data.error))
+            # if data.error:
+            #     raise HTTPException(status_code=500, detail=str(data.error))
             if data.outputs:
                 if return_json:
                     yield data.outputs.model_dump_json()

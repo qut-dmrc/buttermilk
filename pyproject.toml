@@ -112,6 +112,7 @@ dependencies = [
     "promptflow[azure]<2.0.0,>=1.16.2",
     "promptflow-tracing>=1.16.2",
     "promptflow-core>=1.16.2",
+    "numpy>=1.26.4",
 ]
 name = "buttermilk"
 version = "0.2.1"
