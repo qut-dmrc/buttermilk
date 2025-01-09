@@ -76,6 +76,7 @@ We would love your help! Contact [nic](mailto:n.suzor@qut.edu.au) to discuss wha
 Create a new environment and install using uv:
 
 ```shell
+pip install uv
 uv install
 ```
 
