@@ -186,3 +186,4 @@ cython_debug/
 
 *.pickle
 .runs/
+.vscode/buttermilk.code-workspace
