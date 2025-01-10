@@ -15,6 +15,11 @@ osb:
         template: osb
         model: ${llm}
         dataset: osbcasessummary
+      outputs:
+        answers:
+          - job_id: job_id
+            model: parameters.model
+            reasons: outputs.reasons
 
     - _target_: buttermilk.agents.lc.LC
       name: synth
