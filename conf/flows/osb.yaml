@@ -16,6 +16,9 @@ osb:
         formatting: json
         model: ${llm}
         dataset: osbcasessummary
+      inputs:
+        record: record
+        content: record.text
 
     - _target_: buttermilk.agents.lc.LC
       name: synth
