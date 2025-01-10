@@ -143,7 +143,7 @@ class LC(Agent):
         job.parameters["model"] = model
 
         logger.debug(
-            f"Invoking agent {self.name} for job {job.job_id} with model {model} and parameters: {job.parameters}...",
+            f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
         )
         response = await self.invoke(
             prompt_messages=local_messages,
@@ -152,7 +152,7 @@ class LC(Agent):
         )
 
         logger.debug(
-            f"Finished agent {self.name} for job {job.job_id} with model {model}, received response of {len(str(response.values()))} characters.",
+            f"Finished agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}, received response of {len(str(response.values()))} characters.",
         )
         error = response.pop("error", None)
         if error:
@@ -199,8 +199,8 @@ class LC(Agent):
 
         # Make the chain
         logger.debug(f"Assembling the chain with model: {model}.")
-        chain = ChatPromptTemplate(prompt_messages, template_format="jinja2")
-        chain = chain | self._llms[model] | ChatParser()
+        messages = ChatPromptTemplate(prompt_messages, template_format="jinja2")
+        chain = messages | self._llms[model] | ChatParser()
 
         elapsed = 0
         t0 = time.time()

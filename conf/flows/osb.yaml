@@ -13,13 +13,9 @@ osb:
       save: ${save}
       parameters: 
         template: osb
+        formatting: json
         model: ${llm}
         dataset: osbcasessummary
-      outputs:
-        answers:
-          - job_id: job_id
-            model: parameters.model
-            reasons: outputs.reasons
 
     - _target_: buttermilk.agents.lc.LC
       name: synth
@@ -28,19 +24,11 @@ osb:
       save: ${save}
       parameters:
         template: synthesise
-        instructions: osb
+        formatting: json
         model: ${llm}
       inputs:
-        answers:
-          - job_id: search.job_id
-            model: search.outputs.model
-            reasons: search.outputs.reasons
-      outputs:
-        job_id: job_id
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-        reasons: outputs.reasons
+        answers: search.outputs
+        
   data:
     - name: osbcasessummary
       type: file

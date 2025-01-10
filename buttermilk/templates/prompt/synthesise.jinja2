@@ -2,6 +2,7 @@
 description: Synthesise answers
 inputs:
   - instructions
+  - q
   - content
   - answers
 prompt_placeholder: false
@@ -10,7 +11,7 @@ prompt_placeholder: false
 system:
 Your task is to review one or more draft answers and come to a final conclusion.
 
-You are a team leader. Some members of your team have drafted answers to a question, and others have provided feedback on those answers. Your task is to synthesise the information that your team has developed so far and produce the best possible answer to a question. You should generally trust your team members, but they may not always be correct.
+You are a team leader. Some members of your team have drafted answers to a question, and others have provided feedback on those answers. Your task is to synthesise the information that your team has developed so far and produce the best possible answer to a question. You should generally trust your team members, but they may not always be correct. Your response should not include any information from your general knowledge that is not explicitly provided.
 
 You may be provided with additional feedback to consider. You should incorporate this feedback into your final answer where it is helpful and relevant.
 
@@ -18,15 +19,16 @@ You may be provided with additional feedback to consider. You should incorporate
 {{ formatting }}
 {% endif %}
 
-{% if instructions %}
+{% if q %}
 <BEGIN ORIGINAL INSTRUCTIONS>
 {{ instructions }}
+{{ q }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if content or q %}
+{% if content %}
 <BEGIN CONTENT>
-{{ content or q }}
+{{ content }}
 <END CONTENT>
 {% endif %}
 

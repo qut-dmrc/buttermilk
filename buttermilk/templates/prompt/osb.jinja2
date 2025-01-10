@@ -17,22 +17,16 @@ You are a helpful paralegal. You have to help your users find information about 
 
 It is particularly important to explain any relevant divergence in the decisions. 
 
+{% if formatting %}
 <REQUIRED FORMAT>
-You must reply only in a fully valid JSON format.
-
-{% raw %}
-```json
-{
-    "reasons": <STRING: your response as formatted Markdown>
-}
-```
-{% endraw %}
-
+{{ formatting }}
 <END REQUIRED FORMAT>
+
+{% endif %}
 
 <BEGIN CASE DATA>
 {% for case in dataset %}
-    <BEGIN CASE {{ case.record_id }}>{{case}}<END DRAFT ANSWER {{ case.record_id }} >
+    <BEGIN CASE {{ case.title }}>{{case}}<END CASE {{ case.title }} >
 {% endfor %}
 <END CASE DATA>
 
