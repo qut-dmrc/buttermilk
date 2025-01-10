@@ -171,7 +171,6 @@ async def flow_stream(
                     yield job.model_dump_json()
                 else:
                     yield job
-                rprint(job.outputs)
             else:
                 logger.info(f"No data to return from {flow} (completed successfully).")
             # update record in case it has been changed

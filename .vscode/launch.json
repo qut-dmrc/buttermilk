@@ -39,7 +39,7 @@
       "justMyCode": false,
       "args": [
         "+flows=[simple,osb,hate,trans,describer]", 
-        "llm=lite"
+        "llm=full"
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
