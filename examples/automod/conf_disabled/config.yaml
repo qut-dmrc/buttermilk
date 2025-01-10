@@ -8,11 +8,6 @@ logger:
 tracing: 
   enabled: true
 verbose: true
-save_dest:
-  type: gcp
-  project: dmrc-analysis
-  region: us-central1
-  bucket: dmrc-analysis
 secret_provider: 
   type: azure
   vault: https://suzorvault.vault.azure.net/

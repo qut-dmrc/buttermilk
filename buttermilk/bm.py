@@ -108,7 +108,7 @@ class Singleton:
         return _REGISTRY[key]
 
     def __deepcopy__(self, memo: dict[int, Any]| None = None):
-        """Prevent deep copy operations for singletons (code from IcebergRootModel)"""
+        """Prevent deep copy operations for singletons"""
         return self
 
 
@@ -117,7 +117,6 @@ class Project(BaseModel):
     job: str
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg = Field(default=None)
-    save_dest: CloudProviderCfg = Field(default=None)
     logger: CloudProviderCfg = Field(default=None)
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
@@ -142,9 +141,9 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Project] = Field(default=None, validate_default=True)
+    cfg: Project = Field(default=None, validate_default=True)
 
-    _run_metadata: SessionInfo = PrivateAttr(default_factory=SessionInfo)
+    _run_metadata: SessionInfo = PrivateAttr()
     _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -162,12 +161,14 @@ class BM(Singleton, BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if not _REGISTRY.get("init"):
+            # Initialise Run Metadata
+            self._run_metadata=SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base) 
+
             for cloud in self.cfg.clouds:
                 if cloud.type == "gcp":
                     # authenticate to GCP
                     os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
                     credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
-                    self._run_metadata.save_dir = f"gs://{cloud.bucket}/runs/{self._run_metadata.run_id}"
                     self.setup_logging(verbose=self.cfg.logger.verbose)
                     self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
                 if cloud.type == "vertex":
@@ -187,7 +188,7 @@ class BM(Singleton, BaseModel):
                 self.save(
                     data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
                     basename="config",
-                    extension="json",
+                    extension=".json",
                     save_dir=self.save_dir,
                 )
 
@@ -208,7 +209,7 @@ class BM(Singleton, BaseModel):
     def save(self, data, save_dir=None, **kwargs):
         """Failsafe save method."""
         save_dir = save_dir or self.save_dir
-        result =  save.save(data=data, save_dir=save_dir, **kwargs)
+        result = save.save(data=data, save_dir=save_dir, **kwargs)
         logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
         return result
     

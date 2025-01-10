@@ -9,12 +9,6 @@ bm:
     name: default_project
     job: development
 
-    save_dest:
-      type: gcp
-      project: gcp_project_id
-      region: us-central1
-      bucket: bucket_name
-
     clouds:
       - type: vertex
         project: gcp_project_id
@@ -31,3 +25,4 @@ bm:
       platform: local
       max_concurrency: 16
       flow_api: http://flow:8000/flow
+      save_dir_base: gs://prosocial-dev/runs/

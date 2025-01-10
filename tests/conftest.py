@@ -2,10 +2,16 @@ import hydra
 import pytest
 from pytest import MarkDecorator
 
+from unittest.mock import patch
 from buttermilk.llms import LLMs
 from buttermilk.utils.utils import read_file
 from buttermilk import BM
 from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS
+
+@pytest.fixture
+def mock_save():
+    with patch("buttermilk.bm.save.save") as mock_save:
+        yield mock_save
 
 @pytest.fixture(scope="session", autouse=True)
 def bm() -> BM:

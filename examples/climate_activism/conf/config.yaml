@@ -6,8 +6,6 @@ secret_provider: azure
 logger: gcp
 verbose: false
 models_secret: models
-save_dest: gcp
-save_dir:
 gcp:
   project: dmrc-analysis
   region: us-central1

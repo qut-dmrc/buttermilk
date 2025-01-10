@@ -1,6 +1,7 @@
 import datetime
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import (
     Any,
     Literal,
@@ -138,5 +139,6 @@ class RunCfg(BaseModel):
     max_concurrency: int = -1
     parameters: Mapping[str, Any] = Field(default_factory=dict)
     flow_api: str = "http://localhost:8000/flow"
+    save_dir_base: str = Field(default_factory=mkdtemp, validate_default=True)  # Default to temp dir
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)

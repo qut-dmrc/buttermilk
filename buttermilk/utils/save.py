@@ -68,9 +68,9 @@ def save(
             save_dir = CloudPath(save_dir)
             id = params.get("uuid", shortuuid.uuid())
             basename = "_".join([x for x in [basename, id] if x])
-            if extension:
-                basename = basename + extension
             uri = save_dir / basename
+            if extension:
+                uri = uri.with_suffix(extension)
         except InvalidPrefixError:
             pass
         except Exception as e:
@@ -139,9 +139,6 @@ def save(
 def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
-
-    if uri[-5:] != ".json" and uri[-6:] != ".jsonl":
-        uri = uri + ".jsonl"
 
     if any(data.columns.duplicated()):
         data = reset_index_and_dedup_columns(data)
@@ -226,18 +223,9 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_binary(data=None, *, save_dir=None, uri=None, filename=None, extension=None):
+def upload_binary(data=None, *, uri=None):
     assert data is not None
     gcs = storage.Client()
-
-    uri = uri or save_dir
-
-    if filename:
-        uri = f"{uri}/{filename}"
-    else:
-        uri = f"{uri}/{shortuuid.uuid()}"
-    if extension:
-        uri = f"{uri}.{extension}"
 
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs)
@@ -251,12 +239,12 @@ def upload_binary(data=None, *, save_dir=None, uri=None, filename=None, extensio
         return uri
 
 
-def dump_to_disk(data, **kwargs):
+def dump_to_disk(data, *, save_dir, extension='.json', **kwargs):
     with tempfile.NamedTemporaryFile(
         delete=False,
-        dir=kwargs.get("save_dir"),
+        dir=save_dir,
         mode="w",
-        suffix=".jsonl",
+        suffix=extension,
     ) as out:
         if isinstance(data, pd.DataFrame):
             data.to_json(out)
@@ -266,12 +254,12 @@ def dump_to_disk(data, **kwargs):
         return out.name
 
 
-def dump_pickle(data, **kwargs):
+def dump_pickle(data, *, save_dir, extension='.pickle', **kwargs):
     with tempfile.NamedTemporaryFile(
         delete=False,
-        dir=kwargs.get("save_dir"),
+        dir=save_dir,
         mode="wb",
-        suffix=".pickle",
+        suffix=extension,
     ) as out:
         pickle.dump(data, out)
         filename = out.name
@@ -294,15 +282,8 @@ def read_pickle(filename):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_text(data, *, save_dir=None, uri=None, basename=None, extension="html"):
+def upload_text(data, *, uri=None, **kwargs):
     gcs = storage.Client()
-    if not uri:
-        # Create a random URI in our GCS directory
-        if basename:
-            basename = f"{basename}_{shortuuid.uuid()[:6]}"
-        else:
-            basename = f"{shortuuid.uuid()}"
-        uri = f"{save_dir}/{basename}.{extension}"
 
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs)
@@ -314,12 +295,7 @@ def upload_text(data, *, save_dir=None, uri=None, basename=None, extension="html
     return uri
 
 
-def upload_json(data, *, save_dir=None, uri=None, filename=None):
-    filename = filename or shortuuid.uuid()
-    uri = uri or f"{save_dir}/{filename}.jsonl"
-    if uri[-5:] != ".json" and uri[-6:] != ".jsonl":
-        uri = uri + ".jsonl"
-
+def upload_json(data, *, uri, **kwargs):
     # make sure the data is serializable first
     if isinstance(data, pd.DataFrame):
         # First, convert to serialisable formats
@@ -329,4 +305,4 @@ def upload_json(data, *, save_dir=None, uri=None, filename=None):
     # Try to upload as newline delimited json
     rows = "\n".join([json.dumps(row) for row in rows])
 
-    return upload_text(rows, uri=uri, extension="jsonl")
+    return upload_text(rows, uri=uri)

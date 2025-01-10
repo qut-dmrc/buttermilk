@@ -26,12 +26,6 @@ bm:
         region: us-central1
         bucket: prosocial-dev
 
-    save_dest:
-      type: gcp
-      project: prosocial-443205 
-      region: us-central1
-      bucket: prosocial-dev
-      
     secret_provider: 
       type: gcp
       project: prosocial-443205
@@ -45,6 +39,7 @@ bm:
     run:
       platform: local
       max_concurrency: 4
+      save_dir_base: gs://prosocial-dev/runs/
 
 flows:
   test:

@@ -18,13 +18,20 @@ def test_config_llms(bm: BM):
 
 
 def test_save_dir(bm):
+    assert "runs/buttermilk/testing/" in bm.save_dir
     assert bm.save_dir.startswith("gs://")
-    uri = bm.save(["test"])
+    assert CloudPath(bm.save_dir)
+
+def test_save(bm):
+    uri = bm.save(data=["test data"], extension=".txt")
+    assert uri.startswith("gs://")
     assert uri.startswith(bm.save_dir)
+    assert uri.endswith(".txt")
     uploaded = CloudPath(uri)
     assert uploaded.exists()
+    read_text = uploaded.read_text()
+    assert read_text == '{"0": "test data"}'
     uploaded.unlink(missing_ok=False)
-
 
 def test_upload_text(bm):
     save_dir = bm.save_dir
@@ -60,3 +67,19 @@ def test_time_to_instantiate():
     time_taken = end - start
     print(f"Time taken: {time_taken:.2f} seconds")
     assert time_taken < 1, "Took too long to instantiate BM"
+
+
+
+def test_model_post_init_saves_config(bm, mock_save):
+    mock_save.assert_called_once()
+    args, kwargs = mock_save.call_args
+    
+    saved_data = kwargs.get("data")
+
+    assert len(saved_data) == 2
+
+    assert isinstance(saved_data[0], dict)  # Ensure the first item is the config
+    assert isinstance(saved_data[1], dict)  # Ensure the second item is the run metadata
+
+    assert kwargs.get("basename") == "config"
+    assert kwargs.get("extension") == "json"

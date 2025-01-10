@@ -7,6 +7,10 @@
 		{
 			"name": "automod.cc",
 			"path": "../../automod"
+		},
+		{
+			"name": "dev",
+			"path": "../../dev"
 		}
 	],
 	"settings": {
