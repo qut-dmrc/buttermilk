@@ -85,7 +85,7 @@ class LC(Agent):
         params = {}
         # Load template variables
         for k, v in inputs.items():
-            if v and isinstance(v, str):
+            if isinstance(v, str) and v:
                 # Try to load a template if it's passed in by filename, otherwise use it
                 # as a plain string replacement.
 
