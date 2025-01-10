@@ -145,13 +145,13 @@ class Project(BaseModel):
 
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Project] = None
+    cfg: Optional[Project] = Field(default=None, validate_default=True)
 
-    _run_info: SessionInfo = PrivateAttr(default=None)
+    _run_info: SessionInfo = PrivateAttr()
     _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
     
-    @field_validator("cfg", mode="after")
+    @field_validator("cfg")
     @classmethod
     def set_config(cls, cfg) -> dict:
         """Ensure cfg is populated."""
@@ -179,13 +179,13 @@ class BM(Singleton, BaseModel):
         
         if _run_info := _REGISTRY.get("run_info"):  
             # Already configured, just wrap up.
-            self._run_info = self._run_info or _run_info
+            self._run_info = self.model_fields.get("_run_info", _run_info)
             return self
         
         # Initialise Run Metadata
         _REGISTRY["run_info"] = SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base)
         self._run_info = _REGISTRY["run_info"]
-        
+
         for cloud in self.cfg.clouds:
             if cloud.type == "gcp":
                 # authenticate to GCP
