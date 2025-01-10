@@ -4,6 +4,13 @@ includes = []
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
+[tool.mypy]
+python_version = "3.11"  # Specify your target Python version
+strict = true           # Enable strict mode for thorough type checking
+annotations = true      # delayed typing annotations
+warn_unused_configs = true # Warn about unused mypy settings
+plugins = ["pydantic.mypy"]
+
 [tool.ruff]
 extend-include = ["*.ipynb"]
 

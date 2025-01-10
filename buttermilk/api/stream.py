@@ -158,7 +158,7 @@ async def flow_stream(
 
     async for job in flow.run_flows(
         record=record,
-        run_info=bm._run_metadata,
+        run_info=bm.run_info,
         source=flow_request.source,
         flow_id=flow_request.flow_id,
         q=flow_request.q,

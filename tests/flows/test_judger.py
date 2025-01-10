@@ -22,7 +22,7 @@ def single_step_flow(judger):
 
 @pytest.mark.anyio
 async def test_run_flow_judge(single_step_flow,  fight_no_more_forever, bm: BM):
-    async for result in single_step_flow.run_flows(flow_id="testflow", source='testing', record=fight_no_more_forever, run_info=bm._run_metadata):
+    async for result in single_step_flow.run_flows(flow_id="testflow", source='testing', record=fight_no_more_forever, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert result.outputs.prediction is False

@@ -341,7 +341,7 @@ def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names: dict = {}):
     data_file = None
 
     batch_id = dict(
-        run_id=bm._run_metadata.run_id,
+        run_id=bm.run_info.run_id,
         step=flow_name,
         **run_cfg,
     )
@@ -378,7 +378,7 @@ def run(*, flow_name, flow_cfg, flow_obj, run_cfg, run_names: dict = {}):
         batch_id=batch_id,
     )
 
-    df.loc[:, "run_id"] = bm._run_metadata.run_id
+    df.loc[:, "run_id"] = bm.run_info.run_id
     run_names[flow_name] = run_name
 
     # if flow_cfg.save:

@@ -7,6 +7,8 @@
 # The configuration files will be used to store the paths to the authentication credentials in
 # the cloud vaults.
 
+from __future__ import annotations  # Enable postponed annotations
+
 import datetime
 import json
 import logging
@@ -137,32 +139,33 @@ class Project(BaseModel):
         global _REGISTRY
         if not _REGISTRY.get(_CONFIG):
             _REGISTRY[_CONFIG] = self
+        else:
+            raise ValueError(f"Config already initialised; refusing to overwrite!")
         return self
 
 
 class BM(Singleton, BaseModel):
-    cfg: Project = Field(default=None, validate_default=True)
+    cfg: Optional[Project] = None
 
-    _run_metadata: SessionInfo = PrivateAttr()
+    run_info: Optional[SessionInfo] = None
     _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    @field_validator("cfg")
-    def load_config(cls, v):
+    @model_validator(mode="after")
+    def ensure_config(self) -> Self:
+        """Ensure cfg and run_info are populated."""
         global _REGISTRY
-        if not v:
+        if self.cfg is None: # check here that cfg isn't set
             try:
-                return _REGISTRY[_CONFIG]
+                self.cfg = _REGISTRY[_CONFIG] #populate
             except KeyError as e:
                 raise FatalError(
                     "BM() called without config information before it was initialised.",
                 ) from e
-        return v
 
-    def model_post_init(self, __context: Any) -> None:
-        if not _REGISTRY.get("init"):
+        if not self.run_info:
             # Initialise Run Metadata
-            self._run_metadata=SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base) 
+            self.run_info=SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base) 
 
             for cloud in self.cfg.clouds:
                 if cloud.type == "gcp":
@@ -178,15 +181,14 @@ class BM(Singleton, BaseModel):
                         location=cloud.region,
                         staging_bucket=cloud.bucket,
                     )
-            _REGISTRY["init"] = True
 
             # Print config to console and save to default save dir
             rprint(self.cfg)
-            rprint(self._run_metadata)
+            rprint(self.run_info)
 
             try:
                 self.save(
-                    data=[self.cfg.model_dump(), self._run_metadata.model_dump()],
+                    data=[self.cfg.model_dump(), self.run_info.model_dump()],
                     basename="config",
                     extension=".json",
                     save_dir=self.save_dir,
@@ -198,19 +200,22 @@ class BM(Singleton, BaseModel):
             if self.cfg.tracing:
                 from promptflow.tracing import start_trace
                 start_trace(
-                    resource_attributes={"run_id": self._run_metadata.run_id},
+                    resource_attributes={"run_id": self.run_info.run_id},
                     collection=self.cfg.name,
                     job=self.cfg.job,
                 )
+
+        return self
+    
     @property
     def save_dir(self) -> str:
-        return self._run_metadata.save_dir
+        return self.run_info.save_dir
     
     def save(self, data, save_dir=None, **kwargs):
         """Failsafe save method."""
         save_dir = save_dir or self.save_dir
         result = save.save(data=data, save_dir=save_dir, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self._run_metadata.run_id))
+        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self.run_info.run_id))
         return result
     
     @property
@@ -276,7 +281,7 @@ class BM(Singleton, BaseModel):
                 "location": self.cfg.logger.location,
                 "namespace": self.cfg.name,
                 "job": self.cfg.job,
-                "task_id": self._run_metadata.run_id,
+                "task_id": self.run_info.run_id,
             },
         )
 
@@ -290,7 +295,7 @@ class BM(Singleton, BaseModel):
             client=_REGISTRY['gcslogging'],
             resource=resource,
             name=self.cfg.name,
-            labels=self._run_metadata.model_dump(),
+            labels=self.run_info.model_dump(),
         )
         cloudHandler.setLevel(
             logging.INFO,
@@ -299,8 +304,8 @@ class BM(Singleton, BaseModel):
 
         logger.info(
             dict(
-                message=f"Logging setup for: {self._run_metadata.__str__}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",
-                **self._run_metadata.model_dump(),
+                message=f"Logging set up for: {self.run_info.__str__()}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",
+                **self.run_info.model_dump(),
             ),
         )
 

@@ -3,7 +3,7 @@ import datetime
 import platform
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Self
+from typing import Optional, Self
 
 import psutil
 import pydantic
@@ -50,7 +50,7 @@ class SessionInfo(pydantic.BaseModel):
         default_factory=lambda: psutil.Process().username().split("\\")[-1],
     )
     save_dir_base: str 
-    _save_dir: str = PrivateAttr()
+    save_dir: Optional[str] = None
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
@@ -60,9 +60,6 @@ class SessionInfo(pydantic.BaseModel):
     def __str__(self):
         return _global_run_id
 
-    @property
-    def save_dir(self):
-        return self._save_dir
 
     @pydantic.field_validator("save_dir_base", mode="before")
     def get_save_dir(cls, save_dir_base, values) -> str:
@@ -82,5 +79,5 @@ class SessionInfo(pydantic.BaseModel):
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
         save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
-        self._save_dir = save_dir.as_uri()
+        self.save_dir = save_dir.as_uri()
         return self

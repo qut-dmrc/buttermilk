@@ -25,7 +25,7 @@ def flow(describer):
 @pytest.mark.anyio
 async def test_run_flow_describe(flow,  image_bytes, bm: BM):
     record = RecordInfo(media=[await download_and_convert(image_bytes, "image/jpeg")])
-    async for result in flow.run_flows(flow_id="testflow", source='testing', record=record, run_info=bm._run_metadata):
+    async for result in flow.run_flows(flow_id="testflow", source='testing', record=record, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert "painting" in str(result.record.description).lower()
@@ -33,7 +33,7 @@ async def test_run_flow_describe(flow,  image_bytes, bm: BM):
 
 @pytest.mark.anyio
 async def test_run_flow_describe_no_media(flow, lady_macbeth: RecordInfo, bm: BM):
-    async for result in flow.run_flows(flow_id="testflow", source='testing', record=lady_macbeth, run_info=bm._run_metadata):
+    async for result in flow.run_flows(flow_id="testflow", source='testing', record=lady_macbeth, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.outputs
@@ -48,7 +48,7 @@ async def test_painting(bm, describer, image_bytes):
         source="test",
         inputs={"record": "record"},
         parameters={"template": "describe"},
-        run_info=bm._run_metadata,
+        run_info=bm.run_info,
     )
     job.inputs = parse_flow_vars(job.inputs, job=job)
     result = await describer.run(job=job)
@@ -65,7 +65,7 @@ def test_find_record(bm, image_bytes):
         source="test",
         inputs={"record": "record"},
         parameters={"template": "describe"},
-        run_info=bm._run_metadata,
+        run_info=bm.run_info,
     )
     job.inputs = parse_flow_vars(job.inputs, job=job)
     assert job.inputs["record"] == record
