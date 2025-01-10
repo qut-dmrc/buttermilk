@@ -289,9 +289,14 @@ def parse_flow_vars(var_map: Mapping,
             next_level, locator = match_key.split(".", maxsplit=1)
             return resolve_var(match_key=locator, data_dict=data_dict.get(next_level, {}))
         else:
-            # return the name of the key if we can't find a value. It will be used as 
-            # a literal string.
-            return data_dict.get(match_key, match_key)
+            # If the final data variable is a mapping, return the value at the key we 
+            # are looking for. But if the value is not found or the variable is not a 
+            # mapping, return the name of the key if we can't find a value. It will be 
+            # used as a literal string.
+            if isinstance(data_dict, Mapping) and match_key in data_dict:
+                return data_dict[match_key]
+            else:
+                return match_key
         
     def descend(map, path):
         if path is None:
