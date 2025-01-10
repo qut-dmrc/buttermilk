@@ -190,7 +190,8 @@ class BM(Singleton, BaseModel):
             if cloud.type == "gcp":
                 # authenticate to GCP
                 os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
-                credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
+                billing_project = cloud.model_fields.get("quota_project_id", os.environ['GOOGLE_CLOUD_PROJECT'])
+                credentials, self._gcp_project = auth.default(quota_project_id=billing_project)
                 self.setup_logging(verbose=self.cfg.logger.verbose)
                 self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
             if cloud.type == "vertex":
