@@ -134,7 +134,7 @@ class LC(Agent):
         local_messages = self.load_template_vars(**job.parameters, **job.inputs, **additional_data)
 
         if q:
-            job.prompt = q
+            job.prompt = [q]
             job.inputs["q"] = [q]
 
         # Add model details to Job object

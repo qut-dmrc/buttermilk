@@ -2,7 +2,7 @@ import base64
 import datetime
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import numpy as np
 import pydantic
@@ -348,7 +348,8 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: str = Field(default_factory=str)
+    prompt: Optional[Sequence[str]] = Field(default=None)
+    
     parameters: dict | None = Field(
         default_factory=dict,
         description="Additional options for the worker",
@@ -379,7 +380,7 @@ class Job(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
-    _ensure_list = field_validator("source", mode="before")(
+    _ensure_list = field_validator("source","prompt", mode="before")(
         make_list_validator(),
     )
     _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
