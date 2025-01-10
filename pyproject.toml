@@ -11,6 +11,12 @@ annotations = true      # delayed typing annotations
 warn_unused_configs = true # Warn about unused mypy settings
 plugins = ["pydantic.mypy"]
 
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+
 [tool.ruff]
 extend-include = ["*.ipynb"]
 

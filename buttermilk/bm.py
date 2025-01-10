@@ -147,65 +147,89 @@ class Project(BaseModel):
 class BM(Singleton, BaseModel):
     cfg: Optional[Project] = None
 
-    run_info: Optional[SessionInfo] = None
+    _run_info: SessionInfo = PrivateAttr(default=None)
     _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-
-    @model_validator(mode="after")
-    def ensure_config(self) -> Self:
-        """Ensure cfg and run_info are populated."""
+    
+    @field_validator("cfg", mode="after")
+    @classmethod
+    def set_config(cls, cfg) -> dict:
+        """Ensure cfg is populated."""
         global _REGISTRY
-        if self.cfg is None: # check here that cfg isn't set
+
+        if not cfg:  # check here that cfg has not been passed in
             try:
-                self.cfg = _REGISTRY[_CONFIG] #populate
+                cfg = _REGISTRY['BM'].cfg 
             except KeyError as e:
                 raise FatalError(
                     "BM() called without config information before it was initialised.",
                 ) from e
 
-        if not self.run_info:
-            # Initialise Run Metadata
-            self.run_info=SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base) 
+        return cfg
+    
 
-            for cloud in self.cfg.clouds:
-                if cloud.type == "gcp":
-                    # authenticate to GCP
-                    os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
-                    credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
-                    self.setup_logging(verbose=self.cfg.logger.verbose)
-                    self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
-                if cloud.type == "vertex":
-                    # initialize vertexai
-                    aiplatform.init(
-                        project=cloud.project,
-                        location=cloud.region,
-                        staging_bucket=cloud.bucket,
-                    )
-
-            # Print config to console and save to default save dir
-            rprint(self.cfg)
-            rprint(self.run_info)
-
-            try:
-                self.save(
-                    data=[self.cfg.model_dump(), self.run_info.model_dump()],
-                    basename="config",
-                    extension=".json",
-                    save_dir=self.save_dir,
+    @model_validator(mode="before")
+    @classmethod
+    def get_vars(cls, vars) -> dict:
+        return vars
+    
+    @model_validator(mode="after")
+    def ensure_config(self) -> Self:
+        global _REGISTRY
+        
+        if _run_info := _REGISTRY.get("run_info"):  
+            # Already configured, just wrap up.
+            self._run_info = self._run_info or _run_info
+            return self
+        
+        # Initialise Run Metadata
+        _REGISTRY["run_info"] = SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base)
+        self._run_info = _REGISTRY["run_info"]
+        
+        for cloud in self.cfg.clouds:
+            if cloud.type == "gcp":
+                # authenticate to GCP
+                os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
+                credentials, self._gcp_project = auth.default(quota_project_id=cloud.quota_project_id)
+                self.setup_logging(verbose=self.cfg.logger.verbose)
+                self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
+            if cloud.type == "vertex":
+                # initialize vertexai
+                aiplatform.init(
+                    project=cloud.project,
+                    location=cloud.region,
+                    staging_bucket=cloud.bucket,
                 )
 
-            except Exception as e:
-                self.logger.error(f"Could not save config to default save dir: {e}")
+        
+        # Print config to console and save to default save dir
+        rprint(self.cfg)
+        rprint(self.run_info)
 
-            if self.cfg.tracing:
-                from promptflow.tracing import start_trace
-                start_trace(
-                    resource_attributes={"run_id": self.run_info.run_id},
-                    collection=self.cfg.name,
-                    job=self.cfg.job,
-                )
+        try:
+            self.save(
+                data=[self.cfg.model_dump(), self.run_info.model_dump()],
+                basename="config",
+                extension=".json",
+                save_dir=self.save_dir,
+            )
+
+        except Exception as e:
+            self.logger.error(f"Could not save config to default save dir: {e}")
+
+        if self.cfg.tracing:
+            from promptflow.tracing import start_trace
+            start_trace(
+                resource_attributes={"run_id": self.run_info.run_id},
+                collection=self.cfg.name,
+                job=self.cfg.job,
+            )
 
         return self
+    
+    @property
+    def run_info(self) -> SessionInfo:
+        return self._run_info
     
     @property
     def save_dir(self) -> str:
