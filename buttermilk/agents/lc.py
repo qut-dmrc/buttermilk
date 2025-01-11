@@ -68,11 +68,12 @@ class LC(Agent):
     ) -> Job:
 
         model = job.parameters.pop('model')
+        template = job.parameters.pop('template')
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
         
         # Construct list of messages from the templates
-        template = load_template_vars(**job.parameters, **job.inputs, **additional_data)
+        rendered_template = load_template_vars(template=template, **job.parameters, **job.inputs, **additional_data)
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
@@ -83,7 +84,7 @@ class LC(Agent):
             f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
         )
         response = await self.invoke(
-            template=template,
+            template=rendered_template,
             model=model,
             placeholders=job.inputs,
         )
@@ -155,7 +156,7 @@ class LC(Agent):
             lc_messages.append((role, content))
 
         # Make the chain
-        chain = ChatPromptTemplate(lc_messages) | self._llms[model] | ChatParser()
+        chain = ChatPromptTemplate(lc_messages, template_format="jinja2") | self._llms[model] | ChatParser()
 
         elapsed = 0
         t0 = time.time()

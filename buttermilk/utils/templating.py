@@ -47,7 +47,7 @@ def _parse_prompty(string_template) -> str:
 
 def load_template_vars(
     *,
-    rendered_template: str,
+    template: str,
     **inputs,
 ) -> str:
     recursive_paths = TEMPLATE_PATHS + [
@@ -63,8 +63,8 @@ def load_template_vars(
     )
 
     # Read main template and strip out Prompty header
-    filename = env.get_template(f"{rendered_template}.jinja2").filename
-    logger.debug(f"Loading template {rendered_template} from {filename}.")
+    filename = env.get_template(f"{template}.jinja2").filename
+    logger.debug(f"Loading template {template} from {filename}.")
     tpl_text = read_text(filename)
     tpl_text = _parse_prompty(tpl_text)
 

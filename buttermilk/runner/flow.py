@@ -11,6 +11,7 @@ from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk._core.types import SessionInfo
 from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
 from buttermilk.utils.utils import find_in_nested_dict
+from buttermilk.utils.validators import make_list_validator
 
 """ A flow ties several stages together, runs them over a single record, 
     and streams results.
@@ -18,7 +19,7 @@ from buttermilk.utils.utils import find_in_nested_dict
 
 
 class Flow(BaseModel):
-    source: str | Sequence[str] | None
+    source: Sequence[str]
     steps: list[Agent]
 
     data: list[DataSource] | None = Field(default_factory=list)
@@ -26,6 +27,10 @@ class Flow(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+    _ensure_list = field_validator("source", mode="before")(
+        make_list_validator(),
+    )
 
     @field_validator("data", mode="before")
     def convert_data(cls, value):
@@ -45,13 +50,13 @@ class Flow(BaseModel):
         flow_id: str,
         record: RecordInfo | None,
         run_info: SessionInfo,
-        source: str | Sequence[str] | None,
         q: str | None = None,
+        source: Sequence[str] = []
     ) -> AsyncGenerator[Any, None]:
 
         if self._data is None:
             await self.load_data()
-
+        
         for agent in self.steps:
             async for result in self.run_step(
                 agent=agent,
@@ -70,11 +75,11 @@ class Flow(BaseModel):
         flow_id: str,
         run_info: SessionInfo,
         record: RecordInfo | None = None,
-        q: Sequence[str] | str = [],
-        source: Sequence[str] = [],
+        q: Sequence[str] | str | None= [],
+        source: Sequence[str],
     ) -> AsyncGenerator:
         self._data[agent.name] = {}
-        source = [self.source, *source] if source else [self.source]
+        source = list(set(self.source + source)) if source else self.source
         tasks = []
         for variant in agent.make_combinations():
             # Create a new job and task for every combination of variables

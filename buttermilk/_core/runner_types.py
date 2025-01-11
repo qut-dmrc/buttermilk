@@ -348,7 +348,7 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: Optional[Sequence[str]] = Field(default=None)
+    prompt: Optional[Sequence[str|None]|str] = Field(default_factory=list)
     
     parameters: dict | None = Field(
         default_factory=dict,

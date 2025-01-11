@@ -17,6 +17,8 @@ def make_list_validator() -> Callable[[Any], list]:
     """Convert single items to list if not already a list"""
 
     def validator(v: Any) -> list:
+        if v is None:
+            return []
         if isinstance(v, str):
             return [v]
         return v if isinstance(v, list) else [v]
