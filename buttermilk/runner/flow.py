@@ -67,10 +67,10 @@ class Flow(BaseModel):
         self,
         *,
         agent: Agent,
-        record: RecordInfo | None,
         flow_id: str,
         run_info: SessionInfo,
-        q: str | None = None,
+        record: RecordInfo | None = None,
+        q: Sequence[str] | str = [],
         source: Sequence[str] = [],
     ) -> AsyncGenerator:
         self._data[agent.name] = {}
@@ -84,6 +84,7 @@ class Flow(BaseModel):
                 record=record,
                 source=source,
                 run_info=run_info,
+                prompt=q
             )
 
             # Process all inputs into two categories.
@@ -101,7 +102,6 @@ class Flow(BaseModel):
             job.parameters = parse_flow_vars(variant, job=job, additional_data=self._data)
             task = agent.run(
                 job=job,
-                q=q,
                 additional_data=self._data
             )
             tasks.append(task)

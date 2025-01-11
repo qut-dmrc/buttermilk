@@ -4,15 +4,11 @@ from typing import Any, List, Literal
 import json_repair
 from langchain_core.exceptions import OutputParserException
 from langchain_core.output_parsers.json import JsonOutputParser
-from langchain_core.utils.json import parse_json_markdown
 from langchain_core.outputs import Generation
 from pydantic import BaseModel, Field
 
 import regex as re
 from json import JSONDecodeError
-
-from langchain_core.exceptions import OutputParserException
-from langchain_core.utils.json import parse_json_markdown
 
 from .._core.log import logger
 
@@ -45,21 +41,18 @@ class ChatParser(JsonOutputParser):
         try:
             # First we're going to try to remove any text around a possible JSON string.
             # This pattern removes any whitespace after the first "{" and before the last "}".
-            pat = r"\{.*?(.*)\s*\}"
+            pat = r"\{\s*(.*)\s*\}"
             match = re.search(pat, text, re.DOTALL)
 
             json_str = "{" + match.group(1) + "}"
             output = json_repair.loads(json_str)
 
-        except Exception as e:
-            try:
-                output = parse_json_markdown(text)
-            except (JSONDecodeError, OutputParserException, Exception) as e:
-                if self.on_error == "raise":
-                    logger.error(f"Unable to decode JSON in result: {text}")
-                    raise e
-                elif self.on_error == "warn":
-                    logger.warning(f"Unable to decode JSON in result: {text}")
+        except (JSONDecodeError) as e:
+            if self.on_error == "raise":
+                logger.error(f"Unable to decode JSON in result: {text}")
+                raise e
+            else:
+                logger.warning(f"Unable to decode JSON in result: {text}")
                 return dict(response=text, error="Unable to decode JSON in result")
 
         if not isinstance(output, dict):
