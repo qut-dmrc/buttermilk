@@ -6,6 +6,12 @@ from fastapi.testclient import TestClient
 from buttermilk._core.runner_types import Job
 from buttermilk.api.flow import app
 from buttermilk.api.stream import FlowRequest
+import pytest
+from fastapi.testclient import TestClient
+from buttermilk.agents.testagent import TestAgent
+from buttermilk.api.flow import app, FlowRequest
+from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk.runner.flow import Flow
 
 client = TestClient(app)
 
@@ -46,3 +52,22 @@ def test_get_runs(bm: Any):
     assert response.status_code == 200
     assert "text/html" not in response.headers["content-type"]
     assert all([isinstance(x, Job) for x in response])
+
+
+@pytest.fixture
+def flow_request_data():
+    return {
+        "flow": "judge_full",
+        "text": """An image depicting a caricature of a Jewish man with an exaggerated hooked nose and a Star of David marked with "Jude" (resembling Holocaust-era badges), holding a music box labeled "media." A monkey labeled "BLM" sits on the man's shoulder.""",
+    }
+    # "video": "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4",
+
+@pytest.fixture
+def flow(bm):
+    return Flow(source="test", steps=[TestAgent()])
+
+
+async def test_run_flow(flow, flow_request_data):
+    async for response in flow.run(record=RecordInfo(text=flow_request_data['text'])):
+        print(response)
+        pass

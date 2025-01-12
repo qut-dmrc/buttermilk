@@ -100,3 +100,4 @@ And pall thee in the dunnest smoke of hell,
 That my keen knife see not the wound it makes,
 Nor heaven peep through the blanket of the dark
 To cry “Hold, hold!”""")
+    return record

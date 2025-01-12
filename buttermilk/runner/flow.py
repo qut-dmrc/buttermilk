@@ -75,7 +75,7 @@ class Flow(BaseModel):
         flow_id: str,
         run_info: SessionInfo,
         record: RecordInfo | None = None,
-        q: Sequence[str] | str | None= [],
+        q: str | None= None,
         source: Sequence[str],
     ) -> AsyncGenerator:
         self._data[agent.name] = {}

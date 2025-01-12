@@ -7,33 +7,29 @@ from buttermilk.bm import BM
 from buttermilk.llms import MULTIMODAL_MODELS
 from buttermilk.runner.helpers import parse_flow_vars
 from buttermilk.utils.media import download_and_convert
+from buttermilk.runner.flow import Flow
 
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def describer(request):
+def flow_describer(request):
     agent = Describer(name="testdescriber", 
                       parameters={"template": "describe", "model": request.param},
                       inputs={"record": "record"},
                       outputs={"record": "record"})
-    return agent
-
-@pytest.fixture
-def flow(describer):
-    from buttermilk.runner.flow import Flow
-    return Flow(source="testing", steps=[describer])
+    return Flow(source="testing", steps=[agent])
 
 @pytest.mark.anyio
-async def test_run_flow_describe(flow,  image_bytes, bm: BM):
+async def test_run_flow_describe(flow_describer,  image_bytes, bm: BM):
     record = RecordInfo(media=[await download_and_convert(image_bytes, "image/jpeg")])
-    async for result in flow.run_flows(flow_id="testflow", record=record, run_info=bm.run_info):
+    async for result in flow_describer.run_flows(flow_id="testflow", record=record, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert "painting" in str(result.record.description).lower()
         assert "night watch" in str(result.record.title).lower()
 
 @pytest.mark.anyio
-async def test_run_flow_describe_no_media(flow, lady_macbeth: RecordInfo, bm: BM):
-    async for result in flow.run_flows(flow_id="testflow", record=lady_macbeth, run_info=bm.run_info):
+async def test_run_flow_describe_no_media(flow_describer, lady_macbeth: RecordInfo, bm: BM):
+    async for result in flow_describer.run_flows(flow_id="testflow", record=lady_macbeth, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.outputs

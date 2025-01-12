@@ -22,29 +22,6 @@ def test_save_dir(bm):
     assert bm.save_dir.startswith("gs://")
     assert CloudPath(bm.save_dir)
 
-def test_save(bm):
-    uri = bm.save(data=["test data"], extension=".txt")
-    assert uri.startswith("gs://")
-    assert uri.startswith(bm.save_dir)
-    assert uri.endswith(".txt")
-    uploaded = CloudPath(uri)
-    assert uploaded.exists()
-    read_text = uploaded.read_text()
-    assert read_text == '{"0": "test data"}'
-    uploaded.unlink(missing_ok=False)
-
-def test_upload_text(bm):
-    save_dir = bm.save_dir
-    uri = upload_text(data="test data", save_dir=save_dir, extension=".txt")
-    assert uri.startswith("gs://")
-    assert uri.startswith(bm.save_dir)
-    assert uri.endswith(".txt")
-    uploaded = CloudPath(uri)
-    assert uploaded.exists()
-    read_text = uploaded.read_text()
-    assert read_text == "test data"
-    uploaded.unlink(missing_ok=False)
-
 
 def test_singleton(bm):
     obj1 = BM()

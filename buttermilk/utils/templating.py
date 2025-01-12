@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Sequence, Tuple
 
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.defaults import TEMPLATE_PATHS
@@ -30,10 +30,6 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
     ]
 
 
-class KeepUndefined(Undefined):
-    def __str__(self):
-        return "{{ " + self._undefined_name + " }}"
-
 
 def _parse_prompty(string_template) -> str:
     # Use Promptflow's format and strip the header out
@@ -49,11 +45,20 @@ def load_template_vars(
     *,
     template: str,
     **inputs,
-) -> str:
+) -> Tuple[str, list]:
     recursive_paths = TEMPLATE_PATHS + [
         x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
     ]
     loader = FileSystemLoader(searchpath=recursive_paths)
+
+    undefined_vars = []
+    class KeepUndefined(Undefined):
+        def __str__(self):
+            # Keep a list of variables that have not yet been filled.
+            undefined_vars.append(self._undefined_name)
+
+            # From this point, langchain expects single braces for replacement instead of double.
+            return "{" + self._undefined_name + "}"
 
     env = SandboxedEnvironment(
         loader=loader,
@@ -87,23 +92,29 @@ def load_template_vars(
                 pass
 
     # Compile and render the templates, leaving unfilled variables to substitute later
-    rendered_template = env.from_string(tpl_text).render()
+    tpl = env.from_string(tpl_text)
+    rendered_template = tpl.render()
 
-    # From this point, langchain expects single braces for replacement instead of double
-    # we could do this with a custom template class, but it's easier to just do it here.
-    rendered_template = re.sub(r"{{\s+([a-zA-Z0-9_]+)\s+}}", r"{\1}", rendered_template)
+    # We now have a template formatted as a string in Prompty format.
+    # Also return the leftover (unfilled) inputs to pass through later
+    return rendered_template, undefined_vars
 
-    # We now have a template formatted as a string in Prompty format
-    return rendered_template
-
-def fill_placeholders(model_capabilities: LLMCapabilities, **input_vars):
+def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:
     # Fill placeholders
+    placeholders = {}
     for k, v in input_vars.items():
         if isinstance(v, RecordInfo):
             if rendered := v.as_langchain_message(role="user", model_capabilities=model_capabilities):
-                input_vars[k] = [rendered]
-        elif v and v[0]:
-            input_vars[k] = v
+                placeholders[k] = [rendered]
+        elif isinstance(v, str):
+            placeholders[k] = v
+        elif isinstance(v, Sequence):
+            # Lists may need to be handled separately...?
+            placeholders[k] = '\n\n'.join(v)
+        elif v:
+            placeholders[k] = v
+
+    return placeholders
 
 def make_messages(local_template: str) -> list[Tuple[str, str]]:
     try:

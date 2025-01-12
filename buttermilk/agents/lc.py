@@ -41,7 +41,7 @@ from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import KeepUndefined, _parse_prompty, make_messages, load_template_vars
+from buttermilk.utils.templating import prepare_placeholders, make_messages, load_template_vars
 from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
 
 #########################################
@@ -63,7 +63,6 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        q: str | None = None,
         additional_data: dict[str, dict] = {},
     ) -> Job:
 
@@ -73,12 +72,22 @@ class LC(Agent):
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
         
         # Construct list of messages from the templates
-        rendered_template = load_template_vars(template=template, **job.parameters, **job.inputs, **additional_data)
+        rendered_template, remaining_inputs = load_template_vars(template=template, **job.parameters)
 
+        # Prepare placeholder variables
+        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
+        placeholders = { k:v for k,v in additional_data.items() if v}
+        placeholders.update(**job.inputs)
+        placeholders["q"] = job.prompt
+        placeholders["record"] = job.record
+        placeholders = prepare_placeholders(model_capabilities=model_capabilities, **placeholders)
+        placeholders = { k:v for k,v in placeholders.items() if k in remaining_inputs }
+        
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
         job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
         job.parameters["model"] = model
+
 
         logger.debug(
             f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
@@ -86,7 +95,7 @@ class LC(Agent):
         response = await self.invoke(
             template=rendered_template,
             model=model,
-            placeholders=job.inputs,
+            placeholders=placeholders,
         )
 
         logger.debug(
@@ -125,23 +134,6 @@ class LC(Agent):
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-        input_vars = {}
-        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
-
-        # Prepare placeholder variables
-        for k, v in placeholders.items():
-            if isinstance(v, RecordInfo):
-                # Render record as a message part in OpenAI format
-                if rendered := v.as_langchain_message(role="user", model_capabilities=model_capabilities):
-                    input_vars[k] = [rendered]
-            elif isinstance(v, str):
-                input_vars[k] = v
-            elif isinstance(v, Sequence):
-                # Lists may need to be handled separately...?
-                input_vars[k] = '\n\n'.join(v)
-
-        # Substitute placeholder variables into the template
-        # template = template.format(**input_vars)
 
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys
@@ -165,7 +157,7 @@ class LC(Agent):
         try:
             try:
                 logger.debug(f"Invoking chain with {model}...")
-                output = await chain.ainvoke(input=input_vars)
+                output = await chain.ainvoke(input=placeholders)
             except Exception as e:
                 t1 = time.time()
                 elapsed = t1 - t0

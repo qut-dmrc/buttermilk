@@ -33,6 +33,18 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
 
 
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
+def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
+    llm = llms[model]
+    message = RecordInfo(
+        media=[MediaObj(mime="image/jpg", data=image_bytes)],
+    ).as_langchain_message(role="human", model_capabilities=llms.connections[model].capabilities, include_text=False)
+    
+    chain = ChatPromptTemplate.from_messages([message]) | llm
+    answer = chain.invoke({})
+    rprint(answer)
+    assert answer
+
+@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 def test_multimodal_input_video_uri(llms, model, video_url):
     llm = llms[model]
     message = RecordInfo(

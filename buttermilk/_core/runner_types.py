@@ -283,8 +283,9 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
+        include_text: bool = True
     ) -> BaseMessage | None:
-        components = self.as_openai_message(role=role, model_capabilities=model_capabilities)
+        components = self.as_openai_message(role=role, model_capabilities=model_capabilities, include_text=include_text)
         if components and (components := components.get("content")):
             if role in {"user", "human"}:
                 return HumanMessage(content=components)
@@ -295,6 +296,7 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
+        include_text: bool =False, 
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
@@ -305,11 +307,13 @@ class RecordInfo(BaseModel):
             (obj.mime.startswith('audio') and model_capabilities.audio)):
                 components.append(obj.as_content_part())
 
-        if not components and not self.text:
+        if not components and not (self.text and include_text):
             logger.warning(f"No text or model compatible media provided for {self.record_id}")
             return None
-        text = self.text or 'see attached media'
-        components.append({"type": "text", "text": text})
+        
+        if include_text:
+            text = self.text or 'see attached media'
+            components.append({"type": "text", "text": text})
 
         message = {
             "role": role,
@@ -348,7 +352,7 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: Optional[Sequence[str|None]|str] = Field(default_factory=list)
+    prompt: Optional[str] = Field(default=None)
     
     parameters: dict | None = Field(
         default_factory=dict,
@@ -362,7 +366,7 @@ class Job(BaseModel):
         default=None,
         description="The results of the job",
     )
-    error: dict[str, Any] | None = Field(default_factory=dict)
+    error: dict[str, Any] = Field(default_factory=dict)
     metadata: dict | None = Field(default_factory=dict)
 
     model_config = ConfigDict(
@@ -380,7 +384,7 @@ class Job(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
-    _ensure_list = field_validator("source","prompt", mode="before")(
+    _ensure_list = field_validator("source", mode="before")(
         make_list_validator(),
     )
     _convert = field_validator("outputs", "inputs", "parameters", mode="before")(

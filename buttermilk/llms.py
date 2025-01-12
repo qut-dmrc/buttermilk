@@ -19,6 +19,12 @@ if TYPE_CHECKING:
 # from ..libs.hf import Llama2ChatMod
 # from ..libs.replicate import replicatellama3
 
+# Set parameters that apply to all models here
+global_langchain_configs = {
+    # We want to handle retries ourselves, not through langchain
+    "max_retries": 0,
+    }
+
 MODEL_CLASSES = [
     ChatOpenAI,
     AzureChatOpenAI,
@@ -143,11 +149,16 @@ class LLMs(BaseModel):
             return self.models[__name]
 
         model_config = self.connections[__name]
+
+        # Merge global with model specific configs
+        params = dict(**global_langchain_configs)
+        params.update(**model_config.configs)
+
+        # Instantiate the model client object
         self.models[__name] = globals()[model_config.obj](
-            **model_config.configs,
+            **params
         )
         return self.models[__name]
-
 
     def __getitem__(self, __name: str):
         return self.__getattr__(__name)

@@ -4,13 +4,37 @@ from google.cloud.storage.client import Client
 import pytest
 
 from buttermilk.bm import BM
-from buttermilk.utils.save import upload_binary
+from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
-@pytest.fixture
-def gcs() -> Client:
-    from google.cloud import bigquery, storage
-    return storage.Client()
+
+def test_logger_initialised(bm):
+    obj = bm.logger
+    assert obj is not None
+    assert len(obj.handlers) >= 2
+
+def test_save(bm):
+    uri = bm.save(data=["test data"], extension=".txt")
+    assert uri.startswith("gs://")
+    assert uri.startswith(bm.save_dir)
+    assert uri.endswith(".txt")
+    uploaded = CloudPath(uri)
+    assert uploaded.exists()
+    read_text = uploaded.read_text()
+    assert read_text == '{"0": "test data"}'
+    uploaded.unlink(missing_ok=False)
+
+def test_upload_text(bm):
+    save_dir = bm.save_dir
+    uri = upload_text(data="test data", save_dir=save_dir, extension=".txt")
+    assert uri.startswith(bm.save_dir)
+    assert uri.endswith(".txt")
+    uploaded = CloudPath(uri)
+    assert uploaded.exists()
+    read_text = uploaded.read_text()
+    assert read_text == "test data"
+    uploaded.unlink(missing_ok=False)
+
 
 def test_save_binary(bm):
     save_dir = bm.save_dir
@@ -30,8 +54,3 @@ def test_save_binary(bm):
         CloudPath(uri).unlink()
     pass
 
-
-def test_logger_initialised(bm):
-    obj = bm.logger
-    assert obj is not None
-    assert len(obj.handlers) >= 2
