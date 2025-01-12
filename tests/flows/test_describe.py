@@ -23,6 +23,7 @@ async def test_run_flow_describe(flow_describer,  image_bytes, bm: BM):
     record = RecordInfo(media=[await download_and_convert(image_bytes, "image/jpeg")])
     async for result in flow_describer.run_flows(flow_id="testflow", record=record, run_info=bm.run_info):
         assert result
+        assert not result.error
         assert isinstance(result.record, RecordInfo)
         assert "painting" in str(result.record.description).lower()
         assert "night watch" in str(result.record.title).lower()
@@ -33,25 +34,6 @@ async def test_run_flow_describe_no_media(flow_describer, lady_macbeth: RecordIn
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.outputs
-
-
-@pytest.mark.anyio
-async def test_painting(bm, describer, image_bytes):
-    record = RecordInfo(media=[await download_and_convert(image_bytes, "image/jpg")])
-    job = Job(
-        flow_id="test",
-        record=record,
-        source="test",
-        inputs={"record": "record"},
-        parameters={"template": "describe"},
-        run_info=bm.run_info,
-    )
-    job.inputs = parse_flow_vars(job.inputs, job=job)
-    result = await describer.run(job=job)
-    assert result 
-    assert not result.error
-    assert "night watch" in str(result.outputs.model_dump()).lower()
-
 
 def test_find_record(bm, image_bytes):
     record = RecordInfo(media=[image_bytes])
