@@ -46,8 +46,7 @@ class ChunkedDocument(BaseModel):
     document_title: str
     chunk_index: int
     chunk_text: str
-    embedding: Optional[Embeddings]
-    structured_data: Optional[Mapping[str,Any]]
+    embedding: Optional[Sequence[float]|Sequence[int]] = None
 
     @property
     def chunk_title(self):
@@ -58,6 +57,8 @@ class GoogleVertexEmbeddings(BaseModel):
     embedding_model: str = MODEL_NAME
     task: str = "RETRIEVAL_DOCUMENT"
     dimensionality: Optional[int] = None
+    chunk_size: int = 4000
+    chunk_overlap:int = 1000
 
     def get_embeddings(self, chunked_documents: Sequence[ChunkedDocument]) -> Sequence[ChunkedDocument]:
         model = TextEmbeddingModel.from_pretrained(self.embedding_model)
@@ -65,7 +66,11 @@ class GoogleVertexEmbeddings(BaseModel):
         
         inputs = [TextEmbeddingInput(text=chunk.chunk_text, task_type=self.task, title=chunk.chunk_title) for chunk in chunked_documents]
         
-        embeddings = model.get_embeddings(inputs, **kwargs)
+        embeddings = []
+        for chunk in inputs:
+            # we could optimise by passing multiple chunks as a time, but we'd have to calculate the max input token to do that
+            e = model.get_embeddings([chunk], **kwargs)
+            embeddings.extend(e)
         
         for i, e in enumerate(embeddings):
             chunked_documents[i].embedding = e.values
@@ -75,13 +80,13 @@ class GoogleVertexEmbeddings(BaseModel):
     
     def prepare_docs(self, records: Sequence[RecordInfo]) -> Sequence[ChunkedDocument]:
         # Chunking
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=4000, chunk_overlap=1000, add_overlap=True)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
 
         chunked_documents = []
         for record in records:
             chunk_texts = text_splitter.split_text(record.text)
             for i, chunk_text in enumerate(chunk_texts):              
-                chunk = ChunkedDocument(record_id=record.record_id, document_title=record.title, chunk_index=i, chunk_text=chunk_text, structured_data=record.model_dump())
+                chunk = ChunkedDocument(record_id=record.record_id, document_title=record.title, chunk_index=i, chunk_text=chunk_text)
                 chunked_documents.append(chunk)
 
         return chunked_documents
@@ -93,9 +98,8 @@ class GoogleVertexEmbeddings(BaseModel):
         embeddings_path: str,
         persist_directory: str = ".chroma",
     ):
-        # Read all files in the data directory
         records = pd.read_json(dataset, orient='records', lines=True)
-        
+
         chunks = self.prepare_docs(records=records)
         
         embeddings = self.get_embeddings(chunks)
