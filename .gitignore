@@ -25,6 +25,7 @@ authorized_keys
 *.egg-info
 .eggs
 core
+.chroma
 
 # exceptions
 !.devcontainer
