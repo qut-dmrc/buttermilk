@@ -20,7 +20,7 @@ class _CFG(BaseModel):
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def main(cfg: _CFG) -> None:
+def main(cfg) -> None:
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
@@ -35,7 +35,7 @@ def main(cfg: _CFG) -> None:
         ):
             rprint(response)
 
-    asyncio.run(run_flow(objs.flows[flow]))
+    # asyncio.run(run_flow(objs.flows[flow]))
 
 
 if __name__ == "__main__":

@@ -126,6 +126,8 @@ dependencies = [
     "promptflow>=0.17.dev0",
     "promptflow-tracing>=1.17.dev0",
     "marshmallow==3.23.2",
+    "chromadb>=0",
+    "langchain-chroma>=0.0.0.dev0",
 ]
 name = "buttermilk"
 version = "0.2.1"
