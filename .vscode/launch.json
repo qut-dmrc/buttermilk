@@ -27,7 +27,7 @@
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "console": "integratedTerminal",
-      "args": ["job=testing"]
+      "args": []
     },
     {
       "name": "flow mod debug",
