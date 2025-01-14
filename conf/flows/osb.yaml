@@ -33,6 +33,12 @@ osb:
         answers: search.outputs
         
   data:
-    - name: osbcasessummary
-      type: file
-      uri: gs://prosocial-public/osb/02_osb_summaries_20241120.jsonl
+    - name: cases
+      type: vector
+      uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
+      db:
+        type: chromadb
+        embeddings: vertex
+        model: text-embedding-005
+        store: .chromadb
+

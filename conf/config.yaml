@@ -3,11 +3,14 @@ defaults:
   - local
   - llm: lite
 
+name: default_project
+job: development
+
 bm:
   _target_: buttermilk.BM
   cfg:
-    name: default_project
-    job: development
+    name: ${name}
+    job: ${job}
 
     clouds:
       - type: vertex
