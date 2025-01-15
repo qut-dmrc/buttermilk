@@ -5,6 +5,8 @@ import regex as re
 from bs4 import BeautifulSoup
 from pydantic import validate_call
 
+from readabilipy import simple_json_from_html_string
+
 from buttermilk._core.runner_types import MediaObj
 from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
 
@@ -48,8 +50,11 @@ async def download_and_convert(obj: Any, mimetype: str | None = None) -> MediaOb
         uri=uri,
     )
 
+def extract_main_content(html: str) -> dict[str, str]:
+    return simple_json_from_html_string(html, use_readability=True)
 
-def extract_main_content(html: bytes | str) -> str:
+print("\n".join([para['text'] for para in article['plain_text']]))
+def extract_main_content_bs(html: bytes | str) -> str:
     """Extract and clean main content from webpage."""
     soup = BeautifulSoup(html, "html.parser")
 

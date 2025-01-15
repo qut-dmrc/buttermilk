@@ -129,6 +129,7 @@ dependencies = [
     "chromadb>=0",
     "langchain-chroma>=0.0.0.dev0",
     "langchain>=0.3.14",
+    "readabilipy>=0.3.0",
 ]
 name = "buttermilk"
 version = "0.2.1"
