@@ -46,11 +46,11 @@ from vertexai.language_models import TextEmbeddingModel
 MODEL_NAME = "text-embedding-005"
 
 class ChunkedDocument(BaseModel):
-    chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    record_id: str
+    record_id: str  = Field(default_factory=lambda: str(uuid.uuid4()))
     document_title: str
     chunk_index: int
     chunk_text: str
+    document_id: str
     embedding: Optional[Sequence[float]|Sequence[int]] = None
 
     @property
@@ -155,18 +155,18 @@ class GoogleVertexEmbeddings(BaseModel):
         # create a new collection (fails if exists)
         self._client.create_collection(name=self.collection_name, get_or_create=False)
 
-        if not create_embeddings:
+        if create_embeddings:
             # Create new vectors
             docs = self.prepare_docs(records=records)
             embedded_records = self.get_embedded_records(docs)
             df_embeddings = pd.DataFrame.from_records([x.model_dump() for x in embedded_records])
             df_embeddings.to_json(save_path, orient='records', lines=True)
-        elif 'embedding' in records[0].model_fields and len(records[-1].embeddings)>0:
-            df_embeddings = pd.DataFrame.from_records([x.model_dump()])
+        elif len(records[-1].embedding)>0:
+            df_embeddings = pd.DataFrame.from_records([x.model_dump() for x in records])
         else:
             raise ValueError("You must pass an 'embedding' field in the record list or create new embeddings.")
 
-        ids = df_embeddings['chunk_id'].to_list()
+        ids = df_embeddings['record_id'].to_list()
         documents = df_embeddings['text'].to_list()
         embeddings = df_embeddings['embedding'].to_list()
         metadata = df_embeddings[['record_id','document_title','chunk_index']].to_dict(orient='records')
