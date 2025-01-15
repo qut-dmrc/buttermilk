@@ -50,10 +50,9 @@ async def download_and_convert(obj: Any, mimetype: str | None = None) -> MediaOb
         uri=uri,
     )
 
-def extract_main_content(html: str) -> dict[str, str]:
+def extract_main_content(html: str) -> dict[str, None]:
     return simple_json_from_html_string(html, use_readability=True)
 
-print("\n".join([para['text'] for para in article['plain_text']]))
 def extract_main_content_bs(html: bytes | str) -> str:
     """Extract and clean main content from webpage."""
     soup = BeautifulSoup(html, "html.parser")
