@@ -68,6 +68,7 @@ class GoogleVertexEmbeddings(BaseModel):
     persist_directory: str = ".chroma"
     
     _collection = PrivateAttr(default=None)
+    _db = PrivateAttr(default=None)
     _embedding_model = PrivateAttr(default=None)
     _client = PrivateAttr(default=None)
     _lc_embedding_function = PrivateAttr(default=None)
@@ -84,13 +85,16 @@ class GoogleVertexEmbeddings(BaseModel):
         return self
 
     @property
-    def get_collection(self) -> Any:
-        self._collection = self._client.get_collection(self.collection_name, embedding_function=self._lc_embedding_function)
-
+    def collection(self) -> Any:
+        if not self._collection:
+            self._collection = self._client.get_collection(self.collection_name, embedding_function=self._lc_embedding_function)
+        return self._collection
+    
     @property
     def db(self) -> Any:
-        db = Chroma(self.collection_name, persist_directory=self.persist_directory, embedding_function=self._lc_embedding_function, create_collection_if_not_exists=False)
-        return db
+        if not self._db:
+            self._db = Chroma(self.collection_name, client=self._client, persist_directory=self.persist_directory, embedding_function=self._lc_embedding_function, create_collection_if_not_exists=False)
+        return self._db
     
     def embed_records(self, chunked_documents: Sequence[ChunkedDocument]) -> Embeddings:
         inputs = [TextEmbeddingInput(text=chunk.chunk_text, task_type=self.task, title=chunk.chunk_title) for chunk in chunked_documents]
@@ -102,7 +106,8 @@ class GoogleVertexEmbeddings(BaseModel):
 
     def embed_query(self, query: str) -> Any:
         inputs = [TextEmbeddingInput(text=query, task_type=self.task)]
-        return self._embed(inputs)
+        # Don't return a list in this case, since we only passed in a single string
+        return self._embed(inputs)[0]
 
     def _embed(self, inputs: Sequence[TextEmbeddingInput]) -> Embeddings:
         kwargs = dict(output_dimensionality=self.dimensionality, auto_truncate=False)
@@ -142,16 +147,27 @@ class GoogleVertexEmbeddings(BaseModel):
     
 
     def create_vectorstore_chromadb(self,
-                                  records: list[RecordInfo], 
-                                  save_path: str,
+                                  records: list[RecordInfo],
+                                  create_embeddings: bool = False,
+                                  save_path: Optional[str] = None
     ) -> pd.DataFrame:
         
-        docs = self.prepare_docs(records=records)
-        embedded_records = self.get_embedded_records(docs)
-        df_embeddings = pd.DataFrame.from_records([x.model_dump() for x in embedded_records])
-        df_embeddings.to_json(save_path, orient='records', lines=True)
+        # create a new collection (fails if exists)
+        self._client.create_collection(name=self.collection_name, get_or_create=False)
+
+        if not create_embeddings:
+            # Create new vectors
+            docs = self.prepare_docs(records=records)
+            embedded_records = self.get_embedded_records(docs)
+            df_embeddings = pd.DataFrame.from_records([x.model_dump() for x in embedded_records])
+            df_embeddings.to_json(save_path, orient='records', lines=True)
+        elif 'embedding' in records[0].model_fields and len(records[-1].embeddings)>0:
+            df_embeddings = pd.DataFrame.from_records([x.model_dump()])
+        else:
+            raise ValueError("You must pass an 'embedding' field in the record list or create new embeddings.")
 
         ids = df_embeddings['chunk_id'].to_list()
+        documents = df_embeddings['text'].to_list()
         embeddings = df_embeddings['embedding'].to_list()
         metadata = df_embeddings[['record_id','document_title','chunk_index']].to_dict(orient='records')
 
@@ -159,7 +175,12 @@ class GoogleVertexEmbeddings(BaseModel):
         self._collection.add(
                 ids=ids,
                 embeddings=embeddings,
-                metadatas=metadata,
+                metadatas=metadata, documents=documents
             )
+        
+        # 
+
+        # Clear the collection object so that it gets recreated with the embedding function next time
+        self._collection = None
 
         return df_embeddings
