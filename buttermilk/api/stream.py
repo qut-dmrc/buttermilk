@@ -144,17 +144,18 @@ async def flow_stream(
         download_and_convert(flow_request.uri),
     )
 
-    media = [x for x in objects if x and isinstance(x, MediaObj)]
-    contents = [flow_request.text] + [x for x in objects if isinstance(x, str)]
+    media = [x for x in objects if x and isinstance(x, MediaObj) and not x.mime.startswith("text")]
+    contents = [x.text for x in objects if x and isinstance(x, MediaObj) and x.mime.startswith("text")]
+    contents.append(flow_request.text)
     text = "\n".join([x for x in contents if x])
     record = None
     if media or text:
         if flow_request.record_id:
             record = RecordInfo(
-                text=text, media=media, record_id=flow_request.record_id
+                text=text, components=media, record_id=flow_request.record_id
             )
         else:
-            record = RecordInfo(text=text, media=media)
+            record = RecordInfo(text=text, components=media)
 
     async for job in flow.run_flows(
         record=record,

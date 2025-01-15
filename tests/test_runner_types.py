@@ -89,7 +89,7 @@ import pytest
 
 
 def test_as_openai_message_with_media():
-    message = RecordInfo(media=[MediaObj()], text="test")
+    message = RecordInfo(components=[MediaObj()], text="test")
     openai_message = message.as_openai_message()
     assert openai_message["role"] == "user"
     assert openai_message["content"] == [
@@ -99,7 +99,7 @@ def test_as_openai_message_with_media():
 
 
 def test_as_openai_message_with_media_and_role(image_bytes):
-    message = RecordInfo(media=[MediaObj(mime="image/png", data=image_bytes)])
+    message = RecordInfo(components=[MediaObj(mime="image/png", data=image_bytes)])
     openai_message = message.as_openai_message(role="system")
     assert openai_message["role"] == "system"
     assert openai_message["content"][0]["type"] == "image/png"

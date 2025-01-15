@@ -15,7 +15,8 @@ from pydantic import (AliasChoices, BaseModel, ConfigDict, Field,
 
 from buttermilk import logger
 from buttermilk.llms import LLMCapabilities
-from buttermilk.utils.utils import is_uri, remove_punctuation
+from buttermilk.utils.media import convert_media
+from buttermilk.utils.utils import download_limited_async, is_uri, remove_punctuation
 from buttermilk.utils.validators import (convert_omegaconf_objects,
                                          make_list_validator)
 
@@ -70,12 +71,14 @@ class Result(BaseModel):
 
 
 class MediaObj(BaseModel):
+    metadata: dict = {}
+
     mime: str = Field(
-        default="image/png",
+        default="text/plain",
         validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
     )
 
-    text: str = Field(
+    text: list[str]|str = Field(
         default="",
         validation_alias=AliasChoices("text", "alt", "caption", "alt_text"),
     )
@@ -196,41 +199,26 @@ class MediaObj(BaseModel):
         }
     ],"""
 
-
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    title: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("title", "name", "heading"),
-    )
-    description: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("description", "desc"),
-    )
-    caption: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("caption", "alt", "alt_text"),
-    )
-    transcript: str  | None = Field(default=None)
-    text: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "text",
-            "content",
-            "body",
-        ),
-    )
-    media: list[MediaObj] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("media", "image", "video", "audio"),
-    )
+    metadata: dict[str,str] = {}
+    components: list[MediaObj] = []
+
+    @property
+    def title(self):
+        return self.metadata.get('title')
+    
+    @property
+    def text(self):
+        all_text = [f"{k}: {v}" for k,v in self.metadata.items()]
+        all_text.extend([f"{part.section}: {part.text}" if part.text])
+        return "\n".join(all_text)
+    
     ground_truth: Result | None = None
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "path", "url"),
     )
-
-    _ensure_list = field_validator("media", mode="before")(make_list_validator())
 
     model_config = ConfigDict(
         extra="allow",
@@ -242,16 +230,15 @@ class RecordInfo(BaseModel):
 
     @model_validator(mode="after")
     def vld_input(self) -> "RecordInfo":
-        if self.text is None and self.media is None:
+        if not self.components:
             raise ValueError(
-                "InputRecord must have text or image or video or alt_text.",
+                "InputRecord must have at least one component.",
             )
-
-        if not self.record_id:
-            if self.title:
-                self.record_id = remove_punctuation(self.title)
-            elif self.uri:
-                self.record_id = AnyPath(self.uri).stem
+        for key, value in self.model_extra.popitem():
+            if key not in self.metadata:
+                self.metadata[key] = value
+            else:
+                raise ValueError(f"Received multiple values for {key} in RecordInfo")
 
         return self
 
@@ -265,6 +252,21 @@ class RecordInfo(BaseModel):
         if isinstance(path, Path):
             return path.as_posix()
         return str(path)
+
+    @classmethod
+    async def from_uri(cls, uri: str, mimetype: str = None, **metadata):
+        if not is_uri(uri):
+            raise ValueError(f"Invalid URI provided: {uri}")
+        obj, detected_mimetype = await download_limited_async(uri)
+        if not mimetype or mimetype == "application/octet-stream":
+            mimetype = detected_mimetype
+
+        return await cls.from_object(obj=obj, mimetype=mimetype, **metadata)
+    
+    @classmethod
+    async def from_object(cls, obj, uri: str = None, mimetype: str = None, **metadata):
+        components = [ convert_media(obj=obj, mimetype=mimetype)]
+        return RecordInfo(uri=uri, components=components, metadata=metadata)
 
     def update_from(self, result: Result, fields: list|str|None = None):
         update_dict = {}
@@ -300,7 +302,7 @@ class RecordInfo(BaseModel):
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
-        for obj in self.media:
+        for obj in self.components:
             # attach media objects if the model supports them
             if ((obj.mime.startswith('image') and model_capabilities.image) or 
             (obj.mime.startswith('video') and model_capabilities.video) or

@@ -15,7 +15,7 @@ class Describer(LC):
     ) -> Job:
         
         # only process if we have a media object
-        if not job.record or not job.record.media:
+        if not job.record or not job.record.components:
             logger.debug(
                 f"Not invoking agent {self.name} for job {job.job_id}, no media object provided.",
             )
@@ -23,9 +23,9 @@ class Describer(LC):
 
         # Skip processing if we already have information about the 
         # media object (job.record).
-        if job.record.title and (job.record.description or job.record.caption or job.record.transcript):
+        if job.record.transcript:
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id}, media captions already exist.",
+                f"Not invoking agent {self.name} for job {job.job_id}, transcript / media captions already exist.",
             )
             return job
 

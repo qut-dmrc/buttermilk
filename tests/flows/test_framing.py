@@ -57,7 +57,7 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
 
-    record = RecordInfo(media=link_to_video_gcp)
+    record = RecordInfo(components=link_to_video_gcp)
     async for result in flow.run_flows(flow_id="testflow", record=record, run_info=bm.run_info):
         assert result
         assert isinstance(result.record, RecordInfo)

@@ -12,46 +12,58 @@ from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
 
 
 @validate_call
-async def download_and_convert(obj: Any, mimetype: str | None = None) -> MediaObj:
-    # If we have a URI, download it.
-    # If it's a webpage, extract the text.
-    # If it's a binary object, convert it to base64.
-    # Try to guess the mime type from the extension if possible.
+async def download_and_convert(obj: Any, mimetype: str | None = None,  **kwargs):
     if not obj:
         return None
-    uri = None
 
     mimetype = mimetype or "application/octet-stream"
-    if obj and is_b64(obj):
-        return MediaObj(base_64=obj, mime=mimetype)
 
     if is_uri(obj):
-        uri = obj
         obj, detected_mimetype = await download_limited_async(obj)
         if not mimetype or mimetype == "application/octet-stream":
             mimetype = detected_mimetype
 
+    return convert_media(obj, mimetype=mimetype, **kwargs)
+
+def convert_media(obj, mimetype: str = "application/octet-stream", uri: str = None, **metadata) -> MediaObj:
+    # If we have a URI, download it.
+    # If it's a webpage, extract the text.
+    # If it's a binary object, convert it to base64.
+    # Try to guess the mime type from the extension if possible.
+    
+    if is_b64(obj):
+        return MediaObj(base_64=obj, mime=mimetype,uri=uri, metadata=metadata)
+    
     if mimetype.startswith("text/html"):
         # try to extract text from object
-        obj = extract_main_content(obj)
-        mimetype = "text/plain"
+        return extract_main_content(obj.decode("utf-8"),uri=uri, metadata=metadata)
 
-    if (mimetype.startswith("text/")) or (
-        mimetype == "application/octet-stream" and isinstance(obj, str)
-    ):
-        if mimetype == "application/octet-stream":
-            mimetype = "text/plain"
-        return MediaObj(text=obj, mime=mimetype, uri=uri)
+    if (mimetype.startswith("text/")):
+        if isinstance(obj, bytes):
+            return MediaObj(text=obj.decode("utf-8"), uri=uri,mime=mimetype, metadata=metadata)
+        else:
+            return MediaObj(text=obj, mime=mimetype,uri=uri,metadata=metadata)
+    
+    if mimetype == "application/octet-stream" and isinstance(obj, str):
+        return MediaObj(text=obj, mime="text/plain",uri=uri, metadata=metadata)
 
     # By default, encode the object as base64
     return MediaObj(
         mime=mimetype,
         base_64=base64.b64encode(obj).decode("utf-8"),
         uri=uri,
+        metadata=metadata
     )
 
-def extract_main_content(html: str) -> dict[str, None]:
-    return simple_json_from_html_string(html, use_readability=True)
+def extract_main_content(html: str, uri: str = None, **kwargs) -> MediaObj:
+    doc = simple_json_from_html_string(html, use_readability=True)
+
+    text = [ para['text'] for para in doc.pop('plain_text')]
+    del doc['plain_content']
+    del doc['content']
+    doc.update(kwargs)
+
+    return MediaObj(text=text, metadata=doc, mime="text/plain", uri=uri)
 
 def extract_main_content_bs(html: bytes | str) -> str:
     """Extract and clean main content from webpage."""
