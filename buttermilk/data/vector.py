@@ -153,7 +153,8 @@ class GoogleVertexEmbeddings(BaseModel):
     ) -> pd.DataFrame:
         
         # create a new collection (fails if exists)
-        self._client.create_collection(name=self.collection_name, get_or_create=False)
+        # Note we don't update the main collection object in this method
+        collection = self._client.create_collection(name=self.collection_name, get_or_create=False)
 
         if create_embeddings:
             # Create new vectors
@@ -169,10 +170,12 @@ class GoogleVertexEmbeddings(BaseModel):
         ids = df_embeddings['record_id'].to_list()
         documents = df_embeddings['text'].to_list()
         embeddings = df_embeddings['embedding'].to_list()
-        metadata = df_embeddings[['record_id','document_title','chunk_index']].to_dict(orient='records')
-
+        metadata = df_embeddings.drop(columns=['record_id','text','embedding', 'ground_truth']).to_dict(orient='records')
+        # remove nulls
+        metadata = [ {k:v for k,v in rec.items() if v } for rec in metadata ]
+        
         # Add all the embeddings we have currently
-        self._collection.add(
+        collection.add(
                 ids=ids,
                 embeddings=embeddings,
                 metadatas=metadata, documents=documents
