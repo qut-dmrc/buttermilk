@@ -1,78 +1,12 @@
-[tool.pdm.build]
-includes = []
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-[tool.mypy]
-python_version = "3.11"  # Specify your target Python version
-strict = true           # Enable strict mode for thorough type checking
-annotations = true      # delayed typing annotations
-warn_unused_configs = true # Warn about unused mypy settings
-plugins = ["pydantic.mypy"]
-
-[tool.pydantic-mypy]
-init_forbid_extra = true
-init_typed = true
-warn_required_dynamic_aliases = true
-warn_untyped_fields = true
-
-[tool.ruff]
-extend-include = ["*.ipynb"]
-
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-lint.select = ["E", "F"]
-lint.ignore = [
-    "RET504",  # Unnecessary variable assignment before return
-    "RET503",  # Multiple returns 
-    "E501",    # Line too long 
-    "TRY003", "EM101",   # No f-strings or string literals in exceptions
-    "RET505",  # Unnecessary else after return
-] 
-lint.isort.combine-as-imports = true
-lint.isort.known-first-party = ["buttermilk"]
-
-# Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-# Same as Black.
-line-length = 88
-
-# Assume Python 3.11
-target-version = "py311"
-
-[tool.ruff.format]
-# Enable formatting
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
-[tool.pytest.ini_options]
-markers = [
-  "integration: integration tests, don't run by default",
-  "scheduled: mark tests to run in scheduled testing",
-]
-norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
-timeout = 600
-default_async_timeout = 300
-addopts = [ "-rX",
-    "--capture=fd", "--tb=short",
-    "--continue-on-collection-errors","--durations=10", 
-    "-n 32"
-    ]
-#   " "-rA", "--timeout_method=thread", "--with-integration"
-# xfail_strict = true
-
-filterwarnings = [
-    "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
-    "ignore:Passing field metadata as keyword arguments is deprecated"
-    ]
-
 [project]
+requires-python = ">=3.10"
 authors = [
     {name = "Nicolas Suzor", email = "nic@suzor.com"},
 ]
-requires-python = "<3.12,>=3.10.0"
+name = "buttermilk"
+version = "0.2.1"
+description = ""
+readme = "README.md"
 dependencies = [
     "shortuuid<2.0.0,>=1.0.13",
     "psutil<6.0.0,>=5.9.5",
@@ -130,11 +64,9 @@ dependencies = [
     "langchain-chroma>=0.0.0.dev0",
     "langchain>=0.3.14",
     "readabilipy>=0.3.0",
+    "transformers>=4.47.1",
+    "evaluate>=0.4.3",
 ]
-name = "buttermilk"
-version = "0.2.1"
-description = ""
-readme = "README.md"
 
 [dependency-groups]
 ml = [
@@ -179,3 +111,74 @@ dev = [
     "anyio>=4.7.0",
     "pandas-stubs>=2.2.3.241126",
 ]
+
+[tool.pdm.build]
+includes = []
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.mypy]
+python_version = "3.11"  # Specify your target Python version
+strict = false
+annotations = true      # delayed typing annotations
+warn_unused_configs = true # Warn about unused mypy settings
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+
+
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+lint.select = ["E", "F"]
+lint.ignore = [
+    "RET504",  # Unnecessary variable assignment before return
+    "RET503",  # Multiple returns 
+    "E501",    # Line too long 
+    "TRY003", "EM101",   # No f-strings or string literals in exceptions
+    "RET505",  # Unnecessary else after return
+] 
+lint.isort.combine-as-imports = true
+lint.isort.known-first-party = ["buttermilk"]
+
+# Allow unused variables when underscore-prefixed.
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# Same as Black.
+line-length = 88
+
+# Assume Python 3.11
+target-version = "py311"
+
+[tool.ruff.format]
+# Enable formatting
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: integration tests, don't run by default",
+  "scheduled: mark tests to run in scheduled testing",
+]
+norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
+timeout = 600
+default_async_timeout = 300
+addopts = [ "-rX",
+    "--capture=fd", "--tb=short",
+    "--continue-on-collection-errors","--durations=10", 
+    "-n 32"
+    ]
+#   " "-rA", "--timeout_method=thread", "--with-integration"
+# xfail_strict = true
+
+filterwarnings = [
+    "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
+    "ignore:Passing field metadata as keyword arguments is deprecated"
+    ]

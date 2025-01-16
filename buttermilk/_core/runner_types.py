@@ -2,23 +2,28 @@ import base64
 import datetime
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import numpy as np
 import pydantic
 import shortuuid
-from cloudpathlib import AnyPath, CloudPath
+from cloudpathlib import CloudPath
 from langchain_core.messages import BaseMessage, HumanMessage
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from pydantic import (AliasChoices, BaseModel, ConfigDict, Field,
-                      computed_field, field_validator, model_validator)
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from buttermilk import logger
 from buttermilk.llms import LLMCapabilities
-from buttermilk.utils.media import convert_media
-from buttermilk.utils.utils import download_limited_async, is_uri, remove_punctuation
-from buttermilk.utils.validators import (convert_omegaconf_objects,
-                                         make_list_validator)
+from buttermilk.utils.utils import download_limited_async, is_uri
+from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
 from .types import SessionInfo
 
@@ -73,12 +78,12 @@ class Result(BaseModel):
 class MediaObj(BaseModel):
     metadata: dict = {}
 
-    mime: str = Field(
+    mime: str | None = Field(
         default="text/plain",
         validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
     )
 
-    text: list[str]|str = Field(
+    text: list[str] | str = Field(
         default="",
         validation_alias=AliasChoices("text", "alt", "caption", "alt_text"),
     )
@@ -199,21 +204,24 @@ class MediaObj(BaseModel):
         }
     ],"""
 
+
 class RecordInfo(BaseModel):
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    metadata: dict[str,str] = {}
+    metadata: dict[str, str] = {}
     components: list[MediaObj] = []
 
     @property
     def title(self):
-        return self.metadata.get('title')
-    
+        return self.metadata.get("title")
+
     @property
     def text(self):
-        all_text = [f"{k}: {v}" for k,v in self.metadata.items()]
-        all_text.extend([f"{part.section}: {part.text}" if part.text])
+        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
+        all_text.extend([
+            f"{part.section}: {part.text}" for part in self.components if part.text
+        ])
         return "\n".join(all_text)
-    
+
     ground_truth: Result | None = None
     uri: str | None = Field(
         default=None,
@@ -262,32 +270,35 @@ class RecordInfo(BaseModel):
             mimetype = detected_mimetype
 
         return await cls.from_object(obj=obj, mimetype=mimetype, **metadata)
-    
+
     @classmethod
     async def from_object(cls, obj, uri: str = None, mimetype: str = None, **metadata):
-        components = [ convert_media(obj=obj, mimetype=mimetype)]
+        from buttermilk.utils.media import convert_media
+
+        components = [convert_media(obj=obj, mimetype=mimetype)]
         return RecordInfo(uri=uri, components=components, metadata=metadata)
 
-    def update_from(self, result: Result, fields: list|str|None = None):
+    def update_from(self, result: Result, fields: list | str | None = None):
         update_dict = {}
         if result:
             update_dict = result.model_dump()
-        if fields and fields != 'record':
+        if fields and fields != "record":
             update_dict = {f: update_dict[f] for f in fields}
-            
+
         # exclude null values
-        update_dict = {k:v for k, v in update_dict.items() if v}
+        update_dict = {k: v for k, v in update_dict.items() if v}
 
         self.__dict__.update(**update_dict)
-
 
     def as_langchain_message(
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_text: bool = True
+        include_text: bool = True,
     ) -> BaseMessage | None:
-        components = self.as_openai_message(role=role, model_capabilities=model_capabilities, include_text=include_text)
+        components = self.as_openai_message(
+            role=role, model_capabilities=model_capabilities, include_text=include_text
+        )
         if components and (components := components.get("content")):
             if role in {"user", "human"}:
                 return HumanMessage(content=components)
@@ -298,23 +309,27 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_text: bool =False, 
+        include_text: bool = False,
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
         for obj in self.components:
             # attach media objects if the model supports them
-            if ((obj.mime.startswith('image') and model_capabilities.image) or 
-            (obj.mime.startswith('video') and model_capabilities.video) or
-            (obj.mime.startswith('audio') and model_capabilities.audio)):
+            if (
+                (obj.mime.startswith("image") and model_capabilities.image)
+                or (obj.mime.startswith("video") and model_capabilities.video)
+                or (obj.mime.startswith("audio") and model_capabilities.audio)
+            ):
                 components.append(obj.as_content_part())
 
         if not components and not (self.text and include_text):
-            logger.warning(f"No text or model compatible media provided for {self.record_id}")
+            logger.warning(
+                f"No text or model compatible media provided for {self.record_id}"
+            )
             return None
-        
+
         if include_text:
-            text = self.text or 'see attached media'
+            text = self.text or "see attached media"
             components.append({"type": "text", "text": text})
 
         message = {
@@ -337,7 +352,7 @@ class Job(BaseModel):
     job_id: str = pydantic.Field(default_factory=shortuuid.uuid)
     flow_id: str
     timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc),
+        default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
         description="The date and time a job was created.",
     )
     source: Sequence[str] = Field(
@@ -354,8 +369,8 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: Optional[str] = Field(default=None)
-    
+    prompt: str | None = Field(default=None)
+
     parameters: dict | None = Field(
         default_factory=dict,
         description="Additional options for the worker",

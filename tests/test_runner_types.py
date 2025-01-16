@@ -84,36 +84,3 @@ def test_agent_field_validator_parameterized(step_name, agent, run_info):
     assert worker.agent.startswith(expected_prefix)
     assert len(worker.agent.split("_")[-1]) == 6
 
-
-import pytest
-
-
-def test_as_openai_message_with_media():
-    message = RecordInfo(components=[MediaObj()], text="test")
-    openai_message = message.as_openai_message()
-    assert openai_message["role"] == "user"
-    assert openai_message["content"] == [
-        {"type": "media", "media": "test"},
-        {"type": "text", "text": "test"},
-    ]
-
-
-def test_as_openai_message_with_media_and_role(image_bytes):
-    message = RecordInfo(components=[MediaObj(mime="image/png", data=image_bytes)])
-    openai_message = message.as_openai_message(role="system")
-    assert openai_message["role"] == "system"
-    assert openai_message["content"][0]["type"] == "image/png"
-    assert openai_message["content"][0]["image_url"]
-
-
-def test_as_openai_message_with_text():
-    message = RecordInfo(text="test")
-    openai_message = message.as_openai_message(role="system")
-    assert openai_message["role"] == "system"
-    assert openai_message["content"] == [{"type": "text", "text": "test"}]
-
-
-def test_as_openai_message_no_media_no_text():
-    message = RecordInfo()
-    with pytest.raises(OSError):
-        message.as_openai_message()

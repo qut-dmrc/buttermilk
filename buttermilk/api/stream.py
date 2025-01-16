@@ -1,22 +1,30 @@
-import asyncio
 import json
 from collections.abc import AsyncGenerator, Sequence
 from urllib.parse import parse_qs
 
 import shortuuid
-from pydantic import (AliasChoices, AnyUrl, BaseModel, ConfigDict, Field,
-                      PrivateAttr, field_validator, model_validator)
-from rich import print as rprint
+from pydantic import (
+    AliasChoices,
+    AnyUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
-from buttermilk.utils.media import download_and_convert
-from buttermilk.utils.validators import (make_list_validator,
-                                         make_uri_validator, sanitize_html)
+from buttermilk.utils.validators import (
+    make_list_validator,
+    make_uri_validator,
+    sanitize_html,
+)
 
 bm = None
 
@@ -27,20 +35,21 @@ class FlowRequest(BaseModel):
     model: str | Sequence[str] | None = None
     template: str | Sequence[str] | None = None
     template_vars: dict | Sequence[dict] | None = Field(default_factory=list)
+
     q: str | None = Field(
         default=None,
         validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
-    text: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("text", "body"),
-    )
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
-    content: bytes | None = Field(default=None, validation_alias=AliasChoices("content", "video","image"))
+    content: bytes | None = Field(
+        default=None,
+        validation_alias=AliasChoices("text", "body", "content", "video", "image"),
+    )
+    mime_type: str | None = None
     source: str | Sequence[str] = []
 
     model_config = ConfigDict(
@@ -102,11 +111,11 @@ class FlowRequest(BaseModel):
 
         return values
 
-    @field_validator("q", "text", mode="before")
+    @field_validator("q", mode="before")
     def sanitize_strings(cls, v):
         if v and isinstance(v, str):
             v = v.strip()
-            v = sanitize_html(v) 
+            v = sanitize_html(v)
         return v
 
     @model_validator(mode="after")
@@ -119,10 +128,9 @@ class FlowRequest(BaseModel):
         if isinstance(self.text, AnyUrl):
             if self.uri:
                 raise ValueError("You should only pass one URL in at a time.")
-            else:
-                # Move the URL to the correct field
-                self.uri = self.text
-                self.text = None
+            # Move the URL to the correct field
+            self.uri = self.text
+            self.text = None
 
         return self
 
@@ -138,24 +146,20 @@ async def flow_stream(
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
-    
-    objects = await asyncio.gather(
-        download_and_convert(flow_request.content),
-        download_and_convert(flow_request.uri),
-    )
-
-    media = [x for x in objects if x and isinstance(x, MediaObj) and not x.mime.startswith("text")]
-    contents = [x.text for x in objects if x and isinstance(x, MediaObj) and x.mime.startswith("text")]
-    contents.append(flow_request.text)
-    text = "\n".join([x for x in contents if x])
     record = None
-    if media or text:
-        if flow_request.record_id:
-            record = RecordInfo(
-                text=text, components=media, record_id=flow_request.record_id
-            )
-        else:
-            record = RecordInfo(text=text, components=media)
+    if flow_request.uri:
+        record = await RecordInfo.from_uri(
+            flow_request.uri, mimetype=flow_request.mime_type
+        )
+    elif flow_request.content:
+        record = await RecordInfo.from_object(
+            flow_request.content, mimetype=flow_request.mime_type
+        )
+
+    if record and flow_request.record_id:
+        record.record_id = flow_request.record_id
+    elif record:
+        raise NotImplementedError("Loading by record ID is not yet supported.")
 
     async for job in flow.run_flows(
         record=record,

@@ -16,7 +16,6 @@ import evaluate
 import google.auth
 import openai
 import pandas as pd
-import torch
 import transformers
 from azure.ai.contentsafety import ContentSafetyClient
 from azure.ai.contentsafety.models import (
@@ -96,7 +95,7 @@ class ToxicityModel(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def validate_model(self) -> "ToxicityModel":
+    def validate_model(self) -> ToxicityModel:
         if self.client is None:
             self.init_client(**self.options)
             if self.client is None:

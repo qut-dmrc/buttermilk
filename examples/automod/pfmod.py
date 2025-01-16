@@ -24,7 +24,6 @@ import itertools
 # experiment = Experiment(workspace=ws, name='batch-flow-experiment')
 # run = experiment.submit(pipeline)
 # run.wait_for_completion(show_output=True)
-import torch
 import tqdm
 
 from buttermilk._core.log import logger
@@ -121,7 +120,8 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     # df = inputs[id_cols]
 
     details = details.assign(inputs=inputs.to_dict(orient="records")).drop(
-        columns=inputs.columns, errors="ignore"
+        columns=inputs.columns,
+        errors="ignore",
     )
     details["timestamp"] = pd.to_datetime(datetime.datetime.now())
 
@@ -129,7 +129,7 @@ def exec_pf(*, flow, run_name, flow_name, dataset, column_mapping, run, init_var
     flow_outputs = details[[x for x in details.columns if x.startswith("outputs.")]]
     flow_outputs.columns = [x.replace("outputs.", "") for x in flow_outputs.columns]
     details.loc[flow_outputs.index.values, flow_name] = flow_outputs.to_dict(
-        orient="records"
+        orient="records",
     )
 
     logger.info(
@@ -214,7 +214,7 @@ def exec_local(
 
         # add input details to the result dataset
         relevant_input_cols = list(
-            set(input_df.columns).intersection(columns.keys()) - set(results.keys())
+            set(input_df.columns).intersection(columns.keys()) - set(results.keys()),
         )
         inputs = input_df.drop_duplicates(subset="record_id").set_index("record_id")[
             relevant_input_cols
@@ -233,7 +233,8 @@ def exec_local(
             name="inputs",
         )
         results = results.assign(inputs=inputs).drop(
-            columns=columns.keys(), errors="ignore"
+            columns=columns.keys(),
+            errors="ignore",
         )
 
         # add batch details to the result dataset
@@ -249,7 +250,7 @@ def exec_local(
         )
 
         results = results.assign(run_info=batch_columns.to_dict(orient="records")).drop(
-            columns=relevant_batch_cols
+            columns=relevant_batch_cols,
         )
 
         bm.save(results, basename="partial_flow")
@@ -329,7 +330,7 @@ def main(cfg: DictConfig) -> None:
 
     except Exception as e:
         logger.exception(
-            dict(message=f"Failed run on {cfg.run.platform}", error=str(e))
+            dict(message=f"Failed run on {cfg.run.platform}", error=str(e)),
         )
 
 

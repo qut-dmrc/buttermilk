@@ -4,10 +4,8 @@ from typing import (
 )
 
 import regex as re
-import torch
 from promptflow.tracing import trace
 from pydantic import Field
-from transformers import pipeline
 
 from buttermilk.utils import read_text
 
@@ -26,12 +24,15 @@ class Wildguard(ToxicityModel):
     options: ClassVar[dict] = dict(max_new_tokens=128, temperature=1.0)
 
     template: str = Field(
-        default_factory=lambda: read_text(TEMPLATE_DIR / "wildguard.txt")
+        default_factory=lambda: read_text(TEMPLATE_DIR / "wildguard.txt"),
     )
 
     def init_client(self) -> None:
         self.client = pipeline(
-            "text-generation", model=self.model, device=self.device, **self.options
+            "text-generation",
+            model=self.model,
+            device=self.device,
+            **self.options,
         )
 
     @trace

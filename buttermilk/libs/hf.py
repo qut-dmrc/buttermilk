@@ -1,11 +1,9 @@
 import os
 from typing import Any
 
-import torch
 from huggingface_hub import InferenceClient, login
 from langchain.llms.base import LLM
 from langchain.schema import SystemMessage
-from transformers import Pipeline, pipeline
 
 MODIFIED_SYSTEM_PROMPT = """You are a helpful, accurate, and honest assistant. Always answer as helpfully as possible. If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""  # noqa: E501
 

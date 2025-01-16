@@ -22,6 +22,14 @@
 			"notebook.formatOnSave.enabled": true,
 			"notebook.codeActionsOnSave": {
 				"source.organizeImports": "explicit"
-			}
+			},
+			"ruff.enable": true,
+			"ruff.fixAll": true,
+			"ruff.organizeImports":true,
+			"ruff.showSyntaxErrors": true,
+			"ruff.lint.enable": true,
+		    "ruff.showNotifications": "onWarning",
+			"ruff.nativeServer": "on",
+			"python.testing.pytestEnabled": true
 	}
 }
