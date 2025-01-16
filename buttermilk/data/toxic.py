@@ -48,10 +48,14 @@ from buttermilk.data.pipe import CloudStorageDatasetPipe, HuggingFaceDatasetPipe
 ######
 
 
-class WildChat(HuggingFaceDatasetPipe):
-    """The WildChat Dataset is a corpus of 1 million real-world user-ChatGPT interactions, characterized by a wide range of languages and a diversity of user prompts. It was constructed by offering free access to ChatGPT and GPT-4 in exchange for consensual chat history collection. Using this dataset, we finetuned Meta's Llama-2 and created WildLlama-7b-user-assistant, a chatbot which is able to predict both user prompts and assistant responses.
+class WildChat1M(HuggingFaceDatasetPipe):
+    """A corpus of 1 million real-world user-ChatGPT interactions by AllenAI.
+
+    The WildChat Dataset is a corpus of 1 million real-world user-ChatGPT interactions, characterized by a wide range of languages and a diversity of user prompts. It was constructed by offering free access to ChatGPT and GPT-4 in exchange for consensual chat history collection. Using this dataset, we finetuned Meta's Llama-2 and created WildLlama-7b-user-assistant, a chatbot which is able to predict both user prompts and assistant responses.
 
     https://wildchat.allen.ai/
+
+    Note that the standard link for Wildguard-1M is a version without 'toxic' rows. I have had to ask for permission to get access to the full version: https://huggingface.co/datasets/allenai/WildChat-1M-Full.
 
     @misc{zhao2024wildchat1mchatgptinteraction,
       title={WildChat: 1M ChatGPT Interaction Logs in the Wild},
@@ -68,7 +72,40 @@ class WildChat(HuggingFaceDatasetPipe):
 
 
 class ImplicitHatePipe(CloudStorageDatasetPipe):
-    """Loads the Implicit Hate Corpus from Cloud Storage."""
+    """Loads the Implicit Hate Corpus from Cloud Storage.
+
+    This dataset contains 22,056 tweets from the most prominent extremist groups in the United States; 6,346 of these tweets contain implicit hate speech.
+
+    We decompose the implicit hate class using the following taxonomy:
+    (24.2%) Grievance: frustration over a minority group's perceived privilege.
+    (20.0%) Incitement: implicitly promoting known hate groups and ideologies (e.g. by flaunting in-group power).
+    (13.6%) Inferiority: implying some group or person is of lesser value than another.
+    (12.6%) Irony: using sarcasm, humor, and satire to demean someone.
+    (17.9%) Stereotypes: associating a group with negative attribute using euphemisms, circumlocution, or metaphorical language.
+    (10.5%) Threats: making an indirect commitment to attack someone's body, well-being, reputation, liberty, etc.
+    (1.2%) Other
+
+    Each of the 6,346 implicit hate tweets also has free-text annotations for target demographic group and an implied statement to describe the underlying message .
+
+    @inproceedings{elsherief-etal-2021-latent,
+    title = "Latent Hatred: A Benchmark for Understanding Implicit Hate Speech",
+    author = "ElSherief, Mai  and
+      Ziems, Caleb  and
+      Muchlinski, David  and
+      Anupindi, Vaishnavi  and
+      Seybolt, Jordyn  and
+      De Choudhury, Munmun  and
+      Yang, Diyi",
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2021",
+    address = "Online and Punta Cana, Dominican Republic",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.emnlp-main.29",
+    pages = "345--363"
+    }
+
+    """
 
     source: str = "implicit_hate"
     base_uri: str = "gs://dmrc-platforms/data/implicit-hate-corpus"
