@@ -8,7 +8,7 @@ import pandas as pd
 from cloudpathlib import CloudPath
 from pydantic import Field, model_validator
 
-from buttermilk.data.pipe import CloudStorageDatasetPipe
+from buttermilk.data.pipe import CloudStorageDatasetPipe, HuggingFaceDatasetPipe
 
 #####
 # ADD: https://huggingface.co/datasets/OxAISH-AL-LLM/wiki_toxic
