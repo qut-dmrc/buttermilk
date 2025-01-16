@@ -1,30 +1,13 @@
 ##
-## This module contains dataloaders for various toxicity/hate speech datasets.
+# This module contains dataloaders for various toxicity/hate speech datasets.
 ##
 
-from typing import Literal, Optional
+from typing import Literal
 
-import cloudpathlib as cp
-import pandas as pd
-import shortuuid
-from cloudpathlib import CloudPath
-from datasets import load_dataset
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-
-from buttermilk._core.runner_types import FlowResult, RecordInfo
-from buttermilk.bm import BM, logger
-from typing import Any, Dict, Iterator, Optional
-
-from datasets import Dataset, load_dataset
-
-from buttermilk._core.runner_types import RecordInfo
-
-from typing import Any, Dict, Iterator, Optional
-
-from datasets import Dataset, load_dataset
 import pandas as pd
 from cloudpathlib import CloudPath
-from buttermilk._core.runner_types import RecordInfo
+from pydantic import Field, model_validator
+
 from buttermilk.data.pipe import CloudStorageDatasetPipe
 
 #####
@@ -65,6 +48,25 @@ from buttermilk.data.pipe import CloudStorageDatasetPipe
 ######
 
 
+class WildChat(HuggingFaceDatasetPipe):
+    """The WildChat Dataset is a corpus of 1 million real-world user-ChatGPT interactions, characterized by a wide range of languages and a diversity of user prompts. It was constructed by offering free access to ChatGPT and GPT-4 in exchange for consensual chat history collection. Using this dataset, we finetuned Meta's Llama-2 and created WildLlama-7b-user-assistant, a chatbot which is able to predict both user prompts and assistant responses.
+
+    https://wildchat.allen.ai/
+
+    @misc{zhao2024wildchat1mchatgptinteraction,
+      title={WildChat: 1M ChatGPT Interaction Logs in the Wild},
+      author={Wenting Zhao and Xiang Ren and Jack Hessel and Claire Cardie and Yejin Choi and Yuntian Deng},
+      year={2024},
+      eprint={2405.01470},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2405.01470},
+    }
+    """
+
+    path: str = "allenai/wildguard"
+
+
 class ImplicitHatePipe(CloudStorageDatasetPipe):
     """Loads the Implicit Hate Corpus from Cloud Storage."""
 
@@ -78,12 +80,12 @@ class ImplicitHatePipe(CloudStorageDatasetPipe):
     @model_validator(mode="after")
     def metadata_split(self) -> "ImplicitHatePipe":
         """Set metadata for torch dataset."""
-        self.dataset_kwargs['split'] = self.split
+        self.dataset_kwargs["split"] = self.split
         return self
 
     def get_uri(self) -> str:
         base = CloudPath(self.base_uri)
-        
+
         files = {
             # The Stage-1 annotations (high-level; §4.2.1 in the paper)
             "STG1": "implicit_hate_v1_stg1_posts.tsv",
@@ -95,7 +97,6 @@ class ImplicitHatePipe(CloudStorageDatasetPipe):
         }
 
         return (base / files[self.split]).as_uri()
-
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         data["id"] = str(self.split) + "_" + data.index.astype(str)
@@ -114,10 +115,10 @@ class DragQueens(CloudStorageDatasetPipe):
 
     def get_uri(self) -> str:
         return f"{self.uri}/{self._index_name}"
-    
+
     def transform(self, data: pd.DataFrame, *, split: str, **kwargs) -> pd.DataFrame:
         data["path"] = data["img"].apply(
-            lambda name: f"{self.uri}/{name}"
+            lambda name: f"{self.uri}/{name}",
         )
         return data
 
@@ -136,8 +137,6 @@ class DragQueens(CloudStorageDatasetPipe):
 #         from .image import ReadImage
 
 #         return ReadGCS(URI, ).read_image()
-
-
 
 
 # #####################################################
