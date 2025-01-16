@@ -4,7 +4,6 @@ from typing import Any
 import regex as re
 from bs4 import BeautifulSoup
 from pydantic import validate_call
-
 from readabilipy import simple_json_from_html_string
 
 from buttermilk._core.runner_types import MediaObj
@@ -12,7 +11,11 @@ from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
 
 
 @validate_call
-async def download_and_convert(obj: Any, mimetype: str | None = None,  **kwargs):
+async def download_and_convert(
+    obj: Any,
+    mimetype: str | None = None,
+    **kwargs,
+) -> tuple[list[MediaObj], dict]:
     if not obj:
         return None
 
@@ -25,45 +28,74 @@ async def download_and_convert(obj: Any, mimetype: str | None = None,  **kwargs)
 
     return convert_media(obj, mimetype=mimetype, **kwargs)
 
-def convert_media(obj, mimetype: str = "application/octet-stream", uri: str = None, **metadata) -> MediaObj:
+
+def convert_media(
+    obj,
+    mimetype: str = "application/octet-stream",
+    uri: str = None,
+    **metadata,
+) -> tuple[list[MediaObj], dict]:
     # If we have a URI, download it.
-    # If it's a webpage, extract the text.
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
-    
+    obj_list = []
+    retrieved_metadata = {}
+
     if is_b64(obj):
-        return MediaObj(base_64=obj, mime=mimetype,uri=uri, metadata=metadata)
-    
-    if mimetype.startswith("text/html"):
+        obj_list = [MediaObj(base_64=obj, mime=mimetype, uri=uri, metadata=metadata)]
+
+    elif mimetype.startswith("text/html"):
         # try to extract text from object
-        return extract_main_content(obj.decode("utf-8"),uri=uri, metadata=metadata)
+        obj_list, retrieved_metadata = extract_main_content(
+            obj.decode("utf-8"),
+            uri=uri,
+            metadata=metadata,
+        )
 
-    if (mimetype.startswith("text/")):
+    elif mimetype.startswith("text/"):
         if isinstance(obj, bytes):
-            return MediaObj(text=obj.decode("utf-8"), uri=uri,mime=mimetype, metadata=metadata)
+            obj_list = [
+                MediaObj(
+                    text=obj.decode("utf-8"),
+                    uri=uri,
+                    mime=mimetype,
+                    metadata=metadata,
+                ),
+            ]
         else:
-            return MediaObj(text=obj, mime=mimetype,uri=uri,metadata=metadata)
-    
-    if mimetype == "application/octet-stream" and isinstance(obj, str):
-        return MediaObj(text=obj, mime="text/plain",uri=uri, metadata=metadata)
+            obj_list = [MediaObj(text=obj, mime=mimetype, uri=uri, metadata=metadata)]
 
-    # By default, encode the object as base64
-    return MediaObj(
-        mime=mimetype,
-        base_64=base64.b64encode(obj).decode("utf-8"),
-        uri=uri,
-        metadata=metadata
-    )
+    elif mimetype == "application/octet-stream" and isinstance(obj, str):
+        obj_list = [MediaObj(text=obj, mime="text/plain", uri=uri, metadata=metadata)]
 
-def extract_main_content(html: str, uri: str = None, **kwargs) -> MediaObj:
+    else:
+        # By default, encode the object as base64
+        obj_list = [
+            MediaObj(
+                mime=mimetype,
+                base_64=base64.b64encode(obj).decode("utf-8"),
+                uri=uri,
+                metadata=metadata,
+            ),
+        ]
+    return obj_list, retrieved_metadata
+
+
+def extract_main_content(html: str, uri: str = None, **kwargs) -> tuple[MediaObj, dict]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
-    text = [ para['text'] for para in doc.pop('plain_text')]
-    del doc['plain_content']
-    del doc['content']
+    paragraphs = [
+        MediaObj(text=para["text"], label="paragraph", mime="text/plain")
+        for para in doc.pop("plain_text")
+    ]
+    del doc["plain_content"]
+    del doc["content"]
     doc.update(kwargs)
+    doc["uri"] = uri
+    doc = {k: v for k, v in doc.items() if v}
 
-    return MediaObj(text=text, metadata=doc, mime="text/plain", uri=uri)
+    return paragraphs, doc
+
 
 def extract_main_content_bs(html: bytes | str) -> str:
     """Extract and clean main content from webpage."""

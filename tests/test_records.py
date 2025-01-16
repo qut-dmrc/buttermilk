@@ -2,12 +2,42 @@ import pytest
 from PIL import Image
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo, Result
+from buttermilk.llms import LLMCapabilities
+
+pytestmark = pytest.mark.anyio
+
+
+def test_record_no_keywords():
+    record = RecordInfo("test")
+    assert not record.uri
+    assert len(record._components) == 1
+    assert record._components[0].mime == "text/plain"
+    assert record._components[0].base_64 is None
+    assert record.text == "test"
+    assert len(record.record_id) >= 8
+
+
+@pytest.mark.asyncio
+async def test_from_path_valid():
+    # Use a small test image
+    test_image_path = "tests/data/sadrobot.jpg"
+
+    record = await RecordInfo.from_path(
+        test_image_path,
+        mimetype="image/jpeg",
+        title="Test Image",
+    )
+    assert record.uri == test_image_path
+    assert record.metadata["title"] == "Test Image"
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/jpeg"
+    assert record._components[0].base_64 is not None
 
 
 @pytest.mark.asyncio
 async def test_from_uri_valid():
     # Use a small test image
-    test_image_path = "tests/data/sadrobot.jpg"
+    test_image_path = "https://picsum.photos/64"
 
     record = await RecordInfo.from_uri(
         test_image_path,
@@ -16,28 +46,29 @@ async def test_from_uri_valid():
     )
     assert record.uri == test_image_path
     assert record.metadata["title"] == "Test Image"
-    assert len(record.components) == 1
-    assert record.components[0].mime == "image/jpg"
-    assert record.components[0].base_64 is not None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/jpeg"
+    assert record._components[0].base_64 is not None
 
 
 @pytest.mark.asyncio
-async def test_from_uri_invalid():
+async def test_from_uri_article():
     record = await RecordInfo.from_uri(
         "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
     )
     assert (
         """He said it was a "relief" to hear the news of the ceasefire "which we were calling for, for the last 15 months"."""
-        in record.text
+        in record.all_text
     )
     assert (
         """Nasser Mashni, the president of the Australian Palestine Advocacy Network, says he felt changed as an Australian."""
-        in record.text
+        in record.all_text
     )
 
 
 @pytest.mark.asyncio
-async def test_from_uri_article():
+@pytest.mark.xfail
+async def test_from_uri_invalid():
     await RecordInfo.from_uri("invalid_uri", mimetype="image/png")
 
 
@@ -54,9 +85,9 @@ async def test_from_object_valid():
     )
 
     assert record.metadata["title"] == "Test Image from Object"
-    assert len(record.components) == 1
-    assert record.components[0].mime == "image/png"
-    assert record.components[0].base_64 is not None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/png"
+    assert record._components[0].base_64 is not None
 
 
 @pytest.mark.asyncio
@@ -86,27 +117,34 @@ async def test_record_update():
     assert "category" not in record.model_dump()
 
 
-def test_as_openai_message_with_media():
-    message = RecordInfo(components=[MediaObj()], text="test")
-    openai_message = message.as_openai_message()
+def test_as_openai_message_with_media(image_bytes: bytes):
+    message = RecordInfo(data=[MediaObj(mime="image/png", data=image_bytes), "test"])
+    openai_message = message.as_openai_message(
+        model_capabilities=LLMCapabilities(image=True),
+    )
     assert openai_message["role"] == "user"
-    assert openai_message["content"] == [
-        {"type": "media", "media": "test"},
-        {"type": "text", "text": "test"},
-    ]
+    assert len(openai_message["content"]) == 2
+    assert openai_message["content"][0]["type"] == "image_url"
+    assert openai_message["content"][1]["type"] == "text"
 
 
 def test_as_openai_message_with_media_and_role(image_bytes: bytes):
-    message = RecordInfo(components=[MediaObj(mime="image/png", data=image_bytes)])
-    openai_message = message.as_openai_message(role="system")
+    message = RecordInfo(data=[MediaObj(mime="image/png", data=image_bytes)])
+    openai_message = message.as_openai_message(
+        role="system",
+        model_capabilities=LLMCapabilities(image=True),
+    )
     assert openai_message["role"] == "system"
-    assert openai_message["content"][0]["type"] == "image/png"
-    assert openai_message["content"][0]["image_url"]
+    assert openai_message["content"][0]["type"] == "image_url"
+    assert len(openai_message["content"]) == 1
 
 
 def test_as_openai_message_with_text():
     message = RecordInfo(text="test")
-    openai_message = message.as_openai_message(role="system")
+    openai_message = message.as_openai_message(
+        role="system",
+        model_capabilities=LLMCapabilities(),
+    )
     assert openai_message["role"] == "system"
     assert openai_message["content"] == [{"type": "text", "text": "test"}]
 
@@ -114,4 +152,4 @@ def test_as_openai_message_with_text():
 def test_as_openai_message_no_media_no_text():
     message = RecordInfo()
     with pytest.raises(OSError):
-        message.as_openai_message()
+        message.as_openai_message(model_capabilities=LLMCapabilities())

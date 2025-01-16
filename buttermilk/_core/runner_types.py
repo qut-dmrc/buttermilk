@@ -1,8 +1,9 @@
 import base64
 import datetime
+import mimetypes
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import numpy as np
 import pydantic
@@ -15,6 +16,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     computed_field,
     field_validator,
     model_validator,
@@ -22,7 +24,7 @@ from pydantic import (
 
 from buttermilk import logger
 from buttermilk.llms import LLMCapabilities
-from buttermilk.utils.utils import download_limited_async, is_uri
+from buttermilk.utils.utils import download_limited_async, is_uri, read_file
 from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
 from .types import SessionInfo
@@ -76,6 +78,12 @@ class Result(BaseModel):
 
 
 class MediaObj(BaseModel):
+    label: str | None = Field(
+        default=None,
+        description="Section or type of content part (e.g. heading, body paragraph, caption, image, etc)",
+        validation_alias=AliasChoices("arg0"),
+    )
+
     metadata: dict = {}
 
     mime: str | None = Field(
@@ -83,14 +91,9 @@ class MediaObj(BaseModel):
         validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
     )
 
-    text: list[str] | str = Field(
+    text: str = Field(
         default="",
         validation_alias=AliasChoices("text", "alt", "caption", "alt_text"),
-    )
-
-    data: bytes | None = Field(
-        default=None,
-        validation_alias=AliasChoices("data", "content"),
     )
 
     uri: str | None = Field(
@@ -104,13 +107,45 @@ class MediaObj(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
         exclude=["data", "base64"],
     )
+
+    def __str__(self):
+        return f"{self.label or 'unknown'} object ({self.mime}) {self.uri} {self.text[:30]} {self.base_64[:30]}..."
+
+    @model_validator(mode="after")
+    def interpret_data(self) -> Self:
+        if self.model_extra and "data" in self.model_extra:
+            data = self.data
+            del self.data
+            if isinstance(data, str):
+                if self.base_64 or self.text:
+                    raise ValueError("MediaObj received two string fields.")
+
+                self.text = data
+                if not self.mime:
+                    self.mime = "text/plain"
+
+            elif isinstance(data, bytes):
+                if self.base_64:
+                    raise ValueError(
+                        "MediaObj can have either bytes or base64 data, but not both.",
+                    )
+
+                # Strip binary data away once it's converted to b64
+                self.base_64 = base64.b64encode(data).decode("utf-8")
+                if not self.mime:
+                    self.mime = "application/octet-stream"
+            else:
+                raise ValueError(
+                    f"Unknown data format passed to MediaObj: {type(data)}",
+                )
+        return self
 
     @computed_field
     @property
@@ -121,18 +156,6 @@ class MediaObj(BaseModel):
         if self.base_64:
             return len(self.base_64)
         return -1
-
-    @model_validator(mode="after")
-    def vld_input(self) -> "MediaObj":
-        if not (self.data or self.text or self.uri or self.base_64):
-            raise ValueError("MediaObj must have data, a uri, or a base64 string.")
-        if self.data and not self.base_64:
-            self.base_64 = base64.b64encode(self.data).decode("utf-8")
-
-            # Strip binary data away once it's converted to b64
-            self.data = None
-
-        return self
 
     @field_validator("uri")
     def vld_path(path):
@@ -206,21 +229,19 @@ class MediaObj(BaseModel):
 
 
 class RecordInfo(BaseModel):
+    data: (
+        None
+        | str
+        | bytes
+        | MediaObj
+        | Sequence[str | bytes | MediaObj]
+        | Mapping[str, str | bytes | MediaObj]
+        | Sequence[Mapping[str, str | bytes | MediaObj]]
+    ) = Field(default=None, validation_alias=AliasChoices("data", "arg0", "text"))
+
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
-    metadata: dict[str, str] = {}
-    components: list[MediaObj] = []
-
-    @property
-    def title(self):
-        return self.metadata.get("title")
-
-    @property
-    def text(self):
-        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        all_text.extend([
-            f"{part.section}: {part.text}" for part in self.components if part.text
-        ])
-        return "\n".join(all_text)
+    metadata: dict[str, Any] = Field(default={})
+    _components: list[MediaObj] = PrivateAttr(default=[])
 
     ground_truth: Result | None = None
     uri: str | None = Field(
@@ -229,7 +250,7 @@ class RecordInfo(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="allow",
+        extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -237,46 +258,108 @@ class RecordInfo(BaseModel):
     )
 
     @model_validator(mode="after")
-    def vld_input(self) -> "RecordInfo":
-        if not self.components:
-            raise ValueError(
-                "InputRecord must have at least one component.",
-            )
-        for key, value in self.model_extra.popitem():
-            if key not in self.metadata:
-                self.metadata[key] = value
-            else:
-                raise ValueError(f"Received multiple values for {key} in RecordInfo")
+    def vld_input(self) -> Self:
+        # Take data arguments and turn them into MediaObj components
+        if isinstance(self.data, MediaObj):
+            self._components.append(self.data)
+        elif isinstance(self.data, str | bytes | Mapping):
+            self.data = [self.data]
+            for element in self.data:
+                if isinstance(element, Mapping):
+                    self._components.append(MediaObj(**element))
+                elif isinstance(element, str):
+                    self._components.append(MediaObj(text=element))
+                else:
+                    self._components.append(MediaObj(data=element))
+        elif isinstance(self.data, list):
+            for x in self.data:
+                if isinstance(x, MediaObj):
+                    self._components.append(x)
+                else:
+                    self._components.append(MediaObj(data=x))
 
+        # Place extra arguments in the metadata field
+        if self.model_extra:
+            for key, value in self.model_extra.popitem():
+                if key not in self.metadata:
+                    self.metadata[key] = value
+                else:
+                    raise ValueError(
+                        f"Received multiple values for {key} in RecordInfo",
+                    )
+        del self.data
         return self
 
     @field_validator("uri")
     @classmethod
-    def vld_path(cls, path: object) -> str:
-        if not is_uri(path):
-            raise ValueError(f"Invalid URI: {path}")
+    def vld_path(cls, path: object) -> str | None:
+        if not path:
+            return None
         if isinstance(path, CloudPath):
             return path.as_uri()
         if isinstance(path, Path):
             return path.as_posix()
         return str(path)
 
+    @property
+    def title(self) -> str | None:
+        return self.metadata.get("title")
+
+    @property
+    def all_text(self) -> str:
+        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
+        for part in self._components:
+            if part.text:
+                if part.label:
+                    all_text.append(f"{part.label}: {part.text}")
+                else:
+                    all_text.append(part.text)
+        return "\n".join(all_text)
+
     @classmethod
-    async def from_uri(cls, uri: str, mimetype: str = None, **metadata):
+    async def from_path(cls, path: str, mimetype: str = None, **metadata):
+        obj = read_file(path)
+        if not mimetype:
+            mimetype, _ = mimetypes.guess_type(path)
+
+        return await cls.from_object(obj=obj, uri=path, mimetype=mimetype, **metadata)
+
+    @classmethod
+    async def from_uri(
+        cls,
+        uri: str,
+        mimetype: str = None,
+        allow_arbitrarily_large_downloads: bool = False,
+        max_size: int = 1024 * 1024 * 10,
+        token: str | None = None,
+        **metadata,
+    ):
         if not is_uri(uri):
             raise ValueError(f"Invalid URI provided: {uri}")
-        obj, detected_mimetype = await download_limited_async(uri)
+        obj, detected_mimetype = await download_limited_async(
+            uri,
+            allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads,
+            max_size=max_size,
+            token=token,
+        )
         if not mimetype or mimetype == "application/octet-stream":
             mimetype = detected_mimetype
 
-        return await cls.from_object(obj=obj, mimetype=mimetype, **metadata)
+        return await cls.from_object(obj=obj, uri=uri, mimetype=mimetype, **metadata)
 
     @classmethod
-    async def from_object(cls, obj, uri: str = None, mimetype: str = None, **metadata):
+    async def from_object(
+        cls,
+        obj: Any,
+        uri: str = None,
+        mimetype: str = None,
+        **metadata,
+    ):
         from buttermilk.utils.media import convert_media
 
-        components = [convert_media(obj=obj, mimetype=mimetype)]
-        return RecordInfo(uri=uri, components=components, metadata=metadata)
+        components, extra_metadata = convert_media(obj=obj, mimetype=mimetype)
+        metadata.update(extra_metadata)
+        return RecordInfo(uri=uri, data=components, metadata=metadata)
 
     def update_from(self, result: Result, fields: list | str | None = None):
         update_dict = {}
@@ -297,7 +380,9 @@ class RecordInfo(BaseModel):
         include_text: bool = True,
     ) -> BaseMessage | None:
         components = self.as_openai_message(
-            role=role, model_capabilities=model_capabilities, include_text=include_text
+            role=role,
+            model_capabilities=model_capabilities,
+            include_text=include_text,
         )
         if components and (components := components.get("content")):
             if role in {"user", "human"}:
@@ -313,23 +398,24 @@ class RecordInfo(BaseModel):
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
-        for obj in self.components:
+        for obj in self._components:
             # attach media objects if the model supports them
             if (
-                (obj.mime.startswith("image") and model_capabilities.image)
+                (obj.mime.startswith("text") and model_capabilities.chat)
+                or (obj.mime.startswith("image") and model_capabilities.image)
                 or (obj.mime.startswith("video") and model_capabilities.video)
                 or (obj.mime.startswith("audio") and model_capabilities.audio)
             ):
                 components.append(obj.as_content_part())
 
-        if not components and not (self.text and include_text):
+        if not components:
             logger.warning(
-                f"No text or model compatible media provided for {self.record_id}"
+                f"No text or model compatible media provided for {self.record_id}",
             )
             return None
 
         if include_text:
-            text = self.text or "see attached media"
+            text = "see attached media"
             components.append({"type": "text", "text": text})
 
         message = {

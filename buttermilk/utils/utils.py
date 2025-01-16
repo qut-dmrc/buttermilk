@@ -13,7 +13,6 @@ from typing import Any, TypeVar
 import fsspec
 import httpx
 import numpy as np
-from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 import pydantic
 import regex as re
@@ -21,6 +20,7 @@ import requests
 import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from .._core.log import logger
 
@@ -42,7 +42,7 @@ def is_b64(value: Any) -> bool:
         return False
     # Check if the string is a valid base64-encoded string
     try:
-        base64.b64decode(value, validate=True)
+        return base64.b64encode(base64.b64decode(value)) == value.encode("utf-8")
     except:
         return False
     return True
@@ -381,21 +381,21 @@ def find_in_nested_dict(result: dict, value: str) -> object:
     # dictionary, consuming one level of 'value.split(".")'
     if isinstance(result, Mapping) and value in result:
         found = result[value]
-        if isinstance(found, (DictConfig,ListConfig)):
+        if isinstance(found, (DictConfig, ListConfig)):
             return OmegaConf.to_object(found)
         return found
-    
+
     if isinstance(result, Sequence) and not isinstance(result, str):
         # Handle lists of dicts too
         found = [find_in_nested_dict(item, value=value) for item in result]
-        return [x for x in found if x ]
-    
-    if '.' in value:
+        return [x for x in found if x]
+
+    if "." in value:
         nested = value.split(".", maxsplit=1)
         return find_in_nested_dict(result.get(nested[0], {}), value=nested[1])
 
-    
     return None
+
 
 def find_all_keys_in_dict(x, search_key):
     results = []
