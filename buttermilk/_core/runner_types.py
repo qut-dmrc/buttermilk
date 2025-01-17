@@ -229,15 +229,10 @@ class MediaObj(BaseModel):
 
 
 class RecordInfo(BaseModel):
-    data: (
-        None
-        | str
-        | bytes
-        | MediaObj
-        | Sequence[str | bytes | MediaObj]
-        | Mapping[str, str | bytes | MediaObj]
-        | Sequence[Mapping[str, str | bytes | MediaObj]]
-    ) = Field(default=None, validation_alias=AliasChoices("data", "arg0", "text"))
+    data: Any = Field(
+        default=None,
+        validation_alias=AliasChoices("data", "arg0", "text"),
+    )
 
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     metadata: dict[str, Any] = Field(default={})
@@ -259,24 +254,25 @@ class RecordInfo(BaseModel):
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
-        # Take data arguments and turn them into MediaObj components
-        if isinstance(self.data, MediaObj):
-            self._components.append(self.data)
-        elif isinstance(self.data, str | bytes | Mapping):
-            self.data = [self.data]
-            for element in self.data:
-                if isinstance(element, Mapping):
-                    self._components.append(MediaObj(**element))
-                elif isinstance(element, str):
-                    self._components.append(MediaObj(text=element))
-                else:
-                    self._components.append(MediaObj(data=element))
-        elif isinstance(self.data, list):
-            for x in self.data:
-                if isinstance(x, MediaObj):
-                    self._components.append(x)
-                else:
-                    self._components.append(MediaObj(data=x))
+        if "data" in self.model_fields_set:
+            # Take data arguments and turn them into MediaObj components
+            if isinstance(self.data, MediaObj):
+                self._components.append(self.data)
+            elif isinstance(self.data, str | bytes | Mapping):
+                self.data = [self.data]
+                for element in self.data:
+                    if isinstance(element, Mapping):
+                        self._components.append(MediaObj(**element))
+                    elif isinstance(element, str):
+                        self._components.append(MediaObj(text=element))
+                    else:
+                        self._components.append(MediaObj(data=element))
+            elif isinstance(self.data, list):
+                for x in self.data:
+                    if isinstance(x, MediaObj):
+                        self._components.append(x)
+                    else:
+                        self._components.append(MediaObj(data=x))
 
         # Place extra arguments in the metadata field
         if self.model_extra:

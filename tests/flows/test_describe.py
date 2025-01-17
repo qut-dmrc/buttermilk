@@ -22,11 +22,14 @@ def flow_describer(request):
 
 @pytest.mark.anyio
 async def test_run_flow_describe(flow_describer, image_bytes, bm: BM):
+    data, metadata = await download_and_convert(image_bytes, "image/jpeg")
     record = RecordInfo(
-        components=await download_and_convert(image_bytes, "image/jpeg")
+        data=data,
     )
     async for result in flow_describer.run_flows(
-        flow_id="testflow", record=record, run_info=bm.run_info
+        flow_id="testflow",
+        record=record,
+        run_info=bm.run_info,
     ):
         assert result
         assert not result.error
@@ -36,15 +39,23 @@ async def test_run_flow_describe(flow_describer, image_bytes, bm: BM):
 
 
 @pytest.mark.anyio
-async def test_run_flow_describe_no_media(flow_describer, lady_macbeth: RecordInfo, bm: BM):
-    async for result in flow_describer.run_flows(flow_id="testflow", record=lady_macbeth, run_info=bm.run_info):
+async def test_run_flow_describe_no_media(
+    flow_describer,
+    lady_macbeth: RecordInfo,
+    bm: BM,
+):
+    async for result in flow_describer.run_flows(
+        flow_id="testflow",
+        record=lady_macbeth,
+        run_info=bm.run_info,
+    ):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.outputs
 
 
 def test_find_record(bm, image_bytes):
-    record = RecordInfo(components=[image_bytes])
+    record = RecordInfo(data=[image_bytes])
     job = Job(
         flow_id="test",
         record=record,

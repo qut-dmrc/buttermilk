@@ -26,7 +26,9 @@ async def download_and_convert(
         if not mimetype or mimetype == "application/octet-stream":
             mimetype = detected_mimetype
 
-    return convert_media(obj, mimetype=mimetype, **kwargs)
+    new_object, extra_metadata = convert_media(obj, mimetype=mimetype, **kwargs)
+
+    return new_object, extra_metadata
 
 
 def convert_media(

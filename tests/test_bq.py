@@ -23,7 +23,7 @@ MOCK_ROWS = [
 def writer(bm):
     """Fixture to create a TableWriter instance for testing."""
     return TableWriter(
-        table_path=bm.cfg.save_dest.dataset,
+        table_path=bm.cfg.save.dataset,
     )
 
 @pytest.mark.asyncio

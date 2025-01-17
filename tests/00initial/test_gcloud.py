@@ -1,9 +1,7 @@
 from hashlib import md5
-from cloudpathlib import CloudPath
-from google.cloud.storage.client import Client
-import pytest
 
-from buttermilk.bm import BM
+from cloudpathlib import CloudPath
+
 from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
@@ -12,6 +10,7 @@ def test_logger_initialised(bm):
     obj = bm.logger
     assert obj is not None
     assert len(obj.handlers) >= 2
+
 
 def test_save(bm):
     uri = bm.save(data=["test data"], extension=".txt")
@@ -24,9 +23,10 @@ def test_save(bm):
     assert read_text == '{"0": "test data"}'
     uploaded.unlink(missing_ok=False)
 
+
 def test_upload_text(bm):
-    save_dir = bm.save_dir
-    uri = upload_text(data="test data", save_dir=save_dir, extension=".txt")
+    uri = bm.save_dir + "/test_data"
+    uri = upload_text(data="test data", uri=uri, extension=".txt")
     assert uri.startswith(bm.save_dir)
     assert uri.endswith(".txt")
     uploaded = CloudPath(uri)
@@ -52,5 +52,3 @@ def test_save_binary(bm):
     finally:
         # delete
         CloudPath(uri).unlink()
-    pass
-

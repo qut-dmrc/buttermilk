@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import pickle
 import tempfile
 
@@ -106,6 +107,7 @@ def save(
             dump_pickle,
         ],
     )
+    os.makedirs(save_dir, exist_ok=True)
 
     for method in upload_methods:
         try:
@@ -239,7 +241,7 @@ def upload_binary(data=None, *, uri=None):
         return uri
 
 
-def dump_to_disk(data, *, save_dir, extension='.json', **kwargs):
+def dump_to_disk(data, *, save_dir, extension=".json", **kwargs):
     with tempfile.NamedTemporaryFile(
         delete=False,
         dir=save_dir,
@@ -254,7 +256,7 @@ def dump_to_disk(data, *, save_dir, extension='.json', **kwargs):
         return out.name
 
 
-def dump_pickle(data, *, save_dir, extension='.pickle', **kwargs):
+def dump_pickle(data, *, save_dir, extension=".pickle", **kwargs):
     with tempfile.NamedTemporaryFile(
         delete=False,
         dir=save_dir,

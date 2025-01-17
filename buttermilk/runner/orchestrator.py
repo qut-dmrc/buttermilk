@@ -59,7 +59,8 @@ class MultiFlowOrchestrator(BaseModel):
             if not init_vars.get("flow"):
                 init_vars["flow"] = self.flow.name
             agent: Agent = globals()[self.flow.agent.type](
-                **init_vars, save=self.flow.save
+                **init_vars,
+                save=self.flow.save,
             )
             yield agent
 
@@ -83,7 +84,9 @@ class MultiFlowOrchestrator(BaseModel):
                     )
                     coroutine = agent.run(job)
                     coroutine = self.task_wrapper(
-                        task=coroutine, job_id=job.job_id, agent_name=agent.name
+                        task=coroutine,
+                        job_id=job.job_id,
+                        agent_name=agent.name,
                     )
                     yield coroutine
 
@@ -104,5 +107,5 @@ class MultiFlowOrchestrator(BaseModel):
 
         except Exception as e:
             raise FatalError(
-                f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}"
+                f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}",
             )

@@ -12,28 +12,26 @@ from __future__ import annotations  # Enable postponed annotations
 import datetime
 import json
 import logging
-import sys
 import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
     ClassVar,
-    Optional,
     Self,
     TypeVar,
 )
-from google import auth
+
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
-
-from google.cloud import bigquery, storage
+from google import auth
+from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
-from google.cloud import aiplatform
 from omegaconf import DictConfig
 from pydantic import (
     BaseModel,
@@ -109,7 +107,7 @@ class Singleton:
             _REGISTRY[key] = super().__new__(cls)
         return _REGISTRY[key]
 
-    def __deepcopy__(self, memo: dict[int, Any]| None = None):
+    def __deepcopy__(self, memo: dict[int, Any] | None = None):
         """Prevent deep copy operations for singletons"""
         return self
 
@@ -135,22 +133,22 @@ class Project(BaseModel):
         exclude_unset = True
 
     @model_validator(mode="after")
-    def register(self) -> "Project":
+    def register(self) -> Project:
         global _REGISTRY
         if not _REGISTRY.get(_CONFIG):
             _REGISTRY[_CONFIG] = self
         else:
-            raise ValueError(f"Config already initialised; refusing to overwrite!")
+            raise ValueError("Config already initialised; refusing to overwrite!")
         return self
 
 
 class BM(Singleton, BaseModel):
-    cfg: Optional[Project] = Field(default=None, validate_default=True)
+    cfg: Project | None = Field(default=None, validate_default=True)
 
     _run_info: SessionInfo = PrivateAttr()
     _gcp_project: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-    
+
     @field_validator("cfg")
     @classmethod
     def set_config(cls, cfg) -> dict:
@@ -159,41 +157,54 @@ class BM(Singleton, BaseModel):
 
         if not cfg:  # check here that cfg has not been passed in
             try:
-                cfg = _REGISTRY['BM'].cfg 
+                cfg = _REGISTRY["BM"].cfg
             except KeyError as e:
                 raise FatalError(
                     "BM() called without config information before it was initialised.",
                 ) from e
 
         return cfg
-    
 
     @model_validator(mode="before")
     @classmethod
     def get_vars(cls, vars) -> dict:
         return vars
-    
+
     @model_validator(mode="after")
     def ensure_config(self) -> Self:
         global _REGISTRY
-        
-        if _run_info := _REGISTRY.get("run_info"):  
+
+        if _run_info := _REGISTRY.get("run_info"):
             # Already configured, just wrap up.
             self._run_info = self.model_fields.get("_run_info", _run_info)
             return self
-        
+
         # Initialise Run Metadata
-        _REGISTRY["run_info"] = SessionInfo(name=self.cfg.name, job=self.cfg.job, save_dir_base=self.cfg.run.save_dir_base)
+        _REGISTRY["run_info"] = SessionInfo(
+            name=self.cfg.name,
+            job=self.cfg.job,
+            save_dir_base=self.cfg.run.save_dir_base,
+        )
         self._run_info = _REGISTRY["run_info"]
 
         for cloud in self.cfg.clouds:
             if cloud.type == "gcp":
                 # authenticate to GCP
-                os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get('GOOGLE_CLOUD_PROJECT', cloud.project)
-                billing_project = cloud.model_fields.get("quota_project_id", os.environ['GOOGLE_CLOUD_PROJECT'])
-                credentials, self._gcp_project = auth.default(quota_project_id=billing_project)
+                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
+                    "GOOGLE_CLOUD_PROJECT",
+                    cloud.project,
+                )
+                billing_project = cloud.model_fields.get(
+                    "quota_project_id",
+                    os.environ["GOOGLE_CLOUD_PROJECT"],
+                )
+                credentials, self._gcp_project = auth.default(
+                    quota_project_id=billing_project,
+                )
                 self.setup_logging(verbose=self.cfg.logger.verbose)
-                self.logger.info(f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}") 
+                self.logger.info(
+                    f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}",
+                )
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(
@@ -202,7 +213,6 @@ class BM(Singleton, BaseModel):
                     staging_bucket=cloud.bucket,
                 )
 
-        
         # Print config to console and save to default save dir
         rprint(self.cfg)
         rprint(self.run_info)
@@ -227,22 +237,28 @@ class BM(Singleton, BaseModel):
             )
 
         return self
-    
+
     @property
     def run_info(self) -> SessionInfo:
         return self._run_info
-    
+
     @property
     def save_dir(self) -> str:
         return self.run_info.save_dir
-    
+
     def save(self, data, save_dir=None, **kwargs):
         """Failsafe save method."""
         save_dir = save_dir or self.save_dir
         result = save.save(data=data, save_dir=save_dir, **kwargs)
-        logger.info(dict(message=f"Saved data to: {result}", uri=result, run_id=self.run_info.run_id))
+        logger.info(
+            dict(
+                message=f"Saved data to: {result}",
+                uri=result,
+                run_id=self.run_info.run_id,
+            ),
+        )
         return result
-    
+
     @property
     def logger(self) -> logging.Logger:
         global logger
@@ -298,38 +314,49 @@ class BM(Singleton, BaseModel):
                 stream=sys.stdout,
             )
 
-        # Labels for cloud logger
-        resource = google.cloud.logging.Resource(
-            type="generic_task",
-            labels={
-                "project_id": self.cfg.logger.project,
-                "location": self.cfg.logger.location,
-                "namespace": self.cfg.name,
-                "job": self.cfg.job,
-                "task_id": self.run_info.run_id,
-            },
-        )
+        resource = None
+        if self.cfg.logger.type == "gcp":
+            # Labels for cloud logger
+            resource = google.cloud.logging.Resource(
+                type="generic_task",
+                labels={
+                    "project_id": self.cfg.logger.project,
+                    "location": self.cfg.logger.location,
+                    "namespace": self.cfg.name,
+                    "job": self.cfg.job,
+                    "task_id": self.run_info.run_id,
+                },
+            )
+
+            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
+                project=self.cfg.logger.project,
+            )
+            cloudHandler = CloudLoggingHandler(
+                client=_REGISTRY["gcslogging"],
+                resource=resource,
+                name=self.cfg.name,
+                labels=self.run_info.model_dump(),
+            )
+            cloudHandler.setLevel(
+                logging.INFO,
+            )  # Cloud logging never uses the DEBUG level, there's just too much data. Print debug to console only.
+            logger.addHandler(cloudHandler)
 
         if verbose:
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.INFO)
 
-        _REGISTRY['gcslogging'] = google.cloud.logging.Client(project=self.cfg.logger.project)
-        cloudHandler = CloudLoggingHandler(
-            client=_REGISTRY['gcslogging'],
-            resource=resource,
-            name=self.cfg.name,
-            labels=self.run_info.model_dump(),
+        message = (
+            f"Logging set up for: {self.run_info.__str__()}. Ready for data collection. Default save directory for data in this run is: {self.save_dir}",
         )
-        cloudHandler.setLevel(
-            logging.INFO,
-        )  # Cloud logging never uses the DEBUG level, there's just too much data. Print debug to console only.
-        logger.addHandler(cloudHandler)
+
+        if resource:
+            message = f"{message} {resource}"
 
         logger.info(
             dict(
-                message=f"Logging set up for: {self.run_info.__str__()}. Ready for data collection, saving log to Google Cloud Logs ({resource}). Default save directory for data in this run is: {self.save_dir}",
+                message=message,
                 **self.run_info.model_dump(),
             ),
         )
@@ -346,7 +373,7 @@ class BM(Singleton, BaseModel):
         if _REGISTRY.get("gcs") is None:
             _REGISTRY["gcs"] = storage.Client(project=self._gcp_project)
         return _REGISTRY["gcs"]
-    
+
     @property
     def secret_manager(self) -> SecretsManager:
         if _REGISTRY.get("secret_manager") is None:
@@ -364,10 +391,10 @@ class BM(Singleton, BaseModel):
                     cfg_key=_MODELS_CFG_KEY,
                 )
                 try:
-                    Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True,exist_ok=True)
+                    Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
                     Path(CONFIG_CACHE_PATH).write_text(json.dumps(connections), encoding="utf-8")
                 except Exception as e:
-                    logger.error(f'Unable to cache connections: {e}, {e.args}')
+                    logger.error(f"Unable to cache connections: {e}, {e.args}")
 
             _REGISTRY["llms"] = LLMs(connections=connections)
         return _REGISTRY["llms"]

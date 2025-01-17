@@ -3,15 +3,18 @@
 defaults:
   - _self_
 
+save:
+  type: bq
+  dataset: prosocial-443205.testing.flow
+  db_schema: flow.json
+
 bm:
   _target_: buttermilk.BM
   cfg:
     name: buttermilk
     job: testing
     logger: 
-      type: gcp
-      project: prosocial-443205
-      location: us-central1
+      type: local
       verbose: true
     tracing: 
       enabled: true
@@ -37,9 +40,8 @@ bm:
       subscription: flow-sub
 
     run:
-      platform: local
+      platform: testing
       max_concurrency: 4
-      save_dir_base: gs://prosocial-dev/runs/
 
 flows:
   test:

@@ -3,7 +3,6 @@ from langchain.prompts import ChatPromptTemplate
 from rich import print as rprint
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
-from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 
 
@@ -23,8 +22,10 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
-        components=[MediaObj(mime="image/jpg", data=image_bytes)],
-    ).as_langchain_message(role="human", model_capabilities=llms.connections[model].capabilities)
+        data=[MediaObj(mime="image/jpg", data=image_bytes)],
+    ).as_langchain_message(
+        role="human", model_capabilities=llms.connections[model].capabilities
+    )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
@@ -36,21 +37,28 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
 def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
-        components=[MediaObj(mime="image/jpg", data=image_bytes)],
-    ).as_langchain_message(role="human", model_capabilities=llms.connections[model].capabilities, include_text=False)
-    
+        data=[MediaObj(mime="image/jpg", data=image_bytes)],
+    ).as_langchain_message(
+        role="human",
+        model_capabilities=llms.connections[model].capabilities,
+        include_text=False,
+    )
+
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
     rprint(answer)
     assert answer
+
 
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 def test_multimodal_input_video_uri(llms, model, video_url):
     llm = llms[model]
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
-        components=[MediaObj(mime="video/mp4", uri=video_url)],
-    ).as_langchain_message(role="human", model_capabilities=llms.connections[model].capabilities)
+        data=[MediaObj(mime="video/mp4", uri=video_url)],
+    ).as_langchain_message(
+        role="human", model_capabilities=llms.connections[model].capabilities
+    )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
@@ -63,8 +71,10 @@ def test_multimodal_input_b64_video(llms, model, video_bytes):
     llm = llms[model]
     message = RecordInfo(
         text="Hi, can you tell me what this is?",
-        components=[MediaObj(mime="video/mp4", data=video_bytes)],
-    ).as_langchain_message(role="human", model_capabilities=llms.connections[model].capabilities)
+        data=[MediaObj(mime="video/mp4", data=video_bytes)],
+    ).as_langchain_message(
+        role="human", model_capabilities=llms.connections[model].capabilities
+    )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
     answer = chain.invoke({})
@@ -84,6 +94,7 @@ def test_cheap_llm(llms, cheapchatmodel: str):
 
 
 class TestPromptStyles:
+    @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
     def test_words_in_mouth(self, cheapchatmodel, llms):
         llm = llms[cheapchatmodel]
         messages = [
