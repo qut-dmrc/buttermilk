@@ -21,10 +21,13 @@ def test_all_llm(llms, model):
 def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
-        text="Hi, can you tell me what this is?",
-        data=[MediaObj(mime="image/jpg", data=image_bytes)],
+        data=[
+            MediaObj(mime="image/jpg", data=image_bytes),
+            "Hi, can you tell me what this is?",
+        ],
     ).as_langchain_message(
-        role="human", model_capabilities=llms.connections[model].capabilities
+        role="human",
+        model_capabilities=llms.connections[model].capabilities,
     )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
@@ -54,10 +57,13 @@ def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
 def test_multimodal_input_video_uri(llms, model, video_url):
     llm = llms[model]
     message = RecordInfo(
-        text="Hi, can you tell me what this is?",
-        data=[MediaObj(mime="video/mp4", uri=video_url)],
+        data=[
+            MediaObj(mime="video/mp4", uri=video_url),
+            "Hi, can you tell me what this is?",
+        ],
     ).as_langchain_message(
-        role="human", model_capabilities=llms.connections[model].capabilities
+        role="human",
+        model_capabilities=llms.connections[model].capabilities,
     )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm
@@ -70,10 +76,13 @@ def test_multimodal_input_video_uri(llms, model, video_url):
 def test_multimodal_input_b64_video(llms, model, video_bytes):
     llm = llms[model]
     message = RecordInfo(
-        text="Hi, can you tell me what this is?",
-        data=[MediaObj(mime="video/mp4", data=video_bytes)],
+        data=[
+            MediaObj(mime="video/mp4", data=video_bytes),
+            "Hi, can you tell me what this is?",
+        ],
     ).as_langchain_message(
-        role="human", model_capabilities=llms.connections[model].capabilities
+        role="human",
+        model_capabilities=llms.connections[model].capabilities,
     )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm

@@ -2,7 +2,6 @@
 from cloudpathlib import CloudPath
 
 from buttermilk.bm import BM
-from buttermilk.utils.save import upload_text
 
 
 def test_has_test_info(bm: BM):
@@ -11,6 +10,7 @@ def test_has_test_info(bm: BM):
     assert bm.save_dir is not None
     assert bm.save_dir != ""
     assert bm.save_dir.startswith("gs://")
+
 
 def test_config_llms(bm: BM):
     models = bm.llms
@@ -38,6 +38,7 @@ def test_singleton_from_fixture(bm):
 
 def test_time_to_instantiate():
     import time
+
     start = time.time()
     obj = BM()
     end = time.time()
@@ -46,11 +47,10 @@ def test_time_to_instantiate():
     assert time_taken < 1, "Took too long to instantiate BM"
 
 
-
 def test_model_post_init_saves_config(bm, mock_save):
     mock_save.assert_called_once()
     args, kwargs = mock_save.call_args
-    
+
     saved_data = kwargs.get("data")
 
     assert len(saved_data) == 2

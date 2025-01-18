@@ -1,14 +1,8 @@
 import datetime
-from google.cloud import bigquery_storage
-from google.api_core.exceptions import NotFound
 from unittest.mock import AsyncMock, MagicMock
-import pytest
 
-from google.cloud import bigquery_storage_v1beta2
-from google.api_core.exceptions import NotFound
-from unittest.mock import AsyncMock, MagicMock
 import pytest
-import os
+from google.cloud import bigquery_storage
 
 from buttermilk.utils.bq import TableWriter
 
@@ -19,26 +13,31 @@ MOCK_ROWS = [
     {"test_time": datetime.datetime.now(), "success": True, "id": 2},
 ]
 
+
 @pytest.fixture
-def writer(bm):
+def writer(flow):
     """Fixture to create a TableWriter instance for testing."""
     return TableWriter(
-        table_path=bm.cfg.save.dataset,
+        table_path=flow.save.dataset,
     )
+
 
 @pytest.mark.asyncio
 async def test_append_rows(monkeypatch, writer):
     """Test appending rows to a BigQuery table."""
-
     # Mock the BigQueryWriteAsyncClient and its append_rows method
     mock_write_client = AsyncMock(spec=bigquery_storage.BigQueryWriteAsyncClient)
     mock_append_rows_stream = AsyncMock()
-    mock_append_rows_stream.__aiter__.return_value = [MagicMock(), MagicMock()]  # Mock two responses
+    mock_append_rows_stream.__aiter__.return_value = [
+        MagicMock(),
+        MagicMock(),
+    ]  # Mock two responses
     mock_write_client.append_rows.return_value = mock_append_rows_stream
     monkeypatch.setattr(
-        bigquery_storage, "BigQueryWriteAsyncClient", lambda: mock_write_client
+        bigquery_storage,
+        "BigQueryWriteAsyncClient",
+        lambda: mock_write_client,
     )
-
 
     # Call the append_rows method
     await writer.append_rows(rows=MOCK_ROWS)
@@ -59,15 +58,15 @@ async def test_append_rows(monkeypatch, writer):
 @pytest.mark.integration
 async def test_append_rows_integration(writer, bm):
     """Test appending rows to a BigQuery table."""
-
     # Call the append_rows method
     results = await writer.append_rows(rows=MOCK_ROWS)
     assert all(results)
-    
+
     # Add assertions to verify data is in the table
     # You'll need to use the BigQuery client to query the table and check if the data exists.
     # For example:
     from google.cloud import bigquery
+
     client = bigquery.Client()
     query = f"""
         SELECT *
@@ -76,4 +75,3 @@ async def test_append_rows_integration(writer, bm):
     query_job = client.query(query)
     results = query_job.result()
     assert len(list(results)) >= 2  # Assuming at least 2 rows were inserted
-

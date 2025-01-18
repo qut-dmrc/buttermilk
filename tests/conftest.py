@@ -1,32 +1,45 @@
+from unittest.mock import patch
+
 import hydra
 import pytest
 from pytest import MarkDecorator
 
-from unittest.mock import patch
-from buttermilk.llms import LLMs
-from buttermilk.utils.utils import read_file
 from buttermilk import BM
-from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS
+from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS, LLMs
+from buttermilk.utils.utils import read_file
+
 
 @pytest.fixture
 def mock_save():
     with patch("buttermilk.bm.save.save") as mock_save:
         yield mock_save
 
+
 @pytest.fixture(scope="session", autouse=True)
-def bm() -> BM:
+def objs():
     from hydra import compose, initialize
 
     with initialize(version_base=None, config_path="conf"):
         cfg = compose(config_name="config")
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
+    return objs
+
+
+@pytest.fixture(scope="session", autouse=True)
+def bm(objs) -> BM:
     return objs.bm
 
 
+@pytest.fixture(scope="session", autouse=True)
+def flow(objs):
+    return objs.flows["test"]
+
+
 @pytest.fixture(scope="session")
-def logger(BM):
-    return BM.logger
+def logger(bm):
+    return bm.logger
+
 
 @pytest.fixture(scope="session")
 def llms(bm: BM) -> LLMs:
@@ -37,13 +50,16 @@ def llms(bm: BM) -> LLMs:
 def multimodal_llm(request, bm: BM):
     return bm.llms[request.param]
 
+
 @pytest.fixture(params=CHATMODELS)
 def llm(request, bm: BM):
     return bm.llms[request.param]
 
+
 @pytest.fixture
 def anyio_backend():
-    return 'asyncio'
+    return "asyncio"
+
 
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
@@ -58,14 +74,16 @@ def video_bytes(video_url: str) -> bytes:
 VIDEO_URIS = [
     (
         "web",
-        "https://file-examples.com/storage/feb06822a967475629bfe71/2017/04/file_example_MP4_480_1_5MG.mp4",
+        "https://github.com/chthomos/video-media-samples/raw/refs/heads/master/big-buck-bunny-480p-30sec.mp4",
     ),
     ("gcs", "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4"),
 ]
 
 
 @pytest.fixture(
-    scope="session", params=[x[1] for x in VIDEO_URIS], ids=[x[0] for x in VIDEO_URIS]
+    scope="session",
+    params=[x[1] for x in VIDEO_URIS],
+    ids=[x[0] for x in VIDEO_URIS],
 )
 def video_url(request) -> str:
     return request.param

@@ -1,10 +1,9 @@
 import copy
 import datetime
 from collections.abc import Mapping
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
-import pandas as pd
 import shortuuid
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
@@ -21,7 +20,7 @@ from buttermilk._core.config import SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
-from buttermilk.utils.utils import expand_dict, find_in_nested_dict
+from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .log import logger
@@ -52,7 +51,7 @@ class Agent(BaseModel):
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
     save: SaveInfo | None = Field(default=None)  # Where to save the results
-    parameters: dict[str, str | list | dict] | None = Field(
+    parameters: dict[str, Any] | None = Field(
         default_factory=dict,
         description="Combinations of variables to pass to process job",
         validation_alias=AliasChoices(
@@ -92,6 +91,7 @@ class Agent(BaseModel):
     _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
+
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
@@ -131,7 +131,6 @@ class Agent(BaseModel):
             if self.save:
                 rows = [job.model_dump(mode="json")]
                 if self.save.type == "bq":
-            
                     save(
                         data=rows,
                         dataset=self.save.dataset,
@@ -142,8 +141,7 @@ class Agent(BaseModel):
                     save(data=rows, save_dir=self.save.destination)
 
         return job
-    
-    
+
     async def process_job(
         self,
         *,
@@ -160,6 +158,5 @@ class Agent(BaseModel):
             Job with Inputs and Outputs
 
         """
-
         raise NotImplementedError
         return job

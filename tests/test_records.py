@@ -3,6 +3,7 @@ from PIL import Image
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo, Result
 from buttermilk.llms import LLMCapabilities
+from buttermilk.utils.media import download_and_convert
 
 pytestmark = pytest.mark.anyio
 
@@ -39,7 +40,7 @@ async def test_from_uri_valid():
     # Use a small test image
     test_image_path = "https://picsum.photos/64"
 
-    record = await RecordInfo.from_uri(
+    record = await download_and_convert(
         test_image_path,
         mimetype="image/jpeg",
         title="Test Image",
@@ -53,7 +54,7 @@ async def test_from_uri_valid():
 
 @pytest.mark.asyncio
 async def test_from_uri_article():
-    record = await RecordInfo.from_uri(
+    record = await download_and_convert(
         "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
     )
     assert (
@@ -67,9 +68,10 @@ async def test_from_uri_article():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail
 async def test_from_uri_invalid():
-    await RecordInfo.from_uri("invalid_uri", mimetype="image/png")
+    record = await download_and_convert("invalid_uri", mimetype="image/png")
+    assert not record.uri
+    assert record.all_text == "invalid_uri"
 
 
 @pytest.mark.asyncio
@@ -78,7 +80,7 @@ async def test_from_object_valid():
     image = Image.new("RGB", (100, 100))
     obj = image.tobytes()
 
-    record = await RecordInfo.from_object(
+    record = await download_and_convert(
         obj,
         mimetype="image/png",
         title="Test Image from Object",
@@ -93,7 +95,7 @@ async def test_from_object_valid():
 @pytest.mark.asyncio
 async def test_record_update():
     image = Image.new("RGB", (100, 100))
-    record = await RecordInfo.from_object(
+    record = await download_and_convert(
         image.tobytes(),
         mimetype="image/png",
         title="Test Image",

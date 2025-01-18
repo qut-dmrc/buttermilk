@@ -10,18 +10,25 @@ from buttermilk.utils.media import download_and_convert
 
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def flow_describer(request):
+def flow_describer(request) -> Flow:
     agent = Describer(
         name="testdescriber",
-        parameters={"template": "describe", "model": request.param},
+        parameters={"template": "describe", "download_if_necessary": True, "model": request.param},
         inputs={"record": "record"},
         outputs={"record": "record"},
     )
     return Flow(source="testing", steps=[agent])
 
+@pytest.fixture
+def flow_download_only(flow_describer: Flow):
+    flow_describer.steps[0].parameters = {"describe": False}
 
 @pytest.mark.anyio
-async def test_run_flow_describe(flow_describer, image_bytes, bm: BM):
+async def test_fetch_record_uri_image(flow_download_only, image_uri):
+    
+
+@pytest.mark.anyio
+async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
     data, metadata = await download_and_convert(image_bytes, "image/jpeg")
     record = RecordInfo(
         data=data,
@@ -34,7 +41,7 @@ async def test_run_flow_describe(flow_describer, image_bytes, bm: BM):
         assert result
         assert not result.error
         assert isinstance(result.record, RecordInfo)
-        assert "painting" in str(result.record.text).lower()
+        assert "painting" in str(result.record.alt_text).lower()
         assert "night watch" in str(result.record.title).lower()
 
 

@@ -5,7 +5,6 @@ from urllib.parse import parse_qs
 import shortuuid
 from pydantic import (
     AliasChoices,
-    AnyUrl,
     BaseModel,
     ConfigDict,
     Field,
@@ -16,10 +15,11 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
+from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.validators import (
     make_list_validator,
     make_uri_validator,
@@ -125,13 +125,6 @@ class FlowRequest(BaseModel):
                 if v not in CHATMODELS:
                     raise ValueError(f"Valid model must be provided. {v} is unknown.")
 
-        if isinstance(self.text, AnyUrl):
-            if self.uri:
-                raise ValueError("You should only pass one URL in at a time.")
-            # Move the URL to the correct field
-            self.uri = self.text
-            self.text = None
-
         return self
 
 
@@ -148,17 +141,17 @@ async def flow_stream(
     )
     record = None
     if flow_request.uri:
-        record = await RecordInfo.from_uri(
-            flow_request.uri, mimetype=flow_request.mime_type
+        record = await download_and_convert(
+            flow_request.uri,
+            mimetype=flow_request.mime_type,
         )
     elif flow_request.content:
-        record = await RecordInfo.from_object(
-            flow_request.content, mimetype=flow_request.mime_type
+        record = await download_and_convert(
+            flow_request.content,
+            mimetype=flow_request.mime_type,
         )
 
     if record and flow_request.record_id:
-        record.record_id = flow_request.record_id
-    elif record:
         raise NotImplementedError("Loading by record ID is not yet supported.")
 
     async for job in flow.run_flows(

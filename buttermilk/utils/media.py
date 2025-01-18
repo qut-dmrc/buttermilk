@@ -1,4 +1,5 @@
 import base64
+import contextlib
 from typing import Any
 
 import regex as re
@@ -6,94 +7,114 @@ from bs4 import BeautifulSoup
 from pydantic import validate_call
 from readabilipy import simple_json_from_html_string
 
-from buttermilk._core.runner_types import MediaObj
+from buttermilk._core.runner_types import MediaObj, RecordInfo
 from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
 
 
 @validate_call
 async def download_and_convert(
     obj: Any,
-    mimetype: str | None = None,
-    **kwargs,
-) -> tuple[list[MediaObj], dict]:
-    if not obj:
-        return None
-
-    mimetype = mimetype or "application/octet-stream"
-
-    if is_uri(obj):
-        obj, detected_mimetype = await download_limited_async(obj)
-        if not mimetype or mimetype == "application/octet-stream":
-            mimetype = detected_mimetype
-
-    new_object, extra_metadata = convert_media(obj, mimetype=mimetype, **kwargs)
-
-    return new_object, extra_metadata
-
-
-def convert_media(
-    obj,
+    *,
+    label: str | None = None,
     mimetype: str = "application/octet-stream",
-    uri: str = None,
-    **metadata,
-) -> tuple[list[MediaObj], dict]:
+    allow_arbitrarily_large_downloads: bool = False,
+    max_size: int = 1024 * 1024 * 10,
+    token: str | None = None,
+    alt_text: str | None = None,
+    ground_truth: Any = None,
+    metadata: dict = {},
+    **kwargs,
+) -> RecordInfo:
     # If we have a URI, download it.
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
-    obj_list = []
-    retrieved_metadata = {}
+
+    uri = None
+    if is_uri(obj):
+        uri = obj
+        obj, detected_mimetype = await download_limited_async(
+            uri,
+            allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads,
+            token=token,
+            max_size=max_size,
+        )
+
+        # Replace mimetype if default or none was passed in
+        if detected_mimetype and (
+            not mimetype or mimetype == "application/octet-stream"
+        ):
+            mimetype = detected_mimetype
+
+    obj_list = []  # List of component media objects
 
     if is_b64(obj):
-        obj_list = [MediaObj(base_64=obj, mime=mimetype, uri=uri, metadata=metadata)]
+        obj_list = [MediaObj(base_64=obj, mime=mimetype, label=label)]
 
     elif mimetype.startswith("text/html"):
-        # try to extract text from object
+        # try to extract text from web page
+        with contextlib.suppress(Exception):
+            obj = obj.decode("utf-8")
+
         obj_list, retrieved_metadata = extract_main_content(
-            obj.decode("utf-8"),
-            uri=uri,
+            obj,
             metadata=metadata,
         )
+        metadata.update(retrieved_metadata)
 
     elif mimetype.startswith("text/"):
         if isinstance(obj, bytes):
             obj_list = [
                 MediaObj(
-                    text=obj.decode("utf-8"),
-                    uri=uri,
+                    label="media",
+                    content=obj.decode("utf-8"),
                     mime=mimetype,
-                    metadata=metadata,
                 ),
             ]
         else:
-            obj_list = [MediaObj(text=obj, mime=mimetype, uri=uri, metadata=metadata)]
+            obj_list = [
+                MediaObj(
+                    label="text",
+                    content=obj,
+                    mime=mimetype,
+                ),
+            ]
 
     elif mimetype == "application/octet-stream" and isinstance(obj, str):
-        obj_list = [MediaObj(text=obj, mime="text/plain", uri=uri, metadata=metadata)]
+        obj_list = [
+            MediaObj(
+                label="media",
+                content=obj,
+                mime="text/plain",
+            ),
+        ]
 
     else:
         # By default, encode the object as base64
         obj_list = [
             MediaObj(
+                label="media",
                 mime=mimetype,
                 base_64=base64.b64encode(obj).decode("utf-8"),
-                uri=uri,
-                metadata=metadata,
             ),
         ]
-    return obj_list, retrieved_metadata
+    return RecordInfo(
+        data=obj_list,
+        metadata=metadata,
+        alt_text=alt_text,
+        ground_truth=ground_truth,
+    )
 
 
-def extract_main_content(html: str, uri: str = None, **kwargs) -> tuple[MediaObj, dict]:
+def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
     paragraphs = [
-        MediaObj(text=para["text"], label="paragraph", mime="text/plain")
+        MediaObj(content=para["text"], label="paragraph", mime="text/plain")
         for para in doc.pop("plain_text")
     ]
     del doc["plain_content"]
     del doc["content"]
     doc.update(kwargs)
-    doc["uri"] = uri
     doc = {k: v for k, v in doc.items() if v}
 
     return paragraphs, doc

@@ -3,10 +3,6 @@
 defaults:
   - _self_
 
-save:
-  type: bq
-  dataset: prosocial-443205.testing.flow
-  db_schema: flow.json
 
 bm:
   _target_: buttermilk.BM
@@ -53,3 +49,7 @@ flows:
         num_runs: 2
         concurrency: 2
         parameters: 
+    save:
+      type: bq
+      dataset: prosocial-443205.testing.flow
+      db_schema: flow.json

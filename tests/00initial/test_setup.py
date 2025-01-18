@@ -1,23 +1,14 @@
-import datetime
 import os
-import regex as re
 import sys
 
 import google.auth
 import google.auth.credentials
-import pandas as pd
 import pytest
-from cloudpathlib import CloudPath
 from google.auth.credentials import TokenState
-from numpy import isin
-from pytest import CaptureFixture
 from huggingface_hub import login
 
-from buttermilk._core.config import RunCfg
-from buttermilk._core.types import SessionInfo
 from buttermilk.bm import BM
 from buttermilk.utils.utils import read_yaml
-
 
 
 class Test00Setup:
@@ -42,7 +33,7 @@ class Test00Setup:
 
     @pytest.mark.parametrize(
         ["table", "schema"],
-        [("dmrc-analysis.tests.indicator", "datatools/chains/schemas/indicator.json")],
+        [("prosocial-443205.testing.flow", "buttermilk/schemas/flow.json")],
     )
     def test_database(self, bm: BM, table, schema):
         """Delete and recreate the test table"""
@@ -54,7 +45,6 @@ class Test00Setup:
         new_table = Table(table_ref=ref, schema=test_schema)
 
         assert bm.bq.create_table(table=new_table, exists_ok=True)
-
 
     def test_hf_login(self):
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])

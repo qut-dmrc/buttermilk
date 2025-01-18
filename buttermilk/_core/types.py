@@ -2,8 +2,7 @@
 import datetime
 import platform
 from pathlib import Path
-from tempfile import mkdtemp
-from typing import Optional, Self
+from typing import Self
 
 import psutil
 import pydantic
@@ -12,7 +11,6 @@ from cloudpathlib import AnyPath, CloudPath
 from pydantic import (
     ConfigDict,
     Field,
-    PrivateAttr,
 )
 
 from ..utils import get_ip
@@ -31,7 +29,7 @@ def _make_run_id() -> str:
     username = str.split(username, "\\")[-1]
 
     # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
-    run_time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%MZ")
+    run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
     run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
     return run_id
@@ -49,8 +47,8 @@ class SessionInfo(pydantic.BaseModel):
     username: str = Field(
         default_factory=lambda: psutil.Process().username().split("\\")[-1],
     )
-    save_dir_base: str 
-    save_dir: Optional[str] = None
+    save_dir_base: str
+    save_dir: str | None = None
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
@@ -59,7 +57,6 @@ class SessionInfo(pydantic.BaseModel):
 
     def __str__(self):
         return _global_run_id
-
 
     @pydantic.field_validator("save_dir_base", mode="before")
     def get_save_dir(cls, save_dir_base, values) -> str:
@@ -74,10 +71,11 @@ class SessionInfo(pydantic.BaseModel):
                 f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
             )
         return save_dir_base
-    
 
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
-        self.save_dir = save_dir.as_uri()
+        save_dir = (
+            AnyPath(self.save_dir_base) / "runs" / self.name / self.job / self.run_id
+        )
+        self.save_dir = str(save_dir)
         return self

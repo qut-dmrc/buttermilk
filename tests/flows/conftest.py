@@ -5,13 +5,18 @@ from buttermilk._core.runner_types import RecordInfo
 
 @pytest.fixture
 def fight_no_more_forever() -> dict:
-    record = dict(text= """Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",id="ChiefJoseph1877",
-                  expected=dict(violates=False))
+    record = dict(
+        text="""Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",
+        record_id="ChiefJoseph1877",
+        ground_truth=dict(violates=False),
+    )
     return record
+
 
 @pytest.fixture(scope="session")
 def example_coal():
-    record = dict(text= """Scott Morrison brings coal to question time: what fresh idiocy is this?
+    record = dict(
+        text="""Scott Morrison brings coal to question time: what fresh idiocy is this?
 This article is more than 7 years oldKatharine Murphy
 Katharine Murphy
 What a bunch of clowns, hamming it up – while out in the real world an ominous and oppressive heat just won’t let up
@@ -77,9 +82,12 @@ Cabinet’s energy subcommittee met in Canberra for the first time on Thursday a
 
 Perhaps they could do us all a favour.
 
-Perhaps they could just shut up and get on with it.""", id="CoalCrikeyMurphy2017",
-                  expected=dict(violates=False))
+Perhaps they could just shut up and get on with it.""",
+        record_id="CoalCrikeyMurphy2017",
+        ground_truth=dict(violates=False),
+    )
     return record
+
 
 @pytest.fixture
 def lady_macbeth() -> RecordInfo:
