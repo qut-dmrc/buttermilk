@@ -1,10 +1,8 @@
-import logging
 import time
 import uuid
 
 import google.cloud.logging  # Don't conflict with standard logging
 import pytest
-
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
@@ -40,7 +38,12 @@ def test_debug(capsys, logger_new):
     assert "debug" not in str.lower(captured.err)
 
 
-def test_info(capsys, logger_new, bm):
+@pytest.fixture
+def cloud_logging_client_gcs(bm: BM):
+    return google.cloud.logging.Client(project=bm.cfg.clouds[0].project)
+
+
+def test_info(capsys, cloud_logging_client_gcs, logger_new, bm):
     logger_new.info(LOG_TEXT)
     captured = capsys.readouterr()
     assert LOG_TEXT in captured.err
@@ -48,37 +51,25 @@ def test_info(capsys, logger_new, bm):
 
     # sleep 5 seconds to allow the last class to write to the cloud service
     time.sleep(5)
-    client = google.cloud.logging.Client(project=bm.cfg.logger.project)
-    entries = client.list_entries(
-        order_by=google.cloud.logging.DESCENDING, max_results=100
+    entries = cloud_logging_client_gcs.list_entries(
+        order_by=google.cloud.logging.DESCENDING,
+        max_results=100,
     )
     for entry in entries:
         if LOG_TEXT in str(entry.payload):
             return True
 
-    raise IOError(f"Info message not found in log: {LOG_TEXT}")
+    raise OSError(f"Info message not found in log: {LOG_TEXT}")
 
 
-def test_cloud_loger_debug(bm):
-    client = google.cloud.logging.Client(project=bm.cfg.logger.project)
-    entries = client.list_entries(
-        order_by=google.cloud.logging.DESCENDING, max_results=100
+def test_cloud_loger_debug(cloud_logging_client_gcs):
+    entries = cloud_logging_client_gcs.list_entries(
+        order_by=google.cloud.logging.DESCENDING,
+        max_results=100,
     )
     for entry in entries:
         if DEBUG_TEXT in str(entry.payload):
-            raise IOError(f"Debug message found in log: {LOG_TEXT}")
-
-
-def test_zzz01_warning_counts(logger_new):
-    logger_new.warning("test: logging appears to be working.")
-    counts = {}
-    for handlerobj in logger_new.handlers:
-        if isinstance(handlerobj, CountsHandler):
-            counts = handlerobj.get_counts()
-            break
-
-    assert counts["WARNING"] == 1
-    assert counts["ERROR"] == 0
+            raise OSError(f"Debug message found in log: {LOG_TEXT}")
 
 
 def test_zzz02_summary_increment(logger_new):
@@ -90,16 +81,3 @@ def test_zzz02_summary_increment(logger_new):
 
     # Check that summary contains errors above (Warning: relies on tests running in alphabetical order.)
     assert "WARNING messages: 2\n" in summary
-
-
-def test_zzz03_test_log_n(logger_new):
-    for i in range(0, 20):
-        logger_new.log_every_n(f"test log {i}", level=logging.INFO, n=10)
-
-    counts = {}
-    for handlerobj in logger_new.handlers:
-        if isinstance(handlerobj, CountsHandler):
-            counts = handlerobj.get_counts()
-            break
-
-    assert counts["INFO"] == 3

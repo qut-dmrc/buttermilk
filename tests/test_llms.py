@@ -77,7 +77,7 @@ def test_multimodal_input_b64_video(llms, model, video_bytes):
     llm = llms[model]
     message = RecordInfo(
         data=[
-            MediaObj(mime="video/mp4", data=video_bytes),
+            MediaObj(mime="video/mp4", content=video_bytes),
             "Hi, can you tell me what this is?",
         ],
     ).as_langchain_message(

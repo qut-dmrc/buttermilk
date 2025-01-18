@@ -246,10 +246,10 @@ class BM(Singleton, BaseModel):
     def save_dir(self) -> str:
         return self.run_info.save_dir
 
-    def save(self, data, save_dir=None, **kwargs):
+    def save(self, data, save_dir=None, extension=None, **kwargs):
         """Failsafe save method."""
         save_dir = save_dir or self.save_dir
-        result = save.save(data=data, save_dir=save_dir, **kwargs)
+        result = save.save(data=data, save_dir=save_dir, extension=extension, **kwargs)
         logger.info(
             dict(
                 message=f"Saved data to: {result}",

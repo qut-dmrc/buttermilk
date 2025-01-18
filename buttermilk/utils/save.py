@@ -1,8 +1,8 @@
 import io
 import json
-import os
 import pickle
 import tempfile
+from pathlib import Path
 
 import google.cloud.storage
 import pandas as pd
@@ -84,12 +84,10 @@ def save(
 
     upload_methods = []
     if uri:
-        # Try to upload to GCS
-        if isinstance(data, pd.DataFrame):
-            return upload_dataframe_json(data=data, uri=uri)
         try:
-            df = pd.DataFrame(data)
-            return upload_dataframe_json(data=df, uri=uri)
+            # Try to upload to GCS
+            if isinstance(data, pd.DataFrame):
+                return upload_dataframe_json(data=data, uri=uri)
         except Exception as e:
             logger.warning(
                 f"Error saving data to {uri} using upload_dataframe_json: {e} {e.args=}",
@@ -107,12 +105,16 @@ def save(
             dump_pickle,
         ],
     )
-    os.makedirs(save_dir, exist_ok=True)
 
     for method in upload_methods:
         try:
             logger.debug(f"Trying to save data using {method.__name__}.")
-            destination = method(data=data, uri=uri, save_dir=save_dir)
+            destination = method(
+                data=data,
+                uri=uri,
+                save_dir=save_dir,
+                extension=extension,
+            )
             logger.info(
                 f"Saved data using {method.__name__} to: {destination}.",
             )
@@ -138,7 +140,7 @@ def save(
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
+def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs) -> str:
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Data must be a pandas DataFrame.")
 
@@ -169,7 +171,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs):
     return uri
 
 
-def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
+def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) -> str:
     """Upload results to Google Bigquery"""
     bq = bigquery.Client()  # use application default credentials
 
@@ -225,7 +227,7 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_binary(data=None, *, uri=None):
+def upload_binary(data=None, *, uri=None) -> str:
     assert data is not None
     gcs = storage.Client()
 
@@ -241,7 +243,8 @@ def upload_binary(data=None, *, uri=None):
         return uri
 
 
-def dump_to_disk(data, *, save_dir, extension=".json", **kwargs):
+def dump_to_disk(data, *, save_dir, extension=".json", **kwargs) -> str:
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         delete=False,
         dir=save_dir,
@@ -249,14 +252,15 @@ def dump_to_disk(data, *, save_dir, extension=".json", **kwargs):
         suffix=extension,
     ) as out:
         if isinstance(data, pd.DataFrame):
-            data.to_json(out)
+            data.to_json(out, orient="records", lines=True)
         else:
             out.write(json.dumps(data))
         logger.warning(f"Successfully dumped to json on disk: {out.name}.")
         return out.name
 
 
-def dump_pickle(data, *, save_dir, extension=".pickle", **kwargs):
+def dump_pickle(data, *, save_dir, extension=".pickle", **kwargs) -> str:
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         delete=False,
         dir=save_dir,
@@ -284,7 +288,7 @@ def read_pickle(filename):
     # Retry up to five times before giving up
     stop=stop_after_attempt(5),
 )
-def upload_text(data, *, uri=None, **kwargs):
+def upload_text(data, *, uri, **kwargs) -> str:
     gcs = storage.Client()
 
     logger.debug(f"Uploading file {uri}.")
@@ -297,7 +301,7 @@ def upload_text(data, *, uri=None, **kwargs):
     return uri
 
 
-def upload_json(data, *, uri, **kwargs):
+def upload_json(data, *, uri, **kwargs) -> str:
     # make sure the data is serializable first
     if isinstance(data, pd.DataFrame):
         # First, convert to serialisable formats

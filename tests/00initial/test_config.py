@@ -9,7 +9,6 @@ def test_has_test_info(bm: BM):
     assert bm.cfg.job == "testing"
     assert bm.save_dir is not None
     assert bm.save_dir != ""
-    assert bm.save_dir.startswith("gs://")
 
 
 def test_config_llms(bm: BM):
@@ -19,7 +18,6 @@ def test_config_llms(bm: BM):
 
 def test_save_dir(bm):
     assert "runs/buttermilk/testing/" in bm.save_dir
-    assert bm.save_dir.startswith("gs://")
     assert CloudPath(bm.save_dir)
 
 

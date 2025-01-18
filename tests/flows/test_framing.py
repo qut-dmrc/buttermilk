@@ -33,7 +33,9 @@ async def test_frames_cheap(framer, example_coal, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
     async for result in flow.run_flows(
-        flow_id="testflow", record=example_coal, run_info=bm.run_info
+        flow_id="testflow",
+        record=example_coal,
+        run_info=bm.run_info,
     ):
         assert result
         assert isinstance(result.record, RecordInfo)
@@ -57,9 +59,11 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
 
-    record = RecordInfo(o_video_gcp)
+    record = RecordInfo(uri=link_to_video_gcp)
     async for result in flow.run_flows(
-        flow_id="testflow", record=record, run_info=bm.run_info
+        flow_id="testflow",
+        record=record,
+        run_info=bm.run_info,
     ):
         assert result
         assert isinstance(result.record, RecordInfo)

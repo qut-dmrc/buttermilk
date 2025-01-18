@@ -130,11 +130,14 @@ class MediaObj(BaseModel):
 
                 # Strip binary data away once it's converted to b64
                 self.content = None
-
             else:
-                raise ValueError(
-                    f"Unknown data format passed to MediaObj: {type(self.content)}",
-                )
+                # String content, leave as is
+                pass
+
+        else:
+            raise ValueError(
+                f"Unknown data format passed to MediaObj: {type(self.content)}",
+            )
 
         return self
 
@@ -203,10 +206,7 @@ class MediaObj(BaseModel):
 
 
 class RecordInfo(BaseModel):
-    data: Any = Field(
-        default=None,
-        validation_alias=AliasChoices("data", "arg0", "text"),
-    )
+    data: Any
 
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     metadata: dict[str, Any] = Field(default={})
@@ -232,7 +232,12 @@ class RecordInfo(BaseModel):
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
+        data = None
         if "data" in self.model_fields_set:
+            data = self.data
+        elif self.model_extra:
+            data = self.model_extra.get("arg0")
+        if data:
             # Take data arguments and turn them into MediaObj components
             if isinstance(self.data, MediaObj):
                 self._components.append(self.data)
@@ -244,13 +249,13 @@ class RecordInfo(BaseModel):
                     elif isinstance(element, str):
                         self._components.append(MediaObj(content=element))
                     else:
-                        self._components.append(MediaObj(data=element))
+                        self._components.append(MediaObj(content=element))
             elif isinstance(self.data, list):
                 for x in self.data:
                     if isinstance(x, MediaObj):
                         self._components.append(x)
                     else:
-                        self._components.append(MediaObj(data=x))
+                        self._components.append(MediaObj(content=x))
 
         # Place extra arguments in the metadata field
         if self.model_extra:

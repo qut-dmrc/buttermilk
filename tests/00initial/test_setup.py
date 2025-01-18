@@ -39,7 +39,6 @@ class Test00Setup:
         """Delete and recreate the test table"""
         from google.cloud.bigquery.table import Table, TableReference
 
-        test_table = table
         test_schema = read_yaml(schema)
         ref = TableReference.from_string(table_id=table)
         new_table = Table(table_ref=ref, schema=test_schema)
