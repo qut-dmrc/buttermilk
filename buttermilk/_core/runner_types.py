@@ -84,6 +84,11 @@ class MediaObj(BaseModel):
 
     metadata: dict = {}
 
+    uri: str | None = Field(
+        default=None,
+        description="Media objects that can be passed as URIs to cloud storage",
+    )
+
     mime: str | None = Field(
         default="text/plain",
         validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
@@ -91,15 +96,16 @@ class MediaObj(BaseModel):
 
     content: str | bytes | None = Field(
         default=None,
+        validation_alias=AliasChoices("content", "data", "bytes"),
     )
 
     base_64: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("base_64", "b64", "b64_data"),
+        validation_alias=AliasChoices("base_64", "bas64", "b64", "b64_data"),
     )
 
     model_config = ConfigDict(
-        extra="allow",
+        extra="forbit",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -119,25 +125,20 @@ class MediaObj(BaseModel):
             if not self.mime:
                 self.mime = "text/plain"
 
-            elif isinstance(self.content, bytes):
-                if self.base_64:
-                    raise ValueError(
-                        "MediaObj can have either bytes or base64 data, but not both.",
-                    )
-                self.base_64 = base64.b64encode(self.content).decode("utf-8")
-                if not self.mime:
-                    self.mime = "application/octet-stream"
+        if isinstance(self.content, bytes):
+            if self.base_64:
+                raise ValueError(
+                    "MediaObj can have either bytes or base64 data, but not both.",
+                )
+            self.base_64 = base64.b64encode(self.content).decode("utf-8")
+            if not self.mime:
+                self.mime = "application/octet-stream"
 
-                # Strip binary data away once it's converted to b64
-                self.content = None
-            else:
-                # String content, leave as is
-                pass
-
+            # Strip binary data away once it's converted to b64
+            self.content = None
         else:
-            raise ValueError(
-                f"Unknown data format passed to MediaObj: {type(self.content)}",
-            )
+            # String content, leave as is
+            pass
 
         return self
 
@@ -160,8 +161,8 @@ class MediaObj(BaseModel):
     def as_text(self) -> dict:
         return {"type": "text", "text": self.content}
 
-    def as_content_part(self, model_type="openai"):
-        part = None
+    def as_content_part(self, model_type="openai") -> dict:
+        part = {}
         if self.base_64:
             if model_type == "openai":
                 part = {
@@ -179,30 +180,33 @@ class MediaObj(BaseModel):
                         "data": self.base_64,
                     },
                 }
-        elif self.mime.startswith("text/") or self.content:
-            part = {"type": "text", "text": self.content}
+        elif self.content:
+            part = self.as_text()
+        elif self.uri:
+            part = self.as_image_url()
+
         return part
 
-        """ Anthropic expects: 
-        messages=[
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": image1_media_type,
-                        "data": image1_data,
-                    },
-                },
-                {
-                    "type": "text",
-                    "text": "Describe this image."
-                }
-            ],
-        }
-    ],"""
+    #     """ Anthropic expects:
+    #     messages=[
+    #     {
+    #         "role": "user",
+    #         "content": [
+    #             {
+    #                 "type": "image",
+    #                 "source": {
+    #                     "type": "base64",
+    #                     "media_type": image1_media_type,
+    #                     "data": image1_data,
+    #                 },
+    #             },
+    #             {
+    #                 "type": "text",
+    #                 "text": "Describe this image."
+    #             }
+    #         ],
+    #     }
+    # ],"""
 
 
 class RecordInfo(BaseModel):
@@ -229,6 +233,20 @@ class RecordInfo(BaseModel):
         exclude_unset=True,
         exclude_none=True,
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def rename_data(cls, values) -> Any:
+        # Look for data in one of the previous field names for backwards compatibility.
+        if "data" not in values and "arg0" not in values:
+            data_field_aliases = ["text", "content", "image", "video", "media"]
+            for alias in data_field_aliases:
+                if data := values.get(alias):
+                    values["data"] = data
+                    del values[alias]
+                    return values
+
+        return values
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -311,12 +329,12 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_text: bool = True,
+        include_extra_text: bool = False,
     ) -> BaseMessage | None:
         components = self.as_openai_message(
             role=role,
             model_capabilities=model_capabilities,
-            include_text=include_text,
+            include_extra_text=include_extra_text,
         )
         if components and (components := components.get("content")):
             if role in {"user", "human"}:
@@ -328,7 +346,7 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_text: bool = False,
+        include_extra_text: bool = False,
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
@@ -341,6 +359,8 @@ class RecordInfo(BaseModel):
                 or (obj.mime.startswith("audio") and model_capabilities.audio)
             ):
                 components.append(obj.as_content_part())
+            elif "uri" in obj.model_fields_set and model_capabilities.media_uri:
+                components.append(obj.as_image_url())
 
         if not components:
             logger.warning(
@@ -348,7 +368,7 @@ class RecordInfo(BaseModel):
             )
             return None
 
-        if include_text:
+        if include_extra_text:
             text = "see attached media"
             components.append({"type": "text", "text": text})
 

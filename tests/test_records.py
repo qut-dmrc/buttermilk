@@ -154,4 +154,4 @@ def test_as_openai_message_with_text():
 def test_as_openai_message_no_media_no_text():
     message = RecordInfo()
     with pytest.raises(OSError):
-        message.as_openai_message(model_capabilities=LLMCapabilities())
+        x = message.as_openai_message(model_capabilities=LLMCapabilities())

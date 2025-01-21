@@ -1,6 +1,7 @@
 from hashlib import md5
 
 from cloudpathlib import AnyPath, CloudPath
+from shortuuid import uuid
 
 from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
@@ -24,10 +25,9 @@ def test_save(bm):
 
 
 def test_upload_text(bm):
-    uri = bm.save_dir + "/test_data"
-    uri = upload_text(data="test data", uri=uri, extension=".txt")
-    assert uri.startswith(bm.save_dir)
-    assert uri.endswith(".txt")
+    uri = f"gs://{bm.cfg.clouds[0].bucket}/test_data/{uuid}.txt"
+    return_uri = upload_text(data="test data", uri=uri)
+    assert return_uri == uri
     uploaded = CloudPath(uri)
     assert uploaded.exists()
     read_text = uploaded.read_text()
@@ -36,9 +36,11 @@ def test_upload_text(bm):
 
 
 def test_save_binary(bm):
+    uri = f"gs://{bm.cfg.clouds[0].bucket}/test_data/{uuid}.txt"
     try:
         with open("tests/data/Rijksmuseum_(25621972346).jpg", "rb") as img:
-            uri = upload_binary(img)
+            return_uri = upload_binary(img, uri=uri)
+            assert return_uri == uri
             img.seek(0)
             uploaded_bytes = img.read()
             assert uri is not None

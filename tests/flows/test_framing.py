@@ -59,7 +59,7 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
 
-    record = RecordInfo(uri=link_to_video_gcp)
+    record = RecordInfo(data=link_to_video_gcp)
     async for result in flow.run_flows(
         flow_id="testflow",
         record=record,

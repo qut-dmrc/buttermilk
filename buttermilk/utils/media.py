@@ -1,4 +1,3 @@
-import base64
 import contextlib
 from typing import Any
 
@@ -30,6 +29,7 @@ async def download_and_convert(
     # Try to guess the mime type from the extension if possible.
 
     uri = None
+
     if is_uri(obj):
         uri = obj
         obj, detected_mimetype = await download_limited_async(
@@ -45,58 +45,33 @@ async def download_and_convert(
         ):
             mimetype = detected_mimetype
 
-    obj_list = []  # List of component media objects
+        obj_list = []  # List of component media objects
 
-    if is_b64(obj):
-        obj_list = [MediaObj(base_64=obj, mime=mimetype, label=label)]
-
-    elif mimetype.startswith("text/html"):
-        # try to extract text from web page
         with contextlib.suppress(Exception):
             obj = obj.decode("utf-8")
 
+    if mimetype.startswith("text/html"):
+        # try to extract text from web page
         obj_list, retrieved_metadata = extract_main_content(
             obj,
             metadata=metadata,
         )
         metadata.update(retrieved_metadata)
 
-    elif mimetype.startswith("text/"):
-        if isinstance(obj, bytes):
-            obj_list = [
-                MediaObj(
-                    label="media",
-                    content=obj.decode("utf-8"),
-                    mime=mimetype,
-                ),
-            ]
-        else:
-            obj_list = [
-                MediaObj(
-                    label="text",
-                    content=obj,
-                    mime=mimetype,
-                ),
-            ]
-
-    elif mimetype == "application/octet-stream" and isinstance(obj, str):
-        obj_list = [
-            MediaObj(
-                label="media",
-                content=obj,
-                mime="text/plain",
-            ),
-        ]
-
     else:
-        # By default, encode the object as base64
+        b64 = None
+        if is_b64(obj):
+            b64 = obj
+            obj = None
         obj_list = [
             MediaObj(
-                label="media",
+                label=label,
+                content=obj,
+                base_64=b64,
                 mime=mimetype,
-                base_64=base64.b64encode(obj).decode("utf-8"),
             ),
         ]
+
     return RecordInfo(
         data=obj_list,
         metadata=metadata,

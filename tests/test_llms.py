@@ -44,7 +44,7 @@ def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
     ).as_langchain_message(
         role="human",
         model_capabilities=llms.connections[model].capabilities,
-        include_text=False,
+        include_extra_text=False,
     )
 
     chain = ChatPromptTemplate.from_messages([message]) | llm

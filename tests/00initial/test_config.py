@@ -1,5 +1,5 @@
 
-from cloudpathlib import CloudPath
+from cloudpathlib import AnyPath
 
 from buttermilk.bm import BM
 
@@ -18,7 +18,7 @@ def test_config_llms(bm: BM):
 
 def test_save_dir(bm):
     assert "runs/buttermilk/testing/" in bm.save_dir
-    assert CloudPath(bm.save_dir)
+    assert AnyPath(bm.save_dir)
 
 
 def test_singleton(bm):

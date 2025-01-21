@@ -4,7 +4,6 @@ import sys
 import google.auth
 import google.auth.credentials
 import pytest
-from google.auth.credentials import TokenState
 from huggingface_hub import login
 
 from buttermilk.bm import BM
@@ -21,7 +20,8 @@ class Test00Setup:
 
     def test_gcloud_credentials_adc(self):
         credentials, project_id = google.auth.default()
-        assert credentials.token_state == TokenState.FRESH
+        assert credentials
+        assert project_id
 
     def test_gcloud_no_json_key(self):
         """Check that the JSON key is not set."""

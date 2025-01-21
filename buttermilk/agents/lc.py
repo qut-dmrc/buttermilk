@@ -1,10 +1,6 @@
-import datetime
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
-import numpy as np
-import pandas as pd
-import regex as re
 import requests
 import urllib3
 from anthropic import (
@@ -14,19 +10,12 @@ from anthropic import (
 from google.api_core.exceptions import ResourceExhausted
 from langchain_core.prompts import (
     ChatPromptTemplate,
-    MessagesPlaceholder,
 )
-from omegaconf import DictConfig, ListConfig, OmegaConf
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
 from promptflow.tracing import trace
-from pydantic import (
-    Field,
-    PrivateAttr,
-    model_validator,
-)
 from tenacity import (
     RetryError,
     retry,
@@ -35,14 +24,14 @@ from tenacity import (
     wait_random,
 )
 
-from buttermilk import BM, TEMPLATE_PATHS, logger
+from buttermilk import BM, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, RecordInfo, Result
+from buttermilk._core.runner_types import Job, Result
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import prepare_placeholders, make_messages, load_template_vars
-from buttermilk.utils.utils import find_in_nested_dict, read_text, scrub_keys
+from buttermilk.utils.templating import load_template_vars, make_messages
+from buttermilk.utils.utils import scrub_keys
 
 #########################################
 ###
@@ -58,39 +47,38 @@ class LC(Agent):
         bm = BM()
         return bm.llms
 
-
     async def process_job(
         self,
         *,
         job: Job,
         additional_data: dict[str, dict] = {},
     ) -> Job:
-
-        model = job.parameters.pop('model')
-        template = job.parameters.pop('template')
+        model = job.parameters.pop("model")
+        template = job.parameters.pop("template")
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
-        
+
         # Construct list of messages from the templates
         rendered_template, remaining_inputs = load_template_vars(template=template, **job.parameters)
 
         # Prepare placeholder variables
         model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
-        placeholders = { k:v for k,v in additional_data.items() if v}
+        placeholders = {}
         placeholders.update(**job.inputs)
-        placeholders["q"] = job.prompt
+        if job.prompt:
+            placeholders["q"] = job.prompt
+        placeholders = {k: v for k, v in additional_data.items() if v}
 
         # Record will be passed in as a Langchain Placeholder, which means it has to be a list of messages
         placeholders["record"] = [job.record.as_langchain_message(role="user", model_capabilities=model_capabilities)]
 
         # Remove unecessary variables before tracing the API call to the LLM
-        placeholders = { k:v for k,v in placeholders.items() if k in remaining_inputs }
-        
+        placeholders = {k: v for k, v in placeholders.items() if k in remaining_inputs}
+
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
         job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
         job.parameters["model"] = model
-
 
         logger.debug(
             f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
@@ -137,7 +125,6 @@ class LC(Agent):
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys
         messages = make_messages(template)
@@ -146,12 +133,16 @@ class LC(Agent):
         # (Later we won't need this, because langchain ends up converting back to our json anyway)
         lc_messages = []
         for message in messages:
-            role = message['role']
-            content = message['content']
+            role = message["role"]
+            content = message["content"]
             lc_messages.append((role, content))
 
         # Make the chain
-        chain = ChatPromptTemplate(lc_messages, template_format="jinja2") | self._llms[model] | ChatParser()
+        chain = (
+            ChatPromptTemplate(lc_messages, template_format="jinja2")
+            | self._llms[model]
+            | ChatParser()
+        )
 
         elapsed = 0
         t0 = time.time()
@@ -178,4 +169,3 @@ class LC(Agent):
         output["metadata"]["seconds_elapsed"] = elapsed
 
         return output
-
