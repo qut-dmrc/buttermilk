@@ -1,7 +1,7 @@
 
 
 from buttermilk import logger
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job
 from buttermilk.agents.lc import LC
 from buttermilk.utils.media import download_and_convert
 
@@ -41,8 +41,8 @@ class Describer(LC):
 
         if not job.parameters.pop("describe", True):
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id} due to job config.",
-            return job
+                f"Not invoking agent {self.name} for job {job.job_id} due to job config."
             )
+            return job
 
         return await super().process_job(job=job, **kwargs)
