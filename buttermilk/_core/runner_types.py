@@ -105,7 +105,7 @@ class MediaObj(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="forbit",
+        extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -155,7 +155,7 @@ class MediaObj(BaseModel):
     def as_image_url(self) -> dict:
         return {
             "type": "image_url",
-            "image_url": {"url": self.content},
+            "image_url": {"url": self.uri},
         }
 
     def as_text(self) -> dict:
