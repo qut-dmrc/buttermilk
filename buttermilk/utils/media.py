@@ -3,26 +3,23 @@ from typing import Any
 
 import regex as re
 from bs4 import BeautifulSoup
-from pydantic import validate_call
 from readabilipy import simple_json_from_html_string
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
 from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
 
 
-@validate_call
 async def download_and_convert(
     obj: Any,
-    *,
     label: str | None = None,
-    mimetype: str = "application/octet-stream",
+    mime: str = "application/octet-stream",
     allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
     alt_text: str | None = None,
     ground_truth: Any = None,
     metadata: dict = {},
-    **kwargs,
+    **kwargs: Any,
 ) -> RecordInfo:
     # If we have a URI, download it.
     # If it's a binary object, convert it to base64.
@@ -40,17 +37,15 @@ async def download_and_convert(
         )
 
         # Replace mimetype if default or none was passed in
-        if detected_mimetype and (
-            not mimetype or mimetype == "application/octet-stream"
-        ):
-            mimetype = detected_mimetype
+        if detected_mimetype and (not mime or mime == "application/octet-stream"):
+            mime = detected_mimetype
 
         obj_list = []  # List of component media objects
 
         with contextlib.suppress(Exception):
             obj = obj.decode("utf-8")
 
-    if mimetype.startswith("text/html"):
+    if mime.startswith("text/html"):
         # try to extract text from web page
         obj_list, retrieved_metadata = extract_main_content(
             obj,
@@ -68,7 +63,7 @@ async def download_and_convert(
                 label=label,
                 content=obj,
                 base_64=b64,
-                mime=mimetype,
+                mime=mime,
             ),
         ]
 

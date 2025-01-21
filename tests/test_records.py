@@ -42,7 +42,7 @@ async def test_from_uri_valid():
 
     record = await download_and_convert(
         test_image_path,
-        mimetype="image/jpeg",
+        mime="image/jpeg",
         title="Test Image",
     )
     assert record.uri == test_image_path
@@ -69,7 +69,7 @@ async def test_from_uri_article():
 
 @pytest.mark.asyncio
 async def test_from_uri_invalid():
-    record = await download_and_convert("invalid_uri", mimetype="image/png")
+    record = await download_and_convert("invalid_uri", mime="image/png")
     assert not record.uri
     assert record.all_text == "invalid_uri"
 
@@ -82,7 +82,7 @@ async def test_from_object_valid():
 
     record = await download_and_convert(
         obj,
-        mimetype="image/png",
+        mime="image/png",
         title="Test Image from Object",
     )
 
@@ -97,7 +97,7 @@ async def test_record_update():
     image = Image.new("RGB", (100, 100))
     record = await download_and_convert(
         image.tobytes(),
-        mimetype="image/png",
+        mime="image/png",
         title="Test Image",
     )
     result = Result(

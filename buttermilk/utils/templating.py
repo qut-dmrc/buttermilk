@@ -1,21 +1,22 @@
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
+import regex as re
+from jinja2 import FileSystemLoader, TemplateNotFound, Undefined
+from jinja2.sandbox import SandboxedEnvironment
+
+from buttermilk import logger
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.llms import LLMCapabilities
-from buttermilk.utils.utils import list_files_with_content, list_files
-from jinja2 import FileSystemLoader, Undefined
-from buttermilk import logger
-import regex as re
-
-from jinja2 import TemplateNotFound
-from buttermilk.utils.utils import read_text
-from jinja2.sandbox import SandboxedEnvironment
+from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
     templates = list_files_with_content(
-        TEMPLATE_PATHS, filename=pattern, parent=parent, extension=extension
+        TEMPLATE_PATHS,
+        filename=pattern,
+        parent=parent,
+        extension=extension,
     )
     templates = [(t.replace(".jinja2", ""), tpl) for t, tpl in templates]
     return templates
@@ -25,10 +26,12 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
     return [
         file_path.stem
         for file_path in list_files(
-            TEMPLATE_PATHS, filename=pattern, parent=parent, extension=extension
+            TEMPLATE_PATHS,
+            filename=pattern,
+            parent=parent,
+            extension=extension,
         )
     ]
-
 
 
 def _parse_prompty(string_template) -> str:
@@ -37,21 +40,21 @@ def _parse_prompty(string_template) -> str:
     result = re.search(pattern, string_template, re.DOTALL)
     if not result:
         return string_template
-    else:
-        return result.group(2)
+    return result.group(2)
 
 
 def load_template_vars(
     *,
     template: str,
     **inputs,
-) -> Tuple[str, list]:
+) -> tuple[str, list]:
     recursive_paths = TEMPLATE_PATHS + [
         x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
     ]
     loader = FileSystemLoader(searchpath=recursive_paths)
 
     undefined_vars = []
+
     class KeepUndefined(Undefined):
         def __str__(self):
             # Keep a list of variables that have not yet been filled.
@@ -99,6 +102,7 @@ def load_template_vars(
     # Also return the leftover (unfilled) inputs to pass through later
     return rendered_template, undefined_vars
 
+
 def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:
     # Fill placeholders
     placeholders = {}
@@ -110,13 +114,14 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
             placeholders[k] = v
         elif isinstance(v, Sequence):
             # Lists may need to be handled separately...?
-            placeholders[k] = '\n\n'.join(v)
+            placeholders[k] = "\n\n".join(v)
         elif v:
             placeholders[k] = v
 
     return placeholders
 
-def make_messages(local_template: str) -> list[Tuple[str, str]]:
+
+def make_messages(local_template: str) -> list[tuple[str, str]]:
     try:
         # Parse messages using Prompty format
         # First we strip the header information from the markdown
@@ -126,7 +131,8 @@ def make_messages(local_template: str) -> list[Tuple[str, str]]:
         from promptflow.core._prompty_utils import parse_chat
 
         messages = parse_chat(
-            prompty, valid_roles=["system", "user", "human", "placeholder"]
+            prompty,
+            valid_roles=["system", "user", "human", "placeholder"],
         )
 
     except Exception as e:

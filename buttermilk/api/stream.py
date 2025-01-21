@@ -142,13 +142,13 @@ async def flow_stream(
     record = None
     if flow_request.uri:
         record = await download_and_convert(
-            flow_request.uri,
-            mimetype=flow_request.mime_type,
+            obj=flow_request.uri,
+            mime=flow_request.mime_type,
         )
     elif flow_request.content:
         record = await download_and_convert(
-            flow_request.content,
-            mimetype=flow_request.mime_type,
+            obj=flow_request.content,
+            mime=flow_request.mime_type,
         )
 
     if record and flow_request.record_id:

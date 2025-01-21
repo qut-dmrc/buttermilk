@@ -17,7 +17,7 @@ class Describer(LC):
     ) -> Job:
         # First step, fetch the record if we need to.
         if job.parameters.pop("download_if_necessary", True):
-            if not job.record:
+            if not job.record and job.inputs:
                 logger.debug(
                     f"Trying to fetch record for job {job.job_id} from job input parameters.",
                 )
@@ -41,7 +41,7 @@ class Describer(LC):
 
         if not job.parameters.pop("describe", True):
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id} due to job config."
+                f"Not invoking agent {self.name} for job {job.job_id} due to job config.",
             )
             return job
 

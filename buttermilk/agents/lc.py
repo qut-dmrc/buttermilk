@@ -70,7 +70,12 @@ class LC(Agent):
         placeholders = {k: v for k, v in additional_data.items() if v}
 
         # Record will be passed in as a Langchain Placeholder, which means it has to be a list of messages
-        placeholders["record"] = [job.record.as_langchain_message(role="user", model_capabilities=model_capabilities)]
+        if job.record:
+            placeholders["record"] = [
+                job.record.as_langchain_message(
+                    role="user", model_capabilities=model_capabilities
+                )
+            ]
 
         # Remove unecessary variables before tracing the API call to the LLM
         placeholders = {k: v for k, v in placeholders.items() if k in remaining_inputs}
