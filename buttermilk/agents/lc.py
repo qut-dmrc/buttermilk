@@ -139,8 +139,8 @@ class LC(Agent):
                 ResourceExhausted,
             ),
         ),
-        wait=wait_random(min=10, max=60),
-        stop=stop_after_attempt(4),
+        wait=wait_random(min=2, max=30),
+        stop=stop_after_attempt(6),
     )
     @trace
     async def invoke(
