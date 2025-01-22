@@ -1,90 +1,93 @@
-import json
-from collections.abc import AsyncGenerator
-from typing import Any, Literal
+from typing import Any
 
-import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.templating import Jinja2Templates
+import pytest
+from fastapi.testclient import TestClient
 
-from buttermilk.api import stream
-
-from .testdata.jobs_summarise import jobs
-
-app = FastAPI()
-flows = ["summarise_osb"]
-
-templates = Jinja2Templates(directory="buttermilk/api/templates")
+from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk.api.flow import FlowRequest, app
+from buttermilk.runner.flow import Flow
 
 
-async def mock_flow_stream(
-    output_json=True,
-    **kwargs,
-) -> AsyncGenerator[str, None]:
-    for data in jobs:
-        if output_json:
-            yield json.dumps(data)
-        else:
-            yield data
+@pytest.fixture(scope="session")
+def client():
+    return TestClient(app)
 
 
-@app.api_route("/flow/{flow}", methods=["GET", "POST"])
-async def run_flow_json(
-    flow: Literal["hate", "trans", "osb", "osbfulltext", "summarise_osb"],
-    request: Request,
-    flow_request: stream.FlowRequest | None = "",
-) -> StreamingResponse:
-    if flow not in flows:
-        raise HTTPException(status_code=403, detail=f"TEST: Flow {flow} not valid")
-
-    return StreamingResponse(
-        mock_flow_stream(),
-        media_type="application/json",
-    )
-
-
-@app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
-@app.api_route("/html/flow", methods=["GET", "POST"])
-async def run_route_html(
-    request: Request,
-    flow: str = "",
-    flow_request: Any = None,
-) -> StreamingResponse:
-    if flow not in flows:
-        raise HTTPException(status_code=403, detail="Flow not valid")
-
-    async def result_generator() -> AsyncGenerator[str, None]:
-        async for data in mock_flow_stream(output_json=False):
-            # Render the template with the response data
-            rendered_result = templates.TemplateResponse(
-                "flow_html.html",
-                {"request": request, "data": data},
-            )
-            yield rendered_result.body.decode("utf-8")
-
-    return StreamingResponse(result_generator(), media_type="text/html")
+@pytest.fixture
+def flow_request_data():
+    req_cfg = {
+        "model": "haiku",
+        "template": "judge",
+        "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
+        "text": "Sample text",
+        "uri": None,
+        "media_b64": None,
+    }
+    req = FlowRequest(**req_cfg)
+    return req.model_dump()
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow specific origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Allow all headers
+@pytest.mark.parametrize(
+    "options",
+    [
+        pytest.param(
+            {"q": "democrats are arseholes"},
+            id="q only",
+        ),
+        pytest.param({}, id="no record no text"),
+        pytest.param(
+            {"record": lambda: example_coal, "q": "i really love coal"},
+            id="q with record",
+        ),  # Lambda for lazy eval
+        pytest.param({"record": lambda: blm}, id="record only"),
+        pytest.param({"record": lambda: video_bytes}, id="video bytes"),
+        pytest.param({"record": lambda: image_bytes}, id="image bytes"),
+        pytest.param({"record": lambda: video_url}, id="video url"),
+    ],
 )
+def test_api_request_simple(
+    options: dict,
+    client,
+):  # Inject the client
+    # Resolve fixtures using lambda functions
+    # resolved_req_cfg = {k: v() if callable(v) else v for k, v in req_cfg.items()}
+    flow_request = FlowRequest(**options)
+    response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
+    assert response.status_code == 200
+    json_response = response.json()
+    assert "outputs" in json_response
+    assert "agent_info" in json_response
 
 
-# Custom middleware to log CORS failures
-@app.middleware("http")
-async def log_cors_failures(request: Request, call_next):
-    origin = request.headers.get("origin")
-    if origin:
-        print(f"CORS check for {origin}")
-
-    response = await call_next(request)
-    return response
+def test_run_flow(bm: Any, flow_request_data: dict[str, Any]):
+    response = client.post("/flow/test", json=flow_request_data)
+    assert response.status_code == 200
+    json_response = response.json()
+    assert "outputs" in json_response
+    assert "agent_info" in json_response
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+def test_run_flow_html(client, bm: Any, flow_request_data: dict[str, Any]):
+    response = client.post("/html/flow/test_flow", json=flow_request_data)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert (
+        "Sample text" in response.text
+    )  # Check if the response contains the expected text
+
+
+def test_get_runs(client, bm: Any):
+    response = client.get("/runs")
+    assert response.status_code == 200
+    assert "text/html" not in response.headers["content-type"]
+    assert all([isinstance(x, Job) for x in response])
+
+
+@pytest.fixture
+def flow(bm):
+    return Flow(source="test", steps=[TestAgent()])
+
+
+async def test_run_flow(flow, flow_request_data):
+    async for response in flow.run(record=RecordInfo(text=flow_request_data["text"])):
+        print(response)

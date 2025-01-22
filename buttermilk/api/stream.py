@@ -15,7 +15,7 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Job
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
@@ -41,6 +41,7 @@ class FlowRequest(BaseModel):
         validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
+    record: RecordInfo | None = None
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
@@ -100,13 +101,14 @@ class FlowRequest(BaseModel):
         if not any(
             [
                 values.get("content"),
+                values.get("record"),
                 values.get("uri"),
                 values.get("text"),
                 values.get("q"),
             ],
         ):
             raise ValueError(
-                "At least one of query, content, text, or uri must be provided.",
+                "At least one of query, record, content, text, or uri must be provided.",
             )
 
         return values
@@ -139,20 +141,22 @@ async def flow_stream(
     logger.info(
         f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
     )
-    record = None
-    if flow_request.uri:
-        record = await download_and_convert(
-            obj=flow_request.uri,
-            mime=flow_request.mime_type,
-        )
-    elif flow_request.content:
-        record = await download_and_convert(
-            obj=flow_request.content,
-            mime=flow_request.mime_type,
-        )
-
-    if record and flow_request.record_id:
-        raise NotImplementedError("Loading by record ID is not yet supported.")
+    if flow_request.record:
+        record = record
+    else:
+        record = None
+        if flow_request.uri:
+            record = await download_and_convert(
+                obj=flow_request.uri,
+                mime=flow_request.mime_type,
+            )
+        elif flow_request.content:
+            record = await download_and_convert(
+                obj=flow_request.content,
+                mime=flow_request.mime_type,
+            )
+        elif flow_request.record_id:
+            raise NotImplementedError("Loading by record ID is not yet supported.")
 
     async for job in flow.run_flows(
         record=record,

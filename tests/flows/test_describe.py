@@ -19,13 +19,11 @@ def flow_describer(request) -> Flow:
     )
     return Flow(source="testing", steps=[agent])
 
+
 @pytest.fixture
 def flow_download_only(flow_describer: Flow):
     flow_describer.steps[0].parameters = {"describe": False}
 
-@pytest.mark.anyio
-async def test_fetch_record_uri_image(flow_download_only, image_uri):
-    
 
 @pytest.mark.anyio
 async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):

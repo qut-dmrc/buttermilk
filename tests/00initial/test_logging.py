@@ -4,6 +4,8 @@ import uuid
 import google.cloud.logging  # Don't conflict with standard logging
 import pytest
 
+from buttermilk import BM
+
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
