@@ -3,6 +3,7 @@ from collections.abc import Sequence
 import regex as re
 from jinja2 import FileSystemLoader, TemplateNotFound, Undefined
 from jinja2.sandbox import SandboxedEnvironment
+from langchain_core.messages import HumanMessage
 
 from buttermilk import logger
 from buttermilk._core.runner_types import RecordInfo
@@ -60,7 +61,14 @@ def load_template_vars(
             # Keep a list of variables that have not yet been filled.
             undefined_vars.append(self._undefined_name)
 
-            # From this point, langchain expects single braces for replacement instead of double.
+            # Ideally we would still use double braces for variables we are
+            # going to subsitute, but langchain placeholder only expect single
+            # braces.
+            #
+            # We convert to single braces here, but remember to use
+            # template_format="jinja2" in langchain's ChatPromptTemplate
+            # and related methods so that json instructions and examples
+            # etc are not misinterpreted as variables.
             return "{" + self._undefined_name + "}"
 
     env = SandboxedEnvironment(
@@ -111,12 +119,14 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
             if rendered := v.as_langchain_message(role="user", model_capabilities=model_capabilities):
                 placeholders[k] = [rendered]
         elif isinstance(v, str):
-            placeholders[k] = v
+            placeholders[k] = [HumanMessage(v)]
         elif isinstance(v, Sequence):
             # Lists may need to be handled separately...?
             placeholders[k] = "\n\n".join(v)
+            placeholders[k] = [HumanMessage(v)]
         elif v:
             placeholders[k] = v
+            placeholders[k] = [HumanMessage(v)]
 
     return placeholders
 

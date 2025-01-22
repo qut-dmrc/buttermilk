@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
-from buttermilk.utils.utils import download_limited_async, is_b64, is_uri
+from buttermilk.utils.utils import download_limited_async, is_uri
 
 
 async def download_and_convert(
@@ -25,7 +25,15 @@ async def download_and_convert(
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
 
+    if not obj:
+        # Nothing passed in, return None
+        return None
+
     uri = None
+    mime = mime or "application/octet-stream"
+
+    with contextlib.suppress(Exception):
+        obj = obj.decode("utf-8")
 
     if is_uri(obj):
         uri = obj
@@ -40,10 +48,7 @@ async def download_and_convert(
         if detected_mimetype and (not mime or mime == "application/octet-stream"):
             mime = detected_mimetype
 
-        obj_list = []  # List of component media objects
-
-        with contextlib.suppress(Exception):
-            obj = obj.decode("utf-8")
+    obj_list = []  # List of component media objects
 
     if mime.startswith("text/html"):
         # try to extract text from web page
@@ -54,15 +59,13 @@ async def download_and_convert(
         metadata.update(retrieved_metadata)
 
     else:
-        b64 = None
-        if is_b64(obj):
-            b64 = obj
-            obj = None
+        if isinstance(obj, str):
+            if not mime or not mime.startswith("text"):
+                mime = "text/plain"
         obj_list = [
             MediaObj(
                 label=label,
                 content=obj,
-                base_64=b64,
                 mime=mime,
             ),
         ]

@@ -30,7 +30,11 @@ from buttermilk._core.runner_types import Job, Result
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import load_template_vars, make_messages
+from buttermilk.utils.templating import (
+    load_template_vars,
+    make_messages,
+    prepare_placeholders,
+)
 from buttermilk.utils.utils import scrub_keys
 
 #########################################
@@ -52,6 +56,7 @@ class LC(Agent):
         *,
         job: Job,
         additional_data: dict[str, dict] = {},
+        **kwargs,
     ) -> Job:
         model = job.parameters.pop("model")
         template = job.parameters.pop("template")
@@ -62,23 +67,38 @@ class LC(Agent):
         rendered_template, remaining_inputs = load_template_vars(template=template, **job.parameters)
 
         # Prepare placeholder variables
-        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
+        #
+        # From this point, remaining input variables are placeholders -- ie. flexible lists of messages
+        # that may include, for example, chat history or complex media objects.
         placeholders = {}
-        placeholders.update(**job.inputs)
-        if job.prompt:
+
+        placeholders.update({
+            k: v for k, v in job.inputs.items() if k in remaining_inputs and v
+        })
+        placeholders.update({
+            k: v for k, v in additional_data.items() if k in remaining_inputs and v
+        })
+        if job.prompt and "q" in remaining_inputs:
             placeholders["q"] = job.prompt
-        placeholders = {k: v for k, v in additional_data.items() if v}
+        if job.record and "record" in remaining_inputs:
+            placeholders["record"] = job.record
 
-        # Record will be passed in as a Langchain Placeholder, which means it has to be a list of messages
-        if job.record:
-            placeholders["record"] = [
-                job.record.as_langchain_message(
-                    role="user", model_capabilities=model_capabilities
-                )
-            ]
+        # Models should only be given input that they can handle. At this time we do not
+        # fail if the model cannot handle, we just exclude the input. The user should provide,
+        # for example, a textual caption input for models that do not support direct image inputs.
+        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
 
-        # Remove unecessary variables before tracing the API call to the LLM
-        placeholders = {k: v for k, v in placeholders.items() if k in remaining_inputs}
+        # In order to handle multimodal records, the job's record will be passed in as
+        # a Langchain Placeholder, which means it has to be a list of messages
+        placeholders = prepare_placeholders(
+            model_capabilities=model_capabilities,
+            **placeholders,
+        )
+
+        # Remove unecessary or empty variables before tracing the API call to the LLM
+        placeholders = {
+            k: v for k, v in placeholders.items() if k in remaining_inputs and v
+        }
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
