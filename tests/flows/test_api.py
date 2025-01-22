@@ -3,9 +3,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job
 from buttermilk.api.flow import FlowRequest, app
-from buttermilk.runner.flow import Flow
 
 
 @pytest.fixture(scope="session")
@@ -50,8 +49,8 @@ def test_api_request_simple(
     client,
 ):  # Inject the client
     # Resolve fixtures using lambda functions
-    # resolved_req_cfg = {k: v() if callable(v) else v for k, v in req_cfg.items()}
-    flow_request = FlowRequest(**options)
+    resolved_req_cfg = {k: v() if callable(v) else v for k, v in options.items()}
+    flow_request = FlowRequest(**resolved_req_cfg)
     response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
     assert response.status_code == 200
     json_response = response.json()
@@ -81,13 +80,3 @@ def test_get_runs(client, bm: Any):
     assert response.status_code == 200
     assert "text/html" not in response.headers["content-type"]
     assert all([isinstance(x, Job) for x in response])
-
-
-@pytest.fixture
-def flow(bm):
-    return Flow(source="test", steps=[TestAgent()])
-
-
-async def test_run_flow(flow, flow_request_data):
-    async for response in flow.run(record=RecordInfo(text=flow_request_data["text"])):
-        print(response)
