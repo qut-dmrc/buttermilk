@@ -47,6 +47,8 @@ async def download_and_convert(
         # Replace mimetype if default or none was passed in
         if detected_mimetype and (not mime or mime == "application/octet-stream"):
             mime = detected_mimetype
+        with contextlib.suppress(Exception):
+            obj = obj.decode("utf-8")
 
     obj_list = []  # List of component media objects
 
