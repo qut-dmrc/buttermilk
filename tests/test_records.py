@@ -107,14 +107,14 @@ async def test_record_update():
         labels=["test_label"],
         reasons=["test_reason"],
     )
-    record.update_from(result)
+    record.update_from(result.model_dump())
     assert record.category == "test"
     assert record.prediction == True
     assert record.result == 0.9
     assert record.labels == ["test_label"]
     assert record.reasons == ["test_reason"]
 
-    record.update_from(result, fields=["result"])
+    record.update_from(result.model_dump(), fields=["result"])
     assert record.result == 0.9
     assert "category" not in record.model_dump()
 
