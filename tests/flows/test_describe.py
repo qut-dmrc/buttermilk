@@ -47,14 +47,13 @@ async def test_run_flow_describe_no_media(
     lady_macbeth: RecordInfo,
     bm: BM,
 ):
-    async for result in flow_describer.run_flows(
-        flow_id="testflow",
-        record=lady_macbeth,
-        run_info=bm.run_info,
-    ):
+    job = Job(
+        source="testing", flow_id="testflow", record=lady_macbeth, run_info=bm.run_info
+    )
+    async for result in flow_describer.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
-        assert not result.outputs
+        assert not result.record.metadata
 
 
 def test_find_record(bm, image_bytes):
