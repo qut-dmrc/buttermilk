@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
@@ -31,7 +31,13 @@ def single_step_flow(judger):
 
 @pytest.mark.anyio
 async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm: BM):
-    async for result in single_step_flow.run_flows(flow_id="testflow", record=fight_no_more_forever, run_info=bm.run_info):
+    job = Job(
+        source="testing",
+        flow_id="testflow",
+        record=fight_no_more_forever,
+        run_info=bm.run_info,
+    )
+    async for result in single_step_flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert result.outputs.prediction is False

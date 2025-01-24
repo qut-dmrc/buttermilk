@@ -74,7 +74,7 @@ def video_bytes(video_url: str) -> bytes:
 VIDEO_URIS = [
     (
         "web",
-        "https://github.com/chthomos/video-media-samples/raw/refs/heads/master/big-buck-bunny-480p-30sec.mp4",
+        r"https://github.com/chthomos/video-media-samples/raw/refs/heads/master/big-buck-bunny-480p-30sec.mp4",
     ),
     ("gcs", "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4"),
 ]

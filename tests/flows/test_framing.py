@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import MediaObj, RecordInfo
+from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
@@ -32,11 +32,10 @@ def framer():
 async def test_frames_cheap(framer, example_coal, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
-    async for result in flow.run_flows(
-        flow_id="testflow",
-        record=example_coal,
-        run_info=bm.run_info,
-    ):
+    job = Job(
+        source="testing", flow_id="testflow", record=example_coal, run_info=bm.run_info
+    )
+    async for result in flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.error
@@ -47,7 +46,10 @@ async def test_frames_cheap(framer, example_coal, bm: BM, model):
 async def test_frames_text(framer, example_coal, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
-    async for result in flow.run_flows(flow_id="testflow", record=example_coal, run_info=bm.run_info):
+    job = Job(
+        source="testing", flow_id="testflow", record=example_coal, run_info=bm.run_info
+    )
+    async for result in flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.error
@@ -60,11 +62,8 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     flow = Flow(source="testing", steps=[framer])
 
     record = RecordInfo(data=link_to_video_gcp)
-    async for result in flow.run_flows(
-        flow_id="testflow",
-        record=record,
-        run_info=bm.run_info,
-    ):
+    job = Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
+    async for result in flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
         assert not result.error
