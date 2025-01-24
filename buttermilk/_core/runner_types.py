@@ -16,7 +16,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
-    computed_field,
     field_validator,
     model_validator,
 )
@@ -104,17 +103,20 @@ class MediaObj(BaseModel):
         validation_alias=AliasChoices("base_64", "bas64", "b64", "b64_data"),
     )
 
+    # move base64 representation out of the fields into a private attribute
+    _b64: str = PrivateAttr(default=None)
+
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["data", "base64"],
+        exclude=["data", "base_64"],
     )
 
     def __str__(self):
-        return f"{self.label or 'unknown'} object ({self.mime}) {self.content[:30]} {self.base_64[:30]}..."
+        return f"{self.label or 'unknown'} object ({self.mime}) {self.content[:30]} {self._b64[:30]}..."
 
     @model_validator(mode="after")
     def interpret_data(self) -> Self:
@@ -140,17 +142,12 @@ class MediaObj(BaseModel):
             # String content, leave as is
             pass
 
-        return self
-
-    @computed_field
-    @property
-    def len(self) -> int:
-        # We exclude the potentially large fields from the export. Instead
-        # just indicate the length and the mimetype+uri so the user knows
-        # data was passed in.
         if self.base_64:
-            return len(self.base_64)
-        return -1
+            # move base64 representation out of the fields into a private attribute
+            self._b64 = str(self.base_64)
+            # del self.base_64
+
+        return self
 
     def as_image_url(self) -> dict:
         return {
@@ -163,12 +160,12 @@ class MediaObj(BaseModel):
 
     def as_content_part(self, model_type="openai") -> dict:
         part = {}
-        if self.base_64:
+        if self._b64:
             if model_type == "openai":
                 part = {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:{self.mime};base64,{self.base_64}",
+                        "url": f"data:{self.mime};base64,{self._b64}",
                     },
                 }
             elif model_type == "anthropic":
@@ -177,7 +174,7 @@ class MediaObj(BaseModel):
                     "source": {
                         "type": "base64",
                         "media_type": self.mime,
-                        "data": self.base_64,
+                        "data": self._b64,
                     },
                 }
         elif self.content:
@@ -216,7 +213,7 @@ class RecordInfo(BaseModel):
     metadata: dict[str, Any] = Field(default={})
     alt_text: str | None = Field(
         default=None,
-        description="Caption or other text description of media objects contained in this record.",
+        description="Text description of media objects contained in this record.",
     )
     ground_truth: Result | None = None
     uri: str | None = Field(
@@ -224,7 +221,7 @@ class RecordInfo(BaseModel):
         validation_alias=AliasChoices("uri", "path", "url"),
     )
 
-    _components: list[MediaObj] = PrivateAttr(default=[])
+    components: list[MediaObj] = Field(default=[])
 
     model_config = ConfigDict(
         extra="allow",
@@ -250,34 +247,31 @@ class RecordInfo(BaseModel):
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
-        data = None
-        if "data" in self.model_fields_set:
-            data = self.data
-        elif self.model_extra:
-            data = self.model_extra.get("arg0")
-        if data:
-            # Take data arguments and turn them into MediaObj components
-            if isinstance(self.data, MediaObj):
-                self._components.append(self.data)
-            elif isinstance(self.data, str | bytes | Mapping):
-                self.data = [self.data]
-                for element in self.data:
-                    if isinstance(element, Mapping):
-                        self._components.append(MediaObj(**element))
-                    elif isinstance(element, str):
-                        self._components.append(MediaObj(content=element))
-                    else:
-                        self._components.append(MediaObj(content=element))
-            elif isinstance(self.data, list):
-                for x in self.data:
-                    if isinstance(x, MediaObj):
-                        self._components.append(x)
-                    else:
-                        self._components.append(MediaObj(content=x))
+        # Take data arguments and turn them into MediaObj components
+        if isinstance(self.data, MediaObj):
+            self.components.append(self.data)
+        elif isinstance(self.data, str | bytes | Mapping):
+            self.data = [self.data]
+            for element in self.data:
+                if isinstance(element, Mapping):
+                    self.components.append(MediaObj(**element))
+                elif isinstance(element, str):
+                    self.components.append(MediaObj(content=element))
+                else:
+                    self.components.append(MediaObj(content=element))
+        elif isinstance(self.data, list):
+            for x in self.data:
+                if isinstance(x, MediaObj):
+                    self.components.append(x)
+                else:
+                    self.components.append(MediaObj(content=x))
+        elif self.data:
+            raise ValueError(f"Unknown component type: {type(self.data)}")
 
         # Place extra arguments in the metadata field
         if self.model_extra:
-            for key, value in self.model_extra.popitem():
+            while len(self.model_extra.keys()) > 0:
+                key, value = self.model_extra.popitem()
                 if key not in self.metadata:
                     self.metadata[key] = value
                 else:
@@ -305,7 +299,7 @@ class RecordInfo(BaseModel):
     @property
     def all_text(self) -> str:
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        for part in self._components:
+        for part in self.components:
             if part.content:
                 if part.label:
                     all_text.append(f"{part.label}: {part.content}")
@@ -313,28 +307,22 @@ class RecordInfo(BaseModel):
                     all_text.append(part.content)
         return "\n".join(all_text)
 
-    def update_from(self, result: Result, fields: list | str | None = None) -> None:
-        update_dict = {}
-        if result:
-            update_dict = result.model_dump()
-        if fields and fields != "record":
-            update_dict = {f: update_dict[f] for f in fields}
-
+    def update_from(self, update_dict) -> Self:
         # exclude null values
         update_dict = {k: v for k, v in update_dict.items() if v}
 
-        self.__dict__.update(**update_dict)
+        self.metadata.update(**update_dict)
+
+        return self
 
     def as_langchain_message(
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_extra_text: bool = False,
     ) -> BaseMessage | None:
         components = self.as_openai_message(
             role=role,
             model_capabilities=model_capabilities,
-            include_extra_text=include_extra_text,
         )
         if components and (components := components.get("content")):
             if role in {"user", "human"}:
@@ -346,11 +334,13 @@ class RecordInfo(BaseModel):
         self,
         model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system"] = "user",
-        include_extra_text: bool = False,
     ) -> dict | None:
         # Prepare input for model consumption
         components = []
-        for obj in self._components:
+        for k, v in self.metadata.items():
+            # add in metadata (title, byline, date, exif, etc.)
+            components.append({"type": "text", "text": f"{k}: {v}"})
+        for obj in self.components:
             # attach media objects if the model supports them
             if (
                 (obj.mime.startswith("text") and model_capabilities.chat)
@@ -368,7 +358,9 @@ class RecordInfo(BaseModel):
             )
             return None
 
-        if include_extra_text:
+        if model_capabilities.expects_text_with_media and not any([
+            c.get("type") == "text" for c in components
+        ]):
             text = "see attached media"
             components.append({"type": "text", "text": text})
 
@@ -409,9 +401,12 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: str | None = Field(default=None)
+    prompt: str | None = Field(
+        validation_alias=AliasChoices("prompt", "q"),
+        default=None,
+    )
 
-    parameters: dict | None = Field(
+    parameters: dict = Field(
         default_factory=dict,
         description="Additional options for the worker",
     )

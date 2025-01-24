@@ -3,14 +3,13 @@ from collections.abc import Mapping, Sequence
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
-from omegaconf import DictConfig, ListConfig, OmegaConf
 import pandas as pd
 
 from buttermilk import BM, logger
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.flows import col_mapping_hydra_to_local
-from buttermilk.utils.utils import find_in_nested_dict, find_key_string_pairs
+from buttermilk.utils.utils import find_key_string_pairs
 
 
 async def load_data(data_cfg: DataSource) -> pd.DataFrame:
@@ -261,14 +260,15 @@ async def read_all_files(uri, pattern, columns: dict[str, str]):
     return dataset
 
 
-def parse_flow_vars(var_map: Mapping,
+def parse_flow_vars(
+    var_map: Mapping,
     *,
     job: Job,
     additional_data: dict = {},
-) -> dict: 
-    
+    other_vars: dict = {},
+) -> dict:
     # Take an input map of variable names to a dot-separated JSON path.
-    # Returns a dict of variables with their corresponding content, sourced from 
+    # Returns a dict of variables with their corresponding content, sourced from
     # datasets provided in additional_data or records in job.
 
     vars = {}
@@ -276,7 +276,7 @@ def parse_flow_vars(var_map: Mapping,
     all_data_sources = job.model_dump()
     for key, value in additional_data.items():
         if isinstance(value, pd.DataFrame):
-            all_data_sources[key] = value.to_dict(orient='records')
+            all_data_sources[key] = value.to_dict(orient="records")
         else:
             all_data_sources[key] = value
 
@@ -287,73 +287,78 @@ def parse_flow_vars(var_map: Mapping,
 
         if "." in match_key:
             next_level, locator = match_key.split(".", maxsplit=1)
-            return resolve_var(match_key=locator, data_dict=data_dict.get(next_level, {}))
-        else:
-            # If the final data variable is a mapping, return the value at the key we 
-            # are looking for. But if the value is not found or the variable is not a 
-            # mapping, return the name of the key if we can't find a value. It will be 
-            # used as a literal string.
-            if isinstance(data_dict, Mapping) and match_key in data_dict:
-                return data_dict[match_key]
-            else:
-                return match_key
-        
+            return resolve_var(
+                match_key=locator,
+                data_dict=data_dict.get(next_level, {}),
+            )
+        # If the final data variable is a mapping, return the value at the key we
+        # are looking for. But if the value is not found or the variable is not a
+        # mapping, return the name of the key if we can't find a value. It will be
+        # used as a literal string.
+        if isinstance(data_dict, Mapping) and match_key in data_dict:
+            return data_dict[match_key]
+        return match_key
+
     def descend(map, path):
         if path is None:
             return None
+
         if isinstance(path, str):
             # We have reached the end of the tree, this last path is a plain string
             # Use this final leaf as the locator for the data to insert here
             value = resolve_var(path, all_data_sources)
-            #value = jq.all(path, all_data_sources)
+            # value = jq.all(path, all_data_sources)
             return value
-        elif isinstance(path, Sequence):
+        if isinstance(path, bool):
+            return path
+        if isinstance(path, Sequence):
             # The key here is made up of multiple records
             # Descend recurisvely and fill it out.
             value = []
             for x in path:
                 sub_value = descend(map=map, path=x)
-                if sub_value and isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
+                if (
+                    sub_value
+                    and isinstance(sub_value, Sequence)
+                    and not isinstance(sub_value, str)
+                ):
                     value.extend(sub_value)
                 elif sub_value:
                     value.append(sub_value)
             return value
-        elif isinstance(path, Mapping):
+        if isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
             # Descend recurisvely and fill it out.
             value = {k: descend(map=k, path=v) for k, v in path.items() if v}
             return value
-        else:
-            raise ValueError(f'Unknown type in map: {type(path)} @ {map}')
+        raise ValueError(f"Unknown type in map: {type(path)} @ {map}")
 
     for var, locator in var_map.items():
-        if locator == 'record':
+        if locator == "record.all_text":
             if job.record:
-                # substitue the input record from the job
-                # but don't add empty values
-                vars[var] = job.record
+                vars[var] = job.record.all_text
+        elif locator in other_vars:
+            vars[var] = other_vars[locator]
         else:
             value = descend(var, locator)
             # Don't add empty values to the input dict
             if value:
                 vars[var] = value
-            
+
     return vars
 
+    # # Handle direct record field reference
+    # if job.record and (
+    #     match_key in job.record.model_fields or match_key in job.record.model_extra
+    # ):
+    #     return getattr(job.record, match_key)
 
+    # # handle entire dataset
+    # if additional_data and match_key in additional_data:
+    #     if isinstance(additional_data[match_key], pd.DataFrame):
+    #         return additional_data[match_key].astype(str).to_dict(orient="records")
 
-        # # Handle direct record field reference
-        # if job.record and (
-        #     match_key in job.record.model_fields or match_key in job.record.model_extra
-        # ):
-        #     return getattr(job.record, match_key)
-
-        # # handle entire dataset
-        # if additional_data and match_key in additional_data:
-        #     if isinstance(additional_data[match_key], pd.DataFrame):
-        #         return additional_data[match_key].astype(str).to_dict(orient="records")
-            
-        #     found = additional_data[match_key]
-        #     if isinstance(found, (DictConfig,ListConfig)):
-        #         found = OmegaConf.to_object(found)
-        #     return found
+    #     found = additional_data[match_key]
+    #     if isinstance(found, (DictConfig,ListConfig)):
+    #         found = OmegaConf.to_object(found)
+    #     return found

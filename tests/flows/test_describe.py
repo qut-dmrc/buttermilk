@@ -13,7 +13,11 @@ from buttermilk.utils.media import download_and_convert
 def flow_describer(request) -> Flow:
     agent = Describer(
         name="testdescriber",
-        parameters={"template": "describe", "download_if_necessary": True, "model": request.param},
+        parameters={
+            "template": "describe",
+            "download_if_necessary": True,
+            "model": request.param,
+        },
         inputs={"record": "record"},
         outputs={"record": "record"},
     )
@@ -27,19 +31,13 @@ def flow_download_only(flow_describer: Flow):
 
 @pytest.mark.anyio
 async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
-    data, metadata = await download_and_convert(image_bytes, "image/jpeg")
-    record = RecordInfo(
-        data=data,
-    )
-    async for result in flow_describer.run_flows(
-        flow_id="testflow",
-        record=record,
-        run_info=bm.run_info,
-    ):
+    record = await download_and_convert(image_bytes, "image/jpeg")
+    job = Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
+    async for result in flow_describer.run_flows(job=job):
         assert result
         assert not result.error
         assert isinstance(result.record, RecordInfo)
-        assert "painting" in str(result.record.alt_text).lower()
+        assert "painting" in str(result.record.all_text).lower()
         assert "night watch" in str(result.record.title).lower()
 
 

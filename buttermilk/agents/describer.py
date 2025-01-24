@@ -25,9 +25,24 @@ class Describer(LC):
 
         # Next step, call a model to describe the object, but only if necessary.
         # We don't run this step if we only have text components.
-        if not job.record or not job.record._components:
+        if not job.record or not job.record.components:
             logger.debug(
                 f"Not invoking agent {self.name} for job {job.job_id}, no media object provided.",
+            )
+            return job
+
+        media_exists = False
+        for component in job.record.components:
+            if (
+                component.mime.startswith("image")
+                or component.mime.startswith("video")
+                or component.mime.startswith("audio")
+            ):
+                media_exists = True
+        if not media_exists:
+            # don't try to describe only text components
+            logger.debug(
+                f"Not invoking agent {self.name} for job {job.job_id}, no non-text components provided.",
             )
             return job
 
@@ -39,10 +54,9 @@ class Describer(LC):
             )
             return job
 
-        if not job.parameters.pop("describe", True):
-            logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id} due to job config.",
-            )
-            return job
+        result = await super().process_job(job=job, **kwargs)
 
-        return await super().process_job(job=job, **kwargs)
+        # Update record alt text, title, description etc.
+        result.record.update_from(result.outputs.model_dump())
+
+        return result

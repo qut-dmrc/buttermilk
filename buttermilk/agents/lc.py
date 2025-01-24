@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Mapping
 
@@ -18,6 +19,7 @@ from openai import (
 from promptflow.tracing import trace
 from tenacity import (
     RetryError,
+    before_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -141,6 +143,7 @@ class LC(Agent):
         ),
         wait=wait_random(min=2, max=30),
         stop=stop_after_attempt(6),
+        before=before_log(logger, log_level=logging.INFO),
     )
     @trace
     async def invoke(

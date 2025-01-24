@@ -22,7 +22,7 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
         data=[
-            MediaObj(mime="image/jpg", data=image_bytes),
+            MediaObj(mime="image/jpg", content=image_bytes),
             "Hi, can you tell me what this is?",
         ],
     ).as_langchain_message(
@@ -40,7 +40,7 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
 def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
     llm = llms[model]
     message = RecordInfo(
-        data=[MediaObj(mime="image/jpg", data=image_bytes)],
+        data=[MediaObj(mime="image/jpg", content=image_bytes)],
     ).as_langchain_message(
         role="human",
         model_capabilities=llms.connections[model].capabilities,

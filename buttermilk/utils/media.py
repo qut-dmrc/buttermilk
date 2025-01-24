@@ -6,43 +6,49 @@ from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
-from buttermilk.utils.utils import download_limited_async, is_uri
+from buttermilk.utils.utils import (
+    download_limited_async,
+    is_filepath,
+    is_uri,
+    read_file,
+)
 
 
 async def download_and_convert(
-    obj: Any,
-    label: str | None = None,
+    obj: bytes | Any | None = None,
     mime: str = "application/octet-stream",
+    *,
+    uri: str | None = None,
+    b64: str | None = None,
+    html: str | None = None,
+    text: str | None = None,
+    label: str | None = None,
+    filepath: str | None = None,
     allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
-    alt_text: str | None = None,
-    ground_truth: Any = None,
-    metadata: dict = {},
     **kwargs: Any,
 ) -> RecordInfo:
     # If we have a URI, download it.
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
 
-    if not obj:
+    if not obj and not uri and not b64 and not text:
         # Nothing passed in, return None
         return None
-
-    uri = None
-    mime = mime or "application/octet-stream"
 
     with contextlib.suppress(Exception):
         obj = obj.decode("utf-8")
 
-    if is_uri(obj):
-        uri = obj
+    if uri or is_uri(obj):
+        uri = uri or obj
         obj, detected_mimetype = await download_limited_async(
             uri,
             allow_arbitrarily_large_downloads=allow_arbitrarily_large_downloads,
             token=token,
             max_size=max_size,
         )
+        kwargs["uri"] = uri
 
         # Replace mimetype if default or none was passed in
         if detected_mimetype and (not mime or mime == "application/octet-stream"):
@@ -50,20 +56,41 @@ async def download_and_convert(
         with contextlib.suppress(Exception):
             obj = obj.decode("utf-8")
 
+    elif filepath or is_filepath(obj):
+        filepath = filepath or obj
+        obj = read_file(filepath)
+        kwargs["uri"] = filepath
+
     obj_list = []  # List of component media objects
 
-    if mime.startswith("text/html"):
+    if html or mime.startswith("text/html"):
         # try to extract text from web page
+        html = html or obj
         obj_list, retrieved_metadata = extract_main_content(
-            obj,
-            metadata=metadata,
+            html=html,
         )
-        metadata.update(retrieved_metadata)
-
+        # Add additional metadata to the record
+        kwargs.update(retrieved_metadata)
+    elif b64:
+        obj_list = [
+            MediaObj(
+                label=label,
+                base_64=b64,
+                mime=mime,
+            ),
+        ]
+    elif text or isinstance(obj, str):
+        text = text or obj
+        if not mime or mime == "application/octet-stream":
+            mime = "text/plain"
+        obj_list = [
+            MediaObj(
+                label=label,
+                content=text,
+                mime=mime,
+            ),
+        ]
     else:
-        if isinstance(obj, str):
-            if not mime or not mime.startswith("text"):
-                mime = "text/plain"
         obj_list = [
             MediaObj(
                 label=label,
@@ -72,12 +99,11 @@ async def download_and_convert(
             ),
         ]
 
-    return RecordInfo(
+    record = RecordInfo(
         data=obj_list,
-        metadata=metadata,
-        alt_text=alt_text,
-        ground_truth=ground_truth,
+        **kwargs,
     )
+    return record
 
 
 def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:

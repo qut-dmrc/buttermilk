@@ -19,7 +19,6 @@ from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
-from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.validators import (
     make_list_validator,
     make_uri_validator,
@@ -62,7 +61,6 @@ class FlowRequest(BaseModel):
         use_enum_values=True,
     )
     _client: Agent = PrivateAttr()
-    _job: Job = PrivateAttr()
 
     _ensure_list = field_validator(
         "model",
@@ -129,6 +127,22 @@ class FlowRequest(BaseModel):
 
         return self
 
+    def to_job(self) -> Job:
+        job_vars = {k: v for k, v in self.model_dump().items() if k in Job.model_fields}
+        _job = Job(**job_vars)
+        _job.parameters.update(**{
+            k: v
+            for k, v in self.model_dump().items()
+            if k in ["model", "template", "template_vars"]
+        })
+        _job.inputs.update(**{
+            k: v
+            for k, v in self.model_dump().items()
+            if k not in Job.model_fields and k not in _job.parameters
+        })
+
+        return _job
+
 
 async def flow_stream(
     flow: Flow,
@@ -138,43 +152,21 @@ async def flow_stream(
     bm = BM()
     if not flow_request.source:
         flow_request.source = [bm.cfg.job]
-    logger.info(
-        f"Received request for flow {flow} and flow_request {flow_request}. Resolving media URIs.",
-    )
-    if flow_request.record:
-        record = record
-    else:
-        record = None
-        if flow_request.uri:
-            record = await download_and_convert(
-                obj=flow_request.uri,
-                mime=flow_request.mime_type,
-            )
-        elif flow_request.content:
-            record = await download_and_convert(
-                obj=flow_request.content,
-                mime=flow_request.mime_type,
-            )
-        elif flow_request.record_id:
-            raise NotImplementedError("Loading by record ID is not yet supported.")
+    if flow_request.record_id:
+        raise NotImplementedError("Loading by record ID is not yet supported.")
 
-    async for job in flow.run_flows(
-        record=record,
+    job = flow_request.to_job()
+    async for result in flow.run_flows(
         run_info=bm.run_info,
-        source=flow_request.source,
-        flow_id=flow_request.flow_id,
-        q=flow_request.q,
+        job=job,
     ):
-        if job:
+        if result:
             # if data.error:
             #     raise HTTPException(status_code=500, detail=str(data.error))
-            if job.outputs:
+            if result.outputs:
                 if return_json:
-                    yield job.model_dump_json()
+                    yield result.model_dump_json()
                 else:
-                    yield job
+                    yield result
             else:
                 logger.info(f"No data to return from {flow} (completed successfully).")
-            # update record in case it has been changed
-            if job.record:
-                record = job.record

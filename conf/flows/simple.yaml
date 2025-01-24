@@ -4,14 +4,21 @@ simple:
   steps:
     - name: describer
       _target_: buttermilk.agents.describer.Describer
+      num_runs: 1
       parameters: 
         template: describe
+        download_if_necessary: true
         model:
           - gemini15pro
       inputs:
         record: record
+        uri: uri
       outputs:
-        record: record
+        transcript: outputs.transcript
+        title: outputs.title
+        caption: outputs.caption
+        description: outputs.description
+        content: record.all_text
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1

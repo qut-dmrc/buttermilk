@@ -9,6 +9,7 @@ import pathlib
 import uuid
 from collections.abc import Mapping, Sequence
 from typing import Any, TypeVar
+from urllib.parse import urlparse
 
 import fsspec
 import httpx
@@ -25,6 +26,33 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from .._core.log import logger
 
 T = TypeVar("T")
+
+
+def extract_url(text: str) -> str | None:
+    """Find first valid URL in  string."""
+    words = text.split()  # Split into words to avoid partial matches
+    for word in words:
+        try:
+            parsed_url = urlparse(word)
+            if all([
+                parsed_url.scheme,
+                parsed_url.netloc,
+            ]):  # Check for valid scheme and netloc
+                return word
+        except ValueError:  # Invalid url
+            pass
+    return None
+
+
+def is_filepath(value: Any, check_exists=True) -> bool:
+    # Check if the string is a valid filepath
+    try:
+        x = pathlib.Path(value)
+        if check_exists:
+            return x.exists()
+    except:
+        return False
+    return True
 
 
 def is_uri(value: Any) -> bool:
@@ -73,7 +101,7 @@ async def download_limited_async(
         url = httpx.URL(str(url))
 
     async with httpx.AsyncClient() as client:
-        r = await client.get(url, headers=headers)
+        r = await client.get(url, headers=headers, follow_redirects=True)
 
         if (
             not allow_arbitrarily_large_downloads
@@ -84,7 +112,7 @@ async def download_limited_async(
         data = []
         length = 0
 
-        async for chunk in r.aiter_bytes(1024):
+        async for chunk in r.aiter_bytes():
             data.append(chunk)
             length += len(chunk)
             if not allow_arbitrarily_large_downloads and length > max_size:
@@ -148,7 +176,7 @@ def read_file(
     if isinstance(uri, CloudPath):
         return uri.read_bytes()
     if isinstance(uri, pathlib.Path):
-        with fsspec.open(path, "rb") as f:
+        with fsspec.open(uri, "rb") as f:
             # For local files
             return f.read()
     elif validators.url(uri):

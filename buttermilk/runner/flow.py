@@ -7,10 +7,8 @@ from pydantic import BaseModel, Field, field_validator
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job, RecordInfo
-from buttermilk._core.types import SessionInfo
+from buttermilk._core.runner_types import Job, Result
 from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
-from buttermilk.utils.utils import find_in_nested_dict
 from buttermilk.utils.validators import make_list_validator
 
 """ A flow ties several stages together, runs them over a single record, 
@@ -47,50 +45,40 @@ class Flow(BaseModel):
     async def run_flows(
         self,
         *,
-        flow_id: str,
-        record: RecordInfo | None,
-        run_info: SessionInfo,
-        q: str | None = None,
-        source: Sequence[str] = []
+        job: Job,
+        **other_vars,
     ) -> AsyncGenerator[Any, None]:
 
         if self._data is None:
             await self.load_data()
-        
+
         for agent in self.steps:
             async for result in self.run_step(
                 agent=agent,
-                record=record,
-                run_info=run_info,
-                source=source,
-                flow_id=flow_id,
-                q=q,
+                job=job,
+                **other_vars,
             ):
+                if result.record:
+                    job.record = result.record
                 yield result
 
     async def run_step(
         self,
         *,
         agent: Agent,
-        flow_id: str,
-        run_info: SessionInfo,
-        record: RecordInfo | None = None,
-        q: str | None= None,
-        source: Sequence[str],
+        job: Job,
+        **other_vars,
     ) -> AsyncGenerator:
         self._data[agent.name] = {}
-        source = list(set(self.source + source)) if source else self.source
+        source = list(set(self.source + job.source)) if job.source else self.source
         tasks = []
         for variant in agent.make_combinations():
             # Create a new job and task for every combination of variables
             # this agent is configured to run.
-            job = Job(
-                flow_id=flow_id,
-                record=record,
-                source=source,
-                run_info=run_info,
-                prompt=q
+            job_vars = job.model_dump(
+                exclude=["job_id", "source", "parameters", "timestamp"],
             )
+            job_variant = Job(**job_vars, source=source, parameters=variant)
 
             # Process all inputs into two categories.
             # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
@@ -103,11 +91,17 @@ class Flow(BaseModel):
             # during the initital construction of the job - including template variables and static values
             # job.inputs will include all variables and formatted placeholders etc that will not be passed
             # to the templating function and will be sent direct instead
-            job.inputs = parse_flow_vars(agent.inputs, job=job, additional_data=self._data)
-            job.parameters = parse_flow_vars(variant, job=job, additional_data=self._data)
+            other_vars.update(**{k: v for k, v in job_variant.inputs.items() if v})
+            job_variant.inputs = parse_flow_vars(
+                agent.inputs,
+                job=job_variant,
+                additional_data=self._data,
+                other_vars=other_vars,
+            )
+
             task = agent.run(
-                job=job,
-                additional_data=self._data
+                job=job_variant,
+                additional_data=self._data,
             )
             tasks.append(task)
 
@@ -121,14 +115,19 @@ class Flow(BaseModel):
                 else:
                     try:
                         output_map = dict(**agent.outputs)
-                        if (update_record := output_map.pop('record', {})) and result.record:
-                            result.record.update_from(result.outputs, fields=update_record)
+                        result.outputs = parse_flow_vars(
+                            output_map,
+                            job=result,
+                            additional_data=self._data,
+                        )
 
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,
                             output_map=output_map,
+                            job_outputs=result.outputs,
                         )
+
                     except Exception as e:
                         error_msg = (
                             f"Response data not formatted as expected: {e}, {e.args=}"
@@ -141,23 +140,26 @@ class Flow(BaseModel):
                 # raise
             await asyncio.sleep(0)
 
-    def incorporate_outputs(self, step_name: str, result: Job, output_map: Mapping):
+    def incorporate_outputs(
+        self,
+        step_name: str,
+        result: Job,
+        output_map: Mapping,
+        job_outputs: Result,
+    ) -> None:
         """Update the data object with the outputs of the agent."""
         if result.error:
             # don't add failed jobs
             return
-        elif output_map:
-            output = parse_flow_vars(output_map, job=result, additional_data=self._data)
-            for k,v in output.items():
+        if output_map:
+            for k, v in job_outputs.model_dump().items():
                 if isinstance(v, Sequence) and not isinstance(v, str):
-                    self._data[step_name][k] = self._data[step_name].get(k, []) 
+                    self._data[step_name][k] = self._data[step_name].get(k, [])
                     self._data[step_name][k].extend(v)
                 else:
-                    self._data[step_name][k] = self._data[step_name].get(k, [])  
+                    self._data[step_name][k] = self._data[step_name].get(k, [])
                     self._data[step_name][k].append(v)
         else:
-            self._data[step_name]['outputs'] = self._data[step_name].get('outputs', [])  
+            self._data[step_name]["outputs"] = self._data[step_name].get("outputs", [])
             if result.outputs:
-                self._data[step_name]['outputs'].append(result.outputs.model_dump())
-
-        pass
+                self._data[step_name]["outputs"].append(result.outputs.model_dump())

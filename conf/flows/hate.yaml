@@ -9,6 +9,7 @@ hate:
       _target_: buttermilk.agents.describer.Describer
       num_runs: 1
       parameters: 
+        download_if_necessary: true
         template: describe
         model:
           - gemini15pro

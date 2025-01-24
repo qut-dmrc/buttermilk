@@ -39,6 +39,7 @@ class LLMCapabilities(BaseModel):
     video: bool = False
     audio: bool = False
     media_uri: bool = False
+    expects_text_with_media: bool = False
 
 
 class LLMConfig(BaseModel):

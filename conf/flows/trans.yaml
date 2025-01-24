@@ -10,12 +10,18 @@ trans:
       num_runs: 1
       parameters: 
         template: describe
+        download_if_necessary: true
         model:
           - gemini15pro
       inputs:
         record: record
+        uri: uri
       outputs:
-        record: record
+        content: record.all_text
+        transcript: outputs.transcript
+        title: outputs.title
+        caption: outputs.caption
+        description: outputs.description
 
     - name: judger
       _target_: buttermilk.agents.lc.LC
@@ -54,7 +60,7 @@ trans:
         formatting: json_rules
         model: ${llm}
       inputs:
-        content: record.text
+        content: record.all_text
         record: record
         answers: judger.answers
       outputs:
