@@ -8,17 +8,18 @@ from buttermilk.llms import MULTIMODAL_MODELS, LLMClient, LLMs
 
 @pytest.mark.anyio
 async def test_multimodal_question(
-    multimodal_llm: LLMClient, multimodal_record: RecordInfo
+    multimodal_llm: LLMClient,
+    multimodal_record: RecordInfo,
 ):
     messages = []
     messages.append(
         multimodal_record.as_langchain_message(
-            model_capabilities=multimodal_llm.capabilities
+            model_capabilities=multimodal_llm.capabilities,
         ),
     )
     messages.append(("user", "Hi, can you tell me what this is?"))
 
-    chain = multimodal_llm | ChatPromptTemplate.from_messages(messages)
+    chain = ChatPromptTemplate.from_messages(messages) | multimodal_llm.client
     response = chain.ainvoke(input={})
 
     assert response
