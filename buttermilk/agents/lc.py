@@ -104,7 +104,7 @@ class LC(Agent):
 
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms[model].connection)
-        job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
+        job.agent_info["model_params"] = scrub_keys(self._llms[model].params)
         job.parameters["model"] = model
 
         logger.debug(

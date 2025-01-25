@@ -5,6 +5,8 @@ from anthropic import AnthropicVertex, AsyncAnthropicVertex
 from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 
+from buttermilk.utils.utils import scrub_keys
+
 try:
     from langchain_anthropic import ChatAnthropic
 except:
@@ -144,6 +146,8 @@ def _Llama(*args, **kwargs):
 class LLMClient(BaseModel):
     client: Any
     capabilities: LLMCapabilities
+    connection: str
+    params: dict = {}
 
 
 class LLMs(BaseModel):
@@ -180,6 +184,8 @@ class LLMs(BaseModel):
                 **params,
             ),
             capabilities=model_config.capabilities,
+            connection=scrub_keys(model_config.connection),
+            params=scrub_keys(params),
         )
         self.models[__name] = _llm
         return self.models[__name]
