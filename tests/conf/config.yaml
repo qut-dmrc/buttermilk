@@ -4,8 +4,6 @@ defaults:
   - _self_
   - local
 
-
-
 flows:
   test:
     _target_: buttermilk.runner.flow.Flow

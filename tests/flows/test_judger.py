@@ -17,7 +17,11 @@ def judger(request):
             "formatting": "json_rules",
         },
         inputs={"record": "record"},
-
+        save={
+            "type": "bq",
+            "dataset": "prosocial-443205.toxicity.flow",
+            "db_schema": "flow.json",
+        },
     )
     return agent
 
