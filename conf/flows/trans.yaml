@@ -39,7 +39,6 @@ trans:
         formatting: json_rules
         model: ${llm}
       inputs:
-        record: record
       outputs:
         answers:
           - job_id: job_id
@@ -61,7 +60,6 @@ trans:
         model: ${llm}
       inputs:
         content: record.text
-        record: record
         answers: judger.answers
       outputs:
         answers:
