@@ -17,6 +17,7 @@ def judger(request):
             "formatting": "json_rules",
         },
         inputs={"record": "record"},
+
     )
     return agent
 

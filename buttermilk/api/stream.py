@@ -156,8 +156,8 @@ async def flow_stream(
         raise NotImplementedError("Loading by record ID is not yet supported.")
 
     job = flow_request.to_job()
+    job.run_info = bm.run_info
     async for result in flow.run_flows(
-        run_info=bm.run_info,
         job=job,
     ):
         if result:
