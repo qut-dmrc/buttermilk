@@ -83,7 +83,7 @@ def load_template_vars(
     logger.debug(f"Loading template {template} from {filename}.")
     tpl_text = read_text(filename)
     tpl_text = _parse_prompty(tpl_text)
-
+    available_vars = {}
     # Load template variables into the Jinja2 environment
     for k, v in inputs.items():
         if isinstance(v, str) and v:
@@ -100,11 +100,13 @@ def load_template_vars(
                 # Leave the value as is and pass it in as text
                 # Note here we don't treat this as a Jinja2 template to interpret;
                 # the only templates we trust are the ones we read from disk.
-                pass
+                available_vars[k] = v
+        else:
+            available_vars[k] = v
 
     # Compile and render the templates, leaving unfilled variables to substitute later
     tpl = env.from_string(tpl_text)
-    rendered_template = tpl.render()
+    rendered_template = tpl.render(**available_vars)
 
     # We now have a template formatted as a string in Prompty format.
     # Also return the leftover (unfilled) inputs to pass through later
@@ -117,7 +119,8 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
     for k, v in input_vars.items():
         if isinstance(v, RecordInfo):
             if rendered := v.as_langchain_message(
-                role="user", model_capabilities=model_capabilities
+                role="user",
+                model_capabilities=model_capabilities,
             ):
                 placeholders[k] = [rendered]
         elif isinstance(v, str):
@@ -133,6 +136,7 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
 
 
 def make_messages(local_template: str) -> list[tuple[str, str]]:
+    lc_messages = []
     try:
         # Parse messages using Prompty format
         # First we strip the header information from the markdown
@@ -146,8 +150,17 @@ def make_messages(local_template: str) -> list[tuple[str, str]]:
             valid_roles=["system", "user", "human", "placeholder"],
         )
 
+        # Convert to langchain format
+        # (Later we won't need this, because langchain ends up converting back to our json anyway)
+        for message in messages:
+            role = message["role"]
+            content = message["content"]
+            if content:
+                # Don't add empty messages
+                lc_messages.append((role, content))
+
     except Exception as e:
         msg = f"Unable to decode template expecting Prompty format: {e}, {e.args=}"
         raise (ValueError(msg)) from e
 
-    return messages
+    return lc_messages

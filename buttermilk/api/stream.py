@@ -19,6 +19,7 @@ from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
+from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.validators import (
     make_list_validator,
     make_uri_validator,
@@ -156,6 +157,9 @@ async def flow_stream(
         raise NotImplementedError("Loading by record ID is not yet supported.")
 
     job = flow_request.to_job()
+    # First step, fetch the record if we need to.
+    if not job.record and job.inputs:
+        job.record = await download_and_convert(**job.inputs)
     job.run_info = bm.run_info
     async for result in flow.run_flows(
         job=job,

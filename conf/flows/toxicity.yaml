@@ -31,7 +31,7 @@ toxicity:
     #     model: agent_info.model
     #     template: agent_info.template
     #     criteria: agent_info.template_vars.criteria
-    #     content: record.text
+    #     content: record.all_text
     #     prediction: outputs.prediction
     #     reasons: outputs.reasons
     #     labels: outputs.labels

@@ -17,7 +17,7 @@ trans:
         record: record
         uri: uri
       outputs:
-        content: record.all_text
+        content: record.text
         transcript: outputs.transcript
         title: outputs.title
         caption: outputs.caption
@@ -60,7 +60,7 @@ trans:
         formatting: json_rules
         model: ${llm}
       inputs:
-        content: record.all_text
+        content: record.text
         record: record
         answers: judger.answers
       outputs:

@@ -9,12 +9,12 @@ hate:
       _target_: buttermilk.agents.describer.Describer
       num_runs: 1
       parameters: 
-        download_if_necessary: true
         template: describe
         model:
           - gemini15pro
       inputs:
         record: record
+        uri: uri
       outputs:
         record: record
 
@@ -30,7 +30,6 @@ hate:
         formatting: json_rules
         model: ${llm}
       inputs:
-        record: record
       outputs:
         answers:
           - job_id: job_id
@@ -46,14 +45,13 @@ hate:
       concurrency: 20
       save: ${save}
       parameters:
-        template: synthesise
+        template: synthesise_judger
         instructions: judge
         criteria: criteria_ordinary
         formatting: json_rules
         model: ${llm}
       inputs:
         content: record.text
-        record: record
         answers: judger.answers
       outputs:
         answers:

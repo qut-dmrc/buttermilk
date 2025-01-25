@@ -333,17 +333,19 @@ def parse_flow_vars(
             return value
         raise ValueError(f"Unknown type in map: {type(path)} @ {map}")
 
-    for var, locator in var_map.items():
-        if isinstance(locator, str):
-            if locator == "record.all_text" and job.record:
+    if var_map:
+        for var, locator in var_map.items():
+            if isinstance(locator, str) and locator == "record.all_text" and job.record:
                 vars[var] = job.record.all_text
-            elif locator in other_vars:
+            elif isinstance(locator, str) and locator == "record.text" and job.record:
+                vars[var] = job.record.text
+            elif isinstance(locator, str) and locator in other_vars:
                 vars[var] = other_vars[locator]
-        else:
-            value = descend(var, locator)
-            # Don't add empty values to the input dict
-            if value:
-                vars[var] = value
+            else:
+                value = descend(var, locator)
+                # Don't add empty values to the input dict
+                if value:
+                    vars[var] = value
 
     return vars
 

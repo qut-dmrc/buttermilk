@@ -297,7 +297,17 @@ class RecordInfo(BaseModel):
         return self.metadata.get("title")
 
     @property
+    def text(self) -> str:
+        # Text, with headers for metadata but not paragraph labels.
+        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
+        for part in self.components:
+            if part.content:
+                all_text.append(part.content)
+        return "\n".join(all_text)
+
+    @property
     def all_text(self) -> str:
+        # Also with paragraph labels etc.
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
         for part in self.components:
             if part.content:

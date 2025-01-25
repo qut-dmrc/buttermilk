@@ -66,7 +66,16 @@ class LC(Agent):
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
 
         # Construct list of messages from the templates
-        rendered_template, remaining_inputs = load_template_vars(template=template, **job.parameters)
+        rendered_template, remaining_inputs = load_template_vars(
+            template=template,
+            **job.parameters,
+            **job.inputs,
+            **additional_data,
+        )
+
+        # Interpret the template as a Prompty; split it into separate messages with
+        # role and content keys
+        messages = make_messages(rendered_template)
 
         # Prepare placeholder variables
         #
@@ -111,8 +120,8 @@ class LC(Agent):
             f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
         )
         response = await self.invoke(
-            template=rendered_template,
             model=model,
+            messages=messages,
             placeholders=placeholders,
         )
 
@@ -149,25 +158,14 @@ class LC(Agent):
     async def invoke(
         self,
         *,
-        template: str,
+        messages: list,
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-        # Interpret the template as a Prompty; split it into separate messages with
-        # role and content keys
-        messages = make_messages(template)
-
-        # Convert to langchain format
-        # (Later we won't need this, because langchain ends up converting back to our json anyway)
-        lc_messages = []
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            lc_messages.append((role, content))
 
         # Make the chain
         chain = (
-            ChatPromptTemplate(lc_messages, template_format="jinja2")
+            ChatPromptTemplate(messages, template_format="jinja2")
             | self._llms[model].client
             | ChatParser()
         )

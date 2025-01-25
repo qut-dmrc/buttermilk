@@ -36,6 +36,8 @@ async def download_and_convert(
     if not obj and not uri and not b64 and not text:
         # Nothing passed in, return None
         return None
+    # clean up kwargs to remove defaults
+    kwargs = {k: v for k, v in kwargs.items() if v}
 
     with contextlib.suppress(Exception):
         obj = obj.decode("utf-8")
