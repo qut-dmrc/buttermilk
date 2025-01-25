@@ -175,7 +175,7 @@ def read_file(
 
     if isinstance(uri, CloudPath):
         return uri.read_bytes()
-    if isinstance(uri, pathlib.Path):
+    if isinstance(uri, pathlib.Path) and is_filepath(uri, check_exists=True):
         with fsspec.open(uri, "rb") as f:
             # For local files
             return f.read()

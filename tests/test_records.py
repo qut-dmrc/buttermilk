@@ -8,6 +8,11 @@ from buttermilk.utils.media import download_and_convert
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.anyio
+async def test_record_remote_load(multimodal_record):
+    assert multimodal_record
+
+
 def test_record_no_keywords():
     record = RecordInfo(text="test")
     assert not record.uri
@@ -18,7 +23,7 @@ def test_record_no_keywords():
     assert len(record.record_id) >= 8
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_from_path_valid():
     # Use a small test image
     test_image_path = "tests/data/sadrobot.jpg"
@@ -35,7 +40,7 @@ async def test_from_path_valid():
     assert record.components[0].base_64 is not None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_from_uri_valid():
     # Use a small test image
     test_image_path = "https://picsum.photos/64"
@@ -52,7 +57,7 @@ async def test_from_uri_valid():
     assert record.components[0].base_64 is not None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_from_uri_article():
     record = await download_and_convert(
         "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
@@ -67,14 +72,14 @@ async def test_from_uri_article():
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_from_uri_invalid():
     record = await download_and_convert("invalid_uri", mime="image/png")
     assert not record.uri
     assert record.all_text == "invalid_uri"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_from_object_valid():
     # Create a dummy image object
     image = Image.new("RGB", (100, 100))
@@ -92,7 +97,7 @@ async def test_from_object_valid():
     assert record.components[0].base_64 is not None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_record_update():
     image = Image.new("RGB", (100, 100))
     record = await download_and_convert(

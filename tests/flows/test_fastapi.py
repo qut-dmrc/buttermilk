@@ -6,12 +6,12 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
 
-class TestJob():
+class TestJob:
     input: int
     output: int | None = None
 
 
-class TestAgent():
+class TestAgent:
     async def process(self, *, job: TestJob) -> TestJob:
         job.output = 2 * job.input
         return job
@@ -41,7 +41,7 @@ def client():
     return TestClient(app)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_run_flow(client):
     async with AsyncClient(app=app, base_url="http://test") as ac:
         response = await ac.post("/flow", json={"input": 4})
@@ -49,7 +49,7 @@ async def test_run_flow(client):
         assert response.json() == {"input": 4, "output": 8}
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_pubsub_callback(client, monkeypatch):
     # Mock the requests.post call to the FastAPI endpoint
     async def mock_post(url, json):

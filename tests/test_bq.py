@@ -22,7 +22,7 @@ def writer(flow):
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_append_rows(monkeypatch, writer):
     """Test appending rows to a BigQuery table."""
     # Mock the BigQueryWriteAsyncClient and its append_rows method
@@ -54,7 +54,7 @@ async def test_append_rows(monkeypatch, writer):
     assert mock_append_rows_stream.__aiter__.call_count == 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.integration
 async def test_append_rows_integration(writer, bm):
     """Test appending rows to a BigQuery table."""
