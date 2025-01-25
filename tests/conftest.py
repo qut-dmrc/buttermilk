@@ -58,7 +58,7 @@ def llm(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
 

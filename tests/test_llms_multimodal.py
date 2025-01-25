@@ -3,14 +3,18 @@ from langchain.prompts import ChatPromptTemplate
 from rich import print as rprint
 
 from buttermilk._core.runner_types import MediaObj, RecordInfo
-from buttermilk.llms import MULTIMODAL_MODELS, LLMs
+from buttermilk.llms import MULTIMODAL_MODELS, LLMClient, LLMs
 
 
 @pytest.mark.anyio
-async def test_multimodal_question(multimodal_llm, multimodal_record: RecordInfo):
+async def test_multimodal_question(
+    multimodal_llm: LLMClient, multimodal_record: RecordInfo
+):
     messages = []
     messages.append(
-        multimodal_record.as_langchain_message(model_capabilities=multimodal_llm.cap),
+        multimodal_record.as_langchain_message(
+            model_capabilities=multimodal_llm.capabilities
+        ),
     )
     messages.append(("user", "Hi, can you tell me what this is?"))
 
@@ -30,10 +34,10 @@ def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
         ],
     ).as_langchain_message(
         role="human",
-        model_capabilities=llms.connections[model].capabilities,
+        model_capabilities=llm.capabilities,
     )
 
-    chain = ChatPromptTemplate.from_messages([message]) | llm
+    chain = ChatPromptTemplate.from_messages([message]) | llm.client
     answer = chain.invoke({})
     rprint(answer)
     assert answer
@@ -46,10 +50,10 @@ def test_multimodal_input_b64_image_no_text(llms: LLMs, model, image_bytes):
         data=[MediaObj(mime="image/jpg", content=image_bytes)],
     ).as_langchain_message(
         role="human",
-        model_capabilities=llms.connections[model].capabilities,
+        model_capabilities=llm.capabilities,
     )
 
-    chain = ChatPromptTemplate.from_messages([message]) | llm
+    chain = ChatPromptTemplate.from_messages([message]) | llm.client
     answer = chain.invoke({})
     rprint(answer)
     assert answer
@@ -65,10 +69,10 @@ def test_multimodal_input_video_uri(llms, model, video_url):
         ],
     ).as_langchain_message(
         role="human",
-        model_capabilities=llms.connections[model].capabilities,
+        model_capabilities=llm.capabilities,
     )
 
-    chain = ChatPromptTemplate.from_messages([message]) | llm
+    chain = ChatPromptTemplate.from_messages([message]) | llm.client
     answer = chain.invoke({})
     rprint(answer)
     assert answer
@@ -83,10 +87,10 @@ def test_multimodal_input_b64_video(llms, model, video_bytes):
         ],
     ).as_langchain_message(
         role="human",
-        model_capabilities=llms.connections[model].capabilities,
+        model_capabilities=llms.capabilities,
     )
 
-    chain = ChatPromptTemplate.from_messages([message]) | llm
+    chain = ChatPromptTemplate.from_messages([message]) | llm.client
     answer = chain.invoke({})
     rprint(answer)
     assert answer

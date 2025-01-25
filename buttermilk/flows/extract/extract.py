@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TypedDict
 
 import pandas as pd
-from jinja2 import Undefined
 from langchain_core.prompts import (
     ChatPromptTemplate,
 )
@@ -22,7 +21,6 @@ BASE_DIR = Path(__file__).absolute().parent
 TEMPLATE_PATH = BASE_DIR.parent / "templates"
 
 logger = getLogger()
-
 
 
 class Prediction(TypedDict):
@@ -94,7 +92,7 @@ class Analyst:
         llm = LLMs()[self.model]
         tpl = ChatPromptTemplate.from_messages(messages, template_format="jinja2")
 
-        chain = tpl | llm | ChatParser()
+        chain = tpl | llm.client | ChatParser()
         input_vars = dict()
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
@@ -104,7 +102,7 @@ class Analyst:
             output["record_id"] = record_id
 
         output["timestamp"] = pd.to_datetime(
-            datetime.datetime.now(tz=datetime.timezone.utc),
+            datetime.datetime.now(tz=datetime.UTC),
         ).isoformat()
 
         for k in Prediction.__required_keys__:

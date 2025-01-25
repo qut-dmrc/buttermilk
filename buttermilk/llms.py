@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from anthropic import AnthropicVertex, AsyncAnthropicVertex
 from google.cloud import aiplatform
@@ -9,7 +9,6 @@ try:
     from langchain_anthropic import ChatAnthropic
 except:
     pass
-from langchain_core.language_models.llms import LLM
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from pydantic import BaseModel, Field
 
@@ -142,13 +141,21 @@ def _Llama(*args, **kwargs):
     return AzureChatOpenAI(*args, **default_opts)
 
 
+class LLMClient(BaseModel):
+    client: Any
+    capabilities: LLMCapabilities
+
+
 class LLMs(BaseModel):
     connections: dict[str, LLMConfig] = Field(
         default=[],
         description="A dict of dicts each specifying connection information and parameters for an LLM.",
     )
 
-    models: dict = Field(default={}, description="Holds the instantiated model objects")
+    models: dict[str, LLMClient] = Field(
+        default={},
+        description="Holds the instantiated model objects",
+    )
 
     class Config:
         use_enum_values = True
@@ -157,7 +164,7 @@ class LLMs(BaseModel):
     def all_model_names(self) -> Enum:
         return Enum("AllModelNames", list(self.connections.keys()))
 
-    def __getattr__(self, __name: str) -> LLM:
+    def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.models:
             return self.models[__name]
 
@@ -168,9 +175,13 @@ class LLMs(BaseModel):
         params.update(**model_config.configs)
 
         # Instantiate the model client object
-        self.models[__name] = globals()[model_config.obj](
-            **params,
+        _llm = LLMClient(
+            client=globals()[model_config.obj](
+                **params,
+            ),
+            capabilities=model_config.capabilities,
         )
+        self.models[__name] = _llm
         return self.models[__name]
 
     def __getitem__(self, __name: str):

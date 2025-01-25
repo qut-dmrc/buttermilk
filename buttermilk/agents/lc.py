@@ -88,7 +88,7 @@ class LC(Agent):
         # Models should only be given input that they can handle. At this time we do not
         # fail if the model cannot handle, we just exclude the input. The user should provide,
         # for example, a textual caption input for models that do not support direct image inputs.
-        model_capabilities: LLMCapabilities = self._llms.connections[model].capabilities
+        model_capabilities: LLMCapabilities = self._llms[model].capabilities
 
         # In order to handle multimodal records, the job's record will be passed in as
         # a Langchain Placeholder, which means it has to be a list of messages
@@ -103,7 +103,7 @@ class LC(Agent):
         }
 
         # Add model details to Job object
-        job.agent_info["connection"] = scrub_keys(self._llms.connections[model])
+        job.agent_info["connection"] = scrub_keys(self._llms[model].connection)
         job.agent_info["model_params"] = scrub_keys(self._llms[model].dict())
         job.parameters["model"] = model
 
@@ -168,7 +168,7 @@ class LC(Agent):
         # Make the chain
         chain = (
             ChatPromptTemplate(lc_messages, template_format="jinja2")
-            | self._llms[model]
+            | self._llms[model].client
             | ChatParser()
         )
 

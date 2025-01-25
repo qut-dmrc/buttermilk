@@ -10,7 +10,7 @@ def test_all_llm(llms, model):
     assert llm
 
     q = "hi! what's your name?"
-    chain = ChatPromptTemplate.from_messages([("human", q)]) | llm
+    chain = ChatPromptTemplate.from_messages([("human", q)]) | llm.client
     answer = chain.invoke({})
     assert answer
 
@@ -21,7 +21,7 @@ def test_cheap_llm(llms, cheapchatmodel: str):
     assert llm
 
     q = "hi! what's your name?"
-    chain = ChatPromptTemplate.from_messages([("human", q)]) | llm
+    chain = ChatPromptTemplate.from_messages([("human", q)]) | llm.client
     answer = chain.invoke({})
     assert answer
 
@@ -34,7 +34,7 @@ class TestPromptStyles:
             ("human", "hi! I'm Siobhan. What's your name?"),
             ("ai", "Hi Siobhan! I'm a chatbot, my developers call me"),
         ]
-        chain = ChatPromptTemplate.from_messages(messages) | llm
+        chain = ChatPromptTemplate.from_messages(messages) | llm.client
         answer = chain.invoke({})
         assert answer
         assert answer.content.startswith(" ")  # starts with a space
