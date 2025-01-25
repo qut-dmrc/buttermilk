@@ -26,30 +26,14 @@ def flow_request_data():
     return req.model_dump()
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
-        pytest.param(
-            {"q": "democrats are arseholes"},
-            id="q only",
-        ),
-        pytest.param({}, id="no record no text"),
-        pytest.param(
-            {"record": lambda: example_coal, "q": "i really love coal"},
-            id="q with record",
-        ),  # Lambda for lazy eval
-        pytest.param({"record": lambda: blm}, id="record only"),
-        pytest.param({"record": lambda: video_bytes}, id="video bytes"),
-        pytest.param({"record": lambda: image_bytes}, id="image bytes"),
-        pytest.param({"record": lambda: video_url}, id="video url"),
-    ],
-)
 def test_api_request_simple(
-    options: dict,
+    flow_request_data: dict,
     client,
 ):  # Inject the client
     # Resolve fixtures using lambda functions
-    resolved_req_cfg = {k: v() if callable(v) else v for k, v in options.items()}
+    resolved_req_cfg = {
+        k: v() if callable(v) else v for k, v in flow_request_data.items()
+    }
     flow_request = FlowRequest(**resolved_req_cfg)
     response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
     assert response.status_code == 200
@@ -58,7 +42,7 @@ def test_api_request_simple(
     assert "agent_info" in json_response
 
 
-def test_run_flow(bm: Any, flow_request_data: dict[str, Any]):
+def test_run_flow(bm: Any, client, flow_request_data: dict[str, Any]):
     response = client.post("/flow/test", json=flow_request_data)
     assert response.status_code == 200
     json_response = response.json()

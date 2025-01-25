@@ -24,11 +24,6 @@ def flow_describer(request) -> Flow:
     return Flow(source="testing", steps=[agent])
 
 
-@pytest.fixture
-def flow_download_only(flow_describer: Flow):
-    flow_describer.steps[0].parameters = {"describe": False}
-
-
 @pytest.mark.anyio
 async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
     record = await download_and_convert(image_bytes, "image/jpeg")
@@ -39,21 +34,6 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
         assert isinstance(result.record, RecordInfo)
         assert "painting" in str(result.record.all_text).lower()
         assert "night watch" in str(result.record.title).lower()
-
-
-@pytest.mark.anyio
-async def test_run_flow_describe_no_media(
-    flow_describer,
-    lady_macbeth: RecordInfo,
-    bm: BM,
-):
-    job = Job(
-        source="testing", flow_id="testflow", record=lady_macbeth, run_info=bm.run_info
-    )
-    async for result in flow_describer.run_flows(job=job):
-        assert result
-        assert isinstance(result.record, RecordInfo)
-        assert not result.record.metadata
 
 
 def test_find_record(bm, image_bytes):

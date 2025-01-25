@@ -29,11 +29,14 @@ def framer():
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-async def test_frames_cheap(framer, example_coal, bm: BM, model):
+async def test_frames_cheap(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
     job = Job(
-        source="testing", flow_id="testflow", record=example_coal, run_info=bm.run_info
+        source="testing",
+        flow_id="testflow",
+        record=text_record,
+        run_info=bm.run_info,
     )
     async for result in flow.run_flows(job=job):
         assert result
@@ -43,11 +46,14 @@ async def test_frames_cheap(framer, example_coal, bm: BM, model):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", CHATMODELS)
-async def test_frames_text(framer, example_coal, bm: BM, model):
+async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
     job = Job(
-        source="testing", flow_id="testflow", record=example_coal, run_info=bm.run_info
+        source="testing",
+        flow_id="testflow",
+        record=news_record,
+        run_info=bm.run_info,
     )
     async for result in flow.run_flows(job=job):
         assert result

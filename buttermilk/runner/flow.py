@@ -115,11 +115,12 @@ class Flow(BaseModel):
                 else:
                     try:
                         output_map = dict(**agent.outputs)
-                        result.outputs = parse_flow_vars(
-                            output_map,
-                            job=result,
-                            additional_data=self._data,
-                        )
+                        if output_map:
+                            result.outputs = parse_flow_vars(
+                                output_map,
+                                job=result,
+                                additional_data=self._data,
+                            )
 
                         self.incorporate_outputs(
                             step_name=agent.name,

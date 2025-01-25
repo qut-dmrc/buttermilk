@@ -336,22 +336,28 @@ class RecordInfo(BaseModel):
         role: Literal["user", "human", "system"] = "user",
     ) -> dict | None:
         # Prepare input for model consumption
-        components = []
-        for k, v in self.metadata.items():
-            # add in metadata (title, byline, date, exif, etc.)
-            components.append({"type": "text", "text": f"{k}: {v}"})
+        leading_components = []
+        trailing_components = []
+
         for obj in self.components:
             # attach media objects if the model supports them
             if (
-                (obj.mime.startswith("text") and model_capabilities.chat)
-                or (obj.mime.startswith("image") and model_capabilities.image)
+                (obj.mime.startswith("image") and model_capabilities.image)
                 or (obj.mime.startswith("video") and model_capabilities.video)
                 or (obj.mime.startswith("audio") and model_capabilities.audio)
             ):
-                components.append(obj.as_content_part())
+                leading_components.append(obj.as_content_part())
+            elif obj.mime.startswith("text") and model_capabilities.chat:
+                trailing_components.append(obj.as_content_part())
             elif "uri" in obj.model_fields_set and model_capabilities.media_uri:
-                components.append(obj.as_image_url())
+                trailing_components.append(obj.as_image_url())
 
+        for k, v in self.metadata.items():
+            # add in metadata (title, byline, date, exif, etc.)
+            # llama3.2 at least expects images first
+            trailing_components.append({"type": "text", "text": f"{k}: {v}"})
+
+        components = leading_components + trailing_components
         if not components:
             logger.warning(
                 f"No text or model compatible media provided for {self.record_id}",

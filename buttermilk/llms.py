@@ -73,15 +73,13 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # ```
 CHATMODELS = [
     "llama31_405b",
-    "llama31_8b",
     "llama32_90b",
-    "llama31_70b",
     "gpt4o",
     "sonnet",
     "haiku",
     "gemini15pro",
 ]
-CHEAP_CHAT_MODELS = ["haiku", "llama31_8b", "llama31_70b"]
+CHEAP_CHAT_MODELS = ["haiku", "llama32_90b"]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b"]
 
 

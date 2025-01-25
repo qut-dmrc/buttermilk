@@ -116,7 +116,9 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
     placeholders = {}
     for k, v in input_vars.items():
         if isinstance(v, RecordInfo):
-            if rendered := v.as_langchain_message(role="user", model_capabilities=model_capabilities):
+            if rendered := v.as_langchain_message(
+                role="user", model_capabilities=model_capabilities
+            ):
                 placeholders[k] = [rendered]
         elif isinstance(v, str):
             placeholders[k] = [HumanMessage(v)]
@@ -125,7 +127,6 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
             placeholders[k] = "\n\n".join(v)
             placeholders[k] = [HumanMessage(v)]
         elif v:
-            placeholders[k] = v
             placeholders[k] = [HumanMessage(v)]
 
     return placeholders
