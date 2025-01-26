@@ -83,6 +83,10 @@ class Agent(BaseModel):
         convert_omegaconf_objects(),
     )
 
+    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
