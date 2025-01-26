@@ -294,8 +294,9 @@ def upload_text(data, *, uri, **kwargs) -> str:
     logger.debug(f"Uploading file {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs)
     blob.upload_from_string(data)
+    # TODO @nicsuzor: Do we have size info here to report?
     logger.debug(
-        f"Successfully uploaded file {uri} with {len(data)} lines written.",
+        f"Successfully uploaded file {uri} with {len(data)} characters written.",
     )
 
     return uri
