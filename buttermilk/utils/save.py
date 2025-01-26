@@ -296,7 +296,7 @@ def upload_text(data, *, uri, **kwargs) -> str:
     blob.upload_from_string(data)
     # TODO @nicsuzor: Do we have size info here to report?
     logger.debug(
-        f"Successfully uploaded file {uri} with {len(data)} characters written.",
+        f"Successfully uploaded file {uri} with {len(data)} characters written (blob size {blob.size}).",
     )
 
     return uri

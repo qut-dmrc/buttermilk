@@ -2,6 +2,7 @@ from .bq import construct_dict_from_schema
 from .flows import col_mapping_hydra_to_local
 from .utils import (
     download_limited,
+    download_limited_async,
     extract_url,
     find_key_string_pairs,
     get_ip,
@@ -18,6 +19,7 @@ __all__ = [
     "col_mapping_hydra_to_local",
     "construct_dict_from_schema",
     "download_limited",
+    "download_limited_async",
     "extract_url",
     "find_key_string_pairs",
     "get_ip",

@@ -4,14 +4,12 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-import shortuuid
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
-    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -45,12 +43,20 @@ class Agent(BaseModel):
 
     name: str = Field(
         ...,
-        description="The name of the flow or step in the process that this agent is responsible for.",
+        description="The name of the flow or step in the process that this agent does.",
     )
-
+    save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
-    save: SaveInfo | None = Field(default=None)  # Where to save the results
+
+    inputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+    )
+
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
     parameters: dict[str, Any] | None = Field(
         default_factory=dict,
         description="Combinations of variables to pass to process job",
@@ -62,18 +68,10 @@ class Agent(BaseModel):
             "init",
         ),
     )
-    inputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-    )
-    datasets: dict = Field(
-        default_factory=dict,
-    )
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-    _agent_id: str | None = PrivateAttr(None)
 
+    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
@@ -88,22 +86,11 @@ class Agent(BaseModel):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
-
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
         return self
-
-    def make_combinations(self):
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        vars = self.num_runs * expand_dict(self.parameters)
-        return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
@@ -111,13 +98,8 @@ class Agent(BaseModel):
             return value
         return SaveInfo(**value)
 
-    @model_validator(mode="after")
-    def validate_concurrency(self) -> "Agent":
-        self._agent_id = f"{self.name}_{shortuuid.uuid()[:6]}"
-        return self
-
     @trace
-    async def run(self, *, job: Job, **kwargs) -> Job:
+    async def run(self, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
             job = await self.process_job(job=job, **kwargs)
@@ -125,7 +107,7 @@ class Agent(BaseModel):
             job.error = extract_error_info(e=e)
             if job.record:
                 logger.error(
-                    f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                    f"Error processing task {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
                 )
         finally:
             if self.save:
@@ -139,8 +121,18 @@ class Agent(BaseModel):
                     )
                 elif self.save:
                     save(data=rows, save_dir=self.save.destination)
+            else:
+                # failsafe save anyway
+                save(data=job.model_dump())
 
         return job
+
+    def make_combinations(self):
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to return a copy,
+        # not the original.
+        vars = self.num_runs * expand_dict(self.parameters)
+        return copy.deepcopy(vars)
 
     async def process_job(
         self,
