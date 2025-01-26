@@ -12,7 +12,6 @@ from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
-    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -161,6 +160,13 @@ class Agent(BaseModel):
             if self.save:
                 save_job(job=job, save_info=self.save)
         return job
+
+    def make_combinations(self):
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to return a copy,
+        # not the original.
+        vars = self.num_runs * expand_dict(self.parameters)
+        return copy.deepcopy(vars)
 
     async def process_job(
         self,
