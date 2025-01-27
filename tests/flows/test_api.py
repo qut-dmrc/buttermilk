@@ -29,8 +29,7 @@ def flow_request_data():
 def test_api_request_simple(
     flow_request_data: dict,
     client,
-):  # Inject the client
-    # Resolve fixtures using lambda functions
+):
     resolved_req_cfg = {
         k: v() if callable(v) else v for k, v in flow_request_data.items()
     }
