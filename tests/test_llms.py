@@ -1,7 +1,8 @@
 import pytest
 from langchain.prompts import ChatPromptTemplate
 
-from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS
+from buttermilk._core.runner_types import RecordInfo
+from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, LLMClient
 
 
 @pytest.mark.parametrize("model", CHATMODELS)
@@ -24,6 +25,25 @@ def test_cheap_llm(llms, cheapchatmodel: str):
     chain = ChatPromptTemplate.from_messages([("human", q)]) | llm.client
     answer = chain.invoke({})
     assert answer
+
+
+@pytest.mark.anyio
+async def test_text_question(
+    llm: LLMClient,
+    text_record: RecordInfo,
+):
+    messages = []
+    messages.append(("user", "Hi, can you please summarise this content for me?"))
+    messages.append(
+        text_record.as_langchain_message(
+            model_capabilities=llm.capabilities,
+        ),
+    )
+
+    chain = ChatPromptTemplate.from_messages(messages) | llm.client
+    response = await chain.ainvoke(input={})
+
+    assert response
 
 
 class TestPromptStyles:

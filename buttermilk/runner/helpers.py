@@ -335,6 +335,9 @@ def parse_flow_vars(
 
     if var_map:
         for var, locator in var_map.items():
+            if isinstance(locator, str) and locator == "record":
+                # Skip references to full records, they belong in placeholders later on.
+                continue
             if isinstance(locator, str) and locator == "record.all_text" and job.record:
                 vars[var] = job.record.all_text
             elif isinstance(locator, str) and locator == "record.text" and job.record:
