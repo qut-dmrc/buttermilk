@@ -49,7 +49,7 @@ def llms(bm: BM) -> LLMs:
 
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def multimodal_llm(request, bm: BM):
+def llm(request, bm: BM):
     return bm.llms[request.param]
 
 
@@ -76,11 +76,6 @@ def video_bytes(video_url: str) -> bytes:
 MEDIA_RECORDS = [
     ("sad robot local image", "tests/data/sadrobot.jpg", "image/jpeg"),
     ("web image", "https://picsum.photos/64", "image/jpeg"),
-    (
-        "web page",
-        "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
-        "text/html",
-    ),
     (
         "web video",
         "https://github.com/chthomos/video-media-samples/raw/refs/heads/master/big-buck-bunny-480p-30sec.mp4",
@@ -125,6 +120,11 @@ To cry “Hold, hold!”""",
 ]
 
 NEWS_RECORDS = [
+    (
+        "web page",
+        "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
+        "text/html",
+    ),
     (
         "coal",
         """Scott Morrison brings coal to question time: what fresh idiocy is this?

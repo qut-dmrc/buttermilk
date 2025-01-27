@@ -19,7 +19,7 @@ class Describer(LC):
         if job.parameters.pop("download_if_necessary", True):
             if not job.record and job.inputs:
                 logger.debug(
-                    f"Trying to fetch record for job {job.job_id} from job input parameters.",
+                    f"Trying to fetch record for job {job.job_id} from job input parameters {job.inputs.keys()}.",
                 )
                 job.record = await download_and_convert(**job.inputs)
 
