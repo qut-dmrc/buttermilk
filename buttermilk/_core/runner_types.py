@@ -417,8 +417,8 @@ class Job(BaseModel):
         default=None,
         description="The data the job will process.",
     )
-    prompt: str | None = Field(
-        validation_alias=AliasChoices("prompt", "q"),
+    q: str | None = Field(
+        validation_alias=AliasChoices("q", "prompt"),
         default=None,
     )
 

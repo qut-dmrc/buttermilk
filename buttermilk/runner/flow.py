@@ -47,7 +47,6 @@ class Flow(BaseModel):
         self,
         *,
         job: Job,
-        **other_vars,
     ) -> AsyncGenerator[Any, None]:
 
         if self._data is None:
@@ -57,18 +56,18 @@ class Flow(BaseModel):
             async for result in self.run_step(
                 agent=agent,
                 job=job,
-                **other_vars,
             ):
                 if result.record:
                     job.record = result.record
                 yield result
+
+        return
 
     async def run_step(
         self,
         *,
         agent: Agent,
         job: Job,
-        **other_vars,
     ) -> AsyncGenerator:
         self._data[
             agent.name
@@ -96,15 +95,12 @@ class Flow(BaseModel):
             # during the initital construction of the job - including template variables and static values
             # job.inputs will include all variables and formatted placeholders etc that will not be passed
             # to the templating function and will be sent direct instead
-            other_vars.update(**{k: v for k, v in job_variant.inputs.items() if v})
             job_variant = Job(**job_vars, parameters=variant)
 
-            other_vars.update(**{k: v for k, v in job_variant.inputs.items() if v})
             job_variant.inputs = parse_flow_vars(
                 agent.inputs,
                 job=job_variant,
                 additional_data=self._data,
-                other_vars=other_vars,
             )
 
             task = agent.run(
@@ -125,8 +121,9 @@ class Flow(BaseModel):
                     logger.error(
                         f"Agent {agent.name} failed with error: {result.error}",
                     )
-                else:  # incorporate successful runs into data store for future use
+                else:
                     try:
+                        # Save specified result fields to job.outputs
                         output_map = dict(**agent.outputs)
                         if output_map:
                             result.outputs = parse_flow_vars(
@@ -135,6 +132,7 @@ class Flow(BaseModel):
                                 additional_data=self._data,
                             )
 
+                        # incorporate successful runs into data store for future use
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,
@@ -164,8 +162,7 @@ class Flow(BaseModel):
                 )
                 logger.exception(msg)
                 # Continue processing for now
-
-            await asyncio.sleep(0)
+        return
 
     def incorporate_outputs(
         self,

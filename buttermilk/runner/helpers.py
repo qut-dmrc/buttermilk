@@ -265,7 +265,6 @@ def parse_flow_vars(
     *,
     job: Job,
     additional_data: dict = {},
-    other_vars: dict = {},
 ) -> dict:
     # Take an input map of variable names to a dot-separated JSON path.
     # Returns a dict of variables with their corresponding content, sourced from
@@ -273,7 +272,14 @@ def parse_flow_vars(
 
     vars = {}
 
+    # Make job variables accessible for mapping
     all_data_sources = job.model_dump()
+    del all_data_sources["inputs"]  # delete inputs key
+
+    # Add job inputs directly to the root of the search dict
+    all_data_sources.update(**{k: v for k, v in job.inputs.items() if v})
+
+    # Add inputs from previous runs
     for key, value in additional_data.items():
         if isinstance(value, pd.DataFrame):
             all_data_sources[key] = value.to_dict(orient="records")
@@ -342,8 +348,6 @@ def parse_flow_vars(
                 vars[var] = job.record.all_text
             elif isinstance(locator, str) and locator == "record.text" and job.record:
                 vars[var] = job.record.text
-            elif isinstance(locator, str) and locator in other_vars:
-                vars[var] = other_vars[locator]
             else:
                 value = descend(var, locator)
                 # Don't add empty values to the input dict

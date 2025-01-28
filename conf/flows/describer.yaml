@@ -15,7 +15,6 @@ describer:
         model:
           - gemini15pro
       inputs:
-        uri: uri
         record: record
       
     # - name: describe_synth
