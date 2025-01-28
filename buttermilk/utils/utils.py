@@ -21,6 +21,7 @@ import requests
 import validators
 import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
+from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from .._core.log import logger
@@ -80,6 +81,16 @@ async def run_async_newthread(func, *args, **kwargs):
     return await asyncio.to_thread(func, *args, **kwargs)
 
 
+# Initialise here to keep these the same for the whole session.
+ua = UserAgent()
+
+session_headers = {
+    "User-Agent": ua.random,
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "http://www.google.com/",
+}
+
+
 async def download_limited_async(
     url: str | httpx.URL | pydantic.AnyUrl | AnyPath,
     *,
@@ -87,7 +98,6 @@ async def download_limited_async(
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
 ) -> tuple[bytes, str]:
-    headers = {"Authorization": f"Bearer {token}"} if token else None
 
     try:
         url = CloudPath(url)
@@ -101,6 +111,10 @@ async def download_limited_async(
         url = httpx.URL(str(url))
 
     async with httpx.AsyncClient() as client:
+        headers = session_headers.copy()
+        if token:
+            headers.update({"Authorization": f"Bearer {token}"})
+
         r = await client.get(url, headers=headers, follow_redirects=True)
 
         if (
