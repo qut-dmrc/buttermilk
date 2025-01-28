@@ -15,7 +15,6 @@ trans:
           - gemini15pro
       inputs:
         record: record
-        uri: uri
       outputs:
         content: record.text
         transcript: outputs.transcript
