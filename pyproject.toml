@@ -66,6 +66,7 @@ dependencies = [
     "readabilipy>=0.3.0",
     "transformers>=4.47.1",
     "evaluate>=0.4.3",
+    "fake-useragent>=2.0.3",
 ]
 
 [dependency-groups]

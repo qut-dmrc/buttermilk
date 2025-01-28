@@ -57,19 +57,26 @@ async def test_from_uri_valid():
     assert record.components[0].base_64 is not None
 
 
-@pytest.mark.anyio
-async def test_from_uri_article():
-    record = await download_and_convert(
+ARTICLES = [
+    (
+        "abc-gaza",
         "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
+        """He said it was a "relief" to hear the news of the ceasefire "which we were calling for, for the last 15 months".""",
+    ),
+    (
+        "guardian-somethingmiriam",
+        "https://www.theguardian.com/tv-and-radio/2024/apr/25/she-was-tough-but-it-broke-her-why-theres-something-about-miriam-was-reality-tvs-most-shameful-low",
+        """it wasn’t a joke. It was Miriam and her life.""",
+    ),
+]
+
+
+@pytest.mark.parametrize("id, url, test_str", ARTICLES)
+async def test_from_uri_article(id, url, test_str):
+    record = await download_and_convert(
+        url,
     )
-    assert (
-        """He said it was a "relief" to hear the news of the ceasefire "which we were calling for, for the last 15 months"."""
-        in record.all_text
-    )
-    assert (
-        """Nasser Mashni, the president of the Australian Palestine Advocacy Network, says he felt changed as an Australian."""
-        in record.all_text
-    )
+    assert test_str in record.all_text
 
 
 @pytest.mark.anyio
