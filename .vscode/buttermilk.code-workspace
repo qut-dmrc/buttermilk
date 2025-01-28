@@ -1,11 +1,11 @@
 {
-	"folders": [
+  "folders": [
     {
       "name": "buttermilk",
       "path": ".."
-    },
+    }
   ],
-	"settings": {
+  "settings": {
     "python.terminal.activateEnvironment": true,
     "notebook.formatOnSave.enabled": true,
     "notebook.codeActionsOnSave": {
