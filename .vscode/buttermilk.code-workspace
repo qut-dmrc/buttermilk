@@ -11,6 +11,10 @@
 		{
 			"name": "dev",
 			"path": "../../dev"
+		},
+		{
+			"name": "datatools",
+			"path": "../../datatools"
 		}
 	],
 	"settings": {
