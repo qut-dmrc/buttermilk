@@ -89,8 +89,8 @@ class LC(Agent):
         placeholders.update({
             k: v for k, v in additional_data.items() if k in remaining_inputs and v
         })
-        if job.prompt and "q" in remaining_inputs:
-            placeholders["q"] = job.prompt
+        if job.q and "q" in remaining_inputs:
+            placeholders["q"] = job.q
         if job.record and "record" in remaining_inputs:
             placeholders["record"] = job.record
 

@@ -12,7 +12,6 @@ simple:
           - gemini15pro
       inputs:
         record: record
-        uri: uri
       outputs:
         transcript: outputs.transcript
         title: outputs.title

@@ -167,10 +167,14 @@ async def flow_stream(
         if result:
             # if data.error:
             #     raise HTTPException(status_code=500, detail=str(data.error))
-            if result.outputs:
-                if return_json:
-                    yield result.model_dump_json()
-                else:
-                    yield result
-            else:
+            if not result.outputs:
                 logger.info(f"No data to return from {flow} (completed successfully).")
+                # raise StopAsyncIteration
+
+            if return_json:
+                yield result.model_dump_json()
+            else:
+                yield result
+
+    logger.info(f"Finished flow {flow}.")
+    return

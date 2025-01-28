@@ -8,6 +8,7 @@ from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job, Result
+from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
 from buttermilk.utils.validators import make_list_validator
 
@@ -46,7 +47,6 @@ class Flow(BaseModel):
         self,
         *,
         job: Job,
-        **other_vars,
     ) -> AsyncGenerator[Any, None]:
 
         if self._data is None:
@@ -56,30 +56,34 @@ class Flow(BaseModel):
             async for result in self.run_step(
                 agent=agent,
                 job=job,
-                **other_vars,
             ):
                 if result.record:
                     job.record = result.record
                 yield result
+
+        return
 
     async def run_step(
         self,
         *,
         agent: Agent,
         job: Job,
-        **other_vars,
     ) -> AsyncGenerator:
-        self._data[agent.name] = {}
-        source = list(set(self.source + job.source)) if job.source else self.source
-        tasks = []
-        for variant in agent.make_combinations():
-            # Create a new job and task for every combination of variables
-            # this agent is configured to run.
-            job_vars = job.model_dump(
-                exclude=["job_id", "source", "parameters", "timestamp"],
-            )
-            job_variant = Job(**job_vars, source=source, parameters=variant)
+        self._data[
+            agent.name
+        ] = {}  # Ensure this line is present to initialize _data for the agent
 
+        job.source = list(set(self.source + job.source)) if job.source else self.source
+
+        # Store base components of the job that don't change for each variant in the permutations
+        job_vars = job.model_dump(
+            exclude=["job_id", "parameters", "timestamp"],
+        )
+        tasks = []
+
+        # Create a new job and task for every combination of variables
+        # this agent is configured to run.
+        for variant in agent.make_combinations():
             # Process all inputs into two categories.
             # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
             # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
@@ -91,12 +95,12 @@ class Flow(BaseModel):
             # during the initital construction of the job - including template variables and static values
             # job.inputs will include all variables and formatted placeholders etc that will not be passed
             # to the templating function and will be sent direct instead
-            other_vars.update(**{k: v for k, v in job_variant.inputs.items() if v})
+            job_variant = Job(**job_vars, parameters=variant)
+
             job_variant.inputs = parse_flow_vars(
                 agent.inputs,
                 job=job_variant,
                 additional_data=self._data,
-                other_vars=other_vars,
             )
 
             task = agent.run(
@@ -108,12 +112,18 @@ class Flow(BaseModel):
         for task in asyncio.as_completed(tasks):
             try:
                 result: Job = await task
-                if result.error:
+
+                # Process and yield the result immediately
+                if result.record:
+                    job.record = result.record
+
+                if result.error:  # Log errors and yield results with errors immediately
                     logger.error(
                         f"Agent {agent.name} failed with error: {result.error}",
                     )
                 else:
                     try:
+                        # Save specified result fields to job.outputs
                         output_map = dict(**agent.outputs)
                         if output_map:
                             result.outputs = parse_flow_vars(
@@ -122,6 +132,7 @@ class Flow(BaseModel):
                                 additional_data=self._data,
                             )
 
+                        # incorporate successful runs into data store for future use
                         self.incorporate_outputs(
                             step_name=agent.name,
                             result=result,
@@ -130,16 +141,28 @@ class Flow(BaseModel):
                         )
 
                     except Exception as e:
-                        error_msg = (
-                            f"Response data not formatted as expected: {e}, {e.args=}"
-                        )
+                        error_msg = f"Agent {agent.name} response data not formatted as expected: {e}"
                         logger.error(error_msg)
-                yield result
-            except Exception as e:
-                msg = f"Unknown error in run_flows: {e}, {e.args=}"
+                        result.error = error_msg  # log the error but do not abort.
+
+                yield result  # Yield result within the loop
+
+            except FatalError as e:  # Handle FatalError to abort the flow
+                message = f"Aborting flow -- critical error running task from agent {agent.name}: {e}"
+                logger.error(message)
+                # Cancel remaining tasks (important for proper cleanup)
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                raise FatalError(message) from e  # Re-raise to stop the outer loop
+
+            except Exception as e:  # Handle other exceptions
+                msg = (
+                    f"Agent {agent.name} hit unknown error in run_flows: {e}, {e.args=}"
+                )
                 logger.exception(msg)
-                # raise
-            await asyncio.sleep(0)
+                # Continue processing for now
+        return
 
     def incorporate_outputs(
         self,
