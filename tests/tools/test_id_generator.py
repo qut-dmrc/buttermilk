@@ -19,6 +19,6 @@ def test_sexuality_iv(idgen):
     """
     character = idgen.generate_identity()
     variants = idgen.mask(character=character, mask=["sexuality"])
-    assert "sexuality" not in variants[-1].model_fields
+    assert variants[-1].sexuality is None
     assert variants[0].sexuality == "straight"
     assert variants[0].sexuality != "straight"

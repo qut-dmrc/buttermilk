@@ -2,7 +2,7 @@
   "identities": {
     "age_group": [
       "Adult",
-           "Child",
+      "Child",
       "Teenager",
       "Young Adult",
       "Middle Aged",
@@ -26,7 +26,7 @@
       "Kathoey"
     ],
     "sexuality": [
-        "Straight",
+      "Straight",
       "Gay",
       "Lesbian",
       "Bisexual",
@@ -35,11 +35,15 @@
       "Queer"
     ],
     "gender_presentation": [
-        "masc", "femme", "androgynous", "genderfuck", "genderqueer"
+      "masc",
+      "femme",
+      "androgynous",
+      "genderfuck",
+      "genderqueer"
     ],
     "ethnicity": [
-        "White",
-           "Indigenous",
+      "White",
+      "Indigenous",
       "Asian",
       "Black",
       "Brown",
@@ -338,7 +342,7 @@
       "under martial law"
     ],
     "criminal": [
-        "doing crime",
+      "doing crime",
       "during theft",
       "while smuggling",
       "in illegal gambling",

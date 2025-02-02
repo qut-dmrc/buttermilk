@@ -44,9 +44,26 @@ class ProtectedCharacteristics(BaseModel):
     social_class: str
 
     def __str__(self) -> str:
+        # When presenting in English, try to follow a standard-ish order that
+        # doesn't emphasise any particular characteristic.
+        # ref: https://dictionary.cambridge.org/grammar/british-grammar/adjectives-order
+        ordered_fields = [
+            "age_group",
+            "body_type",
+            "ethnicity",
+            "gender",
+            "gender_presentation",
+            "sexuality",
+            "disability",
+            "relationship_status",
+            "citizenship_status",
+            "religion",
+            "social_class",
+        ]
         character_desc = []
-        for key in self.model_fields_set:
-            character_desc.append(self.__getattribute__(key))
+        for field in ordered_fields:
+            if field in self.model_fields_set:
+                character_desc.append(self.__getattribute__(field))
 
         return " ".join(character_desc)
 
@@ -105,7 +122,10 @@ class CharacterGenerator(BaseModel):
         for characteristic in mask:
             if characteristic in self._characteristics:
                 # Assuming first value in each characteristic list represents majority/powerful default
-                default_char[characteristic] = self._characteristics[characteristic][0]
+                default_char.__setattr__(
+                    characteristic,
+                    self._characteristics[characteristic][0],
+                )
         result.append(default_char)
 
         # Create blind version by removing masked characteristics
