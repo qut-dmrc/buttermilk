@@ -1,4 +1,3 @@
-import json
 from collections.abc import AsyncGenerator, Sequence
 from urllib.parse import parse_qs
 
@@ -20,6 +19,7 @@ from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import download_and_convert
+from buttermilk.utils.utils import load_json_flexi
 from buttermilk.utils.validators import (
     make_list_validator,
     make_uri_validator,
@@ -93,7 +93,7 @@ class FlowRequest(BaseModel):
 
         try:
             # might be JSON
-            values = json.loads(values)
+            values = load_json_flexi(values)
         except:
             pass
 

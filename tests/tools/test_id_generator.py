@@ -13,6 +13,15 @@ def test_generator(idgen):
     assert set(character.model_fields_set) == set(character.model_fields)
 
 
+def test_grammar_manual(idgen):
+    try:
+        from rich import print
+    except:
+        pass
+    for _ in range(10):
+        print(idgen.generate_identity())
+
+
 def test_sexuality_iv(idgen):
     """We should receive sets of identity features with only the sexuality
     component differing.

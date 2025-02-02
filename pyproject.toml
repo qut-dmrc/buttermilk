@@ -67,6 +67,7 @@ dependencies = [
     "transformers>=4.47.1",
     "evaluate>=0.4.3",
     "fake-useragent>=2.0.3",
+    "json5>=0.10.0",
 ]
 
 [dependency-groups]

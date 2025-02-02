@@ -1,4 +1,3 @@
-import json
 from collections.abc import Mapping, Sequence
 from tempfile import NamedTemporaryFile
 
@@ -9,7 +8,7 @@ from buttermilk import BM, logger
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.flows import col_mapping_hydra_to_local
-from buttermilk.utils.utils import find_key_string_pairs
+from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
 
 
 async def load_data(data_cfg: DataSource) -> pd.DataFrame:
@@ -118,7 +117,7 @@ def group_and_filter_jobs(
             # First, check if the column is a JSON string, and interpret it.
             try:
                 data[grp] = data[grp].apply(
-                    lambda x: json.loads(x) if pd.notna(x) else dict(),
+                    lambda x: load_json_flexi(x) if pd.notna(x) else dict(),
                 )
             except TypeError:
                 pass  # already a dict

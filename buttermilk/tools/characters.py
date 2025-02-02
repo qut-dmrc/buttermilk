@@ -48,17 +48,17 @@ class ProtectedCharacteristics(BaseModel):
         # doesn't emphasise any particular characteristic.
         # ref: https://dictionary.cambridge.org/grammar/british-grammar/adjectives-order
         ordered_fields = [
-            "age_group",
             "body_type",
+            "age_group",
             "ethnicity",
+            "religion",
             "gender",
             "gender_presentation",
             "sexuality",
             "disability",
-            "relationship_status",
             "citizenship_status",
-            "religion",
             "social_class",
+            "relationship_status",
         ]
         character_desc = []
         for field in ordered_fields:

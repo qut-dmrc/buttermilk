@@ -1,5 +1,4 @@
 import asyncio
-import json
 import threading
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from typing import Literal
@@ -18,6 +17,7 @@ from buttermilk import BM, logger
 from buttermilk._core.runner_types import Job
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.flow import Flow
+from buttermilk.utils.utils import load_json_flexi
 
 from .runs import get_recent_runs
 
@@ -39,7 +39,7 @@ flows = dict()
 
 def callback(message):
     results = None
-    data = json.loads(message.data)
+    data = load_json_flexi(message.data)
     task = data.pop("task")
     try:
         request = FlowRequest(**data)
@@ -120,7 +120,16 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["hate", "simple", "trans", "osb", "osbfulltext", "summarise_osb", "test", "describer"],
+    flow: Literal[
+        "hate",
+        "simple",
+        "trans",
+        "osb",
+        "osbfulltext",
+        "summarise_osb",
+        "test",
+        "describer",
+    ],
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:

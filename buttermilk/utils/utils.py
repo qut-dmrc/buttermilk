@@ -2,7 +2,6 @@ import asyncio
 import base64
 import datetime
 import itertools
-import json
 import math
 import mimetypes
 import pathlib
@@ -210,7 +209,7 @@ def read_yaml(filename: pathlib.Path | str) -> dict:
 
 def read_json(filename: pathlib.Path | str) -> dict:
     file = read_file(filename)
-    return json.loads(file)
+    return load_json_flexi(file)
 
 
 def read_text(filename: pathlib.Path | str) -> str:
@@ -490,3 +489,13 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
         expanded_dicts = [d]
 
     return expanded_dicts
+
+
+def load_json_flexi(contents):
+    """Be a bit more flexible with JSON syntax."""
+    try:
+        import json5
+    except:
+        logger.warning("Install json5 for more lenient JSON parsing")
+
+    return json5.loads(contents)
