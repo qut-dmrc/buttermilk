@@ -52,12 +52,12 @@ class ProtectedCharacteristics(BaseModel):
             "age_group",
             "ethnicity",
             "religion",
-            "gender",
             "gender_presentation",
-            "sexuality",
+            "gender",
             "disability",
-            "citizenship_status",
             "social_class",
+            "sexuality",
+            "citizenship_status",
             "relationship_status",
         ]
         character_desc = []
@@ -136,3 +136,11 @@ class CharacterGenerator(BaseModel):
         result.append(blind_char)
 
         return result
+
+
+"""For testing, output ten generations."""
+if __name__ == "__main__":
+    idgen = CharacterGenerator()
+    for _ in range(10):
+        print(str(idgen.generate_identity()))
+        print()

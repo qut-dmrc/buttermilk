@@ -14,10 +14,6 @@ def test_generator(idgen):
 
 
 def test_grammar_manual(idgen):
-    try:
-        from rich import print
-    except:
-        pass
     for _ in range(10):
         print(idgen.generate_identity())
 
