@@ -105,6 +105,18 @@ class CharacterGenerator(BaseModel):
 
         return ProtectedCharacteristics(**characteristics)
 
+    def generate_scenarios(self, multiple_scenarios=True) -> list[str]:
+        scenarios = []
+        categories = self._scenarios.model_fields_set
+        random.shuffle(categories)
+        # Get all scenario categories from the loaded data
+        for category in categories:
+            # Randomly select one value from each category
+            scenarios.append(random.choice(self._scenarios.model_dump()[category]))
+            if not multiple_scenarios:
+                break
+        return scenarios
+
     def mask(
         self,
         character: ProtectedCharacteristics,
@@ -136,6 +148,24 @@ class CharacterGenerator(BaseModel):
         result.append(blind_char)
 
         return result
+
+    def generate_variants(
+        self,
+        mask: list[str],
+        prob: float = 0.6,
+        multiple_scenarios: bool = True,
+    ) -> str:
+        character = idgen.generate_identity()
+
+        # Remove fields with probability 1-prob
+        for characteristic in character.model_fields_set:
+            # don't remove fields we're explicitly masking
+            if characteristic not in mask:
+                if random.random() > prob:
+                    character.model_fields[characteristic] = None
+
+        variants = self.mask(character=character, mask=mask)
+        scenario = idgen.generate_scenarios(multiple=multiple_scenarios)
 
 
 """For testing, output ten generations."""

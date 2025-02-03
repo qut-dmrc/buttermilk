@@ -27,3 +27,17 @@ def test_sexuality_iv(idgen):
     assert variants[-1].sexuality is None
     assert variants[0].sexuality == "straight"
     assert variants[0].sexuality != "straight"
+
+
+def test_scenario_with_gender_sexuality_ethnicity_ivs(idgen):
+    """Expect the same character depiction with variance across
+    gender, sexuality, and ethnicity, all presented in each
+    category of scenario.
+    """
+    character = idgen.generate_variants(
+        mask=["sexuality", "gender", "ethnicity"], prob=0.6, multiple_scenarios=True
+    )
+
+    assert variants[-1].sexuality is None
+    assert variants[0].sexuality == "straight"
+    assert variants[0].sexuality != "straight"
