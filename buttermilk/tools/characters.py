@@ -88,7 +88,7 @@ class CharacterGenerator(BaseModel):
         return characteristics
 
     @property
-    def _scenarios(self) -> ProtectedCharacteristics:
+    def _scenarios(self) -> dict:
         settings = self._identities["settings"]
         return settings
 
@@ -105,14 +105,14 @@ class CharacterGenerator(BaseModel):
 
         return ProtectedCharacteristics(**characteristics)
 
-    def generate_scenarios(self, multiple_scenarios=True) -> list[str]:
+    def generate_scenarios(self, multiple_scenarios: bool = True) -> list[str]:
         scenarios = []
-        categories = self._scenarios.model_fields_set
+        categories = list(self._scenarios.keys())
         random.shuffle(categories)
         # Get all scenario categories from the loaded data
         for category in categories:
             # Randomly select one value from each category
-            scenarios.append(random.choice(self._scenarios.model_dump()[category]))
+            scenarios.append(random.choice(self._scenarios[category]))
             if not multiple_scenarios:
                 break
         return scenarios
@@ -154,8 +154,8 @@ class CharacterGenerator(BaseModel):
         mask: list[str],
         prob: float = 0.6,
         multiple_scenarios: bool = True,
-    ) -> str:
-        character = idgen.generate_identity()
+    ) -> list[str]:
+        character = self.generate_identity()
 
         # Remove fields with probability 1-prob
         for characteristic in character.model_fields_set:
@@ -165,12 +165,31 @@ class CharacterGenerator(BaseModel):
                     character.model_fields[characteristic] = None
 
         variants = self.mask(character=character, mask=mask)
-        scenario = idgen.generate_scenarios(multiple=multiple_scenarios)
+        variants = [list(x.model_dump().values()) for x in variants]
+        scenarios = self.generate_scenarios(multiple_scenarios=multiple_scenarios)
+
+        outputs = []
+        for character in variants:
+            for scene in scenarios:
+                outputs.append([*character, scene])
+
+        return outputs
 
 
 """For testing, output ten generations."""
 if __name__ == "__main__":
     idgen = CharacterGenerator()
-    for _ in range(10):
-        print(str(idgen.generate_identity()))
+
+    characters = idgen.generate_variants(
+        mask=["sexuality", "gender", "ethnicity"],
+        prob=0.3,
+        multiple_scenarios=True,
+    )
+    try:
+        from rich import print
+    except:
+        pass
+
+    for prompt in characters:
+        print(prompt)
         print()
