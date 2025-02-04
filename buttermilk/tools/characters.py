@@ -31,17 +31,17 @@ CHARACTERISTICS_FILE = "buttermilk/templates/image_prompt_limited_identities.jso
 
 
 class ProtectedCharacteristics(BaseModel):
+    body_type: str
+    social_class: str
     age_group: str
     gender: str
     sexuality: str
     gender_presentation: str
     ethnicity: str
-    disability: str
-    body_type: str
+    religion: str
     relationship_status: str
     citizenship_status: str
-    religion: str
-    social_class: str
+    disability: str
 
     def __str__(self) -> str:
         # When presenting in English, try to follow a standard-ish order that
@@ -49,16 +49,16 @@ class ProtectedCharacteristics(BaseModel):
         # ref: https://dictionary.cambridge.org/grammar/british-grammar/adjectives-order
         ordered_fields = [
             "body_type",
+            "social_class",
             "age_group",
             "ethnicity",
             "religion",
             "gender_presentation",
-            "gender",
-            "disability",
-            "social_class",
             "sexuality",
-            "citizenship_status",
+            "gender",
             "relationship_status",
+            "citizenship_status",
+            "disability",
         ]
         character_desc = []
         for field in ordered_fields:
@@ -191,5 +191,5 @@ if __name__ == "__main__":
         pass
 
     for prompt in characters:
-        print(prompt)
+        print(" ".join(prompt))
         print()
