@@ -215,7 +215,11 @@ class RecordInfo(BaseModel):
         default=None,
         description="Text description of media objects contained in this record.",
     )
-    ground_truth: Result | None = None
+    ground_truth: Result | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ground_truth", "golden", "groundtruth"),
+    )
+
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "path", "url"),

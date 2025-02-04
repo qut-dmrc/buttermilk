@@ -4,32 +4,19 @@ Your task is to qualitatively assess the reasoning provided. You will be provide
 
 You should not refer to the analyst or their response in your answer; just explain your evaluation of the reasoning provided.
 
-{{ formatting }}
-
-
-{% if criteria %}
-<BEGIN ORIGINAL INSTRUCTIONS>
-{{ criteria }}
-<END ORIGINAL INSTRUCTIONS>
+{% if formatting is defined %}
+    {{ formatting }}
+{% else %}
+    {% include "json_reasons.jinja2" %}
 {% endif %}
 
-{% if content %}
-<BEGIN CONTENT>
-{{ content }}
-<END CONTENT>
-{% endif %}
-
-{% if expected %}
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
-{% endif %}
 
-{% for draft in answers %}
-<BEGIN ANALYST ANSWER #: {{ draft.id }}>
-{% if draft.prediction %}Answer: {{ draft.prediction }}{% endif %}
-{% if draft.labels %}Labels: {{ draft.labels }}{% endif %}
+<BEGIN ANALYST ANSWER #: {{ answer.id }}>
+{% if answer.prediction %}Answer: {{ answer.prediction }}{% endif %}
+{% if answer.labels %}Labels: {{ answer.labels }}{% endif %}
 Reasons:
-{{ draft.reasons }}
-<END ANALYST ANSWER #: {{ draft.id }}>
-{% endfor %}
+{{ answer.reasons }}
+<END ANALYST ANSWER #: {{ answer.id }}>

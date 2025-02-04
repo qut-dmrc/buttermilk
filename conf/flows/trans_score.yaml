@@ -1,0 +1,73 @@
+# defaults:
+#   - _self_
+
+trans:
+  _target_: buttermilk.runner.flow.Flow
+  source: api development
+  steps: 
+    - name: judger
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 3
+      save: ${save}
+      parameters: 
+        template: judge
+        criteria: 
+          - trans_cte
+          - trans_tja
+          - trans_glaad
+          - trans_hrc
+          - trans_simplified
+          - trans_factored
+        formatting: json_rules
+        model: ${llm}
+      inputs:
+      outputs:
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
+            reasons: outputs.reasons
+      
+    - name: scorer
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: evaluate
+        model: ${llm}
+        answer: judger.answers
+        expected:
+          - record.ground_truth
+
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - answers
+        - scorer
+      save:
+        type: gsheets
+        sheet_name: scores
+        title: Trans Guidelines Scorer
+      inputs:
+        flow_id: flow_id
+        job_id: job_id
+        timestamp: timestamp
+        models:
+          - judger.model
+          - scorer.model
+        criteria: 
+          - judger.criteria
+        template: 
+          - judger.template
+        record: record
+        answers:
+          - judger.answers
+        score:
+          - scorer.outputs
+
+  data:
+    - name: record
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
