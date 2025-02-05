@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.config import SaveInfo
+from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
@@ -65,13 +65,14 @@ class Agent(BaseModel):
     inputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
     )
-    datasets: dict = Field(
-        default_factory=dict,
-    )
+
+    data: list[DataSource] | None = Field(default_factory=list)
+
     outputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
         description="Data to pass on to next steps.",
     )
+
     _agent_id: str | None = PrivateAttr(None)
 
     class Config:
@@ -87,6 +88,8 @@ class Agent(BaseModel):
             ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
+
+    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
 
     _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),

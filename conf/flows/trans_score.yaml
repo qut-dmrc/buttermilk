@@ -4,25 +4,41 @@
 trans_score:
   _target_: buttermilk.runner.flow.Flow
   source: api development
-  steps: 
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index: 
+        - record_id
+  steps:
     - name: judger
       _target_: buttermilk.agents.lc.LC
       num_runs: 2
       save: ${save}
+      data:
+        - name: judger
+          type: outputs
+          join:
+            record_id: record_id
+          index:
+            - record_id
+            - judger.job_id
       parameters: 
         template: judge
         criteria: 
-          # - trans_cte
-          # - trans_tja
-          # - trans_glaad
-          # - trans_hrc
+          - trans_cte
+          - trans_tja
+          - trans_glaad
+          - trans_hrc
           - trans_simplified
-          # - trans_factored
+          - trans_factored
         formatting: json_rules
         model: ${llm}
       inputs:
         record: record
       outputs:
+        record_id: record.record_id
+        job_id: job_id
         answer:
           job_id: job_id
           flow_id: flow_id
@@ -35,21 +51,22 @@ trans_score:
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       save: ${save}
-      join:
-        record_id: record.record_id
-      group:
-        judger_job_id: judger.job_id
+      data:
+        - name: scorer
+          type: outputs
+          join:
+            record_id: record.record_id
+          index:
+            - record.record_id
+            - judger.job_id
+            - scorer.job_id
+
       parameters:
         template: evaluate
         model: ${llm}
         answer: judger.answer
         expected: record.ground_truth
       outputs:
-        content:
-          flow_id: flow_id
-          record_id: record.record_id
-          timestamp: timestamp
-          record: record.text
         answer:
           - answer_id: judger.job_id
             answer: judger.answer
@@ -90,8 +107,3 @@ trans_score:
         evaluation: scorer.evaluation
         eval_reasons: scorer.evaluation.reasons
         eval_score: scorer.evaluation.score
-
-  data:
-    - name: tja_train
-      type: file
-      path: gs://prosocial-dev/data/tja_train.jsonl

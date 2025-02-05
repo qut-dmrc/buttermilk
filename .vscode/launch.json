@@ -40,7 +40,7 @@
       "args": [
         "+flows=[trans_score]",
         //"+flows=[simple,osb,hate,trans,describer]", 
-        "llm=lite"
+        "llm=full"
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -54,7 +54,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[trans_score]", "llm=lite",
+              "+flows=[trans_score]", "llm=full",
 //              "+q=${input:query}"           // Will prompt for query
             ],
       "envFile": "${workspaceFolder}/.env",

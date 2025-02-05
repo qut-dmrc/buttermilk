@@ -1,15 +1,20 @@
 import asyncio
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, Field, field_validator
+import pandas as pd
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import FatalError
-from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
+from buttermilk.runner.helpers import (
+    combine_datasets,
+    parse_flow_vars,
+    prepare_step_df,
+)
 from buttermilk.utils.validators import make_list_validator
 
 """ A flow ties several stages together, runs them over a single record, 
@@ -23,6 +28,7 @@ class Flow(BaseModel):
 
     data: list[DataSource] | None = Field(default_factory=list)
     _data: dict = None
+    _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
 
     class Config:
         arbitrary_types_allowed = True
@@ -40,7 +46,17 @@ class Flow(BaseModel):
             datasources.append(source)
         return datasources
 
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
+
     async def load_data(self):
+        # We are in the process of replacing _data with a single
+        # _results dataframe.
         self._data = await prepare_step_df(self.data)
 
     async def run_flows(
@@ -115,6 +131,10 @@ class Flow(BaseModel):
             )
             tasks.append(task)
 
+        logger.info(
+            f"Starting {len(tasks)} async tasks for {self.__repr_name__} step {agent.name}"
+        )
+
         for task in asyncio.as_completed(tasks):
             try:
                 result: Job = await task
@@ -148,6 +168,15 @@ class Flow(BaseModel):
                             step_name=agent.name,
                             outputs=outputs,
                         )
+
+                        # We are in the process of replacing this with a single dataframe
+                        # that holds the progressive results of the entire flow.
+                        # results_df = pd.DataFrame.from_records(outputs)
+                        # self._results = combine_datasets(
+                        #     existing_df=self._results,
+                        #     datasources=agent.data,
+                        #     results_df=results_df,
+                        # )
 
                     except Exception as e:
                         # log the error but do not abort.

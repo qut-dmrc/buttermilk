@@ -254,11 +254,6 @@ def main(cfg: _CFG):
     flows = objs.flows
 
     logger = logger
-    start_trace(
-        resource_attributes={"run_id": bm.run_info.run_id},
-        collection="flow_api",
-        job="api/pubsub prompter",
-    )
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
     listener_thread.start()

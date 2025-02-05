@@ -42,7 +42,14 @@ BASE_DIR = Path(__file__).absolute().parent
 
 
 CloudProvider = Literal[
-    "gcp", "bq", "aws", "azure", "env", "local", "gsheets", "vertex"
+    "gcp",
+    "bq",
+    "aws",
+    "azure",
+    "env",
+    "local",
+    "gsheets",
+    "vertex",
 ]
 
 
@@ -105,9 +112,9 @@ class SaveInfo(CloudProviderCfg):
 class DataSource(BaseModel):
     name: str
     max_records_per_group: int = -1
-    type: Literal["job", "file", "bq", "generator", "plaintext", "vector"]
+    type: Literal["job", "file", "bq", "generator", "plaintext", "vector", "outputs"]
     path: str = Field(
-        ...,
+        default='',
         validation_alias=AliasChoices("path", "dataset", "uri", "func"),
     )
     glob: str = Field(default="**/*")
@@ -115,6 +122,7 @@ class DataSource(BaseModel):
         default_factory=dict,
     )
     join: Mapping[str, str] | None = Field(default_factory=dict)
+    index: list[str] | None = None
     agg: bool | None = Field(default=False)
     group: Mapping[str, str] | None = Field(default_factory=dict)
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
