@@ -298,11 +298,11 @@ def parse_flow_vars(
             )
         # If the final data variable is a mapping, return the value at the key we
         # are looking for. But if the value is not found or the variable is not a
-        # mapping, return the name of the key if we can't find a value. It will be
-        # used as a literal string.
+        # mapping, return None. Later, the mapping's value will be used as a
+        # literal string.
         if isinstance(data_dict, Mapping) and match_key in data_dict:
             return data_dict[match_key]
-        return match_key
+        return None
 
     def descend(map, path):
         if path is None:
@@ -342,16 +342,23 @@ def parse_flow_vars(
         for var, locator in var_map.items():
             if isinstance(locator, str) and locator == "record":
                 # Skip references to full records, they belong in placeholders later on.
-                continue
-            if isinstance(locator, str) and locator == "record.all_text" and job.record:
+                pass
+            elif (
+                isinstance(locator, str) and locator == "record.all_text" and job.record
+            ):
                 vars[var] = job.record.all_text
             elif isinstance(locator, str) and locator == "record.text" and job.record:
                 vars[var] = job.record.text
             else:
                 value = descend(var, locator)
-                # Don't add empty values to the input dict
                 if value:
                     vars[var] = value
+                elif locator:
+                    # Instead, treat the value of the input mapping as a string and add in full
+                    vars[var] = locator
+                else:
+                    # Don't add empty values to the input dict
+                    pass
 
     return vars
 

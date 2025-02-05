@@ -102,6 +102,7 @@ class Agent(BaseModel):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
+
         vars = self.num_runs * expand_dict(self.parameters)
         return copy.deepcopy(vars)
 

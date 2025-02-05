@@ -207,7 +207,7 @@ class MediaObj(BaseModel):
 
 
 class RecordInfo(BaseModel):
-    data: Any
+    data: Any | None = None
 
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     metadata: dict[str, Any] = Field(default={})

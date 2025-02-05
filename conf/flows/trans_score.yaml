@@ -1,28 +1,29 @@
 # defaults:
 #   - _self_
 
-trans:
+trans_score:
   _target_: buttermilk.runner.flow.Flow
   source: api development
   steps: 
     - name: judger
       _target_: buttermilk.agents.lc.LC
-      num_runs: 3
+      num_runs: 2
       save: ${save}
       parameters: 
         template: judge
         criteria: 
-          - trans_cte
-          - trans_tja
-          - trans_glaad
-          - trans_hrc
+          # - trans_cte
+          # - trans_tja
+          # - trans_glaad
+          # - trans_hrc
           - trans_simplified
-          - trans_factored
+          # - trans_factored
         formatting: json_rules
         model: ${llm}
       inputs:
+        record: record
       outputs:
-        answers:
+        answer:
           - job_id: job_id
             flow_id: flow_id
             model: parameters.model
@@ -37,9 +38,10 @@ trans:
       parameters:
         template: evaluate
         model: ${llm}
-        answer: judger.answers
-        expected:
-          - record.ground_truth
+        answer: judger.answer
+      inputs:
+        expected: record.ground_truth
+
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
@@ -68,6 +70,6 @@ trans:
           - scorer.outputs
 
   data:
-    - name: record
+    - name: tja_train
       type: file
       path: gs://prosocial-dev/data/tja_train.jsonl

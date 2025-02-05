@@ -81,6 +81,13 @@ class Flow(BaseModel):
         )
         tasks = []
 
+        # Expand mapped parameters before producing permutations of jobs
+        job.parameters = parse_flow_vars(
+            job.parameters,
+            job=job,
+            additional_data=self._data,
+        )
+
         # Create a new job and task for every combination of variables
         # this agent is configured to run.
         for variant in agent.make_combinations():

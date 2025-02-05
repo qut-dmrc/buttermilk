@@ -60,14 +60,13 @@ class LC(Agent):
         additional_data: dict[str, dict] = {},
         **kwargs,
     ) -> Job:
-        model = job.parameters.pop("model")
-        template = job.parameters.pop("template")
+        model = job.parameters["model"]
+        template = job.parameters["template"]
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
 
         # Construct list of messages from the templates
         rendered_template, remaining_inputs = load_template_vars(
-            template=template,
             **job.parameters,
             **job.inputs,
             **additional_data,
@@ -114,10 +113,9 @@ class LC(Agent):
         # Add model details to Job object
         job.agent_info["connection"] = scrub_keys(self._llms[model].connection)
         job.agent_info["model_params"] = scrub_keys(self._llms[model].params)
-        job.parameters["model"] = model
 
         logger.debug(
-            f"Invoking agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}...",
+            f"Invoking agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model}...",
         )
         response = await self.invoke(
             model=model,
@@ -126,7 +124,7 @@ class LC(Agent):
         )
 
         logger.debug(
-            f"Finished agent {self.name} for job {job.job_id} in flow {job.flow_id} with model {model}, received response of {len(str(response.values()))} characters.",
+            f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model}, received response of {len(str(response.values()))} characters.",
         )
         error = response.pop("error", None)
         if error:

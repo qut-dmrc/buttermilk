@@ -38,7 +38,8 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+flows=[simple,osb,hate,trans,describer]", 
+        "+flows=[trans_score]",
+        //"+flows=[simple,osb,hate,trans,describer]", 
         "llm=lite"
        ],
       "envFile": "${workspaceFolder}/.env",
