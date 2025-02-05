@@ -330,6 +330,9 @@ def parse_flow_vars(
                     value.extend(sub_value)
                 elif sub_value:
                     value.append(sub_value)
+                else:
+                    # add the bare string
+                    value.append(x)
             return value
         if isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
@@ -344,11 +347,12 @@ def parse_flow_vars(
                 # Skip references to full records, they belong in placeholders later on.
                 pass
             elif (
-                isinstance(locator, str) and locator == "record.all_text" and job.record
+                isinstance(locator, str)
+                and locator.startswith("record.")
+                and job.record
             ):
-                vars[var] = job.record.all_text
-            elif isinstance(locator, str) and locator == "record.text" and job.record:
-                vars[var] = job.record.text
+                keyname = locator.split(".", 1)[1]
+                vars[var] = job.record.__getattribute__(keyname)
             else:
                 value = descend(var, locator)
                 if value:

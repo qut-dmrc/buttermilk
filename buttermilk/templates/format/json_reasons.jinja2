@@ -5,7 +5,7 @@ You must reply only in a fully valid JSON format.
     "reasons": [ <ARRAY of STRING: one or more logical reasoning steps. Present EACH STEP of your reasoning as a distinct element; each step should comprise one to five sentences of text presenting clear logical reasoning>,
         [... other steps ...]
     ],
-    "evaluation": <Float: a score between 0 and 1, with 0 meaning 'completely wrong' and 1 meaning 'wholly accurate and comprehensive'.>,
+    "score": <Float: an overall evaluation score between 0 and 1, with 0 meaning 'completely wrong' and 1 meaning 'wholly accurate and comprehensive'.>,
     "error": <STRING: NULL normally; only fill if you encounter an error (i.e. missing data or instructions)>,
     }
 ```

@@ -24,30 +24,50 @@ trans_score:
         record: record
       outputs:
         answer:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-            reasons: outputs.reasons
+          job_id: job_id
+          flow_id: flow_id
+          model: parameters.model
+          criteria: parameters.criteria
+          template: parameters.template
+          reasons: outputs.reasons
       
     - name: scorer
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       save: ${save}
+      join:
+        record_id: record.record_id
+      group:
+        judger_job_id: judger.job_id
       parameters:
         template: evaluate
         model: ${llm}
         answer: judger.answer
-      inputs:
         expected: record.ground_truth
-
+      outputs:
+        content:
+          flow_id: flow_id
+          record_id: record.record_id
+          timestamp: timestamp
+          record: record.text
+        answer:
+          - answer_id: judger.job_id
+            answer: judger.answer
+            judge_llm: judger.parameters.model
+            criteria: judger.criteria
+        evaluation:
+          job_id: scorer.job_id
+          score: outputs.score
+          score_llm: scorer.parameters.model
+          reasons: outputs.reasons
+          groundtruth: record.ground_truth
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
       convert_json_columns:
-        - answers
-        - scorer
+        - content
+        - answer
+        - evaluation
       save:
         type: gsheets
         sheet_name: scores
@@ -55,19 +75,21 @@ trans_score:
       inputs:
         flow_id: flow_id
         job_id: job_id
+        record_id: record.record_id
         timestamp: timestamp
-        models:
-          - judger.model
-          - scorer.model
-        criteria: 
-          - judger.criteria
-        template: 
-          - judger.template
-        record: record
-        answers:
-          - judger.answers
-        score:
-          - scorer.outputs
+        judger_llm: judger.model
+        template: judger.template
+        criteria: judger.criteria
+        scorer_llm: scorer.model
+        record: record.text
+        groundtruth: record.ground_truth
+        content: 
+          - scorer.content
+        answer: 
+          - scorer.answer
+        evaluation: scorer.evaluation
+        eval_reasons: scorer.evaluation.reasons
+        eval_score: scorer.evaluation.score
 
   data:
     - name: tja_train
