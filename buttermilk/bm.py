@@ -40,7 +40,11 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from rich import print as rprint
+
+try:
+    pass
+except:
+    pass
 
 from buttermilk.exceptions import FatalError
 from buttermilk.llms import LLMs
@@ -214,10 +218,6 @@ class BM(Singleton, BaseModel):
                     staging_bucket=cloud.bucket,
                 )
 
-        # Print config to console and save to default save dir
-        rprint(self.cfg)
-        rprint(self.run_info)
-
         try:
             self.save(
                 data=[self.cfg.model_dump(), self.run_info.model_dump()],
@@ -286,7 +286,9 @@ class BM(Singleton, BaseModel):
         import warnings
 
         warnings.filterwarnings(
-            action="ignore", message="unclosed", category=ResourceWarning
+            action="ignore",
+            message="unclosed",
+            category=ResourceWarning,
         )
         warnings.filterwarnings(
             action="ignore",
@@ -382,7 +384,7 @@ class BM(Singleton, BaseModel):
     def secret_manager(self) -> SecretsManager:
         if _REGISTRY.get("secret_manager") is None:
             _REGISTRY["secret_manager"] = SecretsManager(
-                **self.cfg.secret_provider.model_dump()
+                **self.cfg.secret_provider.model_dump(),
             )
         return _REGISTRY["secret_manager"]
 
@@ -399,7 +401,8 @@ class BM(Singleton, BaseModel):
                 try:
                     Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
                     Path(CONFIG_CACHE_PATH).write_text(
-                        json.dumps(connections), encoding="utf-8"
+                        json.dumps(connections),
+                        encoding="utf-8",
                     )
                 except Exception as e:
                     logger.error(f"Unable to cache connections: {e}, {e.args}")
