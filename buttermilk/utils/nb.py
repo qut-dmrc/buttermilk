@@ -3,6 +3,18 @@
 import os
 from typing import Any
 
+# flake8: noqa
+
+from pathlib import Path
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pydantic
+import seaborn as sns
+from cmap import Colormap
+from rich import print
+
 import hydra
 from hydra import compose, initialize_config_dir
 
@@ -28,3 +40,13 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     )
 
     return objs
+
+def graph_defaults():
+    plt.rcParams["figure.dpi"] = 300
+    plt.rcParams["figure.figsize"] = (10, 8)
+    sns.set_context("notebook")
+    sns.set_style("darkgrid")
+    plt.rcParams["font.size"] = 14
+
+
+graph_defaults()
