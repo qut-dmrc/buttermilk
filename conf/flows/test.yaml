@@ -1,6 +1,7 @@
 test:
   _target_: buttermilk.runner.flow.Flow
   source: osb development
+  save: ${save}
   steps:
     - name: test
       _target_: buttermilk.agents.testagent.TestAgent

@@ -134,17 +134,7 @@ class Agent(BaseModel):
                 )
         finally:
             if self.save:
-                rows = [job.model_dump(mode="json")]
-                if self.save.type == "bq":
-                    save(
-                        data=rows,
-                        dataset=self.save.dataset,
-                        schema=self.save.db_schema,
-                        save_dir=self.save.destination,
-                    )
-                elif self.save:
-                    save(data=rows, save_dir=self.save.destination)
-
+                save_job(job=job, save_info=self.save)
         return job
 
     async def process_job(
@@ -165,3 +155,16 @@ class Agent(BaseModel):
         """
         raise NotImplementedError
         return job
+
+
+def save_job(job: Job, save_info: SaveInfo) -> None:
+    rows = [job.model_dump(mode="json")]
+    if save_info.type == "bq":
+        save(
+            data=rows,
+            dataset=save_info.dataset,
+            schema=save_info.db_schema,
+            save_dir=save_info.destination,
+        )
+    else:
+        save(data=rows, save_dir=save_info.destination)
