@@ -218,6 +218,9 @@ class BM(Singleton, BaseModel):
                     staging_bucket=cloud.bucket,
                 )
 
+        # Print config to console and save to default save dir
+        print(self.cfg)
+        print(self.run_info)
         try:
             self.save(
                 data=[self.cfg.model_dump(), self.run_info.model_dump()],
