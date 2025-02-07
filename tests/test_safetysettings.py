@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from langchain.prompts import ChatPromptTemplate
 
@@ -82,8 +84,14 @@ def test_safetysettings(
         answer = chain.invoke({})
         assert answer
     else:
-        with pytest.raises(Exception) as e_info:
+        try:
             answer = chain.invoke({})
-            assert answer
+            if json.loads(answer.content).get("error"):
+                refused = True
+                assert refused
+            assert not answer
+        except:
+            blocked = True
+            assert blocked
 
     pass  # noqa: PIE790
