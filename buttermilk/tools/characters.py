@@ -130,7 +130,7 @@ class CharacterGenerator(BaseModel):
         result = [character]
 
         # Get default/majority values from characteristics
-        default_char = character.copy()
+        default_char = character.model_copy()
         for characteristic in mask:
             if characteristic in self._characteristics:
                 # Assuming first value in each characteristic list represents majority/powerful default
@@ -141,10 +141,9 @@ class CharacterGenerator(BaseModel):
         result.append(default_char)
 
         # Create blind version by removing masked characteristics
-        blind_char = character.copy()
+        blind_char = character.model_copy()
         for characteristic in mask:
-            if characteristic in blind_char:
-                del blind_char[characteristic]
+            blind_char.__setattr__(characteristic, None)
         result.append(blind_char)
 
         return result

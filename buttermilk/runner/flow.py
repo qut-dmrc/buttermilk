@@ -132,7 +132,7 @@ class Flow(BaseModel):
             tasks.append(task)
 
         logger.info(
-            f"Starting {len(tasks)} async tasks for {self.__repr_name__} step {agent.name}"
+            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.name}",
         )
 
         for task in asyncio.as_completed(tasks):

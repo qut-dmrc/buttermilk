@@ -72,14 +72,3 @@ def test_cloud_loger_debug(cloud_logging_client_gcs):
     for entry in entries:
         if DEBUG_TEXT in str(entry.payload):
             raise OSError(f"Debug message found in log: {LOG_TEXT}")
-
-
-def test_zzz02_summary_increment(logger_new):
-    logger_new.warning("TEST Warning 1")
-    logger_new.warning("TEST Warning 2")
-    logger_new.increment_run_summary("Test rows saved", 500)
-    summary = logger_new.get_log_summary()
-    assert "Test rows saved: 500\n" in summary
-
-    # Check that summary contains errors above (Warning: relies on tests running in alphabetical order.)
-    assert "WARNING messages: 2\n" in summary

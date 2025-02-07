@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import hydra
 import pytest
 from pytest import MarkDecorator
@@ -9,12 +7,6 @@ from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
-
-
-@pytest.fixture
-def mock_save():
-    with patch("buttermilk.bm.save.save") as mock_save:
-        yield mock_save
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -112,7 +112,7 @@ def test_issue_14_upload(joblist, flow, bm):
 
     sql = f"SELECT outputs.score, outputs.reasons, outputs.labels FROM {save_info.dataset} WHERE job_id IN ({job_ids}) AND timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 300 SECOND)"
     df = bm.run_query(sql)
-    assert df["score"].values == [0.85, 0.5, 0.85]
+    assert df["score"].to_numpy() == [0.85, 0.5, 0.85]
     assert df["labels"].isna().all()
 
     # best we can do at the moment i think

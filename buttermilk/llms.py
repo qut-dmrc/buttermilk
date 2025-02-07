@@ -89,7 +89,6 @@ def VertexNoFilter(*args, **kwargs):
         **kwargs,
         safety_settings=VERTEX_SAFETY_SETTINGS_NONE,
         _raise_on_blocked=False,
-        response_mime_type="application/json",
     )
 
 

@@ -1,5 +1,3 @@
-import pytest
-from langchain.prompts import ChatPromptTemplate
 from promptflow.tracing import start_trace, trace
 
 
@@ -11,12 +9,12 @@ def my_function(input: str) -> str:
 
 def test_trace():
     my_function("This is my function")
-    start_trace(collection="my_custom_collection", resource_attributes=dict(job='testing'))
-    pass
+    start_trace(
+        collection="my_custom_collection", resource_attributes=dict(job="testing")
+    )
 
 
 def test_azure_default():
-    from azure.core.exceptions import ClientAuthenticationError
     from azure.identity import DefaultAzureCredential
     from azure.keyvault.secrets import SecretClient
 
@@ -28,4 +26,4 @@ def test_azure_default():
     )
 
     secret = client.get_secret("testsecret").value
-    print(secret)
+    assert secret
