@@ -81,7 +81,7 @@ CHATMODELS = [
     "llama31_8b",
     "gemini2flash",
     "gemini2pro",
-    "gpt-o3-mini-high",
+    "o3-mini-high",
 ]
 CHEAP_CHAT_MODELS = ["haiku", "llama31_8b", "gemini2flash"]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b", "gemini2pro"]
