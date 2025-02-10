@@ -19,10 +19,6 @@
 	],
 	"settings": {
 			"python.terminal.activateEnvironment": true,
-			"python.editor.formatOnSave": true,
-			"python.editor.codeActionsOnSave": {
-				"source.organizeImports": true
-			},
 			"notebook.formatOnSave.enabled": true,
 			"notebook.codeActionsOnSave": {
 				"source.organizeImports": "explicit"
@@ -32,8 +28,6 @@
 			"ruff.organizeImports":true,
 			"ruff.showSyntaxErrors": true,
 			"ruff.lint.enable": true,
-		    "ruff.showNotifications": "onWarning",
-			"ruff.nativeServer": "on",
 			"python.testing.pytestEnabled": true
 	}
 }

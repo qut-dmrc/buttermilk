@@ -143,14 +143,14 @@ class Agent(BaseModel):
         job: Job,
         **kwargs,
     ) -> Job:
-        """Take a Job with Inputs, process it, and return a Job.
+        """Take a Job with Inputs, process it, and return a Job with result in Outputs field OR a Job with non-null Error field.
 
         Inputs:
             job: Job with Inputs
             **kwargs: Additional variables to pass to the agent
 
         Outputs:
-            Job with Inputs and Outputs
+            Job with Inputs and Outputs OR Job with non-null Error field.
 
         """
         raise NotImplementedError

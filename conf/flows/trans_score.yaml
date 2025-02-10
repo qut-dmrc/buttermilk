@@ -10,6 +10,7 @@ trans_score:
       path: gs://prosocial-dev/data/tja_train.jsonl
       index: 
         - record_id
+  
   steps:
     - name: judger
       _target_: buttermilk.agents.lc.LC
@@ -37,15 +38,10 @@ trans_score:
       inputs:
         record: record
       outputs:
+        identifier: identifier
         record_id: record.record_id
         job_id: job_id
-        answer:
-          job_id: job_id
-          flow_id: flow_id
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
-          reasons: outputs.reasons
+        result: answer
       
     - name: scorer
       _target_: buttermilk.agents.lc.LC

@@ -53,7 +53,7 @@ def joblist(job_minimal: Job):
     data = []
     for line in SAMPLE_DATA:
         job = job_minimal.model_copy()
-        job.outputs = line
+        job.result = line
         data.append(job)
 
     return data

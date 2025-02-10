@@ -135,38 +135,29 @@ class Flow(BaseModel):
             f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.name}",
         )
 
+        # Process and yield the results as they finish
         for task in asyncio.as_completed(tasks):
             try:
                 result: Job = await task
 
-                # Process and yield the result immediately
-                if result.record:
-                    job.record = result.record
-
-                if result.error:  # Log errors and yield results with errors immediately
+                if result.error:
+                    # Log errors and yield result without further processing
                     logger.error(
                         f"Agent {agent.name} failed with error: {result.error}",
                     )
                 else:
                     try:
-                        # incorporate successful runs into data store for future use
-                        output_map = dict(**agent.outputs)
-                        if output_map:
-                            outputs = parse_flow_vars(
-                                output_map,
-                                job=result,
-                                additional_data=self._data,
-                            )
-                            result.outputs = outputs
-                        else:
-                            try:
-                                outputs = result.outputs.model_dump()
-                            except:
-                                outputs = result.outputs
+                        # Process result as specified in the output map field of Flow
+                        result.outputs = parse_flow_vars(
+                            agent.outputs,
+                            job=result,
+                            additional_data=self._data,
+                        )
 
+                        # incorporate successful runs into data store for future use
                         self.incorporate_outputs(
                             step_name=agent.name,
-                            outputs=outputs,
+                            outputs=result.outputs,
                         )
 
                         # We are in the process of replacing this with a single dataframe

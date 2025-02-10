@@ -400,8 +400,14 @@ class RecordInfo(BaseModel):
 #
 ##################################
 class Job(BaseModel):
-    # A unique identifier for this particular unit of work
-    job_id: str = pydantic.Field(default_factory=shortuuid.uuid)
+    job_id: str = pydantic.Field(
+        default_factory=shortuuid.uuid,
+        description="A unique identifier for this particular unit of work",
+    )
+    identifier: str = pydantic.Field(
+        default="",
+        description="A human readable identifier to distinguish the parameters for this job variant.",
+    )
     flow_id: str
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
@@ -434,10 +440,15 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    outputs: Result | None = Field(
+    result: Result | None = Field(
         default=None,
-        description="The results of the job",
+        description="The raw results of the job",
     )
+    outputs: dict | None = Field(
+        default={},
+        description="Formatted and processed results of the job, collated along with other data as specified in the Flow's outputs map.",
+    )
+
     error: dict[str, Any] = Field(default_factory=dict)
     metadata: dict | None = Field(default_factory=dict)
 
@@ -474,11 +485,24 @@ class Job(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def move_metadata(self) -> "Job":
-        if self.outputs and hasattr(self.outputs, "metadata") and self.outputs.metadata:
+    def move_metadata(self) -> Self:
+        if self.result and hasattr(self.result, "metadata") and self.result.metadata:
             if self.metadata is None:
                 self.metadata = {}
-            self.metadata["outputs"] = self.outputs.metadata
-            self.outputs.metadata = None
+            self.metadata["outputs"] = self.result.metadata
+            self.result.metadata = None
 
+        return self
+
+    @model_validator(mode="after")
+    def make_identifier(self) -> Self:
+        if not self.identifier:
+            self.identifier = "-".join(
+                [
+                    str(getattr(self, x))[:8]
+                    for x in self.model_fields_set
+                    if Job.model_fields[x].annotation == type[str]
+                ]
+                + [self.job_id[:4]],
+            )
         return self

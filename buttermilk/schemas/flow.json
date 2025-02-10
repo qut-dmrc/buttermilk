@@ -10,6 +10,10 @@
         "mode": "REQUIRED"
     },
     {
+        "name": "identifier",
+        "type": "STRING",
+        "mode": "REQUIRED"},
+    {
         "name": "timestamp",
         "type": "TIMESTAMP",
         "mode": "REQUIRED"
@@ -46,6 +50,11 @@
     },
     {
         "name": "inputs",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "result",
         "type": "JSON",
         "mode": "NULLABLE"
     },
