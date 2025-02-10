@@ -108,6 +108,27 @@ async def download_and_convert(
     return record
 
 
+def get_news_record_from_uri(uri: str) -> RecordInfo:
+    import newspaper
+
+    article = newspaper.article(uri)
+    paragraphs = [
+        MediaObj(content=para, label="paragraph", mime="text/plain")
+        for para in article.text.splitlines()
+        if para
+    ]
+    metadta = dict(
+        title=article.title,
+        keywords=article.keywords,
+        authors=article.authors,
+        publish_date=article.publish_date,
+    )
+
+    record = RecordInfo(uri=uri, components=paragraphs, metadata=metadta)
+
+    return record
+
+
 def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
