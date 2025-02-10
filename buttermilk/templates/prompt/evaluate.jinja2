@@ -31,9 +31,6 @@ You should not refer to the analyst or their response in your answer; just expla
 <END EXPECTED ANSWER>
 
 # User:
-<BEGIN ANALYST ANSWER #: {{ answer.job_id }}>
-{% if answer.prediction %}Answer: {{ answer.prediction }}{% endif %}
-{% if answer.labels %}Labels: {{ answer.labels }}{% endif %}
-Reasons:
-{{ answer.reasons }}
-<END ANALYST ANSWER #: {{ answer.job_id }}>
+<BEGIN ANALYST ANSWER #{{ answer.identifier }}>
+{{answer}}
+<END ANALYST ANSWER #{{ answer.identifier }}>
