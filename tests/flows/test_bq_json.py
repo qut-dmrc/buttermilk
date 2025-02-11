@@ -53,7 +53,7 @@ def joblist(job_minimal: Job):
     data = []
     for line in SAMPLE_DATA:
         job = job_minimal.model_copy()
-        job.result = line
+        job.outputs = line
         data.append(job)
 
     return data
@@ -61,7 +61,7 @@ def joblist(job_minimal: Job):
 
 def test_issue_14_job(joblist):
     for job in joblist:
-        assert isinstance(job.outputs, Result)
+        assert isinstance(job.result, Result)
         assert len(job.outputs.reasons) == 5
         assert job.outputs.labels == []
     assert joblist[1].outputs.score == 0.5

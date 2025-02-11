@@ -19,5 +19,5 @@ class TestAgent(Agent):
         job: Job,
         **kwargs,
     ) -> Job:
-        job.result = random.choice(jobs)
+        job.outputs = random.choice(jobs)
         return job

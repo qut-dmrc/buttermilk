@@ -307,6 +307,7 @@ def parse_flow_vars(
     vars = {}
 
     # Make job variables accessible for mapping
+    # (this includes the data record in job.record)
     all_data_sources = job.model_dump()
     del all_data_sources["inputs"]  # delete inputs key
 
@@ -315,6 +316,8 @@ def parse_flow_vars(
 
     # Add inputs from previous runs
     for key, value in additional_data.items():
+        if key in all_data_sources:
+            raise ValueError(f"Key {key} already exists in input dataset.")
         if isinstance(value, pd.DataFrame):
             all_data_sources[key] = value.to_dict(orient="records")
         else:
@@ -325,18 +328,23 @@ def parse_flow_vars(
         if not data_dict:
             return None
 
-        if "." in match_key:
-            next_level, locator = match_key.split(".", maxsplit=1)
-            return resolve_var(
-                match_key=locator,
-                data_dict=data_dict.get(next_level, {}),
-            )
         # If the final data variable is a mapping, return the value at the key we
         # are looking for. But if the value is not found or the variable is not a
         # mapping, return None. Later, the mapping's value will be used as a
         # literal string.
         if isinstance(data_dict, Mapping) and match_key in data_dict:
             return data_dict[match_key]
+
+        # If the current data var is a list, check each element
+        if isinstance(data_dict, Sequence) and not isinstance(data_dict, str):
+            return [resolve_var(match_key, x) for x in data_dict]
+
+        if "." in match_key:
+            next_level, locator = match_key.split(".", maxsplit=1)
+            return resolve_var(
+                match_key=locator,
+                data_dict=data_dict.get(next_level, {}),
+            )
         return None
 
     def descend(map, path):
@@ -381,13 +389,6 @@ def parse_flow_vars(
             if isinstance(locator, str) and locator == "record":
                 # Skip references to full records, they belong in placeholders later on.
                 pass
-            elif (
-                isinstance(locator, str)
-                and locator.startswith("record.")
-                and job.record
-            ):
-                keyname = locator.split(".", 1)[1]
-                vars[var] = job.record.__getattribute__(keyname)
             else:
                 value = descend(var, locator)
                 if value:

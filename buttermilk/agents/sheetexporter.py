@@ -18,7 +18,8 @@ class GSheetExporter(Agent):
     )
 
     convert_json_columns: list[str] = Field(
-        default=[], description="List of columns to convert to JSON."
+        default=[],
+        description="List of columns to convert to JSON.",
     )
 
     _gsheet: GSheet = PrivateAttr(default_factory=GSheet)
@@ -43,7 +44,8 @@ class GSheetExporter(Agent):
             inputs.update(job.parameters)
         dataset = pd.DataFrame.from_records([inputs])
         contents = format_strings(
-            dataset, convert_json_columns=self.convert_json_columns
+            dataset,
+            convert_json_columns=self.convert_json_columns,
         )
 
         save_params = {}
@@ -52,8 +54,8 @@ class GSheetExporter(Agent):
 
         sheet = self._gsheet.save_gsheet(df=contents, **save_params)
         save_params["sheet_id"] = sheet.id
-        job.result = dict(sheet_url=sheet.url, **save_params)
+        job.outputs = dict(sheet_url=sheet.url, **save_params)
 
-        logger.info(f"Saved to sheet {job.result}")
+        logger.info(f"Saved to sheet {job.outputs}")
 
         return job

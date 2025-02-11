@@ -45,6 +45,6 @@ async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm: BM):
         assert result
         assert not result.error
         assert isinstance(result.record, RecordInfo)
-        assert result.outputs.prediction is False
-        assert len(result.outputs.reasons) > 0
-        assert "joseph" in " ".join(result.outputs.reasons).lower()
+        assert result.result.prediction is False
+        assert len(result.result.reasons) > 0
+        assert "joseph" in " ".join(result.result.reasons).lower()

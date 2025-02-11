@@ -129,7 +129,7 @@ class LC(Agent):
         error = response.pop("error", None)
         if error:
             job.error[self.name] = error
-        job.result = Result(**response)
+        job.outputs = Result(**response)
 
         return job
 

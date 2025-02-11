@@ -57,6 +57,6 @@ class Describer(LC):
         result = await super().process_job(job=job, **kwargs)
 
         # Update record alt text, title, description etc.
-        result.record.update_from(result.result.model_dump())
+        result.record.update_from(result.outputs.model_dump())
 
         return result

@@ -440,15 +440,10 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default_factory=dict)
-    result: Result | None = Field(
+    outputs: Result | None = Field(
         default=None,
-        description="The raw results of the job",
-    )
-    outputs: dict | None = Field(
-        default={},
         description="Formatted and processed results of the job, collated along with other data as specified in the Flow's outputs map.",
     )
-
     error: dict[str, Any] = Field(default_factory=dict)
     metadata: dict | None = Field(default_factory=dict)
 
@@ -486,11 +481,11 @@ class Job(BaseModel):
 
     @model_validator(mode="after")
     def move_metadata(self) -> Self:
-        if self.result and hasattr(self.result, "metadata") and self.result.metadata:
+        if self.outputs and hasattr(self.outputs, "metadata") and self.outputs.metadata:
             if self.metadata is None:
                 self.metadata = {}
-            self.metadata["outputs"] = self.result.metadata
-            self.result.metadata = None
+            self.metadata["outputs"] = self.outputs.metadata
+            self.outputs.metadata = None
 
         return self
 
