@@ -96,7 +96,7 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
             if isinstance(d[key_name], str):
                 try:
                     new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(
-                        d[key_name]
+                        d[key_name],
                     )
                 except ValueError as e:
                     if new_dict[key_name] == "":
@@ -104,7 +104,7 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
                     raise e
             else:
                 new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(
-                    d[key_name]
+                    d[key_name],
                 )
 
         else:
@@ -147,6 +147,8 @@ class TableWriter(BaseModel):
 
     @pydantic.field_validator("table_path", mode="after")
     def make_table_path(cls, v, values) -> str:
+        if v:
+            return v
         if (
             values.get("project_id")
             and values.get("dataset_id")
@@ -155,7 +157,7 @@ class TableWriter(BaseModel):
             pass
         elif values.get("table"):
             values["project_id"], values["dataset_id"], values["table_id"] = v.split(
-                "."
+                ".",
             )
         else:
             raise ValueError("Table path not provided")
