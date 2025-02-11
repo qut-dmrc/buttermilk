@@ -8,7 +8,7 @@ from anthropic import (
     APIConnectionError as AnthropicAPIConnectionError,
     RateLimitError as AnthropicRateLimitError,
 )
-from google.api_core.exceptions import ResourceExhausted
+from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 from langchain_core.prompts import (
     ChatPromptTemplate,
 )
@@ -146,6 +146,7 @@ class LC(Agent):
                 AnthropicAPIConnectionError,
                 AnthropicRateLimitError,
                 ResourceExhausted,
+                TooManyRequests,
             ),
         ),
         wait=wait_random(min=2, max=30),

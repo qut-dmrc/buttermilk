@@ -399,7 +399,6 @@ def parse_flow_vars(
                 else:
                     # Don't add empty values to the input dict
                     pass
-
     return vars
 
     # # Handle direct record field reference

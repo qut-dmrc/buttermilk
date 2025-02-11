@@ -25,8 +25,8 @@ def test_sexuality_iv(idgen):
     character = idgen.generate_identity()
     variants = idgen.mask(character=character, mask=["sexuality"])
     assert variants[-1].sexuality is None
-    assert variants[1].sexuality == "straight"
-    assert variants[0].sexuality != "straight"
+    assert str.lower(variants[1].sexuality) == "straight"
+    assert str.lower(variants[0].sexuality) != "straight"
 
 
 def test_scenario_with_gender_sexuality_ethnicity_ivs(idgen):

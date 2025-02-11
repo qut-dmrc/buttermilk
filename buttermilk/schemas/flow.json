@@ -10,10 +10,6 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "identifier",
-        "type": "STRING",
-        "mode": "REQUIRED"},
-    {
         "name": "timestamp",
         "type": "TIMESTAMP",
         "mode": "REQUIRED"

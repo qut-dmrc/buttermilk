@@ -147,28 +147,13 @@ class Flow(BaseModel):
                     )
                 else:
                     try:
-                        # Process result as specified in the output map field of Flow
-                        result.outputs = parse_flow_vars(
-                            agent.outputs,
-                            job=result,
-                            additional_data=self._data,
-                        )
-
-                        # incorporate successful runs into data store for future use
-                        self.incorporate_outputs(
-                            step_name=agent.name,
-                            outputs=result.outputs,
-                        )
-
-                        # We are in the process of replacing this with a single dataframe
-                        # that holds the progressive results of the entire flow.
-                        # results_df = pd.DataFrame.from_records(outputs)
-                        # self._results = combine_datasets(
-                        #     existing_df=self._results,
-                        #     datasources=agent.data,
-                        #     results_df=results_df,
-                        # )
-
+                        if agent.outputs:
+                            # Process result as specified in the output map field of Flow
+                            result.outputs = parse_flow_vars(
+                                agent.outputs,
+                                job=result,
+                                additional_data=self._data,
+                            )
                     except Exception as e:
                         # log the error but do not abort.
                         error_msg = f"Agent {agent.name} response data not formatted as expected: {e}"
@@ -178,6 +163,21 @@ class Flow(BaseModel):
                             type=type(e).__name__,
                             args=e.args,
                         )
+
+                    # incorporate successful runs into data store for future use
+                    self.incorporate_outputs(
+                        step_name=agent.name,
+                        outputs=result.outputs,
+                    )
+
+                    # We are in the process of replacing this with a single dataframe
+                    # that holds the progressive results of the entire flow.
+                    # results_df = pd.DataFrame.from_records(outputs)
+                    # self._results = combine_datasets(
+                    #     existing_df=self._results,
+                    #     datasources=agent.data,
+                    #     results_df=results_df,
+                    # )
 
                 yield result  # Yield result within the loop
 

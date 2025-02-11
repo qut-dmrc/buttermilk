@@ -4,6 +4,7 @@
 
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -61,7 +62,7 @@ def joblist(job_minimal: Job):
 
 def test_issue_14_job(joblist):
     for job in joblist:
-        assert isinstance(job.result, Result)
+        assert isinstance(job.outputs, Result)
         assert len(job.outputs.reasons) == 5
         assert job.outputs.labels == []
     assert joblist[1].outputs.score == 0.5
@@ -108,12 +109,18 @@ def test_issue_14_upload(joblist, flow, bm):
     job_ids = ", ".join([f"'{job.job_id}'" for job in joblist])
 
     for job in joblist:
-        save_job(job, save_info=save_info)
+        destination = save_job(job, save_info=save_info)
+        assert destination == save_info.dataset
 
     sql = f"SELECT outputs.score, outputs.reasons, outputs.labels FROM {save_info.dataset} WHERE job_id IN ({job_ids}) AND timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 300 SECOND)"
     df = bm.run_query(sql)
-    assert df["score"].to_numpy() == [0.85, 0.5, 0.85]
-    assert df["labels"].isna().all()
+    assert np.allclose(
+        df["score"].to_numpy().astype(float),
+        np.array([0.85, 0.5, 0.85]),
+        rtol=1e-15,
+        atol=0,
+    )
+    assert not df["labels"].apply(json.loads).any()
 
     # best we can do at the moment i think
     reason = json.loads(df["reasons"].values[2])[4]

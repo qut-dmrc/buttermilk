@@ -237,8 +237,7 @@ class BM(Singleton, BaseModel):
 
             start_trace(
                 resource_attributes={"run_id": self.run_info.run_id},
-                collection=self.cfg.name,
-                job=self.cfg.job,
+                collection=f"{self.cfg.name}-{self.cfg.job}",
             )
 
         return self
