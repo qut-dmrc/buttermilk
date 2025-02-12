@@ -81,13 +81,14 @@ class Agent(BaseModel):
     inputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
     )
-    datasets: dict = Field(
-        default_factory=dict,
-    )
+
+    data: list[DataSource] | None = Field(default_factory=list)
+
     outputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
         description="Data to pass on to next steps.",
     )
+
     _agent_id: str | None = PrivateAttr(None)
 
     class Config:
@@ -116,11 +117,13 @@ class Agent(BaseModel):
             self.parameters.update(self.model_extra)
         return self
 
-    def make_combinations(self):
+    def make_combinations(self, **extra_combinations: dict):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
-        vars = self.num_runs * expand_dict(self.parameters)
+        params = self.parameters.copy()
+        params.update(extra_combinations)
+        vars = self.num_runs * expand_dict(params)
         return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")
