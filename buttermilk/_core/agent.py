@@ -81,31 +81,14 @@ class Agent(BaseModel):
     inputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
     )
-
-    data: list[DataSource] | None = Field(default_factory=list)
-
+    datasets: dict = Field(
+        default_factory=dict,
+    )
     outputs: dict[str, str | list | dict] | None = Field(
         default_factory=dict,
         description="Data to pass on to next steps.",
     )
-
-    data: list[DataSource] | None = Field(default_factory=list)
-
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-
-    _semaphore: Semaphore = PrivateAttr(default=None)
-
-    @model_validator(mode="after")
-    def setup_semaphore(self) -> "Agent":
-        self._semaphore = Semaphore(self.concurrency)
-        return self
-
-    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
+    _agent_id: str | None = PrivateAttr(None)
 
     class Config:
         extra = "forbid"
@@ -133,13 +116,11 @@ class Agent(BaseModel):
             self.parameters.update(self.model_extra)
         return self
 
-    def make_combinations(self, static_inputs={}, **kwargs):
+    def make_combinations(self):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
-        params = self.parameters.copy()
-        params.update(kwargs)
-        vars = self.num_runs * expand_dict(params)
+        vars = self.num_runs * expand_dict(self.parameters)
         return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")

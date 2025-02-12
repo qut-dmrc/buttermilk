@@ -38,8 +38,9 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+flows=[simple,osb,hate,trans,describer]", 
-        "llm=lite"
+        "+flows=[trans_score]",
+        //"+flows=[simple,osb,hate,trans,describer]", 
+        "llm=full"
        ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -53,9 +54,8 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=true",
-              "+flows=[osb]", "llm=lite",
-              "+flow=osb",
-              "+q=${input:query}"           // Will prompt for query
+              "+flows=[trans_score]", "llm=full",
+//              "+q=${input:query}"           // Will prompt for query
             ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

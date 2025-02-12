@@ -90,6 +90,14 @@ class Flow(BaseModel):
         )
         return self
 
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
+
     async def load_data(self):
         # We are in the process of replacing _data with a single
         # _results dataframe.
