@@ -78,10 +78,21 @@ class Agent(BaseModel):
             "init",
         ),
     )
+    inputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+    )
+
+    data: list[DataSource] | None = Field(default_factory=list)
+
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
 
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
