@@ -10,17 +10,15 @@ trans:
     - name: tja_train
       type: file
       path: gs://prosocial-dev/data/tja_train.jsonl
-      index: 
+      index:
         - record_id
 
   steps:
-
     - name: judger
       _target_: buttermilk.agents.lc.LC
       num_runs: 2
       save: ${save}
-      parameters: 
-        template: judge
+      parameters:
         criteria:
           - trans_simplified
           - cte
@@ -40,7 +38,7 @@ trans:
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       save: ${save}
-      parameters: 
+      parameters:
         template: owl
         model: ${llms.general}
 
@@ -63,7 +61,6 @@ trans:
         params: parameters
         answer: outputs
 
-    
     - name: scorer
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
@@ -77,25 +74,25 @@ trans:
         expected: record.ground_truth
       inputs:
         instructions: >
-            The analyst was tasked with evaluating how well the provided content 
-            aligned with journalistic standards and best practices for reporting
-            on stories related to trans people.
+          The analyst was tasked with evaluating how well the provided content 
+          aligned with journalistic standards and best practices for reporting
+          on stories related to trans people.
       outputs:
         identifier: parameters.answer.identifier
         job: parameters.answer.job_id
         params: parameters.answer.params
         score: outputs.score
         reasons: outputs.reasons
-        
-    - name: eval 
+
+    - name: eval
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       save: ${save}
       parameters:
         template: differences
-        criteria: > 
-            evaluate how well the provided content aligns with journalistic standards
-            and best practices for reporting on stories related to trans people.
+        criteria: >
+          evaluate how well the provided content aligns with journalistic standards
+          and best practices for reporting on stories related to trans people.
         model: ${llms.synthesisers}
       inputs:
         content: record.fulltext

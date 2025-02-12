@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS

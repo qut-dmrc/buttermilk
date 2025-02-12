@@ -363,7 +363,6 @@ class Job(BaseModel):
         default_factory=shortuuid.uuid,
         description="A unique identifier for this particular unit of work",
     )
-
     flow_id: str
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
@@ -447,4 +446,17 @@ class Job(BaseModel):
             self.metadata["outputs"] = self.outputs.metadata
             self.outputs.metadata = None
 
+        return self
+
+    @model_validator(mode="after")
+    def make_identifier(self) -> Self:
+        if not self.identifier:
+            self.identifier = "-".join(
+                [
+                    str(getattr(self, x))[:8]
+                    for x in self.model_fields_set
+                    if Job.model_fields[x].annotation == type[str]
+                ]
+                + [self.job_id[:4]],
+            )
         return self
