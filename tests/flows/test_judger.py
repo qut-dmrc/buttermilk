@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
@@ -43,8 +43,10 @@ async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm: BM):
     )
     async for result in single_step_flow.run_flows(job=job):
         assert result
+        assert isinstance(result, Job)
         assert not result.error
         assert isinstance(result.record, RecordInfo)
+        assert result.outputs and isinstance(result.outputs, Result)
         assert result.outputs.prediction is False
         assert len(result.outputs.reasons) > 0
         assert "joseph" in " ".join(result.outputs.reasons).lower()

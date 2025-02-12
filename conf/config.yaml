@@ -22,7 +22,7 @@ bm:
       type: gcp
       verbose: true
     tracing: 
-      enabled: false
+      enabled: true
       
     run:
       platform: local

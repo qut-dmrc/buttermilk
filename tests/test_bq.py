@@ -18,7 +18,7 @@ MOCK_ROWS = [
 def writer(flow):
     """Fixture to create a TableWriter instance for testing."""
     return TableWriter(
-        table_path=flow.save.dataset,
+        table_path=flow.steps[0].save.dataset,
     )
 
 

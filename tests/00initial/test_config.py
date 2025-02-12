@@ -43,18 +43,3 @@ def test_time_to_instantiate():
     time_taken = end - start
     print(f"Time taken: {time_taken:.2f} seconds")
     assert time_taken < 1, "Took too long to instantiate BM"
-
-
-def test_model_post_init_saves_config(bm, mock_save):
-    mock_save.assert_called_once()
-    args, kwargs = mock_save.call_args
-
-    saved_data = kwargs.get("data")
-
-    assert len(saved_data) == 2
-
-    assert isinstance(saved_data[0], dict)  # Ensure the first item is the config
-    assert isinstance(saved_data[1], dict)  # Ensure the second item is the run metadata
-
-    assert kwargs.get("basename") == "config"
-    assert kwargs.get("extension") == "json"

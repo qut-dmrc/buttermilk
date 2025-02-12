@@ -1,18 +1,21 @@
-import json
 from collections.abc import Mapping, Sequence
 from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
 
-from buttermilk import BM, logger
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.flows import col_mapping_hydra_to_local
-from buttermilk.utils.utils import find_key_string_pairs
+from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
 
 
-async def load_data(data_cfg: DataSource) -> pd.DataFrame:
+def load_data(data_cfg: DataSource) -> pd.DataFrame:
+    from buttermilk import logger
+
+    if data_cfg.type == "outputs":
+        # add new data after the agent has run
+        return pd.DataFrame()
     if data_cfg.type == "file":
         logger.debug(f"Reading data from {data_cfg.path}")
         df = pd.read_json(data_cfg.path, lines=True, orient="records")
@@ -27,7 +30,7 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
         df = load_bq(data_cfg=data_cfg)
     elif data_cfg.type == "plaintext":
         # Load all files in a directory
-        df = await read_all_files(
+        df = read_all_files(
             data_cfg.path,
             data_cfg.glob,
             columns=data_cfg.columns,
@@ -38,7 +41,34 @@ async def load_data(data_cfg: DataSource) -> pd.DataFrame:
     return df
 
 
+def combine_datasets(
+    existing_df: pd.DataFrame,
+    datasources: list[DataSource] = [],
+    results_df: pd.DataFrame = None,
+) -> pd.DataFrame:
+    if datasources:
+        for src in datasources:
+            if src.type == "outputs":
+                new_df = results_df.copy()
+            else:
+                new_df = load_data(src)
+            if not existing_df.empty:
+                new_df = group_and_filter_jobs(
+                    existing_dfs=existing_df,
+                    data=new_df,
+                    data_cfg=src,
+                )
+            if src.index:
+                new_df.set_index(src.index)
+
+            existing_df = new_df
+
+    return existing_df
+
+
 def load_bq(data_cfg: DataSource) -> pd.DataFrame:
+    from buttermilk import BM
+
     sql = f"SELECT * FROM `{data_cfg.path}`"
     sql += " ORDER BY RAND() "
 
@@ -50,6 +80,8 @@ def load_bq(data_cfg: DataSource) -> pd.DataFrame:
 
 
 def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
+    from buttermilk import BM
+
     last_n_days = data_cfg.last_n_days
 
     sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL AND (JSON_VALUE(outputs, '$.error') IS NULL) "
@@ -101,6 +133,7 @@ def group_and_filter_jobs(
     existing_dfs: pd.DataFrame | None = None,
     raise_on_error=True,
 ) -> pd.DataFrame:
+    from buttermilk import logger
     # expand and rename columns if we need to
     pairs_to_expand = (
         list(find_key_string_pairs(data_cfg.join))
@@ -118,7 +151,7 @@ def group_and_filter_jobs(
             # First, check if the column is a JSON string, and interpret it.
             try:
                 data[grp] = data[grp].apply(
-                    lambda x: json.loads(x) if pd.notna(x) else dict(),
+                    lambda x: load_json_flexi(x) if pd.notna(x) else dict(),
                 )
             except TypeError:
                 pass  # already a dict
@@ -143,7 +176,7 @@ def group_and_filter_jobs(
     # Add columns to group by to the index
     idx_cols = list(data_cfg.join.keys()) + list(data_cfg.group.keys())
     idx_cols = [c for c in idx_cols if c in data.columns]
-    data = data.set_index(idx_cols, drop=False)
+    data = data.set_index(idx_cols)  # , drop=False)
 
     # Stack any nested fields in the mapping
     if data_cfg.columns:
@@ -178,7 +211,7 @@ def group_and_filter_jobs(
     if existing_dfs is not None and existing_dfs.shape[0] > 0:
         if idx_cols:
             # reset index columns that we're not matching on:
-            data = data.reset_index(level=list(data_cfg.group.keys()), drop=True)
+            data = data.reset_index(level=list(data_cfg.group.keys()), drop=False)
 
             # If agg==True, reduce the groups down again now that we have built
             # our index. This way, we should only have one matching row per
@@ -224,7 +257,7 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
 
     combined_df = pd.DataFrame()
     for src in dataset_configs:
-        new_df = await load_data(src)
+        new_df = load_data(src)
         if src.type == "job":
             # Load and join prior job data
             new_df = group_and_filter_jobs(
@@ -249,7 +282,8 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
     return datasets
 
 
-async def read_all_files(uri, pattern, columns: dict[str, str]):
+def read_all_files(uri, pattern, columns: dict[str, str]):
+    from buttermilk import logger
     filelist = cloudpathlib.GSPath(uri).glob(pattern)
     # Read each file into a DataFrame and store in a list
     dataset = pd.DataFrame(columns=columns.keys())
@@ -273,6 +307,7 @@ def parse_flow_vars(
     vars = {}
 
     # Make job variables accessible for mapping
+    # (this includes the data record in job.record)
     all_data_sources = job.model_dump()
     del all_data_sources["inputs"]  # delete inputs key
 
@@ -281,6 +316,8 @@ def parse_flow_vars(
 
     # Add inputs from previous runs
     for key, value in additional_data.items():
+        if key in all_data_sources:
+            raise ValueError(f"Key {key} already exists in input dataset.")
         if isinstance(value, pd.DataFrame):
             all_data_sources[key] = value.to_dict(orient="records")
         else:
@@ -291,19 +328,24 @@ def parse_flow_vars(
         if not data_dict:
             return None
 
+        # If the final data variable is a mapping, return the value at the key we
+        # are looking for. But if the value is not found or the variable is not a
+        # mapping, return None. Later, the mapping's value will be used as a
+        # literal string.
+        if isinstance(data_dict, Mapping) and match_key in data_dict:
+            return data_dict[match_key]
+
+        # If the current data var is a list, check each element
+        if isinstance(data_dict, Sequence) and not isinstance(data_dict, str):
+            return [resolve_var(match_key, x) for x in data_dict]
+
         if "." in match_key:
             next_level, locator = match_key.split(".", maxsplit=1)
             return resolve_var(
                 match_key=locator,
                 data_dict=data_dict.get(next_level, {}),
             )
-        # If the final data variable is a mapping, return the value at the key we
-        # are looking for. But if the value is not found or the variable is not a
-        # mapping, return the name of the key if we can't find a value. It will be
-        # used as a literal string.
-        if isinstance(data_dict, Mapping) and match_key in data_dict:
-            return data_dict[match_key]
-        return match_key
+        return None
 
     def descend(map, path):
         if path is None:
@@ -331,6 +373,9 @@ def parse_flow_vars(
                     value.extend(sub_value)
                 elif sub_value:
                     value.append(sub_value)
+                else:
+                    # add the bare string
+                    value.append(x)
             return value
         if isinstance(path, Mapping):
             # The data here is another layer of a key:value mapping
@@ -343,17 +388,17 @@ def parse_flow_vars(
         for var, locator in var_map.items():
             if isinstance(locator, str) and locator == "record":
                 # Skip references to full records, they belong in placeholders later on.
-                continue
-            if isinstance(locator, str) and locator == "record.all_text" and job.record:
-                vars[var] = job.record.all_text
-            elif isinstance(locator, str) and locator == "record.text" and job.record:
-                vars[var] = job.record.text
+                pass
             else:
                 value = descend(var, locator)
-                # Don't add empty values to the input dict
                 if value:
                     vars[var] = value
-
+                elif locator:
+                    # Instead, treat the value of the input mapping as a string and add in full
+                    vars[var] = locator
+                else:
+                    # Don't add empty values to the input dict
+                    pass
     return vars
 
     # # Handle direct record field reference

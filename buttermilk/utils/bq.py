@@ -1,34 +1,29 @@
 import datetime
-from typing import Optional, Sequence
-from pydantic import BaseModel, ConfigDict, Field
+from collections.abc import Sequence
+
+import pandas as pd
 import pydantic
-from google.cloud import bigquery_storage_v1beta2
+from google.cloud import bigquery, bigquery_storage_v1beta2
 from google.cloud.bigquery_storage import (
     BigQueryWriteAsyncClient,
 )
-from google.protobuf.descriptor_pb2 import DescriptorProto
-from google.cloud import bigquery
-import pandas as pd
-from pydantic import BaseModel, Field
-from .._core.log import logger
 from google.cloud.bigquery_storage_v1.types import (
-    AppendRowsRequest,
-    CreateWriteStreamRequest,
     ProtoRows,
-    ProtoSchema,
-    WriteStream,
 )
+from pydantic import BaseModel, ConfigDict, Field
 
+from .._core.log import logger
 from .utils import make_serialisable, remove_punctuation
-import json
+
 
 def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
     """Recursively construct a new dictionary, changing data types to match BigQuery.
     Only uses fields from d that are in schema.
 
-    INPUT: schema - list of dictionaries, each with keys 'name', 'type', and optionally 'fields'
+    INPUT:
+        schema - list of dictionaries, each with keys 'name', 'type', and optionally 'fields'
+        d: data dictionary with some subset of keys matching a subset of schema keys
     """
-
     new_dict = {}
     keys_deleted = []
 
@@ -77,7 +72,7 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
                     except (ValueError, OSError):
                         # time is likely in milliseconds
                         new_dict[key_name] = datetime.datetime.utcfromtimestamp(
-                            _ts / 1000
+                            _ts / 1000,
                         )
 
                 elif not isinstance(d[key_name], datetime.datetime):
@@ -100,13 +95,17 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
         elif str.upper(row["type"]) == "BOOLEAN":
             if isinstance(d[key_name], str):
                 try:
-                    new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(d[key_name])
+                    new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(
+                        d[key_name],
+                    )
                 except ValueError as e:
                     if new_dict[key_name] == "":
                         pass  # no value
                     raise e
             else:
-                new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(d[key_name])
+                new_dict[key_name] = pydantic.TypeAdapter(bool).validate_python(
+                    d[key_name],
+                )
 
         else:
             new_dict[key_name] = d[key_name]
@@ -115,43 +114,54 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
 
 
 class TableWriter(BaseModel):
-    """
-        Args:
-            destination: fully qualified table ID in the form `dataset.project.table`
-            project_id: The ID of the Google Cloud project.
-            dataset_id: The ID of the dataset containing the table.
-            table_id: The ID of the table to write to.
-            schema: Optional schema to validate against.
+    """Args:
+    destination: fully qualified table ID in the form `dataset.project.table`
+    project_id: The ID of the Google Cloud project.
+    dataset_id: The ID of the dataset containing the table.
+    table_id: The ID of the table to write to.
+    schema: Optional schema to validate against.
+
     """
 
     write_client:  BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
-    destination: Optional[str] = None
-    bq_schema: Optional[str] = None
-    stream: Optional[str] = '_default'  # fully qualified table ID in the form `dataset.project.table`
-    project_id: Optional[str] = None
-    dataset_id: Optional[str] = None
-    table_id: Optional[str] = None
-    table_path: Optional[str] = None
+    destination: str | None = None
+    bq_schema: str | None = None
+    stream: str | None = (
+        "_default"  # fully qualified table ID in the form `dataset.project.table`
+    )
+    project_id: str | None = None
+    dataset_id: str | None = None
+    table_id: str | None = None
+    table_path: str | None = None
 
     model_config = ConfigDict(
-        extra="forbid", arbitrary_types_allowed=True, populate_by_name=True
+        extra="forbid",
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
     )
-    
-    @pydantic.field_validator('bq_schema', mode='before')
+
+    @pydantic.field_validator("bq_schema", mode="before")
     def load_schema(cls, v) -> dict:
         if isinstance(v, str):
             return bigquery.Client().schema_from_json(v)
-        
-    @pydantic.field_validator('table_path', mode='after')
+
+    @pydantic.field_validator("table_path", mode="after")
     def make_table_path(cls, v, values) -> str:
-        if values.get('project_id') and values.get('dataset_id') and values.get('table_id'):
+        if v:
+            return v
+        if (
+            values.get("project_id")
+            and values.get("dataset_id")
+            and values.get("table_id")
+        ):
             pass
-        elif values.get('table'):
-            values['project_id'], values['dataset_id'], values['table_id'] = v.split('.')
+        elif values.get("table"):
+            values["project_id"], values["dataset_id"], values["table_id"] = v.split(
+                ".",
+            )
         else:
             raise ValueError("Table path not provided")
         return f"projects/{values['project_id']}/datasets/{values['dataset_id']}/tables/{values['table_id']}"
-    
 
     async def append_rows(self, rows: list) -> Sequence[bool]:
         """Appends rows to a BigQuery table asynchronously using the BigQuery Storage Write API.
@@ -159,13 +169,18 @@ class TableWriter(BaseModel):
         Args:
             rows: A list of dictionaries representing the rows to append. Each dictionary
                   should have keys corresponding to the table's column names.
-        """
-        write_stream = f'{self.table_path}/streams/{self.stream}'
 
+        """
+        write_stream = f"{self.table_path}/streams/{self.stream}"
 
         if isinstance(rows, pd.DataFrame):
             # deduplicate columns
-            rows.columns = [x[1] if x[1] not in rows.columns[:x[0]] else f"{x[1]}_{list(rows.columns[:x[0]]).count(x[1])}" for x in enumerate(rows.columns)]
+            rows.columns = [
+                x[1]
+                if x[1] not in rows.columns[: x[0]]
+                else f"{x[1]}_{list(rows.columns[: x[0]]).count(x[1])}"
+                for x in enumerate(rows.columns)
+            ]
 
             batch = rows.to_dict(orient="records")
         else:
@@ -180,13 +195,11 @@ class TableWriter(BaseModel):
         if not batch:
             logger.warning("No rows found in save function.")
             return None
-        
-        from google.protobuf import descriptor_pb2
-        
+
         # # format the rows
         batch = ProtoRows(
-                    serialized_rows=batch
-                ) 
+            serialized_rows=batch,
+        )
         # request = AppendRowsRequest(write_stream=write_stream)
         # first_message = batch[0]
         # proto_descriptor = DescriptorProto()
@@ -200,7 +213,7 @@ class TableWriter(BaseModel):
 
         # Send the request asynchronously and get a stream of responses
         stream = await self.write_client.append_rows([request])
-        
+
         # Handle the responses asynchronously
         results = []
         async for response in stream:
@@ -209,6 +222,3 @@ class TableWriter(BaseModel):
             logger.debug(f"Response: {response}")
 
         return results
-    
-
-    

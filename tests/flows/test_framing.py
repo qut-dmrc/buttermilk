@@ -28,8 +28,8 @@ def framer():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-async def test_frames_cheap(framer, text_record, bm: BM, model):
+@pytest.mark.parametrize("model", CHATMODELS)
+async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
     job = Job(

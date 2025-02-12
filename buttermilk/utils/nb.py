@@ -2,17 +2,32 @@
 
 import os
 from typing import Any
-from hydra import initialize, initialize_config_dir, compose
+
+# flake8: noqa
+
+from pathlib import Path
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pydantic
+import seaborn as sns
+from cmap import Colormap
+from rich import print
+
 import hydra
-from omegaconf import OmegaConf
-from rich import print as rprint
+from hydra import compose, initialize_config_dir
+
 
 # Configuration files are stored in the local directory, and
 # options can be passed in at initialization.
-def init(overrides: list[str]=[], path: str = None) -> Any:
-    if not path: 
+def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
+    if not path:
         # Must be absolute
         path = os.getcwd() + "/conf"
+
+    overrides.append("name=notebook")
+    overrides.append(f"job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
         cfg = compose(config_name="config", overrides=overrides)
@@ -20,10 +35,18 @@ def init(overrides: list[str]=[], path: str = None) -> Any:
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
     logger = bm.logger
-    logger.info(f"Starting interactive run for {bm.cfg.name} job {bm.cfg.job} in notebook")
-
-    # print config details
-    rprint("\nConfiguration:")
-    rprint(OmegaConf.to_yaml(cfg))
+    logger.info(
+        f"Starting interactive run for {bm.cfg.name} job {bm.cfg.job} in notebook",
+    )
 
     return objs
+
+def graph_defaults():
+    plt.rcParams["figure.dpi"] = 300
+    plt.rcParams["figure.figsize"] = (10, 8)
+    sns.set_context("notebook")
+    sns.set_style("darkgrid")
+    plt.rcParams["font.size"] = 14
+
+
+graph_defaults()

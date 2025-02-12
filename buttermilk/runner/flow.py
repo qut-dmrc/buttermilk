@@ -1,15 +1,20 @@
 import asyncio
-from collections.abc import AsyncGenerator, Mapping, Sequence
-from typing import Any
+from collections.abc import AsyncGenerator, Sequence
+from typing import Any, Self
 
-from pydantic import BaseModel, Field, field_validator
+import pandas as pd
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import FatalError
-from buttermilk.runner.helpers import parse_flow_vars, prepare_step_df
+from buttermilk.runner.helpers import (
+    combine_datasets,
+    parse_flow_vars,
+    prepare_step_df,
+)
 from buttermilk.utils.validators import make_list_validator
 
 """ A flow ties several stages together, runs them over a single record, 
@@ -23,6 +28,7 @@ class Flow(BaseModel):
 
     data: list[DataSource] | None = Field(default_factory=list)
     _data: dict = None
+    _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
 
     class Config:
         arbitrary_types_allowed = True
@@ -40,7 +46,17 @@ class Flow(BaseModel):
             datasources.append(source)
         return datasources
 
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
+
     async def load_data(self):
+        # We are in the process of replacing _data with a single
+        # _results dataframe.
         self._data = await prepare_step_df(self.data)
 
     async def run_flows(
@@ -48,7 +64,6 @@ class Flow(BaseModel):
         *,
         job: Job,
     ) -> AsyncGenerator[Any, None]:
-
         if self._data is None:
             await self.load_data()
 
@@ -81,9 +96,16 @@ class Flow(BaseModel):
         )
         tasks = []
 
+        # Expand mapped parameters before producing permutations of jobs
+        params = parse_flow_vars(
+            agent.parameters,
+            job=job,
+            additional_data=self._data,
+        )
+
         # Create a new job and task for every combination of variables
         # this agent is configured to run.
-        for variant in agent.make_combinations():
+        for variant in agent.make_combinations(**params):
             # Process all inputs into two categories.
             # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
             # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
@@ -109,41 +131,53 @@ class Flow(BaseModel):
             )
             tasks.append(task)
 
+        logger.info(
+            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.name}",
+        )
+
+        # Process and yield the results as they finish
         for task in asyncio.as_completed(tasks):
             try:
                 result: Job = await task
 
-                # Process and yield the result immediately
-                if result.record:
-                    job.record = result.record
-
-                if result.error:  # Log errors and yield results with errors immediately
+                if result.error:
+                    # Log errors and yield result without further processing
                     logger.error(
                         f"Agent {agent.name} failed with error: {result.error}",
                     )
                 else:
                     try:
-                        # Save specified result fields to job.outputs
-                        output_map = dict(**agent.outputs)
-                        if output_map:
+                        if agent.outputs:
+                            # Process result as specified in the output map field of Flow
                             result.outputs = parse_flow_vars(
-                                output_map,
+                                agent.outputs,
                                 job=result,
                                 additional_data=self._data,
                             )
-
-                        # incorporate successful runs into data store for future use
-                        self.incorporate_outputs(
-                            step_name=agent.name,
-                            result=result,
-                            output_map=output_map,
-                            job_outputs=result.outputs,
-                        )
-
                     except Exception as e:
+                        # log the error but do not abort.
                         error_msg = f"Agent {agent.name} response data not formatted as expected: {e}"
                         logger.error(error_msg)
-                        result.error = error_msg  # log the error but do not abort.
+                        result.error = dict(
+                            message=error_msg,
+                            type=type(e).__name__,
+                            args=e.args,
+                        )
+
+                    # incorporate successful runs into data store for future use
+                    self.incorporate_outputs(
+                        step_name=agent.name,
+                        outputs=result.outputs,
+                    )
+
+                    # We are in the process of replacing this with a single dataframe
+                    # that holds the progressive results of the entire flow.
+                    # results_df = pd.DataFrame.from_records(outputs)
+                    # self._results = combine_datasets(
+                    #     existing_df=self._results,
+                    #     datasources=agent.data,
+                    #     results_df=results_df,
+                    # )
 
                 yield result  # Yield result within the loop
 
@@ -167,23 +201,13 @@ class Flow(BaseModel):
     def incorporate_outputs(
         self,
         step_name: str,
-        result: Job,
-        output_map: Mapping,
-        job_outputs: Result,
+        outputs: dict[str, Any],
     ) -> None:
         """Update the data object with the outputs of the agent."""
-        if result.error:
-            # don't add failed jobs
-            return
-        if output_map:
-            for k, v in job_outputs.model_dump().items():
-                if isinstance(v, Sequence) and not isinstance(v, str):
-                    self._data[step_name][k] = self._data[step_name].get(k, [])
-                    self._data[step_name][k].extend(v)
-                else:
-                    self._data[step_name][k] = self._data[step_name].get(k, [])
-                    self._data[step_name][k].append(v)
+        if step_name not in self._data:
+            self._data[step_name]["outputs"] = [outputs]
         else:
-            self._data[step_name]["outputs"] = self._data[step_name].get("outputs", [])
-            if result.outputs:
-                self._data[step_name]["outputs"].append(result.outputs.model_dump())
+            for k, v in outputs.items():
+                # create if key does not already exist
+                self._data[step_name][k] = self._data[step_name].get(k, [])
+                self._data[step_name][k].append(v)
