@@ -56,7 +56,6 @@ Example:
 
 import asyncio
 import datetime
-import json
 import time
 from abc import abstractmethod
 from asyncio import Queue, QueueEmpty, TaskGroup
@@ -85,12 +84,13 @@ from buttermilk._core.runner_types import Job
 from buttermilk.bm import BM
 from buttermilk.exceptions import FatalError
 from buttermilk.utils.errors import extract_error_info
+from buttermilk.utils.utils import load_json_flexi
 
 # The schema for the "runs" table in a BigQuery dataset
 RUNS_SCHEMA = """
 [{"name":"runtime","type":"TIMESTAMP","mode":"REQUIRED"},{"name":"name","type":"STRING","mode":"REQUIRED"},{"name":"arguments","type":"STRING","mode":"NULLABLE"},{"name":"task","type":"STRING","mode":"NULLABLE"},{"name":"meta","type":"STRING","mode":"NULLABLE","description":"A serialised representation of a dict with extra fields"},{"name":"successful","type":"BOOLEAN","mode":"NULLABLE"}]
 """
-RUNS_SCHEMA = json.loads(RUNS_SCHEMA)
+RUNS_SCHEMA = load_json_flexi(RUNS_SCHEMA)
 
 # The full path to the "runs" table in a BigQuery dataset
 RUNS_TABLE = "dmrc-platforms.scrapers.runs"

@@ -10,13 +10,17 @@ hate:
       num_runs: 1
       parameters: 
         template: describe
+        download_if_necessary: true
         model:
           - gemini15pro
       inputs:
         record: record
       outputs:
-        record: record
-
+        content: record.text
+        transcript: outputs.transcript
+        title: outputs.title
+        caption: outputs.caption
+        description: outputs.description
     - _target_: buttermilk.agents.lc.LC
       name: judger
       num_runs: 1

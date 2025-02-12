@@ -10,7 +10,8 @@ You must reply only in a fully valid JSON format. Ensure each field is accuratel
     "prediction": <Boolean: the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.>,
     "confidence": <String: "high", "medium", or "low" confidence in the overall conclusion>,
     "severity": <String: "high", "medium", "low", or "N/A": if the content violates the rules, how severe is the breach?>,
-    "labels": [List of <Strings: the 'heading' or 'short name' identifying any rule that the content was found to violate. This is a summary only and should exactly reflect the reasoning above.>,]
+    "labels": [List of <Strings: the 'heading' or 'short name' identifying any rule that the content was found to violate. This is a summary only and should exactly reflect the reasoning above.>,],
+    "error": <STRING: NULL normally; only fill if you encounter an error (i.e. missing data or instructions)>,
     }
 ```
 {% endraw %}

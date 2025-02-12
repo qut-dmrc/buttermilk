@@ -1,5 +1,4 @@
 import asyncio
-import json
 import threading
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from typing import Literal
@@ -18,6 +17,7 @@ from buttermilk import BM, logger
 from buttermilk._core.runner_types import Job
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.flow import Flow
+from buttermilk.utils.utils import load_json_flexi
 
 from .runs import get_recent_runs
 
@@ -39,9 +39,9 @@ flows = dict()
 
 def callback(message):
     results = None
-    data = json.loads(message.data)
-    task = data.pop("task")
     try:
+        data = load_json_flexi(message.data)
+        task = data.pop("task")
         request = FlowRequest(**data)
         message.ack()
     except Exception as e:
@@ -67,17 +67,49 @@ def callback(message):
         logger.error(f"Error processing message: {e}")
         message.nack()
 
-    logger.info("Passed on Pub/Sub job.")
+    logger.info("Completed Pub/Sub job.")
 
 
 def start_pubsub_listener():
+    # publisher = pubsub.PublisherClient()
     subscriber = pubsub.SubscriberClient()
     subscription_path = subscriber.subscription_path(
         bm.cfg.pubsub.project,
         bm.cfg.pubsub.subscription,
     )
+    topic_path = subscriber.topic_path(bm.cfg.pubsub.project, bm.cfg.pubsub.topic)
+
+    # if "dead_letter_topic_id" in bm.cfg.pubsub:
+    #     dead_letter_topic_path = publisher.topic_path(
+    #         bm.cfg.pubsub.project,
+    #         bm.cfg.pubsub.dead_letter_topic,
+    #     )
+    #     logger.info(
+    #         "Pub/Sub forwarding failed messages to: {dead_letter_topic_path} after {bm.cfg.pubsub.max_retries} retries.",
+    #     )
+    #     dead_letter_policy = {
+    #         "dead_letter_topic": dead_letter_topic_path,
+    #         "max_delivery_attempts": bm.cfg.pubsub.max_retries,
+    #     }
+    # else:
+    #     dead_letter_policy = None
+
+    # # try to create the subscription if necessary
+    # try:
+    #     with subscriber:
+    #         request = {
+    #             "name": subscription_path,
+    #             "topic": topic_path,
+    #             "dead_letter_policy": dead_letter_policy,
+    #         }
+    #         subscription = subscriber.create_subscription(request)
+    # except Exception as e:
+    #     logger.error(
+    #         f"Unable to create pub/sub subscription {subscription_path}: {e}, {e.args=}",
+    #     )
+
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
-    print(f"Listening for messages on {subscription_path}...")
+    logger.info(f"Listening for messages on {subscription_path} topic {topic_path}...")
 
     try:
         streaming_pull_future.result()
@@ -120,7 +152,16 @@ async def get_runs_html(request: Request) -> HTMLResponse:
 
 @app.api_route("/flow/{flow}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal["hate", "simple", "trans", "osb", "osbfulltext", "summarise_osb", "test", "describer"],
+    flow: Literal[
+        "hate",
+        "simple",
+        "trans",
+        "osb",
+        "osbfulltext",
+        "summarise_osb",
+        "test",
+        "describer",
+    ],
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:
@@ -213,11 +254,6 @@ def main(cfg: _CFG):
     flows = objs.flows
 
     logger = logger
-    start_trace(
-        resource_attributes={"run_id": bm.run_info.run_id},
-        collection="flow_api",
-        job="api/pubsub prompter",
-    )
 
     listener_thread = threading.Thread(target=start_pubsub_listener)
     listener_thread.start()

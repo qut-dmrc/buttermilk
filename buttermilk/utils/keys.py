@@ -1,16 +1,15 @@
-from functools import lru_cache
 import json
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from google.cloud import secretmanager
-from pydantic import model_validator
 
 from buttermilk._core.config import CloudProviderCfg
-from buttermilk import logger
+from buttermilk.utils.utils import load_json_flexi
+
 
 class SecretsManager(CloudProviderCfg):
-    _path: str = ''
+    _path: str = ""
 
     @property
     def client(self):
@@ -32,25 +31,27 @@ class SecretsManager(CloudProviderCfg):
         self,
         secret_name: str = None,
         secret_class: str = None,
-        cfg_key: str = None,        # Get the secret name from the config passed in earlier
+        cfg_key: str = None,  # Get the secret name from the config passed in earlier
         version: str = "latest",
     ) -> str:
         """Retrieve latest version of a secret by ID"""
-        secret_name =  secret_name or secret_class or getattr(self, cfg_key)
-        
+        secret_name = secret_name or secret_class or getattr(self, cfg_key)
+
         _client = self.client
 
-        name = "/".join([x for x in [self._path, secret_name, "versions", version or "latest"] if x ])
+        name = "/".join([
+            x for x in [self._path, secret_name, "versions", version or "latest"] if x
+        ])
 
         try:
             response = _client.access_secret_version(request={"name": name})
             response = response.payload.data.decode("UTF-8")
         except Exception as e:
-            raise IOError(f"Unable to access secret {name}: {e}, {e.args}")
+            raise OSError(f"Unable to access secret {name}: {e}, {e.args}")
 
         try:
-            response = json.loads(response)
-            
+            response = load_json_flexi(response)
+
         except json.JSONDecodeError:
-            pass    
+            pass
         return response

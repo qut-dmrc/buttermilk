@@ -14,7 +14,7 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.config import SaveInfo
+from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
@@ -68,10 +68,21 @@ class Agent(BaseModel):
             "init",
         ),
     )
+    inputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+    )
+
+    data: list[DataSource] | None = Field(default_factory=list)
+
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
 
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
@@ -86,11 +97,26 @@ class Agent(BaseModel):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
+    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
+
+    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
+
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
         return self
+
+    def make_combinations(self, **extra_combinations: dict):
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to return a copy,
+        # not the original.
+        params = self.parameters.copy()
+        params.update(extra_combinations)
+        vars = self.num_runs * expand_dict(params)
+        return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
@@ -111,20 +137,7 @@ class Agent(BaseModel):
                 )
         finally:
             if self.save:
-                rows = [job.model_dump(mode="json")]
-                if self.save.type == "bq":
-                    save(
-                        data=rows,
-                        dataset=self.save.dataset,
-                        schema=self.save.db_schema,
-                        save_dir=self.save.destination,
-                    )
-                elif self.save:
-                    save(data=rows, save_dir=self.save.destination)
-            else:
-                # failsafe save anyway
-                save(data=job.model_dump())
-
+                save_job(job=job, save_info=self.save)
         return job
 
     def make_combinations(self):
@@ -140,15 +153,30 @@ class Agent(BaseModel):
         job: Job,
         **kwargs,
     ) -> Job:
-        """Take a Job with Inputs, process it, and return a Job.
+        """Take a Job with Inputs, process it, and return a Job with result in Outputs field OR a Job with non-null Error field.
 
         Inputs:
             job: Job with Inputs
             **kwargs: Additional variables to pass to the agent
 
         Outputs:
-            Job with Inputs and Outputs
+            Job with Inputs and Outputs OR Job with non-null Error field.
 
         """
         raise NotImplementedError
         return job
+
+
+def save_job(job: Job, save_info: SaveInfo) -> str:
+    rows = [job.model_dump(mode="json", exclude_none=True)]
+    if save_info.type == "bq":
+        dest = save(
+            data=rows,
+            dataset=save_info.dataset,
+            schema=save_info.db_schema,
+            save_dir=save_info.destination,
+        )
+    else:
+        dest = save(data=rows, save_dir=save_info.destination)
+
+    return dest

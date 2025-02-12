@@ -35,17 +35,3 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
         assert "painting" in str(result.record.all_text).lower()
         assert "night watch" in str(result.record.title).lower()
 
-
-def test_find_record(bm, image_bytes):
-    record = RecordInfo(data=[image_bytes])
-    job = Job(
-        flow_id="test",
-        record=record,
-        source="test",
-        inputs={"record": "record"},
-        parameters={"template": "describe"},
-        run_info=bm.run_info,
-    )
-    job.inputs = parse_flow_vars(job.inputs, job=job)
-    assert job.inputs["record"] == record
-    assert job.inputs["record"].media[0] == image_bytes

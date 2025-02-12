@@ -67,6 +67,9 @@ dependencies = [
     "transformers>=4.47.1",
     "evaluate>=0.4.3",
     "fake-useragent>=2.0.3",
+    "json5>=0.10.0",
+    "newspaper4k>=0.9.3.1",
+    "lxml[html-clean]>=5.3.0",
 ]
 
 [dependency-groups]

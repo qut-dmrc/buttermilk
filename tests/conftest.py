@@ -1,20 +1,12 @@
-from unittest.mock import patch
-
 import hydra
 import pytest
 from pytest import MarkDecorator
 
 from buttermilk import BM
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
-
-
-@pytest.fixture
-def mock_save():
-    with patch("buttermilk.bm.save.save") as mock_save:
-        yield mock_save
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -265,6 +257,17 @@ VIDEO_URIS = [
 )
 def video_url(request) -> str:
     return request.param
+
+
+@pytest.fixture
+def job_minimal(fight_no_more_forever, bm: BM):
+    job = Job(
+        source="testing",
+        flow_id="testflow",
+        record=fight_no_more_forever,
+        run_info=bm.run_info,
+    )
+    return job
 
 
 def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:

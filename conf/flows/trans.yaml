@@ -3,72 +3,80 @@
 
 trans:
   _target_: buttermilk.runner.flow.Flow
-  source: api development
-  steps: 
-    - name: describer
-      _target_: buttermilk.agents.describer.Describer
-      num_runs: 1
-      parameters: 
-        template: describe
-        download_if_necessary: true
-        model:
-          - gemini15pro
-      inputs:
-        record: record
-      outputs:
-        content: record.text
-        transcript: outputs.transcript
-        title: outputs.title
-        caption: outputs.caption
-        description: outputs.description
+  source: trans journalists guidelines assessment
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index: 
+        - record_id
 
+  steps: 
     - name: judger
       _target_: buttermilk.agents.lc.LC
-      num_runs: 1
+      num_runs: 3
       save: ${save}
       parameters: 
         template: judge
         criteria: 
-          - trans_cte
-          - trans_tja
-          - trans_glaad
-          - trans_hrc
+          - cte
+          - tja
+          - glaad
+          - hrc
           - trans_simplified
           - trans_factored
         formatting: json_rules
         model: ${llm}
       inputs:
+        record: record
       outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-            reasons: outputs.reasons
+        identifier: identifier
+        record_id: record.record_id
+        job_id: job_id
+        answer: result
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
       
     - name: synth
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
       save: ${save}
       parameters:
-        template: synthesise
+        template: synthesise_judger
         instructions: judge
         criteria: trans_simplified
         formatting: json_rules
         model: ${llm}
       inputs:
-        content: record.text
-        answers: judger.answers
+        record: record
+        answers: judger.outputs
       outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-            reasons: outputs.reasons
+        identifier: identifier
+        record_id: record.record_id
+        job_id: job_id
+        answer: result
+        model: parameters.model
+        criteria: parameters.criteria
+        template: parameters.template
     
+    - name: scorer
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: evaluate
+        model: ${llm}
+        answer:
+          - judger.answer
+          - synth.answer
+        expected: record.ground_truth
+      outputs:
+        job_id: scorer.job_id
+        score: outputs.score
+        score_llm: scorer.parameters.model
+        reasons: outputs.reasons
+        
     - name: eval 
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
@@ -84,10 +92,10 @@ trans:
           - judger.answers
           - synth.answers
       outputs:
-        differences: outputs.reasons
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
+        differences: result
+        judge: inputs.answers.model
+        criteria: input.answers.criteria
+        template: input.answers.template
 
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter

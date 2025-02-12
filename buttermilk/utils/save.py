@@ -2,7 +2,9 @@ import io
 import json
 import pickle
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import google.cloud.storage
 import pandas as pd
@@ -17,6 +19,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential_jitter,
 )
+
+from buttermilk._core.runner_types import Job, Result
 
 from .._core.log import logger
 from .bq import construct_dict_from_schema
@@ -171,30 +175,43 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs) -> str:
     return uri
 
 
-def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) -> str:
-    """Upload results to Google Bigquery"""
-    bq = bigquery.Client()  # use application default credentials
-
-    if isinstance(schema, str):
-        schema = bigquery.Client().schema_from_json(schema)
-
-    if isinstance(rows, pd.DataFrame):
+def data_to_export_rows(
+    data: pd.DataFrame | Job | Result | list[Mapping[str, Any]],
+    schema: list,
+) -> list[Mapping[str, Any]]:
+    if isinstance(data, pd.DataFrame):
         # deduplicate columns
-        rows.columns = [
+        data.columns = [
             x[1]
-            if x[1] not in rows.columns[: x[0]]
-            else f"{x[1]}_{list(rows.columns[: x[0]]).count(x[1])}"
-            for x in enumerate(rows.columns)
+            if x[1] not in data.columns[: x[0]]
+            else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}"
+            for x in enumerate(data.columns)
         ]
 
-        bq_rows = rows.to_dict(orient="records")
+        bq_rows = data.to_dict(orient="records")
+
+    elif isinstance(data, Job | Result):
+        bq_rows = [data.model_dump(mode="json")]
     else:
-        bq_rows = rows.copy()
+        bq_rows = data.copy()
 
     # Handle other conversions required for bigquery
     bq_rows = [construct_dict_from_schema(schema, row) for row in bq_rows]
 
     bq_rows = make_serialisable(bq_rows)
+
+    return bq_rows
+
+
+def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) -> str:
+    """Upload results to Google Bigquery"""
+    bq = bigquery.Client()  # use application default credentials
+
+    if isinstance(schema, str):
+        schema = bq.schema_from_json(schema)
+
+    bq_rows = data_to_export_rows(rows, schema=schema)
+
     if not bq_rows:
         logger.warning("No rows found in save function.")
         return None

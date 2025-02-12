@@ -118,7 +118,7 @@ class ToxicityModel(BaseModel):
         response.record_id = job.record.record_id
 
         output = job.model_copy()
-        output.result = response
+        output.outputs = response
         return output
 
     @trace
