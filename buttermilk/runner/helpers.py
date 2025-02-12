@@ -258,16 +258,12 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
     combined_df = pd.DataFrame()
     for src in dataset_configs:
         new_df = load_data(src)
-        if src.type == "job":
-            # Load and join prior job data
-            new_df = group_and_filter_jobs(
-                existing_dfs=combined_df,
-                data=new_df,
-                data_cfg=src,
-            )
-        else:
-            # TODO @nicsuzor: group and limit by max_records_per_group
-            pass
+        # Load and join prior job data
+        new_df = group_and_filter_jobs(
+            existing_dfs=combined_df,
+            data=new_df,
+            data_cfg=src,
+        )
 
         if src.columns:
             new_df = new_df[src.columns.keys()]
@@ -304,7 +300,8 @@ def parse_flow_vars(
     # Returns a dict of variables with their corresponding content, sourced from
     # datasets provided in additional_data or records in job.
 
-    vars = {}
+    # Keep any existing vars
+    input_vars = {k: v for k, v in job.inputs.items() if v}
 
     # Make job variables accessible for mapping
     # (this includes the data record in job.record)
@@ -392,14 +389,14 @@ def parse_flow_vars(
             else:
                 value = descend(var, locator)
                 if value:
-                    vars[var] = value
+                    input_vars[var] = value
                 elif locator:
                     # Instead, treat the value of the input mapping as a string and add in full
-                    vars[var] = locator
+                    input_vars[var] = locator
                 else:
                     # Don't add empty values to the input dict
                     pass
-    return vars
+    return input_vars
 
     # # Handle direct record field reference
     # if job.record and (

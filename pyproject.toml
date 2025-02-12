@@ -70,6 +70,8 @@ dependencies = [
     "json5>=0.10.0",
     "newspaper4k>=0.9.3.1",
     "lxml[html-clean]>=5.3.0",
+    "opentelemetry-instrumentation-langchain>=0.38.5",
+    "langchain-community>=0.3.16",
 ]
 
 [dependency-groups]

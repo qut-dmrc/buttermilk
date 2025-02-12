@@ -3,7 +3,7 @@
 
 trans:
   _target_: buttermilk.runner.flow.Flow
-  source: trans journalists guidelines assessment
+  source: trans journalists guidelines test
   data:
     - name: tja_train
       type: file
@@ -22,9 +22,9 @@ trans:
       inputs:
         record: record
       outputs:
-        text: outputs.description
-        id: identifier
-
+        feedback:
+          - text: outputs.description
+            id: identifier
 
     - name: judger
       _target_: buttermilk.agents.lc.LC
@@ -32,25 +32,20 @@ trans:
       save: ${save}
       parameters: 
         template: judge
-        criteria: 
-          - cte
-          - tja
-          - glaad
-          - hrc
-          - trans_simplified
-          - trans_factored
+        criteria: trans_factored
         formatting: json_rules
         model: ${llm}
       inputs:
         record: record
       outputs:
-        identifier: identifier
-        record_id: record.record_id
-        job_id: job_id
-        answer: result
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
+        answer:
+          - identifier: identifier
+            record_id: record.record_id
+            job_id: job_id
+            answer: outputs
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
       
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -64,17 +59,18 @@ trans:
         model: ${llm}
       inputs:
         record: record
-        answers: judger.outputs
-        feedback: context.outputs
+        answers: judger.answer
+        feedback: context.feedback
 
       outputs:
-        identifier: identifier
-        record_id: record.record_id
-        job_id: job_id
-        answer: result
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
+        answer:
+          identifier: identifier
+          record_id: record.record_id
+          job_id: job_id
+          answer: outputs
+          model: parameters.model
+          criteria: parameters.criteria
+          template: parameters.template
     
     - name: scorer
       _target_: buttermilk.agents.lc.LC
@@ -105,10 +101,10 @@ trans:
       inputs:
         content: record.text
         answers:
-          - judger.answers
-          - synth.answers
+          - judger.outputs
+          - synth.outputs
       outputs:
-        differences: result
+        differences: outputs
         judge: inputs.answers.model
         criteria: input.answers.criteria
         template: input.answers.template
@@ -122,7 +118,6 @@ trans:
         - analysis
       save:
         type: gsheets
-        sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
         sheet_name: evals
         title: Trans Guidelines Judger
       inputs:
@@ -141,9 +136,11 @@ trans:
           - synth.template
         record: record
         answers:
-          - judger.answers
+          - judger.answer
+        context:
+          - context.feedback
         synthesis:
-          - synth.answers
+          - synth.answer
         differences:
           - differences: eval.differences
             model: eval.model

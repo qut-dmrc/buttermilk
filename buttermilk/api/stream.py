@@ -101,13 +101,14 @@ class FlowRequest(BaseModel):
             [
                 values.get("content"),
                 values.get("record"),
+                values.get("record_id"),
                 values.get("uri"),
                 values.get("text"),
                 values.get("q"),
             ],
         ):
             raise ValueError(
-                "At least one of query, record, content, text, or uri must be provided.",
+                "At least one of query, record, record_id, content, text, or uri must be provided.",
             )
 
         return values
@@ -153,13 +154,16 @@ async def flow_stream(
     bm = BM()
     if not flow_request.source:
         flow_request.source = [bm.cfg.job]
-    if flow_request.record_id:
-        raise NotImplementedError("Loading by record ID is not yet supported.")
 
     job = flow_request.to_job()
+
     # First step, fetch the record if we need to.
     if not job.record and job.inputs:
-        job.record = await download_and_convert(**job.inputs)
+        if record_id := job.inputs.pop("record_id", None):
+            job.record = flow.get_record(record_id=record_id)
+        else:
+            job.record = await download_and_convert(**job.inputs)
+
     job.run_info = bm.run_info
     async for result in flow.run_flows(
         job=job,

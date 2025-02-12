@@ -113,12 +113,12 @@ class Agent(BaseModel):
             self.parameters.update(self.model_extra)
         return self
 
-    def make_combinations(self, **extra_combinations: dict):
+    def make_combinations(self, **kwargs):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
         params = self.parameters.copy()
-        params.update(extra_combinations)
+        params.update(kwargs)
         vars = self.num_runs * expand_dict(params)
         return copy.deepcopy(vars)
 
@@ -143,13 +143,6 @@ class Agent(BaseModel):
             if self.save:
                 save_job(job=job, save_info=self.save)
         return job
-
-    def make_combinations(self):
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        vars = self.num_runs * expand_dict(self.parameters)
-        return copy.deepcopy(vars)
 
     async def process_job(
         self,

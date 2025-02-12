@@ -1,6 +1,7 @@
 import logging
 import time
 from collections.abc import Mapping
+from typing import Any
 
 import requests
 import urllib3
@@ -16,7 +17,9 @@ from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
+from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from promptflow.tracing import trace
+from pydantic import PrivateAttr
 from tenacity import (
     RetryError,
     before_log,
@@ -47,6 +50,12 @@ from buttermilk.utils.utils import scrub_keys
 
 
 class LC(Agent):
+    _instrumentor: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context) -> None:
+        self._instrumentor = LangchainInstrumentor()
+        if not self._instrumentor.is_instrumented_by_opentelemetry:
+            self._instrumentor.instrument()
 
     @property
     def _llms(self) -> LLMs:
@@ -65,11 +74,13 @@ class LC(Agent):
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
 
+        combined_template_variables = job.parameters.copy()
+        combined_template_variables.update(job.inputs)
+        combined_template_variables.update(additional_data)
+
         # Construct list of messages from the templates
         rendered_template, remaining_inputs = load_template_vars(
-            **job.parameters,
-            **job.inputs,
-            **additional_data,
+            **combined_template_variables,
         )
 
         # Interpret the template as a Prompty; split it into separate messages with

@@ -24,7 +24,7 @@ def main(cfg) -> None:
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
-    params = {k: v for k, v in cfg.items() if k in {"record", "q"} and v}
+    params = {k: v for k, v in cfg.items() if k in {"record", "record_id", "q"} and v}
     record = FlowRequest(**params, source="cli")
     flow = cfg.flow
 
@@ -35,7 +35,7 @@ def main(cfg) -> None:
         ):
             rprint(response)
 
-    # asyncio.run(run_flow(objs.flows[flow]))
+    asyncio.run(run_flow(objs.flows[flow]))
 
 
 if __name__ == "__main__":

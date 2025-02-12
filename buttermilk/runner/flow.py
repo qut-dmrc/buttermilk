@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job
+from buttermilk._core.runner_types import Job, RecordInfo, Result
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -27,7 +27,7 @@ class Flow(BaseModel):
     steps: list[Agent]
 
     data: list[DataSource] | None = Field(default_factory=list)
-    _data: dict = None
+    _data: dict = {}
     _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
 
     class Config:
@@ -54,6 +54,15 @@ class Flow(BaseModel):
         )
         return self
 
+    def get_record(self, record_id: str) -> RecordInfo:
+        rec = self._results.query("record_id==@record_id")
+        if rec.shape[0] > 1:
+            raise ValueError(
+                f"More than one record found for query record_id == {record_id}",
+            )
+
+        return RecordInfo(**rec.iloc[0].to_dict())
+
     async def load_data(self):
         # We are in the process of replacing _data with a single
         # _results dataframe.
@@ -64,8 +73,6 @@ class Flow(BaseModel):
         *,
         job: Job,
     ) -> AsyncGenerator[Any, None]:
-        if self._data is None:
-            await self.load_data()
 
         for agent in self.steps:
             async for result in self.run_step(
@@ -201,13 +208,13 @@ class Flow(BaseModel):
     def incorporate_outputs(
         self,
         step_name: str,
-        outputs: dict[str, Any],
+        outputs: Result,
     ) -> None:
         """Update the data object with the outputs of the agent."""
         if step_name not in self._data:
             self._data[step_name]["outputs"] = [outputs]
         else:
-            for k, v in outputs.items():
+            for k, v in outputs.model_dump().items():
                 # create if key does not already exist
                 self._data[step_name][k] = self._data[step_name].get(k, [])
                 self._data[step_name][k].append(v)
