@@ -44,13 +44,14 @@ trans:
       inputs:
         record: record
       outputs:
-        identifier: identifier
-        record_id: record.record_id
-        job_id: job_id
-        answer: result
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
+        answer:
+          - identifier: identifier
+            record_id: record.record_id
+            job_id: job_id
+            result: outputs
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
       
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -68,13 +69,14 @@ trans:
         feedback: context.outputs
 
       outputs:
-        identifier: identifier
-        record_id: record.record_id
-        job_id: job_id
-        answer: result
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
+        answer:
+          - identifier: identifier
+            record_id: record.record_id
+            job_id: job_id
+            result: outputs
+            model: parameters.model
+            criteria: parameters.criteria
+            template: parameters.template
     
     - name: scorer
       _target_: buttermilk.agents.lc.LC
@@ -129,6 +131,7 @@ trans:
         flow_id: flow_id
         job_id: job_id
         timestamp: timestamp
+        scorer: scorer.outputs
         models:
           - judger.model
           - synth.model
