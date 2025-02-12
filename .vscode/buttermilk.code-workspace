@@ -28,6 +28,7 @@
 			"ruff.organizeImports":true,
 			"ruff.showSyntaxErrors": true,
 			"ruff.lint.enable": true,
+			"ruff.nativeServer": "on",
 			"python.testing.pytestEnabled": true
 	}
 }
