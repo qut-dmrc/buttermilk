@@ -37,12 +37,16 @@ class GSheetExporter(Agent):
         # save the input data from this step to a spreadsheet so that we can compare later.
         from buttermilk.utils.gsheet import format_strings
 
-        # combine input vars and params together in this instance
-        inputs = {}
-        inputs.update(job.inputs)
-        if job.parameters:
-            inputs.update(job.parameters)
-        dataset = pd.DataFrame.from_records([inputs])
+        if dataset_name := job.parameters.get("from_dataset"):
+            dataset = pd.DataFrame.from_records(additional_data[dataset_name])
+        else:
+            # combine input vars and params together in this instance
+            inputs = {}
+            inputs.update(job.inputs)
+            if job.parameters:
+                inputs.update(job.parameters)
+            dataset = pd.DataFrame.from_records(inputs)
+
         contents = format_strings(
             dataset,
             convert_json_columns=self.convert_json_columns,

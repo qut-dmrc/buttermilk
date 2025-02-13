@@ -83,10 +83,29 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
     from buttermilk import BM
 
     last_n_days = data_cfg.last_n_days
+    if data_cfg.sql:
+        bm = BM()
+        return bm.run_query(data_cfg.sql)
 
-    sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL AND (JSON_VALUE(outputs, '$.error') IS NULL) "
+    sql = "SELECT "
+    if data_cfg.columns:
+        sql_cols = []
+        for field, locator in data_cfg.columns.items():
+            locator = locator.split(".", 1)
+            if len(locator) > 1:
+                sql_cols.append(
+                    f'JSON_VALUE({locator[0]}, "$.{locator[1]}") as {field}',
+                )
+            else:
+                sql_cols.append(f"{locator[0]} as {field}")
 
-    sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
+        sql += ", ".join(sql_cols)
+
+    else:
+        sql += " * "
+    sql += f" FROM `{data_cfg.path}` jobs WHERE (JSON_VALUE(outputs, '$.error') IS NULL) AND "
+
+    sql += f" TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
     if data_cfg.filter:
         for field, condition in data_cfg.filter.items():
             field = field.split(".", 1)

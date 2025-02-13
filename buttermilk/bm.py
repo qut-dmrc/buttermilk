@@ -233,6 +233,11 @@ class BM(Singleton, BaseModel):
             self.logger.error(f"Could not save config to default save dir: {e}")
 
         if self.cfg.tracing:
+            import weave
+
+            collection = f"{self.cfg.name}-{self.cfg.job}"
+            weave.init(collection)
+
             from promptflow.tracing import start_trace
 
             start_trace(

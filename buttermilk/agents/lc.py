@@ -5,6 +5,7 @@ from typing import Any
 
 import requests
 import urllib3
+import weave
 from anthropic import (
     APIConnectionError as AnthropicAPIConnectionError,
     RateLimitError as AnthropicRateLimitError,
@@ -164,6 +165,7 @@ class LC(Agent):
         stop=stop_after_attempt(6),
         before=before_log(logger, log_level=logging.INFO),
     )
+    @weave.op
     @trace
     async def invoke(
         self,

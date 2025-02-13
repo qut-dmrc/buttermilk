@@ -4,7 +4,7 @@ prompt_placeholder: true
 inputs:
   expected:
     type: string
-  answer:
+  answers:
     type: mapping
     fields:
       - id
@@ -31,6 +31,8 @@ You should not refer to the analyst or their response in your answer; just expla
 <END EXPECTED ANSWER>
 
 # User:
-<BEGIN ANALYST ANSWER #{{ answer.identifier }}>
-{{answer}}
-<END ANALYST ANSWER #{{ answer.identifier }}>
+{% for draft in answers %}
+    <BEGIN ANALYST ANSWER #{{draft.identifier}}>
+    {{ draft }}
+    <END ANALYST ANSWER #{{ draft.identifier }}>
+{% endfor %}

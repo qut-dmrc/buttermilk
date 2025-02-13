@@ -172,7 +172,10 @@ async def flow_stream(
             # if data.error:
             #     raise HTTPException(status_code=500, detail=str(data.error))
             if not result.outputs:
-                logger.info(f"No data to return from {flow} (completed successfully).")
+                # TODO: put a name in this message
+                logger.info(
+                    "No data to return from flow step (completed successfully)."
+                )
                 # raise StopAsyncIteration
 
             if return_json:

@@ -114,7 +114,7 @@ class DataSource(BaseModel):
     max_records_per_group: int = -1
     type: Literal["job", "file", "bq", "generator", "plaintext", "vector", "outputs"]
     path: str = Field(
-        default='',
+        default="",
         validation_alias=AliasChoices("path", "dataset", "uri", "func"),
     )
     glob: str = Field(default="**/*")
@@ -128,6 +128,7 @@ class DataSource(BaseModel):
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
+    sql: str = ""
 
     class Config:
         extra = "forbid"

@@ -20,7 +20,7 @@ bm:
           
     logger: 
       type: gcp
-      verbose: true
+      verbose: false
     tracing: 
       enabled: true
       

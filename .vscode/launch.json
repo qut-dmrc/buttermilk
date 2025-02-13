@@ -53,9 +53,9 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["hydra.verbose=true",
-              "+flows=[transtest]", "llm=lite",
-              "+flow=trans",
+      "args": ["hydra.verbose=false",
+              "+flows=[trans]", "llm=full",
+              "+flow=trans", 
               "+record_id=${input:query}"           // Will prompt for query
             ],
       "envFile": "${workspaceFolder}/.env",

@@ -1,15 +1,18 @@
 import copy
 import datetime
+from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
+import weave
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
+    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -79,6 +82,13 @@ class Agent(BaseModel):
         description="Data to pass on to next steps.",
     )
 
+    _semaphore: Semaphore = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def setup_semaphore(self) -> "Agent":
+        self._semaphore = Semaphore(self.concurrency)
+        return self
+
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
@@ -128,11 +138,13 @@ class Agent(BaseModel):
             return value
         return SaveInfo(**value)
 
+    @weave.op
     @trace
     async def run(self, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
-            job = await self.process_job(job=job, **kwargs)
+            async with self._semaphore:
+                job = await self.process_job(job=job, **kwargs)
         except Exception as e:
             job.error = extract_error_info(e=e)
             if job.record:

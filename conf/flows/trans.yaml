@@ -12,6 +12,28 @@ trans:
         - record_id
 
   steps:
+    - name: judger
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      save: ${save}
+      parameters: 
+        template: judge
+        criteria:
+          - trans_factored
+          - trans_simplified
+        formatting: json_rules
+        model: ${llm}
+      inputs:
+        record: record
+      outputs:
+        answer:
+          identifier: identifier
+          record_id: record.record_id
+          job_id: job_id
+          result: outputs
+          model: parameters.model
+          criteria: parameters.criteria
+          template: parameters.template
     - name: context
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
@@ -22,37 +44,10 @@ trans:
       inputs:
         record: record
       outputs:
-        text: outputs.description
-        id: identifier
+        feedback:
+          text: outputs.description
+          id: identifier
 
-
-    - name: judger
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 1
-      save: ${save}
-      parameters: 
-        template: judge
-        criteria: 
-          - cte
-          - tja
-          - glaad
-          - hrc
-          - trans_simplified
-          - trans_factored
-        formatting: json_rules
-        model: ${llm}
-      inputs:
-        record: record
-      outputs:
-        answer:
-          - identifier: identifier
-            record_id: record.record_id
-            job_id: job_id
-            result: outputs
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-      
     - name: synth
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
@@ -65,18 +60,17 @@ trans:
         model: ${llm}
       inputs:
         record: record
-        answers: judger.outputs
-        feedback: context.outputs
-
+        answers: judger.answer
+        feedback: context.feedback
       outputs:
         answer:
-          - identifier: identifier
-            record_id: record.record_id
-            job_id: job_id
-            result: outputs
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
+          identifier: identifier
+          record_id: record.record_id
+          job_id: job_id
+          result: outputs
+          model: parameters.model
+          criteria: parameters.criteria
+          template: parameters.template
     
     - name: scorer
       _target_: buttermilk.agents.lc.LC
@@ -85,14 +79,12 @@ trans:
       parameters:
         template: evaluate
         model: ${llm}
-        answer:
-          - judger.answer
-          - synth.answer
+        answers:
+          - judger.outputs.answer
+          - synth.outputs.answer
         expected: record.ground_truth
       outputs:
-        job_id: scorer.job_id
         score: outputs.score
-        score_llm: scorer.parameters.model
         reasons: outputs.reasons
         
     - name: eval 
@@ -107,10 +99,10 @@ trans:
       inputs:
         content: record.text
         answers:
-          - judger.answers
-          - synth.answers
+          - judger.outputs.answer
+          - synth.outputs.answer
       outputs:
-        differences: result
+        differences: outputs
         judge: inputs.answers.model
         criteria: input.answers.criteria
         template: input.answers.template
@@ -118,35 +110,9 @@ trans:
     - name: export
       _target_: buttermilk.agents.sheetexporter.GSheetExporter
       convert_json_columns:
-        - answers
-        - synthesis
-        - differences
+        - params
         - analysis
       save:
         type: gsheets
-        sheet_id: 1e5pun-ry8iZgiUSNtGlwWPW3rD8DxcODNOVrnnyRbe4
         sheet_name: evals
         title: Trans Guidelines Judger
-      inputs:
-        flow_id: flow_id
-        job_id: job_id
-        timestamp: timestamp
-        scorer: scorer.outputs
-        models:
-          - judger.model
-          - synth.model
-          - eval.model
-        criteria: 
-          - judger.criteria
-          - synth.criteria
-        template: 
-          - judger.template
-          - synth.template
-        record: record
-        answers:
-          - judger.answers
-        synthesis:
-          - synth.answers
-        differences:
-          - differences: eval.differences
-            model: eval.model

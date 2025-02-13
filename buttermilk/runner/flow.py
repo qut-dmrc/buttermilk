@@ -52,6 +52,11 @@ class Flow(BaseModel):
             existing_df=self._results,
             datasources=self.data,
         )
+        # this is a hack, it wont work later:
+        self._data[self.data[0].name] = self._results.to_dict(
+            orient="records",
+            index=True,
+        )
         return self
 
     def get_record(self, record_id: str) -> RecordInfo:
@@ -156,10 +161,15 @@ class Flow(BaseModel):
                     try:
                         if agent.outputs:
                             # Process result as specified in the output map field of Flow
-                            result.outputs = parse_flow_vars(
+                            job.outputs = parse_flow_vars(
                                 agent.outputs,
                                 job=result,
                                 additional_data=self._data,
+                            )
+                            # incorporate successful runs into data store for future use
+                            self.incorporate_outputs(
+                                step_name=agent.name,
+                                outputs=job.outputs,
                             )
                     except Exception as e:
                         # log the error but do not abort.
@@ -170,12 +180,6 @@ class Flow(BaseModel):
                             type=type(e).__name__,
                             args=e.args,
                         )
-
-                    # incorporate successful runs into data store for future use
-                    self.incorporate_outputs(
-                        step_name=agent.name,
-                        outputs=result.outputs,
-                    )
 
                     # We are in the process of replacing this with a single dataframe
                     # that holds the progressive results of the entire flow.
@@ -214,7 +218,11 @@ class Flow(BaseModel):
         if step_name not in self._data:
             self._data[step_name]["outputs"] = [outputs]
         else:
-            for k, v in outputs.model_dump().items():
+            if isinstance(outputs, BaseModel):
+                dict_outputs = outputs.model_dump()
+            else:
+                dict_outputs = outputs
+            for k, v in outputs.items():
                 # create if key does not already exist
                 self._data[step_name][k] = self._data[step_name].get(k, [])
                 self._data[step_name][k].append(v)
