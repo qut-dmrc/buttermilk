@@ -54,7 +54,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["hydra.verbose=false",
-              "+flows=[trans]", "llm=full",
+              "+flows=[trans]", "llm=lite",
               "+flow=trans", 
               "+record_id=${input:query}"           // Will prompt for query
             ],

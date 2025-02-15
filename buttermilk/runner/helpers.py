@@ -83,9 +83,6 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
     from buttermilk import BM
 
     last_n_days = data_cfg.last_n_days
-    if data_cfg.sql:
-        bm = BM()
-        return bm.run_query(data_cfg.sql)
 
     sql = "SELECT "
     if data_cfg.columns:
@@ -319,16 +316,11 @@ def parse_flow_vars(
     # Returns a dict of variables with their corresponding content, sourced from
     # datasets provided in additional_data or records in job.
 
-    # Keep any existing vars
-    input_vars = {k: v for k, v in job.inputs.items() if v}
+    mapped_vars = {}
 
     # Make job variables accessible for mapping
     # (this includes the data record in job.record)
     all_data_sources = job.model_dump()
-    del all_data_sources["inputs"]  # delete inputs key
-
-    # Add job inputs directly to the root of the search dict
-    all_data_sources.update(**{k: v for k, v in job.inputs.items() if v})
 
     # Add inputs from previous runs
     for key, value in additional_data.items():
@@ -408,14 +400,14 @@ def parse_flow_vars(
             else:
                 value = descend(var, locator)
                 if value:
-                    input_vars[var] = value
+                    mapped_vars[var] = value
                 elif locator:
                     # Instead, treat the value of the input mapping as a string and add in full
-                    input_vars[var] = locator
+                    mapped_vars[var] = locator
                 else:
                     # Don't add empty values to the input dict
                     pass
-    return input_vars
+    return mapped_vars
 
     # # Handle direct record field reference
     # if job.record and (

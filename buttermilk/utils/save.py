@@ -13,6 +13,7 @@ from cloudpathlib import AnyPath, CloudPath, GSPath
 from cloudpathlib.exceptions import InvalidPrefixError
 from google.api_core.exceptions import ClientError, GoogleAPICallError
 from google.cloud import bigquery, storage
+from pydantic import BaseModel
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -20,7 +21,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job
 
 from .._core.log import logger
 from .bq import construct_dict_from_schema
@@ -176,7 +177,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs) -> str:
 
 
 def data_to_export_rows(
-    data: pd.DataFrame | Job | Result | list[Mapping[str, Any]],
+    data: pd.DataFrame | Job | dict | list[Mapping[str, Any]],
     schema: list,
 ) -> list[Mapping[str, Any]]:
     if isinstance(data, pd.DataFrame):
@@ -190,7 +191,7 @@ def data_to_export_rows(
 
         bq_rows = data.to_dict(orient="records")
 
-    elif isinstance(data, Job | Result):
+    elif isinstance(data, BaseModel):
         bq_rows = [data.model_dump(mode="json")]
     else:
         bq_rows = data.copy()

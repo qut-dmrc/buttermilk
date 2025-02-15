@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job, RecordInfo, Result
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -37,14 +37,14 @@ class Flow(BaseModel):
         make_list_validator(),
     )
 
-    @field_validator("data", mode="before")
-    def convert_data(cls, value):
-        datasources = []
-        for source in value:
-            if not isinstance(source, DataSource):
-                source = DataSource(**source)
-            datasources.append(source)
-        return datasources
+    # @field_validator("data", mode="before")
+    # def convert_data(cls, value):
+    #     datasources = []
+    #     for source in value:
+    #         if not isinstance(source, DataSource):
+    #             source = DataSource(**source)
+    #         datasources.append(source)
+    #     return datasources
 
     @model_validator(mode="after")
     def combine_datasets(self) -> Self:
@@ -52,11 +52,15 @@ class Flow(BaseModel):
             existing_df=self._results,
             datasources=self.data,
         )
-        # this is a hack, it wont work later:
-        self._data[self.data[0].name] = self._results.to_dict(
-            orient="records",
-            index=True,
-        )
+        for agent in self.steps:
+            # Create empty list for results from each step
+            self._data[agent.name] = self._data.get(agent.name, [])
+
+        # # this is a hack, it wont work later:
+        # self._data[self.data[0].name] = self._results.to_dict(
+        #     orient="records",
+        #     index=True,
+        # )
         return self
 
     def get_record(self, record_id: str) -> RecordInfo:
@@ -96,9 +100,6 @@ class Flow(BaseModel):
         agent: Agent,
         job: Job,
     ) -> AsyncGenerator:
-        self._data[
-            agent.name
-        ] = {}  # Ensure this line is present to initialize _data for the agent
 
         job.source = list(set(self.source + job.source)) if job.source else self.source
 
@@ -139,7 +140,6 @@ class Flow(BaseModel):
 
             task = agent.run(
                 job=job_variant,
-                additional_data=self._data,
             )
             tasks.append(task)
 
@@ -161,7 +161,7 @@ class Flow(BaseModel):
                     try:
                         if agent.outputs:
                             # Process result as specified in the output map field of Flow
-                            job.outputs = parse_flow_vars(
+                            result.outputs = parse_flow_vars(
                                 agent.outputs,
                                 job=result,
                                 additional_data=self._data,
@@ -169,7 +169,7 @@ class Flow(BaseModel):
                             # incorporate successful runs into data store for future use
                             self.incorporate_outputs(
                                 step_name=agent.name,
-                                outputs=job.outputs,
+                                outputs=result.outputs,
                             )
                     except Exception as e:
                         # log the error but do not abort.
@@ -212,17 +212,17 @@ class Flow(BaseModel):
     def incorporate_outputs(
         self,
         step_name: str,
-        outputs: Result,
+        outputs: dict,
     ) -> None:
         """Update the data object with the outputs of the agent."""
-        if step_name not in self._data:
-            self._data[step_name]["outputs"] = [outputs]
+        if isinstance(outputs, BaseModel):
+            dict_outputs = outputs.model_dump()
         else:
-            if isinstance(outputs, BaseModel):
-                dict_outputs = outputs.model_dump()
-            else:
-                dict_outputs = outputs
-            for k, v in outputs.items():
+            dict_outputs = outputs
+        if step_name not in self._data:
+            self._data[step_name]["outputs"] = [dict_outputs]
+        else:
+            for k, v in dict_outputs.items():
                 # create if key does not already exist
                 self._data[step_name][k] = self._data[step_name].get(k, [])
                 self._data[step_name][k].append(v)

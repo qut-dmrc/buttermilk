@@ -27,53 +27,6 @@ from buttermilk.utils.validators import convert_omegaconf_objects, make_list_val
 from .types import SessionInfo
 
 
-class Result(BaseModel):
-    category: str | int | None = Field(default=None)
-    prediction: bool | int | None = Field(
-        default=None,
-        validation_alias=AliasChoices("prediction", "prediction", "pred"),
-    )
-    result: float | str | None = Field(default=None)
-    labels: list[str] | None = Field(
-        default=[],
-        validation_alias=AliasChoices("labels", "label"),
-    )
-    confidence: float | str | None = Field(default=None)
-    severity: float | str | None = Field(default=None)
-    reasons: list | None = Field(
-        default=[],
-        validation_alias=AliasChoices("reasoning", "reason", "analysis", "answer"),
-    )
-    scores: dict | list | None = None
-    metadata: dict | None = {}
-
-    _ensure_list = field_validator("labels", "reasons", mode="before")(
-        make_list_validator(),
-    )
-
-    model_config = ConfigDict(
-        extra="allow",
-        arbitrary_types_allowed=True,
-        populate_by_name=True,
-        use_enum_values=True,
-        json_encoders={
-            np.bool_: bool,
-            datetime.datetime: lambda v: v.isoformat(),
-            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-        },
-        validate_assignment=True,
-        exclude_unset=True,
-        exclude_none=True,
-    )
-
-    def model_dump(self, **kwargs):
-        # Use the default model_dump method with exclude_none and exclude_unset
-        data = super().model_dump(**kwargs, exclude_none=True, exclude_unset=True)
-        # Remove keys with empty values
-        return {k: v for k, v in data.items() if v}
-
-
 class MediaObj(BaseModel):
     label: str | None = Field(
         default=None,
@@ -215,9 +168,8 @@ class RecordInfo(BaseModel):
         default=None,
         description="Text description of media objects contained in this record.",
     )
-    ground_truth: Result | None = Field(
+    ground_truth: dict | None = Field(
         default=None,
-        validation_alias=AliasChoices("ground_truth", "golden", "groundtruth"),
     )
 
     uri: str | None = Field(
@@ -404,10 +356,6 @@ class Job(BaseModel):
         default_factory=shortuuid.uuid,
         description="A unique identifier for this particular unit of work",
     )
-    identifier: str = pydantic.Field(
-        default="",
-        description="A human readable identifier to distinguish the parameters for this job variant.",
-    )
     flow_id: str
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
@@ -442,8 +390,8 @@ class Job(BaseModel):
 
     agent_info: dict | None = Field(default={})
 
-    outputs: Result | None = Field(
-        default=None,
+    outputs: dict | None = Field(
+        default={},
         description="Formatted and processed results of the job, collated along with other data as specified in the Flow's outputs map.",
     )
     error: dict[str, Any] = Field(default={})
@@ -475,12 +423,6 @@ class Job(BaseModel):
     # def serialize_omegaconf(cls, value):
     #     return OmegaConf.to_container(value, resolve=True)
 
-    @field_validator("outputs", mode="before")
-    def convert_result(v):
-        if v and isinstance(v, Mapping):
-            return Result(**v)
-        return v
-
     @model_validator(mode="after")
     def move_metadata(self) -> Self:
         if self.outputs and hasattr(self.outputs, "metadata") and self.outputs.metadata:
@@ -491,15 +433,10 @@ class Job(BaseModel):
 
         return self
 
-    @model_validator(mode="after")
-    def make_identifier(self) -> Self:
-        if not self.identifier:
-            self.identifier = "-".join(
-                [
-                    str(getattr(self, x))[:8]
-                    for x in self.model_fields_set
-                    if Job.model_fields[x].annotation == type[str]
-                ]
-                + [self.job_id[:4]],
-            )
-        return self
+    @property
+    def identifier(self) -> Self:
+        identifier = "-".join(
+            [x[:12] for x in list(self.parameters.values()) if x and isinstance(x, str)]
+            + [self.job_id[:4]],
+        )
+        return identifier

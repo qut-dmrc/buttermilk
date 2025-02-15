@@ -7,10 +7,11 @@ inputs:
   answers:
     type: mapping
     fields:
-      - id
-      - prediction
-      - labels
-      - reasons
+      - identifier
+      - others ...
+  instructions:
+    type: string
+  
 ---
 
 # System:
@@ -26,13 +27,15 @@ You should not refer to the analyst or their response in your answer; just expla
     {% include "json_reasons.jinja2" %}
 {% endif %}
 
+<BEGIN ORIGINAL INSTRUCTIONS>
+{{ instructions }}
+<END ORIGINAL INSTRUCTIONS>
+
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
 
 # User:
-{% for draft in answers %}
-    <BEGIN ANALYST ANSWER #{{draft.identifier}}>
-    {{ draft }}
-    <END ANALYST ANSWER #{{ draft.identifier }}>
-{% endfor %}
+<BEGIN ANALYST ANSWER>
+{{ answer }}
+<END ANALYST ANSWER>

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from buttermilk._core.agent import save_job
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job
 from buttermilk.utils.save import data_to_export_rows
 
 SAMPLE_DATA = [
@@ -62,12 +62,12 @@ def joblist(job_minimal: Job):
 
 def test_issue_14_job(joblist):
     for job in joblist:
-        assert isinstance(job.outputs, Result)
-        assert len(job.outputs.reasons) == 5
-        assert job.outputs.labels == []
+        assert isinstance(job.outputs, dict)
+        assert len(job.outputs["reasons"]) == 5
+        assert job.outputs["labels"] == []
     assert joblist[1].outputs.score == 0.5
     assert joblist[2].outputs.score == 0.85
-    assert joblist[2].outputs.reasons[4].startswith("The response demonstrates")
+    assert joblist[2].outputs["reasons"][4].startswith("The response demonstrates")
 
 
 def test_issue_14_rows(joblist, bm, flow):

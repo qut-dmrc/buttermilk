@@ -128,7 +128,6 @@ class DataSource(BaseModel):
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
-    sql: str = ""
 
     class Config:
         extra = "forbid"

@@ -107,6 +107,7 @@ def load_template_vars(
     # Compile and render the templates, leaving unfilled variables to substitute later
     tpl = env.from_string(tpl_text)
     rendered_template = tpl.render(**available_vars)
+    undefined_vars = [x for x in undefined_vars if x not in available_vars]
 
     # We now have a template formatted as a string in Prompty format.
     # Also return the leftover (unfilled) inputs to pass through later

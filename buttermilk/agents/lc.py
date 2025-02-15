@@ -32,7 +32,7 @@ from tenacity import (
 
 from buttermilk import BM, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -67,7 +67,6 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        additional_data: dict[str, dict] = {},
         **kwargs,
     ) -> Job:
         model = job.parameters["model"]
@@ -75,13 +74,10 @@ class LC(Agent):
         if not model:
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
 
-        combined_template_variables = job.parameters.copy()
-        combined_template_variables.update(job.inputs)
-        combined_template_variables.update(additional_data)
-
         # Construct list of messages from the templates
         rendered_template, remaining_inputs = load_template_vars(
-            **combined_template_variables,
+            **job.parameters,
+            **job.inputs,
         )
 
         # Interpret the template as a Prompty; split it into separate messages with
@@ -97,9 +93,9 @@ class LC(Agent):
         placeholders.update({
             k: v for k, v in job.inputs.items() if k in remaining_inputs and v
         })
-        placeholders.update({
-            k: v for k, v in additional_data.items() if k in remaining_inputs and v
-        })
+        # placeholders.update({
+        #     k: v for k, v in additional_data.items() if k in remaining_inputs and v
+        # })
         if job.q and "q" in remaining_inputs:
             placeholders["q"] = job.q
         if job.record and "record" in remaining_inputs:
@@ -141,7 +137,7 @@ class LC(Agent):
         error = response.pop("error", None)
         if error:
             job.error[self.name] = error
-        job.outputs = Result(**response)
+        job.outputs = dict(**response)
 
         return job
 

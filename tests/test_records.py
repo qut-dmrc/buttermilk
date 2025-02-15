@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from buttermilk._core.runner_types import MediaObj, RecordInfo, Result
+from buttermilk._core.runner_types import MediaObj, RecordInfo
 from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.media import download_and_convert
 
@@ -112,14 +112,14 @@ async def test_record_update():
         mime="image/png",
         title="Test Image",
     )
-    result = Result(
+    result = dict(
         category="test",
         prediction=True,
         result=0.9,
         labels=["test_label"],
         reasons=["test_reason"],
     )
-    record.update_from(result.model_dump())
+    record.update_from(result)
     assert record.category == "test"
     assert record.prediction == True
     assert record.result == 0.9

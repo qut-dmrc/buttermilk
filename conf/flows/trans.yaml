@@ -19,7 +19,6 @@ trans:
       parameters: 
         template: judge
         criteria:
-          - trans_factored
           - trans_simplified
         formatting: json_rules
         model: ${llm}
@@ -27,26 +26,26 @@ trans:
         record: record
       outputs:
         answer:
-          identifier: identifier
-          record_id: record.record_id
-          job_id: job_id
-          result: outputs
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
-    - name: context
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 1
-      save: ${save}
-      parameters: 
-        template: context
-        model: ${llm}
-      inputs:
-        record: record
-      outputs:
-        feedback:
-          text: outputs.description
-          id: identifier
+          - job_id: job_id
+            reasons: outputs.reasons
+            prediction: outputs.prediction
+            confidence: outputs.confidence
+            severity: outputs.severity
+            labels: outputs.labels
+
+    # - name: context
+    #   _target_: buttermilk.agents.lc.LC
+    #   num_runs: 1
+    #   save: ${save}
+    #   parameters: 
+    #     template: context
+    #     model: ${llm}
+    #   inputs:
+    #     record: record
+    #   outputs:
+    #     feedback:
+    #       text: outputs.description
+    #       id: identifier
 
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -61,16 +60,15 @@ trans:
       inputs:
         record: record
         answers: judger.answer
-        feedback: context.feedback
+        # feedback: context.feedback
       outputs:
         answer:
-          identifier: identifier
-          record_id: record.record_id
-          job_id: job_id
-          result: outputs
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
+          - job_id: job_id
+            reasons: outputs.reasons
+            prediction: outputs.prediction
+            confidence: outputs.confidence
+            severity: outputs.severity
+            labels: outputs.labels
     
     - name: scorer
       _target_: buttermilk.agents.lc.LC
@@ -79,10 +77,15 @@ trans:
       parameters:
         template: evaluate
         model: ${llm}
-        answers:
+        answer:
           - judger.outputs.answer
           - synth.outputs.answer
         expected: record.ground_truth
+      inputs:
+        instructions: |
+            The analyst was tasked with evaluating how well the provided content 
+            aligned with journalistic standards and best practices for reporting
+            on stories related to trans people.
       outputs:
         score: outputs.score
         reasons: outputs.reasons
@@ -106,13 +109,3 @@ trans:
         judge: inputs.answers.model
         criteria: input.answers.criteria
         template: input.answers.template
-
-    - name: export
-      _target_: buttermilk.agents.sheetexporter.GSheetExporter
-      convert_json_columns:
-        - params
-        - analysis
-      save:
-        type: gsheets
-        sheet_name: evals
-        title: Trans Guidelines Judger
