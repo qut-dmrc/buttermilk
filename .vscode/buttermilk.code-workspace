@@ -4,18 +4,6 @@
 			"name": "buttermilk",
 			"path": ".."
 		},
-		{
-			"name": "automod.cc",
-			"path": "../../automod"
-		},
-		{
-			"name": "dev",
-			"path": "../../dev"
-		},
-		{
-			"name": "datatools",
-			"path": "../../datatools"
-		}
 	],
 	"settings": {
 			"python.terminal.activateEnvironment": true,
