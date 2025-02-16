@@ -172,6 +172,8 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.models:
             return self.models[__name]
+        if __name not in self.connections:
+            raise AttributeError
 
         model_config = self.connections[__name]
 

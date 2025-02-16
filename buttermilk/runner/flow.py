@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
 import pandas as pd
+import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
@@ -20,6 +21,14 @@ from buttermilk.utils.validators import make_list_validator
 """ A flow ties several stages together, runs them over a single record, 
     and streams results.
 """
+
+
+def get_flow_name_tracing(call: Any) -> str:
+    try:
+        name = f"{call.inputs['self'].source}: {call.inputs['job'].record.metadata.get('name', call.inputs['job'].record.record_id)}"
+        return name
+    except:
+        return "unknown flow"
 
 
 class Flow(BaseModel):
@@ -82,9 +91,10 @@ class Flow(BaseModel):
         *,
         job: Job,
     ) -> AsyncGenerator[Any, None]:
+        job.source = list(set(self.source + job.source)) if job.source else self.source
 
         for agent in self.steps:
-            async for result in self.run_step(
+            async for result in self.run_step_variants(
                 agent=agent,
                 job=job,
             ):
@@ -94,14 +104,13 @@ class Flow(BaseModel):
 
         return
 
-    async def run_step(
+    @weave.op(call_display_name=get_flow_name_tracing)
+    async def run_step_variants(
         self,
         *,
         agent: Agent,
         job: Job,
     ) -> AsyncGenerator:
-
-        job.source = list(set(self.source + job.source)) if job.source else self.source
 
         # Store base components of the job that don't change for each variant in the permutations
         job_vars = job.model_dump(

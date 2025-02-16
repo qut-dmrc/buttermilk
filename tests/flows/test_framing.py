@@ -1,9 +1,10 @@
 import pytest
+import weave
 
 from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
-from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
+from buttermilk.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk.runner.flow import Flow
 
 
@@ -28,7 +29,7 @@ def framer():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", CHATMODELS)
+@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
@@ -38,6 +39,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
         record=text_record,
         run_info=bm.run_info,
     )
+    weave.init("buttermilk-testing")
     async for result in flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)
@@ -45,7 +47,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", CHATMODELS)
+@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
 async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])

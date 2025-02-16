@@ -233,17 +233,18 @@ class BM(Singleton, BaseModel):
             self.logger.error(f"Could not save config to default save dir: {e}")
 
         if self.cfg.tracing:
-            import weave
-
             collection = f"{self.cfg.name}-{self.cfg.job}"
-            weave.init(collection)
+            if self.cfg.tracing.provider == "weave":
+                import weave
 
-            from promptflow.tracing import start_trace
+                weave.init(collection)
+            elif self.cfg.tracing.provider == "promptflow":
+                from promptflow.tracing import start_trace
 
-            start_trace(
-                resource_attributes={"run_id": self.run_info.run_id},
-                collection=f"{self.cfg.name}-{self.cfg.job}",
-            )
+                start_trace(
+                    resource_attributes={"run_id": self.run_info.run_id},
+                    collection=collection,
+                )
 
         return self
 
