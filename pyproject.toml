@@ -73,6 +73,7 @@ dependencies = [
     "opentelemetry-instrumentation-langchain>=0.38.5",
     "langchain-community>=0.3.16",
     "weave>=0.51.33",
+    "traceloop-sdk>=0.38.5",
 ]
 
 [dependency-groups]
@@ -182,7 +183,7 @@ default_async_timeout = 300
 addopts = [ "-rX",
     "--capture=fd", "--tb=short",
     "--continue-on-collection-errors","--durations=10", 
-    "-n 32"
+    "-n 12"
     ]
 #   " "-rA", "--timeout_method=thread", "--with-integration"
 # xfail_strict = true

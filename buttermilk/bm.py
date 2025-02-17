@@ -238,6 +238,13 @@ class BM(Singleton, BaseModel):
                 import weave
 
                 weave.init(collection)
+            elif self.cfg.tracing.provider == "traceloop":
+                from traceloop.sdk import Traceloop
+
+                Traceloop.init(
+                    disable_batch=True,
+                    api_key=self.cfg.tracing.api_key,
+                )
             elif self.cfg.tracing.provider == "promptflow":
                 from promptflow.tracing import start_trace
 

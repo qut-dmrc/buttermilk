@@ -1,5 +1,4 @@
 import pytest
-import weave
 
 from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
 from buttermilk.agents.lc import LC
@@ -39,7 +38,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
         record=text_record,
         run_info=bm.run_info,
     )
-    weave.init("buttermilk-testing")
+
     async for result in flow.run_flows(job=job):
         assert result
         assert isinstance(result.record, RecordInfo)

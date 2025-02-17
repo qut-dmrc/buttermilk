@@ -4,6 +4,32 @@ defaults:
   - _self_
   - local
 
+
+bm:
+  _target_: buttermilk.BM
+  cfg:
+    name: buttermilk
+    job: testing
+
+    clouds:
+          
+    logger: 
+      type: gcp
+      verbose: false
+
+    tracing: 
+      enabled: false
+      provider: none
+      
+    run:
+      platform: local
+      max_concurrency: 1
+      flow_api: http://flow:8000/flow
+
+    secret_provider: 
+
+llm:
+
 flows:
   test:
     _target_: buttermilk.runner.flow.Flow

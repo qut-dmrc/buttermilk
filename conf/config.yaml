@@ -28,4 +28,3 @@ bm:
       platform: local
       max_concurrency: 16
       flow_api: http://flow:8000/flow
-      save_dir_base: gs://prosocial-dev/runs/
