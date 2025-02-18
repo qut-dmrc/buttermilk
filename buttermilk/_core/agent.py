@@ -16,6 +16,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from traceloop.sdk.decorators import workflow
 
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
@@ -140,6 +141,7 @@ class Agent(BaseModel):
 
     @weave.op
     @trace
+    @workflow(name="run_step")
     async def run(self, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
