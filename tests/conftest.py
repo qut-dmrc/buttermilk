@@ -13,8 +13,8 @@ from buttermilk.utils.utils import read_file
 def objs():
     from hydra import compose, initialize
 
-    with initialize(version_base=None, config_path="conf"):
-        cfg = compose(config_name="config")
+    with initialize(version_base=None, config_path="../conf"):
+        cfg = compose(config_name="config", overrides=["+testing"])
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
     return objs

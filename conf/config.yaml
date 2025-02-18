@@ -1,8 +1,6 @@
 defaults:
   - _self_
   - local
-  - llm: lite
-  - save: bq
 
 name: default_project
 job: development
@@ -11,21 +9,12 @@ bm:
   _target_: buttermilk.BM
   cfg:
     name: ${name}
-    job: ${job}
-
+    job: 
+    logger:
     clouds:
-      - type: vertex
-        project: gcp_project_id
-        region: us-central1
-        bucket: dmrc-analysis
-          
-    logger: 
-      type: gcp
-      verbose: false
-    tracing: 
-      enabled: true
-      
+    tracing:
     run:
       platform: local
       max_concurrency: 16
       flow_api: http://flow:8000/flow
+      

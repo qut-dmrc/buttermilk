@@ -1,0 +1,26 @@
+defaults:
+  - _self_
+  - llm: lite
+
+name: buttermilk
+
+save:
+  type: bq
+  dataset: prosocial-443205.testing.flow
+  db_schema: flow.json
+
+bm:
+  run:    
+      flow_api: http://flow:8000/flow
+
+flows:
+  test:
+    _target_: buttermilk.runner.flow.Flow
+    source: bm testing
+    steps:
+      - name: test
+        _target_: buttermilk.agents.testagent.TestAgent
+        num_runs: 2
+        concurrency: 2
+        parameters: 
+        save: ${save}
