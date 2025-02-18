@@ -5,6 +5,7 @@ from typing import Any, Self
 import pandas as pd
 import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -104,6 +105,7 @@ class Flow(BaseModel):
 
         return
 
+    @workflow(name="run_step")
     @weave.op(call_display_name=get_flow_name_tracing)
     async def run_step_variants(
         self,

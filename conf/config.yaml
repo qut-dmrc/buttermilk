@@ -2,6 +2,7 @@ defaults:
   - _self_
   - local
   - llm: lite
+  - save: bq
 
 name: default_project
 job: development
