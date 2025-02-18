@@ -1,8 +1,9 @@
 defaults:
+  - config
   - _self_
-  - llm: lite
 
 name: buttermilk
+job: testing
 
 save:
   type: bq

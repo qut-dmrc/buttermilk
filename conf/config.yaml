@@ -9,7 +9,7 @@ bm:
   _target_: buttermilk.BM
   cfg:
     name: ${name}
-    job: 
+    job: ${job}
     logger:
     clouds:
     tracing:
