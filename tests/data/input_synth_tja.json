@@ -1,0 +1,87 @@
+{
+    "job_id": "96FmPc9XJjANPr4dBQAvb2",
+    "flow_id": "LGZvf6sWaGYYS3bHBsNuPB",
+    "source": [
+        "trans journalists guidelines assessment",
+        "cli"
+    ],
+    "run_info": {
+        "name": "buttermilk",
+        "job": "development",
+        "run_id": "20250219T0617Z-HNEf-nicwin11-nic",
+        "ip": "159.196.210.27",
+        "node_name": "nicwin11",
+        "username": "nic",
+        "save_dir_base": "/tmp/tmpdzxq1wea",
+        "save_dir": "/tmp/tmpdzxq1wea/runs/buttermilk/development/20250219T0617Z-HNEf-nicwin11-nic",
+    },
+    "record": {
+        "data": null,
+        "record_id": "Grevajd6tYXFBRvaQvJ7Hs",
+        "metadata": {
+            "outlet": "Clickhole",
+            "date": "2016-06-28T00:00:00",
+            "title": "Inspiring: This Progressive Bully Torments Transgender Students Using Their Preferred Pronoun",
+            "id": "clickhole_trans_bully",
+        },
+        "alt_text": null,
+        "ground_truth": {
+            "labels": [],
+            "reasons": [
+                ""
+            ],
+            "metadata": {}
+        },
+        "uri": "https://clickhole.com/inspiring-this-progressive-bully-torments-transgender-1825122925/",
+        "components": [
+            {
+                "label": null,
+                "metadata": {},
+                "uri": null,
+                "mime": "text/plain",
+                "content": "Transgender teens often have trouble feeling accepted at school, even if they don’t face outright discrimination. That’s why it’s so uplifting to hear about Thomas Watkins, a 16-year-old bully who respects the gender identity of every student he torments. Whether a kid goes by “he,” “she,” or a non-binary pronoun like “they” or “ze,” Thomas calls them by their preferred term and mistreats them just as he would any of his cisgender victims.\nThomas doesn’t care what’s on your birth certificate—only what’s in your heart. If a student identities as male, he’ll call them a wimp-ass momma’s boy while knocking their head against a locker. If they identify as female, he’ll gladly call them a fucking bitch while holding them in a headlock and spitting down the back of their shirt. In a time when we hear about conservative lawmakers banning kids from bathrooms, it’s heartwarming to know that Thomas will ambush his victims and give them a swirly no matter which bathroom they enter. Beautiful!\nSomeday, the whole world will accept transgender individuals for who they truly are, but in the meantime, we can count on role models like Thomas. Whether he’s forcing teens of all gender identities to eat bugs during recess, smearing dog shit on their bicycle seats, or publicly calling them fat sluts on their Facebook walls, he is a true ally of LGBT rights. Let’s hope that more bullies follow this outstanding young man’s lead!",
+                "base_64": null,
+            },
+        ],
+    },
+    "q": null,
+    "parameters": {
+        "template": "synthesise_judger",
+        "instructions": "judge",
+        "criteria": "trans_simplified",
+        "formatting": "json_rules",
+        "model": "gemini2flash",
+    },
+    "inputs": {
+        "uri": null,
+        "content": null,
+        "mime_type": null
+    },
+    "agent_info": {},
+    "outputs": {},
+    "error": {},
+    "metadata": {},
+    "judger": [
+        {
+            "job_id": "RpfDHfHHveJgqVDHFvipZ5",
+            "identifier": "made up human readable",
+            "result": {
+                "reasons": [
+                    "The article satirizes the concept of respecting transgender identities by portraying a bully, Thomas Watkins, who uses preferred pronouns while tormenting students regardless of their gender identity.",
+                    "The article's tone is sarcastic and ironic. It uses phrases like \"uplifting\", \"heartwarming\", \"beautiful\", and \"role model\" to describe a bully's behavior, highlighting the absurdity of the situation.",
+                    "The policy says, \"Avoid language that perpetuates negative or incorrect perceptions of gender identities.\" The article uses satire and irony to highlight a negative and incorrect stereotype about transgender allies by pretending that being awful to everyone equally constitutes \"respect\" for gender identity. This is achieved in a sarcastic and subversive manner, so it does not, in itself, represent a violation of rules or policy.",
+                    "The policy states: \"Do not publish false narratives about trans people. For example, do not uncritically repeat claims about \"grooming\", \"rapid-onset gender dysphoria\", or other debunked and harmful myths\". The article does not directly promote any of these narratives; in fact, it addresses the over-application of preferred pronoun usage, but in a satirical, sarcastic way.",
+                    "Overall, the content uses satire to comment on the performative allyship often seen in discussions of transgender rights.",
+                    "Therefore, the article does not violate the policy, since satire is used to critique a specific behavior.",
+                ],
+                "prediction": false,
+                "confidence": "high",
+                "severity": "N/A",
+                "labels": [],
+            },
+        },
+    ],
+    "synth": [],
+    "scorer": [],
+    "eval": [],
+}

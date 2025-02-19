@@ -28,6 +28,10 @@ def main(cfg) -> None:
     record = FlowRequest(**params, source="cli")
     flow = cfg.flow
 
+    # give our flows a little longer to set up
+    loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
+
     async def run_flow(flow: Flow):
         async for response in flow_stream(
             flow=flow,

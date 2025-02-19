@@ -16,6 +16,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -356,6 +357,7 @@ class Job(BaseModel):
         default_factory=shortuuid.uuid,
         description="A unique identifier for this particular unit of work",
     )
+
     flow_id: str
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
@@ -397,6 +399,14 @@ class Job(BaseModel):
     error: dict[str, Any] = Field(default={})
     metadata: dict | None = Field(default={})
 
+    @computed_field(return_type=str)
+    def identifier(self) -> str:
+        identifier = "-".join(
+            [x[:12] for x in list(self.parameters.values()) if x and isinstance(x, str)]
+            + [self.job_id[:4]],
+        )
+        return identifier
+
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=False,
@@ -432,11 +442,3 @@ class Job(BaseModel):
             self.outputs.metadata = None
 
         return self
-
-    @property
-    def identifier(self) -> Self:
-        identifier = "-".join(
-            [x[:12] for x in list(self.parameters.values()) if x and isinstance(x, str)]
-            + [self.job_id[:4]],
-        )
-        return identifier

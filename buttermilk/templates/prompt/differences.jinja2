@@ -85,11 +85,11 @@ Analyse the underlying reasons behind differences among the answers below.
 {% endif %}
 {% if answers %}
   {% for draft in answers %}
-<BEGIN DRAFT ANSWER: {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }}>
-{% if draft.get('prediction') %}Answer: {{ draft['prediction'] }}{% endif %}
-{% if draft.get('labels') %}Labels: {{ draft['labels'] }}{% endif %}
+<BEGIN DRAFT ANSWER: {{ draft.identifier }}>
+{% if draft.result.get('prediction') %}Answer: {{ draft.result['prediction'] }}{% endif %}
+{% if draft.result.get('labels') %}Labels: {{ draft.result['labels'] }}{% endif %}
 Reasons:
-{{ draft['reasons'] }}
-<END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }} ]>
+{{ draft.result.reasons }}
+<END DRAFT ANSWER>
   {% endfor %}
 {% endif %}

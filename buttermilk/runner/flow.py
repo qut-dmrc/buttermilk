@@ -123,7 +123,7 @@ class Flow(BaseModel):
         # Expand mapped parameters before producing permutations of jobs
         params = parse_flow_vars(
             agent.parameters,
-            job=job,
+            flow_data=job.model_dump(),
             additional_data=self._data,
         )
 
@@ -143,9 +143,13 @@ class Flow(BaseModel):
             # to the templating function and will be sent direct instead
             job_variant = Job(**job_vars, parameters=variant)
 
+            # Make job variables accessible for mapping
+            # (this includes the data record in job.record)
+            flow_data = job_variant.model_dump()
+
             job_variant.inputs = parse_flow_vars(
                 agent.inputs,
-                job=job_variant,
+                flow_data=flow_data,
                 additional_data=self._data,
             )
 
@@ -174,7 +178,7 @@ class Flow(BaseModel):
                             # Process result as specified in the output map field of Flow
                             result.outputs = parse_flow_vars(
                                 agent.outputs,
-                                job=result,
+                                flow_data=result.model_dump(),
                                 additional_data=self._data,
                             )
                             # incorporate successful runs into data store for future use
@@ -231,9 +235,6 @@ class Flow(BaseModel):
         else:
             dict_outputs = outputs
         if step_name not in self._data:
-            self._data[step_name]["outputs"] = [dict_outputs]
-        else:
-            for k, v in dict_outputs.items():
-                # create if key does not already exist
-                self._data[step_name][k] = self._data[step_name].get(k, [])
-                self._data[step_name][k].append(v)
+            self._data[step_name] = []
+
+        self._data[step_name].append(dict_outputs)
