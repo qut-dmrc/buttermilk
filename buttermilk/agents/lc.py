@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from collections.abc import Mapping
@@ -131,15 +132,59 @@ class LC(Agent):
             placeholders=placeholders,
         )
 
-        logger.debug(
-            f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model}, received response of {len(str(response.values()))} characters.",
-        )
+        elapsed = response["metadata"]["seconds_elapsed"]
         error = response.pop("error", None)
+
         if error:
             job.error[self.name] = error
+            logger.error(
+                f"Unsuccessfully nvoked chain with {model} in {elapsed:.2f} seconds: {error}",
+            )
+        else:
+            logger.debug(
+                f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model} in {elapsed:.2f} seconds, received response of {len(str(response.values()))} characters.",
+            )
+
         job.outputs = dict(**response)
 
         return job
+
+    async def invoke(
+        self,
+        *,
+        messages: list,
+        placeholders: Mapping,
+        model: str,
+    ) -> dict[str, str]:
+        # give our flows a little longer to set up
+        loop = asyncio.get_event_loop()
+        loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
+
+        elapsed = 0
+        t0 = time.time()
+        output = {}
+
+        # Invoke the chain
+        try:
+            logger.debug(f"Invoking chain with {model}...")
+            output = await self.invoke_with_retry(
+                messages=messages,
+                placeholders=placeholders,
+                model=model,
+            )
+        except RetryError:
+            output = dict(error="Retry timeout querying LLM")
+        except Exception as e:
+            err = f"Error invoking chain with {model}: {str(e)[:1000]} "
+            output = dict(error=err)
+        finally:
+            t1 = time.time()
+            elapsed = t1 - t0
+            if "metadata" not in output:
+                output["metadata"] = dict()
+            output["metadata"]["seconds_elapsed"] = elapsed
+
+        return output
 
     @retry(
         retry=retry_if_exception_type(
@@ -159,18 +204,17 @@ class LC(Agent):
         ),
         wait=wait_random(min=2, max=30),
         stop=stop_after_attempt(6),
-        before=before_log(logger, log_level=logging.INFO),
+        before=before_log(logger, log_level=logging.DEBUG),
     )
     @weave.op
     @trace
-    async def invoke(
+    async def invoke_with_retry(
         self,
         *,
         messages: list,
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-
         # Make the chain
         chain = (
             ChatPromptTemplate(messages, template_format="jinja2")
@@ -178,28 +222,4 @@ class LC(Agent):
             | ChatParser()
         )
 
-        elapsed = 0
-        t0 = time.time()
-        output = {}
-        # Invoke the chain
-        try:
-            try:
-                logger.debug(f"Invoking chain with {model}...")
-                output = await chain.ainvoke(input=placeholders)
-            except Exception as e:
-                t1 = time.time()
-                elapsed = t1 - t0
-                err = f"Error invoking chain with {model} after {elapsed:.2f} seconds: {str(e)[:1000]} "
-                logger.error(err)
-                output = dict(error=err)
-            t1 = time.time()
-            elapsed = t1 - t0
-            logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")
-
-        except RetryError:
-            output = dict(error="Retry timeout querying LLM")
-        if "metadata" not in output:
-            output["metadata"] = dict()
-        output["metadata"]["seconds_elapsed"] = elapsed
-
-        return output
+        return await chain.ainvoke(input=placeholders)

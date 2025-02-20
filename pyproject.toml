@@ -142,26 +142,28 @@ warn_untyped_fields = true
 [tool.ruff]
 extend-include = ["*.ipynb"]
 
+# Same as Black.
+line-length = 88
 
+# Assume Python 3.11
+target-version = "py311"
+
+
+[tool.ruff.lint]
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-lint.select = ["E", "F"]
-lint.ignore = [
+select = ["E", "F", "W", "Q", "I"] # ["E", "F"]
+ignore = [
     "RET504",  # Unnecessary variable assignment before return
     "RET503",  # Multiple returns 
     "E501",    # Line too long 
     "TRY003", "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
 ] 
-lint.isort.combine-as-imports = true
-lint.isort.known-first-party = ["buttermilk"]
+isort.combine-as-imports = true
+isort.known-first-party = ["buttermilk"]
 
 # Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-# Same as Black.
-line-length = 88
-
-# Assume Python 3.11
-target-version = "py311"
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.format]
 # Enable formatting
@@ -169,6 +171,7 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+docstring-code-format = true
 
 [tool.pytest.ini_options]
 markers = [

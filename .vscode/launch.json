@@ -53,11 +53,12 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["hydra.verbose=false",
-              "+flows=[trans]", "llm=lite",
-              "+flow=trans", 
-              "+record_id=${input:query}"           // Will prompt for query
-            ],
+      "args": [
+        "hydra.verbose=false",
+        "+flows=[trans]",
+        "+flow=trans",
+        "+record_id=${input:query}" // Will prompt for query
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
