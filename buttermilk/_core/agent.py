@@ -58,9 +58,9 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=4)  # Max number of async tasks to run
+    concurrency: int = Field(default=2)  # Max number of async tasks to run
 
-    inputs: dict[str, str | list | dict] | None = Field(
+    inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
     )
 

@@ -12,6 +12,7 @@ trans:
         - record_id
 
   steps:
+
     - name: judger
       _target_: buttermilk.agents.lc.LC
       num_runs: 1
@@ -49,8 +50,8 @@ trans:
       inputs:
         record: record
       outputs:
-        text: outputs.description
-        id: identifier
+        intervention: outputs.intervention
+        identifier: identifier
 
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -65,7 +66,7 @@ trans:
       inputs:
         record: record
         answers: judger
-        feedback: context_owl.text
+        feedback: context_owl.intervention
       outputs:
         job_id: job_id
         identifier: identifier
@@ -93,6 +94,7 @@ trans:
             aligned with journalistic standards and best practices for reporting
             on stories related to trans people.
       outputs:
+        identifier: inputs.answers.identifier
         score: outputs.score
         reasons: outputs.reasons
         
@@ -132,7 +134,7 @@ trans:
         record_id: record.record_id
         job_id: job_id
         timestamp: timestamp
-        record: record.text
+        record: record.fulltext
         owl: context_owl
         scores: scorer.score
         reasons: scorer

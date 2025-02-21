@@ -24,7 +24,7 @@ class ChatParser(JsonOutputParser):
     )
 
     def parse_result(self, result: list[Generation], *, partial: bool = False) -> Any:
-        text = "\n".join([r.text for r in result])
+        text = " ".join([r.text for r in result])
         output = self.parse_json(text)
 
         try:
