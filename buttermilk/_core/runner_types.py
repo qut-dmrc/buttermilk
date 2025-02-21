@@ -199,7 +199,7 @@ class RecordInfo(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["components"]
+        exclude=["components", "fulltext"]
     )
 
     @model_validator(mode="before")

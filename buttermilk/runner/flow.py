@@ -114,9 +114,7 @@ class Flow(BaseModel):
         job: Job,
     ) -> AsyncGenerator:
         # Store base components of the job that don't change for each variant in the permutations
-        job_vars = job.model_dump(
-            exclude=["job_id", "parameters", "timestamp", "identifier", "text"],
-        )
+        job_vars = job.model_dump(exclude={"job_id": True, "parameters": True, "timestamp": True, "identifier": True, "record": {"fulltext"}})
         tasks = []
 
         # Expand mapped parameters before producing permutations of jobs
@@ -143,7 +141,7 @@ class Flow(BaseModel):
             job_variant = Job(**job_vars, parameters=variant)
 
             # Make job variables accessible for mapping
-            # (this includes the data record in job.record)
+            # (this includes the data record in job.record and the computed fields like 'fulltext')
             flow_data = job_variant.model_dump()
 
             job_variant.inputs = parse_flow_vars(
