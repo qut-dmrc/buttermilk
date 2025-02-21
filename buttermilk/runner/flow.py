@@ -115,7 +115,7 @@ class Flow(BaseModel):
     ) -> AsyncGenerator:
         # Store base components of the job that don't change for each variant in the permutations
         job_vars = job.model_dump(
-            exclude=["job_id", "parameters", "timestamp", "identifier"],
+            exclude=["job_id", "parameters", "timestamp", "identifier", "text"],
         )
         tasks = []
 

@@ -175,10 +175,19 @@ class RecordInfo(BaseModel):
 
     uri: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("uri", "path", "url"),
     )
 
     components: list[MediaObj] = Field(default=[])
+
+    @computed_field
+    def record_text(self) -> str:
+        # Text, with headers for metadata but not paragraph labels.
+        # Ground truth not included
+        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
+        for part in self.components:
+            if part.content:
+                all_text.append(part.content)
+        return "\n".join(all_text)
 
     model_config = ConfigDict(
         extra="allow",
@@ -186,6 +195,7 @@ class RecordInfo(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
+        exclude=["components"]
     )
 
     @model_validator(mode="before")
@@ -252,15 +262,6 @@ class RecordInfo(BaseModel):
     @property
     def title(self) -> str | None:
         return self.metadata.get("title")
-
-    @computed_field
-    def text(self) -> str:
-        # Text, with headers for metadata but not paragraph labels.
-        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        for part in self.components:
-            if part.content:
-                all_text.append(part.content)
-        return "\n".join(all_text)
 
     @property
     def all_text(self) -> str:
