@@ -105,8 +105,8 @@ class Flow(BaseModel):
 
         return
 
-    @workflow(name="run_step")
-    @weave.op(call_display_name=get_flow_name_tracing)
+    # @workflow(name="run_step")
+    # @weave.op(call_display_name=get_flow_name_tracing)
     async def run_step_variants(
         self,
         *,

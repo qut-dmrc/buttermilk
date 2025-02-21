@@ -1,0 +1,17 @@
+general:
+  - gpt4o
+  - llama32_90b
+  - sonnet
+  - gemini2pro
+  - o3-mini-high
+
+fast_judgers:
+  - llama32_90b
+  - o3-mini-high
+  - gemini2flashthinking
+  - sonnet
+
+synthesisers:
+  - gemini2pro
+  - llama31_405b
+  - o3-mini-high

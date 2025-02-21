@@ -1,0 +1,10 @@
+general:
+  #- haiku
+  #- llama32_11b
+  - gemini2flash
+
+fast_judgers:
+  - gemini2flashthinking
+
+synthesisers:
+  - o3-mini-high

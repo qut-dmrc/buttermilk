@@ -42,6 +42,13 @@ from .log import logger
 ##########
 
 
+def get_agent_name_tracing(call: Any) -> str:
+    try:
+        name = f"{call.inputs['self'].name}: {call.inputs['job'].record.metadata.get('name', call.inputs['job'].record.record_id)}"
+        return name
+    except:
+        return "unknown flow"
+
 class Agent(BaseModel):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
@@ -71,9 +78,6 @@ class Agent(BaseModel):
             "vars",
             "init",
         ),
-    )
-    inputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
     )
 
     data: list[DataSource] | None = Field(default_factory=list)
@@ -139,9 +143,9 @@ class Agent(BaseModel):
             return value
         return SaveInfo(**value)
 
-    @weave.op
     @trace
-    @workflow(name="run_step")
+    @weave.op(call_display_name=get_agent_name_tracing)
+    @workflow(name="run_agent")
     async def run(self, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")

@@ -253,7 +253,7 @@ class RecordInfo(BaseModel):
     def title(self) -> str | None:
         return self.metadata.get("title")
 
-    @property
+    @computed_field
     def text(self) -> str:
         # Text, with headers for metadata but not paragraph labels.
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]

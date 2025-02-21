@@ -26,7 +26,7 @@ trans:
           - hrc
           - trans_factored
         formatting: json_rules
-        model: ${llm_fast_judgers}
+        model: ${llms.fast_judgers}
       inputs:
         record: record
       outputs:
@@ -49,9 +49,8 @@ trans:
       inputs:
         record: record
       outputs:
-        feedback:
-          text: outputs.description
-          id: identifier
+        text: outputs.description
+        id: identifier
 
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -62,11 +61,11 @@ trans:
         instructions: judge
         criteria: trans_simplified
         formatting: json_rules
-        model: ${llm_synthesisers}
+        model: ${llms.synthesisers}
       inputs:
         record: record
         answers: judger
-        # feedback: context.feedback
+        feedback: context_owl.text
       outputs:
         job_id: job_id
         identifier: identifier
@@ -83,7 +82,7 @@ trans:
       save: ${save}
       parameters:
         template: evaluate
-        model: ${llm_synthesisers}
+        model: ${llms.synthesisers}
         answer:
           - judger
           - synth
@@ -105,7 +104,7 @@ trans:
         template: differences
         criteria: 
           - trans_simplified
-        model: ${llm_synthesisers}
+        model: ${llms.synthesisers}
       inputs:
         content: record.text
         answers:
@@ -115,3 +114,28 @@ trans:
         differences: outputs
         jobs: inputs.answers.job_id
         identifiers: inputs.answers.identifier
+
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - record
+        - owl
+        - reasons
+        - differences
+      save:
+        type: gsheets
+        sheet_id: null
+        sheet_name: evals
+        title: TJA Guidelines full flow
+      inputs:
+        flow_id: flow_id
+        record_id: record.record_id
+        job_id: job_id
+        timestamp: timestamp
+        record: record.text
+        owl: context_owl
+        scores: scorer.score
+        reasons: scorer
+        # zeroshot: judger.answers
+        # synthesis: synth.answers
+        differences: eval.differences
