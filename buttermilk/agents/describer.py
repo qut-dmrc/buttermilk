@@ -25,14 +25,14 @@ class Describer(LC):
 
         # Next step, call a model to describe the object, but only if necessary.
         # We don't run this step if we only have text components.
-        if not job.record or not job.record._components:
+        if not job.record or not job.record.components:
             logger.debug(
                 f"Not invoking agent {self.name} for job {job.job_id}, no media object provided.",
             )
             return job
 
         media_exists = False
-        for component in job.record._components:
+        for component in job.record.components:
             if (
                 component.mime.startswith("image")
                 or component.mime.startswith("video")
