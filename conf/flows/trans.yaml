@@ -106,7 +106,7 @@ trans:
           - trans_simplified
         model: ${llms.synthesisers}
       inputs:
-        content: record.record_text
+        content: record.fulltext
         answers:
           - judger
           - synth

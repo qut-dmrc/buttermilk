@@ -16,9 +16,9 @@ async def test_record_remote_load(multimodal_record):
 def test_record_no_keywords():
     record = RecordInfo(text="test")
     assert not record.uri
-    assert len(record.components) == 1
-    assert record.components[0].mime == "text/plain"
-    assert record.components[0].base_64 is None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "text/plain"
+    assert record._components[0].base_64 is None
     assert record.all_text == "test"
     assert len(record.record_id) >= 8
 
@@ -35,9 +35,9 @@ async def test_from_path_valid():
     )
     assert record.uri == test_image_path
     assert record.metadata["title"] == "Test Image"
-    assert len(record.components) == 1
-    assert record.components[0].mime == "image/jpeg"
-    assert record.components[0].base_64 is not None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/jpeg"
+    assert record._components[0].base_64 is not None
 
 
 @pytest.mark.anyio
@@ -52,9 +52,9 @@ async def test_from_uri_valid():
     )
     assert record.uri == test_image_path
     assert record.metadata["title"] == "Test Image"
-    assert len(record.components) == 1
-    assert record.components[0].mime == "image/jpeg"
-    assert record.components[0].base_64 is not None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/jpeg"
+    assert record._components[0].base_64 is not None
 
 
 ARTICLES = [
@@ -99,9 +99,9 @@ async def test_from_object_valid():
     )
 
     assert record.metadata["title"] == "Test Image from Object"
-    assert len(record.components) == 1
-    assert record.components[0].mime == "image/png"
-    assert record.components[0].base_64 is not None
+    assert len(record._components) == 1
+    assert record._components[0].mime == "image/png"
+    assert record._components[0].base_64 is not None
 
 
 @pytest.mark.anyio

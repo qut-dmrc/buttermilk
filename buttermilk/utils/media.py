@@ -124,7 +124,7 @@ def get_news_record_from_uri(uri: str) -> RecordInfo:
         publish_date=article.publish_date,
     )
 
-    record = RecordInfo(uri=uri, components=paragraphs, metadata=metadta)
+    record = RecordInfo(uri=uri, _components=paragraphs, metadata=metadta)
 
     return record
 

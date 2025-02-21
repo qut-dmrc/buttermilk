@@ -30,6 +30,9 @@ bm = None
 
 
 class FlowRequest(BaseModel):
+    # The aliases on this object are less string, so that we can account
+    # for minor variations in user input. This object stands between the
+    # user and a Job / Record object, which need to comply strictly.
     flow_id: str = Field(default_factory=shortuuid.uuid, init=False)
 
     model: str | Sequence[str] | None = None
@@ -38,6 +41,7 @@ class FlowRequest(BaseModel):
 
     q: str | None = Field(
         default=None,
+        validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
     record: RecordInfo | None = None
@@ -45,8 +49,9 @@ class FlowRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
-    content: bytes | None = Field(
+    data: bytes | None = Field(
         default=None,
+        validation_alias=AliasChoices("data", "text", "body", "content", "video", "image"),
     )
     mime_type: str | None = None
     source: str | Sequence[str] = []
@@ -102,6 +107,7 @@ class FlowRequest(BaseModel):
                 values.get("record_id"),
                 values.get("uri"),
                 values.get("text"),
+                values.get("data"),
                 values.get("q"),
             ],
         ):

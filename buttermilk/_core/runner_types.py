@@ -171,22 +171,26 @@ class RecordInfo(BaseModel):
     )
     ground_truth: dict | None = Field(
         default=None,
+        validation_alias=AliasChoices("ground_truth", "golden")
     )
 
     uri: str | None = Field(
         default=None,
     )
 
-    components: list[MediaObj] = Field(default=[])
+    _components: list[MediaObj] = PrivateAttr(default=[])
 
     @computed_field
-    def record_text(self) -> str:
-        # Text, with headers for metadata but not paragraph labels.
+    def fulltext(self) -> str:
+        # Metadata, Text, but not paragraph labels.
         # Ground truth not included
+
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        for part in self.components:
+        
+        for part in self._components:
             if part.content:
                 all_text.append(part.content)
+
         return "\n".join(all_text)
 
     model_config = ConfigDict(
@@ -195,7 +199,6 @@ class RecordInfo(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["components"]
     )
 
     @model_validator(mode="before")
@@ -205,6 +208,7 @@ class RecordInfo(BaseModel):
         if "data" not in values and "arg0" not in values:
             data_field_aliases = ["text", "content", "image", "video", "media"]
             for alias in data_field_aliases:
+                # pick the first one we find
                 if data := values.get(alias):
                     values["data"] = data
                     del values[alias]
@@ -216,22 +220,22 @@ class RecordInfo(BaseModel):
     def vld_input(self) -> Self:
         # Take data arguments and turn them into MediaObj components
         if isinstance(self.data, MediaObj):
-            self.components.append(self.data)
+            self._components.append(self.data)
         elif isinstance(self.data, str | bytes | Mapping):
             self.data = [self.data]
             for element in self.data:
                 if isinstance(element, Mapping):
-                    self.components.append(MediaObj(**element))
+                    self._components.append(MediaObj(**element))
                 elif isinstance(element, str):
-                    self.components.append(MediaObj(content=element))
+                    self._components.append(MediaObj(content=element))
                 else:
-                    self.components.append(MediaObj(content=element))
+                    self._components.append(MediaObj(content=element))
         elif isinstance(self.data, list):
             for x in self.data:
                 if isinstance(x, MediaObj):
-                    self.components.append(x)
+                    self._components.append(x)
                 else:
-                    self.components.append(MediaObj(content=x))
+                    self._components.append(MediaObj(content=x))
         elif self.data:
             raise ValueError(f"Unknown component type: {type(self.data)}")
 
@@ -267,7 +271,7 @@ class RecordInfo(BaseModel):
     def all_text(self) -> str:
         # Also with paragraph labels etc.
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        for part in self.components:
+        for part in self._components:
             if part.content:
                 if part.label:
                     all_text.append(f"{part.label}: {part.content}")
@@ -307,7 +311,7 @@ class RecordInfo(BaseModel):
         leading_components = []
         trailing_components = []
 
-        for obj in self.components:
+        for obj in self._components:
             # attach media objects if the model supports them
             if (
                 (obj.mime.startswith("image") and model_capabilities.image)
