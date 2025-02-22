@@ -7,7 +7,7 @@ ingest:
   steps: 
 
     - name: fetch
-      _target_: buttermilk.agents.describer.RecordMaker
+      _target_: buttermilk.agents.ingest.RecordMaker
       num_runs: 1
       parameters: 
         download_if_necessary: true
