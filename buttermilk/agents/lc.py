@@ -144,7 +144,7 @@ class LC(Agent):
             logger.debug(
                 f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model} in {elapsed:.2f} seconds, received response of {len(str(response.values()))} characters.",
             )
-
+        job.metadata.update(response.pop("metadata", {}))
         job.outputs = dict(**response)
 
         return job

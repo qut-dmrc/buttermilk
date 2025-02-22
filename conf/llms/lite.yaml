@@ -1,10 +1,11 @@
 general:
-  #- haiku
-  #- llama32_11b
-  - gemini2flash
-
-fast_judgers:
+  # - o3-mini-high
   - gemini2flashthinking
 
+judgers:
+  - gemini2flashthinking
+  # - o3-mini-high
+
 synthesisers:
-  - o3-mini-high
+  - gemini2flashthinking
+  # - o3-mini-high

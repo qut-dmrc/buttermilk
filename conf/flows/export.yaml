@@ -1,0 +1,39 @@
+
+export:
+  _target_: buttermilk.runner.flow.Flow
+  source: sheets exporter
+  data:
+    - name: flows
+      type: bq
+      path: prosocial-443205.toxicity.flow
+      index: 
+        - record_id
+        - job_id
+      filter:
+        - flow_id
+
+  steps:
+    - name: export
+      _target_: buttermilk.agents.sheetexporter.GSheetExporter
+      convert_json_columns:
+        - record
+        # - owl
+        - reasons
+        - differences
+      save:
+        type: gsheets
+        sheet_id: null
+        sheet_name: evals
+        title: TJA Guidelines full flow
+      inputs:
+        flow_id: flows.flow_id
+        record_id: record.record_id
+        job_id: job_id
+        timestamp: timestamp
+        record: record.fulltext
+        # owl: context_owl
+        scores: scorer.score
+        reasons: scorer
+        zeroshot: judger.answers
+        synthesis: synth.answers
+        differences: eval.differences

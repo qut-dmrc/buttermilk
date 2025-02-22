@@ -58,7 +58,7 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=2)  # Max number of async tasks to run
+    concurrency: int = Field(default=4)  # Max number of async tasks to run
 
     inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
@@ -128,7 +128,7 @@ class Agent(BaseModel):
             self.parameters.update(self.model_extra)
         return self
 
-    def make_combinations(self, **kwargs):
+    def make_combinations(self, static_inputs={}, **kwargs):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.

@@ -4,6 +4,8 @@
 trans:
   _target_: buttermilk.runner.flow.Flow
   source: trans journalists guidelines assessment
+  save: ${save}
+
   data:
     - name: tja_train
       type: file
@@ -15,7 +17,7 @@ trans:
 
     - name: judger
       _target_: buttermilk.agents.lc.LC
-      num_runs: 1
+      num_runs: 2
       save: ${save}
       parameters: 
         template: judge
@@ -27,18 +29,12 @@ trans:
           - hrc
           - trans_factored
         formatting: json_rules
-        model: ${llms.fast_judgers}
-      inputs:
-        record: record
+        model: ${llms.judgers}
       outputs:
-        job_id: job_id
         identifier: identifier
-        result:
-          reasons: outputs.reasons
-          prediction: outputs.prediction
-          confidence: outputs.confidence
-          severity: outputs.severity
-          labels: outputs.labels
+        job_id: job_id
+        params: parameters
+        answer: outputs
 
     - name: context_owl
       _target_: buttermilk.agents.lc.LC
@@ -46,12 +42,7 @@ trans:
       save: ${save}
       parameters: 
         template: owl
-        model: o3-mini-high
-      inputs:
-        record: record
-      outputs:
-        intervention: outputs.intervention
-        identifier: identifier
+        model: ${llms.general}
 
     - name: synth
       _target_: buttermilk.agents.lc.LC
@@ -64,18 +55,14 @@ trans:
         formatting: json_rules
         model: ${llms.synthesisers}
       inputs:
-        record: record
         answers: judger
         feedback: context_owl.intervention
       outputs:
-        job_id: job_id
         identifier: identifier
-        result:
-          reasons: outputs.reasons
-          prediction: outputs.prediction
-          confidence: outputs.confidence
-          severity: outputs.severity
-          labels: outputs.labels
+        job_id: job_id
+        params: parameters
+        answer: outputs
+
     
     - name: scorer
       _target_: buttermilk.agents.lc.LC
@@ -89,12 +76,14 @@ trans:
           - synth
         expected: record.ground_truth
       inputs:
-        instructions: |
+        instructions: >
             The analyst was tasked with evaluating how well the provided content 
             aligned with journalistic standards and best practices for reporting
             on stories related to trans people.
       outputs:
-        identifier: inputs.answers.identifier
+        identifier: parameters.answer.identifier
+        job: parameters.answer.job_id
+        params: parameters.answer.params
         score: outputs.score
         reasons: outputs.reasons
         
@@ -104,40 +93,12 @@ trans:
       save: ${save}
       parameters:
         template: differences
-        criteria: 
-          - trans_simplified
+        criteria: > 
+            evaluate how well the provided content aligns with journalistic standards
+            and best practices for reporting on stories related to trans people.
         model: ${llms.synthesisers}
       inputs:
         content: record.fulltext
         answers:
           - judger
           - synth
-      outputs:
-        differences: outputs
-        jobs: inputs.answers.job_id
-        identifiers: inputs.answers.identifier
-
-    - name: export
-      _target_: buttermilk.agents.sheetexporter.GSheetExporter
-      convert_json_columns:
-        - record
-        - owl
-        - reasons
-        - differences
-      save:
-        type: gsheets
-        sheet_id: null
-        sheet_name: evals
-        title: TJA Guidelines full flow
-      inputs:
-        flow_id: flow_id
-        record_id: record.record_id
-        job_id: job_id
-        timestamp: timestamp
-        record: record.fulltext
-        owl: context_owl
-        scores: scorer.score
-        reasons: scorer
-        # zeroshot: judger.answers
-        # synthesis: synth.answers
-        differences: eval.differences

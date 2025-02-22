@@ -206,10 +206,6 @@ class BM(Singleton, BaseModel):
                 credentials, self._gcp_project = auth.default(
                     quota_project_id=billing_project,
                 )
-                self.setup_logging(verbose=self.cfg.logger.verbose)
-                self.logger.info(
-                    f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}",
-                )
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(
@@ -217,6 +213,8 @@ class BM(Singleton, BaseModel):
                     location=cloud.region,
                     staging_bucket=cloud.bucket,
                 )
+        
+        self.setup_logging(verbose=self.cfg.logger.verbose)
 
         # Print config to console and save to default save dir
         print(self.cfg)
