@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 from buttermilk._core.runner_types import RecordInfo
-from buttermilk.toxicity import *
 from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.llamaguard import LlamaGuardTox, MDJudgeLocal
 

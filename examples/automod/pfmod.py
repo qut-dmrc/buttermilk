@@ -15,6 +15,7 @@ from promptflow.client import PFClient as LocalPFClient
 from buttermilk import BM
 from buttermilk.agents.lc import LC
 from buttermilk.exceptions import FatalError
+from buttermilk.toxicity.toxicity import ToxicityModel
 from buttermilk.utils import col_mapping_hydra_to_local
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -27,7 +28,7 @@ import itertools
 import tqdm
 
 from buttermilk._core.log import logger
-from buttermilk.toxicity import *
+#from buttermilk.toxicity import *
 from buttermilk.utils.flows import col_mapping_hydra_to_pf
 
 # from azureml.core import Workspace, Experiment
