@@ -6,7 +6,7 @@ from buttermilk.utils.templating import make_messages
 
 def test_make_messages_with_valid_input():
     # Test with valid input
-    template = "extraneous prompty data\n\n--# system:\n{{key1}} \nUser: {{key2}}"
+    template = "extraneous prompty data\n\n--\n# system:\n{{key1}} \nUser: {{key2}}"
     expected_output = (
         "Expected template output"  # Replace with the actual expected output
     )
@@ -29,5 +29,6 @@ def test_make_messages_with_valid_input():
 def test_make_messages_with_invalid_input():
     # Test with invalid input
     input_data = "invalid_input"
-    with pytest.raises(TypeError):
+    from promptflow.core._errors import ChatAPIInvalidRoleError
+    with pytest.raises(ChatAPIInvalidRoleError):
         make_messages(input_data)

@@ -69,4 +69,4 @@ async def test_gsheet_exporter(flow: Agent):
     )
     result = await flow.process_job(job=job)
 
-    assert result.outputs.sheet_url
+    assert result.outputs['sheet_url']

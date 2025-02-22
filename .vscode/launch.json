@@ -56,7 +56,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[trans]",
-        "+flow=trans", "llms=lite",
+        "+flow=trans", "llms=full",
         "+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",

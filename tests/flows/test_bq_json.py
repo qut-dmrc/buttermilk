@@ -65,8 +65,8 @@ def test_issue_14_job(joblist):
         assert isinstance(job.outputs, dict)
         assert len(job.outputs["reasons"]) == 5
         assert job.outputs["labels"] == []
-    assert joblist[1].outputs.score == 0.5
-    assert joblist[2].outputs.score == 0.85
+    assert joblist[1].outputs['score'] == 0.5
+    assert joblist[2].outputs['score'] == 0.85
     assert joblist[2].outputs["reasons"][4].startswith("The response demonstrates")
 
 

@@ -78,13 +78,12 @@ CHATMODELS = [
     "sonnet",
     "haiku",
     "gemini15pro",
-    "llama31_8b",
     "gemini2flash",
     "gemini2pro",
     "o3-mini-high",
 ]
-CHEAP_CHAT_MODELS = ["haiku", "llama31_8b", "gemini2flash"]
-MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b", "gemini2pro"]
+CHEAP_CHAT_MODELS = ["haiku", "gemini2flash"]
+MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
 
 
 def VertexNoFilter(*args, **kwargs):

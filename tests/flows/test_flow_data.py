@@ -49,7 +49,7 @@ def test_output_map():
     )
 
     assert "flow_id" not in outputs
-    assert len(outputs["reasons"]) == 9
+    assert len(outputs['answers']["reasons"]) == 9
     assert outputs["synth_job_id"] == job.job_id
     assert outputs["identifier"]
 
