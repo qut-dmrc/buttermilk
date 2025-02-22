@@ -43,7 +43,7 @@ class Aegis(LlamaGuardTox):
     template: str = Field(default_factory=lambda: read_text(TEMPLATE_DIR / "aegis.txt"))
     categories: EnumMeta = AegisCategories
     tokenizer: Any = None
-    device: str | torch.device = Field(
+    device: str | Any = Field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
         description="Device type (CPU or CUDA)",
     )

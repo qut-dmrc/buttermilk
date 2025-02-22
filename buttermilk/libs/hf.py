@@ -50,7 +50,7 @@ class HFInferenceClient(LLM):
         return res.strip()
 
 
-def hf_pipeline(hf_model_path, **model_kwargs) -> Pipeline:
+def hf_pipeline(hf_model_path, **model_kwargs):
     # access token with permission to access the model
     login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
     if not (device := model_kwargs.pop("device", None)):

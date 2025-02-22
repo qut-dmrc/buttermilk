@@ -3,11 +3,10 @@
 import evaluate
 import pandas as pd
 import pytest
-
+pytest.importorskip("buttermilk.toxicity")
 from buttermilk._core.runner_types import RecordInfo
-from buttermilk.toxicity import *
-from buttermilk.toxicity import TOXCLIENTS
-from buttermilk.toxicity.llamaguard import LlamaGuardTox, MDJudgeLocal
+from buttermilk.toxicity import TOXCLIENTS, TOXCLIENTS_LOCAL
+from buttermilk.toxicity.llamaguard import LlamaGuard1Together, LlamaGuard2HF, LlamaGuard2Local, LlamaGuard2Replicate, LlamaGuard2Together, LlamaGuard3Local, LlamaGuard3LocalInt8, LlamaGuard3Together, LlamaGuardTox, MDJudge2, MDJudgeLocal
 
 # from datatools.datapipes.toxic import (
 #     BinaryHateSpeech,
@@ -23,7 +22,7 @@ from buttermilk.toxicity.llamaguard import LlamaGuardTox, MDJudgeLocal
 #     ToxicChat,
 #     Toxigen,
 # )
-from buttermilk.toxicity.toxicity import ToxicChat
+from buttermilk.toxicity.toxicity import Comprehend, Perspective, ToxicChat
 from buttermilk.types.tox import EvalRecord
 
 LLAMAGUARD_MODELS = [
