@@ -20,7 +20,7 @@ def test_save(bm):
     uploaded = AnyPath(uri)
     assert uploaded.exists()
     read_text = uploaded.read_text()
-    assert read_text == "test data"
+    assert read_text == '["test data"]'
     uploaded.unlink(missing_ok=False)
 
 

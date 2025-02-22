@@ -70,6 +70,10 @@ dependencies = [
     "json5>=0.10.0",
     "newspaper4k>=0.9.3.1",
     "lxml[html-clean]>=5.3.0",
+    "opentelemetry-instrumentation-langchain>=0.38.5",
+    "langchain-community>=0.3.16",
+    "weave>=0.51.33",
+    "traceloop-sdk>=0.38.5",
 ]
 
 [dependency-groups]
@@ -138,26 +142,28 @@ warn_untyped_fields = true
 [tool.ruff]
 extend-include = ["*.ipynb"]
 
+# Same as Black.
+line-length = 88
 
+# Assume Python 3.11
+target-version = "py311"
+
+
+[tool.ruff.lint]
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-lint.select = ["E", "F"]
-lint.ignore = [
+select = ["E", "F", "W", "Q", "I"] # ["E", "F"]
+ignore = [
     "RET504",  # Unnecessary variable assignment before return
     "RET503",  # Multiple returns 
     "E501",    # Line too long 
     "TRY003", "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
 ] 
-lint.isort.combine-as-imports = true
-lint.isort.known-first-party = ["buttermilk"]
+isort.combine-as-imports = true
+isort.known-first-party = ["buttermilk"]
 
 # Allow unused variables when underscore-prefixed.
-lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-# Same as Black.
-line-length = 88
-
-# Assume Python 3.11
-target-version = "py311"
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.format]
 # Enable formatting
@@ -165,6 +171,7 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+docstring-code-format = true
 
 [tool.pytest.ini_options]
 markers = [
@@ -179,12 +186,12 @@ default_async_timeout = 300
 addopts = [ "-rX",
     "--capture=fd", "--tb=short",
     "--continue-on-collection-errors","--durations=10", 
-    "-n 32"
+    "-n 12"
     ]
 #   " "-rA", "--timeout_method=thread", "--with-integration"
 # xfail_strict = true
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
-    "ignore:Passing field metadata as keyword arguments is deprecated"
+    "ignore:Passing field metadata as keyword arguments is deprecated",
     ]

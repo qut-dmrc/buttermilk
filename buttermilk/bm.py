@@ -206,10 +206,6 @@ class BM(Singleton, BaseModel):
                 credentials, self._gcp_project = auth.default(
                     quota_project_id=billing_project,
                 )
-                self.setup_logging(verbose=self.cfg.logger.verbose)
-                self.logger.info(
-                    f"Authenticated to gcloud using default credentials, project: {self._gcp_project}, save dir: {self.save_dir}",
-                )
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(
@@ -217,6 +213,8 @@ class BM(Singleton, BaseModel):
                     location=cloud.region,
                     staging_bucket=cloud.bucket,
                 )
+        
+        self.setup_logging(verbose=self.cfg.logger.verbose)
 
         # Print config to console and save to default save dir
         print(self.cfg)
@@ -233,12 +231,25 @@ class BM(Singleton, BaseModel):
             self.logger.error(f"Could not save config to default save dir: {e}")
 
         if self.cfg.tracing:
-            from promptflow.tracing import start_trace
+            collection = f"{self.cfg.name}-{self.cfg.job}"
+            if self.cfg.tracing.provider == "weave":
+                import weave
 
-            start_trace(
-                resource_attributes={"run_id": self.run_info.run_id},
-                collection=f"{self.cfg.name}-{self.cfg.job}",
-            )
+                weave.init(collection)
+            elif self.cfg.tracing.provider == "traceloop":
+                from traceloop.sdk import Traceloop
+
+                Traceloop.init(
+                    disable_batch=True,
+                    api_key=self.cfg.tracing.api_key,
+                )
+            elif self.cfg.tracing.provider == "promptflow":
+                from promptflow.tracing import start_trace
+
+                start_trace(
+                    resource_attributes={"run_id": self.run_info.run_id},
+                    collection=collection,
+                )
 
         return self
 

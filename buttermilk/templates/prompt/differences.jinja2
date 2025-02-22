@@ -66,7 +66,7 @@ You must reply only in a fully valid JSON format.
 
 Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
 
-When referring to a draft answer, ALWAYS use the the full ID of the answer with the name and variant included (the full ID is immediately before each answer, in the string: "<BEGIN DRAFT ANSWER: [ID-model-variant]>")
+When referring to a draft answer, ALWAYS use the the full ID of the answer. The full ID is provided immediately before each answer, in the string: "<BEGIN DRAFT ANSWER #[ID]>"
 <END REQUIRED FORMAT>
 
 # User:
@@ -84,12 +84,9 @@ Analyse the underlying reasons behind differences among the answers below.
 <END CONTENT>
 {% endif %}
 {% if answers %}
-  {% for draft in answers %}
-<BEGIN DRAFT ANSWER: {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }}>
-{% if draft.get('prediction') %}Answer: {{ draft['prediction'] }}{% endif %}
-{% if draft.get('labels') %}Labels: {{ draft['labels'] }}{% endif %}
-Reasons:
-{{ draft['reasons'] }}
-<END DRAFT ANSWER {{ draft['job_id'][:4] }}-{{ draft.get('model') }}-{{ draft.get('criteria') }} ]>
-  {% endfor %}
+{% for draft in answers %}
+    <BEGIN DRAFT ANSWER #{{draft.identifier}}>
+    {{ draft.answer }}
+    <END DRAFT ANSWER #{{ draft.identifier }}>
+{% endfor %}
 {% endif %}

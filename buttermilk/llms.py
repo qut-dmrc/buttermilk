@@ -78,13 +78,12 @@ CHATMODELS = [
     "sonnet",
     "haiku",
     "gemini15pro",
-    "llama31_8b",
     "gemini2flash",
     "gemini2pro",
     "o3-mini-high",
 ]
-CHEAP_CHAT_MODELS = ["haiku", "llama31_8b", "gemini2flash"]
-MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "sonnet", "llama32_90b", "gemini2pro"]
+CHEAP_CHAT_MODELS = ["haiku", "gemini2flash"]
+MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
 
 
 def VertexNoFilter(*args, **kwargs):
@@ -172,6 +171,8 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.models:
             return self.models[__name]
+        if __name not in self.connections:
+            raise AttributeError
 
         model_config = self.connections[__name]
 

@@ -1,0 +1,14 @@
+general:
+  - gemini2pro
+  - sonnet
+  - o3-mini-high
+
+judgers:
+  - gemini2pro
+  - sonnet
+  - o3-mini-high
+
+synthesisers:
+  - gemini2pro
+  - sonnet
+  - o3-mini-high

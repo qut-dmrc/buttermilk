@@ -15,11 +15,38 @@ def flow() -> Agent:
     )
 
 
+## Flow config
+export_config = {
+    "convert_json_columns": [
+        "record",
+        "owl",
+        "reasons",
+        "differences"
+    ],
+    "save": {
+        "type": "gsheets",
+        "sheet_id": None,
+        "sheet_name": "testing",
+        "title": "testing only"
+    },
+    "inputs": {
+        "flow_id": "flow_id",
+        "record_id": "record.record_id",
+        "job_id": "job_id",
+        "timestamp": "timestamp",
+        "record": "record.text",
+        "owl": "context_owl",
+        "scores": "scorer.score",
+        "reasons": "scorer",
+        "differences": "eval.differences"
+    }
+}
+
 @pytest.mark.anyio
 async def test_gsheet_exporter(flow: Agent):
     job = Job(
         job_id="job_id",
-        source="testimng",
+        source="testing",
         flow_id=flow.name,
         parameters={
             "sheet_name": "evals",
@@ -42,4 +69,4 @@ async def test_gsheet_exporter(flow: Agent):
     )
     result = await flow.process_job(job=job)
 
-    assert result.outputs.sheet_url
+    assert result.outputs['sheet_url']

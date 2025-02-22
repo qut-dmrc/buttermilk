@@ -1,20 +1,21 @@
 import copy
 import datetime
+from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-import shortuuid
+import weave
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
-    PrivateAttr,
     field_validator,
     model_validator,
 )
+from traceloop.sdk.decorators import workflow
 
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
@@ -40,17 +41,32 @@ from .log import logger
 ##########
 
 
+def get_agent_name_tracing(call: Any) -> str:
+    try:
+        name = f"{call.inputs['self'].name}: {call.inputs['job'].record.metadata.get('name', call.inputs['job'].record.record_id)}"
+        return name
+    except:
+        return "unknown flow"
+
 class Agent(BaseModel):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
     name: str = Field(
         ...,
-        description="The name of the flow or step in the process that this agent is responsible for.",
+        description="The name of the flow or step in the process that this agent does.",
     )
-
+    save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
     concurrency: int = Field(default=4)  # Max number of async tasks to run
-    save: SaveInfo | None = Field(default=None)  # Where to save the results
+
+    inputs: dict[str, str | list | dict] | list | None = Field(
+        default_factory=dict,
+    )
+
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
     parameters: dict[str, Any] | None = Field(
         default_factory=dict,
         description="Combinations of variables to pass to process job",
@@ -73,7 +89,9 @@ class Agent(BaseModel):
         description="Data to pass on to next steps.",
     )
 
-    _agent_id: str | None = PrivateAttr(None)
+    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
 
     class Config:
         extra = "forbid"
@@ -116,26 +134,31 @@ class Agent(BaseModel):
             return value
         return SaveInfo(**value)
 
-    @model_validator(mode="after")
-    def validate_concurrency(self) -> "Agent":
-        self._agent_id = f"{self.name}_{shortuuid.uuid()[:6]}"
-        return self
-
     @trace
-    async def run(self, *, job: Job, **kwargs) -> Job:
+    @weave.op(call_display_name=get_agent_name_tracing)
+    @workflow(name="run_agent")
+    async def run(self, job: Job, **kwargs) -> Job:
         try:
             job.agent_info = self.model_dump(mode="json")
-            job = await self.process_job(job=job, **kwargs)
+            async with self._semaphore:
+                job = await self.process_job(job=job, **kwargs)
         except Exception as e:
             job.error = extract_error_info(e=e)
             if job.record:
                 logger.error(
-                    f"Error processing task {self.name} by {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                    f"Error processing task {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
                 )
         finally:
             if self.save:
                 save_job(job=job, save_info=self.save)
         return job
+
+    def make_combinations(self):
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to return a copy,
+        # not the original.
+        vars = self.num_runs * expand_dict(self.parameters)
+        return copy.deepcopy(vars)
 
     async def process_job(
         self,

@@ -43,7 +43,7 @@ from typing import (
 class Flow(BaseModel):
     name: str
     num_runs: int = 1
-    concurrency: int = 1
+    concurrency: int = 4
     agent: Agent
     save: SaveInfo
     data: Optional[Sequence[DataSource]] = Field(default_factory=list)

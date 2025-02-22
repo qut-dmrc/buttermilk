@@ -5,7 +5,6 @@ import cloudpathlib
 import pandas as pd
 
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
 
@@ -84,9 +83,25 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
 
     last_n_days = data_cfg.last_n_days
 
-    sql = f"SELECT * FROM `{data_cfg.path}` jobs WHERE error IS NULL AND (JSON_VALUE(outputs, '$.error') IS NULL) "
+    sql = "SELECT "
+    if data_cfg.columns:
+        sql_cols = []
+        for field, locator in data_cfg.columns.items():
+            locator = locator.split(".", 1)
+            if len(locator) > 1:
+                sql_cols.append(
+                    f'JSON_VALUE({locator[0]}, "$.{locator[1]}") as {field}',
+                )
+            else:
+                sql_cols.append(f"{locator[0]} as {field}")
 
-    sql += f" AND TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
+        sql += ", ".join(sql_cols)
+
+    else:
+        sql += " * "
+    sql += f" FROM `{data_cfg.path}` jobs WHERE (JSON_VALUE(outputs, '$.error') IS NULL) AND "
+
+    sql += f" TIMESTAMP_TRUNC(timestamp, DAY) >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL {last_n_days} DAY)) "
     if data_cfg.filter:
         for field, condition in data_cfg.filter.items():
             field = field.split(".", 1)
@@ -258,16 +273,12 @@ async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFr
     combined_df = pd.DataFrame()
     for src in dataset_configs:
         new_df = load_data(src)
-        if src.type == "job":
-            # Load and join prior job data
-            new_df = group_and_filter_jobs(
-                existing_dfs=combined_df,
-                data=new_df,
-                data_cfg=src,
-            )
-        else:
-            # TODO @nicsuzor: group and limit by max_records_per_group
-            pass
+        # Load and join prior job data
+        new_df = group_and_filter_jobs(
+            existing_dfs=combined_df,
+            data=new_df,
+            data_cfg=src,
+        )
 
         if src.columns:
             new_df = new_df[src.columns.keys()]
@@ -297,33 +308,25 @@ def read_all_files(uri, pattern, columns: dict[str, str]):
 def parse_flow_vars(
     var_map: Mapping,
     *,
-    job: Job,
+    flow_data: dict,
     additional_data: dict = {},
 ) -> dict:
     # Take an input map of variable names to a dot-separated JSON path.
     # Returns a dict of variables with their corresponding content, sourced from
     # datasets provided in additional_data or records in job.
 
-    vars = {}
-
-    # Make job variables accessible for mapping
-    # (this includes the data record in job.record)
-    all_data_sources = job.model_dump()
-    del all_data_sources["inputs"]  # delete inputs key
-
-    # Add job inputs directly to the root of the search dict
-    all_data_sources.update(**{k: v for k, v in job.inputs.items() if v})
+    mapped_vars = {}
 
     # Add inputs from previous runs
     for key, value in additional_data.items():
-        if key in all_data_sources:
+        if key in flow_data:
             raise ValueError(f"Key {key} already exists in input dataset.")
         if isinstance(value, pd.DataFrame):
-            all_data_sources[key] = value.to_dict(orient="records")
+            flow_data[key] = value.to_dict(orient="records")
         else:
-            all_data_sources[key] = value
+            flow_data[key] = value
 
-    def resolve_var(match_key: str, data_dict: dict):
+    def resolve_var(*, match_key: str, data_dict: dict):
         """Find a key in dot notation from a hierarchical dict."""
         if not data_dict:
             return None
@@ -337,7 +340,7 @@ def parse_flow_vars(
 
         # If the current data var is a list, check each element
         if isinstance(data_dict, Sequence) and not isinstance(data_dict, str):
-            return [resolve_var(match_key, x) for x in data_dict]
+            return [resolve_var(match_key=match_key, data_dict=x) for x in data_dict]
 
         if "." in match_key:
             next_level, locator = match_key.split(".", maxsplit=1)
@@ -354,7 +357,7 @@ def parse_flow_vars(
         if isinstance(path, str):
             # We have reached the end of the tree, this last path is a plain string
             # Use this final leaf as the locator for the data to insert here
-            value = resolve_var(path, all_data_sources)
+            value = resolve_var(match_key=path, data_dict=flow_data)
             # value = jq.all(path, all_data_sources)
             return value
         if isinstance(path, bool):
@@ -392,14 +395,14 @@ def parse_flow_vars(
             else:
                 value = descend(var, locator)
                 if value:
-                    vars[var] = value
+                    mapped_vars[var] = value
                 elif locator:
                     # Instead, treat the value of the input mapping as a string and add in full
-                    vars[var] = locator
+                    mapped_vars[var] = locator
                 else:
                     # Don't add empty values to the input dict
                     pass
-    return vars
+    return mapped_vars
 
     # # Handle direct record field reference
     # if job.record and (

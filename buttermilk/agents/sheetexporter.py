@@ -1,5 +1,3 @@
-from typing import Any
-
 import pandas as pd
 from pydantic import Field, PrivateAttr
 
@@ -31,18 +29,20 @@ class GSheetExporter(Agent):
         self,
         *,
         job: Job,
-        additional_data: Any = None,
         **kwargs,
     ) -> Job:
         # save the input data from this step to a spreadsheet so that we can compare later.
         from buttermilk.utils.gsheet import format_strings
 
-        # combine input vars and params together in this instance
-        inputs = {}
-        inputs.update(job.inputs)
-        if job.parameters:
-            inputs.update(job.parameters)
-        dataset = pd.DataFrame.from_records([inputs])
+        # should probably deal with parameters here somewhere 
+        
+        if isinstance(job.inputs, dict):
+            inputs = [job.inputs]
+        else:
+            inputs = job.inputs
+
+        dataset = pd.DataFrame.from_records(inputs)
+
         contents = format_strings(
             dataset,
             convert_json_columns=self.convert_json_columns,

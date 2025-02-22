@@ -1,34 +1,23 @@
 {
-	"folders": [
-		{
-			"name": "buttermilk",
-			"path": ".."
-		},
-		{
-			"name": "automod.cc",
-			"path": "../../automod"
-		},
-		{
-			"name": "dev",
-			"path": "../../dev"
-		},
-		{
-			"name": "datatools",
-			"path": "../../datatools"
-		}
-	],
-	"settings": {
-			"python.terminal.activateEnvironment": true,
-			"notebook.formatOnSave.enabled": true,
-			"notebook.codeActionsOnSave": {
-				"source.organizeImports": "explicit"
-			},
-			"ruff.enable": true,
-			"ruff.fixAll": true,
-			"ruff.organizeImports":true,
-			"ruff.showSyntaxErrors": true,
-			"ruff.lint.enable": true,
-			"ruff.nativeServer": "on",
-			"python.testing.pytestEnabled": true
-	}
+  "folders": [
+    {
+      "name": "buttermilk",
+      "path": ".."
+    }
+  ],
+  "settings": {
+    "python.terminal.activateEnvironment": true,
+    "notebook.formatOnSave.enabled": true,
+    "notebook.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "ruff.enable": true,
+    "ruff.fixAll": true,
+    "ruff.organizeImports": true,
+    "ruff.showSyntaxErrors": true,
+    "ruff.lint.enable": true,
+    "ruff.nativeServer": "on",
+    "python.testing.pytestEnabled": true,
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  }
 }

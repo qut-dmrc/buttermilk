@@ -3,12 +3,14 @@ from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
 import pandas as pd
+import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job
+from buttermilk._core.runner_types import Job, RecordInfo
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -22,12 +24,20 @@ from buttermilk.utils.validators import make_list_validator
 """
 
 
+def get_flow_name_tracing(call: Any) -> str:
+    try:
+        name = f"{call.inputs['self'].source}: {call.inputs['job'].record.metadata.get('name', call.inputs['job'].record.record_id)}"
+        return name
+    except:
+        return "unknown flow"
+
+
 class Flow(BaseModel):
     source: Sequence[str]
     steps: list[Agent]
 
     data: list[DataSource] | None = Field(default_factory=list)
-    _data: dict = None
+    _data: dict = {}
     _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
 
     class Config:
@@ -37,14 +47,64 @@ class Flow(BaseModel):
         make_list_validator(),
     )
 
-    @field_validator("data", mode="before")
-    def convert_data(cls, value):
-        datasources = []
-        for source in value:
-            if not isinstance(source, DataSource):
-                source = DataSource(**source)
-            datasources.append(source)
-        return datasources
+    # @field_validator("data", mode="before")
+    # def convert_data(cls, value):
+    #     datasources = []
+    #     for source in value:
+    #         if not isinstance(source, DataSource):
+    #             source = DataSource(**source)
+    #         datasources.append(source)
+    #     return datasources
+
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        for agent in self.steps:
+            # Create empty list for results from each step
+            self._data[agent.name] = self._data.get(agent.name, [])
+
+        # # this is a hack, it wont work later:
+        # self._data[self.data[0].name] = self._results.to_dict(
+        #     orient="records",
+        #     index=True,
+        # )
+        return self
+
+    def get_record(self, record_id: str) -> RecordInfo:
+        rec = self._results.query("record_id==@record_id")
+        if rec.shape[0] > 1:
+            raise ValueError(
+                f"More than one record found for query record_id == {record_id}",
+            )
+
+        return RecordInfo(**rec.iloc[0].to_dict())
+
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
+
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
+
+    @model_validator(mode="after")
+    def combine_datasets(self) -> Self:
+        self._results = combine_datasets(
+            existing_df=self._results,
+            datasources=self.data,
+        )
+        return self
 
     @model_validator(mode="after")
     def combine_datasets(self) -> Self:
@@ -64,11 +124,10 @@ class Flow(BaseModel):
         *,
         job: Job,
     ) -> AsyncGenerator[Any, None]:
-        if self._data is None:
-            await self.load_data()
+        job.source = list(set(self.source + job.source)) if job.source else self.source
 
         for agent in self.steps:
-            async for result in self.run_step(
+            async for result in self.run_step_variants(
                 agent=agent,
                 job=job,
             ):
@@ -78,28 +137,22 @@ class Flow(BaseModel):
 
         return
 
-    async def run_step(
+    # @workflow(name="run_step")
+    # @weave.op(call_display_name=get_flow_name_tracing)
+    async def run_step_variants(
         self,
         *,
         agent: Agent,
         job: Job,
     ) -> AsyncGenerator:
-        self._data[
-            agent.name
-        ] = {}  # Ensure this line is present to initialize _data for the agent
-
-        job.source = list(set(self.source + job.source)) if job.source else self.source
-
         # Store base components of the job that don't change for each variant in the permutations
-        job_vars = job.model_dump(
-            exclude=["job_id", "parameters", "timestamp"],
-        )
+        job_vars = job.model_dump(exclude={"job_id": True, "parameters": True, "timestamp": True, "identifier": True, "record": {"fulltext"}})
         tasks = []
 
         # Expand mapped parameters before producing permutations of jobs
         params = parse_flow_vars(
             agent.parameters,
-            job=job,
+            flow_data=job.model_dump(),
             additional_data=self._data,
         )
 
@@ -119,15 +172,18 @@ class Flow(BaseModel):
             # to the templating function and will be sent direct instead
             job_variant = Job(**job_vars, parameters=variant)
 
+            # Make job variables accessible for mapping
+            # (this includes the data record in job.record and the computed fields like 'fulltext')
+            flow_data = job_variant.model_dump()
+
             job_variant.inputs = parse_flow_vars(
                 agent.inputs,
-                job=job_variant,
+                flow_data=flow_data,
                 additional_data=self._data,
             )
 
             task = agent.run(
                 job=job_variant,
-                additional_data=self._data,
             )
             tasks.append(task)
 
@@ -151,8 +207,13 @@ class Flow(BaseModel):
                             # Process result as specified in the output map field of Flow
                             result.outputs = parse_flow_vars(
                                 agent.outputs,
-                                job=result,
+                                flow_data=result.model_dump(),
                                 additional_data=self._data,
+                            )
+                            # incorporate successful runs into data store for future use
+                            self.incorporate_outputs(
+                                step_name=agent.name,
+                                outputs=result.outputs,
                             )
                     except Exception as e:
                         # log the error but do not abort.
@@ -163,12 +224,6 @@ class Flow(BaseModel):
                             type=type(e).__name__,
                             args=e.args,
                         )
-
-                    # incorporate successful runs into data store for future use
-                    self.incorporate_outputs(
-                        step_name=agent.name,
-                        outputs=result.outputs,
-                    )
 
                     # We are in the process of replacing this with a single dataframe
                     # that holds the progressive results of the entire flow.
@@ -201,13 +256,14 @@ class Flow(BaseModel):
     def incorporate_outputs(
         self,
         step_name: str,
-        outputs: dict[str, Any],
+        outputs: dict,
     ) -> None:
         """Update the data object with the outputs of the agent."""
-        if step_name not in self._data:
-            self._data[step_name]["outputs"] = [outputs]
+        if isinstance(outputs, BaseModel):
+            dict_outputs = outputs.model_dump()
         else:
-            for k, v in outputs.items():
-                # create if key does not already exist
-                self._data[step_name][k] = self._data[step_name].get(k, [])
-                self._data[step_name][k].append(v)
+            dict_outputs = outputs
+        if step_name not in self._data:
+            self._data[step_name] = []
+
+        self._data[step_name].append(dict_outputs)

@@ -30,6 +30,9 @@ bm = None
 
 
 class FlowRequest(BaseModel):
+    # The aliases on this object are less string, so that we can account
+    # for minor variations in user input. This object stands between the
+    # user and a Job / Record object, which need to comply strictly.
     flow_id: str = Field(default_factory=shortuuid.uuid, init=False)
 
     model: str | Sequence[str] | None = None
@@ -46,9 +49,9 @@ class FlowRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),
     )
-    content: bytes | None = Field(
+    data: bytes | None = Field(
         default=None,
-        validation_alias=AliasChoices("text", "body", "content", "video", "image"),
+        validation_alias=AliasChoices("data", "text", "body", "content", "video", "image"),
     )
     mime_type: str | None = None
     source: str | Sequence[str] = []
@@ -101,13 +104,15 @@ class FlowRequest(BaseModel):
             [
                 values.get("content"),
                 values.get("record"),
+                values.get("record_id"),
                 values.get("uri"),
                 values.get("text"),
+                values.get("data"),
                 values.get("q"),
             ],
         ):
             raise ValueError(
-                "At least one of query, record, content, text, or uri must be provided.",
+                "At least one of query, record, record_id, content, text, or uri must be provided.",
             )
 
         return values
@@ -153,13 +158,16 @@ async def flow_stream(
     bm = BM()
     if not flow_request.source:
         flow_request.source = [bm.cfg.job]
-    if flow_request.record_id:
-        raise NotImplementedError("Loading by record ID is not yet supported.")
 
     job = flow_request.to_job()
+
     # First step, fetch the record if we need to.
     if not job.record and job.inputs:
-        job.record = await download_and_convert(**job.inputs)
+        if record_id := job.inputs.pop("record_id", None):
+            job.record = flow.get_record(record_id=record_id)
+        else:
+            job.record = await download_and_convert(**job.inputs)
+
     job.run_info = bm.run_info
     async for result in flow.run_flows(
         job=job,
@@ -168,7 +176,9 @@ async def flow_stream(
             # if data.error:
             #     raise HTTPException(status_code=500, detail=str(data.error))
             if not result.outputs:
-                logger.info(f"No data to return from {flow} (completed successfully).")
+                logger.info(
+                    f"No data to return from flow step {result.agent_info.get('name')} (completed successfully).",
+                )
                 # raise StopAsyncIteration
 
             if return_json:

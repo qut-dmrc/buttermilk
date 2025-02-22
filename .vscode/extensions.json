@@ -1,0 +1,16 @@
+{
+    "recommendations": [
+        "github.copilot-chat",
+        "amazonwebservices.amazon-q-vscode",
+        "visualstudioexptteam.intellicode-api-usage-examples",
+        "visualstudioexptteam.vscodeintellicode",
+        "redhat.vscode-yaml",
+        "charliermarsh.ruff",
+        "ms-python.debugpy",
+        "ms-python.vscode-pylance",
+        "ms-python.mypy-type-checker",
+        "ms-toolsai.jupyter",
+        "eamodio.gitlens",
+        "github.copilot"
+    ]
+}

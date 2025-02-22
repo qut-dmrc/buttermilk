@@ -1,9 +1,12 @@
+import asyncio
 import logging
 import time
 from collections.abc import Mapping
+from typing import Any
 
 import requests
 import urllib3
+import weave
 from anthropic import (
     APIConnectionError as AnthropicAPIConnectionError,
     RateLimitError as AnthropicRateLimitError,
@@ -16,7 +19,9 @@ from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
+from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from promptflow.tracing import trace
+from pydantic import PrivateAttr
 from tenacity import (
     RetryError,
     before_log,
@@ -28,7 +33,7 @@ from tenacity import (
 
 from buttermilk import BM, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job, Result
+from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -47,6 +52,12 @@ from buttermilk.utils.utils import scrub_keys
 
 
 class LC(Agent):
+    _instrumentor: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context) -> None:
+        self._instrumentor = LangchainInstrumentor()
+        if not self._instrumentor.is_instrumented_by_opentelemetry:
+            self._instrumentor.instrument()
 
     @property
     def _llms(self) -> LLMs:
@@ -57,7 +68,6 @@ class LC(Agent):
         self,
         *,
         job: Job,
-        additional_data: dict[str, dict] = {},
         **kwargs,
     ) -> Job:
         model = job.parameters["model"]
@@ -69,7 +79,6 @@ class LC(Agent):
         rendered_template, remaining_inputs = load_template_vars(
             **job.parameters,
             **job.inputs,
-            **additional_data,
         )
 
         # Interpret the template as a Prompty; split it into separate messages with
@@ -85,9 +94,9 @@ class LC(Agent):
         placeholders.update({
             k: v for k, v in job.inputs.items() if k in remaining_inputs and v
         })
-        placeholders.update({
-            k: v for k, v in additional_data.items() if k in remaining_inputs and v
-        })
+        # placeholders.update({
+        #     k: v for k, v in additional_data.items() if k in remaining_inputs and v
+        # })
         if job.q and "q" in remaining_inputs:
             placeholders["q"] = job.q
         if job.record and "record" in remaining_inputs:
@@ -123,15 +132,59 @@ class LC(Agent):
             placeholders=placeholders,
         )
 
-        logger.debug(
-            f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model}, received response of {len(str(response.values()))} characters.",
-        )
+        elapsed = response["metadata"]["seconds_elapsed"]
         error = response.pop("error", None)
+
         if error:
             job.error[self.name] = error
-        job.outputs = Result(**response)
+            logger.error(
+                f"Unsuccessfully nvoked chain with {model} in {elapsed:.2f} seconds: {error}",
+            )
+        else:
+            logger.debug(
+                f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model} in {elapsed:.2f} seconds, received response of {len(str(response.values()))} characters.",
+            )
+        job.metadata.update(response.pop("metadata", {}))
+        job.outputs = dict(**response)
 
         return job
+
+    async def invoke(
+        self,
+        *,
+        messages: list,
+        placeholders: Mapping,
+        model: str,
+    ) -> dict[str, str]:
+        # give our flows a little longer to set up
+        loop = asyncio.get_event_loop()
+        loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
+
+        elapsed = 0
+        t0 = time.time()
+        output = {}
+
+        # Invoke the chain
+        try:
+            logger.debug(f"Invoking chain with {model}...")
+            output = await self.invoke_with_retry(
+                messages=messages,
+                placeholders=placeholders,
+                model=model,
+            )
+        except RetryError:
+            output = dict(error="Retry timeout querying LLM")
+        except Exception as e:
+            err = f"Error invoking chain with {model}: {str(e)[:1000]} "
+            output = dict(error=err)
+        finally:
+            t1 = time.time()
+            elapsed = t1 - t0
+            if "metadata" not in output:
+                output["metadata"] = dict()
+            output["metadata"]["seconds_elapsed"] = elapsed
+
+        return output
 
     @retry(
         retry=retry_if_exception_type(
@@ -151,17 +204,17 @@ class LC(Agent):
         ),
         wait=wait_random(min=2, max=30),
         stop=stop_after_attempt(6),
-        before=before_log(logger, log_level=logging.INFO),
+        before=before_log(logger, log_level=logging.DEBUG),
     )
+    @weave.op
     @trace
-    async def invoke(
+    async def invoke_with_retry(
         self,
         *,
         messages: list,
         placeholders: Mapping,
         model: str,
     ) -> dict[str, str]:
-
         # Make the chain
         chain = (
             ChatPromptTemplate(messages, template_format="jinja2")
@@ -169,28 +222,4 @@ class LC(Agent):
             | ChatParser()
         )
 
-        elapsed = 0
-        t0 = time.time()
-        output = {}
-        # Invoke the chain
-        try:
-            try:
-                logger.debug(f"Invoking chain with {model}...")
-                output = await chain.ainvoke(input=placeholders)
-            except Exception as e:
-                t1 = time.time()
-                elapsed = t1 - t0
-                err = f"Error invoking chain with {model} after {elapsed:.2f} seconds: {str(e)[:1000]} "
-                logger.error(err)
-                output = dict(error=err)
-            t1 = time.time()
-            elapsed = t1 - t0
-            logger.debug(f"Invoked chain with {model} in {elapsed:.2f} seconds")
-
-        except RetryError:
-            output = dict(error="Retry timeout querying LLM")
-        if "metadata" not in output:
-            output["metadata"] = dict()
-        output["metadata"]["seconds_elapsed"] = elapsed
-
-        return output
+        return await chain.ainvoke(input=placeholders)

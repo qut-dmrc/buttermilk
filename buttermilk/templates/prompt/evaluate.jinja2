@@ -4,13 +4,14 @@ prompt_placeholder: true
 inputs:
   expected:
     type: string
-  answer:
+  answers:
     type: mapping
     fields:
-      - id
-      - prediction
-      - labels
-      - reasons
+      - identifier
+      - others ...
+  instructions:
+    type: string
+  
 ---
 
 # System:
@@ -26,11 +27,15 @@ You should not refer to the analyst or their response in your answer; just expla
     {% include "json_reasons.jinja2" %}
 {% endif %}
 
+<BEGIN ORIGINAL INSTRUCTIONS>
+{{ instructions }}
+<END ORIGINAL INSTRUCTIONS>
+
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
 
 # User:
-<BEGIN ANALYST ANSWER #{{ answer.identifier }}>
-{{answer}}
-<END ANALYST ANSWER #{{ answer.identifier }}>
+<BEGIN ANALYST ANSWER {{ answer.identifier }} >
+{{ answer.answer }}
+<END ANALYST ANSWER>

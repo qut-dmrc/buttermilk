@@ -1,8 +1,18 @@
-# @package __global__
-
 defaults:
+  - config
   - _self_
-  - local
+
+name: buttermilk
+job: testing
+
+save:
+  type: bq
+  dataset: prosocial-443205.testing.flow
+  db_schema: flow.json
+
+bm:
+  run:    
+      flow_api: http://flow:8000/flow
 
 flows:
   test:

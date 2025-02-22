@@ -114,7 +114,7 @@ class DataSource(BaseModel):
     max_records_per_group: int = -1
     type: Literal["job", "file", "bq", "generator", "plaintext", "vector", "outputs"]
     path: str = Field(
-        default='',
+        default="",
         validation_alias=AliasChoices("path", "dataset", "uri", "func"),
     )
     glob: str = Field(default="**/*")
@@ -139,6 +139,8 @@ class DataSource(BaseModel):
 
 class Tracing(BaseModel):
     enabled: bool = False
+    api_key: str = ""
+    provider: str = ""
     endpoint: str | None = None
     otlp_headers: Mapping | None = Field(default_factory=dict)
 

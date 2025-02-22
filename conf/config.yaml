@@ -1,7 +1,6 @@
 defaults:
   - _self_
   - local
-  - llm: lite
 
 name: default_project
 job: development
@@ -11,21 +10,11 @@ bm:
   cfg:
     name: ${name}
     job: ${job}
-
+    logger:
     clouds:
-      - type: vertex
-        project: gcp_project_id
-        region: us-central1
-        bucket: dmrc-analysis
-          
-    logger: 
-      type: gcp
-      verbose: true
-    tracing: 
-      enabled: true
-      
+    tracing:
     run:
       platform: local
       max_concurrency: 16
       flow_api: http://flow:8000/flow
-      save_dir_base: gs://prosocial-dev/runs/
+      

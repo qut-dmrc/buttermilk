@@ -34,7 +34,7 @@ You may be provided with additional feedback to consider. You should incorporate
 user:
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER #{{draft.identifier}}>
-    {{ draft.result }}
+    {{ draft.answer }}
     <END DRAFT ANSWER {{ draft.identifier }}>
 {% endfor %}
 {% if feedback %}

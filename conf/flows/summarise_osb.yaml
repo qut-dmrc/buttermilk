@@ -18,6 +18,16 @@ summarise_osb:
           - gpt4o
           - sonnet
           - gemini15pro
+          - llama32_90b
+      inputs:
+        content: record.all_text
+      outputs:
+        answers:
+          - job_id: job_id
+            flow_id: flow_id
+            model: parameters.model
+            instructions: summarise_osb
+            reasons: outputs
 
     - name: synthesise
       _target_: buttermilk.agents.lc.LC
@@ -30,6 +40,18 @@ summarise_osb:
         model:
           - gpt4o
           - sonnet
-        content: record.text
-        answers: summarise
+          - gemini15pro
+          - llama32_90b
+      inputs:
+        answers: summarise.answers
      
+
+
+    # - name: cases
+    #   type: vector
+    #   uri: gs://prosocial-public/osb/01_osb_cases.json
+    #   db:
+    #     type: chromadb
+    #     embeddings: gs://prosocial-public/osb/04_osb_embeddings_vertex-005.json
+    #     model: text-embedding-005
+    #     store: ".chromadb"
