@@ -6,9 +6,11 @@ general:
 judgers:
   - gemini2pro
   - sonnet
-  - o3-mini-high
+  - gpt4o
+  - llama32_90b
 
 synthesisers:
   - gemini2pro
   - sonnet
-  - o3-mini-high
+  - gpt4o
+  # - o3-mini-high

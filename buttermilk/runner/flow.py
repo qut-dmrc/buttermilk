@@ -3,9 +3,7 @@ from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
 import pandas as pd
-import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -146,45 +144,29 @@ class Flow(BaseModel):
         job: Job,
     ) -> AsyncGenerator:
         # Store base components of the job that don't change for each variant in the permutations
-        job_vars = job.model_dump(exclude={"job_id": True, "parameters": True, "timestamp": True, "identifier": True, "record": {"fulltext"}})
-        tasks = []
-
-        # Expand mapped parameters before producing permutations of jobs
-        params = parse_flow_vars(
-            agent.parameters,
-            flow_data=job.model_dump(),
-            additional_data=self._data,
+        jobvars = job.model_dump(
+            exclude={
+                "job_id": True,
+                "parameters": True,
+                "timestamp": True,
+                "identifier": True,
+                "record": {"fulltext"},
+            },
         )
+        tasks = []
 
         # Create a new job and task for every combination of variables
         # this agent is configured to run.
-        for variant in agent.make_combinations(**params):
-            # Process all inputs into two categories.
-            # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
-            # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
-            # Then there are also extra **kwargs sent to this method.
-            # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
-            # We need to resolve all inputs into a mapping that can be passed to the agent.
-
-            # After this method, job.parameters will include all variables that will be passed
-            # during the initital construction of the job - including template variables and static values
-            # job.inputs will include all variables and formatted placeholders etc that will not be passed
-            # to the templating function and will be sent direct instead
-            job_variant = Job(**job_vars, parameters=variant)
-
-            # Make job variables accessible for mapping
+        for job_variant in agent.make_combinations():
+            # Expand mapped parameters; first make job variables accessible for mapping
             # (this includes the data record in job.record and the computed fields like 'fulltext')
-            flow_data = job_variant.model_dump()
-
-            job_variant.inputs = parse_flow_vars(
-                agent.inputs,
-                flow_data=flow_data,
+            params = parse_flow_vars(
+                job_variant,
+                flow_data=job_variant.model_dump(),
                 additional_data=self._data,
             )
 
-            task = agent.run(
-                job=job_variant,
-            )
+            task = agent.run(job=Job(**jobvars, parameters=params))
             tasks.append(task)
 
         logger.info(

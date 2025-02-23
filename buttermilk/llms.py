@@ -77,7 +77,6 @@ CHATMODELS = [
     "gpt4o",
     "sonnet",
     "haiku",
-    "gemini15pro",
     "gemini2flash",
     "gemini2pro",
     "o3-mini-high",

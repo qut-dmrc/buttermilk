@@ -1,6 +1,5 @@
 import copy
 import datetime
-from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
@@ -48,6 +47,7 @@ def get_agent_name_tracing(call: Any) -> str:
     except:
         return "unknown flow"
 
+
 class Agent(BaseModel):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
@@ -78,16 +78,8 @@ class Agent(BaseModel):
             "init",
         ),
     )
-    inputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-    )
 
     data: list[DataSource] | None = Field(default_factory=list)
-
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
 
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
@@ -107,26 +99,35 @@ class Agent(BaseModel):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
-    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
-
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
-
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
         return self
 
-    def make_combinations(self, **extra_combinations: dict):
+    def make_combinations(self, **extra_combinations: dict) -> dict:
+        # Produces input mappings for jobs running all combinations of supplied parameters.
+        #
+        # Agents have a parameters mapping; each permutation of these is multiplied by num_runs.
+        # Agents also have an inputs mapping that does not get multiplied.
+        # Extra **kwargs sent to this method will be treated as more combinations.
+        # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
+        # We need to resolve all inputs into a mapping that can be passed to the agent.
+
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
-        params = self.parameters.copy()
+        params = copy.deepcopy(self.parameters)
         params.update(extra_combinations)
-        vars = self.num_runs * expand_dict(params)
-        return copy.deepcopy(vars)
+        params = self.num_runs * expand_dict(params)
+
+        combinations_with_inputs = []
+        for variant in params:
+            # Add inputs to the variant
+            variant.update(self.inputs)
+            combinations_with_inputs.append(variant)
+
+        return combinations_with_inputs
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
@@ -152,13 +153,6 @@ class Agent(BaseModel):
             if self.save:
                 save_job(job=job, save_info=self.save)
         return job
-
-    def make_combinations(self):
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        vars = self.num_runs * expand_dict(self.parameters)
-        return copy.deepcopy(vars)
 
     async def process_job(
         self,
