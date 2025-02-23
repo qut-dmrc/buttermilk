@@ -161,6 +161,13 @@ class Flow(BaseModel):
             additional_data=self._data,
         )
 
+        # Expand mapped parameters before producing permutations of jobs
+        params = parse_flow_vars(
+            agent.parameters,
+            flow_data=job.model_dump(),
+            additional_data=self._data,
+        )
+
         # Create a new job and task for every combination of variables
         # this agent is configured to run. Agents have a parameters mapping; 
         # each permutation of these is multiplied by num_runs. Agents also
