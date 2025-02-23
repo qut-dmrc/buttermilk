@@ -3,7 +3,9 @@ from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
 import pandas as pd
+import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent

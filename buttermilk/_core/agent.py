@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import datetime
+from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,6 +13,7 @@ from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
+    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -82,11 +84,21 @@ class Agent(BaseModel):
 
     data: list[DataSource] | None = Field(default_factory=list)
 
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
+
+    _semaphore: Semaphore = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def setup_semaphore(self) -> "Agent":
+        self._semaphore = Semaphore(self.concurrency)
+        return self
+
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
-
-    _semaphore: asyncio.Semaphore
 
     class Config:
         extra = "forbid"
@@ -107,8 +119,6 @@ class Agent(BaseModel):
         if self.model_extra:
             self.parameters.update(self.model_extra)
 
-        self._semaphore = asyncio.Semaphore(self.concurrency)
-        
         return self
 
     def make_combinations(self, **extra_combinations: dict) -> list[dict]:

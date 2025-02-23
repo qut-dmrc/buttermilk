@@ -54,10 +54,10 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "hydra.verbose=true",
+        "hydra.verbose=false",
         "+flows=[trans]",
-        "llms=full"
-        //              "+q=${input:query}"           // Will prompt for query
+        "+flow=trans", "llms=full",
+        "+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
