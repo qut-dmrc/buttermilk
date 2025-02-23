@@ -13,7 +13,7 @@
         "buttermilk.api.flow:app",
         "--reload",
         "+flows=[simple,osb,hate,trans,describer]",
-        "llm=lite"
+        "llms=lite"
       ],
       "jinja": true
     },

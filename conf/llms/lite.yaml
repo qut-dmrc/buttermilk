@@ -4,8 +4,12 @@ general:
 
 judgers:
   - gemini2flashthinking
+  - sonnet
+  - o3-mini-high
   # - o3-mini-high
 
 synthesisers:
-  - gemini2flashthinking
+  - gemini2pro
+  - gpt4o
+  - llama32_90b
   # - o3-mini-high

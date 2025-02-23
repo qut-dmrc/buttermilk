@@ -8,12 +8,13 @@ judgers:
   # - gemini2pro
   - gemini2flashthinking
   - sonnet
-  # - gpt4o
   - llama32_90b
   - o3-mini-high
+  - gpt4o
+  - llama32_90b
 
 synthesisers:
   - gemini2pro
   - sonnet
-  # - gpt4o
   - o3-mini-high
+  - gpt4o

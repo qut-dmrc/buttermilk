@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
@@ -59,7 +58,7 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=8)  # Max number of async tasks to run
+    concurrency: int = Field(default=3)  # Max number of async tasks to run
 
     inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
@@ -83,16 +82,11 @@ class Agent(BaseModel):
 
     data: list[DataSource] | None = Field(default_factory=list)
 
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-
-    _semaphore: Semaphore = PrivateAttr(default=None)
+    _semaphore: asyncio.Semaphore = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def setup_semaphore(self) -> "Agent":
-        self._semaphore = Semaphore(self.concurrency)
+        self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
@@ -112,6 +106,12 @@ class Agent(BaseModel):
             ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
+
+    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
+
+    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
 
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
