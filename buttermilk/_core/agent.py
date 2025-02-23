@@ -133,17 +133,10 @@ class Agent(BaseModel):
         # Because we're duplicating variables and returning
         # permutations, we should make sure to return a copy,
         # not the original.
-        params = copy.deepcopy(self.parameters)
+        params = self.parameters.copy()
         params.update(extra_combinations)
-        params = self.num_runs * expand_dict(params)
-
-        combinations_with_inputs = []
-        for variant in params:
-            # Add inputs to the variant
-            variant.update(self.inputs)
-            combinations_with_inputs.append(variant)
-
-        return combinations_with_inputs
+        vars = self.num_runs * expand_dict(params)
+        return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:

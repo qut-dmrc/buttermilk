@@ -157,18 +157,42 @@ class Flow(BaseModel):
         )
         tasks = []
 
+        # Expand mapped parameters before producing permutations of jobs
+        params = parse_flow_vars(
+            agent.parameters,
+            flow_data=job.model_dump(),
+            additional_data=self._data,
+        )
+
         # Create a new job and task for every combination of variables
         # this agent is configured to run.
-        for job_variant in agent.make_combinations():
-            # Expand mapped parameters; first make job variables accessible for mapping
+        for variant in agent.make_combinations(**params):
+            # Process all inputs into two categories.
+            # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
+            # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
+            # Then there are also extra **kwargs sent to this method.
+            # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
+            # We need to resolve all inputs into a mapping that can be passed to the agent.
+
+            # After this method, job.parameters will include all variables that will be passed
+            # during the initital construction of the job - including template variables and static values
+            # job.inputs will include all variables and formatted placeholders etc that will not be passed
+            # to the templating function and will be sent direct instead
+            job_variant = Job(**job_vars, parameters=variant)
+
+            # Make job variables accessible for mapping
             # (this includes the data record in job.record and the computed fields like 'fulltext')
-            params = parse_flow_vars(
-                job_variant,
-                flow_data=job_variant,
+            flow_data = job_variant.model_dump()
+
+            job_variant.inputs = parse_flow_vars(
+                agent.inputs,
+                flow_data=flow_data,
                 additional_data=self._data,
             )
 
-            task = agent.run(job=Job(**jobvars, parameters=params))
+            task = agent.run(
+                job=job_variant,
+            )
             tasks.append(task)
 
         logger.info(
