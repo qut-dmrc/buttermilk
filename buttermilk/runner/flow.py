@@ -162,7 +162,7 @@ class Flow(BaseModel):
             # (this includes the data record in job.record and the computed fields like 'fulltext')
             params = parse_flow_vars(
                 job_variant,
-                flow_data=job_variant.model_dump(),
+                flow_data=job_variant,
                 additional_data=self._data,
             )
 

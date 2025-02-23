@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import datetime
 from collections.abc import Mapping
@@ -57,7 +58,7 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=4)  # Max number of async tasks to run
+    concurrency: int = Field(default=8)  # Max number of async tasks to run
 
     inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
@@ -85,6 +86,8 @@ class Agent(BaseModel):
         convert_omegaconf_objects(),
     )
 
+    _semaphore: asyncio.Semaphore
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
@@ -103,9 +106,12 @@ class Agent(BaseModel):
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
+
+        self._semaphore = asyncio.Semaphore(self.concurrency)
+        
         return self
 
-    def make_combinations(self, **extra_combinations: dict) -> dict:
+    def make_combinations(self, **extra_combinations: dict) -> list[dict]:
         # Produces input mappings for jobs running all combinations of supplied parameters.
         #
         # Agents have a parameters mapping; each permutation of these is multiplied by num_runs.

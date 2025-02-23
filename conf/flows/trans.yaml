@@ -19,6 +19,7 @@ trans:
       num_runs: 1
       save: ${save}
       parameters:
+        template: judge
         criteria:
           - trans_simplified
           - cte
