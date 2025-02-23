@@ -93,6 +93,8 @@ class Agent(BaseModel):
         convert_omegaconf_objects(),
     )
 
+    _semaphore: asyncio.Semaphore
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
