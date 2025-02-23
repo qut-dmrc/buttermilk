@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from asyncio import Semaphore
 from collections.abc import Mapping
 from typing import Any
 
@@ -92,8 +93,6 @@ class Agent(BaseModel):
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
-
-    _semaphore: asyncio.Semaphore
 
     class Config:
         extra = "forbid"
