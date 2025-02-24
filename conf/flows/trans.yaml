@@ -16,7 +16,7 @@ trans:
   steps:
     - name: judger
       _target_: buttermilk.agents.lc.LC
-      num_runs: 1
+      num_runs: 2
       save: ${save}
       parameters:
         template: judge

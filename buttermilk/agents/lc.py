@@ -158,7 +158,7 @@ class LC(Agent):
     ) -> dict[str, str]:
         # give our flows a little longer to set up
         loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
+        loop.slow_callback_duration = 5.0  # instead of default 0.1
 
         elapsed = 0
         t0 = time.time()

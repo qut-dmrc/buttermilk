@@ -314,6 +314,12 @@ class BM(Singleton, BaseModel):
             module="promptflow-tracing",
             category=DeprecationWarning,
         )
+        warnings.filterwarnings(
+            action="ignore",
+            module="traceloop",
+            category=DeprecationWarning,
+        )
+
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:

@@ -230,7 +230,7 @@ def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) 
         errors.extend(bq.insert_rows(table, chunk, selected_fields=schema))
 
     if not errors:
-        logger.info(
+        logger.debug(
             f"Successfully pushed {len(bq_rows)} rows to BigQuery table {dataset}.",
         )
     else:
