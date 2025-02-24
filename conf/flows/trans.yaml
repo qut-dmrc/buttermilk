@@ -72,12 +72,12 @@ trans:
         answer:
           - judger
           - synth
-        expected: record.ground_truth
       inputs:
         instructions: >
           The analyst was tasked with evaluating how well the provided content 
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
+        expected: record.ground_truth
       outputs:
         identifier: parameters.answer.identifier
         job: parameters.answer.job_id
@@ -92,7 +92,7 @@ trans:
       parameters:
         template: differences
         criteria: >
-          evaluate how well the provided content aligns with journalistic standards
+          Evaluate how well the provided content aligns with journalistic standards
           and best practices for reporting on stories related to trans people.
         model: ${llms.synthesisers}
       inputs:

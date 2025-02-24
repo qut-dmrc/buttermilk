@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import datetime
 from asyncio import Semaphore
 from collections.abc import Mapping
@@ -120,23 +119,6 @@ class Agent(BaseModel):
             self.parameters.update(self.model_extra)
 
         return self
-
-    def make_combinations(self, **extra_combinations: dict) -> list[dict]:
-        # Produces input mappings for jobs running all combinations of supplied parameters.
-        #
-        # Agents have a parameters mapping; each permutation of these is multiplied by num_runs.
-        # Agents also have an inputs mapping that does not get multiplied.
-        # Extra **kwargs sent to this method will be treated as more combinations.
-        # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
-        # We need to resolve all inputs into a mapping that can be passed to the agent.
-
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        params = self.parameters.copy()
-        params.update(extra_combinations)
-        vars = self.num_runs * expand_dict(params)
-        return copy.deepcopy(vars)
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:

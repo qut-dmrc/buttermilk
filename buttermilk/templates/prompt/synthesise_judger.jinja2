@@ -38,9 +38,8 @@ user:
     <END DRAFT ANSWER {{ draft.identifier }}>
 {% endfor %}
 {% if feedback %}
-{% for feedback in feedback %}
-    <BEGIN FEEDBACK {{ feedback.id }}>
-    {{ feedback.text }}
-    <END FEEDBACK {{ feedback.id }}>
+  <BEGIN ADDITIONAL FEEDBACK>
+  {{ feedback }}
+  <END ADDITIONAL FEEDBACK>
 {% endfor %}
 {% endif %}

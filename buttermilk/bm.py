@@ -373,12 +373,7 @@ class BM(Singleton, BaseModel):
         if resource:
             message = f"{message} {resource}"
 
-        logger.info(
-            dict(
-                message=message,
-                **self.run_info.model_dump(),
-            ),
-        )
+        logger.info(message, extra=dict(run=self.run_info.model_dump()))
 
         try:
             from importlib.metadata import version

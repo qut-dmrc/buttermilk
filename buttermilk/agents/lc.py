@@ -135,10 +135,10 @@ class LC(Agent):
         elapsed = response["metadata"]["seconds_elapsed"]
         error = response.pop("error", None)
 
-        if error:
+        if error and not str(error).lower() == 'null':
             job.error[self.name] = error
             logger.error(
-                f"Unsuccessfully nvoked chain with {model} in {elapsed:.2f} seconds: {error}",
+                f"Unsuccessfully invoked chain with {model} in {elapsed:.2f} seconds: {error}",
             )
         else:
             logger.debug(

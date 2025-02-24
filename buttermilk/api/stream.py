@@ -186,5 +186,5 @@ async def flow_stream(
             else:
                 yield result
 
-    logger.info(f"Finished flow {flow}.")
+    logger.info(f"Finished flow {flow.source}.")
     return

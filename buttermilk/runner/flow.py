@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
+import copy
 import pandas as pd
 import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
@@ -17,6 +18,7 @@ from buttermilk.runner.helpers import (
     parse_flow_vars,
     prepare_step_df,
 )
+from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import make_list_validator
 
 """ A flow ties several stages together, runs them over a single record, 
@@ -90,30 +92,6 @@ class Flow(BaseModel):
         )
         return self
 
-    @model_validator(mode="after")
-    def combine_datasets(self) -> Self:
-        self._results = combine_datasets(
-            existing_df=self._results,
-            datasources=self.data,
-        )
-        return self
-
-    @model_validator(mode="after")
-    def combine_datasets(self) -> Self:
-        self._results = combine_datasets(
-            existing_df=self._results,
-            datasources=self.data,
-        )
-        return self
-
-    @model_validator(mode="after")
-    def combine_datasets(self) -> Self:
-        self._results = combine_datasets(
-            existing_df=self._results,
-            datasources=self.data,
-        )
-        return self
-
     async def load_data(self):
         # We are in the process of replacing _data with a single
         # _results dataframe.
@@ -150,45 +128,49 @@ class Flow(BaseModel):
             exclude={
                 "job_id": True,
                 "parameters": True,
+                "inputs": True,
+                "outputs": True,
+                "error": True,
+                "metadata": True,
                 "timestamp": True,
                 "identifier": True,
-                "record": {"fulltext"},
+                "record": {"fulltext": True},
             },
         )
-        tasks = []
 
-        # Expand mapped parameters before producing permutations of jobs
+
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to edit a copy,
+        # not the original.
+        params = copy.deepcopy(agent.parameters)
+        inputs = copy.deepcopy(agent.inputs)
+
+        # In all cases, input values might be the name of a template, a literal value, 
+        # or a reference to a field in the job.record object or in other supplied additional_data.
+        # We need to resolve all flow inputs into a mapping that can be passed to the agent.
+        # Makesure we make all job variables accessible for mapping but don't pass the job dict by
+        # reference (this includes the data record in job.record and the computed fields like 'fulltext')
         params = parse_flow_vars(
-            agent.parameters,
+            params,
+            flow_data=job.model_dump(),
+            additional_data=self._data,
+        )
+        inputs = parse_flow_vars(
+            inputs,
             flow_data=job.model_dump(),
             additional_data=self._data,
         )
 
         # Create a new job and task for every combination of variables
-        # this agent is configured to run.
-        for variant in agent.make_combinations(**params):
-            # Process all inputs into two categories.
-            # Job objects have a .params mapping, which is usually the result of a combination of init variables that will be common to multiple runs over different records.
-            # Job objects also have a .inputs mapping, which is the result of a combination of inputs that will be unique to a single record.
-            # Then there are also extra **kwargs sent to this method.
-            # In all cases, input values might be the name of a template, a literal value, or a reference to a field in the job.record object or in other supplied additional_data.
-            # We need to resolve all inputs into a mapping that can be passed to the agent.
-
-            # After this method, job.parameters will include all variables that will be passed
-            # during the initital construction of the job - including template variables and static values
-            # job.inputs will include all variables and formatted placeholders etc that will not be passed
-            # to the templating function and will be sent direct instead
-            job_variant = Job(**job_vars, parameters=variant)
-
-            # Make job variables accessible for mapping
-            # (this includes the data record in job.record and the computed fields like 'fulltext')
-            flow_data = job_variant.model_dump()
-
-            job_variant.inputs = parse_flow_vars(
-                agent.inputs,
-                flow_data=flow_data,
-                additional_data=self._data,
-            )
+        # this agent is configured to run. Agents have a parameters mapping; 
+        # each permutation of these is multiplied by num_runs. Agents also
+        # have an inputs mapping that does not get multiplied.
+        variants = agent.num_runs * expand_dict(params)
+        
+        tasks = []
+        for i in range(len(variants)):
+            variants[i].update(inputs)
+            job_variant = Job(**jobvars, parameters=variants[i])
 
             task = agent.run(
                 job=job_variant,
@@ -218,11 +200,11 @@ class Flow(BaseModel):
                                 flow_data=result.model_dump(),
                                 additional_data=self._data,
                             )
-                            # incorporate successful runs into data store for future use
-                            self.incorporate_outputs(
-                                step_name=agent.name,
-                                outputs=result.outputs,
-                            )
+                        # incorporate successful runs into data store for future use
+                        self.incorporate_outputs(
+                            step_name=agent.name,
+                            outputs=result.outputs,
+                        )
                     except Exception as e:
                         # log the error but do not abort.
                         error_msg = f"Agent {agent.name} response data not formatted as expected: {e}"
