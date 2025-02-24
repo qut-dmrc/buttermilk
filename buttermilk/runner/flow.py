@@ -161,9 +161,25 @@ class Flow(BaseModel):
             additional_data=self._data,
         )
 
-        # Expand mapped parameters before producing permutations of jobs
+
+        # Because we're duplicating variables and returning
+        # permutations, we should make sure to edit a copy,
+        # not the original.
+        params = copy.deepcopy(agent.parameters)
+        inputs = copy.deepcopy(agent.inputs)
+
+        # In all cases, input values might be the name of a template, a literal value, 
+        # or a reference to a field in the job.record object or in other supplied additional_data.
+        # We need to resolve all flow inputs into a mapping that can be passed to the agent.
+        # Makesure we make all job variables accessible for mapping but don't pass the job dict by
+        # reference (this includes the data record in job.record and the computed fields like 'fulltext')
         params = parse_flow_vars(
-            agent.parameters,
+            params,
+            flow_data=job.model_dump(),
+            additional_data=self._data,
+        )
+        inputs = parse_flow_vars(
+            inputs,
             flow_data=job.model_dump(),
             additional_data=self._data,
         )
