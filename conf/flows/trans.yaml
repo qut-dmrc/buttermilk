@@ -31,8 +31,12 @@ trans:
         model: ${llms.judgers}
       outputs:
         identifier: identifier
-        job_id: job_id
-        params: parameters
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
         answer: outputs
 
     - name: context_owl
@@ -58,8 +62,12 @@ trans:
         feedback: context_owl.intervention
       outputs:
         identifier: identifier
-        job_id: job_id
-        params: parameters
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
         answer: outputs
 
     - name: scorer
@@ -78,12 +86,6 @@ trans:
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
         expected: record.ground_truth
-      outputs:
-        identifier: parameters.answer.identifier
-        job: parameters.answer.job_id
-        params: parameters.answer.params
-        score: outputs.score
-        reasons: outputs.reasons
 
     - name: eval
       _target_: buttermilk.agents.lc.LC
