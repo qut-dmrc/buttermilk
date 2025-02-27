@@ -135,10 +135,10 @@ class LC(Agent):
         elapsed = response["metadata"]["seconds_elapsed"]
         error = response.pop("error", None)
 
-        if error:
+        if error and not str(error).lower() == 'null':
             job.error[self.name] = error
             logger.error(
-                f"Unsuccessfully nvoked chain with {model} in {elapsed:.2f} seconds: {error}",
+                f"Unsuccessfully invoked chain with {model} in {elapsed:.2f} seconds: {error}",
             )
         else:
             logger.debug(
@@ -158,7 +158,7 @@ class LC(Agent):
     ) -> dict[str, str]:
         # give our flows a little longer to set up
         loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
+        loop.slow_callback_duration = 5.0  # instead of default 0.1
 
         elapsed = 0
         t0 = time.time()

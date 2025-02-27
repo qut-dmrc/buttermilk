@@ -1,0 +1,14 @@
+{
+    "model_name": "meta/llama-3.3-70b-instruct-maas"
+    ,"stream": true
+    ,"max_tokens": 512
+    ,"temperature": 0.5
+    ,"top_p": 0.95
+    ,"messages": [
+        {
+            "role": "user",
+            "content": ["Hi, what's your name?"
+            ]
+        }
+    ]
+}

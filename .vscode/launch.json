@@ -4,16 +4,16 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-    
-    
-    
     {
       "name": "Python Debugger: FastAPI",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["buttermilk.api.flow:app", "--reload",
-      "+flows=[simple,osb,hate,trans,describer]", "llm=lite"
+      "args": [
+        "buttermilk.api.flow:app",
+        "--reload",
+        "+flows=[simple,osb,hate,trans,describer]",
+        "llm=lite"
       ],
       "jinja": true
     },
@@ -38,10 +38,10 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+flows=[trans_score]",
-        //"+flows=[simple,osb,hate,trans,describer]", 
-        "llm=full"
-       ],
+        "+flows=[trans]",
+        //"+flows=[simple,osb,hate,trans,describer]",
+        "llms=full"
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
@@ -53,10 +53,12 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["hydra.verbose=true",
-              "+flows=[trans_score]", "llm=full",
-//              "+q=${input:query}"           // Will prompt for query
-            ],
+      "args": [
+        "hydra.verbose=false",
+        "+flows=[trans]",
+        "+flow=trans", "llms=full",
+        "+record_id=${input:query}" // Will prompt for query
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
@@ -122,9 +124,13 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+data=drag", "+step=ordinary", "+save=bq", "job=test","source=debugger",
+        "+data=drag",
+        "+step=ordinary",
+        "+save=bq",
+        "job=test",
+        "source=debugger",
         "step.0.agent.model=['haiku']",
-        "step.0.concurrent=1",
+        "step.0.concurrent=1"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -138,10 +144,11 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-         "+flows=[hate]", "llm=full",
-         "+flow=hate",
-         "+q=${input:query}"           // Will prompt for query
-       ],
+        "+flows=[hate]",
+        "llm=full",
+        "+flow=hate",
+        "+q=${input:query}" // Will prompt for query
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

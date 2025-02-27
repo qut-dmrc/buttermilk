@@ -19,6 +19,7 @@ trans:
       num_runs: 2
       save: ${save}
       parameters:
+        template: judge
         criteria:
           - trans_simplified
           - cte
@@ -30,8 +31,12 @@ trans:
         model: ${llms.judgers}
       outputs:
         identifier: identifier
-        job_id: job_id
-        params: parameters
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
         answer: outputs
 
     - name: context_owl
@@ -57,8 +62,12 @@ trans:
         feedback: context_owl.intervention
       outputs:
         identifier: identifier
-        job_id: job_id
-        params: parameters
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
         answer: outputs
 
     - name: scorer
@@ -71,18 +80,12 @@ trans:
         answer:
           - judger
           - synth
-        expected: record.ground_truth
       inputs:
         instructions: >
           The analyst was tasked with evaluating how well the provided content 
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
-      outputs:
-        identifier: parameters.answer.identifier
-        job: parameters.answer.job_id
-        params: parameters.answer.params
-        score: outputs.score
-        reasons: outputs.reasons
+        expected: record.ground_truth
 
     - name: eval
       _target_: buttermilk.agents.lc.LC
@@ -91,7 +94,7 @@ trans:
       parameters:
         template: differences
         criteria: >
-          evaluate how well the provided content aligns with journalistic standards
+          Evaluate how well the provided content aligns with journalistic standards
           and best practices for reporting on stories related to trans people.
         model: ${llms.synthesisers}
       inputs:

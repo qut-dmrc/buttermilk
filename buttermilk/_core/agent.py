@@ -1,4 +1,4 @@
-import copy
+import asyncio
 import datetime
 from asyncio import Semaphore
 from collections.abc import Mapping
@@ -12,6 +12,7 @@ from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
+    PrivateAttr,
     field_validator,
     model_validator,
 )
@@ -48,6 +49,7 @@ def get_agent_name_tracing(call: Any) -> str:
     except:
         return "unknown flow"
 
+
 class Agent(BaseModel):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
@@ -57,7 +59,7 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=4)  # Max number of async tasks to run
+    concurrency: int = Field(default=8)  # Max number of async tasks to run
 
     inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
@@ -78,9 +80,6 @@ class Agent(BaseModel):
             "init",
         ),
     )
-    inputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-    )
 
     data: list[DataSource] | None = Field(default_factory=list)
 
@@ -88,6 +87,13 @@ class Agent(BaseModel):
         default_factory=dict,
         description="Data to pass on to next steps.",
     )
+
+    _semaphore: Semaphore = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def setup_semaphore(self) -> "Agent":
+        self._semaphore = Semaphore(self.concurrency)
+        return self
 
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
@@ -107,26 +113,12 @@ class Agent(BaseModel):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
-    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
-
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
-
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
         if self.model_extra:
             self.parameters.update(self.model_extra)
-        return self
 
-    def make_combinations(self, **extra_combinations: dict):
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        params = self.parameters.copy()
-        params.update(extra_combinations)
-        vars = self.num_runs * expand_dict(params)
-        return copy.deepcopy(vars)
+        return self
 
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
@@ -152,13 +144,6 @@ class Agent(BaseModel):
             if self.save:
                 save_job(job=job, save_info=self.save)
         return job
-
-    def make_combinations(self):
-        # Because we're duplicating variables and returning
-        # permutations, we should make sure to return a copy,
-        # not the original.
-        vars = self.num_runs * expand_dict(self.parameters)
-        return copy.deepcopy(vars)
 
     async def process_job(
         self,

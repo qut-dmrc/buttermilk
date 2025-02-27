@@ -54,7 +54,7 @@ class MediaObj(BaseModel):
 
     base_64: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("base_64", "bas64", "b64", "b64_data"),
+        validation_alias=AliasChoices("base_64", "base64", "b64", "b64_data"),
     )
 
     # move base64 representation out of the fields into a private attribute
@@ -103,7 +103,10 @@ class MediaObj(BaseModel):
 
         return self
 
-    def as_image_url(self) -> dict:
+    def as_url(self):
+        return (f"data:{self.mime};base64,{self._b64}",)
+
+    def as_image_url_message(self) -> dict:
         return {
             "type": "image_url",
             "image_url": {"url": self.uri},
@@ -134,7 +137,7 @@ class MediaObj(BaseModel):
         elif self.content:
             part = self.as_text()
         elif self.uri:
-            part = self.as_image_url()
+            part = self.as_image_url_message()
 
         return part
 
@@ -323,7 +326,7 @@ class RecordInfo(BaseModel):
             elif obj.mime.startswith("text") and model_capabilities.chat:
                 trailing_components.append(obj.as_content_part())
             elif "uri" in obj.model_fields_set and model_capabilities.media_uri:
-                trailing_components.append(obj.as_image_url())
+                trailing_components.append(obj.as_image_url_message())
 
         for k, v in self.metadata.items():
             # add in metadata (title, byline, date, exif, etc.)

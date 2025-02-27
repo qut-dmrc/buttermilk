@@ -13,9 +13,6 @@ import aiohttp
 import httpx
 import replicate
 from cloudpathlib import CloudPath
-from datatools.exceptions import RateLimit
-from datatools.gcloud import GCloud
-from datatools.types.images import ImageRecord
 from huggingface_hub import AsyncInferenceClient, login
 from openai import APIStatusError, AsyncOpenAI
 from PIL import Image
@@ -29,14 +26,10 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
-
-uuid = ShortUUID()
-
+from bm import BM, logger
 
 from pydantic import Field, field_validator
 
-gc = GCloud()
-logger = gc.logger
 
 
 class TextToImageClient(BaseModel):

@@ -210,9 +210,11 @@ class BM(Singleton, BaseModel):
                 # initialize vertexai
                 aiplatform.init(
                     project=cloud.project,
-                    location=cloud.region,
+                    location=cloud.location,
                     staging_bucket=cloud.bucket,
                 )
+                # list available models
+                models = aiplatform.Model.list()
         
         self.setup_logging(verbose=self.cfg.logger.verbose)
 
@@ -314,6 +316,12 @@ class BM(Singleton, BaseModel):
             module="promptflow-tracing",
             category=DeprecationWarning,
         )
+        warnings.filterwarnings(
+            action="ignore",
+            module="traceloop",
+            category=DeprecationWarning,
+        )
+
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
@@ -373,12 +381,7 @@ class BM(Singleton, BaseModel):
         if resource:
             message = f"{message} {resource}"
 
-        logger.info(
-            dict(
-                message=message,
-                **self.run_info.model_dump(),
-            ),
-        )
+        logger.info(message, extra=dict(run=self.run_info.model_dump()))
 
         try:
             from importlib.metadata import version
