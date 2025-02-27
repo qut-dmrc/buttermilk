@@ -195,5 +195,4 @@ addopts = [ "-rX",
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
     "ignore:Passing field metadata as keyword arguments is deprecated",
-    "ignore::PydanticDeprecatedSince20:traceloop",
     ]
