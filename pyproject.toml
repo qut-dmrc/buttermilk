@@ -74,6 +74,7 @@ dependencies = [
     "langchain-community>=0.3.16",
     "weave>=0.51.33",
     "traceloop-sdk>=0.38.5",
+    "promptflow-azure>=1.17.2",
 ]
 
 [dependency-groups]
