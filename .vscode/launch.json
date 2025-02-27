@@ -13,7 +13,7 @@
         "buttermilk.api.flow:app",
         "--reload",
         "+flows=[simple,osb,hate,trans,describer]",
-        "llm=lite"
+        "llms=lite"
       ],
       "jinja": true
     },
@@ -40,7 +40,7 @@
       "args": [
         "+flows=[trans]",
         //"+flows=[simple,osb,hate,trans,describer]",
-        "llms=full"
+        "llms=lite"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -56,7 +56,8 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[trans]",
-        "+flow=trans", "llms=full",
+        "+flow=trans",
+        "llms=full",
         "+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -170,11 +171,11 @@
     }
   ],
   "inputs": [
-        {
-            "id": "query",
-            "type": "promptString", 
-            "description": "Enter search query",
-            "default": ""
-        }
-  ],
+    {
+      "id": "query",
+      "type": "promptString",
+      "description": "Enter search query",
+      "default": ""
+    }
+  ]
 }

@@ -59,7 +59,7 @@ class Agent(BaseModel):
     )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
-    concurrency: int = Field(default=8)  # Max number of async tasks to run
+    concurrency: int = Field(default=3)  # Max number of async tasks to run
 
     inputs: dict[str, str | list | dict] | list | None = Field(
         default_factory=dict,
@@ -83,10 +83,12 @@ class Agent(BaseModel):
 
     data: list[DataSource] | None = Field(default_factory=list)
 
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
+    _semaphore: asyncio.Semaphore = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def setup_semaphore(self) -> "Agent":
+        self._semaphore = asyncio.Semaphore(self.concurrency)
+        return self
 
     _semaphore: Semaphore = PrivateAttr(default=None)
 

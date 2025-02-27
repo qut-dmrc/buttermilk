@@ -138,7 +138,6 @@ class Flow(BaseModel):
             },
         )
 
-
         # Because we're duplicating variables and returning
         # permutations, we should make sure to edit a copy,
         # not the original.
