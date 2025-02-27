@@ -90,6 +90,13 @@ class Agent(BaseModel):
         self._semaphore = asyncio.Semaphore(self.concurrency)
         return self
 
+    _semaphore: Semaphore = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def setup_semaphore(self) -> "Agent":
+        self._semaphore = Semaphore(self.concurrency)
+        return self
+
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
@@ -107,12 +114,6 @@ class Agent(BaseModel):
             ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
-
-    # _ensure_list = field_validator("data", mode="before")(make_list_validator())
-
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
 
     @model_validator(mode="after")
     def add_extra_params(self) -> "Agent":
