@@ -3,6 +3,8 @@ from hashlib import md5
 from cloudpathlib import AnyPath, CloudPath
 from shortuuid import uuid
 
+from google.cloud import aiplatform
+
 from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
@@ -50,3 +52,9 @@ def test_save_binary(bm):
     finally:
         # delete
         CloudPath(uri).unlink()
+
+
+def test_vertex_setup(bm):
+    # Try a simple operation like listing models
+    models = aiplatform.Model.list()
+    assert models is not None

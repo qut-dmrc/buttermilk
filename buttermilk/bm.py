@@ -210,9 +210,11 @@ class BM(Singleton, BaseModel):
                 # initialize vertexai
                 aiplatform.init(
                     project=cloud.project,
-                    location=cloud.region,
+                    location=cloud.location,
                     staging_bucket=cloud.bucket,
                 )
+                # list available models
+                models = aiplatform.Model.list()
         
         self.setup_logging(verbose=self.cfg.logger.verbose)
 

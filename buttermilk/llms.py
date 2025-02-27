@@ -72,12 +72,12 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # cat .cache/buttermilk/models.json | jq ".[].name"
 # ```
 CHATMODELS = [
-    "llama31_405b",
+    "llama33_70b",
     "llama32_90b",
     "gpt4o",
     "sonnet",
     "haiku",
-    "gemini2flash",
+    "gemini2flashthinking",
     "gemini2pro",
     "o3-mini-high",
 ]
