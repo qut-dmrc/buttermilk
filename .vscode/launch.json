@@ -56,7 +56,8 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[trans]",
-        "+flow=trans", "llms=full",
+        "+flow=trans",
+        "llms=full",
         "+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -170,11 +171,11 @@
     }
   ],
   "inputs": [
-        {
-            "id": "query",
-            "type": "promptString", 
-            "description": "Enter search query",
-            "default": ""
-        }
-  ],
+    {
+      "id": "query",
+      "type": "promptString",
+      "description": "Enter search query",
+      "default": ""
+    }
+  ]
 }
