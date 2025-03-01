@@ -2,10 +2,17 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from anthropic import AnthropicVertex, AsyncAnthropicVertex
+from autogen_core.models import ChatCompletionClient
+from autogen_ext.models.openai import (
+    AzureOpenAIChatCompletionClient,
+    OpenAIChatCompletionClient,
+)
 from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 
 from buttermilk.utils.utils import scrub_keys
+
+_ = "ChatCompletionClient"
 
 try:
     from langchain_anthropic import ChatAnthropic
@@ -44,10 +51,23 @@ class LLMCapabilities(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    model: str = Field(..., description="The full identifier of this particular model (passed to constructor/API)")
-    connection:  str = Field(..., description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)")
+    model: str = Field(
+        ...,
+        description="The full identifier of this particular model (passed to constructor/API)",
+    )
+    connection: str = Field(
+        ...,
+        description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)",
+    )
     obj: str = Field(..., description="Name of the model object to instantiate")
-    capabilities: LLMCapabilities = Field(default_factory=LLMCapabilities, description="Capabilities of the model (particularly multi-modal)")
+    api_type: str = Field(
+        default="openai", description="Type of API to use (e.g. openai, vertex, azure)"
+    )
+    model_info: dict = {}
+    capabilities: LLMCapabilities = Field(
+        default_factory=LLMCapabilities,
+        description="Capabilities of the model (particularly multi-modal)",
+    )
     configs: dict = Field(default={}, description="Options to pass to the constructor")
 
 
@@ -166,6 +186,16 @@ class LLMs(BaseModel):
     @property
     def all_model_names(self) -> Enum:
         return Enum("AllModelNames", list(self.connections.keys()))
+
+    def get_autogen_client(self, name) -> ChatCompletionClient:
+        params = self.connections[name].configs
+        params["model_info"] = self.connections[name].model_info
+
+        if self.connections[name].api_type == "azure":
+            client = AzureOpenAIChatCompletionClient(**params)
+        else:
+            client = OpenAIChatCompletionClient(**params)
+        return client
 
     def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.models:
