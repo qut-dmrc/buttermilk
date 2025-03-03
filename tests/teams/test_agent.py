@@ -17,7 +17,7 @@ def judger(request):
     agent = ChatAgent(
         model_client=request.param,
         name="testjudger",
-        parameters={
+        parameters={        
             "template": "judge",
             "model": request.param,
             "criteria": "criteria_ordinary",

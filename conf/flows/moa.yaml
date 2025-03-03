@@ -1,0 +1,96 @@
+# defaults:
+#   - _self_
+
+moa:
+  _target_: buttermilk.runner.moa.MoA
+  source: trans journalists guidelines assessment
+  save: ${save}
+  models: ${llms.general}
+
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
+
+  steps:
+    - name: describer
+      _target_: buttermilk.agents.describer.Describer
+      num_runs: 1
+      parameters:
+        template: describe
+        download_if_necessary: true
+        model:
+          - gemini2pro
+      inputs:
+        record: record
+      outputs:
+        content: record.text
+        transcript: outputs.transcript
+        title: outputs.title
+        caption: outputs.caption
+        description: outputs.description
+    - name: judge
+      num_runs: 2
+      save: ${save}
+      parameters:
+        template: judge
+        criteria:
+          - criteria_ordinary
+          - criteria_simple
+        formatting: json_rules
+        model: ${llms.judgers}
+      outputs:
+        identifier: identifier
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
+        answer: outputs
+
+    - name: context_owl
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: owl
+        model: ${llms.general}
+
+    - name: synth
+      _target_: buttermilk.agents.lc.LC
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: synthesise_judger
+        instructions: judge
+        criteria: criteria_simple
+        formatting: json_rules
+        model: ${llms.synthesisers}
+      inputs:
+        answers: judger
+        feedback: context_owl.intervention
+      outputs:
+        identifier: identifier
+        params:
+          job_id: job_id
+          template: parameters.template
+          criteria: parameters.criteria
+          instructions: parameters.instructions
+          model: parameters.model
+        answer: outputs
+
+    - name: eval
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: differences
+        criteria: >
+          Evaluate how well the provided content aligns with journalistic standards
+          and best practices for reporting on stories related to trans people.
+      inputs:
+        content: record.fulltext
+        answers:
+          - judger
+          - synth

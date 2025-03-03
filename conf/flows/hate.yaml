@@ -31,7 +31,7 @@ hate:
         criteria: 
           - criteria_ordinary
         formatting: json_rules
-        model: ${llm}
+        model: ${llms.general}
       inputs:
       outputs:
         answers:
@@ -42,8 +42,7 @@ hate:
             template: parameters.template
             reasons: outputs.reasons
 
-    - _target_: buttermilk.agents.lc.LC
-      name: synth
+    - name: synth
       num_runs: 1
       concurrency: 20
       save: ${save}
@@ -52,7 +51,7 @@ hate:
         instructions: judge
         criteria: criteria_ordinary
         formatting: json_rules
-        model: ${llm}
+        model: ${llms.general}
       inputs:
         content: record.text
         answers: judger.answers
@@ -65,15 +64,14 @@ hate:
             template: parameters.template
             reasons: outputs.reasons
 
-    - _target_: buttermilk.agents.lc.LC
-      name: eval
+    - name: eval
       num_runs: 1
       concurrency: 20
       save: ${save}
       parameters:
         template: differences
         criteria: criteria_ordinary
-        model: ${llm}
+        model: ${llms.general}
       inputs:
         content: record.text
         answers:

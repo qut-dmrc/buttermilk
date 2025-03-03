@@ -321,6 +321,7 @@ class BM(Singleton, BaseModel):
             module="traceloop",
             category=DeprecationWarning,
         )
+        warnings.filterwarnings(action="ignore",message="Passing field metadata as keyword arguments is deprecated")
 
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
