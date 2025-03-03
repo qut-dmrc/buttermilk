@@ -11,6 +11,7 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
+from autogen_core.exceptions import CantHandleException
 from autogen_core.models import (
     ChatCompletionClient,
     SystemMessage,
@@ -100,12 +101,20 @@ class UserAgent(BaseGroupChatAgent):
         message: RequestToSpeak,
         ctx: MessageContext,
     ) -> GroupChatMessage:
-        user_input = input("Enter your message, type 'APPROVE' to conclude the task: ")
-        logger.debug(f"UserAgent received request to speak: {user_input}")
-        Console().print(Markdown(f"### User: \n{user_input}"))
-        reply = GroupChatMessage(content=user_input, step=self._step, source=self.name)
-        await self.publish(reply)
-        return reply
+        if ctx.topic_id.source == self._step:
+            user_input = input(
+                "Enter your message, type 'APPROVE' to conclude the task: ",
+            )
+            logger.debug(f"UserAgent received request to speak: {user_input}")
+            Console().print(Markdown(f"### User: \n{user_input}"))
+            reply = GroupChatMessage(
+                content=user_input,
+                step=self._step,
+                source=self.name,
+            )
+            await self.publish(reply)
+            return reply
+        raise CantHandleException()
 
 
 class LLMAgent(BaseGroupChatAgent):
@@ -177,7 +186,7 @@ class LLMAgent(BaseGroupChatAgent):
         return answer
 
     @message_handler
-    async def handle_request(
+    async def handle_groupchatmessage(
         self,
         message: Request,
         ctx: MessageContext,
@@ -185,7 +194,7 @@ class LLMAgent(BaseGroupChatAgent):
         # Process the message using the LLM client
         if message.step in self.inputs:
             logger.debug(
-                f"LLMAgent {self.name} received step {message.step} request from {message.source}",
+                f"LLMAgent {self.name} received step {message.step} message from {message.source}",
             )
             self._chat_history.append(f"{message.source}: {message.content}")
 
@@ -246,9 +255,9 @@ class MoA(BaseModel):
                     agent_name,
                     lambda llm_client=llm_client,
                     agent_name=agent_name,
-                    step=step,
+                    step=step.name,
                     variant=variant: LLMAgent(
-                        step_name=step,
+                        step_name=step.name,
                         llm_client=llm_client,
                         name=agent_name,
                         group_chat_topic_type=group_chat_topic_type,
@@ -262,13 +271,18 @@ class MoA(BaseModel):
                         agent_type=agent_type,
                     ),
                 )
+                await runtime.add_subscription(
+                    TypeSubscription(
+                        topic_type=step.name,
+                        agent_type=agent_type,
+                    ),
+                )
                 logger.debug(
-                    f"Registering agent {agent_name} with params {variant}: {agent_type}",
+                    f"Registering step {step.name} agent {agent_name} with params {variant}: {agent_type}",
                 )
                 agents.append(agent_type)
 
         runtime.start()
-
         # Start the conversation
         # logger.debug("Sending request to speak to user")
         # await runtime.publish_message(
@@ -277,14 +291,19 @@ class MoA(BaseModel):
         # )
         logger.debug("Sending request to judgers")
         await runtime.publish_message(
-            Request(content="kill all men", source="console"),
-            DefaultTopicId(type=group_chat_topic_type, source="record"),
+            Request(content="kill all men", source="console", step="record"),
+            DefaultTopicId(type=group_chat_topic_type, source="judge"),
         )
-        while True:
-            try:
-                await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                break
+
+        for step in self.steps:
+            await runtime.publish_message(
+                RequestToSpeak(),
+                topic_id=DefaultTopicId(type=step.name),
+            )
+            await runtime.stop_when_idle()
+            runtime.start()
+
+        await runtime.stop()
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
