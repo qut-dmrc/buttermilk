@@ -12,7 +12,7 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.exceptions import CantHandleException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -24,7 +24,7 @@ from buttermilk.utils.utils import expand_dict
 class GroupChatMessage(BaseModel):
     """A message sent to the group chat"""
 
-    content: str
+    content: str | dict[str, Any]
     """The content of the message."""
 
     source: str
@@ -34,6 +34,9 @@ class GroupChatMessage(BaseModel):
     """The stage of the process that this message was sent from"""
 
     type: str = "GroupChatMessage"
+
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    """Metadata about the message."""
 
 
 class Request(GroupChatMessage):
@@ -48,15 +51,11 @@ class RequestToSpeak(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class BaseGroupChatAgent(RoutedAgent, BaseModel):
+class BaseGroupChatAgent(RoutedAgent):
     """A group chat participant."""
 
-    name: str
-
-    _step: str
-    _group_chat_topic_type: str
-
-    _chat_history: list[GroupChatMessage] = []
+    _step: str = PrivateAttr(default="default")
+    _group_chat_topic_type: str = PrivateAttr(default="default")
 
     async def publish(self, message: Any) -> None:
         await self.publish_message(
@@ -67,9 +66,9 @@ class BaseGroupChatAgent(RoutedAgent, BaseModel):
 
 
 class UserAgent(BaseGroupChatAgent):
-    def __init__(self, name="User", *args, **kwargs):
-        super().__init__(name=name, step_name="User", *args, **kwargs)
-        self.description = "The human in the loop"
+    def __init__(self, description: str, **kwargs):
+        description = description or "The human in the loop"
+        super().__init__(description=description, **kwargs)
 
     @message_handler
     async def handle_message(

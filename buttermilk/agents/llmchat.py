@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Coroutine
 from typing import Any
 
 import shortuuid
@@ -8,53 +8,45 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.models import (
-    ChatCompletionClient,
+    AssistantMessage,
+    CreateResult,
+    SystemMessage,
+    UserMessage,
 )
 from promptflow.core._prompty_utils import parse_chat
-from pydantic import BaseModel, PrivateAttr
 
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.runner.moa import (
     BaseGroupChatAgent,
     GroupChatMessage,
     Request,
     RequestToSpeak,
 )
+from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import _parse_prompty, load_template_vars
 
 
-class LLMAgent(BaseGroupChatAgent, BaseModel):
-    inputs: list[str] = []
-
-    _llm_client: ChatCompletionClient = PrivateAttr()
-    _template: str = PrivateAttr()
-    _unfilled_inputs: list[str] = PrivateAttr()
-    _context: list[str] = PrivateAttr(default=[])
-
-    # _model_context = UnboundedChatCompletionContext()
-
+class LLMAgent(BaseGroupChatAgent):
     def __init__(
         self,
         *,
-        llm_client: ChatCompletionClient,
+        llm: str,
         template: str,
+        name: str | None = None,
         **data,
     ) -> None:
-        BaseGroupChatAgent.__init__(**data)
+        super().__init__(**data)
+
+        self._unfilled_inputs: list[str] = []
+        self._context: list[str] = []
+        # _model_context = UnboundedChatCompletionContext()
         self._template = template
-        self._llm_client = llm_client
+        self._json_parser = ChatParser()
+
+        self._model_client = BM().llms.get_autogen_client(llm)
         self._name = "-".join([
-            x
-            for x in [data.get("name"), template, llm_client, shortuuid.uuid()[:6]]
-            if x
+            x for x in [name, template, llm, shortuuid.uuid()[:6]] if x
         ])
-
-    async def save_state(self) -> dict[str, Any]:
-        return self.model_dump()
-
-    async def load_state(self, state: Mapping[str, Any]) -> None:
-        for key, value in state.items():
-            setattr(self, key, value)
 
     def load_template(self, params: dict[str, str]) -> list[Any]:
         # Construct list of messages from the templates
@@ -68,10 +60,34 @@ class LLMAgent(BaseGroupChatAgent, BaseModel):
         prompty = _parse_prompty(rendered_template)
 
         # Next we use Prompty's format to set roles within the template
-        messages = parse_chat(
+        messages = []
+        for message in parse_chat(
             prompty,
-            valid_roles=["system", "user", "developer", "human", "placeholder"],
-        )
+            valid_roles=[
+                "system",
+                "user",
+                "developer",
+                "human",
+                "placeholder",
+                "assistant",
+            ],
+        ):
+            if message["role"] == "placeholder":
+                if message["content"].strip("{}") in self._unfilled_inputs:
+                    continue
+                messages.append(
+                    UserMessage(content=message["content"], source=self._name),
+                )
+            elif message["role"] in ("system", "developer"):
+                messages.append(SystemMessage(content=message["content"]))
+            elif message["role"] in ("assistant"):
+                messages.append(
+                    AssistantMessage(content=message["content"], source=self._name),
+                )
+            else:
+                messages.append(
+                    UserMessage(content=message["content"], source=self._name),
+                )
 
         messages.extend(self._context)
 
@@ -80,10 +96,10 @@ class LLMAgent(BaseGroupChatAgent, BaseModel):
     async def query(
         self,
         params: dict[str, Any] = {},
-    ) -> str:
+    ) -> Coroutine[Any, Any, CreateResult]:
         messages = self.load_template(params=params)
-        response = await self._llm_client.create(messages=messages)
-        yield response.content
+
+        response = await self._model_client.create(messages=messages)
 
         return response
 
@@ -93,21 +109,21 @@ class LLMAgent(BaseGroupChatAgent, BaseModel):
         message: RequestToSpeak,
         ctx: MessageContext,
     ) -> GroupChatMessage:
-        info_message = (
-            f"UserAgent {self.name} from step {self._step} received request to speak.",
-        )
+        info_message = f"{self._name} from {self._step} got request to speak."
 
         if message.model_extra:
-            info_message += "Args: {", ".join(message.model_extra.keys())}."
+            info_message += f" Args: {', '.join(message.model_extra.keys())}."
 
         logger.debug(info_message)
 
         response = await self.query(params=message.model_extra)
+        output = self._json_parser.parse(response.content)
 
         answer = GroupChatMessage(
-            content=response,
-            source=self.name,
-            step=self._step,
+            content=output,
+            source=self._name,
+            step=str(self._step),
+            metadata=response.model_dump(exclude=["content"]),
         )
         await self.publish(answer)
         return answer
@@ -121,9 +137,9 @@ class LLMAgent(BaseGroupChatAgent, BaseModel):
         # Process the message using the LLM client
         if message.step in self.inputs:
             logger.debug(
-                f"LLMAgent {self.name} received step {message.step} message from {message.source}",
+                f"LLMAgent {self._name} received step {message.step} message from {message.source}",
             )
-            self._chat_history.append(message)
+            # self._chat_history.append(message)
             # await self._context.add_message(message)
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:

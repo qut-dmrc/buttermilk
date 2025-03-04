@@ -3,14 +3,13 @@ from typing import Any, Literal
 
 import json_repair
 import regex as re
-from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.outputs import Generation
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from .._core.log import logger
 
 
-class ChatParser(JsonOutputParser):
+class ChatParser(BaseModel):
     """A safe JSON parser. If all else fails, return the original string as a dictionary with the key 'response'"""
 
     # Error handling options:
@@ -23,17 +22,17 @@ class ChatParser(JsonOutputParser):
         description="Error handling options: raise, warn, or ignore",
     )
 
-    def parse_result(self, result: list[Generation], *, partial: bool = False) -> Any:
-        text = " ".join([r.text for r in result])
+    def parse(self, text: str) -> Any:
+        """Parse the output of an LLM call to a JSON object.
+
+        Args:
+            text: The output of the LLM call.
+
+        Returns:
+            The parsed JSON object.
+
+        """
         output = self.parse_json(text)
-
-        try:
-            # next, we're  going to see if we have any more information in the metadata
-            output["metadata"] = result[0].message.response_metadata
-
-            """(gemini) result[0].message.usage_metadata = {'prompt_token_count': 246, 'candidates_token_count': 268, 'total_token_count': 514, 'cached_content_token_count': 0}"""
-        except Exception:
-            pass
 
         return output
 
@@ -46,7 +45,9 @@ class ChatParser(JsonOutputParser):
             match = re.search(pat, text, re.DOTALL)
             if not match:
                 raise JSONDecodeError(
-                    "Unable to find JSON brackets in response", doc=text, pos=0
+                    "Unable to find JSON brackets in response",
+                    doc=text,
+                    pos=0,
                 )
             json_str = "{" + match.group(1) + "}"
             output = json_repair.loads(json_str)
@@ -62,6 +63,19 @@ class ChatParser(JsonOutputParser):
             output = dict(response=output)
 
         output = convert_dict_types(output)
+
+        return output
+
+    def parse_result(self, result: list[Generation], *, partial: bool = False) -> Any:
+        output = self.parse(" ".join([r.text for r in result]))
+
+        try:
+            # next, we're  going to see if we have any more information in the metadata
+            output["metadata"] = result[0].message.response_metadata
+
+            """(gemini) result[0].message.usage_metadata = {'prompt_token_count': 246, 'candidates_token_count': 268, 'total_token_count': 514, 'cached_content_token_count': 0}"""
+        except Exception:
+            pass
 
         return output
 
