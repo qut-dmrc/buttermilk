@@ -12,7 +12,7 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.exceptions import CantHandleException
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -54,13 +54,13 @@ class RequestToSpeak(BaseModel):
 class BaseGroupChatAgent(RoutedAgent):
     """A group chat participant."""
 
-    _step: str = PrivateAttr(default="default")
-    _group_chat_topic_type: str = PrivateAttr(default="default")
+    step: str = "default"
+    group_chat_topic_type: str = "default"
 
     async def publish(self, message: Any) -> None:
         await self.publish_message(
             message,
-            DefaultTopicId(type=self._group_chat_topic_type, source=self._step),
+            DefaultTopicId(type=self.group_chat_topic_type, source=self.step),
             # DefaultTopicId(type=self._group_chat_topic_type),
         )
 
@@ -87,7 +87,7 @@ class UserAgent(BaseGroupChatAgent):
         message: RequestToSpeak,
         ctx: MessageContext,
     ) -> GroupChatMessage:
-        if ctx.topic_id.source == self._step:
+        if ctx.topic_id.source == self.step:
             user_input = input(
                 "Enter your message, type 'APPROVE' to conclude the task: ",
             )
@@ -95,8 +95,8 @@ class UserAgent(BaseGroupChatAgent):
             Console().print(Markdown(f"### User: \n{user_input}"))
             reply = GroupChatMessage(
                 content=user_input,
-                step=self._step,
-                source=self.name,
+                step=self.step,
+                source="User",
             )
             await self.publish(reply)
             return reply

@@ -1,3 +1,4 @@
+import json
 from collections.abc import Coroutine
 from typing import Any
 
@@ -40,7 +41,7 @@ class LLMAgent(BaseGroupChatAgent):
         self._unfilled_inputs: list[str] = []
         self._context: list[str] = []
         # _model_context = UnboundedChatCompletionContext()
-        self._template = template
+        self.template = template
         self._json_parser = ChatParser()
 
         self._model_client = BM().llms.get_autogen_client(llm)
@@ -51,7 +52,7 @@ class LLMAgent(BaseGroupChatAgent):
     def load_template(self, params: dict[str, str]) -> list[Any]:
         # Construct list of messages from the templates
         rendered_template, self._unfilled_inputs = load_template_vars(
-            template=self._template,
+            template=self.template,
             **params,
         )
 
@@ -109,7 +110,7 @@ class LLMAgent(BaseGroupChatAgent):
         message: RequestToSpeak,
         ctx: MessageContext,
     ) -> GroupChatMessage:
-        info_message = f"{self._name} from {self._step} got request to speak."
+        info_message = f"{self._name} from {self.step} got request to speak."
 
         if message.model_extra:
             info_message += f" Args: {', '.join(message.model_extra.keys())}."
@@ -118,14 +119,14 @@ class LLMAgent(BaseGroupChatAgent):
 
         response = await self.query(params=message.model_extra)
         output = self._json_parser.parse(response.content)
+        await self.publish(json.dumps(output))
 
         answer = GroupChatMessage(
             content=output,
             source=self._name,
-            step=str(self._step),
+            step=str(self.step),
             metadata=response.model_dump(exclude=["content"]),
         )
-        await self.publish(answer)
         return answer
 
     @message_handler
