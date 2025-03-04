@@ -12,18 +12,12 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.exceptions import CantHandleException
-from autogen_core.models import (
-    ChatCompletionClient,
-    SystemMessage,
-    UserMessage,
-)
 from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.markdown import Markdown
 
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk.bm import BM, logger
-from buttermilk.utils.templating import _parse_prompty, load_template_vars
 from buttermilk.utils.utils import expand_dict
 
 
@@ -51,25 +45,18 @@ class Answer(GroupChatMessage):
 
 
 class RequestToSpeak(BaseModel):
-    pass
+    model_config = {"extra": "allow"}
 
 
-class BaseGroupChatAgent(RoutedAgent):
-    """A group chat participant using an LLM."""
+class BaseGroupChatAgent(RoutedAgent, BaseModel):
+    """A group chat participant."""
 
-    def __init__(
-        self,
-        *,
-        step_name: str,
-        name: str,
-        description: str,
-        group_chat_topic_type: str,
-    ) -> None:
-        super().__init__(description=description)
-        self.name = name
-        self._group_chat_topic_type = group_chat_topic_type
-        self._chat_history: list[str] = []
-        self._step = step_name
+    name: str
+
+    _step: str
+    _group_chat_topic_type: str
+
+    _chat_history: list[GroupChatMessage] = []
 
     async def publish(self, message: Any) -> None:
         await self.publish_message(
@@ -115,88 +102,6 @@ class UserAgent(BaseGroupChatAgent):
             await self.publish(reply)
             return reply
         raise CantHandleException()
-
-
-class LLMAgent(BaseGroupChatAgent):
-    def __init__(
-        self,
-        *,
-        llm_client: ChatCompletionClient,
-        template: str,
-        step_name: str,
-        name: str,
-        group_chat_topic_type: str,
-        inputs: list[str] = [],
-        **kwargs,
-    ):
-        self.llm_client = llm_client
-        self.system_message = None
-        self.inputs = inputs
-
-        # Construct list of messages from the templates
-        rendered_template, remaining_inputs = load_template_vars(
-            template=template,
-            **kwargs,
-        )
-
-        # Interpret the template as a Prompty; split it into separate messages with
-        # role and content keys. First we strip the header information from the markdown
-        prompty = _parse_prompty(rendered_template)
-
-        # Next we use Prompty's format to set roles within the template
-        from promptflow.core._prompty_utils import parse_chat
-
-        messages = parse_chat(
-            prompty,
-            valid_roles=["system", "user", "developer", "human", "placeholder"],
-        )
-        model_context = []
-        if messages[0]["role"] in ("system", "developer"):
-            self.system_message = messages[0]["content"]
-            model_context.extend(messages[1:])
-
-        super().__init__(
-            description="Applies rules to content.",
-            step_name=step_name,
-            name=name,
-            group_chat_topic_type=group_chat_topic_type,
-        )
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: RequestToSpeak,
-        ctx: MessageContext,
-    ) -> GroupChatMessage:
-        logger.debug(
-            f"UserAgent {self.name} from step {self._step} received request to speak.",
-        )
-        response = await self.llm_client.create(
-            messages=[
-                SystemMessage(content=self.system_message),
-                UserMessage(content="\n".join(self._chat_history), source=self.name),
-            ],
-        )
-        answer = GroupChatMessage(
-            content=response.content,
-            source=self.name,
-            step=self._step,
-        )
-        await self.publish(answer)
-        return answer
-
-    @message_handler
-    async def handle_groupchatmessage(
-        self,
-        message: Request,
-        ctx: MessageContext,
-    ) -> None:
-        # Process the message using the LLM client
-        if message.step in self.inputs:
-            logger.debug(
-                f"LLMAgent {self.name} received step {message.step} message from {message.source}",
-            )
-            self._chat_history.append(f"{message.source}: {message.content}")
 
 
 class MoA(BaseModel):
@@ -255,7 +160,7 @@ class MoA(BaseModel):
                     agent_name,
                     lambda llm_client=llm_client,
                     agent_name=agent_name,
-                    step=step.name,
+                    step=step,
                     variant=variant: LLMAgent(
                         step_name=step.name,
                         llm_client=llm_client,

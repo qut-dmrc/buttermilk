@@ -47,7 +47,7 @@ def _parse_prompty(string_template) -> str:
 def load_template_vars(
     *,
     template: str,
-    **inputs,
+    **parameters,
 ) -> tuple[str, list]:
     recursive_paths = TEMPLATE_PATHS + [
         x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
@@ -85,7 +85,7 @@ def load_template_vars(
     tpl_text = _parse_prompty(tpl_text)
     available_vars = {}
     # Load template variables into the Jinja2 environment
-    for k, v in inputs.items():
+    for k, v in parameters.items():
         if isinstance(v, str) and v:
             # Try to load a template if it's passed in by filename, otherwise use it
             # as a plain string replacement.

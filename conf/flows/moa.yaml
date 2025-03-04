@@ -23,32 +23,34 @@ moa:
     #     model:
     #       - gemini2pro
     - name: judge
+      _target_: buttermilk.agents.Judger
       num_runs: 1
       save: ${save}
+      model: ${llms.judgers}
+      template: judge
       parameters:
-        template: judge
+        formatting: json_rules
         criteria:
           - criteria_ordinary
           - criteria_simple
-        formatting: json_rules
-        model: ${llms.judgers}
       inputs:
         - record
-    # - name: context_owl
-    #   num_runs: 1
-    #   save: ${save}
-    #   parameters:
-    #     template: owl
-    #     model: ${llms.general}
-    - name: synth
+    - name: context_owl
+      _target_: buttermilk.agents.Owl
       num_runs: 1
       save: ${save}
+      model: ${llms.general}
+      template: owl
+    - name: synth
+      _target_: buttermilk.agents.Synthesiser
+      template: synthesise_judger
+      num_runs: 1
+      save: ${save}
+      model: ${llms.synthesisers}
       parameters:
-        template: synthesise_judger
         instructions: judge
         criteria: criteria_simple
         formatting: json_rules
-        model: ${llms.synthesisers}
       inputs:
         - record
         - judge
