@@ -22,6 +22,13 @@ moa:
     #     download_if_necessary: true
     #     model:
     #       - gemini2pro
+
+    - name: context_owl
+      _target_: buttermilk.agents.Owl
+      num_runs: 1
+      save: ${save}
+      model: ${llms.general}
+      template: owl
     - name: judge
       _target_: buttermilk.agents.Judger
       num_runs: 1
@@ -35,6 +42,7 @@ moa:
           - criteria_simple
       inputs:
         - record
+        - context_owl
     - name: context_owl
       _target_: buttermilk.agents.Owl
       num_runs: 1

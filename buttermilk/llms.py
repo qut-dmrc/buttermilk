@@ -2,6 +2,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from anthropic import AnthropicVertex, AsyncAnthropicVertex
+from autogen import OpenAIWrapper
 from autogen_core.models import ChatCompletionClient
 from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
@@ -61,8 +62,11 @@ class LLMConfig(BaseModel):
     )
     obj: str = Field(..., description="Name of the model object to instantiate")
     api_type: str = Field(
-        default="openai", description="Type of API to use (e.g. openai, vertex, azure)"
+        default="openai",
+        description="Type of API to use (e.g. openai, vertex, azure)",
     )
+    base_url: str | None = Field(default=None, description="Custom URL to call")
+
     model_info: dict = {}
     capabilities: LLMCapabilities = Field(
         default_factory=LLMCapabilities,
@@ -97,11 +101,11 @@ CHATMODELS = [
     "gpt4o",
     "sonnet",
     "haiku",
-    "gemini2flashthinking",
+    "gemini2flash",
     "gemini2pro",
     "o3-mini-high",
 ]
-CHEAP_CHAT_MODELS = ["haiku", "gemini2flash"]
+CHEAP_CHAT_MODELS = ["haiku", "gemini2flash", "o3-mini-high"]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
 
 
@@ -187,15 +191,45 @@ class LLMs(BaseModel):
     def all_model_names(self) -> Enum:
         return Enum("AllModelNames", list(self.connections.keys()))
 
-    def get_autogen_client(self, name) -> ChatCompletionClient:
-        params = self.connections[name].configs
+    def get_autogen_generic(self, name):
+        params = self.connections[name].configs.copy()
+        params["api_type"] = self.connections[name].api_type
+        params["base_url"] = self.connections[name].base_url
         params["model_info"] = self.connections[name].model_info
+
+        wrapper = OpenAIWrapper(config_list=[params])
+
+        return wrapper
+
+    def get_autogen_chat_client(self, name) -> ChatCompletionClient:
+        # Let Autogen handle the correct arguments for different models
+        wrapper = self.get_autogen_generic(name)
+
+        # Add in any config keys autogen has removed
+        # params = {k:v for k, v in self.connections[name].configs.items() if k not in params}
+        params = self.connections[name].configs.copy()
+
+        params["base_url"] = self.connections[name].base_url
+        params["model_info"] = self.connections[name].model_info
+
+        # params.update(**wrapper._config_list[0])
 
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**params)
         else:
             client = OpenAIChatCompletionClient(**params)
+
         return client
+
+    # def get_autogen_chat_client(self, name):
+    #     params = self.connections[name].configs
+    #     params["model_info"] = self.connections[name].model_info
+
+    #     if self.connections[name].api_type == "azure":
+    #         client = AzureOpenAIChatCompletionClient(**params)
+    #     else:
+    #         client = OpenAIChatCompletionClient(**params)
+    #     return client
 
     def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.models:

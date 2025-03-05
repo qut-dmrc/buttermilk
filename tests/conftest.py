@@ -4,7 +4,7 @@ from pytest import MarkDecorator
 
 from buttermilk import BM
 from buttermilk._core.runner_types import Job, RecordInfo
-from buttermilk.llms import CHATMODELS, MULTIMODAL_MODELS, LLMs
+from buttermilk.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
@@ -40,14 +40,18 @@ def llms(bm: BM) -> LLMs:
     return bm.llms
 
 
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
+def model_name(request) -> str:
+    return request.param
+
+
 @pytest.fixture(params=MULTIMODAL_MODELS)
-def llm(request, bm: BM):
+def llm_multimodal(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(params=CHATMODELS)
-def llm(request, bm: BM):
-    return bm.llms[request.param]
+def llm(model, bm: BM):
+    return bm.llms[model]
 
 
 @pytest.fixture(scope="session")

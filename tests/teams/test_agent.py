@@ -1,7 +1,12 @@
 import pytest
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.messages import TextMessage
-from autogen_core import CancellationToken, SingleThreadedAgentRuntime, TypeSubscription
+from autogen_core import (
+    CancellationToken,
+    DefaultTopicId,
+    SingleThreadedAgentRuntime,
+    TypeSubscription,
+)
 
 from buttermilk.agents.judger import Judger, Owl
 from buttermilk.bm import BM
@@ -17,7 +22,7 @@ def runtime():
 @pytest.fixture(params=CHATMODELS, scope="function")
 def judger(request):
     agent = Judger(
-        model_client=request.param,
+        llm=request.param,
         name="testjudger",
         parameters={
             "template": "judge",
@@ -31,7 +36,7 @@ def judger(request):
 
 @pytest.fixture(params=CHATMODELS, scope="function")
 async def llm_autogen(request, bm: BM):
-    return bm.llms.get_autogen_client(request.param)
+    return bm.llms.get_autogen_chat_client(request.param)
 
 
 @pytest.mark.anyio
@@ -63,18 +68,28 @@ async def test_run_agent_judge(judger, fight_no_more_forever):
     # assert "joseph" in " ".join(result.outputs["reasons"]).lower()
 
 
+@pytest.fixture(params=[Judger, Owl])
+def record_agent(request):
+    return request.param
+
+
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", CHATMODELS)
-async def test_run_owl(runtime, model, fight_no_more_forever):
-    agent_id = await Owl.register(
+async def test_run_record_agent(
+    runtime,
+    record_agent,
+    model_name,
+    fight_no_more_forever,
+):
+    """Test agents that just take a record as input."""
+    agent_id = await record_agent.register(
         runtime,
-        "default",
-        lambda: Owl(name="assistant1", llm=model),
+        DefaultTopicId().type,
+        lambda: record_agent(name="assistant1", llm=model_name),
     )
     await runtime.add_subscription(
         TypeSubscription(
-            topic_type="default",
-            agent_type="owl",
+            topic_type=DefaultTopicId().type,
+            agent_type=agent_id.type,
         ),
     )
     runtime.start()

@@ -43,8 +43,8 @@ class LLMAgent(BaseGroupChatAgent):
         # _model_context = UnboundedChatCompletionContext()
         self.template = template
         self._json_parser = ChatParser()
-
-        self._model_client = BM().llms.get_autogen_client(llm)
+        # self._model_client = BM().llms.get_autogen_generic(llm)
+        self._model_client = BM().llms.get_autogen_chat_client(llm)
         self._name = "-".join([
             x for x in [name, template, llm, shortuuid.uuid()[:6]] if x
         ])
@@ -110,12 +110,12 @@ class LLMAgent(BaseGroupChatAgent):
         message: RequestToSpeak,
         ctx: MessageContext,
     ) -> GroupChatMessage:
-        info_message = f"{self._name} from {self.step} got request to speak."
+        log_message = f"{self._name} from {self.step} got request to speak."
 
         if message.model_extra:
-            info_message += f" Args: {', '.join(message.model_extra.keys())}."
+            log_message += f" Args: {', '.join(message.model_extra.keys())}."
 
-        logger.debug(info_message)
+        logger.debug(log_message)
 
         response = await self.query(params=message.model_extra)
         output = self._json_parser.parse(response.content)

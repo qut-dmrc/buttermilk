@@ -153,7 +153,7 @@ class MoA(BaseModel):
                     for x in [step.name, shortuuid.uuid()] + list(variant.values())
                     if x
                 ])[:64]
-                llm_client = bm.llms.get_autogen_client(variant["model"])
+                llm_client = bm.llms.get_autogen_chat_client(variant["model"])
                 agent_type = await LLMAgent.register(
                     runtime,
                     agent_name,
