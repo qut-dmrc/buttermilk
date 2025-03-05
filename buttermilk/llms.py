@@ -8,6 +8,7 @@ from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
+from autogen_openaiext_client import GeminiChatCompletionClient
 from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 
@@ -96,16 +97,33 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # cat .cache/buttermilk/models.json | jq ".[].name"
 # ```
 CHATMODELS = [
-    "llama33_70b",
-    "llama32_90b",
+    "gemini15pro",
+    "gemini15pro_safety",
+    "gemini2flash",
+    "gemini2flashlite",
+    "gemini2flashthinking",
+    "gemini2pro",
     "gpt4o",
+    "haiku",
+    "llama31_405b",
+    "llama31_405b-azure",
+    "llama31_8b",
+    "llama31_8b_guard",
+    "llama32_90b",
+    "llama32_90b_azure",
+    "llama32_90b_guard",
+    "llama33_70b",
+    "o3-mini-high",
     "sonnet",
+    "sonnetanthropic",
+]
+CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini2flash",
-    "gemini2pro",
     "o3-mini-high",
+    "gemini2flashthinking",
+    "gemini2flashlite",
 ]
-CHEAP_CHAT_MODELS = ["haiku", "gemini2flash", "o3-mini-high"]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
 
 
@@ -216,6 +234,8 @@ class LLMs(BaseModel):
 
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**params)
+        elif self.connections[name].api_type == "google":
+            client = GeminiChatCompletionClient(**params)
         else:
             client = OpenAIChatCompletionClient(**params)
 

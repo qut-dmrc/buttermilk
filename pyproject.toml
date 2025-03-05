@@ -78,6 +78,7 @@ dependencies = [
     "autogen-ext[azure,openai,gemini]>=0.4.7",
     "autogen>=0.7.6",
     "autogen-agentchat>=0.4.7",
+    "autogen-openaiext-client>=0.0.3",
 ]
 
 [dependency-groups]

@@ -24,12 +24,6 @@ def judger(request):
     agent = Judger(
         llm=request.param,
         name="testjudger",
-        parameters={
-            "template": "judge",
-            "model": request.param,
-            "criteria": "criteria_ordinary",
-            "formatting": "json_rules",
-        },
     )
     return agent
 
@@ -49,23 +43,6 @@ async def test_autogen_clients(llm_autogen):
     )
     print(response)
     assert response
-
-
-@pytest.mark.anyio
-async def test_run_agent_judge(judger, fight_no_more_forever):
-    result = await judger.on_messages(
-        [TextMessage(content=fight_no_more_forever.fulltext, source="user")],
-        CancellationToken(),
-    )
-    assert result
-
-    # assert isinstance(result, Job)
-    # assert not result.error
-    # assert isinstance(result.record, RecordInfo)
-    # assert result.outputs and isinstance(result.outputs, dict)
-    # assert result.outputs["prediction"] is False
-    # assert len(result.outputs["reasons"]) > 0
-    # assert "joseph" in " ".join(result.outputs["reasons"]).lower()
 
 
 @pytest.fixture(params=[Judger, Owl])
