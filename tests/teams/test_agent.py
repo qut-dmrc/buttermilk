@@ -8,7 +8,7 @@ from autogen_core import (
     TypeSubscription,
 )
 
-from buttermilk.agents.judger import Judger, Owl
+from buttermilk.agents.llmchat import LLMAgent
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.moa import RequestToSpeak
@@ -17,15 +17,6 @@ from buttermilk.runner.moa import RequestToSpeak
 @pytest.fixture
 def runtime():
     return SingleThreadedAgentRuntime()
-
-
-@pytest.fixture(params=CHATMODELS, scope="function")
-def judger(request):
-    agent = Judger(
-        llm=request.param,
-        name="testjudger",
-    )
-    return agent
 
 
 @pytest.fixture(params=CHATMODELS, scope="function")
@@ -45,23 +36,43 @@ async def test_autogen_clients(llm_autogen):
     assert response
 
 
-@pytest.fixture(params=[Judger, Owl])
-def record_agent(request):
-    return request.param
+@pytest.fixture(params=["Judger", "Owl"], scope="function")
+def record_agent_cfg(request):
+    match request.param:
+        case "Judger":
+            return dict(
+                template="judge",
+                description="apply rules",
+                formatting="json_rules",
+                criteria="criteria_simple",
+            )
+        case "Owl":
+            return dict(
+                template="owl",
+                formatting="json_rules",
+                description="look for things",
+            )
+        case _:
+            raise ValueError(f"Unknown agent type: {request.param}")
 
 
 @pytest.mark.anyio
 async def test_run_record_agent(
     runtime,
-    record_agent,
+    record_agent_cfg,
     model_name,
     fight_no_more_forever,
 ):
     """Test agents that just take a record as input."""
-    agent_id = await record_agent.register(
+    agent_id = await LLMAgent.register(
         runtime,
         DefaultTopicId().type,
-        lambda: record_agent(name="assistant1", llm=model_name),
+        lambda: LLMAgent(
+            name="assistant1",
+            model=model_name,
+            step_name="test",
+            **record_agent_cfg,
+        ),
     )
     await runtime.add_subscription(
         TypeSubscription(

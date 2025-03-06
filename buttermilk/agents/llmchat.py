@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any
 
+import regex as re
 from autogen_core import (
     CancellationToken,
     DefaultTopicId,
@@ -14,11 +15,12 @@ from autogen_core.model_context import (
 from autogen_core.models import (
     AssistantMessage,
     CreateResult,
+    LLMMessage,
     SystemMessage,
     UserMessage,
 )
 from promptflow.core._prompty_utils import parse_chat
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from buttermilk.bm import BM, logger
 from buttermilk.tools.json_parser import ChatParser
@@ -26,9 +28,10 @@ from buttermilk.utils.templating import _parse_prompty, load_template_vars
 
 
 class GroupChatMessage(BaseModel):
+    type: str = "GroupChatMessage"
     """A message sent to the group chat"""
 
-    content: str | dict[str, Any] | UserMessage | AssistantMessage
+    content: str | LLMMessage
     """The content of the message."""
 
     source: str
@@ -37,10 +40,24 @@ class GroupChatMessage(BaseModel):
     step: str
     """The stage of the process that this message was sent from"""
 
-    type: str = "GroupChatMessage"
+    data: dict[str, Any] = {}
+    """Additional data related to the message."""
 
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_content_to_string(cls, values):
+        if "content" in values:
+            content = values["content"]
+            if isinstance(content, str):
+                pass  # Already a string
+            elif hasattr(content, "content"):  # Handle LLMMessage case
+                values["content"] = str(content.content)
+            else:
+                values["content"] = str(content)
+        return values
 
 
 class Request(GroupChatMessage):
@@ -61,69 +78,58 @@ class BaseGroupChatAgent(RoutedAgent):
     def __init__(
         self,
         description: str,
-        step: str = "default",
         group_chat_topic_type: str = "default",
     ):
         super().__init__(
             description=description,
         )
-        self.step = step
         self._group_chat_topic_type = group_chat_topic_type
         self._json_parser = ChatParser()
 
     async def publish(self, message: Any) -> None:
         await self.publish_message(
             message,
-            DefaultTopicId(type=self._group_chat_topic_type, source=self.step),
-            # DefaultTopicId(type=self._group_chat_topic_type),
+            # DefaultTopicId(type=self._group_chat_topic_type, source=self.step),
+            DefaultTopicId(type=self._group_chat_topic_type),
         )
 
 
 class LLMAgent(BaseGroupChatAgent):
     def __init__(
         self,
+        template: str,
+        model: str,
+        name: str,
         *,
         description: str,
-        group_chat_topic_type: str,
-        model: str,
-        template: str,
         step_name: str,
-        name: str,
         inputs: list[str] = [],
+        group_chat_topic_type: str = "default",
         **parameters,
     ) -> None:
         super().__init__(
             description=description,
-            step=step_name,
             group_chat_topic_type=group_chat_topic_type,
         )
+        bm = BM()
 
         self._context = UnboundedChatCompletionContext()
         self.step = step_name
         self.params = parameters
         self.template = template
         self._json_parser = ChatParser()
-        self._model_client = BM().llms.get_autogen_chat_client(model)
+        self._model_client = bm.llms.get_autogen_chat_client(model)
         self._name = name
         self._inputs = inputs
-        self._history = []
+        self._history: list[str] = []
 
     async def load_template(self, inputs: dict[str, Any] = {}) -> list[Any]:
         # Construct list of messages from the templates
-        rendered_template, _unfilled_inputs = load_template_vars(
+        rendered_template = load_template_vars(
             template=self.template,
             parameters=self.params,
-            **inputs,
+            untrusted_inputs=inputs,
         )
-
-        # if _unfilled_inputs:
-        #     raise ValueError(
-        #         f"Template {self.template} has unfilled inputs: {_unfilled_inputs}",
-        #     )
-        # if any([x not in set(self._unfilled_inputs) for x in inputs if x]):
-        #     raise ValueError(
-        #         f"Inputs {set(inputs.keys())} is not a subset of remaining template inputs {set(self._unfilled_inputs)}",
-        #     )
 
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys. First we strip the header information from the markdown
@@ -142,16 +148,18 @@ class LLMAgent(BaseGroupChatAgent):
                 "assistant",
             ],
         ):
-            if message["role"] in ("system", "developer"):
-                messages.append(SystemMessage(content=message["content"]))
-            elif message["role"] in ("assistant"):
-                messages.append(
-                    AssistantMessage(content=message["content"], source=self._name),
-                )
-            else:
-                messages.append(
-                    UserMessage(content=message["content"], source=self._name),
-                )
+            # Check if there's content in the message after filling the template
+            if re.sub(r"\s+", "", str(message["content"])):
+                if message["role"] in ("system", "developer"):
+                    messages.append(SystemMessage(content=message["content"]))
+                elif message["role"] in ("assistant"):
+                    messages.append(
+                        AssistantMessage(content=message["content"], source=self._name),
+                    )
+                else:
+                    messages.append(
+                        UserMessage(content=message["content"], source=self._name),
+                    )
 
         return messages
 
@@ -191,7 +199,6 @@ class LLMAgent(BaseGroupChatAgent):
             metadata=response.model_dump(exclude=["content"]),
         )
         await self.publish(answer)
-        await asyncio.sleep(1)
 
         return answer
 
@@ -203,8 +210,8 @@ class LLMAgent(BaseGroupChatAgent):
     ) -> None:
         # Process the message using the LLM client
         if message.step in self._inputs:
-            await self._context.add_message(message.content)
             self._history.append(message.content)
+            await self._context.add_message(message.content)
 
             logger.debug(
                 f"LLMAgent {self._name} received step {message.step} message from {message.source}",
@@ -212,4 +219,5 @@ class LLMAgent(BaseGroupChatAgent):
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:
         """Reset the assistant by clearing the model context."""
+        self._history = []
         await self._context.clear()
