@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 import regex as re
 from jinja2 import (
@@ -11,6 +12,7 @@ from jinja2 import (
     sandbox,
 )
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.runner_types import RecordInfo
@@ -18,6 +20,27 @@ from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.exceptions import FatalError
 from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
+
+
+class KeyValueCollector(BaseModel):
+    """A simple collector for key-value pairs to insert into templates."""
+
+    _data: dict[str, Any | list[Any]] = Field(default_factory=dict)
+
+    def add(self, key: str, value: Any) -> None:
+        if key in self._data:
+            if not isinstance(self._data[key], list):
+                self._data[key] = [self._data[key]]
+            if isinstance(self._data[key], list):
+                self._data[key].append(value)
+        else:
+            self._data[key] = value
+
+    def get_dict(self) -> dict:
+        return dict(self._data)
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):

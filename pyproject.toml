@@ -194,7 +194,7 @@ addopts = [
     "--durations=10", 
     "-n 12", 
     "-rfEX",
-    "--tb=short",
+    "--tb=line",
     "--show-capture=no",
     "--disable-warnings",
     ]

@@ -5,7 +5,6 @@ moa:
   _target_: buttermilk.runner.moa.MoA
   source: trans journalists guidelines assessment
   save: ${save}
-  llms: ${llms.general}
 
   data:
     - name: tja_train
@@ -17,7 +16,7 @@ moa:
   steps:
     # - name: describer
     #   num_runs: 1
-    #   parameters:
+    #   variants:
     #     template: describe
     #     download_if_necessary: true
     #     model:
@@ -25,35 +24,35 @@ moa:
 
     - name: context_owl
       description: Spots little things that are easy to miss.
-      target: LLMAgent
+      agent: LLMAgent
       num_runs: 1
       save: ${save}
-      parameters:
+      variants:
         template: owl
         model: ${llms.general}
       inputs:
         - record
     - name: judge
       description: Applies criteria to content.
-      target: LLMAgent
+      agent: LLMAgent
       num_runs: 1
       save: ${save}
-      parameters:
+      variants:
         template: judge
         model: ${llms.general}
         formatting: json_rules
         criteria:
           - criteria_ordinary
-          - criteria_simple
+          # - criteria_simple
       inputs:
         - record
         - context_owl
     - name: synth
-      target: LLMAgent
+      agent: LLMAgent
       description: Synthesizes draft answers.
       num_runs: 1
       save: ${save}
-      parameters:
+      variants:
         model: ${llms.synthesisers}
         template: synthesise_judger
         instructions: judge
@@ -66,7 +65,7 @@ moa:
     # - name: eval
     #   num_runs: 1
     #   save: ${save}
-    #   parameters:
+    #   variants:
     #     template: differences
     #     criteria: >
     #       Evaluate how well the provided content aligns with journalistic standards

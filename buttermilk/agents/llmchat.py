@@ -24,7 +24,11 @@ from pydantic import BaseModel, Field, model_validator
 
 from buttermilk.bm import BM, logger
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import _parse_prompty, load_template_vars
+from buttermilk.utils.templating import (
+    KeyValueCollector,
+    _parse_prompty,
+    load_template_vars,
+)
 
 
 class GroupChatMessage(BaseModel):
@@ -60,7 +64,7 @@ class GroupChatMessage(BaseModel):
         return values
 
 
-class Request(GroupChatMessage):
+class Payload(GroupChatMessage):
     type: str = "Request"
 
 
@@ -121,7 +125,7 @@ class LLMAgent(BaseGroupChatAgent):
         self._model_client = bm.llms.get_autogen_chat_client(model)
         self._name = name
         self._inputs = inputs
-        self._history: list[str] = []
+        self._data: KeyValueCollector = KeyValueCollector()
 
     async def load_template(self, inputs: dict[str, Any] = {}) -> list[Any]:
         # Construct list of messages from the templates
@@ -170,7 +174,7 @@ class LLMAgent(BaseGroupChatAgent):
         messages = await self.load_template(inputs=inputs)
         await asyncio.sleep(1)
         messages.extend(await self._context.get_messages())
-        messages.extend(self._history)
+        messages.extend(self._data)
 
         response = await self._model_client.create(messages=messages)
 
@@ -205,12 +209,12 @@ class LLMAgent(BaseGroupChatAgent):
     @message_handler
     async def handle_groupchatmessage(
         self,
-        message: Request | GroupChatMessage | Answer,
+        message: Payload | GroupChatMessage | Answer,
         ctx: MessageContext,
     ) -> None:
         # Process the message using the LLM client
         if message.step in self._inputs:
-            self._history.append(message.content)
+            self._data.append(message.content)
             await self._context.add_message(message.content)
 
             logger.debug(
@@ -219,5 +223,5 @@ class LLMAgent(BaseGroupChatAgent):
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:
         """Reset the assistant by clearing the model context."""
-        self._history = []
+        self._data = []
         await self._context.clear()

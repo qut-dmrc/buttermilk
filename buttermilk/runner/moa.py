@@ -14,7 +14,7 @@ from autogen_core.exceptions import CantHandleException
 from autogen_core.models import (
     UserMessage,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -24,11 +24,12 @@ from buttermilk.agents.llmchat import (
     BaseGroupChatAgent,
     GroupChatMessage,
     LLMAgent,
-    Request,
+    Payload,
     RequestToSpeak,
 )
 from buttermilk.bm import BM, logger
 from buttermilk.utils.utils import expand_dict
+from buttermilk.utils.validators import make_list_validator
 
 _AGENTS = [LLMAgent]
 
@@ -41,7 +42,7 @@ class UserAgent(BaseGroupChatAgent):
     @message_handler
     async def handle_message(
         self,
-        message: Request | GroupChatMessage | Answer,
+        message: Payload | GroupChatMessage | Answer,
         ctx: MessageContext,
     ) -> None:
         # When integrating with a frontend, this is where group chat message
@@ -73,8 +74,12 @@ class UserAgent(BaseGroupChatAgent):
 
 
 class VariantParameters(BaseModel):
-    template: str
-    model: str
+    template: list[str]
+    model: list[str]
+
+    _ensure_list = field_validator("template", "model", mode="before")(
+        make_list_validator(),
+    )
 
     model_config = {"extra": "allow"}
 
@@ -90,7 +95,7 @@ class MoAAgentFactory(BaseModel):
     """
 
     description: str
-    step: str = Field(
+    name: str = Field(
         ...,
         description="The step in the workflow that this agent can perform.",
     )
@@ -125,7 +130,7 @@ class MoAAgentFactory(BaseModel):
             # Make a unique worker name for identification and logging
             agent_name = "_".join([
                 x[:12]
-                for x in [self.step, shortuuid.uuid()[:6]] + list(variant.values())
+                for x in [self.name, shortuuid.uuid()[:6]] + list(variant.values())
                 if x
             ])[:64]
 
@@ -133,7 +138,7 @@ class MoAAgentFactory(BaseModel):
                 runtime,
                 agent_name,
                 lambda agent_name=agent_name, variant=variant: agent_cls(
-                    step_name=self.step,
+                    step_name=self.name,
                     name=agent_name,
                     description=self.description,
                     group_chat_topic_type=group_chat_topic_type,
@@ -151,12 +156,12 @@ class MoAAgentFactory(BaseModel):
             )
             await runtime.add_subscription(
                 TypeSubscription(
-                    topic_type=self.step,
+                    topic_type=self.name,
                     agent_type=agent_type,
                 ),
             )
             logger.debug(
-                f"Registered step {self.step} agent {agent_name} with params {', '.join(variant.keys())}: {agent_type}",
+                f"Registered step {self.name} agent {agent_name} with params {', '.join(variant.keys())}: {agent_type}",
             )
             registered_agents.append(agent_type)
         return registered_agents
@@ -167,7 +172,6 @@ class MoA(BaseModel):
     source: str
     steps: list[MoAAgentFactory]
     data: list[DataSource] | None = Field(default_factory=list)
-    llms: list[str]
 
     @cached_property
     def group_chat_topic_type(self) -> str:
@@ -193,7 +197,6 @@ class MoA(BaseModel):
             user_topic_type,
             lambda: UserAgent(
                 description="User input",
-                step="user",
                 group_chat_topic_type=self.group_chat_topic_type,
             ),
         )
@@ -221,19 +224,20 @@ class MoA(BaseModel):
                 runtime,
                 group_chat_topic_type=self.group_chat_topic_type,
             )
-            step_agents[step_factory.step] = agents_for_step
+            step_agents[step_factory.name] = agents_for_step
 
         # Start the runtime
         runtime.start()
 
         # Initial message to start the workflow
         logger.debug("Sending initial request to the group chat")
-        record = UserMessage(content="kill all men", source="User")
+        record = "kill all men"
         await runtime.publish_message(
-            Request(
+            Payload(
                 content=record,
                 source="console",
-                step="start",
+                step="record",
+                data=dict(record=record)
             ),
             DefaultTopicId(type=self.group_chat_topic_type),
         )
@@ -244,13 +248,14 @@ class MoA(BaseModel):
         #     RequestToSpeak(),
         #     DefaultTopicId(type=user_topic_type),
         # )
-        logger.debug("Sending request to judgers")
+        logger.debug("Sending record to agents")
 
         await runtime.publish_message(
-            Request(
-                content=record,
+            Payload(
+                content=record.content,
                 source="console",
                 step="record",
+                data=
             ),
             DefaultTopicId(type=self.group_chat_topic_type),
         )
@@ -260,11 +265,11 @@ class MoA(BaseModel):
 
         # Process each step in sequence
         for step_factory in self.steps:
-            logger.debug(f"Processing step: {step_factory.step}")
+            logger.debug(f"Processing step: {step_factory.name}")
             tasks = []
 
             # Request each agent variant for this step to speak
-            for agent_type in step_agents.get(step_factory.step, []):
+            for agent_type in step_agents.get(step_factory.name, []):
                 agent_id = await runtime.get(agent_type)
                 tasks.append(
                     runtime.send_message(
