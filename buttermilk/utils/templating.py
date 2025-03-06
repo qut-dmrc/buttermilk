@@ -47,7 +47,8 @@ def _parse_prompty(string_template) -> str:
 def load_template_vars(
     *,
     template: str,
-    **parameters,
+    parameters: dict,
+    **inputs,
 ) -> tuple[str, list]:
     recursive_paths = TEMPLATE_PATHS + [
         x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
@@ -61,21 +62,16 @@ def load_template_vars(
             # Keep a list of variables that have not yet been filled.
             undefined_vars.append(self._undefined_name)
 
-            # Ideally we would still use double braces for variables we are
-            # going to subsitute, but langchain placeholder only expect single
-            # braces.
-            #
-            # We convert to single braces here, but remember to use
-            # template_format="jinja2" in langchain's ChatPromptTemplate
-            # and related methods so that json instructions and examples
+            # We leave double races here, so remember to use
+            # format as jinja2 methods so that json instructions and examples
             # etc are not misinterpreted as variables.
-            return "{" + self._undefined_name + "}"
+            return "{{" + self._undefined_name + "}}"
 
     env = SandboxedEnvironment(
         loader=loader,
         trim_blocks=True,
         keep_trailing_newline=True,
-        undefined=KeepUndefined,
+        # undefined=KeepUndefined,
     )
 
     # Read main template and strip out Prompty header
@@ -103,6 +99,8 @@ def load_template_vars(
                 available_vars[k] = v
         else:
             available_vars[k] = v
+
+    available_vars.update(inputs)
 
     # Compile and render the templates, leaving unfilled variables to substitute later
     tpl = env.from_string(tpl_text)

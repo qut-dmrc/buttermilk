@@ -24,18 +24,23 @@ moa:
     #       - gemini2pro
 
     - name: context_owl
-      _target_: buttermilk.agents.Owl
+      description: Spots little things that are easy to miss.
+      target: LLMAgent
       num_runs: 1
       save: ${save}
-      model: ${llms.general}
-      template: owl
-    - name: judge
-      _target_: buttermilk.agents.Judger
-      num_runs: 1
-      save: ${save}
-      model: ${llms.judgers}
-      template: judge
       parameters:
+        template: owl
+        model: ${llms.general}
+      inputs:
+        - record
+    - name: judge
+      description: Applies criteria to content.
+      target: LLMAgent
+      num_runs: 1
+      save: ${save}
+      parameters:
+        template: judge
+        model: ${llms.general}
         formatting: json_rules
         criteria:
           - criteria_ordinary
@@ -43,19 +48,14 @@ moa:
       inputs:
         - record
         - context_owl
-    - name: context_owl
-      _target_: buttermilk.agents.Owl
-      num_runs: 1
-      save: ${save}
-      model: ${llms.general}
-      template: owl
     - name: synth
-      _target_: buttermilk.agents.Synthesiser
-      template: synthesise_judger
+      target: LLMAgent
+      description: Synthesizes draft answers.
       num_runs: 1
       save: ${save}
-      model: ${llms.synthesisers}
       parameters:
+        model: ${llms.synthesisers}
+        template: synthesise_judger
         instructions: judge
         criteria: criteria_simple
         formatting: json_rules

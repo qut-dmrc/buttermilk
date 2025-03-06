@@ -1,5 +1,5 @@
-from .lc import LC
-from .sheetexporter import GSheetExporter
-from .judger import Judger, Owl, Synth
+from .lc import LC as LC
+from .llmchat import LLMAgent as LLMAgent
+from .sheetexporter import GSheetExporter as GSheetExporter
 
-ALL = ["LC","GSheetExporter","Judger","Owl","Synth"]
+ALL = ["LC", "GSheetExporter", "LLMAgent"]
