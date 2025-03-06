@@ -38,7 +38,7 @@ from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
-    load_template_vars,
+    load_template,
     make_messages,
     prepare_placeholders,
 )
@@ -76,7 +76,7 @@ class LC(Agent):
             raise ValueError(f"No model specified for agent LC for job {job.job_id}.")
 
         # Construct list of messages from the templates
-        rendered_template, remaining_inputs = load_template_vars(
+        rendered_template, remaining_inputs = load_template(
             **job.parameters,
             **job.inputs,
         )
@@ -135,7 +135,7 @@ class LC(Agent):
         elapsed = response["metadata"]["seconds_elapsed"]
         error = response.pop("error", None)
 
-        if error and not str(error).lower() == 'null':
+        if error and not str(error).lower() == "null":
             job.error[self.name] = error
             logger.error(
                 f"Unsuccessfully invoked chain with {model} in {elapsed:.2f} seconds: {error}",

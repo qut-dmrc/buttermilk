@@ -75,20 +75,23 @@ def _parse_prompty(string_template) -> str:
     return result.group(2)
 
 
-def load_template_vars(
+def load_template(
     *,
     template: str,
-    parameters: dict,
-    untrusted_inputs: dict,
+    parameters: dict = {},
+    untrusted_inputs: dict = {},
 ) -> str:
-    """Two-stage template rendering to safely handle trusted and untrusted variables.
+    """First stage of a two-stage template rendering to safely handle
+    trusted and untrusted variables.
 
     Args:
-        template: The template string
-        parameters: Parameters you control (allows file includes)
-        inputs: User-provided inputs (restricted to string interpolation only)
+        template:           The template string
+        parameters:         Parameters you control (allows file includes)
+        untrusted_inputs:   User-provided inputs (restricted to string
+                            interpolation only)
 
-    Returns: final rendered template string.
+    Returns:    Rendered template string, with placeholders for
+                unfilled variables.
 
     Raises:
         FatalError if the primary template is not found.
@@ -155,6 +158,34 @@ def load_template_vars(
     intermediate_template = tpl.render(**available_vars)
     undefined_vars = [x for x in undefined_vars if x not in available_vars]
 
+    if untrusted_inputs:
+        return finalise_template(
+            intermediate_template=intermediate_template,
+            untrusted_inputs=untrusted_inputs,
+        )
+
+    return intermediate_template
+
+
+def finalise_template(
+    *,
+    intermediate_template: str,
+    untrusted_inputs: dict = {},
+) -> str:
+    """Second stage of a two-stage template rendering to safely handle
+    trusted and untrusted variables.
+
+    Args:
+        intermediate_template:  A partial template
+        untrusted_inputs:   User-provided inputs (restricted to string
+                            interpolation only)
+
+    Return:    Rendered template string, finalised.
+
+    Raises:
+        ValueError if any parameters are missing.
+
+    """
     # Stage 2: Process user-provided inputs with separate sandbox
     sandbox_env = sandbox.SandboxedEnvironment(
         loader=BaseLoader(),

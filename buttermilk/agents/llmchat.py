@@ -27,7 +27,8 @@ from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     KeyValueCollector,
     _parse_prompty,
-    load_template_vars,
+    finalise_template,
+    load_template,
 )
 
 
@@ -120,19 +121,24 @@ class LLMAgent(BaseGroupChatAgent):
         self._context = UnboundedChatCompletionContext()
         self.step = step_name
         self.params = parameters
-        self.template = template
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(model)
         self._name = name
         self._inputs = inputs
         self._data: KeyValueCollector = KeyValueCollector()
-
-    async def load_template(self, inputs: dict[str, Any] = {}) -> list[Any]:
-        # Construct list of messages from the templates
-        rendered_template = load_template_vars(
-            template=self.template,
+        self.partial_template = load_template(
+            template=template,
             parameters=self.params,
-            untrusted_inputs=inputs,
+        )
+
+    async def finalise_template(self, inputs: dict[str, Any] = {}) -> list[Any]:
+        compiled_inputs = inputs.copy()
+        compiled_inputs.update(self._data.get_dict())
+
+        # Construct list of messages from the templates
+        rendered_template = finalise_template(
+            intermediate_template=str(self.partial_template),
+            untrusted_inputs=compiled_inputs,
         )
 
         # Interpret the template as a Prompty; split it into separate messages with
@@ -171,7 +177,7 @@ class LLMAgent(BaseGroupChatAgent):
         self,
         inputs: dict[str, Any] = {},
     ) -> CreateResult:
-        messages = await self.load_template(inputs=inputs)
+        messages = await self.finalise_template(inputs=inputs)
         await asyncio.sleep(1)
         messages.extend(await self._context.get_messages())
         messages.extend(self._data)
