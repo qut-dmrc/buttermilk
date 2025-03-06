@@ -11,9 +11,6 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.exceptions import CantHandleException
-from autogen_core.models import (
-    UserMessage,
-)
 from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 from rich.markdown import Markdown
@@ -237,7 +234,7 @@ class MoA(BaseModel):
                 content=record,
                 source="console",
                 step="record",
-                data=dict(record=record)
+                data=dict(record=record),
             ),
             DefaultTopicId(type=self.group_chat_topic_type),
         )
@@ -249,16 +246,6 @@ class MoA(BaseModel):
         #     DefaultTopicId(type=user_topic_type),
         # )
         logger.debug("Sending record to agents")
-
-        await runtime.publish_message(
-            Payload(
-                content=record.content,
-                source="console",
-                step="record",
-                data=
-            ),
-            DefaultTopicId(type=self.group_chat_topic_type),
-        )
 
         # Allow some time for initialization
         await asyncio.sleep(5)
