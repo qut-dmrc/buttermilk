@@ -2,6 +2,11 @@ from collections.abc import Sequence
 from typing import Any
 
 import regex as re
+from autogen_core.models import (
+    AssistantMessage,
+    SystemMessage,
+    UserMessage,
+)
 from jinja2 import (
     BaseLoader,
     Environment,
@@ -12,7 +17,7 @@ from jinja2 import (
     sandbox,
 )
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.runner_types import RecordInfo
@@ -23,18 +28,27 @@ from buttermilk.utils.utils import list_files, list_files_with_content, read_tex
 
 
 class KeyValueCollector(BaseModel):
-    """A simple collector for key-value pairs to insert into templates."""
+    """A simple collector for key-value pairs of messages
+    to insert into templates.
+    """
 
-    _data: dict[str, Any | list[Any]] = Field(default_factory=dict)
+    _data: dict[str, Any | list[Any]] = PrivateAttr(default_factory=dict)
 
-    def add(self, key: str, value: Any) -> None:
+    def update(self, incoming: dict) -> None:
+        for key, value in incoming.items():
+            self.add(key, value)
+
+    def add(
+        self,
+        key: str,
+        value: UserMessage | SystemMessage | AssistantMessage,
+    ) -> None:
         if key in self._data:
             if not isinstance(self._data[key], list):
                 self._data[key] = [self._data[key]]
-            if isinstance(self._data[key], list):
-                self._data[key].append(value)
+            self._data[key].append(value)
         else:
-            self._data[key] = value
+            self._data[key] = [value]
 
     def get_dict(self) -> dict:
         return dict(self._data)
@@ -79,7 +93,6 @@ def load_template(
     *,
     template: str,
     parameters: dict = {},
-    untrusted_inputs: dict = {},
 ) -> str:
     """First stage of a two-stage template rendering to safely handle
     trusted and untrusted variables.
@@ -119,6 +132,7 @@ def load_template(
         loader=loader,
         trim_blocks=True,
         keep_trailing_newline=True,
+        # Leave some fields unfilled to be filled in later
         undefined=KeepUndefined,
     )
 
@@ -156,13 +170,6 @@ def load_template(
     # Compile and render the templates, leaving unfilled variables to substitute later
     tpl = trusted_env.from_string(tpl_text)
     intermediate_template = tpl.render(**available_vars)
-    undefined_vars = [x for x in undefined_vars if x not in available_vars]
-
-    if untrusted_inputs:
-        return finalise_template(
-            intermediate_template=intermediate_template,
-            untrusted_inputs=untrusted_inputs,
-        )
 
     return intermediate_template
 
@@ -197,7 +204,7 @@ def finalise_template(
         **untrusted_inputs,
     )
 
-    # We now have a template formatted as a string in Prompty format.
+    # We now have a template component formatted as a string.
     return final_rendered
 
 
