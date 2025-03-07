@@ -33,5 +33,8 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 
 # User:
 {% if context_owl %}
-Additional Context: {{context}}
+Additional Context: 
+{% for response in context_owl %}
+- {{response.intervention}}
+{% endfor %}
 {% endif %}

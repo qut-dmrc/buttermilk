@@ -24,21 +24,22 @@ You may be provided with additional feedback to consider. You should incorporate
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if content %}
+{% if record %}
 <BEGIN CONTENT>
-{{ content }}
+{{ record.full_text }}
 <END CONTENT>
 {% endif %}
 
 
-user:
-{% for draft in answers %}
-    <BEGIN DRAFT ANSWER #{{draft.identifier}}>
-    {{ draft.answer }}
-    <END DRAFT ANSWER {{ draft.identifier }}>
+# User:
+
+{% for draft in judge %}
+    <BEGIN DRAFT ANSWER #{{draft.agent_id}}>{{ draft.body }}<END DRAFT ANSWER>
 {% endfor %}
-{% if feedback %}
-  <BEGIN ADDITIONAL FEEDBACK>
-  {{ feedback }}
-  <END ADDITIONAL FEEDBACK>
+{% if context_owl %}
+{% for feedback in context_owl %}
+    <BEGIN FEEDBACK {{ feedback.agent_id }}>
+    {{ feedback.text }}
+    <END FEEDBACK {{ feedback.body }}>
+{% endfor %}
 {% endif %}

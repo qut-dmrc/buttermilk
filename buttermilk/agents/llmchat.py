@@ -105,14 +105,6 @@ class MessagesCollector(KeyValueCollector):
     )
 
 
-class StringCollector(KeyValueCollector):
-    """Holds bare strings only, for use in templates."""
-
-    _data: dict[str, list[str]] = PrivateAttr(
-        default_factory=dict,
-    )
-
-
 class LLMAgent(BaseGroupChatAgent):
     def __init__(
         self,
@@ -142,7 +134,7 @@ class LLMAgent(BaseGroupChatAgent):
         # visible. These collectors provide storage for agents, usually by reading from the
         # the group chat log of messages. Useful for small objects predominantly.
         self._placeholders: KeyValueCollector = MessagesCollector()
-        self._collected_vars: StringCollector = StringCollector()
+        self._collected_vars: KeyValueCollector = KeyValueCollector()
         self._context = UnboundedChatCompletionContext()
 
     async def fill_template(
@@ -266,7 +258,8 @@ class LLMAgent(BaseGroupChatAgent):
         ctx: MessageContext,
     ) -> None:
         if message.step in self._inputs:
-            self._placeholders.add(message.step, message.model_dump())
+            draft = dict(agent_id=message.agent_id, body=message.body)
+            self._collected_vars.add(message.step, draft)
             msg = UserMessage(
                 content=str(message.body),
                 source=message.agent_id,

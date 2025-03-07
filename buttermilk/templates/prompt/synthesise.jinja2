@@ -32,8 +32,9 @@ You may be provided with additional feedback to consider. You should incorporate
 {% endif %}
 
 
-user:
-{% for draft in answers %}
+# User:
+
+{% for draft in judge %}
     <BEGIN DRAFT ANSWER #{{draft.agent_id}}>{{ draft.body }}<END DRAFT ANSWER>
 {% endfor %}
 {% if context_owl %}
