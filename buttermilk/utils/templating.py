@@ -20,7 +20,7 @@ from buttermilk.utils.utils import list_files, list_files_with_content, read_tex
 
 
 class KeyValueCollector(BaseModel):
-    """A simple collector for key-value pairs of messages
+    """A simple collector for key-value pairs
     to insert into templates.
     """
 
