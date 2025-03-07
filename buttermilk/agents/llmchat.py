@@ -13,7 +13,6 @@ from autogen_core.model_context import (
 )
 from autogen_core.models import (
     AssistantMessage,
-    CreateResult,
     SystemMessage,
     UserMessage,
 )
@@ -26,7 +25,6 @@ from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     KeyValueCollector,
     _parse_prompty,
-    finalise_template,
     load_template,
 )
 
@@ -68,6 +66,9 @@ class InputRecord(GroupChatMessage):
 
 class Answer(GroupChatMessage):
     type: str = "Answer"
+    agent_id: str
+    role: str
+    body: str | list | dict
 
 
 class RequestToSpeak(BaseModel):
@@ -117,6 +118,7 @@ class LLMAgent(BaseGroupChatAgent):
         self._context = UnboundedChatCompletionContext()
         self.step = step_name
         self.params = parameters
+        self.template = template
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(model)
         self._inputs = inputs
@@ -127,11 +129,6 @@ class LLMAgent(BaseGroupChatAgent):
         # So far we mainly use this to transfer the canonical RecordInfo object as an input.
         self._data: KeyValueCollector = KeyValueCollector()
 
-        self.partial_template = load_template(
-            template=template,
-            parameters=self.params,
-        )
-
     async def fill_template(
         self,
         placeholder_messages: dict[
@@ -140,12 +137,19 @@ class LLMAgent(BaseGroupChatAgent):
         ] = {},
         untrusted_inputs: dict[str, Any] = {},
     ) -> list[Any]:
+        """Fill the template with the given inputs and return a list of messages."""
+        # Render the template using Jinja2
+        rendered_template = load_template(
+            template=self.template,
+            parameters=self.params,
+            untrusted_inputs=untrusted_inputs,
+        )
 
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys. First we strip the header information from the markdown
-        prompty = _parse_prompty(self.partial_template)
+        prompty = _parse_prompty(rendered_template)
 
-        # Next we use Prompty's format to set roles within the template
+        # Next we use Prompty's format to divide into messages and set roles
         messages = []
         for message in parse_chat(
             prompty,
@@ -171,13 +175,6 @@ class LLMAgent(BaseGroupChatAgent):
                     ) from e
                 continue
 
-            # For all message types except Placeholder, we fill the template
-            # using jinja2 substitution in a sandboxed environment (text only).
-            message["content"] = finalise_template(
-                intermediate_template=str(message["content"]),
-                untrusted_inputs=untrusted_inputs,
-            )
-
             # Check if there's content in the message after filling the template
             if re.sub(r"\s+", "", str(message["content"])):
                 if message["role"] in ("system", "developer"):
@@ -199,16 +196,30 @@ class LLMAgent(BaseGroupChatAgent):
     async def query(
         self,
         inputs: dict[str, Any] = {},
-    ) -> CreateResult:
+    ) -> Answer:
+        vars = dict(**inputs)
+        vars.update(self._data.get_dict())
+        placeholders = dict(record=vars.pop("record", []))
+
         messages = await self.fill_template(
-            untrusted_inputs=inputs,
-            placeholder_messages=self._data.get_dict(),
+            untrusted_inputs=vars,
+            placeholder_messages=placeholders,
         )
         # messages.extend(await self._context.get_messages())
 
         response = await self._model_client.create(messages=messages)
 
-        return response
+        output = self._json_parser.parse(response.content)
+
+        answer = Answer(
+            agent_id=self.id.type,
+            role="assistant",
+            body=output,
+            content=response.content,
+            step=str(self.step),
+            metadata=response.model_dump(exclude=["content"]),
+        )
+        return answer
 
     @message_handler
     async def handle_request_to_speak(
@@ -227,39 +238,45 @@ class LLMAgent(BaseGroupChatAgent):
         inputs["context"] = await self._context.get_messages()
         inputs.update(message.model_extra)
 
-        response = await self.query(inputs=inputs)
-        output = self._json_parser.parse(response.content)
-
-        answer = Answer(
-            content=output,
-            step=str(self.step),
-            metadata=response.model_dump(exclude=["content"]),
-        )
+        answer = await self.query(inputs=inputs)
         await self.publish(answer)
 
         return answer
 
     @message_handler
-    async def handle_groupchatmessage(
+    async def handle_answer(
         self,
-        message: InputRecord | GroupChatMessage | Answer,
+        message: Answer,
         ctx: MessageContext,
     ) -> None:
-        # Process the message using the LLM client
         if message.step in self._inputs:
-            if isinstance(message, InputRecord):
-                # Special handling for input records
-                # text only for now.
-                # TODO @nicsuzor: make multimodal again.
+            self._data.add(message.step, message.model_dump())
+            msg = UserMessage(
+                content=str(message.body),
+                source=message.agent_id,
+            )
+            await self._context.add_message(msg)
 
-                msg = UserMessage(
-                    content=message.payload.fulltext,
-                    source=ctx.sender.type if ctx.sender else self.id.type,
-                )
-                self._data.add("record", msg)
-            else:
-                self._data.add("context", message.content)
-                await self._context.add_message(message.content)
+            logger.debug(
+                f"LLMAgent {self.id} received and stored {message.type} from step {message.step}.",
+            )
+
+    @message_handler
+    async def handle_inputrecords(
+        self,
+        message: InputRecord,
+        ctx: MessageContext,
+    ) -> None:
+        if message.step in self._inputs:
+            # Special handling for input records
+            # text only for now.
+            # TODO @nicsuzor: make multimodal again.
+
+            msg = UserMessage(
+                content=message.payload.fulltext,
+                source=ctx.sender.type if ctx.sender else self.id.type,
+            )
+            self._data.add("record", msg)
 
             logger.debug(
                 f"LLMAgent {self.id} received and stored {message.type} from step {message.step}.",

@@ -2,16 +2,8 @@ from collections.abc import Sequence
 from typing import Any
 
 import regex as re
-from autogen_core.models import (
-    AssistantMessage,
-    SystemMessage,
-    UserMessage,
-)
 from jinja2 import (
-    BaseLoader,
-    Environment,
     FileSystemLoader,
-    StrictUndefined,
     TemplateNotFound,
     Undefined,
     sandbox,
@@ -41,7 +33,7 @@ class KeyValueCollector(BaseModel):
     def add(
         self,
         key: str,
-        value: UserMessage | SystemMessage | AssistantMessage,
+        value: Any,
     ) -> None:
         if key in self._data:
             if not isinstance(self._data[key], list):
@@ -90,24 +82,19 @@ def _parse_prompty(string_template) -> str:
 
 
 def load_template(
-    *,
     template: str,
     parameters: dict = {},
+    untrusted_inputs: dict = {},
 ) -> str:
-    """First stage of a two-stage template rendering to safely handle
-    trusted and untrusted variables.
+    """Render a template with hierarchical includes and some limited security controls.
 
     Args:
-        template:           The template string
+        template:           The template name to load (without .jinja2 extension)
         parameters:         Parameters you control (allows file includes)
-        untrusted_inputs:   User-provided inputs (restricted to string
-                            interpolation only)
+        untrusted_inputs:   User-provided inputs (restricted to string interpolation)
 
-    Returns:    Rendered template string, with placeholders for
-                unfilled variables.
-
-    Raises:
-        FatalError if the primary template is not found.
+    Returns:
+        Fully rendered template
 
     """
     recursive_paths = TEMPLATE_PATHS + [
@@ -127,85 +114,50 @@ def load_template(
             # etc are not misinterpreted as variables.
             return "{{" + str(self._undefined_name) + "}}"
 
-    trusted_env = Environment(
-        autoescape=True,
+    # Create a sandbox environment for template processing
+    sandbox_env = sandbox.SandboxedEnvironment(
         loader=loader,
         trim_blocks=True,
-        keep_trailing_newline=True,
-        # Leave some fields unfilled to be filled in later
-        undefined=KeepUndefined,
+        undefined=KeepUndefined,  # Retain unfilled placeholders
+        keep_trailing_newline=False,
     )
 
-    # Read main template and strip out Prompty header
+    # Load main template
     try:
-        filename = str(trusted_env.get_template(f"{template}.jinja2").filename)
+        filename = str(sandbox_env.get_template(f"{template}.jinja2").filename)
     except Exception as err:
         raise FatalError(f"Template {template} not found.") from err
 
     logger.debug(f"Loading template {template} from {filename}.")
     tpl_text = read_text(filename)
     tpl_text = _parse_prompty(tpl_text)
-    # Render with trusted params first
 
-    available_vars = {}
-    # Load template variables into the Jinja2 environment
+    # Process template inclusions in parameters
+    processed_params = {}
     for k, v in parameters.items():
         if isinstance(v, str) and v:
-            # Try to load a template if it's passed in by filename, otherwise use it
-            # as a plain string replacement.
-
             try:
-                filename = trusted_env.get_template(f"{v}.jinja2").filename
+                # Try to load this as a template
+                filename = sandbox_env.get_template(f"{v}.jinja2").filename
                 var = read_text(filename)
                 var = _parse_prompty(var)
-                trusted_env.globals[k] = trusted_env.from_string(var).render()
+                processed_params[k] = var
                 logger.debug(f"Loaded template variable {k} from {filename}.")
             except TemplateNotFound:
-                # Leave the value as is and pass it in as text -- but in the next step.
-                # The only templates we trust are the ones we read from disk.
-                available_vars[k] = v
+                # Not a template, use as regular string
+                processed_params[k] = v
         else:
-            available_vars[k] = v
+            processed_params[k] = v
 
-    # Compile and render the templates, leaving unfilled variables to substitute later
-    tpl = trusted_env.from_string(tpl_text)
-    intermediate_template = tpl.render(**available_vars)
+    # Create a combined variables dict with trusted parameters taking precedence
+    all_vars = dict(untrusted_inputs)
+    all_vars.update(processed_params)  # Trusted params override untrusted ones
 
-    return intermediate_template
+    # Render everything in one pass
+    tpl = sandbox_env.from_string(tpl_text)
+    rendered = tpl.render(**all_vars)
 
-
-def finalise_template(
-    *,
-    intermediate_template: str,
-    untrusted_inputs: dict = {},
-) -> str:
-    """Second stage of a two-stage template rendering to safely handle
-    trusted and untrusted variables.
-
-    Args:
-        intermediate_template:  A partial template
-        untrusted_inputs:   User-provided inputs (restricted to string
-                            interpolation only)
-
-    Return:    Rendered template string, finalised.
-
-    Raises:
-        ValueError if any parameters are missing.
-
-    """
-    # Stage 2: Process user-provided inputs with separate sandbox
-    sandbox_env = sandbox.SandboxedEnvironment(
-        loader=BaseLoader(),
-        undefined=StrictUndefined,
-    )
-
-    # Render with untrusted inputs in sandbox
-    final_rendered = sandbox_env.from_string(intermediate_template).render(
-        **untrusted_inputs,
-    )
-
-    # We now have a template component formatted as a string.
-    return final_rendered
+    return rendered
 
 
 def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:

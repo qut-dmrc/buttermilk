@@ -32,4 +32,6 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {{ record }}
 
 # User:
-{{ context }}
+{% if context_owl %}
+Additional Context: {{context}}
+{% endif %}
