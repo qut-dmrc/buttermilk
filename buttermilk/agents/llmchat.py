@@ -116,6 +116,7 @@ class LLMAgent(BaseGroupChatAgent):
         description: str,
         step_name: str,
         group_chat_topic_type: str = "default",
+        fail_on_unfilled_parameters: bool = True,
         **parameters,
     ) -> None:
         super().__init__(
@@ -129,6 +130,7 @@ class LLMAgent(BaseGroupChatAgent):
         self.template = template
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(model)
+        self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
 
     async def fill_template(
         self,

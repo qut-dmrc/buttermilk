@@ -88,7 +88,7 @@ def load_template(
     template: str,
     parameters: dict = {},
     untrusted_inputs: dict = {},
-) -> str:
+) -> tuple[str, list[str]]:
     """Render a template with hierarchical includes and some limited security controls.
 
     Args:
@@ -97,7 +97,7 @@ def load_template(
         untrusted_inputs:   User-provided inputs (restricted to string interpolation)
 
     Returns:
-        Fully rendered template
+        Tuple: Fully rendered template; list of unfilled variables.
 
     """
     recursive_paths = TEMPLATE_PATHS + [
@@ -160,7 +160,7 @@ def load_template(
     tpl = sandbox_env.from_string(tpl_text)
     rendered = tpl.render(**all_vars)
 
-    return rendered
+    return rendered, undefined_vars
 
 
 def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:
