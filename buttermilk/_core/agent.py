@@ -9,7 +9,6 @@ import weave
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
-    AliasChoices,
     BaseModel,
     Field,
     PrivateAttr,
@@ -22,7 +21,6 @@ from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
-from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .log import logger
@@ -50,7 +48,43 @@ def get_agent_name_tracing(call: Any) -> str:
         return "unknown flow"
 
 
-class Agent(BaseModel):
+class AgentConfig(BaseModel):
+    agent_id: str
+    agent: str = Field(..., description="The object to instantiate")
+    num_runs: int = 1
+    description: str
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Initialisation parameters to pass to the agent",
+    )
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="A mapping of data to agent inputs",
+    )
+    outputs: dict[str, Any] = {}
+
+
+class AgentConfig(BaseModel):
+    agent_id: str
+    agent: str = Field(..., description="The object to instantiate")
+    num_runs: int = 1
+    description: str
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Initialisation parameters to pass to the agent",
+    )
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="A mapping of data to agent inputs",
+    )
+    outputs: dict[str, str | list | dict] | None = Field(
+        default_factory=dict,
+        description="Data to pass on to next steps.",
+    )
+    data: list[DataSource] | None = Field(default_factory=list)
+
+
+class Agent(AgentConfig):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
     name: str = Field(
@@ -60,26 +94,6 @@ class Agent(BaseModel):
     save: SaveInfo | None = Field(default=None)  # Where to save the results
     num_runs: int = 1
     concurrency: int = Field(default=3)  # Max number of async tasks to run
-
-    inputs: dict[str, str | list | dict] | list | None = Field(
-        default_factory=dict,
-    )
-
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-    parameters: dict[str, Any] | None = Field(
-        default_factory=dict,
-        description="Combinations of variables to pass to process job",
-        validation_alias=AliasChoices(
-            "parameters",
-            "params",
-            "variants",
-            "vars",
-            "init",
-        ),
-    )
 
     data: list[DataSource] | None = Field(default_factory=list)
 

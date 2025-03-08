@@ -85,21 +85,21 @@ def _parse_prompty(string_template) -> str:
 
 
 def load_template(
-    template: str,
-    parameters: dict = {},
+    parameters: dict,
     untrusted_inputs: dict = {},
-) -> tuple[str, list[str]]:
+) -> tuple[str, set[str]]:
     """Render a template with hierarchical includes and some limited security controls.
 
     Args:
-        template:           The template name to load (without .jinja2 extension)
         parameters:         Parameters you control (allows file includes)
         untrusted_inputs:   User-provided inputs (restricted to string interpolation)
 
     Returns:
-        Tuple: Fully rendered template; list of unfilled variables.
+        Tuple: Fully rendered template; set of unfilled variables.
 
     """
+    template = parameters["template"]
+
     recursive_paths = TEMPLATE_PATHS + [
         x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
     ]
@@ -160,7 +160,7 @@ def load_template(
     tpl = sandbox_env.from_string(tpl_text)
     rendered = tpl.render(**all_vars)
 
-    return rendered, undefined_vars
+    return rendered, set(undefined_vars)
 
 
 def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:

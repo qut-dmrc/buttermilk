@@ -149,7 +149,7 @@ class MoAAgentFactory(BaseModel):
                     description=self.description,
                     group_chat_topic_type=group_chat_topic_type,
                     inputs=self.inputs,
-                    **variant,
+                    parameters=variant,
                 ),  # type: ignore
             )
 

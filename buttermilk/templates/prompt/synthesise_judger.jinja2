@@ -26,7 +26,7 @@ You may be provided with additional feedback to consider. You should incorporate
 
 {% if record %}
 <BEGIN CONTENT>
-{{ record.full_text }}
+{{ record.fulltext }}
 <END CONTENT>
 {% endif %}
 
@@ -36,8 +36,3 @@ You may be provided with additional feedback to consider. You should incorporate
 {% for draft in answers %}
     <BEGIN DRAFT ANSWER #{{draft.agent_id}}>{{ draft.body }}<END DRAFT ANSWER>
 {% endfor %}
-{% if feedback %}
-{% for response in feedback %}
-  <BEGIN FEEDBACK {{ response.agent_id }}>{{ response.intervention }}<END FEEDBACK>
-{% endfor %}
-{% endif %}

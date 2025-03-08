@@ -82,6 +82,7 @@ class BaseGroupChatAgent(RoutedAgent):
 
     def __init__(
         self,
+        config: AgentConfig,
         description: str,
         group_chat_topic_type: str = "default",
     ):
@@ -110,14 +111,13 @@ class MessagesCollector(KeyValueCollector):
 class LLMAgent(BaseGroupChatAgent):
     def __init__(
         self,
-        template: str,
-        model: str,
         *,
         description: str,
         step_name: str,
         group_chat_topic_type: str = "default",
         fail_on_unfilled_parameters: bool = True,
-        **parameters,
+        parameters: dict[str, Any] = {},
+        inputs: dict[str, Any] = {},
     ) -> None:
         super().__init__(
             description=description,
@@ -126,10 +126,9 @@ class LLMAgent(BaseGroupChatAgent):
         bm = BM()
 
         self.step = step_name
-        self.params = parameters
-        self.template = template
+        self.parameters = parameters
         self._json_parser = ChatParser()
-        self._model_client = bm.llms.get_autogen_chat_client(model)
+        self._model_client = bm.llms.get_autogen_chat_client(parameters["model"])
         self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
 
     async def fill_template(
@@ -144,8 +143,7 @@ class LLMAgent(BaseGroupChatAgent):
         """Fill the template with the given inputs and return a list of messages."""
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
-            template=self.template,
-            parameters=self.params,
+            parameters=self.parameters,
             untrusted_inputs=untrusted_inputs,
         )
 
