@@ -1,7 +1,8 @@
 from typing import Any
 
 import jmespath
-from pydantic import BaseModel
+
+from buttermilk.utils.templating import KeyValueCollector
 
 """
 Allows YAML configuration for agents to aggregate their inputs
@@ -47,14 +48,14 @@ Example YAML:
 """
 
 
-class FlowVariableRouter(BaseModel):
+class FlowVariableRouter(KeyValueCollector):
     """Routes variables between workflow steps using mappings
 
     Data is essentially a dict of lists, where each key is the name of a step and
     each list is the output of an agent in a step.
     """
 
-    step_outputs: dict[str, list[Any]] = {}
+    _data: dict[str, list[Any]] = {}
 
     def _resolve_mappings(self, mappings: dict[str, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
@@ -85,16 +86,16 @@ class FlowVariableRouter(BaseModel):
         """
         if "." not in path:
             # Direct reference to a step's complete output list
-            return self.step_outputs.get(path, [])
+            return self._data.get(path, [])
 
         # Handle dot notation for nested fields
         step_name, field_path = path.split(".", 1)
 
-        if step_name not in self.step_outputs:
+        if step_name not in self._data:
             return None
 
         # Get all outputs for this step
-        step_results = self.step_outputs[step_name]
+        step_results = self._data[step_name]
         if not step_results:
             return None
 

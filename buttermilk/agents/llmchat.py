@@ -3,14 +3,10 @@ from typing import Any
 
 import regex as re
 from autogen_core import (
-    CancellationToken,
     DefaultTopicId,
     MessageContext,
     RoutedAgent,
     message_handler,
-)
-from autogen_core.model_context import (
-    UnboundedChatCompletionContext,
 )
 from autogen_core.models import (
     AssistantMessage,
@@ -74,6 +70,11 @@ class Answer(GroupChatMessage):
 
 class RequestToSpeak(BaseModel):
     inputs: Mapping[str, Any] = {}
+    placeholders: Mapping[
+        str,
+        list[SystemMessage | UserMessage | AssistantMessage],
+    ] = {}
+    context: list[SystemMessage | UserMessage | AssistantMessage] = []
 
 
 class BaseGroupChatAgent(RoutedAgent):
@@ -130,13 +131,6 @@ class LLMAgent(BaseGroupChatAgent):
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(model)
         self._inputs = inputs
-
-        # Generally, in a group chat, you want most of the information to be publicly
-        # visible. These collectors provide storage for agents, usually by reading from the
-        # the group chat log of messages. Useful for small objects predominantly.
-        self._placeholders: KeyValueCollector = MessagesCollector()
-        self._collected_vars: KeyValueCollector = KeyValueCollector()
-        self._context = UnboundedChatCompletionContext()
 
     async def fill_template(
         self,
@@ -208,15 +202,19 @@ class LLMAgent(BaseGroupChatAgent):
 
     async def query(
         self,
-        additional_inputs: dict[str, str] = {},
+        inputs: dict[str, str] = {},
+        placeholders: dict[
+            str,
+            list[SystemMessage | UserMessage | AssistantMessage],
+        ] = {},
+        context: list[SystemMessage | UserMessage | AssistantMessage] = [],
     ) -> Answer:
-        untrusted_vars = dict(**additional_inputs)
-        untrusted_vars.update(self._collected_vars.get_dict())
+        untrusted_vars = dict(**inputs)
 
         messages = await self.fill_template(
             untrusted_inputs=untrusted_vars,
-            placeholder_messages=self._placeholders.get_dict(),
-            context=await self._context.get_messages(),
+            placeholder_messages=placeholders,
+            context=context,
         )
 
         response = await self._model_client.create(messages=messages)
@@ -236,63 +234,19 @@ class LLMAgent(BaseGroupChatAgent):
     @message_handler
     async def handle_request_to_speak(
         self,
-        message: RequestToSpeak,
+        request: RequestToSpeak,
         ctx: MessageContext,
     ) -> Answer:
         log_message = f"{self.id} from {self.step} got request to speak."
 
-        if message.model_extra:
-            log_message += f" Args: {', '.join(message.model_extra.keys())}."
-
         logger.debug(log_message)
 
-        answer = await self.query(additional_inputs=dict(message.model_extra))
+        answer = await self.query(
+            inputs=request.inputs,
+            placeholders=request.placeholders,
+            context=request.context,
+        )
 
         await self.publish(answer)
 
         return answer
-
-    @message_handler
-    async def handle_answer(
-        self,
-        message: Answer,
-        ctx: MessageContext,
-    ) -> None:
-        if message.step in self._inputs:
-            draft = dict(agent_id=message.agent_id, body=message.body)
-            self._collected_vars.add(message.step, draft)
-            msg = UserMessage(
-                content=str(message.body),
-                source=message.agent_id,
-            )
-            await self._context.add_message(msg)
-
-            logger.debug(
-                f"LLMAgent {self.id} received and stored {message.type} from step {message.step}.",
-            )
-
-    @message_handler
-    async def handle_inputrecords(
-        self,
-        message: InputRecord,
-        ctx: MessageContext,
-    ) -> None:
-        if message.step in self._inputs:
-            # Special handling for input records
-            # text only for now.
-            # TODO @nicsuzor: make multimodal again.
-
-            msg = UserMessage(
-                content=message.payload.fulltext,
-                source=ctx.sender.type if ctx.sender else self.id.type,
-            )
-            self._placeholders.add("record", msg)
-
-            logger.debug(
-                f"LLMAgent {self.id} received and stored {message.type} from step {message.step}.",
-            )
-
-    async def on_reset(self, cancellation_token: CancellationToken) -> None:
-        """Reset the assistant by clearing the model context."""
-        self._placeholders = []
-        await self._context.clear()

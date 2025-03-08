@@ -4,6 +4,7 @@ from functools import cached_property
 import hydra
 import shortuuid
 from autogen_core import (
+    CancellationToken,
     DefaultTopicId,
     MessageContext,
     SingleThreadedAgentRuntime,
@@ -11,6 +12,12 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.exceptions import CantHandleException
+from autogen_core.model_context import (
+    UnboundedChatCompletionContext,
+)
+from autogen_core.models import (
+    UserMessage,
+)
 from pydantic import BaseModel, Field, field_validator
 from rich.console import Console
 from rich.markdown import Markdown
@@ -23,9 +30,11 @@ from buttermilk.agents.llmchat import (
     GroupChatMessage,
     InputRecord,
     LLMAgent,
+    MessagesCollector,
     RequestToSpeak,
 )
 from buttermilk.bm import BM, logger
+from buttermilk.runner.varmap import FlowVariableRouter
 from buttermilk.utils.templating import KeyValueCollector
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import make_list_validator
@@ -44,10 +53,15 @@ class UserAgent(BaseGroupChatAgent):
         message: GroupChatMessage | Answer,
         ctx: MessageContext,
     ) -> None:
-        # When integrating with a frontend, this is where group chat message
-        # would be sent to the frontend.
+        if isinstance(message, Answer):
+            source = message.agent_id
+        elif ctx.sender:
+            source = ctx.sender.type
+        else:
+            source = ctx.topic_id.type
+
         Console().print(
-            Markdown(f"### {message.step}: \n{message.content}"),
+            Markdown(f"### {source}: \n{message.content}"),
         )
 
     @message_handler
@@ -65,7 +79,6 @@ class UserAgent(BaseGroupChatAgent):
             reply = GroupChatMessage(
                 content=user_input,
                 step=self.step,
-                source="User",
             )
             await self.publish(reply)
             return reply
@@ -159,13 +172,153 @@ class MoAAgentFactory(BaseModel):
         return registered_agents
 
 
-class FlowData(KeyValueCollector):
-    """Essentially a dict of lists, where each key is the name of a step and
-    each list is the output of an agent in a step.
+class Conductor(BaseGroupChatAgent):
+    def __init__(self, description: str, steps, **kwargs):
+        super().__init__(description=description, **kwargs)
 
-        step: str  # The name of the workflow step that generated these results
-        data: list[Any]  # Aggregate outputs from all agents in this step
-    """
+        # Generally, in a group chat, you want most of the information to be publicly
+        # visible. These collectors provide storage for agents, usually by reading from
+        # the group chat log of messages. Useful for small objects predominantly.
+        self._placeholders: KeyValueCollector = MessagesCollector()
+        self._flow_data: FlowVariableRouter = FlowVariableRouter()
+        self._context = UnboundedChatCompletionContext()
+        self.running = False
+        self.steps = steps
+
+    @message_handler
+    async def start_signal(
+        self,
+        message: RequestToSpeak,
+        ctx: MessageContext,
+    ) -> None:
+        if not self.running:
+            self.running = True
+            asyncio.get_event_loop().create_task(self.run())
+            logger.info("Conductor started.")
+            await asyncio.sleep(1)  # wait for conductor to start up
+        else:
+            logger.error("Conductor already running.")
+
+    @message_handler
+    async def handle_answer(
+        self,
+        message: Answer,
+        ctx: MessageContext,
+    ) -> None:
+        # store messages
+        # draft = dict(agent_id=message.agent_id, body=message.body)
+
+        self._flow_data.add(message.step, message.body)
+
+    @message_handler
+    async def handle_inputrecords(
+        self,
+        message: InputRecord,
+        ctx: MessageContext,
+    ) -> None:
+        self._placeholders.add("record", message)
+
+    @message_handler
+    async def handle_other(
+        self,
+        message: GroupChatMessage,
+        ctx: MessageContext,
+    ) -> None:
+        msg = UserMessage(
+            content=message.content,
+            source=ctx.sender.type if ctx.sender else self.id.type,
+        )
+        await self._context.add_message(msg)
+
+    async def on_reset(self, cancellation_token: CancellationToken) -> None:
+        """Reset the assistant by clearing the model context."""
+        self._placeholders = MessagesCollector()
+        await self._context.clear()
+        self._flow_data = FlowVariableRouter()
+
+    async def run(self) -> None:
+        user_topic_type = "User"
+
+        # Register the UserAgent
+        user_agent_type = await UserAgent.register(
+            self.runtime,
+            user_topic_type,
+            lambda: UserAgent(
+                description="User input",
+                group_chat_topic_type=self._group_chat_topic_type,
+            ),
+        )
+
+        await self.runtime.add_subscription(
+            TypeSubscription(
+                topic_type=user_topic_type,
+                agent_type=user_topic_type,
+            ),
+        )
+        await self.runtime.add_subscription(
+            TypeSubscription(
+                topic_type=self._group_chat_topic_type,
+                agent_type=user_topic_type,
+            ),
+        )
+
+        # Dictionary to track agents by step
+        step_agents = {}
+
+        # Register all agent variants for each step
+        for step_factory in self.steps:
+            # Register variants and collect the agent types
+            agents_for_step = await step_factory.register_variants(
+                self.runtime,
+                group_chat_topic_type=self._group_chat_topic_type,
+            )
+            step_agents[step_factory.name] = agents_for_step
+
+        # Start the conversation
+        # logger.debug("Sending request to speak to user")
+        # await runtime.publish_message(
+        #     RequestToSpeak(),
+        #     DefaultTopicId(type=user_topic_type),
+        # )
+
+        # Initial message to start the workflow
+        logger.debug("Sending initial record to the group chat")
+        record = "kill all men"
+
+        await self.runtime.publish_message(
+            InputRecord(
+                content=record,
+                step="record",
+                payload=RecordInfo(data=record),
+            ),
+            DefaultTopicId(type=self._group_chat_topic_type),
+        )
+
+        # Allow some time for initialization
+        await asyncio.sleep(1)
+
+        # Process each step in sequence
+        for step_factory in self.steps:
+            logger.debug(f"Processing step: {step_factory.name}")
+            tasks = []
+
+            step_data = self._flow_data._resolve_mappings(mapping=step_factory.inputs)
+
+            # Request each agent variant for this step to speak
+            for agent_type in step_agents.get(step_factory.name, []):
+                agent_id = await self.runtime.get(agent_type)
+                tasks.append(
+                    self.runtime.send_message(
+                        message=RequestToSpeak(
+                            inputs=step_data, placeholders=self._placeholders.get_dict()
+                        ),
+                        recipient=agent_id,
+                    ),
+                )
+
+            # Wait for all agents in this step to complete
+            if tasks:
+                await asyncio.gather(*tasks)
 
 
 class MoA(BaseModel):
@@ -173,8 +326,6 @@ class MoA(BaseModel):
     source: str
     steps: list[MoAAgentFactory]
     data: list[DataSource] | None = list()
-
-    _step_outputs: FlowData = FlowData()
 
     @cached_property
     def group_chat_topic_type(self) -> str:
@@ -192,45 +343,35 @@ class MoA(BaseModel):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()
 
-        user_topic_type = "User"
-
-        # Register the UserAgent
-        user_agent_type = await UserAgent.register(
+        # Register the conductor
+        await Conductor.register(
             runtime,
-            user_topic_type,
-            lambda: UserAgent(
-                description="User input",
+            "Conductor",
+            lambda: Conductor(
+                description="The conductor",
                 group_chat_topic_type=self.group_chat_topic_type,
-            ),
-        )
-
-        await runtime.add_subscription(
-            TypeSubscription(
-                topic_type=user_topic_type,
-                agent_type=user_topic_type,
+                steps=self.steps,
             ),
         )
         await runtime.add_subscription(
             TypeSubscription(
                 topic_type=self.group_chat_topic_type,
-                agent_type=user_topic_type,
+                agent_type="Conductor",
             ),
         )
 
-        # Dictionary to track agents by step
-        step_agents = {}
-
-        # Register all agent variants for each step
-        for step_factory in self.steps:
-            # Register variants and collect the agent types
-            agents_for_step = await step_factory.register_variants(
-                runtime,
-                group_chat_topic_type=self.group_chat_topic_type,
-            )
-            step_agents[step_factory.name] = agents_for_step
-
         # Start the runtime
         runtime.start()
+
+        # Get the conductor started:
+        logger.debug("Sending start signal to Conductor")
+        await runtime.publish_message(
+            RequestToSpeak(),
+            DefaultTopicId(type="Conductor"),
+        )
+
+        # wait for the conversation to spin up
+        await asyncio.sleep(5)
 
         # Start the conversation
         # logger.debug("Sending request to speak to user")
@@ -239,43 +380,10 @@ class MoA(BaseModel):
         #     DefaultTopicId(type=user_topic_type),
         # )
 
-        # Initial message to start the workflow
-        logger.debug("Sending initial record to the group chat")
-        record = "kill all men"
-
-        await runtime.publish_message(
-            InputRecord(
-                content=record,
-                step="record",
-                payload=RecordInfo(data=record),
-            ),
-            DefaultTopicId(type=self.group_chat_topic_type),
-        )
-
-        # Allow some time for initialization
-        await asyncio.sleep(1)
-
-        # Process each step in sequence
-        for step_factory in self.steps:
-            logger.debug(f"Processing step: {step_factory.name}")
-            tasks = []
-
-            # Request each agent variant for this step to speak
-            for agent_type in step_agents.get(step_factory.name, []):
-                agent_id = await runtime.get(agent_type)
-                tasks.append(
-                    runtime.send_message(
-                        message=RequestToSpeak(),
-                        recipient=agent_id,
-                    ),
-                )
-
-            # Wait for all agents in this step to complete
-            if tasks:
-                await asyncio.gather(*tasks)
-
         # Wait for all processing to complete
         await runtime.stop_when_idle()
+
+        await asyncio.sleep(5)
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")

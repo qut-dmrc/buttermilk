@@ -11,7 +11,7 @@ class TestFlowVariableRouter:
         router = FlowVariableRouter()
 
         # Add judge step data (multiple outputs)
-        router.step_outputs["judge"] = [
+        router._data["judge"] = [
             {
                 "answer": "This is the judge's answer",
                 "scores": [
@@ -46,7 +46,7 @@ class TestFlowVariableRouter:
         ]
 
         # Add draft step data
-        router.step_outputs["draft"] = [
+        router._data["draft"] = [
             {
                 "answer": "This is the draft answer",
                 "feedback": "Needs improvement in clarity",
@@ -56,7 +56,7 @@ class TestFlowVariableRouter:
         ]
 
         # Add context step data
-        router.step_outputs["context"] = [
+        router._data["context"] = [
             {
                 "source": "user query",
                 "timestamp": "2025-03-08T11:55:00Z",
@@ -66,7 +66,7 @@ class TestFlowVariableRouter:
         ]
 
         # Add a simple scalar value wrapped in a list
-        router.step_outputs["job_id"] = ["job-987654"]
+        router._data["job_id"] = ["job-987654"]
 
         return router
 
@@ -243,7 +243,7 @@ class TestFlowVariableRouter:
         """Test that all matching outputs are returned when there are multiple outputs"""
         # Add another step with multiple outputs where both have field1 but only second has field2
         router = sample_data
-        router.step_outputs["special"] = [
+        router._data["special"] = [
             {"field1": "value1"},
             {"field1": "value1-alt", "field2": "value2"},
         ]
@@ -270,9 +270,9 @@ class TestFlowVariableRouter:
         router = sample_data
 
         # Ensure judge step has outputs with scores
-        assert len(router.step_outputs["judge"]) == 2
-        assert "scores" in router.step_outputs["judge"][0]
-        assert "scores" in router.step_outputs["judge"][1]
+        assert len(router._data["judge"]) == 2
+        assert "scores" in router._data["judge"][0]
+        assert "scores" in router._data["judge"][1]
 
         mappings = {
             # This should collect all score values from all judge outputs
