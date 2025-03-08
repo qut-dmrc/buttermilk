@@ -32,9 +32,9 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {{ record }}
 
 # User:
-{% if context_owl %}
+{% if feedback %}
 Additional Context: 
-{% for response in context_owl %}
+{% for response in feedback %}
 - {{response.intervention}}
 {% endfor %}
 {% endif %}

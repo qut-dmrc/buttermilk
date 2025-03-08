@@ -33,13 +33,11 @@ You may be provided with additional feedback to consider. You should incorporate
 
 # User:
 
-{% for draft in judge %}
+{% for draft in answers %}
     <BEGIN DRAFT ANSWER #{{draft.agent_id}}>{{ draft.body }}<END DRAFT ANSWER>
 {% endfor %}
-{% if context_owl %}
-{% for feedback in context_owl %}
-    <BEGIN FEEDBACK {{ feedback.agent_id }}>
-    {{ feedback.text }}
-    <END FEEDBACK {{ feedback.body }}>
+{% if feedback %}
+{% for response in feedback %}
+  <BEGIN FEEDBACK {{ response.agent_id }}>{{ response.intervention }}<END FEEDBACK>
 {% endfor %}
 {% endif %}

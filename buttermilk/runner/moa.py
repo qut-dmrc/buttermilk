@@ -1,5 +1,6 @@
 import asyncio
 from functools import cached_property
+from typing import Any
 
 import hydra
 import shortuuid
@@ -121,12 +122,12 @@ class MoAAgentFactory(BaseModel):
         description="The number of times to run each variant.",
     )
 
-    inputs: list[str] = Field(
-        default_factory=list,
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
         description="The inputs that this agent will receive from the workflow.",
     )
-    outputs: list[str] = Field(
-        default_factory=list,
+    outputs: dict[str, Any] = Field(
+        default_factory=dict,
         description="The outputs that this agent will produce to the workflow.",
     )
 
@@ -193,9 +194,9 @@ class Conductor(BaseGroupChatAgent):
     ) -> None:
         if not self.running:
             self.running = True
-            asyncio.get_event_loop().create_task(self.run())
+            # asyncio.get_event_loop().create_task(self.run())
             logger.info("Conductor started.")
-            await asyncio.sleep(1)  # wait for conductor to start up
+            await self.run()
         else:
             logger.error("Conductor already running.")
 
@@ -216,7 +217,12 @@ class Conductor(BaseGroupChatAgent):
         message: InputRecord,
         ctx: MessageContext,
     ) -> None:
-        self._placeholders.add("record", message)
+        try:
+            src = ctx.sender.type
+        except:
+            src = self.id.type
+        msg = UserMessage(content=message.payload.fulltext, source=src)
+        self._placeholders.add("record", msg)
 
     @message_handler
     async def handle_other(
@@ -302,7 +308,7 @@ class Conductor(BaseGroupChatAgent):
             logger.debug(f"Processing step: {step_factory.name}")
             tasks = []
 
-            step_data = self._flow_data._resolve_mappings(mapping=step_factory.inputs)
+            step_data = self._flow_data._resolve_mappings(step_factory.inputs)
 
             # Request each agent variant for this step to speak
             for agent_type in step_agents.get(step_factory.name, []):
@@ -310,7 +316,8 @@ class Conductor(BaseGroupChatAgent):
                 tasks.append(
                     self.runtime.send_message(
                         message=RequestToSpeak(
-                            inputs=step_data, placeholders=self._placeholders.get_dict()
+                            inputs=step_data,
+                            placeholders=self._placeholders.get_dict(),
                         ),
                         recipient=agent_id,
                     ),
@@ -343,20 +350,23 @@ class MoA(BaseModel):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()
 
+        conductor_topic_type = "conductor"
         # Register the conductor
-        await Conductor.register(
+        conductor = await Conductor.register(
             runtime,
-            "Conductor",
+            conductor_topic_type,
             lambda: Conductor(
                 description="The conductor",
                 group_chat_topic_type=self.group_chat_topic_type,
                 steps=self.steps,
             ),
         )
+        conductor_id = await runtime.get(conductor)
+
         await runtime.add_subscription(
             TypeSubscription(
                 topic_type=self.group_chat_topic_type,
-                agent_type="Conductor",
+                agent_type=conductor_topic_type,
             ),
         )
 
@@ -365,9 +375,9 @@ class MoA(BaseModel):
 
         # Get the conductor started:
         logger.debug("Sending start signal to Conductor")
-        await runtime.publish_message(
+        await runtime.send_message(
             RequestToSpeak(),
-            DefaultTopicId(type="Conductor"),
+            recipient=conductor_id,
         )
 
         # wait for the conversation to spin up

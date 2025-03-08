@@ -76,6 +76,9 @@ class FlowVariableRouter(KeyValueCollector):
             else:
                 resolved[target] = self._resolve_simple_path(source_spec)
 
+        # remove empty values
+        resolved = {k: v for k, v in resolved.items() if v is not None and v != []}
+
         return resolved
 
     def _resolve_simple_path(self, path: str) -> Any:

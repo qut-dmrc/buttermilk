@@ -31,7 +31,7 @@ moa:
         template: owl
         model: ${llms.general}
       inputs:
-        - record
+        record: record
     - name: judge
       description: Applies criteria to content.
       agent: LLMAgent
@@ -45,8 +45,8 @@ moa:
           - criteria_ordinary
           # - criteria_simple
       inputs:
-        - record
-        - context_owl
+        record: record
+        feedback: context_owl
     - name: synth
       agent: LLMAgent
       description: Synthesizes draft answers.
@@ -59,9 +59,9 @@ moa:
         criteria: criteria_simple
         formatting: json_rules
       inputs:
-        - record
-        - judge
-        - context_owl
+        record: record
+        answers: judge
+        feedback: context_owl
     # - name: eval
     #   num_runs: 1
     #   save: ${save}

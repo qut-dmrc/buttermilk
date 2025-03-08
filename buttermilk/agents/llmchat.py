@@ -115,7 +115,6 @@ class LLMAgent(BaseGroupChatAgent):
         *,
         description: str,
         step_name: str,
-        inputs: list[str] = [],
         group_chat_topic_type: str = "default",
         **parameters,
     ) -> None:
@@ -130,7 +129,6 @@ class LLMAgent(BaseGroupChatAgent):
         self.template = template
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(model)
-        self._inputs = inputs
 
     async def fill_template(
         self,
@@ -234,7 +232,7 @@ class LLMAgent(BaseGroupChatAgent):
     @message_handler
     async def handle_request_to_speak(
         self,
-        request: RequestToSpeak,
+        message: RequestToSpeak,
         ctx: MessageContext,
     ) -> Answer:
         log_message = f"{self.id} from {self.step} got request to speak."
@@ -242,9 +240,9 @@ class LLMAgent(BaseGroupChatAgent):
         logger.debug(log_message)
 
         answer = await self.query(
-            inputs=request.inputs,
-            placeholders=request.placeholders,
-            context=request.context,
+            inputs=message.inputs,
+            placeholders=message.placeholders,
+            context=message.context,
         )
 
         await self.publish(answer)
