@@ -42,6 +42,9 @@ class KeyValueCollector(BaseModel):
         else:
             self._data[key] = [value]
 
+    def set(self, key: str, value: Any) -> None:
+        self._data[key] = value
+
     def get_dict(self) -> dict:
         return dict(self._data)
 

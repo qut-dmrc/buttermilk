@@ -26,6 +26,7 @@ from buttermilk.agents.llmchat import (
     RequestToSpeak,
 )
 from buttermilk.bm import BM, logger
+from buttermilk.utils.templating import KeyValueCollector
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import make_list_validator
 
@@ -158,11 +159,22 @@ class MoAAgentFactory(BaseModel):
         return registered_agents
 
 
+class FlowData(KeyValueCollector):
+    """Essentially a dict of lists, where each key is the name of a step and
+    each list is the output of an agent in a step.
+
+        step: str  # The name of the workflow step that generated these results
+        data: list[Any]  # Aggregate outputs from all agents in this step
+    """
+
+
 class MoA(BaseModel):
     save: SaveInfo
     source: str
     steps: list[MoAAgentFactory]
-    data: list[DataSource] | None = Field(default_factory=list)
+    data: list[DataSource] | None = list()
+
+    _step_outputs: FlowData = FlowData()
 
     @cached_property
     def group_chat_topic_type(self) -> str:

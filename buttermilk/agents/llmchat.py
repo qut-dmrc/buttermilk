@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Any
 
 import regex as re
@@ -72,7 +73,7 @@ class Answer(GroupChatMessage):
 
 
 class RequestToSpeak(BaseModel):
-    model_config = {"extra": "allow"}
+    inputs: Mapping[str, Any] = {}
 
 
 class BaseGroupChatAgent(RoutedAgent):
