@@ -16,6 +16,7 @@ from autogen_core.models import (
 from promptflow.core._prompty_utils import parse_chat
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
+from buttermilk._core.agent import AgentConfig
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.bm import BM, logger
 from buttermilk.tools.json_parser import ChatParser
@@ -65,7 +66,10 @@ class Answer(GroupChatMessage):
     type: str = "Answer"
     agent_id: str
     role: str
-    body: str | list | dict
+
+    config: AgentConfig
+
+    model_config = {"extra": "allow"}
 
 
 class RequestToSpeak(BaseModel):
@@ -82,10 +86,16 @@ class BaseGroupChatAgent(RoutedAgent):
 
     def __init__(
         self,
-        config: AgentConfig,
         description: str,
         group_chat_topic_type: str = "default",
-    ):
+    ) -> None:
+        """Initialize the agent with configuration and topic type.
+
+        Args:
+            config: Configuration settings for the agent
+            group_chat_topic_type: The type of group chat topic to use (default: "default")
+
+        """
         super().__init__(
             description=description,
         )
@@ -112,23 +122,20 @@ class LLMAgent(BaseGroupChatAgent):
     def __init__(
         self,
         *,
-        description: str,
-        step_name: str,
+        config: AgentConfig,
         group_chat_topic_type: str = "default",
         fail_on_unfilled_parameters: bool = True,
-        parameters: dict[str, Any] = {},
-        inputs: dict[str, Any] = {},
     ) -> None:
         super().__init__(
-            description=description,
+            description=config.description,
             group_chat_topic_type=group_chat_topic_type,
         )
         bm = BM()
-
-        self.step = step_name
-        self.parameters = parameters
+        self.config = config
+        self.step = config.name
+        self.parameters = config.parameters
         self._json_parser = ChatParser()
-        self._model_client = bm.llms.get_autogen_chat_client(parameters["model"])
+        self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
         self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
 
     async def fill_template(
@@ -175,7 +182,8 @@ class LLMAgent(BaseGroupChatAgent):
                 try:
                     messages.extend(combined_placeholders[var_name])
                     # Remove the placeholder from the list of unfilled variables
-                    unfilled_vars.remove(var_name)
+                    if var_name in unfilled_vars:
+                        unfilled_vars.remove(var_name)
                 except KeyError as e:
                     raise ValueError(
                         f"Missing {var_name} in template or placeholder vars.",
@@ -229,10 +237,11 @@ class LLMAgent(BaseGroupChatAgent):
         answer = Answer(
             agent_id=self.id.type,
             role="assistant",
-            body=output,
             content=response.content,
             step=str(self.step),
             metadata=response.model_dump(exclude=["content"]),
+            config=self.config,
+            **output,
         )
         return answer
 

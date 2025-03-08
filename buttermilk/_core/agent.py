@@ -21,6 +21,7 @@ from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
+from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .log import logger
@@ -49,9 +50,11 @@ def get_agent_name_tracing(call: Any) -> str:
 
 
 class AgentConfig(BaseModel):
-    agent_id: str
     agent: str = Field(..., description="The object to instantiate")
-    num_runs: int = 1
+    name: str = Field(
+        ...,
+        description="The name of the flow or step in the process that this agent does.",
+    )
     description: str
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -64,38 +67,36 @@ class AgentConfig(BaseModel):
     outputs: dict[str, Any] = {}
 
 
-class AgentConfig(BaseModel):
-    agent_id: str
-    agent: str = Field(..., description="The object to instantiate")
+class AgentVariants(AgentConfig):
+    variants: dict[str, Any] = Field(
+        ...,
+        description="A set of initialisation parameters that will be multiplied together to create individual variant agents.",
+    )
     num_runs: int = 1
-    description: str
-    parameters: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Initialisation parameters to pass to the agent",
-    )
-    inputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="A mapping of data to agent inputs",
-    )
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-    data: list[DataSource] | None = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
+
+    def get_variant_configs(self) -> list[AgentConfig]:
+        static_vars = self.model_dump(exclude={"variants", "num_runs"})
+
+        # Create variants (permutations of vars multiplied by num_runs)
+
+        variant_configs = self.num_runs * expand_dict(self.variants)
+        variants = []
+        for cfg in variant_configs:
+            variant = AgentConfig(**static_vars)
+            variant.parameters.update(cfg)
+            variants.append(variant)
+
+        return variants
 
 
 class Agent(AgentConfig):
     """Receive data, processes it, save the results, yield, and acknowledge completion."""
 
-    name: str = Field(
-        ...,
-        description="The name of the flow or step in the process that this agent does.",
-    )
     save: SaveInfo | None = Field(default=None)  # Where to save the results
-    num_runs: int = 1
     concurrency: int = Field(default=3)  # Max number of async tasks to run
-
-    data: list[DataSource] | None = Field(default_factory=list)
+    data: list[DataSource] | None = []
 
     _semaphore: asyncio.Semaphore = PrivateAttr(default=None)
 

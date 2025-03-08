@@ -2,6 +2,7 @@ from typing import Any
 
 import jmespath
 
+from buttermilk.agents.llmchat import Answer
 from buttermilk.utils.templating import KeyValueCollector
 
 """
@@ -55,7 +56,7 @@ class FlowVariableRouter(KeyValueCollector):
     each list is the output of an agent in a step.
     """
 
-    _data: dict[str, list[Any]] = {}
+    _data: dict[str, list[Answer]] = {}
 
     def _resolve_mappings(self, mappings: dict[str, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""

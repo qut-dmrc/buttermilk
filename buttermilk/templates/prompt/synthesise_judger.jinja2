@@ -18,9 +18,9 @@ You may be provided with additional feedback to consider. You should incorporate
 {{ formatting }}
 {% endif %}
 
-{% if q %}
+{% if instructions %}
 <BEGIN ORIGINAL INSTRUCTIONS>
-{{ q }}
+{{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
@@ -33,6 +33,22 @@ You may be provided with additional feedback to consider. You should incorporate
 
 # User:
 
-{% for draft in answers %}
-    <BEGIN DRAFT ANSWER #{{draft.agent_id}}>{{ draft.body }}<END DRAFT ANSWER>
+{% if context_owl %}
+<BEGIN ANALYST NOTES>
+{% for feedback in context_owl %}
+  - {{ feedback.agent_id }}: {{ feedback.body }}
 {% endfor %}
+<END ANALYST NOTES>
+{% endif %}
+
+{% for draft in judge %}
+<BEGIN DRAFT ANSWER #{{draft.agent_id}}>
+{{ draft.body }}
+<END DRAFT ANSWER>
+{% endfor %}
+
+{% if feedback %}
+{% for response in feedback %}
+<BEGIN FEEDBACK {{ response.agent_id }}>{{ response.intervention }}<END FEEDBACK>
+{% endfor %}
+{% endif %}

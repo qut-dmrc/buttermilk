@@ -1,6 +1,5 @@
 import asyncio
 from functools import cached_property
-from typing import Any
 
 import hydra
 import shortuuid
@@ -19,10 +18,11 @@ from autogen_core.model_context import (
 from autogen_core.models import (
     UserMessage,
 )
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 from rich.console import Console
 from rich.markdown import Markdown
 
+from buttermilk._core.agent import AgentVariants
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.agents.llmchat import (
@@ -37,8 +37,6 @@ from buttermilk.agents.llmchat import (
 from buttermilk.bm import BM, logger
 from buttermilk.runner.varmap import FlowVariableRouter
 from buttermilk.utils.templating import KeyValueCollector
-from buttermilk.utils.utils import expand_dict
-from buttermilk.utils.validators import make_list_validator
 
 _AGENTS = [LLMAgent]
 
@@ -86,18 +84,7 @@ class UserAgent(BaseGroupChatAgent):
         raise CantHandleException()
 
 
-class VariantParameters(BaseModel):
-    template: list[str]
-    model: list[str]
-
-    _ensure_list = field_validator("template", "model", mode="before")(
-        make_list_validator(),
-    )
-
-    model_config = {"extra": "allow"}
-
-
-class MoAAgentFactory(BaseModel):
+class MoAAgentFactory(AgentVariants):
     """A factory for creating LLMAgent instance variants for a single
     step of a workflow.
 
@@ -107,49 +94,20 @@ class MoAAgentFactory(BaseModel):
     have an inputs mapping that does not get multiplied.
     """
 
-    description: str
-    name: str = Field(
-        ...,
-        description="The step in the workflow that this agent can perform.",
-    )
-    agent: str = Field(..., description="The agent object to use for this step.")
-    variants: VariantParameters = Field(
-        ...,
-        description="A set of initialisation parameters that will be multiplied together to create individual variant agents.",
-    )
-    num_runs: int = Field(
-        default=1,
-        description="The number of times to run each variant.",
-    )
-
-    inputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="The inputs that this agent will receive from the workflow.",
-    )
-    outputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="The outputs that this agent will produce to the workflow.",
-    )
-
-    async def register_variants(self, runtime, group_chat_topic_type):
+    async def register_variants(self, runtime, group_chat_topic_type: str):
         # Get the object that provides the agent template for all variants
         agent_cls: LLMAgent = globals()[self.agent]
 
-        # Create variants (permutations of vars multiplied by num_runs)
-        variant_configs = self.num_runs * expand_dict(self.variants.model_dump())
         registered_agents = []
-        for variant in variant_configs:
+        for variant in self.get_variant_configs():
             unique_id = f"{self.name}-{shortuuid.uuid()[:6]}"
 
             agent_type = await agent_cls.register(
                 runtime,
                 unique_id,
                 lambda variant=variant: agent_cls(
-                    step_name=self.name,
-                    description=self.description,
+                    config=variant,
                     group_chat_topic_type=group_chat_topic_type,
-                    inputs=self.inputs,
-                    parameters=variant,
                 ),  # type: ignore
             )
 
@@ -167,15 +125,18 @@ class MoAAgentFactory(BaseModel):
                 ),
             )
             logger.debug(
-                f"Registered step {self.name} with params {', '.join(variant.keys())}: {agent_type}",
+                f"Registered step {self.name} with params {', '.join(variant.model_fields_set)}: {agent_type}",
             )
             registered_agents.append(agent_type)
         return registered_agents
 
 
 class Conductor(BaseGroupChatAgent):
-    def __init__(self, description: str, steps, **kwargs):
-        super().__init__(description=description, **kwargs)
+    def __init__(self, description: str, group_chat_topic_type: str, steps):
+        super().__init__(
+            description=description,
+            group_chat_topic_type=group_chat_topic_type,
+        )
 
         # Generally, in a group chat, you want most of the information to be publicly
         # visible. These collectors provide storage for agents, usually by reading from
@@ -209,7 +170,7 @@ class Conductor(BaseGroupChatAgent):
         # store messages
         # draft = dict(agent_id=message.agent_id, body=message.body)
 
-        self._flow_data.add(message.step, message.body)
+        self._flow_data.add(message.step, message)
 
     @message_handler
     async def handle_inputrecords(
