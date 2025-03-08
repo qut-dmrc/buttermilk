@@ -143,7 +143,7 @@ class LLMAgent(BaseGroupChatAgent):
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
         # Render the template using Jinja2
-        rendered_template = load_template(
+        rendered_template, unfilled_vars = load_template(
             template=self.template,
             parameters=self.params,
             untrusted_inputs=untrusted_inputs,
@@ -173,12 +173,14 @@ class LLMAgent(BaseGroupChatAgent):
             # entire Message objects
             if message["role"] == "placeholder":
                 # Remove everything except word chars to get the variable name
-                var_name = re.sub(r"[\W]+", "", message["content"])
+                var_name = re.sub(r"[^\w\d_]+", "", message["content"])
                 try:
                     messages.extend(combined_placeholders[var_name])
+                    # Remove the placeholder from the list of unfilled variables
+                    unfilled_vars.remove(var_name)
                 except KeyError as e:
                     raise ValueError(
-                        f"Missing placeholder {var_name} in template placeholder.",
+                        f"Missing {var_name} in template or placeholder vars.",
                     ) from e
                 continue
 
@@ -197,6 +199,11 @@ class LLMAgent(BaseGroupChatAgent):
                     messages.append(
                         UserMessage(content=message["content"], source=self.id.type),
                     )
+
+        if unfilled_vars and self._fail_on_unfilled_parameters:
+            raise ValueError(
+                f"Template has unfilled parameters: {', '.join(unfilled_vars)}",
+            )
 
         return messages
 
