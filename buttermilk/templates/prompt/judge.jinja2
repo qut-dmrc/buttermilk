@@ -19,7 +19,7 @@ Be careful not to interpret the content too literally. Make sure you identify po
 
 Context is important; consider the audience, the platform, the speaker, and the broader social and political environment.
 
-STEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quoted from the content where necessary to support your analysis.
+STEP 2: Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
 
 STEP 3: Finally, you should provide an overall and decisive conclusion that applies the rules to the content as it would likely be understood in context. 
 <END INSTRUCTIONS>
@@ -32,9 +32,11 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {{ record }}
 
 # User:
+
 {% if feedback %}
-Additional Context: 
-{% for response in feedback %}
-- {{response.intervention}}
+<BEGIN ANALYST NOTES>
+{% for answer in feedback %}
+  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
 {% endfor %}
+<END ANALYST NOTES>
 {% endif %}

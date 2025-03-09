@@ -67,6 +67,10 @@ class Answer(GroupChatMessage):
     agent_id: str
     role: str
 
+    inputs: dict = {}
+    outputs: dict = {}
+    context: list[SystemMessage | UserMessage | AssistantMessage] = []
+
     config: AgentConfig
 
     model_config = {"extra": "allow"}
@@ -241,7 +245,9 @@ class LLMAgent(BaseGroupChatAgent):
             step=str(self.step),
             metadata=response.model_dump(exclude=["content"]),
             config=self.config,
-            **output,
+            inputs=untrusted_vars,
+            outputs=output,
+            context=context,
         )
         return answer
 

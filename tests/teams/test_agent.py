@@ -44,7 +44,7 @@ def record_agent_cfg(request):
                 template="judge",
                 description="apply rules",
                 formatting="json_rules",
-                criteria="criteria_simple",
+                criteria="criteria_ordinary",
             )
         case "Owl":
             return dict(
