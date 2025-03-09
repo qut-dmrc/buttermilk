@@ -1,7 +1,6 @@
 import asyncio
 from functools import cached_property
 
-import hydra
 import shortuuid
 from autogen_core import (
     CancellationToken,
@@ -11,7 +10,6 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
-from autogen_core.exceptions import CantHandleException
 from autogen_core.model_context import (
     UnboundedChatCompletionContext,
 )
@@ -19,69 +17,28 @@ from autogen_core.models import (
     UserMessage,
 )
 from pydantic import BaseModel
-from rich.console import Console
-from rich.markdown import Markdown
 
 from buttermilk._core.agent import AgentVariants
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.runner_types import RecordInfo
 from buttermilk.agents.llmchat import (
+    LLMAgent,
+)
+from buttermilk.bm import BM, logger
+from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
     GroupChatMessage,
     InputRecord,
-    LLMAgent,
+    IOInterface,
     MessagesCollector,
     RequestToSpeak,
 )
-from buttermilk.bm import BM, logger
 from buttermilk.runner.varmap import FlowVariableRouter
+from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector
 
 _AGENTS = [LLMAgent]
-
-
-class UserAgent(BaseGroupChatAgent):
-    def __init__(self, description: str, **kwargs):
-        description = description or "The human in the loop"
-        super().__init__(description=description, **kwargs)
-
-    @message_handler
-    async def handle_message(
-        self,
-        message: GroupChatMessage | Answer,
-        ctx: MessageContext,
-    ) -> None:
-        if isinstance(message, Answer):
-            source = message.agent_id
-        elif ctx.sender:
-            source = ctx.sender.type
-        else:
-            source = ctx.topic_id.type
-
-        Console().print(
-            Markdown(f"### {source}: \n{message.content}"),
-        )
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: RequestToSpeak,
-        ctx: MessageContext,
-    ) -> GroupChatMessage:
-        if ctx.topic_id.source == self.step:
-            user_input = input(
-                "Enter your message: ",
-            )
-            logger.debug(f"UserAgent received request to speak: {user_input}")
-            Console().print(Markdown(f"### User: \n{user_input}"))
-            reply = GroupChatMessage(
-                content=user_input,
-                step=self.step,
-            )
-            await self.publish(reply)
-            return reply
-        raise CantHandleException()
+USER_AGENT_TYPE = "User"
 
 
 class MoAAgentFactory(AgentVariants):
@@ -204,31 +161,6 @@ class Conductor(BaseGroupChatAgent):
         self._flow_data = FlowVariableRouter()
 
     async def run(self) -> None:
-        user_topic_type = "User"
-
-        # Register the UserAgent
-        user_agent_type = await UserAgent.register(
-            self.runtime,
-            user_topic_type,
-            lambda: UserAgent(
-                description="User input",
-                group_chat_topic_type=self._group_chat_topic_type,
-            ),
-        )
-
-        await self.runtime.add_subscription(
-            TypeSubscription(
-                topic_type=user_topic_type,
-                agent_type=user_topic_type,
-            ),
-        )
-        await self.runtime.add_subscription(
-            TypeSubscription(
-                topic_type=self._group_chat_topic_type,
-                agent_type=user_topic_type,
-            ),
-        )
-
         # Dictionary to track agents by step
         step_agents = {}
 
@@ -242,21 +174,20 @@ class Conductor(BaseGroupChatAgent):
             step_agents[step_factory.name] = agents_for_step
 
         # Start the conversation
-        # logger.debug("Sending request to speak to user")
-        # await runtime.publish_message(
-        #     RequestToSpeak(),
-        #     DefaultTopicId(type=user_topic_type),
-        # )
+        logger.debug("Sending request to speak to user")
+        user_id = await self.runtime.get(USER_AGENT_TYPE)
+        result = await self.runtime.send_message(
+            RequestToSpeak(content="Over to you..."),
+            recipient=user_id,
+        )
+        record = await download_and_convert(result.content)
 
-        # Initial message to start the workflow
-        logger.debug("Sending initial record to the group chat")
-        record = "kill all men"
-
+        # Start the group chat
         await self.runtime.publish_message(
             InputRecord(
-                content=record,
+                content=record.fulltext,
                 step="record",
-                payload=RecordInfo(data=record),
+                payload=record,
             ),
             DefaultTopicId(type=self._group_chat_topic_type),
         )
@@ -299,15 +230,15 @@ class MoA(BaseModel):
     def group_chat_topic_type(self) -> str:
         bm = BM()
 
-        """The group chat topic type (common to all agents in the chat)."""
-        topic = f"groupchat-{bm.run_info.name}-{bm.run_info.job}"
+        """The group chat topic type (common to all agents in this chat)."""
+        topic = f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}"
 
         # remove punctuation
         topic = "".join([x for x in topic if x.isalnum() or x == "-"])
 
         return topic
 
-    async def moa_chat(self):
+    async def moa_chat(self, io_interface: IOInterface):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()
 
@@ -331,6 +262,22 @@ class MoA(BaseModel):
             ),
         )
 
+        # Register the UserAgent with the provided IO interface
+        user_agent_type = await io_interface.register(
+            runtime,
+            USER_AGENT_TYPE,
+            lambda: io_interface(
+                description="User input",
+                group_chat_topic_type=self.group_chat_topic_type,
+            ),
+        )
+
+        await runtime.add_subscription(
+            TypeSubscription(
+                topic_type=self.group_chat_topic_type,
+                agent_type=USER_AGENT_TYPE,
+            ),
+        )
         # Start the runtime
         runtime.start()
 
@@ -344,28 +291,7 @@ class MoA(BaseModel):
         # wait for the conversation to spin up
         await asyncio.sleep(5)
 
-        # Start the conversation
-        # logger.debug("Sending request to speak to user")
-        # await runtime.publish_message(
-        #     RequestToSpeak(),
-        #     DefaultTopicId(type=user_topic_type),
-        # )
-
         # Wait for all processing to complete
         await runtime.stop_when_idle()
 
         await asyncio.sleep(5)
-
-
-@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def main(cfg) -> None:
-    # Hydra will automatically instantiate the objects
-    objs = hydra.utils.instantiate(cfg)
-    bm = objs.bm
-    bm = BM()
-    moa = objs.flows.moa
-    asyncio.run(moa.moa_chat())
-
-
-if __name__ == "__main__":
-    main()

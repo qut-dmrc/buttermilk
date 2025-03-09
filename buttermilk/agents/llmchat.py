@@ -1,11 +1,8 @@
-from collections.abc import Mapping
 from typing import Any
 
 import regex as re
 from autogen_core import (
-    DefaultTopicId,
     MessageContext,
-    RoutedAgent,
     message_handler,
 )
 from autogen_core.models import (
@@ -14,112 +11,19 @@ from autogen_core.models import (
     UserMessage,
 )
 from promptflow.core._prompty_utils import parse_chat
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk._core.agent import AgentConfig
-from buttermilk._core.runner_types import RecordInfo
 from buttermilk.bm import BM, logger
+from buttermilk.runner.chat import (
+    Answer,
+    BaseGroupChatAgent,
+    RequestToSpeak,
+)
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
-    KeyValueCollector,
     _parse_prompty,
     load_template,
 )
-
-
-class GroupChatMessage(BaseModel):
-    type: str = "GroupChatMessage"
-    """A message sent to the group chat"""
-
-    content: str
-    """The content of the message."""
-
-    step: str
-    """The stage of the process that this message was sent from"""
-
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    """Metadata about the message."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_content_to_string(cls, values):
-        if "content" in values:
-            content = values["content"]
-            if isinstance(content, str):
-                pass  # Already a string
-            elif hasattr(content, "content"):  # Handle LLMMessage case
-                values["content"] = str(content.content)
-            else:
-                values["content"] = str(content)
-        return values
-
-
-class InputRecord(GroupChatMessage):
-    type: str = "InputRecord"
-    payload: RecordInfo = Field(
-        ...,
-        description="A single instance of an input example for workers to use.",
-    )
-
-
-class Answer(GroupChatMessage):
-    type: str = "Answer"
-    agent_id: str
-    role: str
-
-    inputs: dict = {}
-    outputs: dict = {}
-    context: list[SystemMessage | UserMessage | AssistantMessage] = []
-
-    config: AgentConfig
-
-    model_config = {"extra": "allow"}
-
-
-class RequestToSpeak(BaseModel):
-    inputs: Mapping[str, Any] = {}
-    placeholders: Mapping[
-        str,
-        list[SystemMessage | UserMessage | AssistantMessage],
-    ] = {}
-    context: list[SystemMessage | UserMessage | AssistantMessage] = []
-
-
-class BaseGroupChatAgent(RoutedAgent):
-    """A group chat participant."""
-
-    def __init__(
-        self,
-        description: str,
-        group_chat_topic_type: str = "default",
-    ) -> None:
-        """Initialize the agent with configuration and topic type.
-
-        Args:
-            config: Configuration settings for the agent
-            group_chat_topic_type: The type of group chat topic to use (default: "default")
-
-        """
-        super().__init__(
-            description=description,
-        )
-        self._group_chat_topic_type = group_chat_topic_type
-        self._json_parser = ChatParser()
-
-    async def publish(self, message: Any) -> None:
-        await self.publish_message(
-            message,
-            # DefaultTopicId(type=self._group_chat_topic_type, source=self.step),
-            DefaultTopicId(type=self._group_chat_topic_type),
-        )
-
-
-class MessagesCollector(KeyValueCollector):
-    """Specifically typed to collect pairs of (User, Assistant) messages"""
-
-    _data: dict[str, list[UserMessage | AssistantMessage]] = PrivateAttr(
-        default_factory=dict,
-    )
 
 
 class LLMAgent(BaseGroupChatAgent):
