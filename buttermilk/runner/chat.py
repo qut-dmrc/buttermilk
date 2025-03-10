@@ -22,6 +22,7 @@ from buttermilk._core.agent import AgentConfig
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.bm import logger
 from buttermilk.tools.json_parser import ChatParser
+from buttermilk.ui.slackbot import SlackBot
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )
@@ -227,7 +228,7 @@ def run_moa_cli(cfg) -> None:
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
 
-    if True:
+    if False:
         # Run CLI version
         from buttermilk.ui.console import CLIUserAgent
 
@@ -237,8 +238,9 @@ def run_moa_cli(cfg) -> None:
         asyncio.run(moa.moa_chat(io_interface=io_interface))
     else:
         # Run Slack version
-        slack_bot = SlackBot()
-        asyncio.run(slack_bot.start())
+        slack_bot = SlackBot(flows=objs.flows)
+        while True:
+            asyncio.sleep(1)
 
 
 if __name__ == "__main__":
