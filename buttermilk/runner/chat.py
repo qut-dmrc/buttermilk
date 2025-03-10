@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -22,7 +23,6 @@ from buttermilk._core.agent import AgentConfig
 from buttermilk._core.runner_types import RecordInfo
 from buttermilk.bm import logger
 from buttermilk.tools.json_parser import ChatParser
-from buttermilk.ui.slackbot import SlackBot
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )
@@ -232,15 +232,28 @@ def run_moa_cli(cfg) -> None:
         # Run CLI version
         from buttermilk.ui.console import CLIUserAgent
 
-        io_interface = CLIUserAgent
         moa = objs.flows.moa
-
-        asyncio.run(moa.moa_chat(io_interface=io_interface))
+        asyncio.run(moa.moa_chat(io_interface=CLIUserAgent))
     else:
         # Run Slack version
-        slack_bot = SlackBot(flows=objs.flows)
-        while True:
-            asyncio.sleep(1)
+
+        secrets = bm.secret_manager.get_secret("automod")
+        os.environ["SLACK_BOT_TOKEN"] = secrets["AUTOMOD_BOT_TOKEN"]
+        app_token = secrets["DMRC_SLACK_APP_TOKEN"]
+        manager = ConversationManager()
+        flows = objs.flows
+        from buttermilk.ui.slackbot import initialize_slack_bot
+
+        loop = asyncio.get_event_loop()
+        handler = initialize_slack_bot(
+            conversation_manager=manager,
+            flows=flows,
+            loop=loop,
+            app_token=app_token,
+        )
+        loop.run_until_complete(handler.start_async())
+
+        pass  # noqa
 
 
 if __name__ == "__main__":

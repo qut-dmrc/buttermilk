@@ -177,7 +177,7 @@ class Conductor(BaseGroupChatAgent):
         logger.debug("Sending request to speak to user")
         user_id = await self.runtime.get(USER_AGENT_TYPE)
         result = await self.runtime.send_message(
-            RequestToSpeak(content="Over to you..."),
+            RequestToSpeak(),
             recipient=user_id,
         )
         record = await download_and_convert(result.content)

@@ -2,7 +2,7 @@
 #   - _self_
 
 trans:
-  _target_: buttermilk.runner.flow.Flow
+  _target_: buttermilk.runner.moa.MoA
   source: trans journalists guidelines assessment
   save: ${save}
 
@@ -14,11 +14,24 @@ trans:
         - record_id
 
   steps:
-    - name: judger
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 2
+    - name: context_owl
+      description: Spots little things that are easy to miss.
+      agent: LLMAgent
+      num_runs: 1
       save: ${save}
-      parameters:
+      variants:
+        template: owl
+        criteria: 
+          - ambiguity
+        model: ${llms.general}
+      inputs:
+        record: record
+
+    - name: judge
+      description: Applies criteria to content.
+      agent: LLMAgent
+      num_runs: 2
+      variants:
         template: judge
         criteria:
           - trans_simplified
@@ -29,52 +42,44 @@ trans:
           - trans_factored
         formatting: json_rules
         model: ${llms.judgers}
-      outputs:
-        identifier: identifier
-        params:
-          job_id: job_id
-          template: parameters.template
-          criteria: parameters.criteria
-          instructions: parameters.instructions
-          model: parameters.model
-        answer: outputs
+      inputs:
+        record: record
+        feedback: context_owl
 
-    - name: context_owl
-      _target_: buttermilk.agents.lc.LC
+    - name: feedback
+      description: QA for mistakes.
+      agent: LLMAgent
       num_runs: 1
       save: ${save}
-      parameters:
-        template: owl
+      variants:
+        template: feedback
         model: ${llms.general}
+      inputs:
+        context: context
 
     - name: synth
-      _target_: buttermilk.agents.lc.LC
+      agent: LLMAgent
+      description: Synthesizes draft answers.
       num_runs: 1
       save: ${save}
-      parameters:
+      variants:
+        model: ${llms.synthesisers}
         template: synthesise_judger
-        instructions: judge
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
         criteria: trans_simplified
         formatting: json_rules
-        model: ${llms.synthesisers}
       inputs:
-        answers: judger
-        feedback: context_owl.intervention
-      outputs:
-        identifier: identifier
-        params:
-          job_id: job_id
-          template: parameters.template
-          criteria: parameters.criteria
-          instructions: parameters.instructions
-          model: parameters.model
-        answer: outputs
+        record: record
+        answers: judge
+        feedback: 
+          - context_owl
+          - feedback
 
     - name: scorer
-      _target_: buttermilk.agents.lc.LC
+      agent: LLMAgent
       num_runs: 1
-      save: ${save}
-      parameters:
+      variants:
         template: evaluate
         model: ${llms.synthesisers}
         answer:

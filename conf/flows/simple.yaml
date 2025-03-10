@@ -27,7 +27,7 @@ simple:
         template: judge
         criteria: criteria_ordinary
         formatting: json_rules
-        model: ${llm}
+        model: ${llms.general}
       inputs:
         record: record
       outputs:

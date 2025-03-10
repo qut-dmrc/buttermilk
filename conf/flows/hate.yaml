@@ -2,104 +2,103 @@ defaults:
   - _self_
 
 hate:
-  _target_: buttermilk.runner.flow.Flow
-  source: hate development
+  _target_: buttermilk.runner.moa.MoA
+  source: hate speech guidelines
+  save: ${save}
+
   steps:
-    - name: describer
-      _target_: buttermilk.agents.describer.Describer
+    # - name: describer
+    #   num_runs: 1
+    #   variants:
+    #     template: describe
+    #     download_if_necessary: true
+    #     model:
+    #       - gemini2pro
+
+    - name: context_owl
+      agent: LLMAgent
       num_runs: 1
-      parameters: 
-        template: describe
-        download_if_necessary: true
-        model:
-          - gemini15pro
-      inputs:
-        record: record
-      outputs:
-        content: record.text
-        transcript: outputs.transcript
-        title: outputs.title
-        caption: outputs.caption
-        description: outputs.description
-    - _target_: buttermilk.agents.lc.LC
-      name: judger
-      num_runs: 1
-      concurrency: 20
       save: ${save}
-      parameters:
-        template: judge
+      variants:
+        template: owl
         criteria: 
-          - criteria_ordinary
-        formatting: json_rules
+          - ambiguity
+          - power
         model: ${llms.general}
       inputs:
-      outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-            reasons: outputs.reasons
+        record: record
+
+    - name: feedback
+      description: Applies criteria to content.
+      agent: LLMAgent
+      num_runs: 1
+      variants:
+        template: judge
+        model: ${llms.general}
+        formatting: json_rules
+        criteria:
+          - criteria_ordinary
+          - criteria_gelber
+          - criteria_hatefb_factorised
+      inputs:
+        record: record
+        feedback: context_owl
+
+    - name: judge
+      description: Applies criteria to content.
+      agent: LLMAgent
+      num_runs: 1
+      variants:
+        template: judge
+        model: ${llms.general}
+        formatting: json_rules
+        criteria:
+          - criteria_ordinary
+          - criteria_gelber
+          - criteria_hatefb_factorised
+      inputs:
+        record: record
+        feedback: context_owl
+
+    - name: feedback
+      description: QA for mistakes.
+      agent: LLMAgent
+      num_runs: 1
+      save: ${save}
+      variants:
+        template: feedback
+        model: ${llms.general}
+      inputs:
+        context: context
 
     - name: synth
+      agent: LLMAgent
+      description: Synthesizes draft answers.
       num_runs: 1
-      concurrency: 20
       save: ${save}
-      parameters:
+      variants:
+        model: ${llms.synthesisers}
         template: synthesise_judger
-        instructions: judge
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
         criteria: criteria_ordinary
         formatting: json_rules
-        model: ${llms.general}
       inputs:
-        content: record.text
-        answers: judger.answers
-      outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            criteria: parameters.criteria
-            template: parameters.template
-            reasons: outputs.reasons
+        record: record
+        answers: judge
+        feedback: 
+          - context_owl
+          - feedback
 
     - name: eval
+      agent: LLMAgent
       num_runs: 1
-      concurrency: 20
-      save: ${save}
-      parameters:
+      variants:
         template: differences
         criteria: criteria_ordinary
-        model: ${llms.general}
+        model: ${llms.synthesisers}
       inputs:
-        content: record.text
+        content: record.fulltext
         answers:
-          - judger.answers
-          - synth.answers
-      outputs:
-        differences: outputs.reasons
-        model: parameters.model
-        criteria: parameters.criteria
-        template: parameters.template
-
-    - name: export
-      _target_: buttermilk.agents.sheetexporter.GSheetExporter
-      convert_json_columns:
-        - answers
-        - synthesis
-        - differences
-      save:
-        type: gsheets
-        sheet_id: null
-        sheet_name: evals
-        title: Hatespeech flow
-      inputs:
-        flow_id: flow_id
-        record_id: record.record_id
-        job_id: job_id
-        timestamp: timestamp
-        record: record
-        zeroshot: judger.answers
-        synthesis: synth.answers
-        differences: eval.differences
+          - judger
+          - synth
