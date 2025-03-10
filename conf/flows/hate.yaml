@@ -17,11 +17,12 @@ hate:
 
     - name: context_owl
       agent: LLMAgent
+      description: Spots little things that are easy to miss.
       num_runs: 1
       save: ${save}
       variants:
         template: owl
-        criteria: 
+        watch: 
           - ambiguity
           - power
         model: ${llms.general}
@@ -92,6 +93,7 @@ hate:
 
     - name: eval
       agent: LLMAgent
+      description: show differences between answers
       num_runs: 1
       variants:
         template: differences

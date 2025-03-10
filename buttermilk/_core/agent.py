@@ -1,7 +1,7 @@
 import asyncio
 import datetime
 from asyncio import Semaphore
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -60,6 +60,7 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
+    data: Sequence[DataSource] | None = Field(default_factory=list)
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="A mapping of data to agent inputs",

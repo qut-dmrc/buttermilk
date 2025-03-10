@@ -2,6 +2,7 @@ import asyncio
 from functools import cached_property
 
 import shortuuid
+import weave
 from autogen_core import (
     CancellationToken,
     DefaultTopicId,
@@ -238,6 +239,7 @@ class MoA(BaseModel):
 
         return topic
 
+    @weave.op
     async def moa_chat(self, io_interface: IOInterface):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()

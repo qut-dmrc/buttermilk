@@ -6,6 +6,8 @@ import regex as re
 from langchain_core.outputs import Generation
 from pydantic import BaseModel, Field
 
+from buttermilk.utils.utils import load_json_flexi
+
 from .._core.log import logger
 
 
@@ -50,7 +52,10 @@ class ChatParser(BaseModel):
                     pos=0,
                 )
             json_str = "{" + match.group(1) + "}"
-            output = json_repair.loads(json_str)
+            try:
+                output = load_json_flexi(json_str)
+            except JSONDecodeError:
+                output = json_repair.loads(json_str)
 
         except JSONDecodeError as e:
             if self.on_error == "raise":

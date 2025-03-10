@@ -37,7 +37,7 @@
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["+flows=[trans,hate]", "llms=full"],
+      "args": ["+flows=[trans,hate]", "llms=lite"],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

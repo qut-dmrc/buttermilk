@@ -21,7 +21,7 @@ trans:
       save: ${save}
       variants:
         template: owl
-        criteria: 
+        watch: 
           - ambiguity
         model: ${llms.general}
       inputs:
@@ -79,6 +79,7 @@ trans:
     - name: scorer
       agent: LLMAgent
       num_runs: 1
+      description: score against ground truth
       variants:
         template: evaluate
         model: ${llms.synthesisers}
@@ -93,10 +94,10 @@ trans:
         expected: record.ground_truth
 
     - name: eval
-      _target_: buttermilk.agents.lc.LC
+      agent: LLMAgent
       num_runs: 1
-      save: ${save}
-      parameters:
+      description: show differences between answers
+      variants:
         template: differences
         criteria: >
           Evaluate how well the provided content aligns with journalistic standards
