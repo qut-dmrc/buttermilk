@@ -33,28 +33,30 @@ class Fetch(BaseGroupChatAgent):
             group_chat_topic_type=group_chat_topic_type,
         )
         self._data = None
-
-        asyncio.get_running_loop().create_task(self.load_data())
+        self._data_task = asyncio.get_running_loop().create_task(self.load_data())
 
     async def load_data(self):
         self._data = await prepare_step_df(self.config.data)
 
-    def get_record_dataset(self, record_id: str) -> RecordInfo:
-        if not self._data:
-            raise ValueError("Data not loaded yet.")
-        rec = self._data.query("record_id==@record_id")
-        if rec.shape[0] > 1:
-            raise ValueError(
-                f"More than one record found for query record_id == {record_id}",
-            )
+    async def get_record_dataset(self, record_id: str) -> RecordInfo | None:
+        while not self._data_task.done():
+            await asyncio.sleep(1)
+        for dataset in self._data.values():
+            rec = dataset.query("record_id==@record_id")
+            if rec.shape[0] == 1:
+                return RecordInfo(**rec.iloc[0].to_dict())
+            if rec.shape[0] > 1:
+                raise ValueError(
+                    f"More than one record found for query record_id == {record_id}",
+                )
 
-        return RecordInfo(**rec.iloc[0].to_dict())
+        return None
 
     async def get_record(self, message: str) -> RecordInfo:
         record = None
         if match := re.match(r"`#([\s\w]+)`", message):
             # Try to get by record_id
-            record = self.get_record_dataset(match.group(0))
+            record = await self.get_record_dataset(match.group(1))
         elif uri := extract_url(message):
             # Try to download
             record = await download_and_convert(uri=uri)

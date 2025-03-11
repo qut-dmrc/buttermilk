@@ -1,7 +1,16 @@
+import asyncio
+import logging
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
-from anthropic import AnthropicVertex, AsyncAnthropicVertex
+import requests
+import urllib3
+from anthropic import (
+    AnthropicVertex,
+    APIConnectionError as AnthropicAPIConnectionError,
+    AsyncAnthropicVertex,
+    RateLimitError as AnthropicRateLimitError,
+)
 from autogen import OpenAIWrapper
 from autogen_core.models import ChatCompletionClient
 from autogen_ext.models.openai import (
@@ -9,9 +18,22 @@ from autogen_ext.models.openai import (
     OpenAIChatCompletionClient,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
+from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
+from openai import (
+    APIConnectionError as OpenAIAPIConnectionError,
+    RateLimitError as OpenAIRateLimitError,
+)
+from tenacity import (
+    RetryError,
+    before_sleep_log,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
+from buttermilk.exceptions import RateLimit
 from buttermilk.utils.utils import scrub_keys
 
 _ = "ChatCompletionClient"
@@ -21,7 +43,7 @@ try:
 except:
     pass
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 if TYPE_CHECKING:
     _ = [HarmBlockThreshold, HarmCategory]
@@ -191,13 +213,143 @@ class LLMClient(BaseModel):
     params: dict = {}
 
 
+T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
+
+
+class AutoGenWrapper(BaseModel):
+    """Wraps any ChatCompletionClient and adds rate limiting via a semaphore
+    plus robust retry logic for handling API failures.
+
+    Args:
+        client: The ChatCompletionClient to wrap
+        max_concurrent_calls: Maximum number of concurrent calls allowed
+        cooldown_seconds: Time to wait between calls
+        max_retries: Maximum number of retry attempts for failed API calls
+        min_wait_seconds: Minimum wait time between retries (exponential backoff)
+        max_wait_seconds: Maximum wait time between retries
+        jitter_seconds: Random jitter added to wait times to prevent thundering herd
+
+    """
+
+    client: ChatCompletionClient
+    max_concurrent_calls: int = 3
+    cooldown_seconds: float = 0.1
+    max_retries: int = 6
+    min_wait_seconds: float = 1.0
+    max_wait_seconds: float = 30.0
+    jitter_seconds: float = 1.0
+
+    _semaphore: asyncio.Semaphore
+    _logger: logging.Logger
+
+    @model_validator(mode="after")
+    def create_semaphore(self) -> Self:
+        from buttermilk.bm import logger
+
+        self._semaphore = asyncio.Semaphore(self.max_concurrent_calls)
+        self._logger = logger
+        return self
+
+    def _get_retry_config(self) -> dict:
+        """Get the retry configuration for tenacity."""
+        return {
+            "retry": retry_if_exception_type(
+                (
+                    RateLimit,
+                    TimeoutError,
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                    urllib3.exceptions.ProtocolError,
+                    urllib3.exceptions.TimeoutError,
+                    OpenAIAPIConnectionError,
+                    OpenAIRateLimitError,
+                    AnthropicAPIConnectionError,
+                    AnthropicRateLimitError,
+                    ResourceExhausted,
+                    TooManyRequests,
+                    ConnectionResetError,
+                    ConnectionError,
+                    ConnectionAbortedError,
+                ),
+            ),
+            "stop": stop_after_attempt(self.max_retries),
+            "wait": wait_exponential_jitter(
+                initial=self.min_wait_seconds,
+                max=self.max_wait_seconds,
+                jitter=self.jitter_seconds,
+            ),
+            "before_sleep": before_sleep_log(self._logger, logging.WARNING),
+            "reraise": True,
+        }
+
+    async def _execute_with_retry(
+        self,
+        func: Callable,
+        *args,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Execute a function with retry logic."""
+        try:
+            async for attempt in AsyncRetrying(**self._get_retry_config()):
+                with attempt:
+                    # Execute the function
+                    return await func(*args, **kwargs)
+        except RetryError as e:
+            self._logger.error(f"All retry attempts failed: {e!s}")
+            # Re-raise the last exception
+            raise e.last_attempt.exception()
+
+    async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Rate-limited version of the underlying client's create method with retries"""
+        async with self._semaphore:
+            # Use the retry logic
+            result = await self._execute_with_retry(
+                self.client.create,
+                *args,
+                **kwargs,
+            )
+
+            # Add a small delay to prevent rate limiting
+            await asyncio.sleep(self.cooldown_seconds)
+            return result
+
+    async def agenerate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Rate-limited version of the underlying client's agenerate method with retries"""
+        async with self._semaphore:
+            if hasattr(self.client, "agenerate"):
+                # Use the retry logic with agenerate
+                result = await self._execute_with_retry(
+                    self.client.agenerate,
+                    *args,
+                    **kwargs,
+                )
+            else:
+                # Fallback to create with retry
+                result = await self._execute_with_retry(
+                    self.client.create,
+                    *args,
+                    **kwargs,
+                )
+
+            await asyncio.sleep(self.cooldown_seconds)
+            return result
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate all other attributes to the wrapped client"""
+        return getattr(self.client, name)
+
+
 class LLMs(BaseModel):
     connections: dict[str, LLMConfig] = Field(
         default=[],
         description="A dict of dicts each specifying connection information and parameters for an LLM.",
     )
 
-    models: dict[str, LLMClient] = Field(
+    langchain_models: dict[str, LLMClient] = Field(
+        default={},
+        description="Holds the instantiated model objects",
+    )
+    autogen_models: dict[str, AutoGenWrapper] = Field(
         default={},
         description="Holds the instantiated model objects",
     )
@@ -220,6 +372,9 @@ class LLMs(BaseModel):
         return wrapper
 
     def get_autogen_chat_client(self, name) -> ChatCompletionClient:
+        if name in self.autogen_models:
+            return self.autogen_models[name]
+
         # Let Autogen handle the correct arguments for different models
         wrapper = self.get_autogen_generic(name)
 
@@ -239,21 +394,14 @@ class LLMs(BaseModel):
         else:
             client = OpenAIChatCompletionClient(**params)
 
+        # Store for next time so that we only maintain one client
+        self.autogen_models[name] = AutoGenWrapper(client)
+
         return client
 
-    # def get_autogen_chat_client(self, name):
-    #     params = self.connections[name].configs
-    #     params["model_info"] = self.connections[name].model_info
-
-    #     if self.connections[name].api_type == "azure":
-    #         client = AzureOpenAIChatCompletionClient(**params)
-    #     else:
-    #         client = OpenAIChatCompletionClient(**params)
-    #     return client
-
     def __getattr__(self, __name: str) -> LLMClient:
-        if __name in self.models:
-            return self.models[__name]
+        if __name in self.langchain_models:
+            return self.langchain_models[__name]
         if __name not in self.connections:
             raise AttributeError
 
@@ -272,8 +420,8 @@ class LLMs(BaseModel):
             connection=scrub_keys(model_config.connection),
             params=scrub_keys(params),
         )
-        self.models[__name] = _llm
-        return self.models[__name]
+        self.langchain_models[__name] = _llm
+        return self.langchain_models[__name]
 
     def __getitem__(self, __name: str):
         return self.__getattr__(__name)
