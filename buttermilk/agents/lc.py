@@ -35,7 +35,7 @@ from buttermilk import BM, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import RateLimit
-from buttermilk.llms import LLMCapabilities
+from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     load_template,

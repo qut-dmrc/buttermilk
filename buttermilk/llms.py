@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
@@ -241,6 +242,8 @@ class AutoGenWrapper(BaseModel):
 
     _semaphore: asyncio.Semaphore
     _logger: logging.Logger
+
+    model_config = {"arbitrary_types_allowed": True}
 
     @model_validator(mode="after")
     def create_semaphore(self) -> Self:
