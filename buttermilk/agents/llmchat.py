@@ -1,10 +1,6 @@
 from typing import Any
 
 import regex as re
-from autogen_core import (
-    MessageContext,
-    message_handler,
-)
 from autogen_core.models import (
     AssistantMessage,
     SystemMessage,
@@ -13,10 +9,11 @@ from autogen_core.models import (
 from promptflow.core._prompty_utils import parse_chat
 
 from buttermilk._core.agent import AgentConfig
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
+    NullAnswer,
     RequestToSpeak,
 )
 from buttermilk.tools.json_parser import ChatParser
@@ -35,13 +32,10 @@ class LLMAgent(BaseGroupChatAgent):
         fail_on_unfilled_parameters: bool = True,
     ) -> None:
         super().__init__(
-            description=config.description,
+            config=config,
             group_chat_topic_type=group_chat_topic_type,
         )
         bm = BM()
-        self.config = config
-        self.step = config.name
-        self.parameters = config.parameters
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
         self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
@@ -123,19 +117,14 @@ class LLMAgent(BaseGroupChatAgent):
 
     async def query(
         self,
-        inputs: dict[str, str] = {},
-        placeholders: dict[
-            str,
-            list[SystemMessage | UserMessage | AssistantMessage],
-        ] = {},
-        context: list[SystemMessage | UserMessage | AssistantMessage] = [],
-    ) -> Answer:
-        untrusted_vars = dict(**inputs)
+        request: RequestToSpeak,
+    ) -> Answer | NullAnswer:
+        untrusted_vars = dict(**request.inputs)
 
         messages = await self.fill_template(
             untrusted_inputs=untrusted_vars,
-            placeholder_messages=placeholders,
-            context=context,
+            placeholder_messages=request.placeholders,
+            context=request.context,
         )
 
         response = await self._model_client.create(messages=messages)
@@ -151,26 +140,6 @@ class LLMAgent(BaseGroupChatAgent):
             config=self.config,
             inputs=untrusted_vars,
             outputs=output,
-            context=context,
+            context=request.context,
         )
-        return answer
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: RequestToSpeak,
-        ctx: MessageContext,
-    ) -> Answer:
-        log_message = f"{self.id} from {self.step} got request to speak."
-
-        logger.debug(log_message)
-
-        answer = await self.query(
-            inputs=message.inputs,
-            placeholders=message.placeholders,
-            context=message.context,
-        )
-
-        await self.publish(answer)
-
         return answer

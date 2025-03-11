@@ -6,14 +6,19 @@ trans:
   source: trans journalists guidelines assessment
   save: ${save}
 
-  data:
-    - name: tja_train
-      type: file
-      path: gs://prosocial-dev/data/tja_train.jsonl
-      index:
-        - record_id
-
   steps:
+    - name: fetch
+      agent: Fetch
+      description: fetch urls and stored records for the chat
+      data:
+        - name: tja_train
+          type: file
+          path: gs://prosocial-dev/data/tja_train.jsonl
+          index:
+            - record_id
+      inputs:
+        prompt: q
+
     - name: context_owl
       description: Spots little things that are easy to miss.
       agent: LLMAgent

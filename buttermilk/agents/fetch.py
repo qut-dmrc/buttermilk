@@ -1,5 +1,7 @@
 
+import asyncio
 import re
+
 from autogen_core import (
     MessageContext,
     message_handler,
@@ -7,18 +9,16 @@ from autogen_core import (
 
 from buttermilk._core.agent import AgentConfig
 from buttermilk._core.runner_types import RecordInfo
-from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
-    Answer,
     BaseGroupChatAgent,
     GroupChatMessage,
     InputRecord,
+    NullAnswer,
     RequestToSpeak,
 )
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import extract_url
-from re import match
 
 
 class Fetch(BaseGroupChatAgent):
@@ -29,17 +29,19 @@ class Fetch(BaseGroupChatAgent):
         group_chat_topic_type: str = "default",
     ) -> None:
         super().__init__(
-            description=config.description,
+            config=config,
             group_chat_topic_type=group_chat_topic_type,
         )
-        self.bm = BM()
-        self.config = config
-        self.step = config.name
-        self.parameters = config.parameters
+        self._data = None
 
-        self._data = await prepare_step_df(self.data)
+        asyncio.get_running_loop().create_task(self.load_data())
 
-    def get_record(self, record_id: str) -> RecordInfo:
+    async def load_data(self):
+        self._data = await prepare_step_df(self.config.data)
+
+    def get_record_dataset(self, record_id: str) -> RecordInfo:
+        if not self._data:
+            raise ValueError("Data not loaded yet.")
         rec = self._data.query("record_id==@record_id")
         if rec.shape[0] > 1:
             raise ValueError(
@@ -47,46 +49,60 @@ class Fetch(BaseGroupChatAgent):
             )
 
         return RecordInfo(**rec.iloc[0].to_dict())
-    
+
+    async def get_record(self, message: str) -> RecordInfo:
+        record = None
+        if match := re.match(r"`#([\s\w]+)`", message):
+            # Try to get by record_id
+            record = self.get_record_dataset(match.group(0))
+        elif uri := extract_url(message):
+            # Try to download
+            record = await download_and_convert(uri=uri)
+
+        return record
+
+    async def query(
+        self,
+        request: RequestToSpeak | GroupChatMessage,
+    ) -> InputRecord | NullAnswer:
+        record = None
+        inputs = []
+        if isinstance(request, RequestToSpeak):
+            # Check the extra fields in the request
+            for key, value in self.config.inputs.items():
+                inputs.extend([r.content for r in request.placeholders.get(value, [])])
+                inputs.extend([r for r in request.inputs.get(value, [])])
+                if value == "context" and request.context:
+                    inputs.extend([r.content for r in request.context])
+
+        if request.content:
+            inputs.append(request.content)
+        for data_var in inputs:
+            # Get the first matching input we can find
+            record = await self.get_record(data_var)
+            if record:
+                break
+
+        if not record and isinstance(request, RequestToSpeak):
+            # We must return an input record if we were asked for one
+            # Create a new record with the original text we were given.
+            record = RecordInfo(data=request.content)
+
+        if record:
+            response = InputRecord(
+                content=record.fulltext,
+                payload=record,
+                step=self.step,
+            )
+            await self.publish(response)
+            return response
+
+        return NullAnswer(step=self.step)
+
     @message_handler
     async def handle_urls(
         self,
-        message: GroupChatMessage | RequestToSpeak,
+        message: GroupChatMessage,
         ctx: MessageContext,
-    ) -> None:
-        
-        record = None
-        if uri := extract_url(message.content):
-            record = await download_and_convert(uri=uri)
-        elif match := re.match(r"`#([\s\w]+)`", message.content):
-            record = self.get_record(match.group(0))
-        
-        if record:
-            response = InputRecord(content=record.fulltext, payload=record, step=self.step)
-            await self.publish(response)
-
-            return response
-        else:
-            return None
-
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: RequestToSpeak,
-        ctx: MessageContext,
-    ) -> InputRecord:
-        log_message = f"{self.id} from {self.step} got request to speak."
-
-        logger.debug(log_message)
-
-        if uri := extract_url(message.content):
-            record = await download_and_convert(uri=uri)
-        else:
-            # check dataset for an ID
-            id = re.sub() message.content
-
-        response = InputRecord(content=record.fulltext, payload=record, step=self.step)
-        await self.publish(response)
-
-        return answer
+    ) -> InputRecord | NullAnswer:
+        return await self.query(message)

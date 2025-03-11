@@ -3,7 +3,7 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Union
 
 import hydra
 from autogen_core import (
@@ -55,6 +55,12 @@ class GroupChatMessage(BaseModel):
         return values
 
 
+class NullAnswer(GroupChatMessage):
+    type: str = "NullAnswer"
+    content: str = ""
+    """A message sent to the group chat indicating that the agent did not provide an answer."""
+
+
 class InputRecord(GroupChatMessage):
     type: str = "InputRecord"
     payload: RecordInfo = Field(
@@ -77,6 +83,10 @@ class Answer(GroupChatMessage):
     model_config = {"extra": "allow"}
 
 
+# Union of all known GroupChatMessage subclasses
+GroupChatMessageType = Union[GroupChatMessage, NullAnswer, InputRecord, Answer]
+
+
 class RequestToSpeak(BaseModel):
     content: str = ""
     inputs: Mapping[str, Any] = {}
@@ -95,12 +105,12 @@ class MessagesCollector(KeyValueCollector):
     )
 
 
-class BaseGroupChatAgent(RoutedAgent):
+class BaseGroupChatAgent(RoutedAgent, ABC):
     """A group chat participant."""
 
     def __init__(
         self,
-        description: str,
+        config: AgentConfig,
         group_chat_topic_type: str = "default",
     ) -> None:
         """Initialize the agent with configuration and topic type.
@@ -111,8 +121,11 @@ class BaseGroupChatAgent(RoutedAgent):
 
         """
         super().__init__(
-            description=description,
+            description=config.description,
         )
+        self.config = config
+        self.step = config.name
+        self.parameters = config.parameters
         self._group_chat_topic_type = group_chat_topic_type
         self._json_parser = ChatParser()
 
@@ -123,11 +136,39 @@ class BaseGroupChatAgent(RoutedAgent):
             DefaultTopicId(type=self._group_chat_topic_type),
         )
 
+    @abstractmethod
+    async def query(self, request: RequestToSpeak) -> GroupChatMessageType:
+        """Query the agent with the given inputs and placeholders."""
+        raise NotImplementedError
+
+    @message_handler
+    async def handle_request_to_speak(
+        self,
+        message: RequestToSpeak,
+        ctx: MessageContext,
+    ) -> GroupChatMessageType:
+        log_message = f"{self.id} got request to speak."
+
+        logger.debug(log_message)
+
+        answer = await self.query(message)
+
+        # await self.publish(answer)
+
+        return answer
+
 
 class IOInterface(BaseGroupChatAgent, ABC):
-    @abstractmethod
-    async def get_input(self, prompt: str = "") -> GroupChatMessage:
-        """Retrieve input from the user interface"""
+    def __init__(
+        self,
+        group_chat_topic_type: str,
+    ) -> None:
+        ui_config = AgentConfig(
+            agent=self.__class__.__name__,
+            name="user",
+            description="User interface",
+        )
+        super().__init__(ui_config, group_chat_topic_type)
 
     @abstractmethod
     async def send_output(self, message: GroupChatMessage, source: str = "") -> None:
@@ -154,17 +195,7 @@ class IOInterface(BaseGroupChatAgent, ABC):
         else:
             source = ctx.topic_id.type
 
-        return await self.send_output(message, source)
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: RequestToSpeak,
-        ctx: MessageContext,
-    ) -> GroupChatMessage:
-        reply = await self.get_input(prompt="")
-        await self.send_output(reply)
-        return reply
+        await self.send_output(message, source)
 
 
 class ConversationId(BaseModel):
@@ -228,13 +259,15 @@ def run_moa_cli(cfg) -> None:
     objs = hydra.utils.instantiate(cfg)
     bm = objs.bm
 
-    if False:
+    if bm.cfg.run.ui == "cli":
         # Run CLI version
         from buttermilk.ui.console import CLIUserAgent
 
-        moa = objs.flows.moa
+        moa = objs.flows[cfg.flow]
+        # flow = objs.flows[cfg.flow]
+        # moa = MoA(steps=flow.steps, source="dev")
         asyncio.run(moa.moa_chat(io_interface=CLIUserAgent))
-    else:
+    elif bm.cfg.run.ui == "slackbot":
         # Run Slack version
 
         secrets = bm.secret_manager.get_secret("automod")
@@ -252,8 +285,10 @@ def run_moa_cli(cfg) -> None:
             app_token=app_token,
         )
         loop.run_until_complete(handler.start_async())
+    else:
+        raise ValueError(f"Unknown run ui type: {bm.cfg.run.ui}")
 
-        pass  # noqa
+    pass  # noqa
 
 
 if __name__ == "__main__":

@@ -8,7 +8,13 @@ from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
 from buttermilk.bm import logger
-from buttermilk.runner.chat import ConversationManager, GroupChatMessage, IOInterface
+from buttermilk.runner.chat import (
+    Answer,
+    ConversationManager,
+    GroupChatMessage,
+    IOInterface,
+    RequestToSpeak,
+)
 
 SLACK_MAX_MESSAGE_LENGTH = 3000
 
@@ -42,16 +48,12 @@ def register_handlers():
         client_msg_id: str | None = None
 
     class MoAThreadNoContext(IOInterface):
-        def __init__(self, init_text: str = None, **kwargs):
+        def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.app = app
             self.context: SlackContext = None
             self.max_message_length = 3000
             self.inputqueue = Queue()
-            if init_text:
-                self.inputqueue.put_nowait(
-                    GroupChatMessage(content=init_text, step="User"),
-                )
 
         async def send_to_thread(self, text, blocks=None, **kwargs):
             kwargs.update({
@@ -63,12 +65,19 @@ def register_handlers():
             msg_response = await self.context.say.client.chat_postMessage(**kwargs)
             return msg_response
 
-        async def get_input(self, prompt: str = "") -> GroupChatMessage:
+        async def query(self, request: RequestToSpeak) -> GroupChatMessage:
             """Retrieve input from the user interface"""
-            if prompt:
-                await self.send_to_thread(prompt)
+            await self.send_to_thread(request.content or "Enter your message: ")
             msg = await self.inputqueue.get()
-            return msg
+
+            reply = Answer(
+                agent_id=self.id.type,
+                role="user",
+                content=msg,
+                step="User",
+                config=self.config,
+            )
+            return reply
 
         async def send_output(
             self,
@@ -117,6 +126,9 @@ def register_handlers():
                 super().__init__(init_text=text, **kwargs)
                 self.context = context
 
+                # communication from slack to chat thread
+                register_chat_thread_handler(thread_ts, self)
+
         # Create Slack IO interface for this thread
         io_interface = MoAThread
 
@@ -133,6 +145,17 @@ def register_handlers():
             await io_interface.send_to_thread(
                 f"Unfortunately I hit an error, sorry: {e} {e.args=}",
             )
+
+
+def register_chat_thread_handler(thread_ts, agent: "MoAThreadNoContext"):
+    """Connect messages sent to a slack thread to the group chat."""
+
+    @app.message(
+        matchers=lambda message: message.thread_ts == thread_ts
+        and message.get("subtype") != "bot_message",
+    )
+    async def feed_in(self, message, say):
+        await agent.input_queue.put(message.text)
 
 
 def initialize_slack_bot(

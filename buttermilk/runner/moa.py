@@ -5,8 +5,8 @@ import shortuuid
 import weave
 from autogen_core import (
     CancellationToken,
-    DefaultTopicId,
     MessageContext,
+    RoutedAgent,
     SingleThreadedAgentRuntime,
     TypeSubscription,
     message_handler,
@@ -20,10 +20,8 @@ from autogen_core.models import (
 from pydantic import BaseModel
 
 from buttermilk._core.agent import AgentVariants
-from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk.agents.llmchat import (
-    LLMAgent,
-)
+from buttermilk._core.config import SaveInfo
+from buttermilk.agents import Fetch, LLMAgent
 from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
     Answer,
@@ -35,10 +33,9 @@ from buttermilk.runner.chat import (
     RequestToSpeak,
 )
 from buttermilk.runner.varmap import FlowVariableRouter
-from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector
 
-_AGENTS = [LLMAgent]
+_AGENTS = [LLMAgent, Fetch]
 USER_AGENT_TYPE = "User"
 
 
@@ -54,7 +51,7 @@ class MoAAgentFactory(AgentVariants):
 
     async def register_variants(self, runtime, group_chat_topic_type: str):
         # Get the object that provides the agent template for all variants
-        agent_cls: LLMAgent = globals()[self.agent]
+        agent_cls: BaseGroupChatAgent = globals()[self.agent]
 
         registered_agents = []
         for variant in self.get_variant_configs():
@@ -89,12 +86,12 @@ class MoAAgentFactory(AgentVariants):
         return registered_agents
 
 
-class Conductor(BaseGroupChatAgent):
+class Conductor(RoutedAgent):
     def __init__(self, description: str, group_chat_topic_type: str, steps):
         super().__init__(
             description=description,
-            group_chat_topic_type=group_chat_topic_type,
         )
+        self._group_chat_topic_type = group_chat_topic_type
 
         # Generally, in a group chat, you want most of the information to be publicly
         # visible. These collectors provide storage for agents, usually by reading from
@@ -177,20 +174,18 @@ class Conductor(BaseGroupChatAgent):
         # Start the conversation
         logger.debug("Sending request to speak to user")
         user_id = await self.runtime.get(USER_AGENT_TYPE)
+
+        # Get and start the group chat with the user's first message
         result = await self.runtime.send_message(
-            RequestToSpeak(),
+            RequestToSpeak(
+                content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `#Record ID`)",
+            ),
             recipient=user_id,
         )
-        record = await download_and_convert(result.content)
-
-        # Start the group chat
-        await self.runtime.publish_message(
-            InputRecord(
-                content=record.fulltext,
-                step="record",
-                payload=record,
-            ),
-            DefaultTopicId(type=self._group_chat_topic_type),
+        # the "q" variable is a query or prompt from the user.
+        self._placeholders.add(
+            "q",
+            UserMessage(content=result.content, source=result.role),
         )
 
         # Allow some time for initialization
@@ -222,10 +217,9 @@ class Conductor(BaseGroupChatAgent):
 
 
 class MoA(BaseModel):
-    save: SaveInfo
+    save: SaveInfo = None
     source: str
     steps: list[MoAAgentFactory]
-    data: list[DataSource] | None = list()
 
     @cached_property
     def group_chat_topic_type(self) -> str:
@@ -263,13 +257,11 @@ class MoA(BaseModel):
                 agent_type=conductor_topic_type,
             ),
         )
-
         # Register the UserAgent with the provided IO interface
         user_agent_type = await io_interface.register(
             runtime,
             USER_AGENT_TYPE,
             lambda: io_interface(
-                description="User input",
                 group_chat_topic_type=self.group_chat_topic_type,
             ),
         )

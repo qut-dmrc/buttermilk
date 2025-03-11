@@ -151,5 +151,6 @@ class RunCfg(BaseModel):
     parameters: Mapping[str, Any] = Field(default_factory=dict)
     flow_api: str = "http://localhost:8000/flow"
     save_dir_base: str = Field(default_factory=mkdtemp, validate_default=True)  # Default to temp dir
+    ui: str = "cli"
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
