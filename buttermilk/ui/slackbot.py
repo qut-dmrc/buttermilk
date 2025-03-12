@@ -1,7 +1,6 @@
 import os
 import re
 from asyncio import Queue
-from typing import Any
 
 from pydantic import BaseModel
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
@@ -22,6 +21,11 @@ MODPATTERN = re.compile(
     r"^!((mod|osb|summarise_osb|trans|hate|describe|frames|simple|moa)\s+)",
     re.IGNORECASE | re.MULTILINE,
 )
+BOTPATTERNS = re.compile(
+    r"^!?[<@>\w\d]*\s+(\w+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 ALLPATTERNS = re.compile(r"mod(.*)")
 
 # Global state variables
@@ -43,9 +47,7 @@ def register_handlers():
         channel_id: str
         thread_ts: str
         user_id: str | None = None
-        say: Any = None
         event_ts: str | None = None
-        client_msg_id: str | None = None
 
     class MoAThreadNoContext(IOInterface):
         def __init__(self, **kwargs):
@@ -53,22 +55,22 @@ def register_handlers():
             self.app = app
             self.context: SlackContext = None
             self.max_message_length = 3000
-            self.inputqueue = Queue()
+            self.input_queue = Queue()
 
         async def send_to_thread(self, text, blocks=None, **kwargs):
             kwargs.update({
-                "channel": self.context.say.channel,
+                "channel": self.context.channel_id,
                 "text": text,
                 "blocks": blocks,
                 "thread_ts": self.context.thread_ts,
             })
-            msg_response = await self.context.say.client.chat_postMessage(**kwargs)
+            msg_response = await app.client.chat_postMessage(**kwargs)
             return msg_response
 
         async def query(self, request: RequestToSpeak) -> GroupChatMessage:
             """Retrieve input from the user interface"""
             await self.send_to_thread(request.content or "Enter your message: ")
-            msg = await self.inputqueue.get()
+            msg = await self.input_queue.get()
 
             reply = Answer(
                 agent_id=self.id.type,
@@ -95,13 +97,22 @@ def register_handlers():
         async def cleanup(self) -> None:
             """Clean up resources"""
 
+    @app.event("app_mention")
+    async def handle_app_mention_events(body, logger):
+        logger.info(body)
+        return await moderate(body["event"])
+
     @app.message(MODPATTERN)
-    async def moderate(message: dict, say):
+    async def handle_keyword(message: dict, say):
+        return await moderate(message)
+
+    async def moderate(message: dict):
         try:
-            match = MODPATTERN.search(message["text"])
-            flow_name = match[2]
+            match = BOTPATTERNS.search(message["text"])
+            flow_name = match[1]
             pattern_length = len(match[0])
-            text = message["text"][pattern_length:]
+            init_text = message["text"][pattern_length:]
+            flow = _flows[flow_name]
         except Exception:
             # not formatted properly, ignore.
             return
@@ -116,14 +127,12 @@ def register_handlers():
             channel_id=channel_id,
             thread_ts=thread_ts,
             user_id=user_id,
-            say=say,
             event_ts=message.get("event_ts"),
-            client_msg_id=message.get("client_msg_id"),
         )
 
         class MoAThread(MoAThreadNoContext):
             def __init__(self, **kwargs):
-                super().__init__(init_text=text, **kwargs)
+                super().__init__(**kwargs)
                 self.context = context
 
                 # communication from slack to chat thread
@@ -135,9 +144,10 @@ def register_handlers():
         try:
             await _manager.start_conversation(
                 io_interface=io_interface,
+                init_text=init_text,
                 platform="slack",
                 external_id=f"{channel_id}-{thread_ts}",
-                **_flows[flow_name].model_dump(),
+                **flow.model_dump(),
             )
 
         except Exception as e:
@@ -150,12 +160,17 @@ def register_handlers():
 def register_chat_thread_handler(thread_ts, agent: "MoAThreadNoContext"):
     """Connect messages sent to a slack thread to the group chat."""
 
+    async def matcher(message):
+        return (
+            message.get("thread_ts") == thread_ts
+            and message.get("subtype") != "bot_message"
+        )
+
     @app.message(
-        matchers=lambda message: message.thread_ts == thread_ts
-        and message.get("subtype") != "bot_message",
+        matchers=[matcher],
     )
-    async def feed_in(self, message, say):
-        await agent.input_queue.put(message.text)
+    async def feed_in(message, say):
+        await agent.input_queue.put(message["text"])
 
 
 def initialize_slack_bot(

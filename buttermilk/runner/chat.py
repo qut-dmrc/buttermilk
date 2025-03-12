@@ -88,7 +88,7 @@ GroupChatMessageType = Union[GroupChatMessage, NullAnswer, InputRecord, Answer]
 
 
 class RequestToSpeak(BaseModel):
-    content: str = ""
+    content: str | None = None
     inputs: Mapping[str, Any] = {}
     placeholders: Mapping[
         str,
@@ -213,6 +213,7 @@ class ConversationManager(BaseModel):
         io_interface: IOInterface,
         platform: str,
         external_id: str,
+        init_text: str = None,
         **kwargs,
     ) -> ConversationId:
         """Start a new group chat conversation with the given IO interface"""
@@ -227,7 +228,7 @@ class ConversationManager(BaseModel):
 
         return conv_id
 
-    async def _run_chat(self, conv_id: ConversationId, **kwargs):
+    async def _run_chat(self, conv_id: ConversationId, init_text: str = None, **kwargs):
         """Run a groupchat conversation"""
         from buttermilk.runner.moa import MoA
 
@@ -239,7 +240,7 @@ class ConversationManager(BaseModel):
             io = self.io_interfaces[conv_id.id]
 
             # Run the MoA chat with the provided IO interface
-            await moa.moa_chat(io_interface=io)
+            await moa.moa_chat(io_interface=io, init_text=init_text)
 
         except Exception as e:
             logger.exception(f"Error in conversation {conv_id.id}: {e!s}")
@@ -267,7 +268,7 @@ def run_moa_cli(cfg) -> None:
         # flow = objs.flows[cfg.flow]
         # moa = MoA(steps=flow.steps, source="dev")
         asyncio.run(moa.moa_chat(io_interface=CLIUserAgent))
-    elif bm.cfg.run.ui == "slackbot":
+    elif bm.cfg.run.ui == "slack":
         # Run Slack version
 
         secrets = bm.secret_manager.get_secret("automod")

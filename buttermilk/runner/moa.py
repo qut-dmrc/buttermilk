@@ -158,7 +158,7 @@ class Conductor(RoutedAgent):
         await self._context.clear()
         self._flow_data = FlowVariableRouter()
 
-    async def run(self) -> None:
+    async def run(self, init_text: str = None) -> None:
         # Dictionary to track agents by step
         step_agents = {}
 
@@ -174,11 +174,10 @@ class Conductor(RoutedAgent):
         # Start the conversation
         logger.debug("Sending request to speak to user")
         user_id = await self.runtime.get(USER_AGENT_TYPE)
-
         # Get and start the group chat with the user's first message
         result = await self.runtime.send_message(
             RequestToSpeak(
-                content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `#Record ID`)",
+                content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)",
             ),
             recipient=user_id,
         )
@@ -234,7 +233,7 @@ class MoA(BaseModel):
         return topic
 
     @weave.op
-    async def moa_chat(self, io_interface: IOInterface):
+    async def moa_chat(self, io_interface: IOInterface, init_text: str = None):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()
 
@@ -278,7 +277,7 @@ class MoA(BaseModel):
         # Get the conductor started:
         logger.debug("Sending start signal to Conductor")
         await runtime.send_message(
-            RequestToSpeak(),
+            RequestToSpeak(content=init_text),
             recipient=conductor_id,
         )
 

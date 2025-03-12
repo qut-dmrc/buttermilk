@@ -54,7 +54,7 @@ class Fetch(BaseGroupChatAgent):
 
     async def get_record(self, message: str) -> RecordInfo:
         record = None
-        if match := re.match(r"`#([\s\w]+)`", message):
+        if match := re.match(r"!([\d\w_]+)", message):
             # Try to get by record_id
             record = await self.get_record_dataset(match.group(1))
         elif uri := extract_url(message):
