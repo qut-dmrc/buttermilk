@@ -7,7 +7,11 @@ from autogen_core import (
     SingleThreadedAgentRuntime,
     TypeSubscription,
 )
+from autogen_core.models import (
+    UserMessage,
+)
 
+from buttermilk._core.agent import AgentConfig
 from buttermilk.agents.llmchat import LLMAgent
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
@@ -37,20 +41,33 @@ async def test_autogen_clients(llm_autogen):
 
 
 @pytest.fixture(params=["Judger", "Owl"], scope="function")
-def record_agent_cfg(request):
+def record_agent_cfg(
+    request,
+    model_name,
+) -> AgentConfig:
     match request.param:
         case "Judger":
-            return dict(
-                template="judge",
+            return AgentConfig(
+                agent="LLMClient",
+                name=request.param,
                 description="apply rules",
-                formatting="json_rules",
-                criteria="criteria_ordinary",
+                parameters=dict(
+                    model=model_name,
+                    template="judge",
+                    formatting="json_rules",
+                    criteria="criteria_ordinary",
+                ),
             )
         case "Owl":
-            return dict(
-                template="owl",
-                formatting="json_rules",
+            return AgentConfig(
+                agent="LLMClient",
+                name=request.param,
                 description="look for things",
+                parameters=dict(
+                    model=model_name,
+                    template="owl",
+                    watch="ambiguity",
+                ),
             )
         case _:
             raise ValueError(f"Unknown agent type: {request.param}")
@@ -60,7 +77,6 @@ def record_agent_cfg(request):
 async def test_run_record_agent(
     runtime,
     record_agent_cfg,
-    model_name,
     fight_no_more_forever,
 ):
     """Test agents that just take a record as input."""
@@ -68,10 +84,7 @@ async def test_run_record_agent(
         runtime,
         DefaultTopicId().type,
         lambda: LLMAgent(
-            name="assistant1",
-            model=model_name,
-            step_name="test",
-            **record_agent_cfg,
+            config=record_agent_cfg,
         ),
     )
     await runtime.add_subscription(
@@ -81,12 +94,9 @@ async def test_run_record_agent(
         ),
     )
     runtime.start()
-    # result = await runtime.publish_message(
-    #     RequestToSpeak(record=fight_no_more_forever.fulltext),
-    #     "default",
-    # )
+    record = UserMessage(content=fight_no_more_forever.fulltext, source="testing")
     result = await runtime.send_message(
-        RequestToSpeak(record=fight_no_more_forever.fulltext),
+        RequestToSpeak(placeholders={"record": [record]}),
         await runtime.get("default"),
     )
     await runtime.stop_when_idle()

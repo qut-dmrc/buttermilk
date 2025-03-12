@@ -27,6 +27,7 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 from tenacity import (
+    AsyncRetrying,
     RetryError,
     before_sleep_log,
     retry_if_exception_type,
@@ -240,8 +241,8 @@ class AutoGenWrapper(BaseModel):
     max_wait_seconds: float = 30.0
     jitter_seconds: float = 1.0
 
-    _semaphore: asyncio.Semaphore
-    _logger: logging.Logger
+    semaphore: asyncio.Semaphore = Field(default=None)
+    logger: logging.Logger = Field(default=None)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -249,8 +250,11 @@ class AutoGenWrapper(BaseModel):
     def create_semaphore(self) -> Self:
         from buttermilk.bm import logger
 
-        self._semaphore = asyncio.Semaphore(self.max_concurrent_calls)
-        self._logger = logger
+        # Use the proper setter for private attributes
+        self.semaphore = asyncio.Semaphore(
+            self.max_concurrent_calls,
+        )
+        self.logger = logger
         return self
 
     def _get_retry_config(self) -> dict:
@@ -281,7 +285,7 @@ class AutoGenWrapper(BaseModel):
                 max=self.max_wait_seconds,
                 jitter=self.jitter_seconds,
             ),
-            "before_sleep": before_sleep_log(self._logger, logging.WARNING),
+            "before_sleep": before_sleep_log(self.logger, logging.WARNING),
             "reraise": True,
         }
 
@@ -298,13 +302,13 @@ class AutoGenWrapper(BaseModel):
                     # Execute the function
                     return await func(*args, **kwargs)
         except RetryError as e:
-            self._logger.error(f"All retry attempts failed: {e!s}")
+            self.logger.error(f"All retry attempts failed: {e!s}")
             # Re-raise the last exception
             raise e.last_attempt.exception()
 
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""
-        async with self._semaphore:
+        async with self.semaphore:
             # Use the retry logic
             result = await self._execute_with_retry(
                 self.client.create,
@@ -318,7 +322,7 @@ class AutoGenWrapper(BaseModel):
 
     async def agenerate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's agenerate method with retries"""
-        async with self._semaphore:
+        async with self.semaphore:
             if hasattr(self.client, "agenerate"):
                 # Use the retry logic with agenerate
                 result = await self._execute_with_retry(
@@ -338,7 +342,21 @@ class AutoGenWrapper(BaseModel):
             return result
 
     def __getattr__(self, name: str) -> Any:
-        """Delegate all other attributes to the wrapped client"""
+        """Delegate attributes to the wrapped client only if they don't exist on self.
+        This prevents accidentally redirecting access to important instance attributes.
+        """
+        # Check if this is an attribute that should exist on self
+        if (
+            name in self.__dict__
+            or name in self.__annotations__
+            or name in self.__class__.__dict__
+            or (name.startswith("_") and hasattr(type(self), name))
+        ):
+            # Let the normal attribute lookup process handle this (which will raise
+            # AttributeError if appropriate)
+            return self.__getattribute__(name)
+
+        # Otherwise delegate to the client
         return getattr(self.client, name)
 
 
@@ -398,9 +416,9 @@ class LLMs(BaseModel):
             client = OpenAIChatCompletionClient(**params)
 
         # Store for next time so that we only maintain one client
-        self.autogen_models[name] = AutoGenWrapper(client)
+        self.autogen_models[name] = AutoGenWrapper(client=client)
 
-        return client
+        return self.autogen_models[name]
 
     def __getattr__(self, __name: str) -> LLMClient:
         if __name in self.langchain_models:
