@@ -213,6 +213,7 @@ class Conductor(RoutedAgent):
             # Wait for all agents in this step to complete
             if tasks:
                 await asyncio.gather(*tasks)
+            await asyncio.sleep(1)
 
 
 class MoA(BaseModel):

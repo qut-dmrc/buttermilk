@@ -88,6 +88,7 @@ def register_handlers():
         ) -> None:
             """Send output to the user interface"""
             await self.send_to_thread(text=f"{source}: {message.content}")
+            logger.info(f"Sent message to thread: {message.content}")
 
         async def initialize(self) -> None:
             """Initialize the interface"""

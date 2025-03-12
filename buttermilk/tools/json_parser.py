@@ -54,7 +54,7 @@ class ChatParser(BaseModel):
             json_str = "{" + match.group(1) + "}"
             try:
                 output = load_json_flexi(json_str)
-            except JSONDecodeError:
+            except (JSONDecodeError, ValueError):
                 output = json_repair.loads(json_str)
 
         except JSONDecodeError as e:

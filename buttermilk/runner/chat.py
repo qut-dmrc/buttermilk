@@ -132,7 +132,6 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
     async def publish(self, message: Any) -> None:
         await self.publish_message(
             message,
-            # DefaultTopicId(type=self._group_chat_topic_type, source=self.step),
             DefaultTopicId(type=self._group_chat_topic_type),
         )
 
@@ -153,7 +152,7 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
 
         answer = await self.query(message)
 
-        # await self.publish(answer)
+        await self.publish(answer)
 
         return answer
 
@@ -185,7 +184,7 @@ class IOInterface(BaseGroupChatAgent, ABC):
     @message_handler
     async def handle_message(
         self,
-        message: GroupChatMessage | Answer,
+        message: GroupChatMessageType,
         ctx: MessageContext,
     ) -> None:
         if isinstance(message, Answer):

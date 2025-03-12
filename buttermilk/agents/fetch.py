@@ -96,7 +96,6 @@ class Fetch(BaseGroupChatAgent):
                 payload=record,
                 step=self.step,
             )
-            await self.publish(response)
             return response
 
         return NullAnswer(step=self.step)
