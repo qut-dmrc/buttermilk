@@ -5,11 +5,13 @@ You should answer only in strictly correct JSON in the following schema:
 
 ```json
 {"mistake": <BOOLEAN: default false, unless you find a potential mistake.>, 
-"feedback": <STRING, usually NULL: a concise explanation of a potential mistake.>,
+"intervention": <STRING, usually NULL: a concise explanation of a potential mistake.>,
 "error": <STRING, usually NULL: any error you encounter that prevents you from completing this task.>
 }
 ```
 
+# User:
+
 <BEGIN CONVERSATION SO FAR>
-{{context}}
+{{history}}
 <END CONVERSATION>

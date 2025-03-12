@@ -305,6 +305,9 @@ class AutoGenWrapper(BaseModel):
             self.logger.error(f"All retry attempts failed: {e!s}")
             # Re-raise the last exception
             raise e.last_attempt.exception()
+        except Exception as e:
+            self.logger.error(f"Unexpected exception: {e!s}")
+            raise e
 
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""

@@ -88,7 +88,7 @@ class Fetch(BaseGroupChatAgent):
         if not record and isinstance(request, RequestToSpeak):
             # We must return an input record if we were asked for one
             # Create a new record with the original text we were given.
-            record = RecordInfo(data=request.content)
+            record = RecordInfo(data="\n".join(inputs))
 
         if record:
             response = InputRecord(

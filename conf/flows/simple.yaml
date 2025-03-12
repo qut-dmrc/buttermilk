@@ -1,39 +1,68 @@
 simple:
-  _target_: buttermilk.runner.flow.Flow
-  source: hate development
+  _target_: buttermilk.runner.moa.MoA
+  source: development flow
+
+
   steps:
-    - name: describer
-      _target_: buttermilk.agents.describer.Describer
-      num_runs: 1
-      parameters: 
-        template: describe
-        download_if_necessary: true
-        model:
-          - gemini15pro
+    - name: fetch
+      agent: Fetch
+      description: fetch urls and stored records for the chat
+      inputs:
+        prompt: q
+
+    - name: judge
+      description: Applies criteria to content.
+      agent: LLMAgent
+      num_runs: 2
+      variants:
+        template: judge
+        criteria:
+          - criteria_ordinary
+        formatting: json_rules
+        model: gemini2flashthinking
       inputs:
         record: record
-      outputs:
-        transcript: outputs.transcript
-        title: outputs.title
-        caption: outputs.caption
-        description: outputs.description
-        content: record.text
-    - _target_: buttermilk.agents.lc.LC
-      name: judger
+
+    - name: feedback
+      description: QA for mistakes.
+      agent: LLMAgent
       num_runs: 1
-      concurrency: 20
       save: ${save}
-      parameters:
-        template: judge
-        criteria: criteria_ordinary
-        formatting: json_rules
+      variants:
+        template: feedback
         model: ${llms.general}
       inputs:
-        record: record
-      outputs:
-          job_id: job_id
-          model: parameters.model
-          criteria: parameters.criteria
-          template: parameters.template
-          reasons: outputs.reasons
+        history: history
 
+    - name: synth
+      agent: LLMAgent
+      description: Synthesizes draft answers.
+      num_runs: 1
+      save: ${save}
+      variants:
+        model: gemini2flashthinking
+        template: synthesise_judger
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
+        criteria: criteria_ordinary
+        formatting: json_rules
+      inputs:
+        content: record.fulltext
+        answers: judge
+        feedback: feedback
+
+    - name: eval
+      agent: LLMAgent
+      num_runs: 1
+      description: show differences between answers
+      variants:
+        template: differences
+        criteria: >
+          Evaluate how well the provided content aligns with the rules.
+        model: gemini2flashthinking
+      inputs:
+        content: record.fulltext
+        answers:
+          - judge
+          - synth
+        feedback: feedback

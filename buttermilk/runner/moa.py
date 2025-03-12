@@ -14,9 +14,7 @@ from autogen_core import (
 from autogen_core.model_context import (
     UnboundedChatCompletionContext,
 )
-from autogen_core.models import (
-    UserMessage,
-)
+from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import BaseModel
 
 from buttermilk._core.agent import AgentVariants
@@ -26,7 +24,7 @@ from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
-    GroupChatMessage,
+    GroupChatMessageType,
     InputRecord,
     IOInterface,
     MessagesCollector,
@@ -117,17 +115,6 @@ class Conductor(RoutedAgent):
             logger.error("Conductor already running.")
 
     @message_handler
-    async def handle_answer(
-        self,
-        message: Answer,
-        ctx: MessageContext,
-    ) -> None:
-        # store messages
-        # draft = dict(agent_id=message.agent_id, body=message.body)
-
-        self._flow_data.add(message.step, message)
-
-    @message_handler
     async def handle_inputrecords(
         self,
         message: InputRecord,
@@ -143,13 +130,22 @@ class Conductor(RoutedAgent):
     @message_handler
     async def handle_other(
         self,
-        message: GroupChatMessage,
+        message: GroupChatMessageType,
         ctx: MessageContext,
     ) -> None:
-        msg = UserMessage(
-            content=message.content,
-            source=ctx.sender.type if ctx.sender else self.id.type,
-        )
+        if isinstance(message, Answer):
+            self._flow_data.add(message.step, message)
+
+        if message.step == "User":
+            msg = UserMessage(
+                content=message.content,
+                source=ctx.sender.type if ctx.sender else self.id.type,
+            )
+        else:
+            msg = AssistantMessage(
+                content=message.content,
+                source=ctx.sender.type if ctx.sender else self.id.type,
+            )
         await self._context.add_message(msg)
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:
@@ -205,6 +201,7 @@ class Conductor(RoutedAgent):
                         message=RequestToSpeak(
                             inputs=step_data,
                             placeholders=self._placeholders.get_dict(),
+                            context=await self._context.get_messages(),
                         ),
                         recipient=agent_id,
                     ),
@@ -217,7 +214,7 @@ class Conductor(RoutedAgent):
 
 
 class MoA(BaseModel):
-    save: SaveInfo = None
+    save: SaveInfo | None = None
     source: str
     steps: list[MoAAgentFactory]
 

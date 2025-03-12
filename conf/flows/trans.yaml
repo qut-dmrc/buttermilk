@@ -60,7 +60,7 @@ trans:
         template: feedback
         model: ${llms.general}
       inputs:
-        context: context
+        history: context
 
     - name: synth
       agent: LLMAgent
@@ -75,11 +75,27 @@ trans:
         criteria: trans_simplified
         formatting: json_rules
       inputs:
-        record: record
+        content: record.fulltext
         answers: judge
         feedback: 
           - context_owl
           - feedback
+
+    - name: eval
+      agent: LLMAgent
+      num_runs: 1
+      description: show differences between answers
+      variants:
+        template: differences
+        criteria: >
+          Evaluate how well the provided content aligns with journalistic standards
+          and best practices for reporting on stories related to trans people.
+        model: ${llms.synthesisers}
+      inputs:
+        content: record.fulltext
+        answers:
+          - judge
+          - synth
 
     - name: scorer
       agent: LLMAgent
@@ -97,19 +113,3 @@ trans:
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
         expected: record.ground_truth
-
-    - name: eval
-      agent: LLMAgent
-      num_runs: 1
-      description: show differences between answers
-      variants:
-        template: differences
-        criteria: >
-          Evaluate how well the provided content aligns with journalistic standards
-          and best practices for reporting on stories related to trans people.
-        model: ${llms.synthesisers}
-      inputs:
-        content: record.fulltext
-        answers:
-          - judger
-          - synth

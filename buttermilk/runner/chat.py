@@ -213,6 +213,7 @@ class ConversationManager(BaseModel):
         platform: str,
         external_id: str,
         init_text: str = None,
+        history: list = [],
         **kwargs,
     ) -> ConversationId:
         """Start a new group chat conversation with the given IO interface"""

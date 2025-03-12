@@ -121,10 +121,16 @@ class LLMAgent(BaseGroupChatAgent):
     ) -> Answer | NullAnswer:
         untrusted_vars = dict(**request.inputs)
 
+        # History variable is a list of strings, but context variable is a
+        # list of messages
+        untrusted_vars["history"] = [
+            f"{x.source}: {x.content}" for x in request.context
+        ]
+        placeholders = {"context": request.context}
+        placeholders.update(request.placeholders)
         messages = await self.fill_template(
             untrusted_inputs=untrusted_vars,
-            placeholder_messages=request.placeholders,
-            context=request.context,
+            placeholder_messages=placeholders,
         )
 
         response = await self._model_client.create(messages=messages)

@@ -25,31 +25,27 @@ You may be provided with additional feedback to consider. You should incorporate
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if record %}
 <BEGIN CONTENT>
-{{ record.fulltext }}
+{{ content }}
 <END CONTENT>
-{% endif %}
 
 
 # User:
 
-{% if context_owl %}
-<BEGIN ANALYST NOTES>
-{% for feedback in context_owl %}
-  - {{ feedback.agent_id }}: {{ feedback.body }}
-{% endfor %}
-<END ANALYST NOTES>
-{% endif %}
-
 {% for draft in judge %}
 <BEGIN DRAFT ANSWER #{{draft.agent_id}}>
-{{ draft.body }}
+{{ draft.outputs }}
 <END DRAFT ANSWER>
 {% endfor %}
 
-{% if feedback %}
-{% for response in feedback %}
-<BEGIN FEEDBACK {{ response.agent_id }}>{{ response.intervention }}<END FEEDBACK>
+
+{% if context_owl or feedback %}
+<BEGIN ANALYST NOTES>
+{% for answer in context_owl %}
+  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
 {% endfor %}
+{% for answer in feedback %}
+  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
+{% endfor %}
+<END ANALYST NOTES>
 {% endif %}

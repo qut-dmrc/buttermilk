@@ -14,6 +14,8 @@ from buttermilk.runner.chat import (
     IOInterface,
     RequestToSpeak,
 )
+from buttermilk.ui.formatting.slackblock import format_response
+from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
 
 SLACK_MAX_MESSAGE_LENGTH = 3000
 
@@ -64,6 +66,7 @@ def register_handlers():
                 "blocks": blocks,
                 "thread_ts": self.context.thread_ts,
             })
+            
             msg_response = await app.client.chat_postMessage(**kwargs)
             return msg_response
 
@@ -87,8 +90,11 @@ def register_handlers():
             source: str = "",
         ) -> None:
             """Send output to the user interface"""
-            await self.send_to_thread(text=f"{source}: {message.content}")
-            logger.info(f"Sent message to thread: {message.content}")
+            if isinstance(message, Answer):
+                formatted_blocks = format_slack_reasons(message)
+                await self.send_to_thread(**formatted_blocks)
+            else:
+                await self.send_to_thread(message.content)
 
         async def initialize(self) -> None:
             """Initialize the interface"""
@@ -101,13 +107,31 @@ def register_handlers():
     @app.event("app_mention")
     async def handle_app_mention_events(body, logger):
         logger.info(body)
-        return await moderate(body["event"])
+        return await run_moderate(body["event"])
+
+    @app.event("message_replied")
+    async def handle_thread_reply_resume(message, logger):
+        try:
+            match = BOTPATTERNS.search(message["text"])
+            flow_name = match[1]
+            pattern_length = len(match[0])
+            step = message["text"][pattern_length:]
+
+            flow = _flows[flow_name]
+            history = await app.client.channels_replies(
+                message["channel"], message["message"]["thread_ts"]
+            )
+
+            return  # not implemented yet
+        except Exception:
+            # not formatted properly, ignore.
+            return
 
     @app.message(MODPATTERN)
     async def handle_keyword(message: dict, say):
-        return await moderate(message)
+        return await run_moderate(message)
 
-    async def moderate(message: dict):
+    async def run_moderate(message: dict):
         try:
             match = BOTPATTERNS.search(message["text"])
             flow_name = match[1]
@@ -131,13 +155,16 @@ def register_handlers():
             event_ts=message.get("event_ts"),
         )
 
+        await moderate(context=context, flow=flow)
+
+    async def moderate(context, flow, init_text=None, history=[]):
         class MoAThread(MoAThreadNoContext):
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
                 self.context = context
 
                 # communication from slack to chat thread
-                register_chat_thread_handler(thread_ts, self)
+                register_chat_thread_handler(self.context.thread_ts, self)
 
         # Create Slack IO interface for this thread
         io_interface = MoAThread
@@ -147,7 +174,7 @@ def register_handlers():
                 io_interface=io_interface,
                 init_text=init_text,
                 platform="slack",
-                external_id=f"{channel_id}-{thread_ts}",
+                external_id=f"{context.channel_id}-{context.thread_ts}",
                 **flow.model_dump(),
             )
 
