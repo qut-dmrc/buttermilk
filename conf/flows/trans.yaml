@@ -35,7 +35,7 @@ trans:
     - name: judge
       description: Applies criteria to content.
       agent: LLMAgent
-      num_runs: 2
+      num_runs: 1
       variants:
         template: judge
         criteria:
@@ -69,11 +69,11 @@ trans:
       variants:
         model: ${llms.synthesisers}
         template: synthesise_judger
-        instructions: >
-          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
         criteria: trans_simplified
         formatting: json_rules
       inputs:
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
         content: content
         answers: judge
         feedback: 
@@ -86,11 +86,11 @@ trans:
       description: show differences between answers
       variants:
         template: differences
+        model: ${llms.synthesisers}
+      inputs:
         criteria: >
           Evaluate how well the provided content aligns with journalistic standards
           and best practices for reporting on stories related to trans people.
-        model: ${llms.synthesisers}
-      inputs:
         content: content
         answers:
           - judge

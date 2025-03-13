@@ -75,8 +75,8 @@ dependencies = [
     "weave>=0.51.33",
     "traceloop-sdk>=0.38.5",
     "promptflow-azure>=1.17.2",
-    "autogen-ext[azure,openai,gemini]>=0.4.7",
-    "autogen>=0.7.6",
+    "autogen-ext[anthropic,azure,gemini,openai]>=0.4.7",
+    "autogen[anthropic]>=0.7.6",
     "autogen-agentchat>=0.4.7",
     "autogen-openaiext-client>=0.0.3",
 ]

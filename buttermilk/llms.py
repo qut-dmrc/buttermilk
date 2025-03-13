@@ -12,6 +12,9 @@ from anthropic import (
     AsyncAnthropicVertex,
     RateLimitError as AnthropicRateLimitError,
 )
+
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient 
 from autogen import OpenAIWrapper
 from autogen_core.models import ChatCompletionClient
 from autogen_ext.models.openai import (
@@ -415,9 +418,18 @@ class LLMs(BaseModel):
             client = AzureOpenAIChatCompletionClient(**params)
         elif self.connections[name].api_type == "google":
             client = GeminiChatCompletionClient(**params)
+        elif self.connections[name].api_type == "anthropic":
+            from google.auth import default
+            import google.auth.transport.requests
+            credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            credentials.refresh(google.auth.transport.requests.Request())
+            _vertex_params = {k:v for k, v in params.items() if k in ['region', 'project_id', 'credentials']}
+            _vertex_client = AsyncAnthropicVertex(**_vertex_params)
+            client = AnthropicChatCompletionClient(**params)
+            client._client = _vertex_client  # replace client with vertexai version
         else:
             client = OpenAIChatCompletionClient(**params)
-
+        # test:  await client.create([UserMessage(content="hi", source="dev")])
         # Store for next time so that we only maintain one client
         self.autogen_models[name] = AutoGenWrapper(client=client)
 
