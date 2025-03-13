@@ -115,37 +115,49 @@ class Conductor(RoutedAgent):
             logger.error("Conductor already running.")
 
     @message_handler
-    async def handle_inputrecords(
-        self,
-        message: InputRecord,
-        ctx: MessageContext,
-    ) -> None:
-        try:
-            src = ctx.sender.type
-        except:
-            src = self.id.type
-        msg = UserMessage(content=message.payload.fulltext, source=src)
-        self._placeholders.add("record", msg)
-
-    @message_handler
-    async def handle_other(
+    async def handle_messages(
         self,
         message: GroupChatMessageType,
         ctx: MessageContext,
     ) -> None:
-        if isinstance(message, Answer):
-            self._flow_data.add(message.step, message)
-
-        if message.step == "User":
+        """
+        Special cases:
+        - 'record': List of InputRecord objects
+        - 'content': List of fulltext values from InputRecord objects
+        - 'context': List of all received messages
+        - 'history': List of text from history messages
+        """
+        source=ctx.sender.type if ctx.sender else self.id.type
+        
+        if isinstance(message, InputRecord):
             msg = UserMessage(
                 content=message.content,
                 source=ctx.sender.type if ctx.sender else self.id.type,
             )
+            
+            self._placeholders.add('record', UserMessage(content=message.payload.fulltext, 
+                source=source))
+            self._flow_data.add("content", message.content)
+
+        elif message.step == "User":
+            msg = UserMessage(
+                content=message.content,
+                source=source,
+            )
+
         else:
             msg = AssistantMessage(
                 content=message.content,
-                source=ctx.sender.type if ctx.sender else self.id.type,
-            )
+                source=source,
+            )        
+
+        self._flow_data.add(message.step, message)
+
+        
+        # Add to our history as text
+        self._flow_data.add("history", message.content)
+
+        # also add to generic autogen collector
         await self._context.add_message(msg)
 
     async def on_reset(self, cancellation_token: CancellationToken) -> None:

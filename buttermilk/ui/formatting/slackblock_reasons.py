@@ -5,10 +5,12 @@ from buttermilk.ui.formatting.slackblock import SLACK_MAX_MESSAGE_LENGTH, format
 
 def format_slack_reasons(result: Answer) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
+    # don't modify the original object
+    result_copy = result.model_copy(deep=True)
     blocks = []
     
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result.agent_id} {result.config.parameters.get('model')}"
+    header_text = f"Model: :robot_face: {result_copy.agent_id} {result_copy.config.parameters.get('model')}"
     blocks.append({
         "type": "header",
         "text": {
@@ -21,22 +23,22 @@ def format_slack_reasons(result: Answer) -> dict:
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": ", ".join(result.config.parameters.values()),
+            "text": ", ".join(result_copy.config.parameters.values()),
         }
     })
     
     # Handle error case
-    if result.outputs.get('error'):
+    if result_copy.outputs.get('error'):
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Error!*\n" + "\n".join(format_response(result.outputs.get('error'))),
+                "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get('error'))),
             }
         })
         
     else:
-        outputs = result.outputs
+        outputs = result_copy.outputs
         if isinstance(outputs, dict):
             # Extract reasons for special handling
             reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []
@@ -133,7 +135,7 @@ def format_slack_reasons(result: Answer) -> dict:
     blocks = blocks[:50]  # Slack's block limit
     
     # Also provide a text fallback for clients that don't support blocks
-    fallback_text = header_text + "\n" + pprint.pformat(result, indent=2)[:SLACK_MAX_MESSAGE_LENGTH-len(header_text)-10]
+    fallback_text = header_text + "\n" + pprint.pformat(result_copy, indent=2)[:SLACK_MAX_MESSAGE_LENGTH-len(header_text)-10]
     
     return {
         "blocks": blocks,

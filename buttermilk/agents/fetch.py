@@ -12,6 +12,7 @@ from buttermilk._core.runner_types import RecordInfo
 from buttermilk.runner.chat import (
     BaseGroupChatAgent,
     GroupChatMessage,
+    GroupChatMessageType,
     InputRecord,
     NullAnswer,
     RequestToSpeak,
@@ -103,7 +104,7 @@ class Fetch(BaseGroupChatAgent):
     @message_handler
     async def handle_urls(
         self,
-        message: GroupChatMessage,
+        message: GroupChatMessageType,
         ctx: MessageContext,
     ) -> InputRecord | NullAnswer:
         return await self.query(message)

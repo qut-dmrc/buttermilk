@@ -1,8 +1,10 @@
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import jmespath
+from pydantic import PrivateAttr
 
 from buttermilk.agents.llmchat import Answer
+from buttermilk.runner.chat import GroupChatMessageType, InputRecord
 from buttermilk.utils.templating import KeyValueCollector
 
 """
@@ -37,6 +39,11 @@ Example YAML:
             - judge.answer
             - draft.answer
             
+            # answer: record   # a list of RecordInfo objects
+            # fulltext: content  # a list of the text of all RecordInfo objects
+            # prior_messages: context  # a list of messages received
+            # history: history  # a list of the text of all messages received
+
             # Direct reference to whole step output
             feedback: context
             
@@ -56,22 +63,23 @@ class FlowVariableRouter(KeyValueCollector):
     each list is the output of an agent in a step.
     """
 
-    _data: dict[str, list[Answer]] = {}
+    _data: dict[str, Any | list[GroupChatMessageType]] = PrivateAttr(default_factory=dict)
+ 
 
     def _resolve_mappings(self, mappings: dict[str, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
         resolved = {}
 
         for target, source_spec in mappings.items():
-            if isinstance(source_spec, list):
+            if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case
-                resolved[target] = [
-                    self._resolve_mappings(src)
-                    if isinstance(src, dict)
-                    else self._resolve_simple_path(src)
-                    for src in source_spec
-                ]
-            elif isinstance(source_spec, dict):
+                resolved[target] = []
+                for src in source_spec:
+                    if isinstance(src, dict):
+                        resolved[target].extend(self._resolve_mappings(src))
+                    else:
+                        resolved[target].extend(self._resolve_simple_path(src))
+            elif isinstance(source_spec, Mapping|dict):
                 # Handle nested mappings
                 resolved[target] = self._resolve_mappings(source_spec)
             else:
@@ -88,6 +96,7 @@ class FlowVariableRouter(KeyValueCollector):
         When a step has multiple outputs, returns a list with all matching results.
         For JMESPath expressions that return lists, flattens the results.
         """
+        
         if "." not in path:
             # Direct reference to a step's complete output list
             return self._data.get(path, [])
@@ -107,7 +116,13 @@ class FlowVariableRouter(KeyValueCollector):
         all_matches = []
 
         for result in step_results:
-            value = jmespath.search(field_path, result)
+            # Convert Pydantic models to dictionaries for JMESPath
+            if hasattr(result, "model_dump"):
+                result_dict = result.model_dump()
+            else:
+                result_dict = result
+                
+            value = jmespath.search(field_path, result_dict)
             if value is not None:
                 # If the value is already a list, extend our results
                 if isinstance(value, list):

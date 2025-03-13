@@ -47,7 +47,7 @@ simple:
         criteria: criteria_ordinary
         formatting: json_rules
       inputs:
-        content: record.fulltext
+        content: content
         answers: judge
         feedback: feedback
 
@@ -61,7 +61,7 @@ simple:
           Evaluate how well the provided content aligns with the rules.
         model: gemini2flashthinking
       inputs:
-        content: record.fulltext
+        content: content
         answers:
           - judge
           - synth

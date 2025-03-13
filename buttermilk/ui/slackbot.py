@@ -90,7 +90,7 @@ def register_handlers():
             source: str = "",
         ) -> None:
             """Send output to the user interface"""
-            if isinstance(message, Answer):
+            if isinstance(message, Answer):        
                 formatted_blocks = format_slack_reasons(message)
                 await self.send_to_thread(**formatted_blocks)
             else:

@@ -28,18 +28,13 @@ You may be provided with additional feedback to consider. You should incorporate
 <END INSTRUCTIONS>
 {% endif %}
 
-## Criteria
 <BEGIN CRITERIA>
 {{ criteria }}
 <END CRITERIA>
 
-{% if record %}
-## Content
 <BEGIN CONTENT>
-{{ record.fulltext }}
+{{ content }}
 <END CONTENT>
-{% endif %}
-
 
 # User:
 
@@ -51,7 +46,7 @@ You may be provided with additional feedback to consider. You should incorporate
 <END ANALYST NOTES>
 {% endif %}
 
-{% for answer in judge %}
+{% for answer in answers %}
 <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
 {{ answer.outputs }}
 <END DRAFT ANSWER>

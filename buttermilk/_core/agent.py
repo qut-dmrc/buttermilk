@@ -66,6 +66,10 @@ class AgentConfig(BaseModel):
         description="A mapping of data to agent inputs",
     )
     outputs: dict[str, Any] = {}
+    
+    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
 
 
 class AgentVariants(AgentConfig):

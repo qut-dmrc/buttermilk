@@ -32,12 +32,11 @@ You may be provided with additional feedback to consider. You should incorporate
 
 # User:
 
-{% for draft in judge %}
-<BEGIN DRAFT ANSWER #{{draft.agent_id}}>
-{{ draft.outputs }}
+{% for answer in answers %}
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+{{ answer.outputs }}
 <END DRAFT ANSWER>
 {% endfor %}
-
 
 {% if context_owl or feedback %}
 <BEGIN ANALYST NOTES>

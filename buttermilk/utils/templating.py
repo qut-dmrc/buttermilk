@@ -47,6 +47,9 @@ class KeyValueCollector(BaseModel):
 
     def get_dict(self) -> dict:
         return dict(self._data)
+    
+    def get(self, key: str, default: Any =None) -> Any:
+        return self._data.get(key, default)
 
     def __getitem__(self, key: str) -> Any:
         return self._data[key]

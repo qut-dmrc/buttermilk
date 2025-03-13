@@ -75,7 +75,7 @@ trans:
         criteria: trans_simplified
         formatting: json_rules
       inputs:
-        content: record.fulltext
+        content: content
         answers: judge
         feedback: 
           - context_owl
@@ -92,7 +92,7 @@ trans:
           and best practices for reporting on stories related to trans people.
         model: ${llms.synthesisers}
       inputs:
-        content: record.fulltext
+        content: content
         answers:
           - judge
           - synth

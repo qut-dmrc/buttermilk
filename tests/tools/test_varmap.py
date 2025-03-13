@@ -1,9 +1,16 @@
 import pytest
 
 from buttermilk.runner.varmap import FlowVariableRouter
+from buttermilk.utils.templating import KeyValueCollector
 
 
 class TestFlowVariableRouter:
+    @pytest.fixture
+    def sample_data(self):
+        """Sample data for testing variable routing with multiple outputs per step"""
+        # Create a router with pre-populated data
+        router = FlowVariableRouter()
+        
     @pytest.fixture
     def sample_data(self):
         """Sample data for testing variable routing with multiple outputs per step"""
@@ -300,3 +307,151 @@ class TestFlowVariableRouter:
         mappings = {"draft": "judge.scores[].score"}
         result = sample_data._resolve_mappings(mappings)
         assert set(result["draft"]) == {0.9, 0.7, 0.85, 0.95}
+
+
+class TestFlowVariableRouterSpecialCases:
+    @pytest.fixture
+    def router_with_records(self):
+        """Router with record and placeholder data"""
+        router = FlowVariableRouter()
+        
+        router._data = {
+            "context": "This is context data",
+        }
+        # Mock record data (as would come from placeholders)
+        router._data["record"] = [
+            {"fulltext": "This is the first record text"},
+            {"fulltext": "This is the second record text"},
+        ]
+        
+        # Mock history data
+        router._data["history"] = [
+            "Previous message 1",
+            "Previous message 2",
+        ]
+        
+        # Mock judge data
+        router._data["judge"] = [
+            {"answer": "Judge answer 1", "score": 0.8},
+            {"answer": "Judge answer 2", "score": 0.9},
+        ]
+        
+        
+        return router
+
+    def test_special_case_mappings(self, router_with_records):
+        """Test the special case mappings from the YAML example"""
+        mappings = {
+            "content": "record.fulltext",  # Should extract fulltext from all records
+            "history": "history",  # Should pass through the history list
+            "context": "context",  # Should not find in _data (returns None)
+            "record": "record",    # Should return the record list as is
+            "answers": "judge"     # Should return the full judge list
+        }
+        
+        result = router_with_records._resolve_mappings(mappings)
+        
+        # Check content extracts fulltext from all records
+        assert "content" in result
+        assert isinstance(result["content"], list)
+        assert len(result["content"]) == 2
+        assert "This is the first record text" in result["content"]
+        assert "This is the second record text" in result["content"]
+        
+        # History should be passed through as is
+        assert result["history"] == ["Previous message 1", "Previous message 2"]
+        
+        # Context should not be found in _data, returns None and then filtered out
+        assert "context" not in result
+        
+        # Record should return the full record list
+        assert isinstance(result["record"], list)
+        assert len(result["record"]) == 2
+        assert "fulltext" in result["record"][0]
+        
+        # Answers should return the full judge list
+        assert isinstance(result["answers"], list)
+        assert len(result["answers"]) == 2
+        assert result["answers"][0]["answer"] == "Judge answer 1"
+        assert result["answers"][1]["answer"] == "Judge answer 2"
+
+    def test_empty_lists(self, router_with_records):
+        """Test handling of empty lists in data"""
+        router = router_with_records
+        router._data["empty_step"] = []
+        
+        mappings = {
+            "empty_result": "empty_step",
+            "missing_field": "empty_step.field",
+            "valid_field": "record.fulltext"
+        }
+        
+        result = router._resolve_mappings(mappings)
+        
+        # Empty step should not be present
+        assert "empty_result" not in result
+        
+        # Missing field in empty step should be filtered out
+        assert "missing_field" not in result
+        
+        # Valid field should still work
+        assert "valid_field" in result
+
+    def test_nested_special_cases(self, router_with_records):
+        """Test nested mapping structures with special cases"""
+        mappings = {
+            "analysis": {
+                "record_data": "record.fulltext",
+                "judge_data": "judge",
+                "context": "context",  # Should be filtered out
+            },
+            "combined": [
+                "record.fulltext",
+                "history",
+                "context"  # Should be not in the list
+            ]
+        }
+        
+        result = router_with_records._resolve_mappings(mappings)
+        
+        # Check nested structure
+        assert "analysis" in result
+        assert "record_data" in result["analysis"]
+        assert "judge_data" in result["analysis"]
+        assert "context" not in result["analysis"]  # Should be filtered
+        
+        # Check combined list
+        assert len(result["combined"]) == 3
+        assert isinstance(result["combined"][0], list)  # record.fulltext values
+        assert isinstance(result["combined"][1], list)  # history values
+        assert result["combined"][2] is None  # context is None
+
+
+def test_placeholder_integration():
+    """Test how placeholders would be incorporated with routing"""
+    router = FlowVariableRouter()
+    
+    # Set up data in router
+    router._data["step1"] = [{"value": "step1 data"}]
+    
+    # Create mock placeholders
+    mock_placeholders = KeyValueCollector()
+    mock_placeholders.add("context", "Context value")
+    mock_placeholders.add("record", {"id": "123", "text": "Record text"})
+    
+    # In actual usage, you'd have to manually incorporate placeholders
+    # into the router data before resolving mappings
+    router._data["context"] = [mock_placeholders.get("context")]
+    router._data["record"] = [mock_placeholders.get("record")]
+    
+    mappings = {
+        "step_value": "step1.value",
+        "context_value": "context",
+        "record_id": "record.id"
+    }
+    
+    result = router._resolve_mappings(mappings)
+    
+    assert result["step_value"] == ["step1 data"]
+    assert result["context_value"] == ["Context value"]
+    assert result["record_id"] == ["123"]
