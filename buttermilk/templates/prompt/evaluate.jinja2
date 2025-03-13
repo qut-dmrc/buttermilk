@@ -36,6 +36,8 @@ You should not refer to the analyst or their response in your answer; just expla
 <END EXPECTED ANSWER>
 
 # User:
-<BEGIN ANALYST ANSWER {{ answer.identifier }} >
-{{ answer.answer }}
-<END ANALYST ANSWER>
+{% for answer in answers %}
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+{{ answer.outputs }}
+<END DRAFT ANSWER>
+{% endfor %}

@@ -55,12 +55,11 @@ trans:
       description: QA for mistakes.
       agent: LLMAgent
       num_runs: 1
-      save: ${save}
       variants:
         template: feedback
         model: ${llms.general}
       inputs:
-        history: context
+        history: history
 
     - name: synth
       agent: LLMAgent
@@ -104,12 +103,12 @@ trans:
       variants:
         template: evaluate
         model: ${llms.synthesisers}
-        answer:
-          - judger
-          - synth
       inputs:
         instructions: >
           The analyst was tasked with evaluating how well the provided content 
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
         expected: record.ground_truth
+        answer:
+          - judger
+          - synth
