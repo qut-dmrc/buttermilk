@@ -93,6 +93,7 @@ class LLMConfig(BaseModel):
         default="openai",
         description="Type of API to use (e.g. openai, vertex, azure)",
     )
+    api_key: str|None  = Field(default=None, description="API key to use for this model")
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
     model_info: dict = {}
@@ -121,7 +122,7 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 }
 # Generate with:
 # ```sh
-# cat .cache/buttermilk/models.json | jq ".[].name"
+# cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 CHATMODELS = [
     "gemini15pro",
@@ -132,17 +133,13 @@ CHATMODELS = [
     "gemini2pro",
     "gpt4o",
     "haiku",
-    "llama31_405b",
     "llama31_405b-azure",
     "llama31_8b",
-    "llama31_8b_guard",
     "llama32_90b",
     "llama32_90b_azure",
-    "llama32_90b_guard",
     "llama33_70b",
     "o3-mini-high",
-    "sonnet",
-    "sonnetanthropic",
+    "sonnet"
 ]
 CHEAP_CHAT_MODELS = [
     "haiku",
@@ -391,6 +388,7 @@ class LLMs(BaseModel):
     def get_autogen_generic(self, name):
         params = self.connections[name].configs.copy()
         params["api_type"] = self.connections[name].api_type
+        params["api_key"] = self.connections[name].api_key
         params["base_url"] = self.connections[name].base_url
         params["model_info"] = self.connections[name].model_info
 
@@ -399,11 +397,12 @@ class LLMs(BaseModel):
         return wrapper
 
     def get_autogen_chat_client(self, name) -> ChatCompletionClient:
+        from buttermilk import BM
         if name in self.autogen_models:
             return self.autogen_models[name]
 
         # Let Autogen handle the correct arguments for different models
-        wrapper = self.get_autogen_generic(name)
+        # wrapper = self.get_autogen_generic(name)
 
         # Add in any config keys autogen has removed
         # params = {k:v for k, v in self.connections[name].configs.items() if k not in params}
@@ -411,6 +410,7 @@ class LLMs(BaseModel):
 
         params["base_url"] = self.connections[name].base_url
         params["model_info"] = self.connections[name].model_info
+        params["api_key"] = self.connections[name].api_key
 
         # params.update(**wrapper._config_list[0])
 
@@ -418,17 +418,18 @@ class LLMs(BaseModel):
             client = AzureOpenAIChatCompletionClient(**params)
         elif self.connections[name].api_type == "google":
             client = GeminiChatCompletionClient(**params)
+        elif self.connections[name].api_type == "vertex":
+            client = OpenAIChatCompletionClient(**params)
         elif self.connections[name].api_type == "anthropic":
-            from google.auth import default
-            import google.auth.transport.requests
-            credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-            credentials.refresh(google.auth.transport.requests.Request())
-            _vertex_params = {k:v for k, v in params.items() if k in ['region', 'project_id', 'credentials']}
+            # token = credentials.refresh(google.auth.transport.requests.Request())
+            _vertex_params = {k:v for k, v in params.items() if k in ['region', 'project_id']}
+            _vertex_params['credentials'] = BM()._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**params)
             client._client = _vertex_client  # replace client with vertexai version
         else:
             client = OpenAIChatCompletionClient(**params)
+        # from autogen_core.models import    UserMessage
         # test:  await client.create([UserMessage(content="hi", source="dev")])
         # Store for next time so that we only maintain one client
         self.autogen_models[name] = AutoGenWrapper(client=client)
