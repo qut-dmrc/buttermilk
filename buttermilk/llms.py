@@ -126,19 +126,18 @@ VERTEX_SAFETY_SETTINGS_NONE = {
 # ```
 CHATMODELS = [
     "gemini15pro",
-    "gemini15pro_safety",
     "gemini2flash",
     "gemini2flashlite",
     "gemini2flashthinking",
     "gemini2pro",
     "gpt4o",
-    "haiku",
+    "o3-mini-high",
+    "llama31_8b",
     "llama31_405b-azure",
     "llama31_8b",
-    "llama32_90b",
     "llama32_90b_azure",
     "llama33_70b",
-    "o3-mini-high",
+    "haiku",
     "sonnet"
 ]
 CHEAP_CHAT_MODELS = [
