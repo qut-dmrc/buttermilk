@@ -1,6 +1,6 @@
 import asyncio
 from functools import cached_property
-
+from distutils.util import strtobool
 import shortuuid
 import weave
 from autogen_core import (
@@ -223,12 +223,16 @@ class Conductor(RoutedAgent):
         
         result = await self.runtime.send_message(
             RequestToSpeak(
-                content=prompt or "Ready to proceed? (y/n)",
+                prompt=prompt or "Ready to proceed? (y/n)",
             ),
             recipient=user_id,
         )
-        return result.content
-
+        try:
+            return bool(strtobool(result.content))
+        except ValueError:
+            logger.error(f"Invalid input in confirm_user: {result.content}")
+            return False
+        
 
 class MoA(BaseModel):
     save: SaveInfo | None = None

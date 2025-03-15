@@ -90,6 +90,7 @@ GroupChatMessageType = Union[GroupChatMessage, NullAnswer, InputRecord, Answer]
 class RequestToSpeak(BaseModel):
     content: str | None = None
     inputs: Mapping[str, Any] = {}
+    prompt: str | None = None
     placeholders: Mapping[
         str,
         list[SystemMessage | UserMessage | AssistantMessage],

@@ -226,31 +226,11 @@ def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No
     return {
         "blocks": [
             {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": ":bell: Confirmation Required",
-                    "emoji": True
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
                     "text": f":question: *{message}*"
                 }
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "Please select an option below to continue"
-                    }
-                ]
             },
             {
                 "type": "actions",
@@ -279,9 +259,6 @@ def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No
                     }
                 ]
             },
-            {
-                "type": "divider"
-            }
         ],
         "text": f"Confirmation required: {message}"  # Fallback text
     }
