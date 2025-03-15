@@ -108,7 +108,6 @@ class Conductor(RoutedAgent):
     ) -> None:
         if not self.running:
             self.running = True
-            # asyncio.get_event_loop().create_task(self.run())
             logger.info("Conductor started.")
             await self.run()
         else:
@@ -149,7 +148,7 @@ class Conductor(RoutedAgent):
             msg = AssistantMessage(
                 content=message.content,
                 source=source,
-            )        
+            )
 
         self._flow_data.add(message.step, message)
 
@@ -179,21 +178,11 @@ class Conductor(RoutedAgent):
             )
             step_agents[step_factory.name] = agents_for_step
 
-        # Start the conversation
-        logger.debug("Sending request to speak to user")
-        user_id = await self.runtime.get(USER_AGENT_TYPE)
-        # Get and start the group chat with the user's first message
-        result = await self.runtime.send_message(
-            RequestToSpeak(
-                content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)",
-            ),
-            recipient=user_id,
-        )
-        # the "q" variable is a query or prompt from the user.
-        self._placeholders.add(
-            "q",
-            UserMessage(content=result.content, source=result.role),
-        )
+        # Start the group chat with the user's first message
+        if not await self.confirm_user(prompt="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)"):
+            logger.info("User did not confirm, exiting.")
+            return
+        
 
         # Allow some time for initialization
         await asyncio.sleep(1)
@@ -201,6 +190,10 @@ class Conductor(RoutedAgent):
         # Process each step in sequence
         for step_factory in self.steps:
             logger.debug(f"Processing step: {step_factory.name}")
+
+            if not await self.confirm_user():
+                logger.info("User did not confirm, exiting.")
+                return
             tasks = []
 
             step_data = self._flow_data._resolve_mappings(step_factory.inputs)
@@ -223,6 +216,18 @@ class Conductor(RoutedAgent):
             if tasks:
                 await asyncio.gather(*tasks)
             await asyncio.sleep(1)
+
+    async def confirm_user(self, prompt: str = '') -> bool:
+        """Ask the user to confirm the next step."""
+        user_id = await self.runtime.get(USER_AGENT_TYPE)
+        
+        result = await self.runtime.send_message(
+            RequestToSpeak(
+                content=prompt or "Ready to proceed? (y/n)",
+            ),
+            recipient=user_id,
+        )
+        return result.content
 
 
 class MoA(BaseModel):

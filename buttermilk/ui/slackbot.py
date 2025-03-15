@@ -17,6 +17,14 @@ from buttermilk.runner.chat import (
 from buttermilk.ui.formatting.slackblock import format_response
 from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
 
+from tenacity import (
+    retry,
+    stop_after_attempt, 
+    wait_exponential,
+    retry_if_exception_type
+)
+import asyncio
+
 SLACK_MAX_MESSAGE_LENGTH = 3000
 
 MODPATTERN = re.compile(
@@ -59,6 +67,13 @@ def register_handlers():
             self.max_message_length = 3000
             self.input_queue = Queue()
 
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=4, max=10)
+        )
+        async def _post_message_with_retry(self, **kwargs):
+            return await app.client.chat_postMessage(**kwargs)
+
         async def send_to_thread(self, text, blocks=None, **kwargs):
             kwargs.update({
                 "channel": self.context.channel_id,
@@ -67,12 +82,60 @@ def register_handlers():
                 "thread_ts": self.context.thread_ts,
             })
             
-            msg_response = await app.client.chat_postMessage(**kwargs)
+            msg_response = await self._post_message_with_retry(**kwargs)
             return msg_response
-
+        
         async def query(self, request: RequestToSpeak) -> GroupChatMessage:
             """Retrieve input from the user interface"""
-            await self.send_to_thread(request.content or "Enter your message: ")
+            if request.content:
+                await self.send_to_thread(request.content)
+            else:
+                from buttermilk.ui.formatting.slackblock import confirm_block
+                confirm_blocks = confirm_block(message="Would you like to proceed?")
+                response = await self.send_to_thread(text=confirm_blocks["text"], blocks=confirm_blocks["blocks"])
+                
+                # Setup action handlers for the buttons
+                @app.action("confirm_action")
+                async def handle_confirm(ack, body, client):
+                    await ack()
+                    user_id = body["user"]["id"]
+                    # Put "Yes" response in the queue
+                    await self.input_queue.put(True)
+                    # Replace buttons with confirmation message
+                    await client.chat_update(
+                        channel=self.context.channel_id,
+                        ts=response["ts"],
+                        text="You selected: Yes",
+                        blocks=[{
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": ":white_check_mark: You selected: *Yes*"
+                            }
+                        }]
+                    )
+                    
+                @app.action("cancel_action")
+                async def handle_cancel(ack, body, client):
+                    await ack()
+                    user_id = body["user"]["id"]
+                    # Put "No" response in the queue
+                    await self.input_queue.put(False)
+                    # Replace buttons with cancellation message
+                    await client.chat_update(
+                        channel=self.context.channel_id,
+                        ts=response["ts"],
+                        text="You selected: No",
+                        blocks=[{
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": ":x: You selected: *No*"
+                            }
+                        }]
+                    )
+                    
+            # Wait for a response (either text message or button click)
             msg = await self.input_queue.get()
 
             reply = Answer(

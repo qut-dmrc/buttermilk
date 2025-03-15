@@ -12,7 +12,7 @@ judgers:
   - haiku
   - o3-mini-high
   - gpt4o
-  # - llama32_90b
+  - llama32_90b_azure
 
 synthesisers:
   - gemini2pro

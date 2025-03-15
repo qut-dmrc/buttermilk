@@ -267,6 +267,8 @@ def run_moa_cli(cfg) -> None:
         moa = objs.flows[cfg.flow]
         # flow = objs.flows[cfg.flow]
         # moa = MoA(steps=flow.steps, source="dev")
+        loop = asyncio.get_event_loop()
+        loop.slow_callback_duration = 3.0 
         asyncio.run(moa.moa_chat(io_interface=CLIUserAgent))
     elif bm.cfg.run.ui == "slack":
         # Run Slack version
@@ -279,6 +281,7 @@ def run_moa_cli(cfg) -> None:
         from buttermilk.ui.slackbot import initialize_slack_bot
 
         loop = asyncio.get_event_loop()
+        loop.slow_callback_duration = 3.0 
         handler = initialize_slack_bot(
             conversation_manager=manager,
             flows=flows,

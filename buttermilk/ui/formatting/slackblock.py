@@ -210,3 +210,78 @@ def format_slack_message(result: dict) -> dict:
         "blocks": blocks,
         "text": fallback_text
     }
+
+def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No") -> dict:
+    """
+    Format a confirmation block for Slack with Yes/No buttons and decorative elements.
+    
+    Args:
+        message: The confirmation question to display
+        yes_text: Text for the confirmation button
+        no_text: Text for the decline button
+    
+    Returns:
+        dict: Slack blocks format for a confirmation message
+    """
+    return {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": ":bell: Confirmation Required",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f":question: *{message}*"
+                }
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "Please select an option below to continue"
+                    }
+                ]
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f":white_check_mark: {yes_text}",
+                            "emoji": True
+                        },
+                        "style": "primary",
+                        "value": "confirm",
+                        "action_id": "confirm_action"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f":x: {no_text}",
+                            "emoji": True
+                        },
+                        "style": "danger",
+                        "value": "cancel",
+                        "action_id": "cancel_action"
+                    }
+                ]
+            },
+            {
+                "type": "divider"
+            }
+        ],
+        "text": f"Confirmation required: {message}"  # Fallback text
+    }

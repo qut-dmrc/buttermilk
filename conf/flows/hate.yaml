@@ -7,6 +7,11 @@ hate:
   save: ${save}
 
   steps:
+    - name: fetch
+      agent: Fetch
+      description: fetch urls and stored records for the chat
+      inputs:
+        prompt: q
     # - name: describer
     #   num_runs: 1
     #   variants:
@@ -28,22 +33,6 @@ hate:
         model: ${llms.general}
       inputs:
         record: record
-
-    - name: feedback
-      description: Applies criteria to content.
-      agent: LLMAgent
-      num_runs: 1
-      variants:
-        template: judge
-        model: ${llms.general}
-        formatting: json_rules
-        criteria:
-          - criteria_ordinary
-          - criteria_gelber
-          - criteria_hatefb_factorised
-      inputs:
-        record: record
-        feedback: context_owl
 
     - name: judge
       description: Applies criteria to content.
@@ -70,7 +59,7 @@ hate:
         template: feedback
         model: ${llms.general}
       inputs:
-        context: context
+        history: history
 
     - name: synth
       agent: LLMAgent
@@ -80,13 +69,17 @@ hate:
       variants:
         model: ${llms.synthesisers}
         template: synthesise_judger
-        instructions: >
-          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
-        criteria: criteria_ordinary
+        criteria: 
+          - criteria_ordinary
+          - criteria_gelber
+          - criteria_hatefb_factorised
         formatting: json_rules
       inputs:
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
         record: record
         answers: judge
+        content: content
         feedback: 
           - context_owl
           - feedback
@@ -100,7 +93,7 @@ hate:
         criteria: criteria_ordinary
         model: ${llms.synthesisers}
       inputs:
-        content: record.fulltext
+        content: content
         answers:
           - judger
           - synth
