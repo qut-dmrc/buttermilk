@@ -40,7 +40,6 @@ ALLPATTERNS = re.compile(r"mod(.*)")
 
 # Global state variables
 app = AsyncApp(token=os.environ.get("SLACK_BOT_TOKEN"))
-_conversation_manager = None
 _flows = None
 _manager = ConversationManager()
 
@@ -221,7 +220,7 @@ def register_handlers():
         await moderate(context=context, flow=flow)
 
     async def moderate(context, flow, init_text=None, history=[]):
-        class MoAThread(MoAThreadNoContext):
+        class SlackMoAThread(MoAThreadNoContext):
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
                 self.context = context
@@ -230,7 +229,7 @@ def register_handlers():
                 register_chat_thread_handler(self.context.thread_ts, self)
 
         # Create Slack IO interface for this thread
-        io_interface = MoAThread
+        io_interface = SlackMoAThread
 
         try:
             await _manager.start_conversation(
@@ -272,8 +271,7 @@ def initialize_slack_bot(
     app_token,
 ) -> AsyncSocketModeHandler:
     """Initialize the Slack bot and its dependencies."""
-    global _conversation_manager, _flows
-    _conversation_manager = conversation_manager
+    global _flows
     _flows = flows
 
     # Register all handlers

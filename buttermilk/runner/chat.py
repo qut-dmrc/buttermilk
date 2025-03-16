@@ -270,7 +270,8 @@ def run_moa_cli(cfg) -> None:
         # moa = MoA(steps=flow.steps, source="dev")
         loop = asyncio.get_event_loop()
         loop.slow_callback_duration = 3.0 
-        asyncio.run(moa.moa_chat(io_interface=CLIUserAgent))
+        io_interface=CLIUserAgent
+        
     elif bm.cfg.run.ui == "slack":
         # Run Slack version
 
@@ -292,7 +293,7 @@ def run_moa_cli(cfg) -> None:
         loop.run_until_complete(handler.start_async())
     else:
         raise ValueError(f"Unknown run ui type: {bm.cfg.run.ui}")
-
+    asyncio.run(moa.moa_chat())
     pass  # noqa
 
 

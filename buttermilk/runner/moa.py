@@ -179,7 +179,7 @@ class Conductor(RoutedAgent):
             step_agents[step_factory.name] = agents_for_step
 
         # Start the group chat with the user's first message
-        if not await self.confirm_user(prompt="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)"):
+        if not await self.query_user(content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)"):
             logger.info("User did not confirm, exiting.")
             return
         
@@ -233,6 +233,16 @@ class Conductor(RoutedAgent):
             logger.error(f"Invalid input in confirm_user: {result.content}")
             return False
         
+    async def query_user(self, content: str) -> bool:
+        """Ask the user for input."""
+        user_id = await self.runtime.get(USER_AGENT_TYPE)
+        
+        result = await self.runtime.send_message(
+            RequestToSpeak(content=content
+            ),
+            recipient=user_id,
+        )
+        return result.content
 
 class MoA(BaseModel):
     save: SaveInfo | None = None
