@@ -1,6 +1,7 @@
 import asyncio
 from functools import cached_property
 from distutils.util import strtobool
+from typing import Type
 import shortuuid
 import weave
 from autogen_core import (
@@ -262,22 +263,21 @@ class MoA(BaseModel):
         return topic
 
     @weave.op
-    async def moa_chat(self, io_interface: IOInterface, init_text: str = None):
+    async def moa_chat(self, io_interface: IOInterface, conductor: Type[Conductor | RoutedAgent], init_text: str = None):
         """Execute AutoGen group chat."""
         runtime = SingleThreadedAgentRuntime()
 
         conductor_topic_type = "conductor"
         # Register the conductor
-        conductor = await Conductor.register(
+        conductor_id = await conductor.register(
             runtime,
             conductor_topic_type,
-            lambda: Conductor(
+            lambda: conductor(
                 description="The conductor",
                 group_chat_topic_type=self.group_chat_topic_type,
                 steps=self.steps,
             ),
         )
-        conductor_id = await runtime.get(conductor)
 
         await runtime.add_subscription(
             TypeSubscription(

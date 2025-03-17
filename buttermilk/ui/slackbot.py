@@ -14,6 +14,7 @@ from buttermilk.runner.chat import (
     IOInterface,
     RequestToSpeak,
 )
+from buttermilk.runner.conversation import Selector
 from buttermilk.ui.formatting.slackblock import format_response
 from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
 
@@ -230,10 +231,11 @@ def register_handlers():
 
         # Create Slack IO interface for this thread
         io_interface = SlackMoAThread
-
+        conductor = Selector
         try:
             await _manager.start_conversation(
                 io_interface=io_interface,
+                conductor=flow.conductor,
                 init_text=init_text,
                 platform="slack",
                 external_id=f"{context.channel_id}-{context.thread_ts}",

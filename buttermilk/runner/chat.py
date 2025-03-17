@@ -3,7 +3,7 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import Any, Type, Union
 
 import hydra
 from autogen_core import (
@@ -202,6 +202,9 @@ class ConversationId(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     platform: str
     external_id: str
+    conductor: RoutedAgent | None = Field(default=None)
+    io_interface: IOInterface | None = Field(default=None)
+    task: Any = Field(default=None)
 
 
 class ConversationManager(BaseModel):
@@ -211,6 +214,7 @@ class ConversationManager(BaseModel):
     async def start_conversation(
         self,
         io_interface: IOInterface,
+        conductor: RoutedAgent,
         platform: str,
         external_id: str,
         init_text: str = None,
@@ -218,16 +222,14 @@ class ConversationManager(BaseModel):
         **kwargs,
     ) -> ConversationId:
         """Start a new group chat conversation with the given IO interface"""
-        conv_id = ConversationId(platform=platform, external_id=external_id)
 
-        # Store the IO interface
-        self.io_interfaces[conv_id.id] = io_interface
+        conv = ConversationId(platform=platform, external_id=external_id, io_interface=io_interface, conductor=conductor)
 
         # Create and start the MoA task
-        task = asyncio.create_task(self._run_chat(conv_id, **kwargs))
-        self.conversations[conv_id.id] = task
+        conv.task = asyncio.create_task(self._run_chat(conv, **kwargs))
+        self.conversations[conv.id] = conv
 
-        return conv_id
+        return conv
 
     async def _run_chat(self, conv_id: ConversationId, init_text: str = None, **kwargs):
         """Run a groupchat conversation"""
@@ -237,19 +239,15 @@ class ConversationManager(BaseModel):
             # Create and configure MoA
             moa = MoA(**kwargs)
 
-            # Get the IO interface
-            io = self.io_interfaces[conv_id.id]
-
-            # Run the MoA chat with the provided IO interface
-            await moa.moa_chat(io_interface=io, init_text=init_text)
+            # Run the MoA chat with the provided IO interface and the conductor
+            await moa.moa_chat(io_interface=conv_id.io_interface, init_text=init_text, conductor = conv_id.conductor)
 
         except Exception as e:
             logger.exception(f"Error in conversation {conv_id.id}: {e!s}")
         finally:
             # Clean up
-            if conv_id.id in self.io_interfaces:
-                await self.io_interfaces[conv_id.id].cleanup()
-                del self.io_interfaces[conv_id.id]
+            await conv_id.io_interface.cleanup()
+            del conv_id.io_interface
 
             if conv_id.id in self.conversations:
                 del self.conversations[conv_id.id]

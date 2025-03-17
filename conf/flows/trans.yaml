@@ -5,6 +5,7 @@ trans:
   _target_: buttermilk.runner.moa.MoA
   source: trans journalists guidelines assessment
   save: ${save}
+  conductor: buttermilk.runner.conversation.Selector
 
   steps:
     - name: fetch
