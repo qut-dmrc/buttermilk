@@ -29,6 +29,7 @@ from buttermilk.runner.chat import (
     InputRecord,
     IOInterface,
     MessagesCollector,
+    NullAnswer,
     RequestToSpeak,
 )
 from buttermilk.runner.varmap import FlowVariableRouter
@@ -102,17 +103,19 @@ class Conductor(RoutedAgent):
         self.steps = steps
 
     @message_handler
-    async def start_signal(
+    async def handle_request_to_speak(
         self,
         message: RequestToSpeak,
         ctx: MessageContext,
-    ) -> None:
+    ) -> GroupChatMessageType:
         if not self.running:
             self.running = True
             logger.info("Conductor started.")
             await self.run()
         else:
             logger.error("Conductor already running.")
+
+        return NullAnswer(content="Conductor started.", step=self.id.type)
 
     @message_handler
     async def handle_messages(
@@ -269,7 +272,7 @@ class MoA(BaseModel):
 
         conductor_topic_type = "conductor"
         # Register the conductor
-        conductor_id = await conductor.register(
+        conductor_type = await conductor.register(
             runtime,
             conductor_topic_type,
             lambda: conductor(
@@ -278,7 +281,7 @@ class MoA(BaseModel):
                 steps=self.steps,
             ),
         )
-
+        conductor_id = await runtime.get(conductor_type)
         await runtime.add_subscription(
             TypeSubscription(
                 topic_type=self.group_chat_topic_type,

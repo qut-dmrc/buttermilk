@@ -18,6 +18,7 @@ from autogen_core.models import (
     UserMessage,
 )
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
+import pydantic
 
 from buttermilk._core.agent import AgentConfig
 from buttermilk._core.runner_types import RecordInfo
@@ -202,9 +203,10 @@ class ConversationId(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     platform: str
     external_id: str
-    conductor: RoutedAgent | None = Field(default=None)
-    io_interface: IOInterface | None = Field(default=None)
+    conductor: Any | RoutedAgent | None = Field(default=None)
+    io_interface: Any | IOInterface | None = Field(default=None)
     task: Any = Field(default=None)
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
 
 class ConversationManager(BaseModel):

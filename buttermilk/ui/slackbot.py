@@ -235,7 +235,7 @@ def register_handlers():
         try:
             await _manager.start_conversation(
                 io_interface=io_interface,
-                conductor=flow.conductor,
+                conductor=conductor,
                 init_text=init_text,
                 platform="slack",
                 external_id=f"{context.channel_id}-{context.thread_ts}",
@@ -244,8 +244,7 @@ def register_handlers():
 
         except Exception as e:
             logger.exception(f"Error in process: {e} {e.args=}")
-            await io_interface.send_to_thread(
-                f"Unfortunately I hit an error, sorry: {e} {e.args=}",
+            await io_interface.send_to_thread(text=f"Unfortunately I hit an error, sorry: {e} {e.args=}",
             )
 
 

@@ -9,7 +9,8 @@ from autogen_core.models import (
 from promptflow.core._prompty_utils import parse_chat
 
 from buttermilk._core.agent import AgentConfig
-from buttermilk.bm import BM
+from buttermilk._core.runner_types import RecordInfo
+from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
@@ -29,7 +30,8 @@ class LLMAgent(BaseGroupChatAgent):
         *,
         config: AgentConfig,
         group_chat_topic_type: str = "default",
-        fail_on_unfilled_parameters: bool = True,
+        fail_on_unfilled_parameters: bool = False,
+        description: str = "An agent that uses an LLM to respond to messages.",
     ) -> None:
         super().__init__(
             config=config,
@@ -87,9 +89,12 @@ class LLMAgent(BaseGroupChatAgent):
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
                 except KeyError as e:
-                    raise ValueError(
-                        f"Missing {var_name} in template or placeholder vars.",
-                    ) from e
+                    err =  f"Missing {var_name} in template or placeholder vars.",
+                    if self._fail_on_unfilled_parameters:
+                        raise ValueError(err)
+                    else: 
+                        logger.warning(err)
+                        
                 continue
 
             # Check if there's content in the message after filling the template
@@ -108,10 +113,13 @@ class LLMAgent(BaseGroupChatAgent):
                         UserMessage(content=message["content"], source=self.id.type),
                     )
 
-        if unfilled_vars and self._fail_on_unfilled_parameters:
-            raise ValueError(
-                f"Template has unfilled parameters: {', '.join(unfilled_vars)}",
-            )
+        if unfilled_vars:
+            err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
+            if self._fail_on_unfilled_parameters:
+                raise ValueError(err)
+            else: 
+                logger.warning(err)
+                
 
         return messages
 
@@ -119,13 +127,23 @@ class LLMAgent(BaseGroupChatAgent):
         self,
         request: RequestToSpeak,
     ) -> Answer | NullAnswer:
-        untrusted_vars = dict(**request.inputs)
+
+        # # Start by filling the history var, but overwrite if we've got another one passed in
+        # history = "\n".join([ f"{msg.source}: {msg.content}" for msg in request.context if msg.content])
+        # untrusted_vars = {
+        #     "history": history,
+        # }
+        untrusted_vars= dict(**request.inputs)
 
         placeholders = {"context": request.context}
-        placeholders.update(request.placeholders)
+        placeholders= dict(**request.placeholders)
+        # # Make sure there's a record too if possible
+        # if 'record' not in request.placeholders and request.prompt or 'prompt' in request.inputs:
+        #     from buttermilk.runner.moa import USER_AGENT_TYPE
+        #     placeholders['record'] = UserMessage(content=request.prompt or request.inputs['prompt'], source=USER_AGENT_TYPE)
         messages = await self.fill_template(
             untrusted_inputs=untrusted_vars,
-            placeholder_messages=placeholders,
+            placeholder_messages=placeholders,context=request.context,
         )
 
         response = await self._model_client.create(messages=messages)
