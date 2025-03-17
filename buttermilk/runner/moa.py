@@ -18,10 +18,9 @@ from autogen_core.model_context import (
 from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk._core.agent import AgentVariants
 from buttermilk._core.config import SaveInfo
 from buttermilk.agents import Fetch, LLMAgent
-from buttermilk.bm import BM, logger
+from buttermilk.bm import bm, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
@@ -33,14 +32,13 @@ from buttermilk.runner.chat import (
     NullAnswer,
     RequestToSpeak,
 )
-from buttermilk.runner.varmap import FlowVariableRouter
 from buttermilk.utils.templating import KeyValueCollector
 
 _AGENTS = [LLMAgent, Fetch]
 USER_AGENT_TYPE = "User"
 
 
-class MoAAgentFactory(AgentVariants):
+class MoAAgentFactory:
     """A factory for creating LLMAgent instance variants for a single
     step of a workflow.
 

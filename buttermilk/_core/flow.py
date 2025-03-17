@@ -1,49 +1,12 @@
-import os
 from pathlib import Path
-from typing import Any, AsyncGenerator, Generator, Literal, Optional, Sequence, Tuple, Type, TypeVar, Union,Mapping
-from cloudpathlib import CloudPath, GSPath
-import cloudpathlib
-from pydantic import (
-    AliasChoices,
-    AnyUrl,
-    BaseModel,
-    ConfigDict,
-    Field,
-    RootModel,
-    TypeAdapter,
-    field_validator,
-    model_validator,
-)
-
-from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk.defaults import BQ_SCHEMA_DIR
-
-import os
-from pathlib import Path
-
-import cloudpathlib
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
-
-from .log import logger
-
-BASE_DIR = Path(__file__).absolute().parent
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
-)
-
 from typing import Any, Mapping, Sequence
 
-import jmespath
 from pydantic import PrivateAttr
+
+BASE_DIR = Path(__file__).absolute().parent
+
+
+import jmespath
 
 from buttermilk.utils.templating import KeyValueCollector
 
@@ -104,7 +67,7 @@ class FlowVariableRouter(KeyValueCollector):
     """
 
     _data: dict[str, Any ] = PrivateAttr(default_factory=dict)
- 
+
 
     def _resolve_mappings(self, mappings: dict[str, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
@@ -136,7 +99,7 @@ class FlowVariableRouter(KeyValueCollector):
         When a step has multiple outputs, returns a list with all matching results.
         For JMESPath expressions that return lists, flattens the results.
         """
-        
+
         if "." not in path:
             # Direct reference to a step's complete output list
             return self._data.get(path, [])
@@ -161,7 +124,7 @@ class FlowVariableRouter(KeyValueCollector):
                 result_dict = result.model_dump()
             else:
                 result_dict = result
-                
+
             value = jmespath.search(field_path, result_dict)
             if value is not None:
                 # If the value is already a list, extend our results

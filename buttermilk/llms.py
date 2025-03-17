@@ -396,7 +396,7 @@ class LLMs(BaseModel):
         return wrapper
 
     def get_autogen_chat_client(self, name) -> ChatCompletionClient:
-        from buttermilk import BM
+        from buttermilk.bm import bm
         if name in self.autogen_models:
             return self.autogen_models[name]
 

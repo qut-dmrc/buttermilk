@@ -13,7 +13,7 @@ from autogen_core.models import (
 
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llmchat import LLMAgent
-from buttermilk.bm import BM
+from buttermilk.bm import bm
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.moa import RequestToSpeak
 

@@ -31,9 +31,8 @@ from tenacity import (
     wait_random,
 )
 
-from buttermilk import BM, logger
+from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job
 from buttermilk.exceptions import RateLimit
 from buttermilk.llms import LLMCapabilities, LLMs
 from buttermilk.tools.json_parser import ChatParser
@@ -62,7 +61,6 @@ class LC(Agent):
 
     @property
     def _llms(self) -> LLMs:
-        bm = BM()
         return bm.llms
 
     async def process_job(

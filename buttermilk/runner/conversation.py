@@ -18,7 +18,7 @@ from autogen_core.models import (
 from promptflow.core._prompty_utils import parse_chat
 
 from buttermilk._core.agent import Agent
-from buttermilk.bm import BM
+from buttermilk.bm import bm
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
@@ -32,7 +32,7 @@ from buttermilk.utils.templating import (
     _parse_prompty,
     load_template,
 )
-from buttermilk.bm import BM, logger
+from buttermilk.bm import bm, logger
 
 class Selector(Conductor, LLMAgent):
     def __init__(

@@ -66,7 +66,7 @@ def combine_datasets(
 
 
 def load_bq(data_cfg: DataSource) -> pd.DataFrame:
-    from buttermilk import BM
+    from buttermilk.bm import bm
 
     sql = f"SELECT * FROM `{data_cfg.path}`"
     sql += " ORDER BY RAND() "
@@ -79,7 +79,7 @@ def load_bq(data_cfg: DataSource) -> pd.DataFrame:
 
 
 def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
-    from buttermilk import BM
+    from buttermilk.bm import bm
 
     last_n_days = data_cfg.last_n_days
 

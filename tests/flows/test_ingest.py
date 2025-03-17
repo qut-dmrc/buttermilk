@@ -1,7 +1,7 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, Record, MediaObj
-from buttermilk.bm import BM
+from buttermilk._core.runner_types import  Record, MediaObj
+from buttermilk.bm import bm
 from buttermilk.llms import CHATMODELS
 from buttermilk.tools.ingest import RecordMaker   
 

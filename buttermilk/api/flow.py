@@ -13,8 +13,8 @@ from google.cloud import pubsub
 from promptflow.tracing import start_trace
 from pydantic import BaseModel
 
-from buttermilk import BM, logger
-from buttermilk._core.runner_types import Job
+from buttermilk.bm import bm, logger
+
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.utils import load_json_flexi

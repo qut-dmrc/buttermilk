@@ -1,6 +1,5 @@
-import asyncio
 import datetime
-from asyncio import Semaphore
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from typing import Any
 
@@ -11,63 +10,20 @@ from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     Field,
-    PrivateAttr,
     field_validator,
-    model_validator,
 )
 from traceloop.sdk.decorators import workflow
 
+from buttermilk import logger
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.runner_types import Job
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
-import base64
-import datetime
-from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import Any, Literal, Self
-
-import numpy as np
-import pydantic
-import shortuuid
-from cloudpathlib import CloudPath
-from langchain_core.messages import BaseMessage, HumanMessage
-from omegaconf import DictConfig, ListConfig, OmegaConf
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-    computed_field,
-    field_validator,
-    model_validator,
-)
-
-from buttermilk import logger
-from buttermilk.llms import LLMCapabilities
-from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
-
-from .types import SessionInfo
-
 from .log import logger
+from .types import AgentInput, AgentOutput
 
-
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
-from pydantic import BaseModel
-
-class AgentInput(BaseModel):
-    """Base class for agent inputs with built-in validation"""
-    pass
-
-
-class AgentOutput(BaseModel):
-    """Base class for agent outputs with built-in validation"""
-    pass
 
 def get_agent_name_tracing(call: Any) -> str:
     try:
@@ -88,14 +44,22 @@ def get_agent_name_tracing(call: Any) -> str:
 ##########
 class Agent(BaseModel, ABC):
     """Base Agent interface for all processing units"""
-    
+
     data: list[DataSource] | None = []
-    agent: str = Field(..., description="The object to instantiate")
+    agent: str | None = Field(default=None, description="The object to instantiate")
     name: str = Field(
         ...,
         description="The name of the flow or step in the process that this agent does.",
     )
     description: str
+    variants: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Combinations of initialisation parameters",
+    )
+    num_runs: int = Field(
+        default=1,
+        description="Number of times to run the agent for each variant",
+    )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
@@ -106,10 +70,7 @@ class Agent(BaseModel, ABC):
         description="A mapping of data to agent inputs",
     )
     outputs: dict[str, Any] = {}
-    
-    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
+
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
@@ -124,12 +85,6 @@ class Agent(BaseModel, ABC):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
-    @field_validator("save", mode="before")
-    def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
-        if value is None or isinstance(value, SaveInfo):
-            return value
-        return SaveInfo(**value)
-    
     @abstractmethod
     async def process(self, input_data: AgentInput) -> AgentOutput:
         """Process input data and return output
@@ -144,13 +99,13 @@ class Agent(BaseModel, ABC):
         """
         raise NotImplementedError
         return job
-        
+
     async def __call__(self, input_data: AgentInput) -> AgentOutput:
         """Allow agents to be called directly as functions"""
         return await self.process(input_data)
-    
+
     @classmethod
-    def get_variant_configs(cls, *, variants: dict[str, Any], num_runs: int = 1, **kwargs) -> list[Agent]:
+    def get_variant_configs(cls, *, variants: dict[str, Any], num_runs: int = 1, **kwargs) -> list["Agent"]:
         """A factory for creating Agent instance variants for a single
         step of a workflow.
 
@@ -159,14 +114,14 @@ class Agent(BaseModel, ABC):
         each permutation of these is multiplied by num_runs. Agents also
         have an inputs mapping that does not get multiplied.
         """
-        
+
         # Create variants (permutations of vars multiplied by num_runs)
 
         variant_configs = num_runs * expand_dict(variants)
         agents = []
         for cfg in variant_configs:
             variant = dict(**kwargs)
-            variant['parameters'].update(cfg)
+            variant["parameters"].update(cfg)
             agents.append(cls(**variant))
 
         return agents
@@ -174,7 +129,7 @@ class Agent(BaseModel, ABC):
     @trace
     @weave.op(call_display_name=get_agent_name_tracing)
     @workflow(name="run_agent")
-    async def run(self, job: Job, **kwargs) -> Job:
+    async def run(self, job: "Job", **kwargs) -> "Job":
         try:
             job.agent_info = self.model_dump(mode="json")
             job = await self.process(input_data=job, **kwargs)
@@ -188,7 +143,7 @@ class Agent(BaseModel, ABC):
 
 
 
-def save_job(job: Job, save_info: SaveInfo) -> str:
+def save_job(job: "Job", save_info: SaveInfo) -> str:
     rows = [job.model_dump(mode="json", exclude_none=True)]
     if save_info.type == "bq":
         dest = save(

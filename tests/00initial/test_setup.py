@@ -6,7 +6,7 @@ import google.auth.credentials
 import pytest
 from huggingface_hub import login
 
-from buttermilk.bm import BM
+from buttermilk.bm import bm
 from buttermilk.utils.utils import read_yaml
 
 

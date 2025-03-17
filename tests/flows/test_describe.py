@@ -1,8 +1,8 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, Record
+from buttermilk._core.runner_types import  Record
 from buttermilk.agents.describer import Describer
-from buttermilk.bm import BM
+from buttermilk.bm import bm
 from buttermilk.llms import MULTIMODAL_MODELS
 from buttermilk.runner.flow import Flow
 from buttermilk.runner.helpers import parse_flow_vars

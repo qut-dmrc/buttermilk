@@ -2,7 +2,7 @@ import pytest
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.runner_types import Job
+
 from buttermilk.agents.sheetexporter import GSheetExporter
 
 

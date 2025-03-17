@@ -1,8 +1,8 @@
 
 from pydantic import BaseModel
 
-from buttermilk._core.contract import Orchestrator
-
+from buttermilk._core.job import Job
+from buttermilk._core.orchestrator import Orchestrator
 
 class Sequencer(Orchestrator):
 

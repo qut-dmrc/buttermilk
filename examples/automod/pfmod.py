@@ -12,7 +12,7 @@ from humanfriendly import format_timespan
 from omegaconf import DictConfig, OmegaConf
 from promptflow.client import PFClient as LocalPFClient
 
-from buttermilk import BM
+from buttermilk.bm import bm
 from buttermilk.agents.lc import LC
 from buttermilk.exceptions import FatalError
 from buttermilk.toxicity.toxicity import ToxicityModel

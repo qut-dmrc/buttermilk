@@ -9,6 +9,7 @@ import pydantic
 import shortuuid
 from cloudpathlib import AnyPath, CloudPath
 from pydantic import (
+    BaseModel,
     ConfigDict,
     Field,
 )
@@ -36,6 +37,15 @@ def _make_run_id() -> str:
 
 
 _global_run_id = _make_run_id()
+
+class AgentInput(BaseModel):
+    """Base class for agent inputs with built-in validation"""
+    pass
+
+
+class AgentOutput(BaseModel):
+    """Base class for agent outputs with built-in validation"""
+    pass
 
 
 class SessionInfo(pydantic.BaseModel):

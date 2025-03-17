@@ -11,7 +11,7 @@ from traceloop.sdk.decorators import workflow
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job, Record
+from buttermilk._core.runner_types import  Record
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -92,7 +92,7 @@ class Flow(BaseModel):
     async def run_flows(
         self,
         *,
-        job: Job,
+        job: "Job",
     ) -> AsyncGenerator[Any, None]:
         job.source = list(set(self.source + job.source)) if job.source else self.source
 
@@ -113,7 +113,7 @@ class Flow(BaseModel):
         self,
         *,
         agent: Agent,
-        job: Job,
+        job: "Job",
     ) -> AsyncGenerator:
         # Store base components of the job that don't change for each variant in the permutations
         jobvars = job.model_dump(

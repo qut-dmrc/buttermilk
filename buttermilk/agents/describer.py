@@ -1,7 +1,6 @@
 
 
 from buttermilk import logger
-from buttermilk._core.runner_types import Job
 from buttermilk.agents.lc import LC
 from buttermilk.utils.media import download_and_convert
 

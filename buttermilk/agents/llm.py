@@ -1,26 +1,18 @@
 from typing import Any, Self
 
-from pydantic import Field, PrivateAttr
 import pydantic
 import regex as re
 from autogen_core.models import (
     AssistantMessage,
+    ChatCompletionClient,
     SystemMessage,
     UserMessage,
 )
 from promptflow.core._prompty_utils import parse_chat
+from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
-from buttermilk._core.runner_types import Record
-from buttermilk.bm import BM, logger
-from buttermilk.llms import LLMs
-from buttermilk.runner.chat import (
-    Answer,
-    BaseGroupChatAgent,
-    NullAnswer,
-    RequestToSpeak,
-)
-from autogen_core.models import ChatCompletionClient
+from buttermilk.bm import bm, logger
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     _parse_prompty,
@@ -29,19 +21,16 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
-    template: str
-    model: str
     fail_on_unfilled_parameters: bool = Field(default=False)
-    
-    _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
-    _model_client: ChatCompletionClient = PrivateAttr() 
-    
-    @pydantic.model_validator(mode="after")
-    def init_model(self) -> Self:
-        bm = BM()
-        self._model_client = bm.llms.get_autogen_chat_client(self.model)
 
-        return self
+    _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
+    _model_client: ChatCompletionClient = PrivateAttr()
+
+    # @pydantic.model_validator(mode="after")
+    # def init_model(self) -> Self:
+    #     self._model_client = bm.llms.get_autogen_chat_client(self.model)
+
+    #     return self
 
     async def fill_template(
         self,
@@ -89,13 +78,13 @@ class LLMAgent(Agent):
                     # Remove the placeholder from the list of unfilled variables
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
-                except KeyError as e:
+                except KeyError:
                     err =  f"Missing {var_name} in template or placeholder vars.",
                     if self.fail_on_unfilled_parameters:
                         raise ValueError(err)
-                    else: 
+                    else:
                         logger.warning(err)
-                        
+
                 continue
 
             # Remove unfilled variables now
@@ -121,9 +110,9 @@ class LLMAgent(Agent):
             err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ValueError(err)
-            else: 
+            else:
                 logger.warning(err)
-                
+
 
         return messages
 
@@ -138,5 +127,5 @@ class LLMAgent(Agent):
         response = await self._model_client.create(messages=messages)
 
         outputs = self._json_parser.parse(response.content)
-        
+
         return outputs

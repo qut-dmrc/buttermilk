@@ -12,12 +12,13 @@ from typing import Any
 import aiohttp
 import httpx
 import replicate
+from bm import logger
 from cloudpathlib import CloudPath
 from huggingface_hub import AsyncInferenceClient, login
 from openai import APIStatusError, AsyncOpenAI
 from PIL import Image
 from promptflow.tracing import trace
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from requests import ConnectTimeout, HTTPError
 from shortuuid import ShortUUID
 from tenacity import (
@@ -26,10 +27,6 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
-from bm import BM, logger
-
-from pydantic import Field, field_validator
-
 
 
 class TextToImageClient(BaseModel):

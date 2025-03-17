@@ -48,7 +48,7 @@ from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from ..types.tox import EvalRecord, Score
 
 if TYPE_CHECKING:
-    from buttermilk._core.runner_types import Job
+    
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 

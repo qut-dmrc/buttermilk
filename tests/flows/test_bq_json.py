@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from buttermilk._core.agent import save_job
-from buttermilk._core.runner_types import Job
+
 from buttermilk.utils.save import data_to_export_rows
 
 SAMPLE_DATA = [

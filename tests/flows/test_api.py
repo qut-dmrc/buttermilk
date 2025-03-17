@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from buttermilk._core.runner_types import Job
+
 from buttermilk.api.flow import FlowRequest, app
 
 

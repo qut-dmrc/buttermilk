@@ -17,7 +17,7 @@
 import httpx
 
 from buttermilk._core.agent import SingleAgent
-from buttermilk._core.runner_types import Job
+
 
 
 class Slurp(SingleAgent):

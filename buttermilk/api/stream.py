@@ -14,8 +14,8 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Job, Record
-from buttermilk.bm import BM
+from buttermilk._core.runner_types import Record
+from buttermilk.bm import bm, logger
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import download_and_convert
@@ -30,7 +30,7 @@ bm = None
 
 
 class FlowRequest(BaseModel):
-    # The aliases on this object are less string, so that we can account
+    # The aliases on this object are less strict, so that we can account
     # for minor variations in user input. This object stands between the
     # user and a Job / Record object, which need to comply strictly.
     flow_id: str = Field(default_factory=shortuuid.uuid, init=False)
@@ -133,7 +133,7 @@ class FlowRequest(BaseModel):
 
         return self
 
-    def to_job(self) -> Job:
+    def to_job(self) -> "Job":
         job_vars = {k: v for k, v in self.model_dump().items() if k in Job.model_fields}
         _job = Job(**job_vars)
         _job.parameters.update(**{
@@ -155,7 +155,6 @@ async def flow_stream(
     flow_request: FlowRequest,
     return_json=True,
 ) -> AsyncGenerator[str, None]:
-    bm = BM()
     if not flow_request.source:
         flow_request.source = [bm.cfg.job]
 

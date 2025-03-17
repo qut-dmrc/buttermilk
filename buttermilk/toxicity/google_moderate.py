@@ -5,7 +5,7 @@ from typing import (
 )
 from .toxicity import ToxicityModel, EvalRecord, Score
 from promptflow.tracing import trace
-from buttermilk import BM
+from buttermilk.bm import bm
 from buttermilk.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from pathlib import Path

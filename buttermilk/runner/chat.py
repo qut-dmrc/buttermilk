@@ -22,6 +22,7 @@ import pydantic
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
+from buttermilk._core.ui import IOInterface
 from buttermilk.bm import logger
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (

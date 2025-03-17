@@ -52,7 +52,6 @@ from buttermilk.utils.keys import SecretsManager
 from buttermilk.utils.utils import load_json_flexi
 
 from ._core.config import CloudProviderCfg, RunCfg, Tracing
-from ._core.flow import Flow
 from ._core.log import logger
 from ._core.types import SessionInfo
 from .utils import save
@@ -125,7 +124,7 @@ class Project(BaseModel):
     logger: CloudProviderCfg = Field(default=None)
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
-    flows: list[Flow] = Field(default_factory=list)
+    # flows: list[Flow] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
     verbose: bool = True
     run: RunCfg
@@ -498,7 +497,30 @@ class BM(Singleton, BaseModel):
                 return results_df
             return pd.DataFrame()
         return result
+    
+class BMProxy:
+    """A proxy class for lazy initialization of the BM singleton."""
+    _instance = None
+    
+    def __getattr__(self, name):
+        """Forward attribute access to the BM instance, creating it if needed."""
+        if BMProxy._instance is None:
+            # Use the existing Singleton pattern from BM
+            BMProxy._instance = BM()
+        return getattr(BMProxy._instance, name)
+    
+    def __call__(self, *args, **kwargs):
+        """Initialize or return the BM singleton."""
+        if not args and not kwargs and BMProxy._instance is not None:
+            # Just returning existing instance
+            return BMProxy._instance
+            
+        # Create new instance with args/kwargs (or default)
+        BMProxy._instance = BM(*args, **kwargs)
+        return BMProxy._instance
 
+# Create the global instance
+bm = BMProxy()
 
 if __name__ == "__main__":
     pass

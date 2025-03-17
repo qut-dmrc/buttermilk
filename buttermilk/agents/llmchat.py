@@ -8,9 +8,9 @@ from autogen_core.models import (
 )
 from promptflow.core._prompty_utils import parse_chat
 
+from buttermilk import bm
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Record
-from buttermilk.bm import BM, logger
+from buttermilk.bm import bm, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
@@ -37,7 +37,6 @@ class LLMAgent(BaseGroupChatAgent):
             config=config,
             group_chat_topic_type=group_chat_topic_type,
         )
-        bm = BM()
         self._json_parser = ChatParser()
         self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
         self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
@@ -88,13 +87,13 @@ class LLMAgent(BaseGroupChatAgent):
                     # Remove the placeholder from the list of unfilled variables
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
-                except KeyError as e:
+                except KeyError:
                     err =  f"Missing {var_name} in template or placeholder vars.",
                     if self._fail_on_unfilled_parameters:
                         raise ValueError(err)
-                    else: 
+                    else:
                         logger.warning(err)
-                        
+
                 continue
 
             # Remove unfilled variables now
@@ -120,9 +119,9 @@ class LLMAgent(BaseGroupChatAgent):
             err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
             if self._fail_on_unfilled_parameters:
                 raise ValueError(err)
-            else: 
+            else:
                 logger.warning(err)
-                
+
 
         return messages
 

@@ -8,7 +8,7 @@ from pydantic import BaseModel, PrivateAttr, field_serializer, model_validator
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.flow import Flow
-from buttermilk._core.runner_types import Job
+
 from buttermilk.data.recordmaker import RecordMakerDF
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df

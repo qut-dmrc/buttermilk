@@ -21,7 +21,9 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from buttermilk._core.runner_types import Job
+from buttermilk._core.job import Job
+
+
 
 from .._core.log import logger
 from .bq import construct_dict_from_schema
@@ -44,7 +46,7 @@ def save(
     from .utils import reset_index_and_dedup_columns
     if not save_dir:
         try:
-            from buttermilk import BM
+            from buttermilk.bm import bm
             save_dir = BM().save_dir
         except Exception as e:
             logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")

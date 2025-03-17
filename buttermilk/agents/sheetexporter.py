@@ -3,7 +3,7 @@ from pydantic import Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Job
+from buttermilk._core.job import Job
 from buttermilk.utils.gsheet import GSheet
 
 
@@ -34,8 +34,8 @@ class GSheetExporter(Agent):
         # save the input data from this step to a spreadsheet so that we can compare later.
         from buttermilk.utils.gsheet import format_strings
 
-        # should probably deal with parameters here somewhere 
-        
+        # should probably deal with parameters here somewhere
+
         if isinstance(job.inputs, dict):
             inputs = [job.inputs]
         else:

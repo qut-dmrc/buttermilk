@@ -68,10 +68,10 @@
       "justMyCode": false,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans]",
-        "+flow=trans",
-        "llms=full",
-        "+record_id=${input:query}" // Will prompt for query
+        "+flows=[simple]",
+        "+flow=simple",
+        "llms=full"
+        //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

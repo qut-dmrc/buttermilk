@@ -3,9 +3,7 @@ name: simplerunner
 job: flows
 
 runner:
-  _target_: buttermilk.runner.simple.Sequencer
   bm:
-    _target_: buttermilk.BM
     cfg:
       name: ${name}
       job: ${job}
@@ -16,10 +14,11 @@ runner:
         platform: local
         max_concurrency: 16
         flow_api: http://flow:8000/flow/
-  data:
-  interface: buttermilk.ui.console.CLIUserAgent
+
   flows:
     simple:
+      data:
+      interface: buttermilk.ui.console.CLIUserAgent
       source: development flow
 
       steps:
@@ -55,7 +54,6 @@ runner:
           _target_: buttermilk.agents.llm.LLMAgent
           description: Synthesizes draft answers.
           num_runs: 1
-          save: ${save}
           variants:
             model: gemini2flashthinking
             template: synthesise_judger

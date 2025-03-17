@@ -1,64 +1,23 @@
-import asyncio
 import datetime
-from asyncio import Semaphore
-from collections.abc import Mapping
-from typing import Any
-
-import numpy as np
-import weave
-from omegaconf import DictConfig, ListConfig, OmegaConf
-from promptflow.tracing import trace
-from pydantic import (
-    BaseModel,
-    Field,
-    PrivateAttr,
-    field_validator,
-    model_validator,
-)
-from traceloop.sdk.decorators import workflow
-
-from buttermilk._core.agent import AgentInput, AgentOutput
-from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk.utils.errors import extract_error_info
-from buttermilk.utils.save import save
-from buttermilk.utils.utils import expand_dict
-from buttermilk.utils.validators import convert_omegaconf_objects
-
-import base64
-import datetime
-from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import Any, Literal, Self
+from collections.abc import Sequence
+from typing import Any, Self
 
 import numpy as np
 import pydantic
 import shortuuid
-from cloudpathlib import CloudPath
-from langchain_core.messages import BaseMessage, HumanMessage
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
-    computed_field,
     field_validator,
     model_validator,
 )
 
-from buttermilk import logger
-from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
 from .types import SessionInfo
 
-from .log import logger
-
-
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
-from pydantic import BaseModel
 
 ##################################
 # A single unit of work, including
@@ -88,14 +47,14 @@ class Job(BaseModel):
         description="Information about the context in which this job runs",
     )
 
-    inputs: AgentInput | None = Field(
+    inputs: "AgentInput | None" = Field(
         default=None,
         description="The data the job will process.",
     )
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default=None)
-    outputs: AgentOutput | None = Field(default=None)
+    outputs: "AgentOutput | None" = Field(default=None)
     error: dict[str, Any] = Field(default={})
     metadata: dict | None = Field(default={})
 
@@ -113,12 +72,12 @@ class Job(BaseModel):
         validate_assignment=True,
         exclude_unset=True,
         exclude_none=True,
-    ) # type: ignore
+    )  # type: ignore
 
     _ensure_list = field_validator("source", mode="before")(
         make_list_validator(),
     )
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
+    _convert = field_validator("outputs", "inputs", mode="before")(
         convert_omegaconf_objects(),
     )
 
