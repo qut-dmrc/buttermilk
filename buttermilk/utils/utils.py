@@ -499,3 +499,10 @@ def load_json_flexi(contents):
         logger.warning("Install json5 for more lenient JSON parsing")
 
     return json5.loads(contents)
+
+
+def extract_url(text):
+    # Simple regex pattern that matches common URL formats
+    url_pattern = r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+"
+    match = re.search(url_pattern, text)
+    return match.group(0) if match else None

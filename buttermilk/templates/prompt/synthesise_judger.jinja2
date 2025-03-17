@@ -15,30 +15,45 @@ You are a team leader. Some members of your team have drafted answers to a quest
 You may be provided with additional feedback to consider. You should incorporate this feedback into your final answer where it is helpful and relevant.
 
 {% if formatting %}
+## Formatting
+<BEGIN OUTPUT FORMAT>
 {{ formatting }}
+<END OUTPUT FORMAT>
 {% endif %}
 
-{% if q %}
-<BEGIN ORIGINAL INSTRUCTIONS>
-{{ q }}
-<END ORIGINAL INSTRUCTIONS>
+{% if instructions %}
+## Instructions
+<BEGIN INSTRUCTIONS>
+{{ instructions }}
+<END INSTRUCTIONS>
 {% endif %}
 
-{% if content %}
+<BEGIN CRITERIA>
+{{ criteria }}
+<END CRITERIA>
+
 <BEGIN CONTENT>
 {{ content }}
 <END CONTENT>
+
+# User:
+
+{% if context_owl %}
+<BEGIN ANALYST NOTES>
+{% for answer in context_owl %}
+  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
+{% endfor %}
+<END ANALYST NOTES>
 {% endif %}
 
-
-user:
-{% for draft in answers %}
-    <BEGIN DRAFT ANSWER #{{draft.identifier}}>
-    {{ draft.answer }}
-    <END DRAFT ANSWER {{ draft.identifier }}>
+{% for answer in answers %}
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+{{ answer.outputs }}
+<END DRAFT ANSWER>
 {% endfor %}
+
 {% if feedback %}
-  <BEGIN ADDITIONAL FEEDBACK>
-  {{ feedback }}
-  <END ADDITIONAL FEEDBACK>
+{% for answer in feedback %}
+<BEGIN FEEDBACK {{ answer.agent_id }}>{{ answer.outputs.intervention }}<END FEEDBACK>
+{% endfor %}
 {% endif %}

@@ -2,23 +2,42 @@
 #   - _self_
 
 trans:
-  _target_: buttermilk.runner.flow.Flow
+  _target_: buttermilk.runner.moa.MoA
   source: trans journalists guidelines assessment
   save: ${save}
-
-  data:
-    - name: tja_train
-      type: file
-      path: gs://prosocial-dev/data/tja_train.jsonl
-      index:
-        - record_id
+  conductor: conductor
 
   steps:
-    - name: judger
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 2
+    - name: fetch
+      agent: Fetch
+      description: fetch urls and stored records for the chat
+      data:
+        - name: tja_train
+          type: file
+          path: gs://prosocial-dev/data/tja_train.jsonl
+          index:
+            - record_id
+      inputs:
+        prompt: q
+
+    - name: context_owl
+      description: Spots little things that are easy to miss.
+      agent: LLMAgent
+      num_runs: 1
       save: ${save}
-      parameters:
+      variants:
+        template: owl
+        watch: 
+          - ambiguity
+        model: ${llms.general}
+      inputs:
+        record: record
+
+    - name: judge
+      description: Applies criteria to content.
+      agent: LLMAgent
+      num_runs: 1
+      variants:
         template: judge
         criteria:
           - trans_simplified
@@ -29,76 +48,68 @@ trans:
           - trans_factored
         formatting: json_rules
         model: ${llms.judgers}
-      outputs:
-        identifier: identifier
-        params:
-          job_id: job_id
-          template: parameters.template
-          criteria: parameters.criteria
-          instructions: parameters.instructions
-          model: parameters.model
-        answer: outputs
+      inputs:
+        record: record
+        feedback: context_owl
 
-    - name: context_owl
-      _target_: buttermilk.agents.lc.LC
+    - name: feedback
+      description: QA for mistakes.
+      agent: LLMAgent
       num_runs: 1
-      save: ${save}
-      parameters:
-        template: owl
+      variants:
+        template: feedback
         model: ${llms.general}
+      inputs:
+        history: history
 
     - name: synth
-      _target_: buttermilk.agents.lc.LC
+      agent: LLMAgent
+      description: Synthesizes draft answers.
       num_runs: 1
       save: ${save}
-      parameters:
+      variants:
+        model: ${llms.synthesisers}
         template: synthesise_judger
-        instructions: judge
         criteria: trans_simplified
         formatting: json_rules
+      inputs:
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
+        content: content
+        answers: judge
+        feedback: 
+          - context_owl
+          - feedback
+
+    - name: eval
+      agent: LLMAgent
+      num_runs: 1
+      description: show differences between answers
+      variants:
+        template: differences
         model: ${llms.synthesisers}
       inputs:
-        answers: judger
-        feedback: context_owl.intervention
-      outputs:
-        identifier: identifier
-        params:
-          job_id: job_id
-          template: parameters.template
-          criteria: parameters.criteria
-          instructions: parameters.instructions
-          model: parameters.model
-        answer: outputs
+        criteria: >
+          Evaluate how well the provided content aligns with journalistic standards
+          and best practices for reporting on stories related to trans people.
+        content: content
+        answers:
+          - judge
+          - synth
 
     - name: scorer
-      _target_: buttermilk.agents.lc.LC
+      agent: LLMAgent
       num_runs: 1
-      save: ${save}
-      parameters:
+      description: score against ground truth
+      variants:
         template: evaluate
         model: ${llms.synthesisers}
-        answer:
-          - judger
-          - synth
       inputs:
         instructions: >
           The analyst was tasked with evaluating how well the provided content 
           aligned with journalistic standards and best practices for reporting
           on stories related to trans people.
         expected: record.ground_truth
-
-    - name: eval
-      _target_: buttermilk.agents.lc.LC
-      num_runs: 1
-      save: ${save}
-      parameters:
-        template: differences
-        criteria: >
-          Evaluate how well the provided content aligns with journalistic standards
-          and best practices for reporting on stories related to trans people.
-        model: ${llms.synthesisers}
-      inputs:
-        content: record.fulltext
-        answers:
+        answer:
           - judger
           - synth

@@ -1,6 +1,5 @@
 You must reply only in a fully valid JSON format. Ensure each field is accurately filled as per the policy details, and include a rationale that supports your assessment by referencing specific content and policy criteria. Your response should include these fields:
 
-{% raw %}
 ```json
 {
     "reasons": [ ARRAY of STRING: <Each element should represent ONE SINGLE STEP in logical reasoning. Each step should comprise one to five sentences of text presenting a clear logical analysis.>, 
@@ -14,7 +13,6 @@ You must reply only in a fully valid JSON format. Ensure each field is accuratel
     "error": <STRING: NULL normally; only fill if you encounter an error (i.e. missing data or instructions)>,
     }
 ```
-{% endraw %}
 
 Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each STRING element of the reasons ARRAY should only relate to one step of reasoning in a sequence.
 

@@ -164,7 +164,17 @@ class MediaObj(BaseModel):
 
 
 class RecordInfo(BaseModel):
-    data: Any | None = None
+    data: Any | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "arg0",
+            # for backwards compatibility
+            "content",
+            "image",
+            "video",
+            "media",
+        ),
+    )
 
     record_id: str = Field(default_factory=lambda: str(shortuuid.ShortUUID().uuid()))
     metadata: dict[str, Any] = Field(default={})
@@ -174,7 +184,7 @@ class RecordInfo(BaseModel):
     )
     ground_truth: dict | None = Field(
         default=None,
-        validation_alias=AliasChoices("ground_truth", "golden")
+        validation_alias=AliasChoices("ground_truth", "golden"),
     )
 
     uri: str | None = Field(
@@ -189,7 +199,7 @@ class RecordInfo(BaseModel):
         # Ground truth not included
 
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
-        
+
         for part in self.components:
             if part.content:
                 all_text.append(part.content)
@@ -202,23 +212,9 @@ class RecordInfo(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["components", "fulltext"]
+        exclude=["components", "fulltext"],
+        positional_args=True,
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def rename_data(cls, values) -> Any:
-        # Look for data in one of the previous field names for backwards compatibility.
-        if "data" not in values and "arg0" not in values:
-            data_field_aliases = ["text","content",  "fulltext", "full_text", "image", "video", "media"]
-            for alias in data_field_aliases:
-                # pick the first one we find
-                if data := values.get(alias):
-                    values["data"] = data
-                    del values[alias]
-                    return values
-
-        return values
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -309,7 +305,7 @@ class RecordInfo(BaseModel):
     def as_openai_message(
         self,
         model_capabilities: LLMCapabilities,
-        role: Literal["user", "human", "system"] = "user",
+        role: Literal["user", "human", "system", "assistant"] = "user",
     ) -> dict | None:
         # Prepare input for model consumption
         leading_components = []

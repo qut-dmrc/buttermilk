@@ -16,12 +16,15 @@ bm:
 
 flows:
   test:
-    _target_: buttermilk.runner.flow.Flow
-    source: bm testing
+    source: hate development
     steps:
-      - name: test
-        _target_: buttermilk.agents.testagent.TestAgent
-        num_runs: 2
-        concurrency: 2
-        parameters: 
+      - name: context_owl
+        description: Spots little things that are easy to miss.
+        agent: LLMAgent
+        num_runs: 1
         save: ${save}
+        variants:
+          template: owl
+          model: ${llms.general}
+        inputs:
+          record: record

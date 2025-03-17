@@ -9,7 +9,6 @@ import weave
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
-    AliasChoices,
     BaseModel,
     Field,
     PrivateAttr,
@@ -50,38 +49,59 @@ def get_agent_name_tracing(call: Any) -> str:
         return "unknown flow"
 
 
-class Agent(BaseModel):
-    """Receive data, processes it, save the results, yield, and acknowledge completion."""
-
+class AgentConfig(BaseModel):
+    agent: str = Field(..., description="The object to instantiate")
     name: str = Field(
         ...,
         description="The name of the flow or step in the process that this agent does.",
     )
-    save: SaveInfo | None = Field(default=None)  # Where to save the results
-    num_runs: int = 1
-    concurrency: int = Field(default=3)  # Max number of async tasks to run
-
-    inputs: dict[str, str | list | dict] | list | None = Field(
+    description: str
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
+        description="Initialisation parameters to pass to the agent",
     )
-
-    outputs: dict[str, str | list | dict] | None = Field(
-        default_factory=dict,
-        description="Data to pass on to next steps.",
-    )
-    parameters: dict[str, Any] | None = Field(
-        default_factory=dict,
-        description="Combinations of variables to pass to process job",
-        validation_alias=AliasChoices(
-            "parameters",
-            "params",
-            "variants",
-            "vars",
-            "init",
-        ),
-    )
-
     data: list[DataSource] | None = Field(default_factory=list)
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="A mapping of data to agent inputs",
+    )
+    outputs: dict[str, Any] = {}
+    
+    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
+        convert_omegaconf_objects(),
+    )
+
+
+class AgentVariants(AgentConfig):
+    variants: dict[str, Any] = Field(
+        default={},
+        description="A set of initialisation parameters that will be multiplied together to create individual variant agents.",
+    )
+    num_runs: int = 1
+
+    model_config = {"extra": "allow"}
+
+    def get_variant_configs(self) -> list[AgentConfig]:
+        static_vars = self.model_dump(exclude={"variants", "num_runs"})
+
+        # Create variants (permutations of vars multiplied by num_runs)
+
+        variant_configs = self.num_runs * expand_dict(self.variants)
+        variants = []
+        for cfg in variant_configs:
+            variant = AgentConfig(**static_vars)
+            variant.parameters.update(cfg)
+            variants.append(variant)
+
+        return variants
+
+
+class Agent(AgentConfig):
+    """Receive data, processes it, save the results, yield, and acknowledge completion."""
+
+    save: SaveInfo | None = Field(default=None)  # Where to save the results
+    concurrency: int = Field(default=3)  # Max number of async tasks to run
+    data: list[DataSource] | None = []
 
     _semaphore: asyncio.Semaphore = PrivateAttr(default=None)
 

@@ -152,6 +152,7 @@ class BM(Singleton, BaseModel):
 
     _run_info: SessionInfo = PrivateAttr()
     _gcp_project: str = PrivateAttr(default=None)
+    _gcp_credentials: str = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("cfg")
@@ -203,9 +204,10 @@ class BM(Singleton, BaseModel):
                     "quota_project_id",
                     os.environ["GOOGLE_CLOUD_PROJECT"],
                 )
-                credentials, self._gcp_project = auth.default(
+                self._gcp_credentials, self._gcp_project = auth.default(
                     quota_project_id=billing_project,
                 )
+                # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(
@@ -321,6 +323,7 @@ class BM(Singleton, BaseModel):
             module="traceloop",
             category=DeprecationWarning,
         )
+        warnings.filterwarnings(action="ignore",message="Passing field metadata as keyword arguments is deprecated")
 
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"

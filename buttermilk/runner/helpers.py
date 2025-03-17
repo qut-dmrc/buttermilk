@@ -189,9 +189,13 @@ def group_and_filter_jobs(
                 raise e
 
     # Add columns to group by to the index
-    idx_cols = list(data_cfg.join.keys()) + list(data_cfg.group.keys())
+    idx_cols = (
+        list(data_cfg.join.keys()) + list(data_cfg.group.keys()) + list(data_cfg.index)
+    )
+
     idx_cols = [c for c in idx_cols if c in data.columns]
-    data = data.set_index(idx_cols)  # , drop=False)
+    if idx_cols:
+        data = data.set_index(idx_cols)  # , drop=False)
 
     # Stack any nested fields in the mapping
     if data_cfg.columns:

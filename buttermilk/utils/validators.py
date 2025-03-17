@@ -21,19 +21,24 @@ def make_list_validator() -> Callable[[Any], list]:
             return []
         if isinstance(v, str):
             return [v]
-        return v if isinstance(v, list) else [v]
+        if isinstance(v, ListConfig):
+            # Convert Hydra's ListConfig to a regular list
+            return list(v)
+        return v if isinstance(v, list) else list(v)
 
     return validator
 
-def convert_omegaconf_objects() -> Callable[[Any], dict|list]:
+
+def convert_omegaconf_objects() -> Callable[[Any], dict | list]:
     """Convert OmegaConf items to python objects"""
 
-    def validator(v: Any) -> list|dict:
-        if isinstance(v, (DictConfig,ListConfig)):
+    def validator(v: Any) -> list | dict:
+        if isinstance(v, (DictConfig, ListConfig)):
             return OmegaConf.to_container(v, resolve=True)
         return v
 
     return validator
+
 
 def make_uri_validator() -> Callable[[Any], str]:
     """Convert input to string URI if possible"""
@@ -65,13 +70,17 @@ def make_path_validator() -> Callable[[Any], str]:
 
     return validator
 
+
 def sanitize_html(value: str) -> str:
     """Sanitizes HTML input."""
-    cleaned = clean(value, tags=[], attributes={}, strip=True) # Allow no tags/attributes
+    cleaned = clean(
+        value, tags=[], attributes={}, strip=True
+    )  # Allow no tags/attributes
     return cleaned
+
 
 def sanitize_markdown(value: str) -> str:
     """Sanitizes Markdown, converting it to safe HTML."""
-    md = MarkdownIt('commonmark', {'breaks':True,'html':True})
+    md = MarkdownIt("commonmark", {"breaks": True, "html": True})
     html_output = md.render(value)
     return html_output

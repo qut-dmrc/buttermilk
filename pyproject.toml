@@ -75,6 +75,10 @@ dependencies = [
     "weave>=0.51.33",
     "traceloop-sdk>=0.38.5",
     "promptflow-azure>=1.17.2",
+    "autogen-ext[anthropic,azure,gemini,openai]>=0.4.7",
+    "autogen[anthropic]>=0.7.6",
+    "autogen-agentchat>=0.4.7",
+    "autogen-openaiext-client>=0.0.3",
 ]
 
 [dependency-groups]
@@ -184,15 +188,24 @@ markers = [
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
 default_async_timeout = 300
-addopts = [ "-rX",
-    "--capture=fd", "--tb=short",
-    "--continue-on-collection-errors","--durations=10", 
-    "-n 12"
+addopts = [ 
+    "--capture=fd", 
+    "--continue-on-collection-errors",
+    "--durations=10", 
+    "-n 12", 
+    "-rfEX",
+    "--tb=line",
+    "--show-capture=no",
+    "--disable-warnings",
     ]
+
+#    "--no-summary",
+#    "--no-header",
 #   " "-rA", "--timeout_method=thread", "--with-integration"
 # xfail_strict = true
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
     "ignore:Passing field metadata as keyword arguments is deprecated",
-    ]
+    "ignore:.*grpc_wait_for_shutdown_with_timeout.*:Warning",
+]

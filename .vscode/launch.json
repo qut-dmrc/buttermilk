@@ -30,6 +30,18 @@
       "args": []
     },
     {
+      "name": "moa debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.chat",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": ["+flows=[trans,simple,hate,chat]", "llms=full"],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "flow mod debug",
       "type": "debugpy",
       "request": "launch",
@@ -39,6 +51,7 @@
       "justMyCode": false,
       "args": [
         "+flows=[trans]",
+        "+flow=trans",
         //"+flows=[simple,osb,hate,trans,describer]",
         "llms=lite"
       ],
