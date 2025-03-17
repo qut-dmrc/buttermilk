@@ -10,7 +10,7 @@ from buttermilk.bm import logger
 from buttermilk.runner.chat import (
     Answer,
     ConversationManager,
-    GroupChatMessage,
+    FlowMessage,
     IOInterface,
     NullAnswer,
     RequestToSpeak,
@@ -88,7 +88,7 @@ def register_handlers():
             msg_response = await self._post_message_with_retry(**kwargs)
             return msg_response
         
-        async def query(self, request: RequestToSpeak) -> GroupChatMessage:
+        async def query(self, request: RequestToSpeak) -> FlowMessage:
             """Retrieve input from the user interface"""
             _confirm_only=False
             if request.content:
@@ -159,7 +159,7 @@ def register_handlers():
 
         async def send_output(
             self,
-            message: GroupChatMessage,
+            message: FlowMessage,
             source: str = "",
         ) -> None:
             """Send output to the user interface"""

@@ -24,22 +24,50 @@ from buttermilk.utils.save import save
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
+import base64
+import datetime
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any, Literal, Self
+
+import numpy as np
+import pydantic
+import shortuuid
+from cloudpathlib import CloudPath
+from langchain_core.messages import BaseMessage, HumanMessage
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    computed_field,
+    field_validator,
+    model_validator,
+)
+
+from buttermilk import logger
+from buttermilk.llms import LLMCapabilities
+from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
+
+from .types import SessionInfo
+
 from .log import logger
 
-#########
-# Agent
-#
-# A simple class with a function that process a job.
-#
-# It takes a Job with Inputs and returns a Job with Inputs and Outputs.
-# The completed Job is stored in a database (BigQuery) for tracing and analysis.
-#
-# The primary type of Job is a "flow" which is a sequence of steps that process data
-# using a model or client of some sort. In the standard implementation, this is a
-# langchain based template processed by an interchangeable LLM Chat model.
-#
-##########
 
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
+from pydantic import BaseModel
+
+class AgentInput(BaseModel):
+    """Base class for agent inputs with built-in validation"""
+    pass
+
+
+class AgentOutput(BaseModel):
+    """Base class for agent outputs with built-in validation"""
+    pass
 
 def get_agent_name_tracing(call: Any) -> str:
     try:
@@ -49,7 +77,19 @@ def get_agent_name_tracing(call: Any) -> str:
         return "unknown flow"
 
 
-class AgentConfig(BaseModel):
+#########
+# Agent
+#
+# A simple class with a function that process a job.
+#
+# It takes a Job with Inputs and returns a Job with Inputs and Outputs.
+# The completed Job is stored in a database (BigQuery) for tracing and analysis.
+#
+##########
+class Agent(BaseModel, ABC):
+    """Base Agent interface for all processing units"""
+    
+    data: list[DataSource] | None = []
     agent: str = Field(..., description="The object to instantiate")
     name: str = Field(
         ...,
@@ -70,57 +110,6 @@ class AgentConfig(BaseModel):
     _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
         convert_omegaconf_objects(),
     )
-
-
-class AgentVariants(AgentConfig):
-    variants: dict[str, Any] = Field(
-        default={},
-        description="A set of initialisation parameters that will be multiplied together to create individual variant agents.",
-    )
-    num_runs: int = 1
-
-    model_config = {"extra": "allow"}
-
-    def get_variant_configs(self) -> list[AgentConfig]:
-        static_vars = self.model_dump(exclude={"variants", "num_runs"})
-
-        # Create variants (permutations of vars multiplied by num_runs)
-
-        variant_configs = self.num_runs * expand_dict(self.variants)
-        variants = []
-        for cfg in variant_configs:
-            variant = AgentConfig(**static_vars)
-            variant.parameters.update(cfg)
-            variants.append(variant)
-
-        return variants
-
-
-class Agent(AgentConfig):
-    """Receive data, processes it, save the results, yield, and acknowledge completion."""
-
-    save: SaveInfo | None = Field(default=None)  # Where to save the results
-    concurrency: int = Field(default=3)  # Max number of async tasks to run
-    data: list[DataSource] | None = []
-
-    _semaphore: asyncio.Semaphore = PrivateAttr(default=None)
-
-    @model_validator(mode="after")
-    def setup_semaphore(self) -> "Agent":
-        self._semaphore = asyncio.Semaphore(self.concurrency)
-        return self
-
-    _semaphore: Semaphore = PrivateAttr(default=None)
-
-    @model_validator(mode="after")
-    def setup_semaphore(self) -> "Agent":
-        self._semaphore = Semaphore(self.concurrency)
-        return self
-
-    _convert_params = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
-
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
@@ -135,45 +124,15 @@ class Agent(AgentConfig):
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         }
 
-    @model_validator(mode="after")
-    def add_extra_params(self) -> "Agent":
-        if self.model_extra:
-            self.parameters.update(self.model_extra)
-
-        return self
-
     @field_validator("save", mode="before")
     def validate_save_params(cls, value: SaveInfo | Mapping | None) -> SaveInfo | None:
         if value is None or isinstance(value, SaveInfo):
             return value
         return SaveInfo(**value)
-
-    @trace
-    @weave.op(call_display_name=get_agent_name_tracing)
-    @workflow(name="run_agent")
-    async def run(self, job: Job, **kwargs) -> Job:
-        try:
-            job.agent_info = self.model_dump(mode="json")
-            async with self._semaphore:
-                job = await self.process_job(job=job, **kwargs)
-        except Exception as e:
-            job.error = extract_error_info(e=e)
-            if job.record:
-                logger.error(
-                    f"Error processing task {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
-                )
-        finally:
-            if self.save:
-                save_job(job=job, save_info=self.save)
-        return job
-
-    async def process_job(
-        self,
-        *,
-        job: Job,
-        **kwargs,
-    ) -> Job:
-        """Take a Job with Inputs, process it, and return a Job with result in Outputs field OR a Job with non-null Error field.
+    
+    @abstractmethod
+    async def process(self, input_data: AgentInput) -> AgentOutput:
+        """Process input data and return output
 
         Inputs:
             job: Job with Inputs
@@ -185,6 +144,48 @@ class Agent(AgentConfig):
         """
         raise NotImplementedError
         return job
+        
+    async def __call__(self, input_data: AgentInput) -> AgentOutput:
+        """Allow agents to be called directly as functions"""
+        return await self.process(input_data)
+    
+    @classmethod
+    def get_variant_configs(cls, *, variants: dict[str, Any], num_runs: int = 1, **kwargs) -> list[Agent]:
+        """A factory for creating Agent instance variants for a single
+        step of a workflow.
+
+        Creates a new agent for every combination of parameters in a given
+        step of the workflow to run. Agents have a variants mapping;
+        each permutation of these is multiplied by num_runs. Agents also
+        have an inputs mapping that does not get multiplied.
+        """
+        
+        # Create variants (permutations of vars multiplied by num_runs)
+
+        variant_configs = num_runs * expand_dict(variants)
+        agents = []
+        for cfg in variant_configs:
+            variant = dict(**kwargs)
+            variant['parameters'].update(cfg)
+            agents.append(cls(**variant))
+
+        return agents
+
+    @trace
+    @weave.op(call_display_name=get_agent_name_tracing)
+    @workflow(name="run_agent")
+    async def run(self, job: Job, **kwargs) -> Job:
+        try:
+            job.agent_info = self.model_dump(mode="json")
+            job = await self.process(input_data=job, **kwargs)
+        except Exception as e:
+            job.error = extract_error_info(e=e)
+            if job.record:
+                logger.error(
+                    f"Error processing task {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                )
+        return job
+
 
 
 def save_job(job: Job, save_info: SaveInfo) -> str:
@@ -200,3 +201,6 @@ def save_job(job: Job, save_info: SaveInfo) -> str:
         dest = save(data=rows, save_dir=save_info.destination)
 
     return dest
+
+
+

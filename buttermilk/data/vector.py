@@ -14,7 +14,7 @@ from langchain_chroma import Chroma
 from pydantic import BaseModel, Field, PrivateAttr
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Record
 
 MODEL_NAME = "text-embedding-005"
 
@@ -102,7 +102,7 @@ class GoogleVertexEmbeddings(BaseModel):
 
         return embeddings
 
-    def prepare_docs(self, records: Sequence[RecordInfo]) -> Sequence[ChunkedDocument]:
+    def prepare_docs(self, records: Sequence[Record]) -> Sequence[ChunkedDocument]:
         # Chunking
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
 
@@ -127,7 +127,7 @@ class GoogleVertexEmbeddings(BaseModel):
 
     def create_vectorstore_chromadb(
         self,
-        records: list[RecordInfo],
+        records: list[Record],
         create_embeddings: bool = False,
         save_path: str | None = None,
     ) -> pd.DataFrame:

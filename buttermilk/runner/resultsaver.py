@@ -12,7 +12,7 @@ from cloudpathlib import CloudPath
 from promptflow.tracing import trace
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from buttermilk._core.runner_types import Job
+from buttermilk._core.job import Job
 from buttermilk.bm import BM, logger
 from buttermilk.utils import save
 from buttermilk.utils.save import upload_rows

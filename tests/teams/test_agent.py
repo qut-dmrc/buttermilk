@@ -11,7 +11,7 @@ from autogen_core.models import (
     UserMessage,
 )
 
-from buttermilk._core.agent import AgentConfig
+from buttermilk._core.agent import Agent
 from buttermilk.agents.llmchat import LLMAgent
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
@@ -44,10 +44,10 @@ async def test_autogen_clients(llm_autogen):
 def record_agent_cfg(
     request,
     model_name,
-) -> AgentConfig:
+) -> Agent:
     match request.param:
         case "Judger":
-            return AgentConfig(
+            return Agent(
                 agent="LLMClient",
                 name=request.param,
                 description="apply rules",
@@ -59,7 +59,7 @@ def record_agent_cfg(
                 ),
             )
         case "Owl":
-            return AgentConfig(
+            return Agent(
                 agent="LLMClient",
                 name=request.param,
                 description="look for things",

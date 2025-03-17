@@ -3,7 +3,7 @@ import pytest
 from pytest import MarkDecorator
 
 from buttermilk import BM
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, Record
 from buttermilk.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
@@ -200,7 +200,7 @@ Perhaps they could just shut up and get on with it.""",
     params=MEDIA_RECORDS,
     ids=[x[0] for x in MEDIA_RECORDS],
 )
-async def multimodal_record(request) -> RecordInfo:
+async def multimodal_record(request) -> Record:
     record = await download_and_convert(
         request.param[1],
         mime=request.param[2],
@@ -214,7 +214,7 @@ async def multimodal_record(request) -> RecordInfo:
     params=NEWS_RECORDS,
     ids=[x[0] for x in NEWS_RECORDS],
 )
-async def news_record(request) -> RecordInfo:
+async def news_record(request) -> Record:
     record = await download_and_convert(
         request.param[1],
         mime=request.param[2],
@@ -224,8 +224,8 @@ async def news_record(request) -> RecordInfo:
 
 
 @pytest.fixture
-def fight_no_more_forever() -> RecordInfo:
-    return RecordInfo(
+def fight_no_more_forever() -> Record:
+    return Record(
         data="""Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",
         mime="text/plain",
         title="fight no more forever",
@@ -237,7 +237,7 @@ def fight_no_more_forever() -> RecordInfo:
     params=TEXT_RECORDS,
     ids=[x[0] for x in TEXT_RECORDS],
 )
-async def text_record(request) -> RecordInfo:
+async def text_record(request) -> Record:
     record = await download_and_convert(
         request.param[1],
         mime=request.param[2],

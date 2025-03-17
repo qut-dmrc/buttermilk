@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from buttermilk._core.runner_types import MediaObj, RecordInfo
+from buttermilk._core.runner_types import MediaObj, Record
 from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.media import download_and_convert
 
@@ -14,7 +14,7 @@ async def test_record_remote_load(multimodal_record):
 
 
 def test_record_no_keywords():
-    record = RecordInfo(text="test")
+    record = Record(text="test")
     assert not record.uri
     assert len(record.components) == 1
     assert record.components[0].mime == "text/plain"
@@ -132,7 +132,7 @@ async def test_record_update():
 
 
 def test_as_openai_message_with_media(image_bytes: bytes):
-    message = RecordInfo(data=[MediaObj(mime="image/png", content=image_bytes), "test"])
+    message = Record(data=[MediaObj(mime="image/png", content=image_bytes), "test"])
     openai_message = message.as_openai_message(
         model_capabilities=LLMCapabilities(image=True),
     )
@@ -143,7 +143,7 @@ def test_as_openai_message_with_media(image_bytes: bytes):
 
 
 def test_as_openai_message_with_media_and_role(image_bytes: bytes):
-    message = RecordInfo(data=[MediaObj(mime="image/png", content=image_bytes)])
+    message = Record(data=[MediaObj(mime="image/png", content=image_bytes)])
     openai_message = message.as_openai_message(
         role="system",
         model_capabilities=LLMCapabilities(image=True),
@@ -154,7 +154,7 @@ def test_as_openai_message_with_media_and_role(image_bytes: bytes):
 
 
 def test_as_openai_message_with_text():
-    message = RecordInfo(text="test")
+    message = Record(text="test")
     openai_message = message.as_openai_message(
         role="system",
         model_capabilities=LLMCapabilities(),
@@ -166,6 +166,6 @@ def test_as_openai_message_with_text():
 
 def test_as_openai_message_no_media_no_text():
     with pytest.raises(OSError):
-        message = RecordInfo()
+        message = Record()
     openai_message = message.as_openai_message(model_capabilities=LLMCapabilities())
     assert len(openai_message["content"]) == 0

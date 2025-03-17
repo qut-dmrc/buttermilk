@@ -1,7 +1,7 @@
 import pytest
 from langchain.prompts import ChatPromptTemplate
 
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Record
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, LLMClient
 
 
@@ -30,7 +30,7 @@ def test_cheap_llm(llms, cheapchatmodel: str):
 @pytest.mark.anyio
 async def test_text_question(
     llm: LLMClient,
-    text_record: RecordInfo,
+    text_record: Record,
 ):
     messages = []
     messages.append(("user", "Hi, can you please summarise this content for me?"))

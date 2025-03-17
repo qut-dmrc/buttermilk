@@ -1,4 +1,4 @@
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, Record
 from buttermilk.runner.helpers import parse_flow_vars
 from buttermilk.utils.utils import read_json
 
@@ -24,7 +24,7 @@ def test_input_map():
     assert len(vars["answers"]) == 2
     assert len(vars["answers"][1]["reasons"]) == 3
     assert vars["answers"][1]["flow_id"] != TEST_FLOW_ID
-    assert isinstance(vars["object"], RecordInfo)
+    assert isinstance(vars["object"], Record)
 
     assert vars["flow_id"] != TEST_FLOW_ID
 

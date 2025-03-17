@@ -163,7 +163,7 @@ class MediaObj(BaseModel):
     # ],"""
 
 
-class RecordInfo(BaseModel):
+class Record(BaseModel):
     data: Any | None = Field(
         default=None,
         validation_alias=AliasChoices(
@@ -214,7 +214,7 @@ class RecordInfo(BaseModel):
         exclude_none=True,
         exclude=["components", "fulltext"],
         positional_args=True,
-    )
+    ) # type: ignore
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -348,114 +348,3 @@ class RecordInfo(BaseModel):
         }
         return message
 
-
-##################################
-# A single unit of work, including
-# a result once we get it.
-#
-# A Job contains all the information that we need to log
-# to know about an agent's operation on a single datum.
-#
-##################################
-class Job(BaseModel):
-    job_id: str = pydantic.Field(
-        default_factory=shortuuid.uuid,
-        description="A unique identifier for this particular unit of work",
-    )
-    flow_id: str
-    timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(tz=datetime.UTC),
-        description="The date and time a job was created.",
-    )
-    source: Sequence[str] = Field(
-        ...,
-        description="Where this particular job came from",
-    )
-
-    run_info: SessionInfo | None = Field(
-        default=None,
-        description="Information about the context in which this job runs",
-    )
-
-    record: RecordInfo | None = Field(
-        default=None,
-        description="The data the job will process.",
-    )
-    q: str | None = Field(
-        validation_alias=AliasChoices("q", "prompt"),
-        default=None,
-    )
-
-    parameters: dict = Field(
-        default_factory=dict,
-        description="Additional options for the worker",
-    )
-    inputs: dict = Field(default={})
-
-    # These fields will be fully filled once the record is processed
-
-    agent_info: dict | None = Field(default={})
-
-    outputs: dict | None = Field(
-        default={},
-        description="Formatted and processed results of the job, collated along with other data as specified in the Flow's outputs map.",
-    )
-    error: dict[str, Any] = Field(default={})
-    metadata: dict | None = Field(default={})
-
-    @computed_field(return_type=str)
-    def identifier(self) -> str:
-        identifier = "-".join(
-            [x[:12] for x in list(self.parameters.values()) if x and isinstance(x, str)]
-            + [self.job_id[:4]],
-        )
-        return identifier
-
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        use_enum_values=True,
-        json_encoders={
-            np.bool_: bool,
-            datetime.datetime: lambda v: v.isoformat(),
-            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-        },
-        validate_assignment=True,
-        exclude_unset=True,
-        exclude_none=True,
-    )
-    _ensure_list = field_validator("source", mode="before")(
-        make_list_validator(),
-    )
-    _convert = field_validator("outputs", "inputs", "parameters", mode="before")(
-        convert_omegaconf_objects(),
-    )
-
-    # @field_serializer('flow')
-    # def serialize_omegaconf(cls, value):
-    #     return OmegaConf.to_container(value, resolve=True)
-
-    @model_validator(mode="after")
-    def move_metadata(self) -> Self:
-        if self.outputs and hasattr(self.outputs, "metadata") and self.outputs.metadata:
-            if self.metadata is None:
-                self.metadata = {}
-            self.metadata["outputs"] = self.outputs.metadata
-            self.outputs.metadata = None
-
-        return self
-
-    @model_validator(mode="after")
-    def make_identifier(self) -> Self:
-        if not self.identifier:
-            self.identifier = "-".join(
-                [
-                    str(getattr(self, x))[:8]
-                    for x in self.model_fields_set
-                    if Job.model_fields[x].annotation == type[str]
-                ]
-                + [self.job_id[:4]],
-            )
-        return self

@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Record
 from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.exceptions import FatalError
 from buttermilk.llms import LLMCapabilities
@@ -169,7 +169,7 @@ def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> d
     # Fill placeholders
     placeholders = {}
     for k, v in input_vars.items():
-        if isinstance(v, RecordInfo):
+        if isinstance(v, Record):
             if rendered := v.as_langchain_message(
                 role="user",
                 model_capabilities=model_capabilities,

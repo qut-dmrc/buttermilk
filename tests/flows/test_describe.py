@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, Record
 from buttermilk.agents.describer import Describer
 from buttermilk.bm import BM
 from buttermilk.llms import MULTIMODAL_MODELS
@@ -31,7 +31,7 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, bm: BM):
     async for result in flow_describer.run_flows(job=job):
         assert result
         assert not result.error
-        assert isinstance(result.record, RecordInfo)
+        assert isinstance(result.record, Record)
         assert "painting" in str(result.record.all_text).lower()
         assert "night watch" in str(result.record.title).lower()
 

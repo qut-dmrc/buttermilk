@@ -4,7 +4,7 @@ import evaluate
 import pandas as pd
 import pytest
 pytest.importorskip("buttermilk.toxicity")
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Record
 from buttermilk.toxicity import TOXCLIENTS, TOXCLIENTS_LOCAL
 from buttermilk.toxicity.llamaguard import LlamaGuard1Together, LlamaGuard2HF, LlamaGuard2Local, LlamaGuard2Replicate, LlamaGuard2Together, LlamaGuard3Local, LlamaGuard3LocalInt8, LlamaGuard3Together, LlamaGuardTox, MDJudge2, MDJudgeLocal
 
@@ -51,8 +51,8 @@ def llamaguard_gpu(request):
 
 
 @pytest.fixture(scope="session")
-def toxic_record() -> RecordInfo:
-    rec = RecordInfo(
+def toxic_record() -> Record:
+    rec = Record(
         record_id="testdata_frenzal_rhomb",
         content="get fucked you fucking fuckwit you can't move into my house",
     )
@@ -103,7 +103,7 @@ class TestLlamaGuard:
     @pytest.mark.async_timeout(150)
     async def test_llamaguard_cpu(self, llamaguard_gpu):
         text = "The image is a black and white photo of a group of people in Ku Klux Klan (KKK) robes and hoods. There is text on the image that says 'i'm dreaming of a white christmas'."
-        rec = RecordInfo(record_id="testHFModels", content=text)
+        rec = Record(record_id="testHFModels", content=text)
 
         response = await llamaguard_gpu.mod_single(rec)
         assert response.result
@@ -111,7 +111,7 @@ class TestLlamaGuard:
 
     async def test_llamaguard_defaultprompt(
         self,
-        toxic_record: RecordInfo,
+        toxic_record: Record,
         llamaguard,
         logger,
     ):
@@ -126,7 +126,7 @@ class TestLlamaGuard:
         "standard",
         ["MDJUDGE.DOMAIN_POLICY", "MDJUDGE.TASK_POLICY"],
     )
-    async def test_mdjudge(self, toxic_record: RecordInfo, standard: str):
+    async def test_mdjudge(self, toxic_record: Record, standard: str):
         client = MDJudgeLocal(standard=standard)
         response = await client.mod_single(message=toxic_record)
         assert isinstance(response, EvalRecord)
@@ -155,7 +155,7 @@ class TestDataPipes:
     def test_toxic_pipe(self, pipe):
         dp = pipe()
         for example in dp:
-            assert isinstance(example, RecordInfo)
+            assert isinstance(example, Record)
             assert example.source is not None and example.source != ""
             break
 
@@ -168,7 +168,7 @@ class TestDataPipes:
 
 class TestClients:
     # These tests test the toxicity models directly
-    def test_perspective(self, toxic_record: RecordInfo):
+    def test_perspective(self, toxic_record: Record):
         client = Perspective()
         result = client.call_client(prompt=toxic_record.content)
         assert result is not None
@@ -185,7 +185,7 @@ class TestClients:
             ]
         )
 
-    def test_comprehend(self, toxic_record: RecordInfo):
+    def test_comprehend(self, toxic_record: Record):
         tox = Comprehend()
 
         result = tox.client.mod_meratesingle(toxic_record.content)
@@ -212,7 +212,7 @@ class TestClients:
         )
 
     @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_HONEST_prompt(self, toxic_record: RecordInfo):
+    def test_HONEST_prompt(self, toxic_record: Record):
         # This isn't in the right format yet.
         # see https://huggingface.co/spaces/evaluate-measurement/honest
 
@@ -224,7 +224,7 @@ class TestClients:
         assert isinstance(result, dict)
 
     @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_LFTW_R4(self, toxic_record: RecordInfo):
+    def test_LFTW_R4(self, toxic_record: Record):
         from transformers import pipeline
 
         pipe = pipeline(
@@ -237,14 +237,14 @@ class TestClients:
             assert isinstance(r, dict)
 
     #    @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_REGARD(self, toxic_record: RecordInfo):
+    def test_REGARD(self, toxic_record: Record):
         regard = evaluate.load("regard", module_type="measurement")
         scores = regard.compute(data=[toxic_record.content])["regard"][0]
         assert scores["negative"] > 0
         assert isinstance(scores, dict)
 
     @pytest.mark.parametrize("client_type", ["openai", "azure"])
-    def test_OpenAIMod(self, client_type, toxic_record: RecordInfo):
+    def test_OpenAIMod(self, client_type, toxic_record: Record):
         import openai
 
         openai.api_type = client_type
@@ -277,7 +277,7 @@ class TestToxicityModels:
     """These tests test the toxicity models through the ToxicityModel wrapper"""
 
     @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS)
-    def test_mod(self, tox_model_cls, toxic_record: RecordInfo):
+    def test_mod(self, tox_model_cls, toxic_record: Record):
         tox_model = tox_model_cls()
         result = tox_model.moderate(
             content=toxic_record.content,

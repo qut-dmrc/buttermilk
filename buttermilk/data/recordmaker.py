@@ -3,27 +3,27 @@ import asyncio
 from typing import Any, AsyncGenerator, Iterable, Iterator
 import pandas as pd
 from pydantic import BaseModel
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.runner_types import Record
 from .loaders import LoaderGCS
 
 class RecordMaker(BaseModel):
     
     @abstractmethod 
-    async def record_generator(self) -> AsyncGenerator[RecordInfo, None]:
+    async def record_generator(self) -> AsyncGenerator[Record, None]:
         for record in self.data:
-            yield RecordInfo(**record)
+            yield Record(**record)
 
 class RecordMakerDF(RecordMaker):
     dataset: Any
 
-    async def record_generator(self) -> AsyncGenerator[RecordInfo, None]:
+    async def record_generator(self) -> AsyncGenerator[Record, None]:
         # Generator to yield records from the dataset
         for _, record in self.dataset.sample(frac=1).iterrows():
-            yield RecordInfo(**record.to_dict())
+            yield Record(**record.to_dict())
 
 class RecordMakerCloudStorageFiles(RecordMaker, LoaderGCS):
-    async def record_generator(self) -> AsyncGenerator[RecordInfo, None]:
+    async def record_generator(self) -> AsyncGenerator[Record, None]:
         # Generator to yield records from the dataset
         async for uri, content in self.read_files():
-            yield RecordInfo(uri=uri, text=content.decode())
+            yield Record(uri=uri, text=content.decode())
             await asyncio.sleep(0)

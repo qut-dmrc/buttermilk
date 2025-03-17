@@ -11,7 +11,7 @@ from traceloop.sdk.decorators import workflow
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, Record
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -75,14 +75,14 @@ class Flow(BaseModel):
         # )
         return self
 
-    def get_record(self, record_id: str) -> RecordInfo:
+    def get_record(self, record_id: str) -> Record:
         rec = self._results.query("record_id==@record_id")
         if rec.shape[0] > 1:
             raise ValueError(
                 f"More than one record found for query record_id == {record_id}",
             )
 
-        return RecordInfo(**rec.iloc[0].to_dict())
+        return Record(**rec.iloc[0].to_dict())
 
     async def load_data(self):
         # We are in the process of replacing _data with a single

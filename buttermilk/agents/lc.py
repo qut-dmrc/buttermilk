@@ -53,6 +53,7 @@ from buttermilk.utils.utils import scrub_keys
 
 class LC(Agent):
     _instrumentor: Any = PrivateAttr(default=None)
+    template: str
 
     def model_post_init(self, __context) -> None:
         self._instrumentor = LangchainInstrumentor()

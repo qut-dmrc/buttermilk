@@ -1,16 +1,16 @@
 from rich.console import Console
 from rich.markdown import Markdown
 
+from buttermilk._core.ui import IOInterface
 from buttermilk.runner.chat import (
     Answer,
-    GroupChatMessage,
-    IOInterface,
+    FlowMessage,
     RequestToSpeak,
 )
 
 
 class CLIUserAgent(IOInterface):
-    async def query(self, request: RequestToSpeak) -> GroupChatMessage:
+    async def query(self, request: RequestToSpeak) -> FlowMessage:
         """Retrieve input from the user interface"""
         user_input = input(
             request.content or "Enter your message: ",
@@ -25,7 +25,7 @@ class CLIUserAgent(IOInterface):
         )
         return reply
 
-    async def send_output(self, message: GroupChatMessage, source: str = "") -> None:
+    async def send_output(self, message: FlowMessage, source: str = "") -> None:
         """Send output to the user interface"""
         Console().print(
             Markdown(f"### {source}: \n{message.content}"),

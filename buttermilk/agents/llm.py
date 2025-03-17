@@ -1,5 +1,7 @@
-from typing import Any
+from typing import Any, Self
 
+from pydantic import Field, PrivateAttr
+import pydantic
 import regex as re
 from autogen_core.models import (
     AssistantMessage,
@@ -8,15 +10,17 @@ from autogen_core.models import (
 )
 from promptflow.core._prompty_utils import parse_chat
 
-from buttermilk._core.agent import Agent
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import BM, logger
+from buttermilk.llms import LLMs
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
     NullAnswer,
     RequestToSpeak,
 )
+from autogen_core.models import ChatCompletionClient
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     _parse_prompty,
@@ -24,23 +28,20 @@ from buttermilk.utils.templating import (
 )
 
 
-class LLMAgent(BaseGroupChatAgent):
-    def __init__(
-        self,
-        *,
-        config: Agent,
-        group_chat_topic_type: str = "default",
-        fail_on_unfilled_parameters: bool = False,
-        description: str = "An agent that uses an LLM to respond to messages.",
-    ) -> None:
-        super().__init__(
-            config=config,
-            group_chat_topic_type=group_chat_topic_type,
-        )
+class LLMAgent(Agent):
+    template: str
+    model: str
+    fail_on_unfilled_parameters: bool = Field(default=False)
+    
+    _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
+    _model_client: ChatCompletionClient = PrivateAttr() 
+    
+    @pydantic.model_validator(mode="after")
+    def init_model(self) -> Self:
         bm = BM()
-        self._json_parser = ChatParser()
-        self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
-        self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
+        self._model_client = bm.llms.get_autogen_chat_client(self.model)
+
+        return self
 
     async def fill_template(
         self,
@@ -90,7 +91,7 @@ class LLMAgent(BaseGroupChatAgent):
                         unfilled_vars.remove(var_name)
                 except KeyError as e:
                     err =  f"Missing {var_name} in template or placeholder vars.",
-                    if self._fail_on_unfilled_parameters:
+                    if self.fail_on_unfilled_parameters:
                         raise ValueError(err)
                     else: 
                         logger.warning(err)
@@ -118,7 +119,7 @@ class LLMAgent(BaseGroupChatAgent):
 
         if unfilled_vars:
             err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
-            if self._fail_on_unfilled_parameters:
+            if self.fail_on_unfilled_parameters:
                 raise ValueError(err)
             else: 
                 logger.warning(err)
@@ -126,27 +127,16 @@ class LLMAgent(BaseGroupChatAgent):
 
         return messages
 
-    async def query(
-        self,
-        request: RequestToSpeak,
-    ) -> Answer | NullAnswer:
+    async def process(self, input_data: AgentInput) -> AgentOutput:
 
-        untrusted_vars= dict(**request.inputs)
-        placeholders= dict(**request.placeholders)
+        untrusted_vars= input_data.model_copy()
 
-        response = self.agent(untrusted_vars=untrusted_vars, placeholders=placeholders)
+        messages = await self.fill_template(
+            untrusted_inputs=untrusted_vars
+        )
+
+        response = await self._model_client.create(messages=messages)
 
         outputs = self._json_parser.parse(response.content)
-
-        answer = Answer(
-            agent_id=self.id.type,
-            role="assistant",
-            content=response.content,
-            step=str(self.step),
-            metadata=response.model_dump(exclude=["content"]),
-            config=self.config,
-            inputs=untrusted_vars,
-            outputs=outputs,
-            context=request.context,
-        )
-        return answer
+        
+        return outputs

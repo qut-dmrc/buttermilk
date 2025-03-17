@@ -25,7 +25,7 @@ from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
-    GroupChatMessage,
+    FlowMessage,
     GroupChatMessageType,
     InputRecord,
     IOInterface,
@@ -244,7 +244,7 @@ class Conductor(RoutedAgent):
                 logger.error(f"Invalid input in confirm_user: {result.content}")
                 return False
         
-    async def query_user(self, content: str) -> GroupChatMessage:
+    async def query_user(self, content: str) -> FlowMessage:
         """Ask the user for input."""
         user_id = await self.runtime.get(USER_AGENT_TYPE)
         

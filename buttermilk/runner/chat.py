@@ -20,8 +20,8 @@ from autogen_core.models import (
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import pydantic
 
-from buttermilk._core.agent import AgentConfig
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.agent import Agent
+from buttermilk._core.runner_types import Record
 from buttermilk.bm import logger
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -29,7 +29,7 @@ from buttermilk.utils.templating import (
 )
 
 
-class GroupChatMessage(BaseModel):
+class FlowMessage(BaseModel):
     type: str = "GroupChatMessage"
     """A message sent to the group chat"""
 
@@ -56,22 +56,22 @@ class GroupChatMessage(BaseModel):
         return values
 
 
-class NullAnswer(GroupChatMessage):
+class NullAnswer(FlowMessage):
     type: str = "NullAnswer"
     content: str = ""
     value: bool | None|str = None
     """A message sent to the group chat indicating that the agent did not provide an answer."""
 
 
-class InputRecord(GroupChatMessage):
+class InputRecord(FlowMessage):
     type: str = "InputRecord"
-    payload: RecordInfo = Field(
+    payload: Record = Field(
         ...,
         description="A single instance of an input example for workers to use.",
     )
 
 
-class Answer(GroupChatMessage):
+class Answer(FlowMessage):
     type: str = "Answer"
     agent_id: str
     role: str
@@ -80,13 +80,13 @@ class Answer(GroupChatMessage):
     outputs: dict = {}
     context: list[SystemMessage | UserMessage | AssistantMessage] = []
 
-    config: AgentConfig
+    config: Agent
 
     model_config = {"extra": "allow"}
 
 
 # Union of all known GroupChatMessage subclasses
-GroupChatMessageType = Union[GroupChatMessage, NullAnswer, InputRecord, Answer]
+GroupChatMessageType = Union[FlowMessage, NullAnswer, InputRecord, Answer]
 
 
 class RequestToSpeak(BaseModel):
@@ -113,7 +113,7 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
 
     def __init__(
         self,
-        config: AgentConfig,
+        config: Agent,
         group_chat_topic_type: str = "default",
     ) -> None:
         """Initialize the agent with configuration and topic type.
@@ -158,46 +158,6 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
         await self.publish(answer)
 
         return answer
-
-
-class IOInterface(BaseGroupChatAgent, ABC):
-    def __init__(
-        self,
-        group_chat_topic_type: str,
-    ) -> None:
-        ui_config = AgentConfig(
-            agent=self.__class__.__name__,
-            name="user",
-            description="User interface",
-        )
-        super().__init__(ui_config, group_chat_topic_type)
-
-    @abstractmethod
-    async def send_output(self, message: GroupChatMessage, source: str = "") -> None:
-        """Send output to the user interface"""
-
-    @abstractmethod
-    async def initialize(self) -> None:
-        """Initialize the interface"""
-
-    @abstractmethod
-    async def cleanup(self) -> None:
-        """Clean up resources"""
-
-    @message_handler
-    async def handle_message(
-        self,
-        message: GroupChatMessageType,
-        ctx: MessageContext,
-    ) -> None:
-        if isinstance(message, Answer):
-            source = message.agent_id
-        elif ctx.sender:
-            source = ctx.sender.type
-        else:
-            source = ctx.topic_id.type
-
-        await self.send_output(message, source)
 
 
 class ConversationId(BaseModel):

@@ -24,23 +24,6 @@ from buttermilk.defaults import BQ_SCHEMA_DIR
 BASE_DIR = Path(__file__).absolute().parent
 
 
-# from functools import wraps
-# from typing import Any, Callable
-# from pydantic import BaseModel
-
-# async def run_flow(job: Job, flow: callable):
-#     response = await flow.call_async(**job.inputs)
-#     job.outputs = Result(**response)
-#     return job
-
-# def flow():
-#     def inner(func):
-#         @wraps(func)
-#         def _impl(job: Job) -> Job:
-#             return run_flow(job, func)
-#         return _impl
-
-
 CloudProvider = Literal[
     "gcp",
     "bq",

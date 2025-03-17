@@ -7,11 +7,11 @@ from autogen_core import (
     message_handler,
 )
 
-from buttermilk._core.agent import AgentConfig
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.agent import Agent
+from buttermilk._core.runner_types import Record
 from buttermilk.runner.chat import (
     BaseGroupChatAgent,
-    GroupChatMessage,
+    FlowMessage,
     GroupChatMessageType,
     InputRecord,
     NullAnswer,
@@ -26,7 +26,7 @@ class Fetch(BaseGroupChatAgent):
     def __init__(
         self,
         *,
-        config: AgentConfig,
+        config: Agent,
         group_chat_topic_type: str = "default",
     ) -> None:
         super().__init__(
@@ -39,13 +39,13 @@ class Fetch(BaseGroupChatAgent):
     async def load_data(self):
         self._data = await prepare_step_df(self.config.data)
 
-    async def get_record_dataset(self, record_id: str) -> RecordInfo | None:
+    async def get_record_dataset(self, record_id: str) -> Record | None:
         while not self._data_task.done():
             await asyncio.sleep(1)
         for dataset in self._data.values():
             rec = dataset.query("record_id==@record_id")
             if rec.shape[0] == 1:
-                return RecordInfo(**rec.iloc[0].to_dict())
+                return Record(**rec.iloc[0].to_dict())
             if rec.shape[0] > 1:
                 raise ValueError(
                     f"More than one record found for query record_id == {record_id}",
@@ -53,7 +53,7 @@ class Fetch(BaseGroupChatAgent):
 
         return None
 
-    async def get_record(self, message: str) -> RecordInfo:
+    async def get_record(self, message: str) -> Record:
         record = None
         if match := re.match(r"!([\d\w_]+)", message):
             # Try to get by record_id
@@ -66,7 +66,7 @@ class Fetch(BaseGroupChatAgent):
 
     async def query(
         self,
-        request: RequestToSpeak | GroupChatMessage,
+        request: RequestToSpeak | FlowMessage,
     ) -> InputRecord | NullAnswer:
         record = None
         inputs = []
@@ -89,7 +89,7 @@ class Fetch(BaseGroupChatAgent):
         if not record and isinstance(request, RequestToSpeak):
             # We must return an input record if we were asked for one
             # Create a new record with the original text we were given.
-            record = RecordInfo(data="\n".join(inputs))
+            record = Record(data="\n".join(inputs))
 
         if record:
             response = InputRecord(

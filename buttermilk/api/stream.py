@@ -14,7 +14,7 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Job, RecordInfo
+from buttermilk._core.runner_types import Job, Record
 from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
@@ -44,7 +44,7 @@ class FlowRequest(BaseModel):
         validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
-    record: RecordInfo | None = None
+    record: Record | None = None
     uri: str | None = Field(
         default=None,
         validation_alias=AliasChoices("uri", "url", "link"),

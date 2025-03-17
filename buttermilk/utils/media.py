@@ -5,7 +5,7 @@ import regex as re
 from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
-from buttermilk._core.runner_types import MediaObj, RecordInfo
+from buttermilk._core.runner_types import MediaObj, Record
 from buttermilk.utils.utils import (
     download_limited_async,
     is_filepath,
@@ -28,7 +28,7 @@ async def download_and_convert(
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
     **kwargs: Any,
-) -> RecordInfo:
+) -> Record:
     # If we have a URI, download it.
     # If it's a binary object, convert it to base64.
     # Try to guess the mime type from the extension if possible.
@@ -101,14 +101,14 @@ async def download_and_convert(
             ),
         ]
 
-    record = RecordInfo(
+    record = Record(
         data=obj_list,
         **kwargs,
     )
     return record
 
 
-def get_news_record_from_uri(uri: str) -> RecordInfo:
+def get_news_record_from_uri(uri: str) -> Record:
     import newspaper
 
     article = newspaper.article(uri)
@@ -124,7 +124,7 @@ def get_news_record_from_uri(uri: str) -> RecordInfo:
         publish_date=article.publish_date,
     )
 
-    record = RecordInfo(uri=uri, components=paragraphs, metadata=metadta)
+    record = Record(uri=uri, components=paragraphs, metadata=metadta)
 
     return record
 

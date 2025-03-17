@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
-from buttermilk._core.agent import AgentConfig
-from buttermilk._core.runner_types import RecordInfo
+from buttermilk._core.agent import Agent
+from buttermilk._core.runner_types import Record
 from buttermilk.agents.fetch import Fetch
-from buttermilk.runner.chat import GroupChatMessage, InputRecord, RequestToSpeak
+from buttermilk.runner.chat import FlowMessage, InputRecord, RequestToSpeak
 
 
 class TestFetch:
@@ -57,7 +57,7 @@ class TestFetch:
 
         # Assert
         mock_df.query.assert_called_once_with("record_id==@record_id")
-        assert isinstance(result, RecordInfo)
+        assert isinstance(result, Record)
         assert result.record_id == "123"
         assert result.fulltext == "Sample text"
 
@@ -94,14 +94,14 @@ class TestFetch:
     ):
         """Test handle_urls with a URL."""
         # Setup
-        message = GroupChatMessage(
+        message = FlowMessage(
             content="Check out https://example.com",
             step="testing",
         )
         ctx = MagicMock()
 
         mock_extract_url.return_value = "https://example.com"
-        mock_record = MagicMock(spec=RecordInfo)
+        mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Example page content"
         mock_download.return_value = mock_record
 
@@ -128,7 +128,7 @@ class TestFetch:
     ):
         """Test handle_urls with a record ID."""
         # Setup
-        message = GroupChatMessage(
+        message = FlowMessage(
             content="Get `#record123`",
             step="testing",
         )
@@ -140,7 +140,7 @@ class TestFetch:
         match_result.group.return_value = "record123"
         mock_re_match.return_value = match_result
 
-        mock_record = MagicMock(spec=RecordInfo)
+        mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Record content"
         mock_fetch.get_record = MagicMock(return_value=mock_record)
 
@@ -167,7 +167,7 @@ class TestFetch:
     ):
         """Test handle_urls with neither URL nor record ID."""
         # Setup
-        message = GroupChatMessage(
+        message = FlowMessage(
             content="Just a regular message",
             step="testing",
         )
@@ -200,7 +200,7 @@ class TestFetch:
         ctx = MagicMock()
 
         mock_extract_url.return_value = "https://example.com"
-        mock_record = MagicMock(spec=RecordInfo)
+        mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Example page content"
 
         with patch(
@@ -219,7 +219,7 @@ class TestFetch:
 
 @pytest.fixture
 def fetch_agent_cfg():
-    return AgentConfig(
+    return Agent(
         agent="Fetch",
         name="testing",
         description="fetch stuff",
@@ -237,7 +237,7 @@ def fetch_agent_cfg():
 messages = [
     (
         None,
-        GroupChatMessage(
+        FlowMessage(
             content="Just a regular message",
             step="testing",
         ),
@@ -250,7 +250,7 @@ messages = [
     ),
     (
         "missing",
-        GroupChatMessage(
+        FlowMessage(
             content="Get `#record123`",
             step="testing",
         ),

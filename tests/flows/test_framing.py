@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import Job, MediaObj, RecordInfo
+from buttermilk._core.runner_types import Job, MediaObj, Record
 from buttermilk.agents.lc import LC
 from buttermilk.bm import BM
 from buttermilk.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
@@ -41,7 +41,7 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 
     async for result in flow.run_flows(job=job):
         assert result
-        assert isinstance(result.record, RecordInfo)
+        assert isinstance(result.record, Record)
         assert not result.error
 
 
@@ -58,7 +58,7 @@ async def test_frames_article(framer, news_record, bm: BM, model):
     )
     async for result in flow.run_flows(job=job):
         assert result
-        assert isinstance(result.record, RecordInfo)
+        assert isinstance(result.record, Record)
         assert not result.error
 
 
@@ -68,11 +68,11 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
 
-    record = RecordInfo(data=link_to_video_gcp)
+    record = Record(data=link_to_video_gcp)
     job = Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
     async for result in flow.run_flows(job=job):
         assert result
-        assert isinstance(result.record, RecordInfo)
+        assert isinstance(result.record, Record)
         assert not result.error
 
 

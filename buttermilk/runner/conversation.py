@@ -17,7 +17,7 @@ from autogen_core.models import (
 )
 from promptflow.core._prompty_utils import parse_chat
 
-from buttermilk._core.agent import AgentConfig
+from buttermilk._core.agent import Agent
 from buttermilk.bm import BM
 from buttermilk.runner.chat import (
     Answer,
@@ -42,7 +42,7 @@ class Selector(Conductor, LLMAgent):
         steps,
         fail_on_unfilled_parameters: bool = True,
     ):
-        config = AgentConfig(agent="LLMAgent", name="conductor", description="description", parameters=dict(template="panel_host", model="gemini2pro", inputs={"participants": "participants", "context": "context", "history": "history", "prompt": "prompt", "record": "record"}))
+        config = Agent(agent="LLMAgent", name="conductor", description="description", parameters=dict(template="panel_host", model="gemini2pro", inputs={"participants": "participants", "context": "context", "history": "history", "prompt": "prompt", "record": "record"}))
         # Initialize LLMAgent first with its required parameters
         LLMAgent.__init__(
             self,
