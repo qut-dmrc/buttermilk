@@ -12,9 +12,12 @@ from buttermilk.runner.chat import (
     ConversationManager,
     GroupChatMessage,
     IOInterface,
+    NullAnswer,
     RequestToSpeak,
 )
 from buttermilk.runner.conversation import Selector
+from buttermilk.runner.flow import Flow
+from buttermilk.runner.moa import FFA, Conductor, MoA
 from buttermilk.ui.formatting.slackblock import format_response
 from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
 
@@ -87,9 +90,11 @@ def register_handlers():
         
         async def query(self, request: RequestToSpeak) -> GroupChatMessage:
             """Retrieve input from the user interface"""
+            _confirm_only=False
             if request.content:
                 await self.send_to_thread(request.content)
             else:
+                _confirm_only=True
                 from buttermilk.ui.formatting.slackblock import confirm_block
                 confirm_blocks = confirm_block(message=request.prompt or "Would you like to proceed?")
                 response = await self.send_to_thread(text=confirm_blocks["text"], blocks=confirm_blocks["blocks"])
@@ -137,14 +142,19 @@ def register_handlers():
                     
             # Wait for a response (either text message or button click)
             msg = await self.input_queue.get()
-
-            reply = Answer(
-                agent_id=self.id.type,
-                role="user",
-                content=msg,
-                step="User",
-                config=self.config,
-            )
+            if _confirm_only:
+                reply = NullAnswer(
+                    step="User",
+                    value=msg,
+                )
+            else:
+                reply = Answer(
+                    agent_id=self.id.type,
+                    role="user",
+                    content=msg,
+                    step="User",
+                    config=self.config,
+                )
             return reply
 
         async def send_output(
@@ -220,7 +230,7 @@ def register_handlers():
 
         await moderate(context=context, flow=flow)
 
-    async def moderate(context, flow, init_text=None, history=[]):
+    async def moderate(context, flow: MoA, init_text=None, history=[]):
         class SlackMoAThread(MoAThreadNoContext):
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
@@ -231,21 +241,26 @@ def register_handlers():
 
         # Create Slack IO interface for this thread
         io_interface = SlackMoAThread
-        conductor = Selector
-        try:
-            await _manager.start_conversation(
-                io_interface=io_interface,
-                conductor=conductor,
-                init_text=init_text,
-                platform="slack",
-                external_id=f"{context.channel_id}-{context.thread_ts}",
-                **flow.model_dump(),
-            )
+        conductor = Conductor
+        match flow.conductor:
+            case "FFA":
+                conductor = FFA
+            case "selector":
+                conductor = Selector
+            case "conductor":
+                conductor = Conductor
+            
+        await _manager.start_conversation(
+            io_interface=io_interface,
+            conductor=conductor,
+            init_text=init_text,
+            platform="slack",
+            external_id=f"{context.channel_id}-{context.thread_ts}",
+            source=flow.source,
+            steps=flow.steps
+            # **flow.model_dump(),
+        )
 
-        except Exception as e:
-            logger.exception(f"Error in process: {e} {e.args=}")
-            await io_interface.send_to_thread(text=f"Unfortunately I hit an error, sorry: {e} {e.args=}",
-            )
 
 
 def register_chat_thread_handler(thread_ts, agent: "MoAThreadNoContext"):

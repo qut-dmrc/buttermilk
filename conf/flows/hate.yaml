@@ -5,6 +5,7 @@ hate:
   _target_: buttermilk.runner.moa.MoA
   source: hate speech guidelines
   save: ${save}
+  conductor: conductor
 
   steps:
     - name: fetch

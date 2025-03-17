@@ -59,6 +59,7 @@ class GroupChatMessage(BaseModel):
 class NullAnswer(GroupChatMessage):
     type: str = "NullAnswer"
     content: str = ""
+    value: bool | None|str = None
     """A message sent to the group chat indicating that the agent did not provide an answer."""
 
 

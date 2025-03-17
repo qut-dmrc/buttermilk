@@ -97,20 +97,23 @@ class LLMAgent(BaseGroupChatAgent):
                         
                 continue
 
-            # Check if there's content in the message after filling the template
-            if re.sub(r"\s+", "", str(message["content"])):
+            # Remove unfilled variables now
+            content_without_vars = re.sub(r"\{\{.*?\}\}", "", message["content"])
+
+            # And check if there's content in the message still
+            if re.sub(r"\s+", "", content_without_vars):
                 if message["role"] in ("system", "developer"):
-                    messages.append(SystemMessage(content=message["content"]))
+                    messages.append(SystemMessage(content=content_without_vars))
                 elif message["role"] in ("assistant"):
                     messages.append(
                         AssistantMessage(
-                            content=message["content"],
+                            content=content_without_vars,
                             source=self.id.type,
                         ),
                     )
                 else:
                     messages.append(
-                        UserMessage(content=message["content"], source=self.id.type),
+                        UserMessage(content=content_without_vars, source=self.id.type),
                     )
 
         if unfilled_vars:
@@ -128,22 +131,13 @@ class LLMAgent(BaseGroupChatAgent):
         request: RequestToSpeak,
     ) -> Answer | NullAnswer:
 
-        # # Start by filling the history var, but overwrite if we've got another one passed in
-        # history = "\n".join([ f"{msg.source}: {msg.content}" for msg in request.context if msg.content])
-        # untrusted_vars = {
-        #     "history": history,
-        # }
         untrusted_vars= dict(**request.inputs)
-
-        placeholders = {"context": request.context}
         placeholders= dict(**request.placeholders)
-        # # Make sure there's a record too if possible
-        # if 'record' not in request.placeholders and request.prompt or 'prompt' in request.inputs:
-        #     from buttermilk.runner.moa import USER_AGENT_TYPE
-        #     placeholders['record'] = UserMessage(content=request.prompt or request.inputs['prompt'], source=USER_AGENT_TYPE)
+
         messages = await self.fill_template(
             untrusted_inputs=untrusted_vars,
-            placeholder_messages=placeholders,context=request.context,
+            placeholder_messages=placeholders,
+            context=request.context,
         )
 
         response = await self._model_client.create(messages=messages)

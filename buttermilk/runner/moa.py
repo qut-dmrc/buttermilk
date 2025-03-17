@@ -25,6 +25,7 @@ from buttermilk.bm import BM, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
+    GroupChatMessage,
     GroupChatMessageType,
     InputRecord,
     IOInterface,
@@ -143,6 +144,9 @@ class Conductor(RoutedAgent):
             self._flow_data.add("content", message.content)
 
         elif message.step == "User":
+            if isinstance(message, NullAnswer):
+                # No content, just the value -- handled elsewhere, we don't need to log it.
+                return
             msg = UserMessage(
                 content=message.content,
                 source=source,
@@ -232,12 +236,15 @@ class Conductor(RoutedAgent):
             recipient=user_id,
         )
         try:
-            return bool(strtobool(result.content))
-        except ValueError:
-            logger.error(f"Invalid input in confirm_user: {result.content}")
-            return False
+            return result.value
+        except AttributeError:
+            try:
+                return bool(strtobool(result.content))
+            except ValueError:
+                logger.error(f"Invalid input in confirm_user: {result.content}")
+                return False
         
-    async def query_user(self, content: str) -> bool:
+    async def query_user(self, content: str) -> GroupChatMessage:
         """Ask the user for input."""
         user_id = await self.runtime.get(USER_AGENT_TYPE)
         
@@ -246,12 +253,13 @@ class Conductor(RoutedAgent):
             ),
             recipient=user_id,
         )
-        return result.content
+        return result
 
 class MoA(BaseModel):
     save: SaveInfo | None = None
     source: str
     steps: list[MoAAgentFactory]
+    conductor: str = ""
 
     @cached_property
     def group_chat_topic_type(self) -> str:
@@ -320,3 +328,67 @@ class MoA(BaseModel):
         await runtime.stop_when_idle()
 
         await asyncio.sleep(5)
+
+
+class FFA(Conductor):
+
+    async def run(self, init_text: str = None) -> None:
+        # Dictionary to track agents by step
+        step_agents = {}
+
+        # Register all agent variants for each step
+        for step_factory in self.steps:
+            # Register variants and collect the agent types
+            agents_for_step = await step_factory.register_variants(
+                self.runtime,
+                group_chat_topic_type=self._group_chat_topic_type,
+            )
+            step_agents[step_factory.name] = agents_for_step
+
+        # Start the group chat with the user's first message
+        prompt = await self.query_user(content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)")
+        if not prompt:
+            logger.info("User did not confirm, exiting.")
+            return
+        
+        tasks = []
+
+        # First step, fetch records
+        for agent_type in step_agents.get("fetch", []):
+            agent_id = await self.runtime.get(agent_type)
+            tasks.append(
+                self.runtime.send_message(
+                    message=RequestToSpeak(
+                        inputs={"prompt": prompt},
+                    ),
+                    recipient=agent_id,
+                ),
+            )
+
+        await asyncio.gather(*tasks)
+        tasks = []
+
+        while q := await self.query_user(content="Enter your query"):
+            # Add history to query
+            context = await self._context.get_messages()
+            
+            # Request each agent variant to speak
+            for agent_type in step_agents.get("general", []):
+                agent_id = await self.runtime.get(agent_type)
+                tasks.append(
+                    self.runtime.send_message(
+                        message=RequestToSpeak(
+                            inputs={"prompt": q},
+                            placeholders=self._placeholders.get_dict(),
+                            context=context,
+                        ),
+                        recipient=agent_id,
+                    ),
+                )
+
+                # Wait for all agents in this step to complete
+                if tasks:
+                    await asyncio.gather(*tasks)
+                await asyncio.sleep(1)
+                
+

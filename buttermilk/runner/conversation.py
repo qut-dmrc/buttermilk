@@ -59,12 +59,6 @@ class Selector(Conductor, LLMAgent):
         self._context = UnboundedChatCompletionContext()
         self.running = False
         self.steps = steps
-    # async def get_conversation(self) -> str:
-    #     history = []
-    #     async for msg in self._context.get_messages():
-    #         history.append(f"{msg.source}: {msg.content}")
-            
-    #     return "\n".join(history)
 
     async def run(self, init_text: str = None) -> None:
         # Dictionary to track agents by step
@@ -102,8 +96,7 @@ class Selector(Conductor, LLMAgent):
 
             if selected_topic_type in step_agents:
                 # add the user's query if required
-                step_data = {"prompt": prompt}
-                step_data.update(self._flow_data._resolve_mappings(input_map[selected_topic_type]))
+                step_data = self._flow_data._resolve_mappings(input_map[selected_topic_type])
 
                 # And add our history too
                 context = await self._context.get_messages()

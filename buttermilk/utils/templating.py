@@ -115,9 +115,8 @@ def load_template(
             # Keep a list of variables that have not yet been filled.
             undefined_vars.append(self._undefined_name)
 
-            # We leave double braces here, so remember to use
-            # format as jinja2 methods so that json instructions and examples
-            # etc are not misinterpreted as variables.
+            # We leave double braces here, that json instructions and
+            # examples etc are not misinterpreted as variables.
             return "{{" + str(self._undefined_name) + "}}"
 
     # Create a sandbox environment for template processing
