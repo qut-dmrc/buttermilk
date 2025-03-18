@@ -3,7 +3,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import (
     Any,
+    Mapping,
     Optional,
+    Self,
     Sequence,
 )
 
@@ -13,13 +15,17 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    field_validator,
+    model_validator,
 )
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.ui import IOInterface
-from buttermilk.bm import BM
+from buttermilk._core.variants import AgentVariants
+from buttermilk.bm import bm, logger
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -28,13 +34,13 @@ BASE_DIR = Path(__file__).absolute().parent
 class Orchestrator(BaseModel, ABC):
     """ Runs a single instance of a flow, given an interface."""
     session_id: str = Field(default_factory=shortuuid.uuid, description="A unique session id for this set of flow runs.")
-    bm: BM
     save: Optional[SaveInfo] = Field(default=None)
     data: Sequence[DataSource] = Field(default_factory=list)
-    flow: Sequence[Agent] = Field(default_factory=list)
+    steps: Sequence[AgentVariants]= Field(default_factory=list, description="A sequence of agent factories to run in order")
+    agents: list[list[Agent]] = Field(default_factory=list)
     interface: IOInterface
 
-    _flow_data: dict[str, Any] = PrivateAttr(default_factory=dict, description="Memory for this specific flow run.")
+    _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
 
     model_config = ConfigDict(
         extra = "forbid",
@@ -44,8 +50,22 @@ class Orchestrator(BaseModel, ABC):
         exclude_unset = True,
     )
 
+    @field_validator('steps', mode='before')
+    @classmethod
+    def validate_steps(cls, value):
+        if isinstance(value, Sequence) and not isinstance(value, str):
+            return [AgentVariants(**step) if not isinstance(step, AgentVariants) else step 
+                   for step in value]
+        return value
+    
+    @model_validator(mode="after")
+    def generate_agents(self) -> Self:
+        for variant in self.steps:
+            self.agents.append(variant.create())
+        return self
+
     @abstractmethod
-    async def run(self, request) -> None:
+    async def run(self, request=None) -> None:
         """ Starts a flow, given an incoming request"""
         self._flow_data = copy.deepcopy(self.data)  # process if needed
         # add request data
@@ -58,5 +78,5 @@ class Orchestrator(BaseModel, ABC):
 
         return None
 
-    async def __call__(self, request) -> Job:
-        return await self.run(request)
+    async def __call__(self, request=None) -> Job:
+        return await self.run(request=request)

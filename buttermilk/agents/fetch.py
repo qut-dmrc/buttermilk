@@ -6,9 +6,11 @@ from autogen_core import (
     MessageContext,
     message_handler,
 )
+from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
+from buttermilk._core.types import AgentInput, AgentOutput
 from buttermilk.runner.chat import (
     BaseGroupChatAgent,
     FlowMessage,
@@ -20,24 +22,26 @@ from buttermilk.runner.chat import (
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import extract_url
+from typing import Any
 
 
-class Fetch(BaseGroupChatAgent):
-    def __init__(
-        self,
-        *,
-        config: Agent,
-        group_chat_topic_type: str = "default",
-    ) -> None:
-        super().__init__(
-            config=config,
-            group_chat_topic_type=group_chat_topic_type,
-        )
-        self._data = None
-        self._data_task = asyncio.get_running_loop().create_task(self.load_data())
+class Fetch(Agent):
+    _data_task: Any = PrivateAttr(default=None)
+    # def __init__(
+    #     self,
+    #     *,
+    #     config: Agent,
+    #     group_chat_topic_type: str = "default",
+    # ) -> None:
+    #     super().__init__(
+    #         config=config,
+    #         group_chat_topic_type=group_chat_topic_type,
+    #     )
+    #     self._data = None
+    #     self._data_task = asyncio.get_running_loop().create_task(self.load_data())
 
     async def load_data(self):
-        self._data = await prepare_step_df(self.config.data)
+        self._data = await prepare_step_df(self.data)
 
     async def get_record_dataset(self, record_id: str) -> Record | None:
         while not self._data_task.done():
@@ -64,6 +68,20 @@ class Fetch(BaseGroupChatAgent):
 
         return record
 
+    async def process(self, input_data: AgentInput) -> AgentOutput:
+        if input_data.prompt:
+            record = await self.get_record(input_data.prompt)
+            if record:
+                return AgentOutput(
+                    records=[record]
+                )
+            else:
+                return AgentOutput(
+                    records=[Record(data=input_data.prompt)]
+                )
+        return AgentOutput(error="No input provided.")
+                    
+    
     async def query(
         self,
         request: RequestToSpeak | FlowMessage,

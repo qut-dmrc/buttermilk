@@ -9,7 +9,7 @@ from buttermilk._core.contract import OrchestratorProtocol
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.bm import bm
 from buttermilk.runner.flow import Flow
-
+from buttermilk.runner.simple import Sequencer
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -30,8 +30,10 @@ def main(cfg: OrchestratorProtocol) -> None:
             return_json=False
         ):
             rprint(response)
-
-    asyncio.run(objs.flows[flow_name].run())
+    
+    orchestrator_name = objs.flows[flow_name].pop('orchestrator')
+    orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+    asyncio.run(orchestrator.run())
 
 
 if __name__ == "__main__":

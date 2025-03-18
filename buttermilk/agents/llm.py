@@ -34,22 +34,18 @@ class LLMAgent(Agent):
 
     async def fill_template(
         self,
-        placeholder_messages: dict[
-            str,
-            list[SystemMessage | UserMessage | AssistantMessage],
-        ] = {},
-        untrusted_inputs: dict[str, Any] = {},
-        context: list[SystemMessage | UserMessage | AssistantMessage] = [],
+        inputs: AgentInput|None = None
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
+        untrusted_inputs = {}
+        if inputs:
+            untrusted_inputs = inputs.inputs
+            untrusted_inputs['prompt'] = inputs.prompt
+
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
-            parameters=self.parameters,
-            untrusted_inputs=untrusted_inputs,
+            parameters=self.parameters, untrusted_inputs=untrusted_inputs,
         )
-
-        combined_placeholders = dict(context=context)
-        combined_placeholders.update(placeholder_messages)
 
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys. First we strip the header information from the markdown
@@ -74,7 +70,7 @@ class LLMAgent(Agent):
                 # Remove everything except word chars to get the variable name
                 var_name = re.sub(r"[^\w\d_]+", "", message["content"])
                 try:
-                    messages.extend(combined_placeholders[var_name])
+                    messages.extend(getattr(inputs, var_name))
                     # Remove the placeholder from the list of unfilled variables
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
@@ -118,14 +114,13 @@ class LLMAgent(Agent):
 
     async def process(self, input_data: AgentInput) -> AgentOutput:
 
-        untrusted_vars= input_data.model_copy()
-
         messages = await self.fill_template(
-            untrusted_inputs=untrusted_vars
+            inputs=input_data
         )
 
         response = await self._model_client.create(messages=messages)
 
-        outputs = self._json_parser.parse(response.content)
-
-        return outputs
+        content = self._json_parser.parse(response.content)
+        metadata = {k:v for k,v in response.model_dump(exclude_unset=True, exclude_none=True).items() if v and k not in ["content"]}
+        output = AgentOutput(response=content, metadata=metadata)
+        return output
