@@ -1,17 +1,15 @@
 import asyncio
+import copy
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
-import copy
 import pandas as pd
-import weave
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
-from buttermilk._core.runner_types import  Record
+from buttermilk._core.runner_types import Record
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
@@ -66,7 +64,7 @@ class Flow(BaseModel):
         )
         for agent in self.steps:
             # Create empty list for results from each step
-            self._data[agent.name] = self._data.get(agent.name, [])
+            self._data[agent.agent_id] = self._data.get(agent.agent_id, [])
 
         # # this is a hack, it wont work later:
         # self._data[self.data[0].name] = self._results.to_dict(
@@ -136,7 +134,7 @@ class Flow(BaseModel):
         params = copy.deepcopy(agent.parameters)
         inputs = copy.deepcopy(agent.inputs)
 
-        # In all cases, input values might be the name of a template, a literal value, 
+        # In all cases, input values might be the name of a template, a literal value,
         # or a reference to a field in the job.record object or in other supplied additional_data.
         # We need to resolve all flow inputs into a mapping that can be passed to the agent.
         # Makesure we make all job variables accessible for mapping but don't pass the job dict by
@@ -153,11 +151,11 @@ class Flow(BaseModel):
         )
 
         # Create a new job and task for every combination of variables
-        # this agent is configured to run. Agents have a parameters mapping; 
+        # this agent is configured to run. Agents have a parameters mapping;
         # each permutation of these is multiplied by num_runs. Agents also
         # have an inputs mapping that does not get multiplied.
         variants = agent.num_runs * expand_dict(params)
-        
+
         tasks = []
         for i in range(len(variants)):
             variants[i].update(inputs)
@@ -169,7 +167,7 @@ class Flow(BaseModel):
             tasks.append(task)
 
         logger.info(
-            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.name}",
+            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.agent_id}",
         )
 
         # Process and yield the results as they finish
@@ -180,7 +178,7 @@ class Flow(BaseModel):
                 if result.error:
                     # Log errors and yield result without further processing
                     logger.error(
-                        f"Agent {agent.name} failed with error: {result.error}",
+                        f"Agent {agent.agent_id} failed with error: {result.error}",
                     )
                 else:
                     try:
@@ -193,12 +191,12 @@ class Flow(BaseModel):
                             )
                         # incorporate successful runs into data store for future use
                         self.incorporate_outputs(
-                            step_name=agent.name,
+                            step_name=agent.agent_id,
                             outputs=result.outputs,
                         )
                     except Exception as e:
                         # log the error but do not abort.
-                        error_msg = f"Agent {agent.name} response data not formatted as expected: {e}"
+                        error_msg = f"Agent {agent.agent_id} response data not formatted as expected: {e}"
                         logger.error(error_msg)
                         result.error = dict(
                             message=error_msg,
@@ -218,7 +216,7 @@ class Flow(BaseModel):
                 yield result  # Yield result within the loop
 
             except FatalError as e:  # Handle FatalError to abort the flow
-                message = f"Aborting flow -- critical error running task from agent {agent.name}: {e}"
+                message = f"Aborting flow -- critical error running task from agent {agent.agent_id}: {e}"
                 logger.error(message)
                 # Cancel remaining tasks (important for proper cleanup)
                 for t in tasks:
@@ -228,7 +226,7 @@ class Flow(BaseModel):
 
             except Exception as e:  # Handle other exceptions
                 msg = (
-                    f"Agent {agent.name} hit unknown error in run_flows: {e}, {e.args=}"
+                    f"Agent {agent.agent_id} hit unknown error in run_flows: {e}, {e.args=}"
                 )
                 logger.exception(msg)
                 # Continue processing for now

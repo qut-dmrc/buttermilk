@@ -41,7 +41,7 @@ class LLMAgent(Agent):
         untrusted_inputs = {}
         if inputs:
             untrusted_inputs = inputs.inputs
-            untrusted_inputs['prompt'] = inputs.prompt
+            untrusted_inputs["prompt"] = inputs.prompt
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
@@ -103,12 +103,12 @@ class LLMAgent(Agent):
                     messages.append(
                         AssistantMessage(
                             content=content_without_vars,
-                            source=self.name,
+                            source=self.agent_id,
                         ),
                     )
                 else:
                     messages.append(
-                        UserMessage(content=content_without_vars, source=self.name),
+                        UserMessage(content=content_without_vars, source=self.agent_id),
                     )
 
         if unfilled_vars:
@@ -131,5 +131,5 @@ class LLMAgent(Agent):
 
         outputs = self._json_parser.parse(response.content)
         metadata = {k:v for k,v in response.model_dump(exclude_unset=True, exclude_none=True).items() if v and k not in ["content"]}
-        output = AgentOutput(agent_id=self.name, response=outputs, content=response.content, metadata=metadata)
+        output = AgentOutput(agent_id=self.agent_id, response=outputs, content=response.content, metadata=metadata)
         return output

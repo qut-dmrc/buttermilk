@@ -10,12 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import pubsub
-from promptflow.tracing import start_trace
 from pydantic import BaseModel
 
-from buttermilk.bm import bm, logger
-
 from buttermilk.api.stream import FlowRequest, flow_stream
+from buttermilk.bm import bm, logger
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.utils import load_json_flexi
 

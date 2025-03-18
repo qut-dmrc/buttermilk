@@ -12,7 +12,7 @@ from buttermilk.utils.media import download_and_convert
 @pytest.fixture(params=MULTIMODAL_MODELS)
 def flow_describer(request) -> Flow:
     agent = Describer(
-        name="testdescriber",
+        agent_id="testdescriber",
         parameters={
             "template": "describe",
             "download_if_necessary": True,

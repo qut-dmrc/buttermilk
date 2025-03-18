@@ -70,6 +70,7 @@
         "hydra.verbose=false",
         "+flows=[simple]",
         "+flow=simple",
+        "flows.simple.orchestrator=AutogenOrchestrator",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
       ],

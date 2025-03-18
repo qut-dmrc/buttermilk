@@ -28,8 +28,8 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
     error_dict = dict(message=str(e), type=type(e).__name__, args=args)
     error_dict.update(process_info)
     try:
-        error_dict['status_code'] = e.status_code
-        error_dict['request_id']=e.request_id
+        error_dict["status_code"] = e.status_code
+        error_dict["request_id"]=e.request_id
     except AttributeError:
         pass
 
@@ -71,7 +71,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             raise RateLimit(*e.args)
 
     except Exception as secondary_error:
-        logger.warning(f'Unable to extract error information from error: {type(e).__name__} {e} {e.args=}. Hit secondary error: {type(secondary_error).__name__} {secondary_error} {secondary_error.args=}')
+        logger.warning(f"Unable to extract error information from error: {type(e).__name__} {e} {e.args=}. Hit secondary error: {type(secondary_error).__name__} {secondary_error} {secondary_error.args=}")
 
     return error_dict
 

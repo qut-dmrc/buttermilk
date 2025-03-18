@@ -47,7 +47,7 @@ async def test_gsheet_exporter(flow: Agent):
     job = Job(
         job_id="job_id",
         source="testing",
-        flow_id=flow.name,
+        flow_id=flow.agent_id,
         parameters={
             "sheet_name": "evals",
             "title": "Trans Guidelines Judger",

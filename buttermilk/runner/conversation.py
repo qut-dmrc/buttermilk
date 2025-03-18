@@ -1,38 +1,19 @@
 
 import asyncio
 
-from autogen_core import DefaultTopicId
-from buttermilk.agents.llmchat import LLMAgent
-from buttermilk.runner.moa import Conductor
-from typing import Any
-
 from autogen_core.model_context import (
     UnboundedChatCompletionContext,
 )
-import regex as re
-from autogen_core.models import (
-    AssistantMessage,
-    SystemMessage,
-    UserMessage,
-)
-from promptflow.core._prompty_utils import parse_chat
 
 from buttermilk._core.agent import Agent
-from buttermilk.bm import bm
+from buttermilk.agents.llmchat import LLMAgent
 from buttermilk.runner.chat import (
-    Answer,
-    BaseGroupChatAgent,
+    FlowRequest,
     MessagesCollector,
-    NullAnswer,
-    RequestToSpeak,
 )
+from buttermilk.runner.moa import Conductor
 from buttermilk.runner.varmap import FlowVariableRouter
-from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import (
-    _parse_prompty,
-    load_template,
-)
-from buttermilk.bm import bm, logger
+
 
 class Selector(Conductor, LLMAgent):
     def __init__(
@@ -42,14 +23,14 @@ class Selector(Conductor, LLMAgent):
         steps,
         fail_on_unfilled_parameters: bool = True,
     ):
-        config = Agent(agent="LLMAgent", name="conductor", description="description", parameters=dict(template="panel_host", model="gemini2pro", inputs={"participants": "participants", "context": "context", "history": "history", "prompt": "prompt", "record": "record"}))
+        config = Agent(agent="LLMAgent", agent_id="conductor", description="description", parameters=dict(template="panel_host", model="gemini2pro", inputs={"participants": "participants", "context": "context", "history": "history", "prompt": "prompt", "record": "record"}))
         # Initialize LLMAgent first with its required parameters
         LLMAgent.__init__(
             self,
             config=config,
             group_chat_topic_type=group_chat_topic_type,
         )
-        
+
         # Initialize Conductor attributes without calling its __init__
         # since we've already initialized the RoutedAgent base through LLMAgent
         self.description = description
@@ -80,16 +61,16 @@ class Selector(Conductor, LLMAgent):
 
             # Add roles
             roles.append(dict(role=step_factory.name, description=step_factory.description))
-        
+
         role_str = "\n".join([ f" - {str(role)}" for role in roles ])
-        
+
         # Allow some time for initialization
         await asyncio.sleep(1)
 
         while await self.confirm_user():
             # Prompt the user for input
             prompt = await self.query_user(content="Enter your query")
-            req = RequestToSpeak(inputs={"participants": role_str, "prompt": prompt}, context=await self._context.get_messages())
+            req = FlowRequest(inputs={"participants": role_str, "prompt": prompt}, context=await self._context.get_messages())
             response = await self.query(req)
             selected_topic_type = response.outputs.get("role",response.content)
             tasks = []
@@ -100,13 +81,13 @@ class Selector(Conductor, LLMAgent):
 
                 # And add our history too
                 context = await self._context.get_messages()
-                
+
                 # Request each agent variant for this step to speak
                 for agent_type in step_agents.get(selected_topic_type, []):
                     agent_id = await self.runtime.get(agent_type)
                     tasks.append(
                         self.runtime.send_message(
-                            message=RequestToSpeak(
+                            message=FlowRequest(
                                 inputs=step_data,
                                 placeholders=self._placeholders.get_dict(),
                                 context=context,

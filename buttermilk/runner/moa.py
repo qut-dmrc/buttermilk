@@ -1,7 +1,8 @@
 import asyncio
-from functools import cached_property
 from distutils.util import strtobool
+from functools import cached_property
 from typing import Type
+
 import shortuuid
 import weave
 from autogen_core import (
@@ -22,15 +23,14 @@ from buttermilk._core.config import SaveInfo
 from buttermilk.agents import Fetch, LLMAgent
 from buttermilk.bm import bm, logger
 from buttermilk.runner.chat import (
-    Answer,
     BaseGroupChatAgent,
     FlowMessage,
+    FlowRequest,
     GroupChatMessageType,
     InputRecord,
     IOInterface,
     MessagesCollector,
     NullAnswer,
-    RequestToSpeak,
 )
 from buttermilk.utils.templating import KeyValueCollector
 
@@ -104,7 +104,7 @@ class Conductor(RoutedAgent):
     @message_handler
     async def handle_request_to_speak(
         self,
-        message: RequestToSpeak,
+        message: FlowRequest,
         ctx: MessageContext,
     ) -> GroupChatMessageType:
         if not self.running:
@@ -130,14 +130,14 @@ class Conductor(RoutedAgent):
         - 'history': List of text from history messages
         """
         source=ctx.sender.type if ctx.sender else self.id.type
-        
+
         if isinstance(message, InputRecord):
             msg = UserMessage(
                 content=message.content,
                 source=ctx.sender.type if ctx.sender else self.id.type,
             )
-            
-            self._placeholders.add('record', UserMessage(content=message.payload.fulltext, 
+
+            self._placeholders.add("record", UserMessage(content=message.payload.fulltext,
                 source=source))
             self._flow_data.add("content", message.content)
 
@@ -158,7 +158,7 @@ class Conductor(RoutedAgent):
 
         self._flow_data.add(message.step, message)
 
-        
+
         # Add to our history as text
         self._flow_data.add("history", message.content)
 
@@ -188,7 +188,7 @@ class Conductor(RoutedAgent):
         if not await self.query_user(content="OK, group chat started, go ahead. Enter a prompt, a URL, or a record ID (format: `!Record_ID`)"):
             logger.info("User did not confirm, exiting.")
             return
-        
+
 
         # Allow some time for initialization
         await asyncio.sleep(1)
@@ -209,7 +209,7 @@ class Conductor(RoutedAgent):
                 agent_id = await self.runtime.get(agent_type)
                 tasks.append(
                     self.runtime.send_message(
-                        message=RequestToSpeak(
+                        message=FlowRequest(
                             inputs=step_data,
                             placeholders=self._placeholders.get_dict(),
                             context=await self._context.get_messages(),
@@ -223,12 +223,12 @@ class Conductor(RoutedAgent):
                 await asyncio.gather(*tasks)
             await asyncio.sleep(1)
 
-    async def confirm_user(self, prompt: str = '') -> bool:
+    async def confirm_user(self, prompt: str = "") -> bool:
         """Ask the user to confirm the next step."""
         user_id = await self.runtime.get(USER_AGENT_TYPE)
-        
+
         result = await self.runtime.send_message(
-            RequestToSpeak(
+            FlowRequest(
                 prompt=prompt or "Ready to proceed? (y/n)",
             ),
             recipient=user_id,
@@ -241,13 +241,13 @@ class Conductor(RoutedAgent):
             except ValueError:
                 logger.error(f"Invalid input in confirm_user: {result.content}")
                 return False
-        
+
     async def query_user(self, content: str) -> FlowMessage:
         """Ask the user for input."""
         user_id = await self.runtime.get(USER_AGENT_TYPE)
-        
+
         result = await self.runtime.send_message(
-            RequestToSpeak(content=content
+            FlowRequest(content=content
             ),
             recipient=user_id,
         )
@@ -314,7 +314,7 @@ class MoA(BaseModel):
         # Get the conductor started:
         logger.debug("Sending start signal to Conductor")
         await runtime.send_message(
-            RequestToSpeak(content=init_text),
+            FlowRequest(content=init_text),
             recipient=conductor_id,
         )
 
@@ -347,7 +347,7 @@ class FFA(Conductor):
         if not prompt:
             logger.info("User did not confirm, exiting.")
             return
-        
+
         tasks = []
 
         # First step, fetch records
@@ -355,7 +355,7 @@ class FFA(Conductor):
             agent_id = await self.runtime.get(agent_type)
             tasks.append(
                 self.runtime.send_message(
-                    message=RequestToSpeak(
+                    message=FlowRequest(
                         inputs={"prompt": prompt},
                     ),
                     recipient=agent_id,
@@ -368,13 +368,13 @@ class FFA(Conductor):
         while q := await self.query_user(content="Enter your query"):
             # Add history to query
             context = await self._context.get_messages()
-            
+
             # Request each agent variant to speak
             for agent_type in step_agents.get("general", []):
                 agent_id = await self.runtime.get(agent_type)
                 tasks.append(
                     self.runtime.send_message(
-                        message=RequestToSpeak(
+                        message=FlowRequest(
                             inputs={"prompt": q},
                             placeholders=self._placeholders.get_dict(),
                             context=context,
@@ -387,5 +387,5 @@ class FFA(Conductor):
                 if tasks:
                     await asyncio.gather(*tasks)
                 await asyncio.sleep(1)
-                
+
 

@@ -26,7 +26,7 @@ class Describer(LC):
         # We don't run this step if we only have text components.
         if not job.record or not job.record.components:
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id}, no media object provided.",
+                f"Not invoking agent {self.agent_id} for job {job.job_id}, no media object provided.",
             )
             return job
 
@@ -41,7 +41,7 @@ class Describer(LC):
         if not media_exists:
             # don't try to describe only text components
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id}, no non-text components provided.",
+                f"Not invoking agent {self.agent_id} for job {job.job_id}, no non-text components provided.",
             )
             return job
 
@@ -49,7 +49,7 @@ class Describer(LC):
         # media object (job.record).
         if job.record.alt_text:
             logger.debug(
-                f"Not invoking agent {self.name} for job {job.job_id}, alt text / transcript / media captions already exist.",
+                f"Not invoking agent {self.agent_id} for job {job.job_id}, alt text / transcript / media captions already exist.",
             )
             return job
 

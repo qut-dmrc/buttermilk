@@ -14,8 +14,8 @@ from buttermilk.bm import bm, logger
 from buttermilk.runner.chat import (
     Answer,
     BaseGroupChatAgent,
+    FlowRequest,
     NullAnswer,
-    RequestToSpeak,
 )
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -127,7 +127,7 @@ class LLMAgent(BaseGroupChatAgent):
 
     async def query(
         self,
-        request: RequestToSpeak,
+        request: FlowRequest,
     ) -> Answer | NullAnswer:
 
         untrusted_vars= dict(**request.inputs)

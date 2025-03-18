@@ -19,7 +19,6 @@ import httpx
 from buttermilk._core.agent import SingleAgent
 
 
-
 class Slurp(SingleAgent):
     #         endpoint = endpoint
     #         key = key

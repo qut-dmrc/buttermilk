@@ -216,7 +216,7 @@ class BM(Singleton, BaseModel):
                 )
                 # list available models
                 models = aiplatform.Model.list()
-        
+
         self.setup_logging(verbose=self.cfg.logger.verbose)
 
         # Print config to console and save to default save dir
@@ -497,24 +497,24 @@ class BM(Singleton, BaseModel):
                 return results_df
             return pd.DataFrame()
         return result
-    
+
 class BMProxy:
     """A proxy class for lazy initialization of the BM singleton."""
     _instance = None
-    
+
     def __getattr__(self, name):
         """Forward attribute access to the BM instance, creating it if needed."""
         if BMProxy._instance is None:
             # Use the existing Singleton pattern from BM
             BMProxy._instance = BM()
         return getattr(BMProxy._instance, name)
-    
+
     def __call__(self, *args, **kwargs):
         """Initialize or return the BM singleton."""
         if not args and not kwargs and BMProxy._instance is not None:
             # Just returning existing instance
             return BMProxy._instance
-            
+
         # Create new instance with args/kwargs (or default)
         BMProxy._instance = BM(*args, **kwargs)
         return BMProxy._instance

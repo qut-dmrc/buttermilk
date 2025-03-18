@@ -1,14 +1,17 @@
-from abc import abstractmethod
 import asyncio
-from typing import Any, AsyncGenerator, Iterable, Iterator
-import pandas as pd
+from abc import abstractmethod
+from typing import Any, AsyncGenerator
+
 from pydantic import BaseModel
+
 from buttermilk._core.runner_types import Record
+
 from .loaders import LoaderGCS
 
+
 class RecordMaker(BaseModel):
-    
-    @abstractmethod 
+
+    @abstractmethod
     async def record_generator(self) -> AsyncGenerator[Record, None]:
         for record in self.data:
             yield Record(**record)

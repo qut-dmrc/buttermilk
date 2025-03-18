@@ -15,7 +15,7 @@ from buttermilk._core.agent import Agent
 from buttermilk.agents.llmchat import LLMAgent
 from buttermilk.bm import bm
 from buttermilk.llms import CHATMODELS
-from buttermilk.runner.moa import RequestToSpeak
+from buttermilk.runner.moa import FlowRequest
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def record_agent_cfg(
         case "Judger":
             return Agent(
                 agent="LLMClient",
-                name=request.param,
+                agent_id=request.param,
                 description="apply rules",
                 parameters=dict(
                     model=model_name,
@@ -61,7 +61,7 @@ def record_agent_cfg(
         case "Owl":
             return Agent(
                 agent="LLMClient",
-                name=request.param,
+                agent_id=request.param,
                 description="look for things",
                 parameters=dict(
                     model=model_name,
@@ -96,7 +96,7 @@ async def test_run_record_agent(
     runtime.start()
     record = UserMessage(content=fight_no_more_forever.fulltext, source="testing")
     result = await runtime.send_message(
-        RequestToSpeak(placeholders={"record": [record]}),
+        FlowRequest(placeholders={"record": [record]}),
         await runtime.get("default"),
     )
     await runtime.stop_when_idle()

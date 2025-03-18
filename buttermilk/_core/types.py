@@ -2,21 +2,16 @@
 import datetime
 import platform
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
 
 import psutil
 import pydantic
 import shortuuid
 from cloudpathlib import AnyPath, CloudPath
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
-    field_validator,
 )
-
-from buttermilk._core.runner_types import Record
-from buttermilk.utils.validators import make_list_validator
 
 from ..utils import get_ip
 
@@ -41,46 +36,6 @@ def _make_run_id() -> str:
 
 
 _global_run_id = _make_run_id()
-
-class AgentInput(BaseModel):
-    """Base class for agent inputs with built-in validation"""
-    prompt: str = Field(default="", description="A question or prompt from a user")
-    records: list[Record] = Field(default=[],
-        description="A prepared data record",
-    )
-    context: list[Any] = Field(default=[], description="History or context to provide to the agent.")
-    inputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="A dictionary of inputs to the agent",
-    )
-
-    _ensure_list = field_validator("records", "context", mode="before")(
-        make_list_validator(),
-    )
-
-class AgentOutput(BaseModel):
-    """Base class for agent outputs with built-in validation"""
-    agent_id: str
-
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors that occurred during the agent's execution",
-    )
-    content: str = Field(
-        default="",
-        description="The raw string response from the agent",
-    )
-    response: Any = Field(
-        default=None,
-        description="The response from the agent",
-    )
-    # messages: list = Field(default_factory=list, description="Messages generated during the step")
-    records: list[Record] = Field(default=[], description="Records fetched in the step")
-    metadata: dict | None = Field(default={})
-
-    _ensure_list = field_validator("error", "records", mode="before")(
-        make_list_validator(),
-    )
 
 
 class SessionInfo(pydantic.BaseModel):

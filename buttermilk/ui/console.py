@@ -1,13 +1,9 @@
 from typing import Any
+
 from rich.console import Console
 from rich.markdown import Markdown
 
 from buttermilk._core.ui import IOInterface
-from buttermilk.runner.chat import (
-    Answer,
-    FlowMessage,
-    RequestToSpeak,
-)
 
 
 class CLIUserAgent(IOInterface):
@@ -22,7 +18,7 @@ class CLIUserAgent(IOInterface):
 
     async def send_output(self, message: Any, source: str = "") -> None:
         """Send output to the user interface"""
-        Console().print(
+        Console(highlight=True).print(
             Markdown(f"### {source}: \n{message}"),
         )
 

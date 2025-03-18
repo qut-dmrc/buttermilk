@@ -8,7 +8,6 @@ from pydantic import BaseModel, PrivateAttr, field_serializer, model_validator
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.flow import Flow
-
 from buttermilk.data.recordmaker import RecordMakerDF
 from buttermilk.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df
@@ -86,7 +85,7 @@ class MultiFlowOrchestrator(BaseModel):
                     coroutine = self.task_wrapper(
                         task=coroutine,
                         job_id=job.job_id,
-                        agent_name=agent.name,
+                        agent_name=agent.agent_id,
                     )
                     yield coroutine
 

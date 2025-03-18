@@ -13,8 +13,7 @@ from promptflow.tracing import trace
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk._core.job import Job
-from buttermilk.bm import bm, logger
-from buttermilk.utils import save
+from buttermilk.bm import logger
 from buttermilk.utils.save import upload_rows
 
 

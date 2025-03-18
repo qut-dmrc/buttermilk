@@ -23,8 +23,6 @@ from tenacity import (
 
 from buttermilk._core.job import Job
 
-
-
 from .._core.log import logger
 from .bq import construct_dict_from_schema
 from .utils import (

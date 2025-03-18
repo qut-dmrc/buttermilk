@@ -1,44 +1,21 @@
 
 import asyncio
 import re
+from typing import Any
 
-from autogen_core import (
-    MessageContext,
-    message_handler,
-)
 from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.runner_types import Record
-from buttermilk._core.types import AgentInput, AgentOutput
-from buttermilk.runner.chat import (
-    BaseGroupChatAgent,
-    FlowMessage,
-    GroupChatMessageType,
-    InputRecord,
-    NullAnswer,
-    RequestToSpeak,
-)
+
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import extract_url
-from typing import Any
 
 
 class Fetch(Agent):
     _data_task: Any = PrivateAttr(default=None)
-    # def __init__(
-    #     self,
-    #     *,
-    #     config: Agent,
-    #     group_chat_topic_type: str = "default",
-    # ) -> None:
-    #     super().__init__(
-    #         config=config,
-    #         group_chat_topic_type=group_chat_topic_type,
-    #     )
-    #     self._data = None
-    #     self._data_task = asyncio.get_running_loop().create_task(self.load_data())
 
     async def load_data(self):
         self._data = await prepare_step_df(self.data)
@@ -57,7 +34,7 @@ class Fetch(Agent):
 
         return None
 
-    async def get_record(self, message: str) -> Record:
+    async def get_record(self, message: str) -> Record|None: 
         record = None
         if match := re.match(r"!([\d\w_]+)", message):
             # Try to get by record_id
@@ -72,57 +49,12 @@ class Fetch(Agent):
         if input_data.prompt:
             record = await self.get_record(input_data.prompt)
             if record:
-                return AgentOutput(agent_id=self.name,
+                return AgentOutput(agent=self.agent_id,
                     records=[record]
                 )
             else:
-                return AgentOutput(agent_id=self.name,
+                return AgentOutput(agent=self.agent_id,
                     records=[Record(data=input_data.prompt)]
                 )
-        return AgentOutput(agent_id=self.name,error="No input provided.")
-                    
-    
-    async def query(
-        self,
-        request: RequestToSpeak | FlowMessage,
-    ) -> InputRecord | NullAnswer:
-        record = None
-        inputs = []
-        if isinstance(request, RequestToSpeak):
-            # Check the extra fields in the request
-            for key, value in self.config.inputs.items():
-                inputs.extend([r.content for r in request.placeholders.get(value, [])])
-                inputs.extend([r for r in request.inputs.get(value, [])])
-                if value == "context" and request.context:
-                    inputs.extend([r.content for r in request.context])
+        return AgentOutput(agent=self.agent_id,error="No input provided.")
 
-        if request.content:
-            inputs.append(request.content)
-        for data_var in inputs:
-            # Get the first matching input we can find
-            record = await self.get_record(data_var)
-            if record:
-                break
-
-        if not record and isinstance(request, RequestToSpeak):
-            # We must return an input record if we were asked for one
-            # Create a new record with the original text we were given.
-            record = Record(data="\n".join(inputs))
-
-        if record:
-            response = InputRecord(
-                content=record.fulltext,
-                payload=record,
-                step=self.step,
-            )
-            return response
-
-        return NullAnswer(step=self.step)
-
-    @message_handler
-    async def handle_urls(
-        self,
-        message: GroupChatMessageType,
-        ctx: MessageContext,
-    ) -> InputRecord | NullAnswer:
-        return await self.query(message)

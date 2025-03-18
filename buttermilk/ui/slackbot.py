@@ -5,29 +5,23 @@ from asyncio import Queue
 from pydantic import BaseModel
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-from buttermilk.bm import logger
 from buttermilk.runner.chat import (
     Answer,
     ConversationManager,
     FlowMessage,
+    FlowRequest,
     IOInterface,
     NullAnswer,
-    RequestToSpeak,
 )
 from buttermilk.runner.conversation import Selector
-from buttermilk.runner.flow import Flow
 from buttermilk.runner.moa import FFA, Conductor, MoA
-from buttermilk.ui.formatting.slackblock import format_response
 from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
-
-from tenacity import (
-    retry,
-    stop_after_attempt, 
-    wait_exponential,
-    retry_if_exception_type
-)
-import asyncio
 
 SLACK_MAX_MESSAGE_LENGTH = 3000
 
@@ -84,11 +78,11 @@ def register_handlers():
                 "blocks": blocks,
                 "thread_ts": self.context.thread_ts,
             })
-            
+
             msg_response = await self._post_message_with_retry(**kwargs)
             return msg_response
-        
-        async def query(self, request: RequestToSpeak) -> FlowMessage:
+
+        async def query(self, request: FlowRequest) -> FlowMessage:
             """Retrieve input from the user interface"""
             _confirm_only=False
             if request.content:
@@ -98,7 +92,7 @@ def register_handlers():
                 from buttermilk.ui.formatting.slackblock import confirm_block
                 confirm_blocks = confirm_block(message=request.prompt or "Would you like to proceed?")
                 response = await self.send_to_thread(text=confirm_blocks["text"], blocks=confirm_blocks["blocks"])
-                
+
                 # Setup action handlers for the buttons
                 @app.action("confirm_action")
                 async def handle_confirm(ack, body, client):
@@ -119,7 +113,7 @@ def register_handlers():
                             }
                         }]
                     )
-                    
+
                 @app.action("cancel_action")
                 async def handle_cancel(ack, body, client):
                     await ack()
@@ -139,7 +133,7 @@ def register_handlers():
                             }
                         }]
                     )
-                    
+
             # Wait for a response (either text message or button click)
             msg = await self.input_queue.get()
             if _confirm_only:
@@ -163,7 +157,7 @@ def register_handlers():
             source: str = "",
         ) -> None:
             """Send output to the user interface"""
-            if isinstance(message, Answer):        
+            if isinstance(message, Answer):
                 formatted_blocks = format_slack_reasons(message)
                 await self.send_to_thread(**formatted_blocks)
             else:
@@ -249,7 +243,7 @@ def register_handlers():
                 conductor = Selector
             case "conductor":
                 conductor = Conductor
-            
+
         await _manager.start_conversation(
             io_interface=io_interface,
             conductor=conductor,

@@ -8,14 +8,14 @@ simple:
 
   steps:
     - name: fetch
-      agent: Fetch
+      agent_obj: Fetch
       description: fetch urls and stored records for the chat
       inputs:
         prompt: prompt
 
     - name: judge
       description: Applies criteria to content.
-      agent: LLMAgent
+      agent_obj: LLMAgent
       num_runs: 2
       variants:
         template: judge
@@ -27,7 +27,7 @@ simple:
 
     # - name: feedback
     #   description: QA for mistakes.
-    #   agent: LLMAgent
+    #   agent_obj: LLMAgent
     #   num_runs: 1
     #   variants:
     #     template: feedback
@@ -36,7 +36,7 @@ simple:
     #     history: history
 
     - name: synth
-      agent: LLMAgent
+      agent_obj: LLMAgent
       description: Synthesizes draft answers.
       num_runs: 1
       variants:
@@ -52,7 +52,7 @@ simple:
         feedback: feedback
 
     - name: eval
-      agent: LLMAgent
+      agent_obj: LLMAgent
       num_runs: 1
       description: show differences between answers
       variants:

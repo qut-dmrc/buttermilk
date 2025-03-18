@@ -3,14 +3,15 @@
 # we want to make sure that run_id (which informs the logging
 # tags and save directories) does not change across processes.
 import hydra
-from buttermilk._core.types import SessionInfo, _global_run_id
-from buttermilk.bm import bm, Project
 from rich import print as rprint
+
+from buttermilk.bm import Project
+
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(cfg: Project) -> None:
     global bm, logger, global_run_id
-    
+
     rprint(cfg)
     pass
 
@@ -20,5 +21,5 @@ def main(cfg: Project) -> None:
     bm = BM(cfg=cfg)
     logger = bm.logger
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

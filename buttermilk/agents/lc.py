@@ -123,7 +123,7 @@ class LC(Agent):
         job.agent_info["model_params"] = scrub_keys(self._llms[model].params)
 
         logger.debug(
-            f"Invoking agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model}...",
+            f"Invoking agent {self.agent_id} {template} for job {job.job_id} in flow {job.flow_id} with model {model}...",
         )
         response = await self.invoke(
             model=model,
@@ -135,13 +135,13 @@ class LC(Agent):
         error = response.pop("error", None)
 
         if error and not str(error).lower() == "null":
-            job.error[self.name] = error
+            job.error[self.agent_id] = error
             logger.error(
                 f"Unsuccessfully invoked chain with {model} in {elapsed:.2f} seconds: {error}",
             )
         else:
             logger.debug(
-                f"Finished agent {self.name} {template} for job {job.job_id} in flow {job.flow_id} with model {model} in {elapsed:.2f} seconds, received response of {len(str(response.values()))} characters.",
+                f"Finished agent {self.agent_id} {template} for job {job.job_id} in flow {job.flow_id} with model {model} in {elapsed:.2f} seconds, received response of {len(str(response.values()))} characters.",
             )
         job.metadata.update(response.pop("metadata", {}))
         job.outputs = dict(**response)

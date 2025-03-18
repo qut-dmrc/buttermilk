@@ -1,6 +1,10 @@
 import pprint
+
 from buttermilk.runner.chat import Answer
-from buttermilk.ui.formatting.slackblock import SLACK_MAX_MESSAGE_LENGTH, format_response
+from buttermilk.ui.formatting.slackblock import (
+    SLACK_MAX_MESSAGE_LENGTH,
+    format_response,
+)
 
 
 def format_slack_reasons(result: Answer) -> dict:
@@ -8,7 +12,7 @@ def format_slack_reasons(result: Answer) -> dict:
     # don't modify the original object
     result_copy = result.model_copy(deep=True)
     blocks = []
-    
+
     # Add header with model identifier
     header_text = f"Model: :robot_face: {result_copy.agent_id} {result_copy.config.parameters.get('model')}"
     blocks.append({
@@ -26,41 +30,41 @@ def format_slack_reasons(result: Answer) -> dict:
             "text": ", ".join(result_copy.config.parameters.values()),
         }
     })
-    
+
     # Handle error case
-    if result_copy.outputs.get('error'):
+    if result_copy.outputs.get("error"):
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get('error'))),
+                "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get("error"))),
             }
         })
-        
+
     else:
         outputs = result_copy.outputs
         if isinstance(outputs, dict):
             # Extract reasons for special handling
             reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []
-            
+
             # Format prediction, confidence and severity with special styling if present
             key_fields = ["prediction", "confidence", "severity"]
             if any(k in outputs for k in key_fields):
                 special_text = ""
-                
+
                 if "prediction" in outputs:
                     prediction = outputs.pop("prediction", None)
                     icon = ":white_check_mark:" if prediction else ":no_entry:"
                     special_text += f"{icon} *Prediction:* {str(prediction)}\n"
-                
+
                 if "confidence" in outputs:
                     confidence = outputs.pop("confidence", "")
                     special_text += f":bar_chart: *Confidence:* {confidence}\n"
-                
+
                 if "severity" in outputs:
                     severity = outputs.pop("severity", "")
                     special_text += f":warning: *Severity:* {severity}\n"
-                
+
                 if special_text:
                     blocks.append({
                         "type": "section",
@@ -69,7 +73,7 @@ def format_slack_reasons(result: Answer) -> dict:
                             "text": special_text.strip()
                         }
                     })
-            
+
             # Add labels as chips if present
             if "labels" in outputs and outputs["labels"]:
                 labels = outputs.pop("labels", [])
@@ -82,11 +86,11 @@ def format_slack_reasons(result: Answer) -> dict:
                             "text": label_text
                         }
                     })
-            
+
             # Handle any remaining fields in outputs
-            remaining_outputs = {k: v for k, v in outputs.items() 
+            remaining_outputs = {k: v for k, v in outputs.items()
                                if k not in ["reasons", "prediction", "confidence", "severity", "labels"]}
-            
+
             if remaining_outputs:
                 for text in format_response(remaining_outputs):
                     blocks.append({
@@ -96,13 +100,13 @@ def format_slack_reasons(result: Answer) -> dict:
                             "text": text
                         }
                     })
-            
+
             # Add divider before reasons if there are any
             if reasons:
                 blocks.append({
                     "type": "divider"
                 })
-                
+
                 blocks.append({
                     "type": "section",
                     "text": {
@@ -110,7 +114,7 @@ def format_slack_reasons(result: Answer) -> dict:
                         "text": "*Reasoning:*"
                     }
                 })
-                
+
                 # Add each reason as its own contextual block for better readability
                 for i, reason in enumerate(reasons):
                     blocks.append({
@@ -133,10 +137,10 @@ def format_slack_reasons(result: Answer) -> dict:
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
-    
+
     # Also provide a text fallback for clients that don't support blocks
     fallback_text = header_text + "\n" + pprint.pformat(result_copy, indent=2)[:SLACK_MAX_MESSAGE_LENGTH-len(header_text)-10]
-    
+
     return {
         "blocks": blocks,
         "text": fallback_text

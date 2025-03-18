@@ -1,28 +1,20 @@
-import datetime
-from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from typing import Any
 
-import numpy as np
 import weave
-from omegaconf import DictConfig, ListConfig, OmegaConf
 from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     Field,
-    field_validator,
 )
 from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
-from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.config import SaveInfo
+from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
-from buttermilk.utils.utils import expand_dict
-from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .log import logger
-from .types import AgentInput, AgentOutput
 
 
 def get_agent_name_tracing(call: Any) -> str:
@@ -44,11 +36,12 @@ def get_agent_name_tracing(call: Any) -> str:
 ##########
 class Agent(BaseModel):
     """Base Agent interface for all processing units"""
-    
-    name: str = Field(
+
+    agent_id: str = Field(
         ...,
-        description="The name of the flow or step in the process that this agent does.",
+        description="The unique name of this agent.",
     )
+    name: str = Field(..., description="The name of the step this agent type performs")
     description: str
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -75,7 +68,7 @@ class Agent(BaseModel):
             job.error = extract_error_info(e=e)
             if job.record:
                 logger.error(
-                    f"Error processing task {self.name} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                    f"Error processing task {self.agent_id} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
                 )
         return job
 

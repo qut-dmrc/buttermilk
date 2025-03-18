@@ -2,10 +2,10 @@ import asyncio
 import os
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
-from typing import Any, Type, Union
+from typing import Any, Union
 
 import hydra
+import pydantic
 from autogen_core import (
     DefaultTopicId,
     MessageContext,
@@ -17,8 +17,7 @@ from autogen_core.models import (
     SystemMessage,
     UserMessage,
 )
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
-import pydantic
+from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
@@ -28,33 +27,6 @@ from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )
-
-
-class FlowMessage(BaseModel):
-    type: str = "GroupChatMessage"
-    """A message sent to the group chat"""
-
-    content: str
-    """The content of the message."""
-
-    step: str
-    """The stage of the process that this message was sent from"""
-
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    """Metadata about the message."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_content_to_string(cls, values):
-        if "content" in values:
-            content = values["content"]
-            if isinstance(content, str):
-                pass  # Already a string
-            elif hasattr(content, "content"):  # Handle LLMMessage case
-                values["content"] = str(content.content)
-            else:
-                values["content"] = str(content)
-        return values
 
 
 class NullAnswer(FlowMessage):
@@ -90,16 +62,6 @@ class Answer(FlowMessage):
 GroupChatMessageType = Union[FlowMessage, NullAnswer, InputRecord, Answer]
 
 
-class RequestToSpeak(BaseModel):
-    content: str | None = None
-    inputs: Mapping[str, Any] = {}
-    prompt: str | None = None
-    placeholders: Mapping[
-        str,
-        list[SystemMessage | UserMessage | AssistantMessage],
-    ] = {}
-    context: list[SystemMessage | UserMessage | AssistantMessage] = []
-
 
 class MessagesCollector(KeyValueCollector):
     """Specifically typed to collect pairs of (User, Assistant) messages"""
@@ -128,7 +90,7 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
             description=config.description,
         )
         self.config = config
-        self.step = config.name
+        self.step = config.agent_id
         self.parameters = config.parameters
         self._group_chat_topic_type = group_chat_topic_type
         self._json_parser = ChatParser()
@@ -140,14 +102,14 @@ class BaseGroupChatAgent(RoutedAgent, ABC):
         )
 
     @abstractmethod
-    async def query(self, request: RequestToSpeak) -> GroupChatMessageType:
+    async def query(self, request: FlowRequest) -> GroupChatMessageType:
         """Query the agent with the given inputs and placeholders."""
         raise NotImplementedError
 
     @message_handler
     async def handle_request_to_speak(
         self,
-        message: RequestToSpeak,
+        message: FlowRequest,
         ctx: MessageContext,
     ) -> GroupChatMessageType:
         log_message = f"{self.id} got request to speak."
@@ -231,9 +193,9 @@ def run_moa_cli(cfg) -> None:
         # flow = objs.flows[cfg.flow]
         # moa = MoA(steps=flow.steps, source="dev")
         loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 3.0 
+        loop.slow_callback_duration = 3.0
         io_interface=CLIUserAgent
-        
+
     elif bm.cfg.run.ui == "slack":
         # Run Slack version
 
@@ -245,7 +207,7 @@ def run_moa_cli(cfg) -> None:
         from buttermilk.ui.slackbot import initialize_slack_bot
 
         loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 3.0 
+        loop.slow_callback_duration = 3.0
         handler = initialize_slack_bot(
             conversation_manager=manager,
             flows=flows,

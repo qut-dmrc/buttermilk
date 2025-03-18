@@ -6,7 +6,7 @@ from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscri
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
 from buttermilk.agents.fetch import Fetch
-from buttermilk.runner.chat import FlowMessage, InputRecord, RequestToSpeak
+from buttermilk.runner.chat import FlowMessage, InputRecord, FlowRequest
 
 
 class TestFetch:
@@ -17,7 +17,7 @@ class TestFetch:
         """Create a mock Fetch instance without dealing with initialization."""
         with patch.object(Fetch, "__init__", return_value=None):
             agent = Fetch()
-            agent.step = "test_step"
+            agent.name = "test_step"
             agent.publish = AsyncMock()
             return agent
 
@@ -194,7 +194,7 @@ class TestFetch:
     ):
         """Test handle_urls works with RequestToSpeak messages."""
         # Setup
-        message = RequestToSpeak(
+        message = FlowRequest(
             content="Check out https://example.com",
         )
         ctx = MagicMock()
@@ -221,7 +221,7 @@ class TestFetch:
 def fetch_agent_cfg():
     return Agent(
         agent="Fetch",
-        name="testing",
+        agent_id="testing",
         description="fetch stuff",
         data=[
             {
@@ -244,7 +244,7 @@ messages = [
     ),
     (
         "error",
-        RequestToSpeak(
+        FlowRequest(
             content="Check out https://example.com",
         ),
     ),

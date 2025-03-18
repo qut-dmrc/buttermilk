@@ -1,14 +1,14 @@
-import cv2
-from moviepy.editor import VideoFileClip
-import time
 import base64
 from pathlib import Path
+
+import cv2
 from pydantic import validate_call
+
 
 @validate_call
 def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
     """ Extract frames from video for use in analysis."""
-    
+
     base64Frames = []
 
     video = cv2.VideoCapture(video_path)
@@ -35,4 +35,4 @@ def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
     # clip.audio.close()
     # clip.close()
 
-    return base64Frames 
+    return base64Frames

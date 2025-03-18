@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any
 from distutils.util import strtobool
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -20,7 +21,7 @@ class IOInterface(BaseModel, ABC):
             message or "Proceed? (y/n): ",
         )
         return bool(strtobool(user_input))
-    
+
     @abstractmethod
     async def initialize(self) -> None:
         """Initialize the interface"""

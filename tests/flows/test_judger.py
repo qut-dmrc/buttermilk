@@ -9,7 +9,7 @@ from buttermilk.llms import CHATMODELS
 @pytest.fixture(params=CHATMODELS)
 def judger(request):
     agent = LC(
-        name="testjudger",
+        agent_id="testjudger",
         parameters={
             "template": "judge",
             "model": request.param,

@@ -1,13 +1,11 @@
 
+import asyncio
 import random
 from typing import AsyncGenerator, Sequence
-from cloudpathlib import GSPath
-import gcsfs
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
-import asyncio
-from aiohttp import ClientSession
 
-from buttermilk.utils.utils import read_file
+from cloudpathlib import GSPath
+from pydantic import BaseModel, PrivateAttr
+
 
 class LoaderGCS(BaseModel):
     uri: str
@@ -18,11 +16,11 @@ class LoaderGCS(BaseModel):
         if not self._filelist:
             for file in GSPath(self.uri).glob(self.glob):
                 self._filelist.append(file)
-        
+
             random.shuffle(self._filelist)
 
         return self._filelist
-    
+
     async def read_files_concurrently(self, *, list_files: Sequence, num_readers: int):
         # Read a set of files from GCS using several asyncio readers, and
         # yield one file at a time
@@ -32,7 +30,7 @@ class LoaderGCS(BaseModel):
             async with semaphore:
                 file_content = await self._fs.cat(file)
                 yield file, file_content
-        
+
         tasks = [sem_read_file(file) for file in list_files]
         for task in asyncio.as_completed(tasks):
             yield await task
@@ -43,4 +41,3 @@ class LoaderGCS(BaseModel):
             file_content = file.read_bytes()
             yield file.as_uri(), file_content
             await asyncio.sleep(0)
-    
