@@ -262,7 +262,6 @@ class TaskDistributor(BaseModel):
     _tasks: list[Coroutine] = []
     total_tasks: int = 0
     _collector: ResultsCollector | None = None
-    bm: BM = Field(default_factory=lambda: BM())
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

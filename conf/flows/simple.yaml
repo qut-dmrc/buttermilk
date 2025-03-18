@@ -25,15 +25,15 @@ simple:
       inputs:
         record: record
 
-    - name: feedback
-      description: QA for mistakes.
-      agent: LLMAgent
-      num_runs: 1
-      variants:
-        template: feedback
-        model: ${llms.general}
-      inputs:
-        history: history
+    # - name: feedback
+    #   description: QA for mistakes.
+    #   agent: LLMAgent
+    #   num_runs: 1
+    #   variants:
+    #     template: feedback
+    #     model: ${llms.general}
+    #   inputs:
+    #     history: history
 
     - name: synth
       agent: LLMAgent

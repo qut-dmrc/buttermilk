@@ -72,14 +72,14 @@ class Fetch(Agent):
         if input_data.prompt:
             record = await self.get_record(input_data.prompt)
             if record:
-                return AgentOutput(
+                return AgentOutput(agent_id=self.name,
                     records=[record]
                 )
             else:
-                return AgentOutput(
+                return AgentOutput(agent_id=self.name,
                     records=[Record(data=input_data.prompt)]
                 )
-        return AgentOutput(error="No input provided.")
+        return AgentOutput(agent_id=self.name,error="No input provided.")
                     
     
     async def query(

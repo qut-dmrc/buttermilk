@@ -1,7 +1,7 @@
 
 from cloudpathlib import AnyPath
 
-from buttermilk.bm import bm
+from buttermilk.bm import bm, BM
 
 
 def test_has_test_info(bm: BM):

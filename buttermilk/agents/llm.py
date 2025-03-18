@@ -26,11 +26,12 @@ class LLMAgent(Agent):
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
 
-    # @pydantic.model_validator(mode="after")
-    # def init_model(self) -> Self:
-    #     self._model_client = bm.llms.get_autogen_chat_client(self.model)
+    @pydantic.model_validator(mode="after")
+    def init_model(self) -> Self:
+        if self.parameters.get("model"):
+            self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
 
-    #     return self
+        return self
 
     async def fill_template(
         self,
@@ -69,17 +70,25 @@ class LLMAgent(Agent):
             if message["role"] == "placeholder":
                 # Remove everything except word chars to get the variable name
                 var_name = re.sub(r"[^\w\d_]+", "", message["content"])
-                try:
-                    messages.extend(getattr(inputs, var_name))
+                if var_name.lower() == "records" and inputs:
+                    for rec in inputs.records:
+                        # TODO make this multimodal later
+                        messages.append(UserMessage(content=rec.fulltext, source="record"))
                     # Remove the placeholder from the list of unfilled variables
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
-                except KeyError:
-                    err =  f"Missing {var_name} in template or placeholder vars.",
-                    if self.fail_on_unfilled_parameters:
-                        raise ValueError(err)
-                    else:
-                        logger.warning(err)
+                else:
+                    try:
+                        messages.extend(getattr(inputs, var_name))
+                        # Remove the placeholder from the list of unfilled variables
+                        if var_name in unfilled_vars:
+                            unfilled_vars.remove(var_name)
+                    except KeyError:
+                        err =  f"Missing {var_name} in template or placeholder vars.",
+                        if self.fail_on_unfilled_parameters:
+                            raise ValueError(err)
+                        else:
+                            logger.warning(err)
 
                 continue
 
@@ -94,12 +103,12 @@ class LLMAgent(Agent):
                     messages.append(
                         AssistantMessage(
                             content=content_without_vars,
-                            source=self.id.type,
+                            source=self.name,
                         ),
                     )
                 else:
                     messages.append(
-                        UserMessage(content=content_without_vars, source=self.id.type),
+                        UserMessage(content=content_without_vars, source=self.name),
                     )
 
         if unfilled_vars:
@@ -120,7 +129,7 @@ class LLMAgent(Agent):
 
         response = await self._model_client.create(messages=messages)
 
-        content = self._json_parser.parse(response.content)
+        outputs = self._json_parser.parse(response.content)
         metadata = {k:v for k,v in response.model_dump(exclude_unset=True, exclude_none=True).items() if v and k not in ["content"]}
-        output = AgentOutput(response=content, metadata=metadata)
+        output = AgentOutput(agent_id=self.name, response=outputs, content=response.content, metadata=metadata)
         return output

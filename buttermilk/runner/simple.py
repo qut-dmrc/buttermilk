@@ -25,14 +25,14 @@ class Sequencer(Orchestrator):
                 step_inputs = AgentInput(prompt=prompt, inputs=mapped_inputs, records=self._records)
                 result = await variant(step_inputs)
                 if not result.error:
-                    self._flow_data.add(key=variant.name, value=result.response)
+                    self._flow_data.add(key=variant.name, value=result)
                     
                     # Harvest records
                     self._records.extend(result.records)
 
                     # also add to generic autogen collector
                     if result.response:
-                        msg = AssistantMessage(content=result.response, source=variant.name)
+                        msg = AssistantMessage(content=str(result.response), source=variant.name)
                         await self._context.add_message(msg)
                     
 

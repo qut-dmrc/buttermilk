@@ -26,7 +26,6 @@ from buttermilk.utils.save import upload_rows
 class ResultsCollector(BaseModel):
     """A simple collector that receives results from a queue and collates them."""
 
-    bm: BM = Field(default_factory=lambda: BM())
     results: asyncio.Queue[Job] = Field(default_factory=asyncio.Queue)
     shutdown: bool = False
     n_results: int = 0

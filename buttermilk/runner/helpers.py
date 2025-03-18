@@ -71,8 +71,6 @@ def load_bq(data_cfg: DataSource) -> pd.DataFrame:
     sql = f"SELECT * FROM `{data_cfg.path}`"
     sql += " ORDER BY RAND() "
 
-    bm = BM()
-
     df = bm.run_query(sql)
 
     return df
@@ -133,8 +131,6 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
     #     sql += ") "
 
     sql += " ORDER BY RAND() "
-
-    bm = BM()
 
     df = bm.run_query(sql)
 

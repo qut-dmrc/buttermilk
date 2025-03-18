@@ -85,7 +85,6 @@ class NemoLangchain(Nemo):
         return output
 
     def init_client(self) -> None:
-        bm = BM()
         llm = LLMs()[self.model]
         template_text = read_yaml(
             Path(__file__).parent / "templates/nemo_self_check.yaml",

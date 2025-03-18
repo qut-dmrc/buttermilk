@@ -261,7 +261,6 @@ class MoA(BaseModel):
 
     @cached_property
     def group_chat_topic_type(self) -> str:
-        bm = BM()
 
         """The group chat topic type (common to all agents in this chat)."""
         topic = f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}"

@@ -60,9 +60,15 @@ class AgentInput(BaseModel):
 
 class AgentOutput(BaseModel):
     """Base class for agent outputs with built-in validation"""
+    agent_id: str
+
     error: list[str] = Field(
         default_factory=list,
         description="A list of errors that occurred during the agent's execution",
+    )
+    content: str = Field(
+        default="",
+        description="The raw string response from the agent",
     )
     response: Any = Field(
         default=None,
