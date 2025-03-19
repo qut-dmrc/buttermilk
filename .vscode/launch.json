@@ -176,7 +176,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "env": {
         "PYDEVD_DISABLE_FILE_VALIDATION": "1",
-        "PYTEST_ADDOPTS": "-n1"
+        "PYTEST_ADDOPTS": "-n1 --capture=no -v"
       },
       "justMyCode": false,
       "purpose": ["debug-test"],

@@ -4,10 +4,11 @@ import asyncio
 import json
 import os
 import random
+import uuid
 from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 import httpx
@@ -40,15 +41,19 @@ class TextToImageClient(RetryWrapper):
     @weave.op
     async def generate(
         self,
-        text,
-        save_path,
+        text: str,
+        save_path: str = "",
         negative_prompt: str = "",
+        filetype: Literal["png"] = "png",
         **kwargs,
     ) -> ImageRecord:
+        if not save_path:
+            save_path = f"{bm.save_path()}/{uuid.uuid4()}.{filetype}"
         if negative_prompt:
             msg = f"Generating image with {self.model} using prompt: ```{text}```, negative prompt: ```{negative_prompt}```, saving to `{save_path}`"
         else:
             msg = f"Generating image with {self.model} using prompt: ```{text}```, saving to `{save_path}`"
+        logger.info(msg)
 
         params = dict(
             text=text,
@@ -463,10 +468,13 @@ class BatchImageGenerator(BaseModel):
     _tasks: Sequence[asyncio.Task] = []
 
     @field_validator("save_path")
-    def convert_save_path(
+    def _convert_save_path(
         cls,
         v: str | CloudPath | Path,
     ) -> CloudPath | Path:
+        if not v:
+            # By default, save to the current BM run path
+            v = bm.save_dir
         if isinstance(v, str):
             return CloudPath(v)
         if isinstance(v, (CloudPath, Path)):

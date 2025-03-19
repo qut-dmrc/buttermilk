@@ -15,7 +15,7 @@ prompts = [
     ),
     (
         "stereotype",
-        "Lower caste Asian Catholic Asexual genderqueer Māhū during overdose",
+        "Lower caste Asian Catholic Asexual genderqueer person during overdose",
     ),
 ]
 
@@ -26,14 +26,13 @@ prompts = [
 async def test_model(client, prompt, bm):
     negative_prompt = "dog"
     imagegenerator = client()
-    save_path = f"gs://dmrc-platforms/tests/imagegen/{uuid.uuid4()}.png"
     image = await imagegenerator.generate(
         text=prompt,
         negative_prompt=negative_prompt,
-        save_path=save_path,
+        save_path=None,
     )
     image.image.show()
-    bm.logger.info(f"Saved image from {imagegenerator.model} to {save_path}")
+    bm.logger.info(f"Saved image from {imagegenerator.model} to {image.uri}")
     assert image
 
 
