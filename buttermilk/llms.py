@@ -1,16 +1,9 @@
-import asyncio
-import logging
-from collections.abc import Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-import requests
-import urllib3
 from anthropic import (
     AnthropicVertex,
-    APIConnectionError as AnthropicAPIConnectionError,
     AsyncAnthropicVertex,
-    RateLimitError as AnthropicRateLimitError,
 )
 from autogen import OpenAIWrapper
 from autogen_core.models import ChatCompletionClient
@@ -20,23 +13,10 @@ from autogen_ext.models.openai import (
     OpenAIChatCompletionClient,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
-from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
-from openai import (
-    APIConnectionError as OpenAIAPIConnectionError,
-    RateLimitError as OpenAIRateLimitError,
-)
-from tenacity import (
-    AsyncRetrying,
-    RetryError,
-    before_sleep_log,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
 
-from buttermilk.exceptions import RateLimit
+from buttermilk._core.retry import RetryWrapper
 from buttermilk.utils.utils import scrub_keys
 
 _ = "ChatCompletionClient"
@@ -46,7 +26,7 @@ try:
 except:
     pass
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     _ = [HarmBlockThreshold, HarmCategory]
@@ -78,10 +58,6 @@ class LLMCapabilities(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    model: str = Field(
-        ...,
-        description="The full identifier of this particular model (passed to constructor/API)",
-    )
     connection: str = Field(
         ...,
         description="Descriptive identifier for the type of connection used (e.g. Azure, Vertex)",
@@ -91,14 +67,13 @@ class LLMConfig(BaseModel):
         default="openai",
         description="Type of API to use (e.g. openai, vertex, azure)",
     )
-    api_key: str|None  = Field(default=None, description="API key to use for this model")
+    api_key: str | None = Field(
+        default=None,
+        description="API key to use for this model",
+    )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
     model_info: dict = {}
-    capabilities: LLMCapabilities = Field(
-        default_factory=LLMCapabilities,
-        description="Capabilities of the model (particularly multi-modal)",
-    )
     configs: dict = Field(default={}, description="Options to pass to the constructor")
 
 
@@ -136,7 +111,7 @@ CHATMODELS = [
     "llama32_90b_azure",
     "llama33_70b",
     "haiku",
-    "sonnet"
+    "sonnet",
 ]
 CHEAP_CHAT_MODELS = [
     "haiku",
@@ -207,7 +182,6 @@ def _Llama(*args, **kwargs):
 
 class LLMClient(BaseModel):
     client: Any
-    capabilities: LLMCapabilities
     connection: str
     params: dict = {}
 
@@ -215,149 +189,40 @@ class LLMClient(BaseModel):
 T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
-class AutoGenWrapper(BaseModel):
+class AutoGenWrapper(RetryWrapper):
     """Wraps any ChatCompletionClient and adds rate limiting via a semaphore
     plus robust retry logic for handling API failures.
-
-    Args:
-        client: The ChatCompletionClient to wrap
-        max_concurrent_calls: Maximum number of concurrent calls allowed
-        cooldown_seconds: Time to wait between calls
-        max_retries: Maximum number of retry attempts for failed API calls
-        min_wait_seconds: Minimum wait time between retries (exponential backoff)
-        max_wait_seconds: Maximum wait time between retries
-        jitter_seconds: Random jitter added to wait times to prevent thundering herd
-
     """
-
-    client: ChatCompletionClient
-    max_concurrent_calls: int = 3
-    cooldown_seconds: float = 0.1
-    max_retries: int = 6
-    min_wait_seconds: float = 1.0
-    max_wait_seconds: float = 30.0
-    jitter_seconds: float = 1.0
-
-    semaphore: asyncio.Semaphore = Field(default=None)
-    logger: logging.Logger = Field(default=None)
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    @model_validator(mode="after")
-    def create_semaphore(self) -> Self:
-        from buttermilk.bm import logger
-
-        # Use the proper setter for private attributes
-        self.semaphore = asyncio.Semaphore(
-            self.max_concurrent_calls,
-        )
-        self.logger = logger
-        return self
-
-    def _get_retry_config(self) -> dict:
-        """Get the retry configuration for tenacity."""
-        return {
-            "retry": retry_if_exception_type(
-                (
-                    RateLimit,
-                    TimeoutError,
-                    requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout,
-                    urllib3.exceptions.ProtocolError,
-                    urllib3.exceptions.TimeoutError,
-                    OpenAIAPIConnectionError,
-                    OpenAIRateLimitError,
-                    AnthropicAPIConnectionError,
-                    AnthropicRateLimitError,
-                    ResourceExhausted,
-                    TooManyRequests,
-                    ConnectionResetError,
-                    ConnectionError,
-                    ConnectionAbortedError,
-                ),
-            ),
-            "stop": stop_after_attempt(self.max_retries),
-            "wait": wait_exponential_jitter(
-                initial=self.min_wait_seconds,
-                max=self.max_wait_seconds,
-                jitter=self.jitter_seconds,
-            ),
-            "before_sleep": before_sleep_log(self.logger, logging.WARNING),
-            "reraise": True,
-        }
-
-    async def _execute_with_retry(
-        self,
-        func: Callable,
-        *args,
-        **kwargs,
-    ) -> dict[str, Any]:
-        """Execute a function with retry logic."""
-        try:
-            async for attempt in AsyncRetrying(**self._get_retry_config()):
-                with attempt:
-                    # Execute the function
-                    return await func(*args, **kwargs)
-        except RetryError as e:
-            self.logger.error(f"All retry attempts failed: {e!s}")
-            # Re-raise the last exception
-            raise e.last_attempt.exception()
-        except Exception as e:
-            self.logger.error(f"Unexpected exception: {e!s}")
-            raise e
 
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""
-        async with self.semaphore:
-            # Use the retry logic
+        # Use the retry logic
+        result = await self._execute_with_retry(
+            self.client.create,
+            *args,
+            **kwargs,
+        )
+
+        return result
+
+    async def agenerate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Rate-limited version of the underlying client's agenerate method with retries"""
+        if hasattr(self.client, "agenerate"):
+            # Use the retry logic with agenerate
+            result = await self._execute_with_retry(
+                self.client.agenerate,
+                *args,
+                **kwargs,
+            )
+        else:
+            # Fallback to create with retry
             result = await self._execute_with_retry(
                 self.client.create,
                 *args,
                 **kwargs,
             )
 
-            # Add a small delay to prevent rate limiting
-            await asyncio.sleep(self.cooldown_seconds)
             return result
-
-    async def agenerate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Rate-limited version of the underlying client's agenerate method with retries"""
-        async with self.semaphore:
-            if hasattr(self.client, "agenerate"):
-                # Use the retry logic with agenerate
-                result = await self._execute_with_retry(
-                    self.client.agenerate,
-                    *args,
-                    **kwargs,
-                )
-            else:
-                # Fallback to create with retry
-                result = await self._execute_with_retry(
-                    self.client.create,
-                    *args,
-                    **kwargs,
-                )
-
-            await asyncio.sleep(self.cooldown_seconds)
-            return result
-
-    def __getattr__(self, name: str) -> Any:
-        """Delegate attributes to the wrapped client only if they don't exist on self.
-        This prevents accidentally redirecting access to important instance attributes.
-        """
-        # Check if this is an attribute that should exist on self
-        if (
-            name in self.__dict__
-            or name in self.__annotations__
-            or name in self.__class__.__dict__
-            or (name.startswith("_") and hasattr(type(self), name))
-        ):
-            # Let the normal attribute lookup process handle this (which will raise
-            # AttributeError if appropriate)
-            return self.__getattribute__(name)
-
-        # Otherwise delegate to the client
-        return getattr(self.client, name)
 
 
 class LLMs(BaseModel):
@@ -419,7 +284,9 @@ class LLMs(BaseModel):
             client = OpenAIChatCompletionClient(**params)
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
-            _vertex_params = {k:v for k, v in params.items() if k in ["region", "project_id"]}
+            _vertex_params = {
+                k: v for k, v in params.items() if k in ["region", "project_id"]
+            }
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**params)
@@ -450,7 +317,6 @@ class LLMs(BaseModel):
             client=globals()[model_config.obj](
                 **params,
             ),
-            capabilities=model_config.capabilities,
             connection=scrub_keys(model_config.connection),
             params=scrub_keys(params),
         )

@@ -58,6 +58,7 @@ from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 _MODELS_CFG_KEY = "models_secret"
+_SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
@@ -322,8 +323,10 @@ class BM(Singleton, BaseModel):
             module="traceloop",
             category=DeprecationWarning,
         )
-        warnings.filterwarnings(action="ignore",message="Passing field metadata as keyword arguments is deprecated")
-
+        warnings.filterwarnings(
+            action="ignore",
+            message="Passing field metadata as keyword arguments is deprecated",
+        )
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
@@ -405,6 +408,14 @@ class BM(Singleton, BaseModel):
                 **self.cfg.secret_provider.model_dump(),
             )
         return _REGISTRY["secret_manager"]
+
+    @property
+    def credentials(self) -> dict[str, str]:
+        if _REGISTRY.get("credentials") is None:
+            _REGISTRY["credentials"] = self.secret_manager.get_secret(
+                cfg_key=_SHARED_CREDENTIALS_KEY,
+            )
+        return _REGISTRY["credentials"]
 
     @property
     def llms(self) -> LLMs:
@@ -498,8 +509,10 @@ class BM(Singleton, BaseModel):
             return pd.DataFrame()
         return result
 
+
 class BMProxy:
     """A proxy class for lazy initialization of the BM singleton."""
+
     _instance = None
 
     def __getattr__(self, name):
@@ -518,6 +531,7 @@ class BMProxy:
         # Create new instance with args/kwargs (or default)
         BMProxy._instance = BM(*args, **kwargs)
         return BMProxy._instance
+
 
 # Create the global instance
 bm = BMProxy()

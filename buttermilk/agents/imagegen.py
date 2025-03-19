@@ -12,31 +12,28 @@ from typing import Any
 import aiohttp
 import httpx
 import replicate
-from bm import logger
 from cloudpathlib import CloudPath
+from google import genai
+from google.genai import types
 from huggingface_hub import AsyncInferenceClient, login
-from openai import APIStatusError, AsyncOpenAI
+from openai import AsyncOpenAI
 from PIL import Image
 from promptflow.tracing import trace
 from pydantic import BaseModel, Field, field_validator
-from requests import ConnectTimeout, HTTPError
 from shortuuid import ShortUUID
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_random_exponential,
-)
+
+from buttermilk._core.image import ImageRecord, read_image
+from buttermilk._core.retry import RetryWrapper
+from buttermilk.bm import bm, logger
 
 
-class TextToImageClient(BaseModel):
-    client: Any | None = None
+class TextToImageClient(RetryWrapper):
+    client: object = None
     model: str = Field(
         ...,
         description="The model to use for text-to-image generation.",
     )
     prefix: str
-    image_params: dict[str, Any] = {}
 
     @trace
     async def generate(
@@ -51,33 +48,20 @@ class TextToImageClient(BaseModel):
         else:
             msg = f"Generating image with {self.model} using prompt: ```{text}```, saving to `{save_path}`"
 
-        params = dict(prompt=text, save_path=save_path, negative_prompt=negative_prompt, **self.image_params)
-        params.update(**kwargs)
+        params = dict(
+            text=text,
+            negative_prompt=negative_prompt,
+            **kwargs,
+        )
 
         try:
-            image = await self.generate_with_retry(
+            image = await self._execute_with_retry(
+                self.generate_image,
                 **params,
             )
             image.uri = image.save(save_path)
             return image
 
-        except (ConnectTimeout, TimeoutError) as e:
-            err = f"Timeout error {msg}: {e or type(e)} {e.args=}"
-            args = [str(x) for x in e.args]
-            error_dict = dict(prompt=text, model=self.model, message=str(e), args=args, type=type(e).__name__)
-        except APIStatusError as e:
-            err = f"Error generating image for {text} using {self.model}: {e or type(e)} {e.args=}"
-            error_dict = dict(
-                prompt=text,
-                model=self.model,
-                status_code=e.status_code,
-                request_id=e.request_id,
-                type=type(e).__name__,
-            )
-            error_dict.update(e.body)
-        except replicate.exceptions.ModelError as e:
-            err = f"Error generating image for {text} using {self.model}: {e or type(e)} {e.args=}"
-            error_dict = dict(prompt=text, model=self.model, message=str(e), type=type(e).__name__)
         except Exception as e:
             err = f"Error generating image for {text} using {self.model}: {e or type(e)} {e.args=}"
             args = [str(x) for x in e.args]
@@ -99,23 +83,6 @@ class TextToImageClient(BaseModel):
 
         return image
 
-    @retry(
-        retry=retry_if_exception_type((RateLimit, HTTPError)),
-        wait=wait_random_exponential(multiplier=0.5, max=60),
-        stop=stop_after_attempt(7),
-    )
-    async def generate_with_retry(
-        self,
-        prompt: str,
-        negative_prompt: str = "",
-        **kwargs,
-    ) -> ImageRecord:
-        return await self.generate_image(
-            prompt,
-            negative_prompt=negative_prompt,
-            **kwargs,
-        )
-
     async def generate_image(
         self,
         text: str,
@@ -126,21 +93,118 @@ class TextToImageClient(BaseModel):
         raise NotImplementedError
 
 
-class SD3(TextToImageClient):
-    # Stable Diffusion 3 using api.stability.ai
-    model: str = "stabilityai/stable-diffusion-3"
-    prefix: str = "sd3_"
-    image_params: dict[str, Any] = {"output_format": "png"}
+class Imagegen3(TextToImageClient):
+    model: str = "imagen-3.0-generate-002"
+    prefix: str = "imagen3_"
+    client: genai.Client = Field(
+        default_factory=lambda: genai.Client(
+            vertexai=True,
+            project=bm.credentials["GOOGLE_CLOUD_PROJECT"],
+            location=bm.credentials["GOOGLE_CLOUD_LOCATION"],
+        ),
+    )  # type: ignore
+    fast: bool = Field(default=False, description="Use the faster, lower quality model")
 
     async def generate_image(
         self,
         text: str,
         negative_prompt: str | None = "",
+        aspect_ratio="3:4",
         **kwargs,
     ) -> ImageRecord:
-        params = self.image_params.copy()
+        if negative_prompt:
+            prompt = f"{text} \nDO NOT INCLUDE: {negative_prompt}"
+        else:
+            prompt = text
 
-        params["prompt"] = text
+        params = dict(
+            number_of_images=1,
+            aspect_ratio=aspect_ratio,
+            safety_filter_level="BLOCK_ONLY_HIGH",
+            person_generation="ALLOW_ADULT",
+        )
+
+        # Imagen 3 image generation
+        image = self.client.models.generate_images(
+            model=self.model,
+            prompt=prompt,
+            config=types.GenerateImagesConfig(
+                **params,
+            ),
+        )
+        pil_image = image.generated_images[0].image._pil_image
+
+        image = ImageRecord(
+            image=pil_image,
+            model=self.model,
+            params=params,
+        )
+        return image
+
+
+class SD35Large(TextToImageClient):
+    # Stable Diffusion 3 using Azure
+    model: str = "stabilityai/stable-diffusion-3.5-large"
+    prefix: str = "sd35_"
+
+    async def generate_image(
+        self,
+        text: str,
+        negative_prompt: str | None = "",
+        size: str = "1024x1024",
+        output_format: str = "png",
+        seed: int = 0,
+        **kwargs,
+    ) -> ImageRecord:
+        request_data = {
+            "prompt": text,
+            "negative_prompt": negative_prompt,
+            "size": size,
+            "output_format": output_format,
+            "seed": seed,
+        }
+
+        url = bm.credentials["AZURE_STABILITY35_URL"]
+        api_key = bm.credentials["AZURE_STABILITY35_API_KEY"]
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": ("Bearer " + api_key),
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers=headers,
+                json=request_data,
+                timeout=600,
+            )
+        response.raise_for_status()
+        image = read_image(image_b64=response.json().get("image"))
+        image.model = self.model
+        image.params = request_data
+
+        return image
+
+
+class Imagegen3Fast(Imagegen3):
+    mode: str = "imagen-3.0-fast-generate-001"
+
+
+class SD3(TextToImageClient):
+    # Stable Diffusion 3 using api.stability.ai
+    model: str = "stabilityai/stable-diffusion-3"
+    prefix: str = "sd3_"
+
+    async def generate_image(
+        self,
+        text: str,
+        negative_prompt: str | None = "",
+        output_format: str = "png",
+        **kwargs,
+    ) -> ImageRecord:
+        params = dict(prompt=text, output_format=output_format, **kwargs)
+
         if negative_prompt:
             params["negative_prompt"] = negative_prompt
 
@@ -313,24 +377,37 @@ class SD(TextToImageClient):
 
 class DALLE(TextToImageClient):
     model: str = "dall-e-3"
-    image_params: dict[str, Any] = dict(size="1024x1024", quality="standard")
     prefix: str = "dalle3_"
 
     async def generate_image(
         self,
         text: str,
         negative_prompt: str | None = None,
+        size="1024x1024",
+        style="natural",
+        quality="standard",
         **kwargs,
     ) -> ImageRecord:
-        params = self.image_params.copy()
+        params = dict(
+            model=self.model,
+            size=size,
+            style=style,
+            quality=quality,
+            **kwargs,
+        )
         if self.client is None:
-            self.client = AsyncOpenAI()
+            self.client = AsyncOpenAI(
+                api_key=bm.credentials["OPENAI_API_KEY"],
+                timeout=600,
+            )
         if negative_prompt:
             params["prompt"] = f"{text} \nDO NOT INCLUDE: {negative_prompt}"
         else:
             params["prompt"] = text
 
-        response = await self.client.images.generate(model=self.model, **params)
+        response = await self.client.images.generate(
+            **params,
+        )
 
         # add extra keys not passed to model after generation
         params.update(**kwargs)
@@ -346,13 +423,7 @@ class DALLE(TextToImageClient):
         return image
 
 
-ImageClients = [
-    DALLE,
-    SD,
-    SD3,
-    SDXL,
-    SDXLReplicate,
-]
+ImageClients = [DALLE, SD35Large, Imagegen3, Imagegen3Fast]
 
 
 class BatchImageGenerator(BaseModel):
