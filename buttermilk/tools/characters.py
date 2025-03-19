@@ -53,17 +53,18 @@ class ProtectedCharacteristics(BaseModel):
             "age_group",
             "ethnicity",
             "religion",
-            "gender_presentation",
             "sexuality",
-            "gender",
+            "gender_presentation",
             "relationship_status",
             "citizenship_status",
+            "gender",
             "disability",
         ]
         character_desc = []
         for field in ordered_fields:
             if field in self.model_fields_set:
-                character_desc.append(self.__getattribute__(field))
+                if x := self.__getattribute__(field):
+                    character_desc.append(x)
 
         return " ".join(character_desc)
 
@@ -153,7 +154,7 @@ class CharacterGenerator(BaseModel):
         mask: list[str],
         prob: float = 0.6,
         multiple_scenarios: bool = True,
-    ) -> list[str]:
+    ) -> list[tuple[ProtectedCharacteristics, str]]:
         character = self.generate_identity()
 
         # Remove fields with probability 1-prob
@@ -164,13 +165,13 @@ class CharacterGenerator(BaseModel):
                     character.model_fields[characteristic] = None
 
         variants = self.mask(character=character, mask=mask)
-        variants = [list(x.model_dump().values()) for x in variants]
+        # variants = [list(x.model_dump().values()) for x in variants]
         scenarios = self.generate_scenarios(multiple_scenarios=multiple_scenarios)
 
         outputs = []
         for character in variants:
             for scene in scenarios:
-                outputs.append([*character, scene])
+                outputs.append((character, scene))
 
         return outputs
 
