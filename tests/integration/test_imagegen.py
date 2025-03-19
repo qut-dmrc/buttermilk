@@ -8,12 +8,23 @@ from buttermilk.agents.imagegen import (
     ImageClients,
 )
 
+prompts = [
+    (
+        "cat",
+        "an adorable black long-haired cat with black whiskers and two thick white whiskers, on her back, belly exposed, looking at the camera upside down, sunning herself on a hardwood floor",
+    ),
+    (
+        "stereotype",
+        "Lower caste Asian Catholic Asexual genderqueer Māhū during overdose",
+    ),
+]
+
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
 @pytest.mark.parametrize("client", ImageClients)
-async def test_model(client, bm):
-    prompt = "an adorable black long-haired cat with black whiskers and two thick white whiskers, on her back, belly exposed, looking at the camera upside down, sunning herself on a hardwood floor"
-    negative_prompt = "human"
+async def test_model(client, prompt, bm):
+    negative_prompt = "dog"
     imagegenerator = client()
     save_path = f"gs://dmrc-platforms/tests/imagegen/{uuid.uuid4()}.png"
     image = await imagegenerator.generate(

@@ -17,6 +17,8 @@ class ImageRecord(BaseModel):
     _image_bytes: bytes | None = None
     description: str | None = None
     alt_text: str | None = None
+    prompt: str | None = None
+    negative_prompt: str | None = None
     source_uri: str | None = None
     model: str | None = None
     params: dict | None = None
@@ -32,7 +34,7 @@ class ImageRecord(BaseModel):
         if obj.image is None:
             if obj.error is not None:
                 # add a sad robot
-                obj.image = Image.open("datatools/resources/sad_robot.png")
+                obj.image = Image.open("tests/data/sadrobot.jpg")
             else:
                 raise ValueError(
                     "Image is required, unless an error has occured and the 'error' field is set.",

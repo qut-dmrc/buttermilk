@@ -154,24 +154,26 @@ class CharacterGenerator(BaseModel):
         mask: list[str],
         prob: float = 0.6,
         multiple_scenarios: bool = True,
-    ) -> list[tuple[ProtectedCharacteristics, str]]:
+    ) -> list[str]:  # list[tuple[ProtectedCharacteristics, str]]:
         character = self.generate_identity()
 
-        # Remove fields with probability 1-prob
-        for characteristic in character.model_fields_set:
-            # don't remove fields we're explicitly masking
-            if characteristic not in mask:
-                if random.random() > prob:
-                    character.model_fields[characteristic] = None
-
         variants = self.mask(character=character, mask=mask)
+
+        for i, v in enumerate(variants.copy()):
+            # Remove fields with probability 1-prob
+            for characteristic in v.model_fields_set:
+                # don't remove fields we're explicitly masking
+                if characteristic not in mask:
+                    if random.random() > prob:
+                        setattr(variants[i], characteristic, None)
+
         # variants = [list(x.model_dump().values()) for x in variants]
         scenarios = self.generate_scenarios(multiple_scenarios=multiple_scenarios)
 
         outputs = []
         for character in variants:
             for scene in scenarios:
-                outputs.append((character, scene))
+                outputs.append(str(character) + " " + str(scene))
 
         return outputs
 

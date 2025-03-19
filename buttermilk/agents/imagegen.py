@@ -12,6 +12,7 @@ from typing import Any
 import aiohttp
 import httpx
 import replicate
+import weave
 from cloudpathlib import CloudPath
 from google import genai
 from google.genai import types
@@ -36,6 +37,7 @@ class TextToImageClient(RetryWrapper):
     prefix: str
 
     @trace
+    @weave.op
     async def generate(
         self,
         text,
@@ -60,6 +62,8 @@ class TextToImageClient(RetryWrapper):
                 **params,
             )
             image.uri = image.save(save_path)
+            image.prompt = text
+            image.negative_prompt = negative_prompt
             return image
 
         except Exception as e:
@@ -132,12 +136,16 @@ class Imagegen3(TextToImageClient):
                 **params,
             ),
         )
+        if not image.generated_images:
+            raise ValueError(f"No image generated. Response: {image.model_dump()}")
         pil_image = image.generated_images[0].image._pil_image
 
         image = ImageRecord(
             image=pil_image,
             model=self.model,
             params=params,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
         )
         return image
 
@@ -233,6 +241,8 @@ class SD3(TextToImageClient):
             image=img,
             model=self.model,
             params=params,
+            prompt=text,
+            negative_prompt=negative_prompt,
         )
         return image
 
@@ -283,6 +293,8 @@ class SDXL(TextToImageClient):
             image=refined_img,
             model=self.model,
             params=params,
+            prompt=text,
+            negative_prompt=negative_prompt,
         )
 
         return image
@@ -327,6 +339,8 @@ class SDXLReplicate(TextToImageClient):
             image=img,
             model=self.model,
             params=params,
+            prompt=text,
+            negative_prompt=negative_prompt,
         )
 
         return image
@@ -371,6 +385,8 @@ class SD(TextToImageClient):
             image=img,
             model=self.model,
             params=params,
+            prompt=text,
+            negative_prompt=negative_prompt,
         )
         return image
 
@@ -419,7 +435,13 @@ class DALLE(TextToImageClient):
             response = await client.get(output_uri)
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
-        image = ImageRecord(image=img, model=self.model, params=params)
+        image = ImageRecord(
+            image=img,
+            model=self.model,
+            params=params,
+            prompt=text,
+            negative_prompt=negative_prompt,
+        )
         return image
 
 
