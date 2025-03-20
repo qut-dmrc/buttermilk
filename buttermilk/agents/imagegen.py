@@ -121,22 +121,19 @@ class Imagegen3(TextToImageClient):
         aspect_ratio="3:4",
         **kwargs,
     ) -> ImageRecord:
-        if negative_prompt:
-            prompt = f"{text} \nDO NOT INCLUDE: {negative_prompt}"
-        else:
-            prompt = text
 
         params = dict(
             number_of_images=1,
             aspect_ratio=aspect_ratio,
             safety_filter_level="BLOCK_ONLY_HIGH",
             person_generation="ALLOW_ADULT",
+            negative_prompt=negative_prompt,
         )
 
         # Imagen 3 image generation
         image = self.client.models.generate_images(
             model=self.model,
-            prompt=prompt,
+            prompt=text,
             config=types.GenerateImagesConfig(
                 **params,
             ),
