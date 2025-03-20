@@ -120,7 +120,9 @@ class RetryWrapper(BaseModel):
             # Re-raise the last exception
             raise e.last_attempt.exception()
         except Exception as e:
-            logger.error(f"Unexpected exception: {e!s}")
+            logger.error(
+                f"{type(self.client).__qualname__} client hit unexpected exception: {e!s}"
+            )
             raise e
 
     def __getattr__(self, name: str) -> Any:

@@ -31,6 +31,7 @@ async def test_model(client, prompt, bm):
         negative_prompt=negative_prompt,
         save_path=None,
     )
+    assert not image.error
     image.image.show()
     bm.logger.info(f"Saved image from {imagegenerator.model} to {image.uri}")
     assert image
@@ -38,8 +39,7 @@ async def test_model(client, prompt, bm):
 
 async def test_batch(bm):
     prompt = "an adorable black long-haired cat with black whiskers and two thick white whiskers, on her back, belly exposed, looking at the camera upside down, sunning herself on a hardwood floor"
-    save_path = CloudPath(f"gs://dmrc-platforms/tests/imagegen/batch-{uuid.uuid4()}/")
-    runner = BatchImageGenerator(save_path=save_path)
+    runner = BatchImageGenerator(generators=ImageClients)
     images = []
     async for result in runner.abatch(input=[prompt], n=1):
         images.append(result)

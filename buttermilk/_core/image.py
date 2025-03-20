@@ -19,6 +19,7 @@ class ImageRecord(BaseModel):
     alt_text: str | None = None
     prompt: str | None = None
     negative_prompt: str | None = None
+    enhanced_prompt: str | None = None
     source_uri: str | None = None
     model: str | None = None
     params: dict | None = None

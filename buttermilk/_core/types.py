@@ -74,8 +74,6 @@ class SessionInfo(pydantic.BaseModel):
 
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
-        save_dir = (
-            AnyPath(self.save_dir_base) / "runs" / self.name / self.job / self.run_id
-        )
+        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
         self.save_dir = str(save_dir)
         return self

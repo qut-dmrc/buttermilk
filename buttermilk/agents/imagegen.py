@@ -48,7 +48,7 @@ class TextToImageClient(RetryWrapper):
         **kwargs,
     ) -> ImageRecord:
         if not save_path:
-            save_path = f"{bm.save_path()}/{uuid.uuid4()}.{filetype}"
+            save_path = f"{bm.save_dir}/{uuid.uuid4()}.{filetype}"
         if negative_prompt:
             msg = f"Generating image with {self.model} using prompt: ```{text}```, negative prompt: ```{negative_prompt}```, saving to `{save_path}`"
         else:
@@ -143,13 +143,16 @@ class Imagegen3(TextToImageClient):
         )
         if not image.generated_images:
             raise ValueError(f"No image generated. Response: {image.model_dump()}")
-        pil_image = image.generated_images[0].image._pil_image
+        result = image.generated_images[0]
+        pil_image = result.image._pil_image
+        enhanced_prompt = result.enhanced_prompt
 
         image = ImageRecord(
             image=pil_image,
             model=self.model,
             params=params,
             prompt=prompt,
+            enhanced_prompt=enhanced_prompt,
             negative_prompt=negative_prompt,
         )
         return image
@@ -461,7 +464,7 @@ class BatchImageGenerator(BaseModel):
         description="The image generators to use.",
     )
     save_path: CloudPath | Path = Field(
-        ...,
+        default=None,
         description="The path to save the generated images to.",
     )
     _clients: dict[str, TextToImageClient] = {}
