@@ -48,7 +48,7 @@ class TextToImageClient(RetryWrapper):
         **kwargs,
     ) -> ImageRecord:
         if not save_path:
-            save_path = f"{bm.save_dir}/{uuid.uuid4()}.{filetype}"
+            save_path = f"{bm.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
         if negative_prompt:
             msg = f"Generating image with {self.model} using prompt: ```{text}```, negative prompt: ```{negative_prompt}```, saving to `{save_path}`"
         else:
