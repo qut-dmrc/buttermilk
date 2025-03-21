@@ -6,6 +6,7 @@ from typing import Any
 
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
+from autogen_core.models import AssistantMessage
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -14,6 +15,7 @@ from pydantic import (
     field_validator,
 )
 
+from buttermilk._core.agent import AgentConfig
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentOutput
 from buttermilk._core.flow import FlowVariableRouter
@@ -83,10 +85,14 @@ class Orchestrator(BaseModel, ABC):
         if not result.error:
             self._flow_data.add(key=step, value=result)
 
+            await self._context.add_message(
+                message=AssistantMessage(content=result.content, source=result.agent),
+            )
+
             # Harvest records
             self._records.extend(result.records)
 
-    async def _prepare_inputs(self, config: dict) -> dict[str, Any]:
+    async def _prepare_inputs(self, config: AgentConfig) -> dict[str, Any]:
         """Fill inputs according to specification.
 
         Includes several special case keywords:
@@ -97,10 +103,10 @@ class Orchestrator(BaseModel, ABC):
             - "record": list of InputRecords"
         """
         input_dict = {}
-        input_dict = self._flow_data._resolve_mappings(config["inputs"])
+        input_dict = self._flow_data._resolve_mappings(config.inputs)
 
         for value in PLACEHOLDER_VARIABLES:
-            if value in config["inputs"].keys():
+            if value in config.inputs:
                 if value == "content":
                     records = [
                         f"{rec.record_id}: {rec.fulltext}" for rec in self._records
@@ -108,7 +114,7 @@ class Orchestrator(BaseModel, ABC):
                     input_dict[value] = records
                 elif value == "history":
                     history = await self._context.get_messages()
-                    history = [f"- {msg.type}: {msg.content}" for msg in history]
+                    history = [f"- {msg.source}: {msg.content}" for msg in history]
                     history = "\n".join(history)
                     input_dict[value] = history
                 elif value == "context":
@@ -122,6 +128,6 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = "\n".join(participants)
 
-        input_dict.update(self._flow_data._resolve_mappings(config["inputs"]))
+        input_dict.update(self._flow_data._resolve_mappings(config.inputs))
 
         return input_dict

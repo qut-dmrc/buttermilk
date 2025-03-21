@@ -11,6 +11,7 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
+from autogen_core.models import UserMessage
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentConfig
@@ -111,12 +112,13 @@ class AutogenOrchestrator(Orchestrator):
 
             next_step = await anext(self._step_generator)
             while True:
-                await self._execute_step(
+                responses = await self._execute_step(
                     step_name=next_step["role"],
                     prompt=next_step.get("question", ""),
                 )
 
                 next_step = await anext(self._step_generator)
+
                 user_input = await self._ask_user(
                     question=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
                 )
@@ -201,10 +203,6 @@ class AutogenOrchestrator(Orchestrator):
 
         # Wait for all agents to respond
         responses = await asyncio.gather(*tasks)
-        # Process and collect responses
-        for result in responses:
-            if result and not result.error:
-                await self.store_results(step=MANAGER, result=result)
         return responses
 
     async def _execute_step(
@@ -217,6 +215,11 @@ class AutogenOrchestrator(Orchestrator):
             raise ProcessingError(f"No agents registered for step {step_name}")
 
         tasks = []
+
+        if prompt:
+            await self._context.add_message(
+                message=UserMessage(content=prompt, source=step_name)
+            )
 
         # Send message to each agent for this step
         for agent_type, config in self._agents[step_name]:

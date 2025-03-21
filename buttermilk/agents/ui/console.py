@@ -51,7 +51,7 @@ class CLIUserAgent(UIAgent):
     async def process(self, input_data: AgentMessages, **kwargs) -> AgentMessages:
         """Request input from the user interface"""
         user_input = input(
-            input_data.content or "Enter your message: \n",
+            input_data.prompt or "Do you want to proceed? y/n \n",
         )
         Console().print(Markdown(f"### User: \n{user_input}"))
         return AgentOutput(content=user_input, agent=self.name)
