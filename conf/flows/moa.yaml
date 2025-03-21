@@ -1,4 +1,4 @@
-simple:
+moa:
   # _target_: buttermilk.runner.simple.Sequencer
   orchestrator: Selector
   # data:

@@ -85,10 +85,11 @@ class AutogenOrchestrator(Orchestrator):
 
     # Additional configuration
     max_wait_time: int = Field(
-        default=300, description="Maximum time to wait for agent responses in seconds"
+        default=300,
+        description="Maximum time to wait for agent responses in seconds",
     )
 
-    _topic_type = PrivateAttr(
+    _topic_type: str = PrivateAttr(
         default_factory=lambda: f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}",
     )
     _last_message: AgentOutput | None = PrivateAttr(default=None)
