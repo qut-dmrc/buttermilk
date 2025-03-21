@@ -2,7 +2,8 @@ import importlib
 import pkgutil
 
 import shortuuid
-from pydantic import Field, field_validator
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from buttermilk._core.agent import Agent
 from buttermilk.utils.utils import expand_dict
@@ -52,15 +53,7 @@ class AgentRegistry:
             cls.register(subclass)
 
 
-class AgentVariants(Agent):
-    agent_id: str = "unconfigured"
-
-    agent_obj: str = Field(..., description="The object name to instantiate")
-    num_runs: int = Field(
-        default=1,
-        description="Number of times to run the agent for each variant",
-    )
-    variants: dict = {}
+class AgentVariants(BaseModel):
     """A factory for creating Agent instance variants for a single
     step of a workflow.
 
@@ -70,9 +63,27 @@ class AgentVariants(Agent):
     have an inputs mapping that does not get multiplied.
     """
 
+    agent_obj: str = Field(..., description="The object name to instantiate")
+    num_runs: int = Field(
+        default=1,
+        description="Number of times to run the agent for each variant",
+    )
+    variants: dict = {}
+
     validate_parameters = field_validator(
-        "parameters", "variants", "inputs", "outputs", mode="before"
+        "variants",
+        mode="before",
     )(convert_omegaconf_objects())
+
+    @model_validator(mode="after")
+    def validate_extra_fields(self):
+        """Convert any omegaconf objects in extra fields to plain Python objects."""
+        for key, value in dict(self.model_extra).items():
+            if isinstance(value, (DictConfig, ListConfig)):
+                self.model_extra[key] = OmegaConf.to_container(value, resolve=True)
+        return self
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
     def get_configs(self) -> list[tuple[type, dict]]:
         # Create variants (permutations of vars multiplied by num_runs)
@@ -81,11 +92,7 @@ class AgentVariants(Agent):
         agents = []
         for variant in variant_configs:
             # Start with static config
-            cfg = dict(
-                **self.model_dump(
-                    exclude={"agent_id", "num_runs", "variants", "agent", "agent_obj"}
-                )
-            )
+            cfg = dict(**self.model_extra)
 
             # Generate unique ID for this agent
             cfg["agent_id"] = f"{self.name}-{shortuuid.uuid()[:6]}"
