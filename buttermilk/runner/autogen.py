@@ -22,9 +22,11 @@ from buttermilk._core.contract import (
     FlowMessage,
 )
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk._core.ui import IOInterface
-from buttermilk.bm import logger
+from buttermilk.bm import bm, logger
 from buttermilk.exceptions import ProcessingError
+
+CONDUCTOR = "HOST"
+MANAGER = "MANAGER"
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -41,43 +43,33 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_request(self, message: AgentInput, ctx: MessageContext) -> AgentOutput:
         # Process using the wrapped agent
-        agent_output = await self.agent(message)
+        source = str(ctx.sender) if ctx and ctx.sender else message.type
+        agent_output = await self.agent(message, source=source)
 
         return agent_output
 
-    async def handle_message(self, message: Any, **kwargs) -> AgentOutput:
-        """Alternative entry point for non-decorated handling"""
-        if isinstance(message, AgentInput):
-            return await self.handle_request(message, kwargs.get("ctx"))
-        return AgentOutput(agent=self.agent.agent_id, error="Unsupported message type")
-
-
-class AutogenIOAdapter(RoutedAgent):
-    def __init__(self, topic_type: str, interface: IOInterface, description="UserProxy"):
-        self.interface: IOInterface = interface
-        self.topic_type = topic_type
-        super().__init__(description=description)
-
     @message_handler
-    async def handle_request(self, message: AgentInput, ctx: MessageContext) -> AgentOutput:
-        # Request input from the UI
-        user_input = await self.interface.get_input(message.content, source=ctx.sender.type if ctx.sender else self.id.type)
-
-        return AgentOutput(content=user_input, agent=self.id.type)
-
-    @message_handler
-    async def handle_message(self, message: AgentMessages, ctx: MessageContext) -> None:
-        # Send to the UI
-        await self.interface.send_output(message,
-                source=ctx.sender.type if ctx.sender else self.id.type)
+    async def handle_output(self, message: AgentMessages, ctx: MessageContext) -> None:
+        try:
+            source = str(ctx.sender) if ctx and ctx.sender else message.type
+            agent_output = await self.agent.receive_output(message, source=source)
+            return
+        except ValueError:
+            logger.warning(
+                f"Agent {self.agent.agent_id} received nsupported message type: {type(message)}",
+            )
 
 
 class AutogenOrchestrator(Orchestrator):
     """Orchestrator that uses Autogen's routing and messaging system"""
 
     # Private attributes
-    _runtime: SingleThreadedAgentRuntime = PrivateAttr(default_factory=SingleThreadedAgentRuntime)
-    _context: UnboundedChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)
+    _runtime: SingleThreadedAgentRuntime = PrivateAttr(
+        default_factory=SingleThreadedAgentRuntime,
+    )
+    _context: UnboundedChatCompletionContext = PrivateAttr(
+        default_factory=UnboundedChatCompletionContext,
+    )
     _agents: dict[str, list[tuple[AgentType, dict]]] = PrivateAttr(
         default_factory=dict,
     )  # mapping of step to registered agents and their individual configs
@@ -103,15 +95,17 @@ class AutogenOrchestrator(Orchestrator):
             # Initialize the generator once
             self._step_generator = self._get_next_step()
 
-            next_step = await self._get_next_step()
-            next_step = await anext(generator_object)
+            next_step = await anext(self._step_generator)
 
-            while await self.interface.confirm(
+            while await self._interface.confirm(
                 f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
             ):
-                await self._execute_step(next_step)
+                await self._execute_step(
+                    step_name=next_step["role"],
+                    prompt=next_step.get("question", ""),
+                )
 
-                next_step = await self._get_next_step()
+                next_step = await anext(self._step_generator)
             # Clean up resources
             await self._cleanup()
 
@@ -130,33 +124,13 @@ class AutogenOrchestrator(Orchestrator):
         # Start the runtime
         self._runtime.start()
 
-        # Register the interface as the user agent
-        user_agent_type = await AutogenIOAdapter.register(
-            self._runtime,
-            "User",
-            lambda: AutogenIOAdapter(
-                topic_type=self._topic_type,
-                interface=self.interface,
-            ),
-        )
-        self._user_agent_id = await self._runtime.get(user_agent_type)
-
-        # Add subscription for the user agent
-        await self._runtime.add_subscription(
-            TypeSubscription(
-                topic_type=self._topic_type,
-                agent_type=user_agent_type,
-            ),
-        )
-
         # Register agents for each step
         await self._register_agents()
 
     async def _register_agents(self) -> None:
         """Register all agent variants for a specific step"""
-        step_agents = []
-
         for step in self.steps:
+            step_agents = []
             for agent_cls, variant in step.get_configs():
 
                 # Register the agent with the runtime
@@ -187,7 +161,6 @@ class AutogenOrchestrator(Orchestrator):
                 )
 
                 step_agents.append((agent_type, variant))
-
             # Store the registered agents for this step
             self._agents[step.name] = step_agents
 
@@ -231,7 +204,7 @@ class AutogenOrchestrator(Orchestrator):
         for result in responses:
             if result and not result.error:
                 await self.store_results(step=step_name, result=result)
-                await self.interface.send_output(result)
+                # await self._interface.send_output(result)
 
         return responses
 

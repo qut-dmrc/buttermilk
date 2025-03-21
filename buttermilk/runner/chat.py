@@ -6,10 +6,7 @@ from autogen_core import AgentId
 from pydantic import PrivateAttr, model_validator
 
 from buttermilk.exceptions import ProcessingError
-from buttermilk.runner.autogen import AutogenOrchestrator
-
-CONDUCTOR = "HOST"
-MANAGER = "MANAGER"
+from buttermilk.runner.autogen import CONDUCTOR, AutogenOrchestrator
 
 
 class Selector(AutogenOrchestrator):

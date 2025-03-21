@@ -17,14 +17,13 @@ from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentOutput
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
-from buttermilk._core.ui import IOInterface
 from buttermilk._core.variants import AgentVariants
 
 BASE_DIR = Path(__file__).absolute().parent
 
 
 class Orchestrator(BaseModel, ABC):
-    """Runs a single instance of a flow, given an interface."""
+    """Runs a single instance of a flow."""
 
     session_id: str = Field(
         default_factory=shortuuid.uuid,
@@ -36,7 +35,6 @@ class Orchestrator(BaseModel, ABC):
         default_factory=list,
         description="Agent factories available to run.",
     )
-    interface: IOInterface
 
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
     _records: list = PrivateAttr(default_factory=list)

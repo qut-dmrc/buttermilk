@@ -12,6 +12,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+from buttermilk._core.contract import AgentMessages
 from buttermilk.bm import bm, logger
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -33,9 +34,18 @@ class LLMAgent(Agent):
 
         return self
 
+    async def receive_output(
+        self,
+        message: AgentMessages,
+        source: str,
+        **kwargs,
+    ) -> AgentMessages | None:
+        """Log data or send output to the user interface"""
+        # Not implemented on the agent right now; inputs come from conductor.
+
     async def fill_template(
         self,
-        inputs: AgentInput|None = None
+        inputs: AgentInput | None = None,
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
         untrusted_inputs = {}
@@ -84,11 +94,10 @@ class LLMAgent(Agent):
                         if var_name in unfilled_vars:
                             unfilled_vars.remove(var_name)
                     except KeyError:
-                        err =  f"Missing {var_name} in template or placeholder vars.",
+                        err = (f"Missing {var_name} in template or placeholder vars.",)
                         if self.fail_on_unfilled_parameters:
                             raise ValueError(err)
-                        else:
-                            logger.warning(err)
+                        logger.warning(err)
 
                 continue
 
@@ -115,21 +124,26 @@ class LLMAgent(Agent):
             err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ValueError(err)
-            else:
-                logger.warning(err)
-
+            logger.warning(err)
 
         return messages
 
-    async def process(self, input_data: AgentInput) -> AgentOutput:
+    async def process(self, input_data: AgentInput, **kwargs) -> AgentOutput:
 
         messages = await self.fill_template(
-            inputs=input_data
+            inputs=input_data,
         )
 
         response = await self._model_client.create(messages=messages)
 
         outputs = self._json_parser.parse(response.content)
-        metadata = {k:v for k,v in response.model_dump(exclude_unset=True, exclude_none=True).items() if v and k not in ["content"]}
+        metadata = {
+            k: v
+            for k, v in response.model_dump(
+                exclude_unset=True,
+                exclude_none=True,
+            ).items()
+            if v and k != "content"
+        }
         output = AgentOutput(agent_id=self.agent_id, response=outputs, content=response.content, metadata=metadata)
         return output

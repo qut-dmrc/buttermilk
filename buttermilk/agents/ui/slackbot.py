@@ -11,16 +11,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from buttermilk.runner.chat import (
-    Answer,
-    ConversationManager,
-    FlowMessage,
-    FlowRequest,
-    IOInterface,
-    NullAnswer,
-)
-from buttermilk.runner.conversation import Selector
-from buttermilk.runner.moa import FFA, Conductor, MoA
 from buttermilk.ui.formatting.slackblock_reasons import format_slack_reasons
 
 SLACK_MAX_MESSAGE_LENGTH = 3000
@@ -66,7 +56,7 @@ def register_handlers():
 
         @retry(
             stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=4, max=10)
+            wait=wait_exponential(multiplier=1, min=4, max=10),
         )
         async def _post_message_with_retry(self, **kwargs):
             return await app.client.chat_postMessage(**kwargs)
@@ -84,14 +74,19 @@ def register_handlers():
 
         async def query(self, request: FlowRequest) -> FlowMessage:
             """Retrieve input from the user interface"""
-            _confirm_only=False
+            _confirm_only = False
             if request.content:
                 await self.send_to_thread(request.content)
             else:
-                _confirm_only=True
+                _confirm_only = True
                 from buttermilk.ui.formatting.slackblock import confirm_block
-                confirm_blocks = confirm_block(message=request.prompt or "Would you like to proceed?")
-                response = await self.send_to_thread(text=confirm_blocks["text"], blocks=confirm_blocks["blocks"])
+
+                confirm_blocks = confirm_block(
+                    message=request.prompt or "Would you like to proceed?"
+                )
+                response = await self.send_to_thread(
+                    text=confirm_blocks["text"], blocks=confirm_blocks["blocks"]
+                )
 
                 # Setup action handlers for the buttons
                 @app.action("confirm_action")
@@ -105,13 +100,15 @@ def register_handlers():
                         channel=self.context.channel_id,
                         ts=response["ts"],
                         text="You selected: Yes",
-                        blocks=[{
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": ":white_check_mark: You selected: *Yes*"
+                        blocks=[
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": ":white_check_mark: You selected: *Yes*",
+                                },
                             }
-                        }]
+                        ],
                     )
 
                 @app.action("cancel_action")
@@ -125,13 +122,15 @@ def register_handlers():
                         channel=self.context.channel_id,
                         ts=response["ts"],
                         text="You selected: No",
-                        blocks=[{
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": ":x: You selected: *No*"
+                        blocks=[
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": ":x: You selected: *No*",
+                                },
                             }
-                        }]
+                        ],
                     )
 
             # Wait for a response (either text message or button click)
@@ -186,7 +185,8 @@ def register_handlers():
 
             flow = _flows[flow_name]
             history = await app.client.channels_replies(
-                message["channel"], message["message"]["thread_ts"]
+                message["channel"],
+                message["message"]["thread_ts"],
             )
 
             return  # not implemented yet
@@ -251,10 +251,9 @@ def register_handlers():
             platform="slack",
             external_id=f"{context.channel_id}-{context.thread_ts}",
             source=flow.source,
-            steps=flow.steps
+            steps=flow.steps,
             # **flow.model_dump(),
         )
-
 
 
 def register_chat_thread_handler(thread_ts, agent: "MoAThreadNoContext"):

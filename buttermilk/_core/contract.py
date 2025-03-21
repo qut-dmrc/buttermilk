@@ -12,7 +12,6 @@ from pydantic import (
 
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Record
-from buttermilk._core.ui import IOInterface
 from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -22,7 +21,6 @@ class FlowProtocol(Protocol):
     save: SaveInfo
     data: Sequence[DataSource]
     steps: Sequence["Agent"]
-    interface: IOInterface
 
     async def run(self, job: "Job") -> "Job": ...
 
@@ -49,7 +47,8 @@ class FlowMessage(BaseModel):
     )
 
     records: list[Record] = Field(
-        default=[], description="Records relevant to this message"
+        default=[],
+        description="Records relevant to this message",
     )
 
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -85,7 +84,8 @@ class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
     prompt: str = Field(default="", description="A question or prompt from a user")
     context: list[Any] = Field(
-        default=[], description="History or context to provide to the agent."
+        default=[],
+        description="History or context to provide to the agent.",
     )
     inputs: dict[str, Any] = Field(
         default_factory=dict,

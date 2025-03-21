@@ -26,7 +26,7 @@ class Sequencer(Orchestrator):
         return self
 
     async def run(self, request=None) -> None:
-        prompt = await self.interface.get_input(
+        prompt = await self._interface.get_input(
             message="Enter your prompt or record info...",
         )
         for step in self.agents:
@@ -37,8 +37,8 @@ class Sequencer(Orchestrator):
                 result = await variant(step_inputs)
                 await self.store_results(step=variant.name, result=result)
 
-                await self.interface.send_output(result)
+                await self._interface.send_output(result)
 
             prompt = ""
-            if not await self.interface.confirm("Proceed to next step?"):
+            if not await self._interface.confirm("Proceed to next step?"):
                 break

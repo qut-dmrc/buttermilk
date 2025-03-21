@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Any
 
 import weave
@@ -10,7 +11,7 @@ from traceloop.sdk.decorators import workflow
 
 from buttermilk import logger
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
 
@@ -34,7 +35,7 @@ def get_agent_name_tracing(call: Any) -> str:
 # The completed Job is stored in a database (BigQuery) for tracing and analysis.
 #
 ##########
-class Agent(BaseModel):
+class Agent(BaseModel, ABC):
     """Base Agent interface for all processing units"""
 
     agent_id: str = Field(
@@ -72,7 +73,18 @@ class Agent(BaseModel):
                 )
         return job
 
-    async def process(self, input_data: AgentInput) -> AgentOutput:
+    @abstractmethod
+    async def receive_output(
+        self,
+        message: AgentMessages,
+        source: str,
+        **kwargs,
+    ) -> AgentMessages | None:
+        """Log data or send output to the user interface"""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def process(self, input_data: AgentMessages, **kwargs) -> AgentMessages:
         """Process input data and return output
 
         Inputs:
@@ -85,9 +97,10 @@ class Agent(BaseModel):
         raise NotImplementedError
         return job
 
-    async def __call__(self, input_data: AgentInput) -> AgentOutput:
+    async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput:
         """Allow agents to be called directly as functions"""
-        return await self.process(input_data)
+        return await self.process(input_data, **kwargs)
+
 
 def save_job(job: "Job", save_info: SaveInfo) -> str:
     rows = [job.model_dump(mode="json", exclude_none=True)]
@@ -102,6 +115,3 @@ def save_job(job: "Job", save_info: SaveInfo) -> str:
         dest = save(data=rows, save_dir=save_info.destination)
 
     return dest
-
-
-

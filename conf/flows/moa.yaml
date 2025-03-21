@@ -1,9 +1,6 @@
 moa:
   # _target_: buttermilk.runner.simple.Sequencer
   orchestrator: Selector
-  # data:
-  interface: 
-    _target_: buttermilk.ui.console.CLIUserAgent
   # save:
 
   steps:
