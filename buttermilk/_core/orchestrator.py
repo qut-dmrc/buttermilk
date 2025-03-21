@@ -23,7 +23,7 @@ from buttermilk._core.variants import AgentVariants
 BASE_DIR = Path(__file__).absolute().parent
 
 
-PLACEHOLDER_VARIABLES = ["content", "history", "context", "record"]
+PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "record"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -86,7 +86,7 @@ class Orchestrator(BaseModel, ABC):
             # Harvest records
             self._records.extend(result.records)
 
-    async def _prepare_inputs(self, config: dict):
+    async def _prepare_inputs(self, config: dict) -> dict[str, Any]:
         """Fill inputs according to specification.
 
         Includes several special case keywords:
@@ -107,7 +107,6 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = records
                 elif value == "history":
-                    history = self._flow_data.get("history", [])
                     history = await self._context.get_messages()
                     history = [f"- {msg.type}: {msg.content}" for msg in history]
                     history = "\n".join(history)
@@ -124,3 +123,5 @@ class Orchestrator(BaseModel, ABC):
                     input_dict[value] = "\n".join(participants)
 
         input_dict.update(self._flow_data._resolve_mappings(config["inputs"]))
+
+        return input_dict

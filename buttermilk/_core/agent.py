@@ -35,9 +35,7 @@ def get_agent_name_tracing(call: Any) -> str:
 # The completed Job is stored in a database (BigQuery) for tracing and analysis.
 #
 ##########
-class Agent(BaseModel, ABC):
-    """Base Agent interface for all processing units"""
-
+class AgentConfig(BaseModel):
     agent_id: str = Field(
         ...,
         description="The unique name of this agent.",
@@ -60,6 +58,10 @@ class Agent(BaseModel, ABC):
     class Config:
         extra = "forbid"
         arbitrary_types_allowed = False
+
+
+class Agent(AgentConfig, ABC):
+    """Base Agent interface for all processing units"""
 
     @trace
     @weave.op(call_display_name=get_agent_name_tracing)

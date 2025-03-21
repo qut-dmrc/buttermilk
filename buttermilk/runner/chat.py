@@ -6,7 +6,7 @@ from autogen_core import AgentId
 from pydantic import PrivateAttr, model_validator
 
 from buttermilk.exceptions import ProcessingError
-from buttermilk.runner.autogen import CONDUCTOR, AutogenOrchestrator
+from buttermilk.runner.autogen import CONDUCTOR, MANAGER, AutogenOrchestrator
 
 
 class Selector(AutogenOrchestrator):
@@ -28,6 +28,12 @@ class Selector(AutogenOrchestrator):
         """Determine the next step based on the user's prompt"""
         self._next_step = None
 
+        # First, get user input
+        yield {
+            "role": MANAGER,
+            "question": "Enter your question or prompt.",
+        }
+
         while True:
             # store the last message received, so that any changes in instructions
             # are incorporated before executing the next step
@@ -43,7 +49,7 @@ class Selector(AutogenOrchestrator):
             # return
 
             # Determine the next step based on the response
-            if not (next_step := instructions.content.get("role")):
+            if not (next_step := instructions.response.get("role")):
                 raise ProcessingError("Next step not found from conductor.")
             if next_step not in self._agents:
                 raise ProcessingError(
@@ -54,7 +60,7 @@ class Selector(AutogenOrchestrator):
                 # No change to inputs
                 yield {
                     "role": next_step,
-                    "question": instructions.content.get("question", ""),
+                    "question": instructions.response.get("question", ""),
                 }
             # wait a bit and go around again
             await asyncio.sleep(5)

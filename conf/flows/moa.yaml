@@ -15,8 +15,8 @@ moa:
       num_runs: 1
       parameters:
         template: panel_host
-      inputs:
         model: gemini2pro
+      inputs:
         participants: participants
         context: context
         history: history

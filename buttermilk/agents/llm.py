@@ -31,7 +31,8 @@ class LLMAgent(Agent):
     def init_model(self) -> Self:
         if self.parameters.get("model"):
             self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
-
+        else:
+            raise ValueError("Must provide a model in the parameters.")
         return self
 
     async def receive_output(
@@ -145,5 +146,10 @@ class LLMAgent(Agent):
             ).items()
             if v and k != "content"
         }
-        output = AgentOutput(agent_id=self.agent_id, response=outputs, content=response.content, metadata=metadata)
+        output = AgentOutput(
+            agent=str(self.agent_id),
+            response=outputs,
+            content=response.content,
+            metadata=metadata,
+        )
         return output

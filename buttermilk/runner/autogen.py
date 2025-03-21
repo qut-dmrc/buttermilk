@@ -13,13 +13,15 @@ from autogen_core import (
 )
 from pydantic import Field, PrivateAttr
 
-from buttermilk._core.agent import Agent
+from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     FlowMessage,
+    ManagerMessage,
 )
 from buttermilk._core.orchestrator import Orchestrator
+from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
 from buttermilk.exceptions import ProcessingError
 
@@ -30,11 +32,19 @@ MANAGER = "MANAGER"
 class AutogenAgentAdapter(RoutedAgent):
     """Adapter for Autogen runtime"""
 
-    def __init__(self, topic_type: str, agent: Agent = None, agent_cls: type = None, agent_cfg: dict = {}):
+    def __init__(
+        self,
+        topic_type: str,
+        agent: Agent = None,
+        agent_cls: type = None,
+        agent_cfg: AgentConfig = None,
+    ):
         if agent:
             self.agent = agent
         else:
-            self.agent: Agent = agent_cls(**agent_cfg)
+            if not agent_cfg:
+                agent_cfg = AgentConfig()
+            self.agent: Agent = agent_cls(**agent_cfg.model_dump())
         self.topic_type = topic_type
         super().__init__(description=self.agent.description)
 
@@ -54,8 +64,19 @@ class AutogenAgentAdapter(RoutedAgent):
             return
         except ValueError:
             logger.warning(
-                f"Agent {self.agent.agent_id} received nsupported message type: {type(message)}",
+                f"Agent {self.agent.agent_id} received unsupported message type: {type(message)}",
             )
+
+    @message_handler
+    async def handle_oob(
+        self,
+        message: ManagerMessage,
+        ctx: MessageContext,
+    ) -> ManagerMessage | None:
+        """Control messages are only sent to the User Interface."""
+        if isinstance(self.agent, UIAgent):
+            return await self.agent.confirm(message)
+        return None
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -63,7 +84,7 @@ class AutogenOrchestrator(Orchestrator):
 
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _agents: dict[str, list[tuple[AgentType, dict]]] = PrivateAttr(
+    _agents: dict[str, list[tuple[AgentType, AgentConfig]]] = PrivateAttr(
         default_factory=dict,
     )  # mapping of step to registered agents and their individual configs
     _step_generator = PrivateAttr(default=None)
@@ -89,21 +110,27 @@ class AutogenOrchestrator(Orchestrator):
             self._step_generator = self._get_next_step()
 
             next_step = await anext(self._step_generator)
-
-            while await self._interface.confirm(
-                f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
-            ):
+            while True:
                 await self._execute_step(
                     step_name=next_step["role"],
                     prompt=next_step.get("question", ""),
                 )
 
                 next_step = await anext(self._step_generator)
-            # Clean up resources
-            await self._cleanup()
-
+                user_input = await self._ask_user(
+                    question=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
+                )
+                if not all(ui.confirm for ui in user_input):
+                    # User does not want to proceed
+                    raise ProcessingError("User does not want to proceed.")
+        except ProcessingError:
+            logger.error("User does not want to proceed.")
+            raise
         except Exception as e:
             logger.exception(f"Error in AutogenOrchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()
 
     async def _get_next_step(self) -> AsyncGenerator[dict[str, str]]:
         for step in self.steps:
@@ -128,11 +155,10 @@ class AutogenOrchestrator(Orchestrator):
         for step in self.steps:
             step_agents = []
             for agent_cls, variant in step.get_configs():
-
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    variant["agent_id"],
+                    variant.agent_id,
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,
@@ -160,6 +186,27 @@ class AutogenOrchestrator(Orchestrator):
             # Store the registered agents for this step
             self._agents[step.name] = step_agents
 
+    async def _ask_user(self, question: str = "") -> list[ManagerMessage]:
+        """Ask user for input"""
+        tasks = []
+        for agent_type, _ in self._agents[MANAGER]:
+            message = ManagerMessage(content=question)
+            agent_id = await self._runtime.get(agent_type)
+            task = self._runtime.send_message(
+                message=message,
+                recipient=agent_id,
+            )
+
+            tasks.append(task)
+
+        # Wait for all agents to respond
+        responses = await asyncio.gather(*tasks)
+        # Process and collect responses
+        for result in responses:
+            if result and not result.error:
+                await self.store_results(step=MANAGER, result=result)
+        return responses
+
     async def _execute_step(
         self,
         step_name: str,
@@ -174,7 +221,7 @@ class AutogenOrchestrator(Orchestrator):
         # Send message to each agent for this step
         for agent_type, config in self._agents[step_name]:
             # prepare the step inputs
-            mapped_inputs = self._prepare_inputs(config=config)
+            mapped_inputs = await self._prepare_inputs(config=config)
             agent_id = await self._runtime.get(agent_type)
 
             message = AgentInput(

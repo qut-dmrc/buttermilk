@@ -76,7 +76,13 @@ class ManagerMessage(FlowMessage):
     """
 
     type: str = "ManagerMessage"
+    confirm: bool = Field(default=False, description="Ready to proceed?")
     stop: bool = Field(default=False, description="Whether to stop the flow")
+
+    error: list[str] = Field(
+        default_factory=list,
+        description="A list of errors",
+    )
 
 
 class AgentInput(FlowMessage):

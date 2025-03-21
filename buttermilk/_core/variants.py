@@ -5,7 +5,7 @@ import shortuuid
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from buttermilk._core.agent import Agent
+from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
@@ -94,18 +94,25 @@ class AgentVariants(BaseModel):
 
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
-    def get_configs(self) -> list[tuple[type, dict]]:
+    def get_configs(self) -> list[tuple[type, AgentConfig]]:
+        # Get static config
+        static = dict(name=self.name, description=self.description, **self.model_extra)
+
+        # Get object
+        agent_class = AgentRegistry.get(self.agent_obj)
+        if agent_class is None:
+            raise ValueError(f"Agent class '{self.agent_obj}' not found in registry")
+
         # Create variants (permutations of vars multiplied by num_runs)
         variant_configs = self.num_runs * expand_dict(self.variants)
+
         if not variant_configs:
-            variant_configs = [
-                {"name": self.name},
-            ]  # Default to just using standard params
+            return [(agent_class, static)]
 
         agents = []
         for variant in variant_configs:
             # Start with static config
-            cfg = dict(name=self.name, **self.model_extra)
+            cfg = dict(**static)
 
             # Generate unique ID for this agent
             cfg["agent_id"] = f"{self.name}-{shortuuid.uuid()[:6]}"
@@ -115,12 +122,7 @@ class AgentVariants(BaseModel):
                 cfg["parameters"] = {}
             cfg["parameters"].update(variant)
 
-            # Instantiate
-            agent_class = AgentRegistry.get(self.agent_obj)
-            if agent_class is None:
-                raise ValueError(f"Agent class '{self.agent_obj}' not found in registry")
-
-            agents.append((agent_class, cfg))
+            agents.append((agent_class, AgentConfig(**cfg)))
 
         return agents
 
