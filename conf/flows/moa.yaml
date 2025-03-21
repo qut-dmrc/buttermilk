@@ -1,0 +1,86 @@
+simple:
+  # _target_: buttermilk.runner.simple.Sequencer
+  orchestrator: Selector
+  # data:
+  interface: 
+    _target_: buttermilk.ui.console.CLIUserAgent
+  # save:
+
+  steps:
+    - name: MANAGER
+      agent_obj: CLIUserAgent
+      num_runs: 1
+      description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given. 
+
+    - name: HOST
+      description: Your role, facilitating the discussion and directing questions to those best placed to answer.
+      agent_obj: LLMAgent
+      num_runs: 1
+      inputs:
+        template: panel_host
+        model: gemini2pro
+        participants: participants
+        context: context
+        history: history
+        prompt: prompt
+        record: record
+
+    - name: fetch
+      agent_obj: Fetch
+      description: An agent responsible for providing the content of URLs and stored records required for the discussion.
+      inputs:
+        prompt: prompt
+
+    - name: judge
+      description: Expert analyst, particularly suited to assess content with subject matter expertise.
+      agent_obj: LLMAgent
+      num_runs: 2
+      variants:
+        template: judge
+        model: gemini2flashthinking
+        criteria: criteria_ordinary
+        formatting: json_rules
+      inputs:
+        record: record
+
+    - name: feedback
+      description: Quality Assurance agent, responsible for identifying potential mistakes.
+      agent_obj: LLMAgent
+      num_runs: 1
+      variants:
+        template: feedback
+        model: ${llms.general}
+      inputs:
+        history: history
+
+    - name: synthesizer
+      agent_obj: LLMAgent
+      description: Team leader, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
+      num_runs: 1
+      variants:
+        model: gemini2flashthinking
+        template: synthesise_judger
+        criteria: criteria_ordinary
+        formatting: json_rules
+      inputs:
+        record: record
+        instructions: >
+          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
+        answers: judge
+        feedback: feedback
+
+    - name: introspector
+      agent_obj: LLMAgent
+      num_runs: 1
+      description: Prepares analysis of the discussion and differences between draft answers (Required step after synthesizing a response).
+      variants:
+        template: differences
+        model: gemini2flashthinking
+        criteria: >
+          Evaluate how well the provided content aligns with the rules.
+      inputs:
+        content: content
+        answers:
+          - judge
+          - synth
+        feedback: feedback

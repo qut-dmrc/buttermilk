@@ -1,225 +1,64 @@
 import asyncio
-import os
-import uuid
-from abc import ABC, abstractmethod
-from typing import Any, Union
+from collections.abc import AsyncGenerator
+from typing import Self
 
-import hydra
-import pydantic
-from autogen_core import (
-    DefaultTopicId,
-    MessageContext,
-    RoutedAgent,
-    message_handler,
-)
-from autogen_core.models import (
-    AssistantMessage,
-    SystemMessage,
-    UserMessage,
-)
-from pydantic import BaseModel, Field, PrivateAttr
+from autogen_core import AgentId
+from pydantic import PrivateAttr, model_validator
 
-from buttermilk._core.agent import Agent
-from buttermilk._core.runner_types import Record
-from buttermilk._core.ui import IOInterface
-from buttermilk.bm import logger
-from buttermilk.tools.json_parser import ChatParser
-from buttermilk.utils.templating import (
-    KeyValueCollector,
-)
+from buttermilk.exceptions import ProcessingError
+from buttermilk.runner.autogen import AutogenOrchestrator
+
+CONDUCTOR = "HOST"
+MANAGER = "MANAGER"
 
 
-class NullAnswer(FlowMessage):
-    type: str = "NullAnswer"
-    content: str = ""
-    value: bool | None|str = None
-    """A message sent to the group chat indicating that the agent did not provide an answer."""
+class Selector(AutogenOrchestrator):
+    _participants: list = PrivateAttr(default_factory=list)
+    _conductor_id: AgentId = PrivateAttr()
 
+    @model_validator(mode="after")
+    def _init_conductor(self) -> Self:
+        for step in self.steps:
+            self._participants.append(
+                {
+                    "role": step.name,
+                    "description": step.description,
+                },
+            )
+        return self
 
-class InputRecord(FlowMessage):
-    type: str = "InputRecord"
-    payload: Record = Field(
-        ...,
-        description="A single instance of an input example for workers to use.",
-    )
+    async def _get_next_step(self) -> AsyncGenerator[dict[str, str], None]:
+        """Determine the next step based on the user's prompt"""
+        self._next_step = None
 
+        while True:
+            # store the last message received, so that any changes in instructions
+            # are incorporated before executing the next step
+            _last_message = self._last_message
+            responses = await self._execute_step(CONDUCTOR)
 
-class Answer(FlowMessage):
-    type: str = "Answer"
-    agent_id: str
-    role: str
+            if len(responses) > 1:
+                raise ProcessingError("Conductor returned multiple responses.")
 
-    inputs: dict = {}
-    outputs: dict = {}
-    context: list[SystemMessage | UserMessage | AssistantMessage] = []
+            instructions = responses[0]
 
-    config: Agent
+            # TODO(NS): Add finish condition
+            # return
 
-    model_config = {"extra": "allow"}
+            # Determine the next step based on the response
+            if not (next_step := instructions.content.get("role")):
+                raise ProcessingError("Next step not found from conductor.")
+            if next_step not in self._agents:
+                raise ProcessingError(
+                    f"Step {next_step} not found in registered agents.",
+                )
 
-
-# Union of all known GroupChatMessage subclasses
-GroupChatMessageType = Union[FlowMessage, NullAnswer, InputRecord, Answer]
-
-
-
-class MessagesCollector(KeyValueCollector):
-    """Specifically typed to collect pairs of (User, Assistant) messages"""
-
-    _data: dict[str, list[UserMessage | AssistantMessage]] = PrivateAttr(
-        default_factory=dict,
-    )
-
-
-class BaseGroupChatAgent(RoutedAgent, ABC):
-    """A group chat participant."""
-
-    def __init__(
-        self,
-        config: Agent,
-        group_chat_topic_type: str = "default",
-    ) -> None:
-        """Initialize the agent with configuration and topic type.
-
-        Args:
-            config: Configuration settings for the agent
-            group_chat_topic_type: The type of group chat topic to use (default: "default")
-
-        """
-        super().__init__(
-            description=config.description,
-        )
-        self.config = config
-        self.step = config.agent_id
-        self.parameters = config.parameters
-        self._group_chat_topic_type = group_chat_topic_type
-        self._json_parser = ChatParser()
-
-    async def publish(self, message: Any) -> None:
-        await self.publish_message(
-            message,
-            DefaultTopicId(type=self._group_chat_topic_type),
-        )
-
-    @abstractmethod
-    async def query(self, request: FlowRequest) -> GroupChatMessageType:
-        """Query the agent with the given inputs and placeholders."""
-        raise NotImplementedError
-
-    @message_handler
-    async def handle_request_to_speak(
-        self,
-        message: FlowRequest,
-        ctx: MessageContext,
-    ) -> GroupChatMessageType:
-        log_message = f"{self.id} got request to speak."
-
-        logger.debug(log_message)
-
-        answer = await self.query(message)
-
-        await self.publish(answer)
-
-        return answer
-
-
-class ConversationId(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    platform: str
-    external_id: str
-    conductor: Any | RoutedAgent | None = Field(default=None)
-    io_interface: Any | IOInterface | None = Field(default=None)
-    task: Any = Field(default=None)
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-
-
-class ConversationManager(BaseModel):
-    conversations: dict[str, Any] = {}
-    io_interfaces: dict[str, Any] = {}
-
-    async def start_conversation(
-        self,
-        io_interface: IOInterface,
-        conductor: RoutedAgent,
-        platform: str,
-        external_id: str,
-        init_text: str = None,
-        history: list = [],
-        **kwargs,
-    ) -> ConversationId:
-        """Start a new group chat conversation with the given IO interface"""
-
-        conv = ConversationId(platform=platform, external_id=external_id, io_interface=io_interface, conductor=conductor)
-
-        # Create and start the MoA task
-        conv.task = asyncio.create_task(self._run_chat(conv, **kwargs))
-        self.conversations[conv.id] = conv
-
-        return conv
-
-    async def _run_chat(self, conv_id: ConversationId, init_text: str = None, **kwargs):
-        """Run a groupchat conversation"""
-        from buttermilk.runner.moa import MoA
-
-        try:
-            # Create and configure MoA
-            moa = MoA(**kwargs)
-
-            # Run the MoA chat with the provided IO interface and the conductor
-            await moa.moa_chat(io_interface=conv_id.io_interface, init_text=init_text, conductor = conv_id.conductor)
-
-        except Exception as e:
-            logger.exception(f"Error in conversation {conv_id.id}: {e!s}")
-        finally:
-            # Clean up
-            await conv_id.io_interface.cleanup()
-            del conv_id.io_interface
-
-            if conv_id.id in self.conversations:
-                del self.conversations[conv_id.id]
-
-
-@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def run_moa_cli(cfg) -> None:
-    # Hydra will automatically instantiate the objects
-    objs = hydra.utils.instantiate(cfg)
-    bm = objs.bm
-
-    if bm.cfg.run.ui == "cli":
-        # Run CLI version
-        from buttermilk.ui.console import CLIUserAgent
-
-        moa = objs.flows[cfg.flow]
-        # flow = objs.flows[cfg.flow]
-        # moa = MoA(steps=flow.steps, source="dev")
-        loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 3.0
-        io_interface=CLIUserAgent
-
-    elif bm.cfg.run.ui == "slack":
-        # Run Slack version
-
-        secrets = bm.secret_manager.get_secret("automod")
-        os.environ["SLACK_BOT_TOKEN"] = secrets["AUTOMOD_BOT_TOKEN"]
-        app_token = secrets["DMRC_SLACK_APP_TOKEN"]
-        manager = ConversationManager()
-        flows = objs.flows
-        from buttermilk.ui.slackbot import initialize_slack_bot
-
-        loop = asyncio.get_event_loop()
-        loop.slow_callback_duration = 3.0
-        handler = initialize_slack_bot(
-            conversation_manager=manager,
-            flows=flows,
-            loop=loop,
-            app_token=app_token,
-        )
-        loop.run_until_complete(handler.start_async())
-    else:
-        raise ValueError(f"Unknown run ui type: {bm.cfg.run.ui}")
-    asyncio.run(moa.moa_chat())
-    pass  # noqa
-
-
-if __name__ == "__main__":
-    run_moa_cli()
+            if self._last_message == _last_message:
+                # No change to inputs
+                yield {
+                    "role": next_step,
+                    "question": instructions.content.get("question", ""),
+                }
+            # wait a bit and go around again
+            await asyncio.sleep(5)
+            continue

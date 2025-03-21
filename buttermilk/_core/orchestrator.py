@@ -1,10 +1,8 @@
 import copy
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from pathlib import Path
-from typing import (
-    Optional,
-    Sequence,
-)
+from typing import Any
 
 import shortuuid
 from pydantic import (
@@ -25,37 +23,45 @@ from buttermilk._core.variants import AgentVariants
 BASE_DIR = Path(__file__).absolute().parent
 
 
-
 class Orchestrator(BaseModel, ABC):
-    """ Runs a single instance of a flow, given an interface."""
-    session_id: str = Field(default_factory=shortuuid.uuid, description="A unique session id for this set of flow runs.")
-    save: Optional[SaveInfo] = Field(default=None)
+    """Runs a single instance of a flow, given an interface."""
+
+    session_id: str = Field(
+        default_factory=shortuuid.uuid,
+        description="A unique session id for this set of flow runs.",
+    )
+    save: SaveInfo | None = Field(default=None)
     data: Sequence[DataSource] = Field(default_factory=list)
-    steps: Sequence[AgentVariants]= Field(default_factory=list, description="A sequence of agent factories to run in order")
+    steps: Sequence[AgentVariants] = Field(
+        default_factory=list,
+        description="Agent factories available to run.",
+    )
     interface: IOInterface
 
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
     _records: list = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
-        extra = "forbid",
-        arbitrary_types_allowed =False,
-        populate_by_name = True,
-        exclude_none = True,
-        exclude_unset = True,
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
     )
 
     @field_validator("steps", mode="before")
     @classmethod
     def validate_steps(cls, value):
         if isinstance(value, Sequence) and not isinstance(value, str):
-            return [AgentVariants(**step) if not isinstance(step, AgentVariants) else step
-                   for step in value]
+            return [
+                AgentVariants(**step) if not isinstance(step, AgentVariants) else step
+                for step in value
+            ]
         return value
 
     @abstractmethod
-    async def run(self, request=None) -> None:
-        """ Starts a flow, given an incoming request"""
+    async def run(self, request: Any = None) -> None:
+        """Starts a flow, given an incoming request"""
         self._flow_data = copy.deepcopy(self.data)  # process if needed
         # add request data
         # ...
@@ -64,8 +70,6 @@ class Orchestrator(BaseModel, ABC):
 
         # save the results
         # flow_data ...
-
-        return None
 
     async def __call__(self, request=None) -> Job:
         return await self.run(request=request)

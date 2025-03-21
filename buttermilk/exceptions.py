@@ -1,26 +1,24 @@
 class ProcessingFinished(Exception):
     """Jobs done."""
 
-    pass
-
 
 class FatalError(Exception):
-    ## Something has gone horribly wrong and the process must terminate.
+    # Something has gone horribly wrong and the process must terminate.
     pass
+
+
+class ProcessingError(Exception):
+    """Something has gone mildly wrong."""
 
 
 class RateLimit(Exception):
     """Rate limit exceeded."""
 
-    pass
-
 
 class NoMoreResults(Exception):
     """Time or results exceeded."""
 
-    pass
-
 
 class Delay(Exception):
-    ## Wait before running again
+    # Wait before running again
     pass

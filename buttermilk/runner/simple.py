@@ -14,15 +14,21 @@ class Sequencer(Orchestrator):
 
     @model_validator(mode="after")
     def _register_agents(self) -> Self:
+        roles: list[dict[str, str]] = []
         for step in self.steps:
             step_agents = []
             for obj, cfg in step.get_configs():
                 step_agents.append(obj(**cfg))
             self.agents.append(step_agents)
+            roles.append({"role": step.name, "description": step.description})
+
+        self._flow_data.add(key="participants", value=roles)
         return self
 
     async def run(self, request=None) -> None:
-        prompt = await self.interface.get_input(message="Enter your prompt or record info...")
+        prompt = await self.interface.get_input(
+            message="Enter your prompt or record info...",
+        )
         for step in self.agents:
             for variant in step:
                 mapped_inputs = self._flow_data._resolve_mappings(variant.inputs)
@@ -36,5 +42,3 @@ class Sequencer(Orchestrator):
             prompt = ""
             if not await self.interface.confirm("Proceed to next step?"):
                 break
-        return
-
