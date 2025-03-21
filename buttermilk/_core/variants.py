@@ -34,7 +34,11 @@ class AgentRegistry:
         """Discover and register all Agent subclasses in the package."""
         # Import all submodules to make sure they're loaded
         package = importlib.import_module(package_name)
-        for _, name, is_pkg in pkgutil.walk_packages(package.__path__, package.__name__ + ".", onerror=lambda x: print(f"Error importing {x}")):
+        for _, name, is_pkg in pkgutil.walk_packages(
+            package.__path__,
+            package.__name__ + ".",
+            onerror=lambda x: print(f"Error importing {x}"),
+        ):
             try:
                 importlib.import_module(name)
             except Exception as e:
@@ -64,6 +68,11 @@ class AgentVariants(BaseModel):
     """
 
     agent_obj: str = Field(..., description="The object name to instantiate")
+    name: str = Field(..., description="The name of the step this agent type performs")
+    description: str = Field(
+        ...,
+        description="Short explanation of what this agent type does",
+    )
     num_runs: int = Field(
         default=1,
         description="Number of times to run the agent for each variant",
@@ -88,16 +97,22 @@ class AgentVariants(BaseModel):
     def get_configs(self) -> list[tuple[type, dict]]:
         # Create variants (permutations of vars multiplied by num_runs)
         variant_configs = self.num_runs * expand_dict(self.variants)
+        if not variant_configs:
+            variant_configs = [
+                {"name": self.name},
+            ]  # Default to just using standard params
 
         agents = []
         for variant in variant_configs:
             # Start with static config
-            cfg = dict(**self.model_extra)
+            cfg = dict(name=self.name, **self.model_extra)
 
             # Generate unique ID for this agent
             cfg["agent_id"] = f"{self.name}-{shortuuid.uuid()[:6]}"
 
             # Add variant config to parameters
+            if "parameters" not in cfg:
+                cfg["parameters"] = {}
             cfg["parameters"].update(variant)
 
             # Instantiate

@@ -43,7 +43,10 @@ class Agent(BaseModel, ABC):
         description="The unique name of this agent.",
     )
     name: str = Field(..., description="The name of the step this agent type performs")
-    description: str
+    description: str = Field(
+        ...,
+        description="Short explanation of what this agent type does",
+    )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",

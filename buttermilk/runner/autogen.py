@@ -11,13 +11,11 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
-from autogen_core.model_context import UnboundedChatCompletionContext
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     AgentInput,
-    AgentMessages,
     AgentOutput,
     FlowMessage,
 )
@@ -49,7 +47,7 @@ class AutogenAgentAdapter(RoutedAgent):
         return agent_output
 
     @message_handler
-    async def handle_output(self, message: AgentMessages, ctx: MessageContext) -> None:
+    async def handle_output(self, message: AgentOutput, ctx: MessageContext) -> None:
         try:
             source = str(ctx.sender) if ctx and ctx.sender else message.type
             agent_output = await self.agent.receive_output(message, source=source)
@@ -64,12 +62,7 @@ class AutogenOrchestrator(Orchestrator):
     """Orchestrator that uses Autogen's routing and messaging system"""
 
     # Private attributes
-    _runtime: SingleThreadedAgentRuntime = PrivateAttr(
-        default_factory=SingleThreadedAgentRuntime,
-    )
-    _context: UnboundedChatCompletionContext = PrivateAttr(
-        default_factory=UnboundedChatCompletionContext,
-    )
+    _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agents: dict[str, list[tuple[AgentType, dict]]] = PrivateAttr(
         default_factory=dict,
     )  # mapping of step to registered agents and their individual configs
@@ -121,11 +114,14 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""
-        # Start the runtime
-        self._runtime.start()
+        # loop = asyncio.get_running_loop()
+        self._runtime = SingleThreadedAgentRuntime()
 
         # Register agents for each step
         await self._register_agents()
+
+        # Start the runtime
+        self._runtime.start()
 
     async def _register_agents(self) -> None:
         """Register all agent variants for a specific step"""
@@ -155,7 +151,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Also subscribe to a step-specific topic
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=step.agent_id,
+                        topic_type=step.name,
                         agent_type=agent_type,
                     ),
                 )
@@ -174,21 +170,16 @@ class AutogenOrchestrator(Orchestrator):
             raise ProcessingError(f"No agents registered for step {step_name}")
 
         tasks = []
-        # Get the chat context and records
-        context = await self._context.get_messages()
-        records = self._flow_data.get("records")
 
         # Send message to each agent for this step
         for agent_type, config in self._agents[step_name]:
             # prepare the step inputs
-            mapped_inputs = self._flow_data._resolve_mappings(config["inputs"])
+            mapped_inputs = self._prepare_inputs(config=config)
             agent_id = await self._runtime.get(agent_type)
 
             message = AgentInput(
                 prompt=prompt,
                 inputs=mapped_inputs,
-                records=records,
-                context=context,
             )
             # Create task for sending message
             task = self._runtime.send_message(

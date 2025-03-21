@@ -13,8 +13,9 @@ moa:
       description: Your role, facilitating the discussion and directing questions to those best placed to answer.
       agent_obj: LLMAgent
       num_runs: 1
-      inputs:
+      parameters:
         template: panel_host
+      inputs:
         model: gemini2pro
         participants: participants
         context: context

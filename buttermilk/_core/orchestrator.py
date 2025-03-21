@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import shortuuid
+from autogen_core.model_context import UnboundedChatCompletionContext
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -20,6 +21,9 @@ from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
 
 BASE_DIR = Path(__file__).absolute().parent
+
+
+PLACEHOLDER_VARIABLES = ["content", "history", "context", "record"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -39,6 +43,9 @@ class Orchestrator(BaseModel, ABC):
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
     _records: list = PrivateAttr(default_factory=list)
 
+    _context: UnboundedChatCompletionContext = PrivateAttr(
+        default_factory=UnboundedChatCompletionContext,
+    )
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=False,
@@ -78,3 +85,42 @@ class Orchestrator(BaseModel, ABC):
 
             # Harvest records
             self._records.extend(result.records)
+
+    async def _prepare_inputs(self, config: dict):
+        """Fill inputs according to specification.
+
+        Includes several special case keywords:
+            - "participants": list of agents in the flow
+            - "content": list of string, fulltext from all records
+            - "history": list of history messages in string format
+            - "context": list of history messages in message format
+            - "record": list of InputRecords"
+        """
+        input_dict = {}
+        input_dict = self._flow_data._resolve_mappings(config["inputs"])
+
+        for value in PLACEHOLDER_VARIABLES:
+            if value in config["inputs"].keys():
+                if value == "content":
+                    records = [
+                        f"{rec.record_id}: {rec.fulltext}" for rec in self._records
+                    ]
+                    input_dict[value] = records
+                elif value == "history":
+                    history = self._flow_data.get("history", [])
+                    history = await self._context.get_messages()
+                    history = [f"- {msg.type}: {msg.content}" for msg in history]
+                    history = "\n".join(history)
+                    input_dict[value] = history
+                elif value == "context":
+                    # Get the chat context and records
+                    input_dict[value] = await self._context.get_messages()
+                elif value == "record":
+                    input_dict[value] = self._records
+                elif value == "participants":
+                    participants = [
+                        f"- {step.name}: {step.description}" for step in self.steps
+                    ]
+                    input_dict[value] = "\n".join(participants)
+
+        input_dict.update(self._flow_data._resolve_mappings(config["inputs"]))
