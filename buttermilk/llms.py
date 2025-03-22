@@ -12,47 +12,20 @@ from autogen_ext.models.openai import (
     OpenAIChatCompletionClient,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
-from google.cloud import aiplatform
-from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
+from pydantic import BaseModel, Field
 
 from buttermilk._core.retry import RetryWrapper
 
 _ = "ChatCompletionClient"
 
-try:
-    from langchain_anthropic import ChatAnthropic
-except:
-    pass
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    _ = [HarmBlockThreshold, HarmCategory]
-
-# from ..libs.hf import Llama2ChatMod
-# from ..libs.replicate import replicatellama3
-
-# Set parameters that apply to all models here
-global_langchain_configs = {
-    # We want to handle retries ourselves, not through langchain
-    "max_retries": 0,
-}
-
-MODEL_CLASSES = [
-    ChatOpenAI,
-    AzureChatOpenAI,
-    AnthropicVertex,
-    ChatVertexAI,
-]
-
-
-class LLMCapabilities(BaseModel):
-    chat: bool = True
-    image: bool = False
-    video: bool = False
-    audio: bool = False
-    media_uri: bool = False
-    expects_text_with_media: bool = False
+    _: list[Any] = [
+        AzureOpenAIChatCompletionClient,
+        OpenAIChatCompletionClient,
+        GeminiChatCompletionClient,
+        AnthropicVertex,
+    ]
 
 
 class LLMConfig(BaseModel):
@@ -84,13 +57,6 @@ class MLPlatformTypes(Enum):
     azure = "azure"
 
 
-VERTEX_SAFETY_SETTINGS_NONE = {
-    HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-}
 # Generate with:
 # ```sh
 # cat .cache/buttermilk/models.json | jq "keys[]"
@@ -119,63 +85,6 @@ CHEAP_CHAT_MODELS = [
     "gemini2flashlite",
 ]
 MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
-
-
-def VertexNoFilter(*args, **kwargs):
-    return ChatVertexAI(
-        *args,
-        **kwargs,
-        safety_settings=VERTEX_SAFETY_SETTINGS_NONE,
-        _raise_on_blocked=False,
-    )
-
-
-def LangChainAnthropicVertex(
-    region: str,
-    project_id: str,
-    model_name: str,
-    *args,
-    **kwargs,
-):
-    llm = ChatAnthropic(model_name=model_name, *args, **kwargs)
-    llm._client = AnthropicVertex(region=region, project_id=project_id)
-    llm._async_client = AsyncAnthropicVertex(region=region, project_id=project_id)
-    return llm
-
-
-def VertexMAAS(
-    model_name: str,
-    *,
-    project: str,
-    location: str,
-    staging_bucket: str,
-    **kwargs,
-):
-    _ = aiplatform.init(
-        project=project,
-        location=location,
-        staging_bucket=staging_bucket,
-    )
-    model = ChatVertexAI(
-        model_name=model_name,
-        project=project,
-        location=location,
-        **kwargs,
-    )
-    return model
-    MODEL_LOCATION = "us-central1"
-    MAAS_ENDPOINT = f"{MODEL_LOCATION}-aiplatform.googleapis.com"
-
-    client = openai.OpenAI(
-        base_url=f"https://{MAAS_ENDPOINT}/v1beta1/projects/{PROJECT_ID}/locations/{LOCATION}/endpoints/openapi",
-        api_key=credentials.token,
-    )
-
-
-def _Llama(*args, **kwargs):
-    default_opts = {"content_formatter": CustomOpenAIChatContentFormatter()}
-    default_opts.update(**kwargs)
-    return AzureChatOpenAI(*args, **default_opts)
 
 
 class LLMClient(BaseModel):
