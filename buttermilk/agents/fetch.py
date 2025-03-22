@@ -68,11 +68,11 @@ class Fetch(Agent):
             record = await self.get_record(input_data.prompt)
             if record:
                 return AgentOutput(
-                    agent=self.agent_id,
+                    agent=self.id,
                     records=[record],
                 )
             return AgentOutput(
-                agent=self.agent_id,
+                agent=self.id,
                 records=[Record(data=input_data.prompt)],
             )
-        return AgentOutput(agent=self.agent_id, error="No input provided.")
+        return AgentOutput(agent=self.id, error="No input provided.")

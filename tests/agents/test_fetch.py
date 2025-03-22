@@ -6,7 +6,7 @@ from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscri
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
 from buttermilk.agents.fetch import Fetch
-from buttermilk.runner.chat import FlowMessage, InputRecord, FlowRequest
+from buttermilk.runner.chat import FlowMessage, FlowRequest, InputRecord
 
 
 class TestFetch:
@@ -221,7 +221,7 @@ class TestFetch:
 def fetch_agent_cfg():
     return Agent(
         agent="Fetch",
-        agent_id="testing",
+        id="testing",
         description="fetch stuff",
         data=[
             {
@@ -229,7 +229,7 @@ def fetch_agent_cfg():
                 "name": "tja_train",
                 "path": "gs://prosocial-dev/data/tja_train.jsonl",
                 "index": ["record_id"],
-            }
+            },
         ],
     )
 

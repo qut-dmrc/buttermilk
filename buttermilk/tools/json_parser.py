@@ -3,7 +3,6 @@ from typing import Any, Literal
 
 import json_repair
 import regex as re
-from langchain_core.outputs import Generation
 from pydantic import BaseModel, Field
 
 from buttermilk.utils.utils import load_json_flexi
@@ -71,7 +70,7 @@ class ChatParser(BaseModel):
 
         return output
 
-    def parse_result(self, result: list[Generation], *, partial: bool = False) -> Any:
+    def parse_result(self, result: list, *, partial: bool = False) -> Any:
         output = self.parse(" ".join([r.text for r in result]))
 
         try:

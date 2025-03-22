@@ -936,12 +936,10 @@ class ToxicChat(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        from langchain_community.llms.huggingface_endpoint import HuggingFaceEndpoint
 
         API_URL = (
             "https://api-inference.huggingface.co/models/lmsys/toxicchat-t5-large-v1.0"
         )
-        self.client = HuggingFaceEndpoint(endpoint_url=API_URL)
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)

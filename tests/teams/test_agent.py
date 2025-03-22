@@ -13,7 +13,6 @@ from autogen_core.models import (
 
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llmchat import LLMAgent
-from buttermilk.bm import bm
 from buttermilk.llms import CHATMODELS
 from buttermilk.runner.moa import FlowRequest
 
@@ -49,7 +48,7 @@ def record_agent_cfg(
         case "Judger":
             return Agent(
                 agent="LLMClient",
-                agent_id=request.param,
+                id=request.param,
                 description="apply rules",
                 parameters=dict(
                     model=model_name,
@@ -61,7 +60,7 @@ def record_agent_cfg(
         case "Owl":
             return Agent(
                 agent="LLMClient",
-                agent_id=request.param,
+                id=request.param,
                 description="look for things",
                 parameters=dict(
                     model=model_name,

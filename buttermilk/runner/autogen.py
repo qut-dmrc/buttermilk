@@ -7,6 +7,7 @@ from autogen_core import (
     AgentType,
     ClosureAgent,
     ClosureContext,
+    DefaultTopicId,
     MessageContext,
     RoutedAgent,
     SingleThreadedAgentRuntime,
@@ -20,7 +21,6 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
-    FlowMessage,
     ManagerMessage,
 )
 from buttermilk._core.orchestrator import Orchestrator
@@ -68,7 +68,7 @@ class AutogenAgentAdapter(RoutedAgent):
             return
         except ValueError:
             logger.warning(
-                f"Agent {self.agent.agent_id} received unsupported message type: {type(message)}",
+                f"Agent {self.agent.id} received unsupported message type: {type(message)}",
             )
 
     @message_handler
@@ -122,7 +122,8 @@ class AutogenOrchestrator(Orchestrator):
 
                 next_step = await anext(self._step_generator)
 
-                user_input = await self._ask_user(
+                user_input = await self._ask_agent(
+                    agent=MANAGER,
                     question=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
                 )
                 if not all(ui.confirm for ui in user_input):
@@ -191,12 +192,12 @@ class AutogenOrchestrator(Orchestrator):
     async def _register_agents(self) -> None:
         """Register all agent variants for each step"""
         for step in self.steps:
-            step_agents = []
+            step_agent_type = []
             for agent_cls, variant in step.get_configs():
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    variant.agent_id,
+                    variant.name,
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,
@@ -220,14 +221,18 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                 )
 
-                step_agents.append((agent_type, variant))
+                step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
-            self._agents[step.name] = step_agents
+            self._agents[step.name] = step_agent_type
 
-    async def _ask_user(self, question: str = "") -> list[ManagerMessage]:
+    async def _ask_agent(
+        self,
+        agent,
+        question: str = "",
+    ) -> list[ManagerMessage]:
         """Ask user for input"""
         tasks = []
-        for agent_type, _ in self._agents[MANAGER]:
+        for agent_type, _ in self._agents[agent]:
             message = ManagerMessage(content=question)
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
@@ -244,33 +249,29 @@ class AutogenOrchestrator(Orchestrator):
     async def _execute_step(
         self,
         step_name: str,
-        prompt: str = "",
-    ) -> list[FlowMessage]:
+        content: str = "",
+        **inputs,
+    ) -> None:
         """Execute a step by sending requests to relevant agents and collecting responses"""
         if step_name not in self._agents or len(self._agents[step_name]) == 0:
             raise ProcessingError(f"No agents registered for step {step_name}")
 
-        tasks = []
         config = None
         for config in self.steps:
-            if step.name == step_name:
+            if config.name == step_name:
                 break
         if not config:
             raise ProcessingError(f"Cannot find config for step {step_name}.")
 
         # Send message with appropriate inputs for this step
         mapped_inputs = await self._prepare_inputs(config=config)
+        mapped_inputs.update(inputs)
         message = AgentInput(
-                content=prompt,
-                payload=mapped_inputs,
+            content=content,
+            payload=mapped_inputs,
         )
-        topic_id = await self._runtime.get(self._topic_type)
+        topic_id = DefaultTopicId(type=self._topic_type)
         await self._runtime.publish_message(message, topic_id=topic_id)
-
-        # Wait for all agents to respond
-        responses = await asyncio.gather(*tasks)
-
-        return responses
 
     async def _cleanup(self):
         """Clean up resources when flow is complete"""

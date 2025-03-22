@@ -6,11 +6,6 @@ import chromadb
 import pandas as pd
 import pydantic
 from chromadb import Documents, Embeddings
-from chromadb.utils.embedding_functions.chroma_langchain_embedding_function import (
-    create_langchain_embedding,
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
 from pydantic import BaseModel, Field, PrivateAttr
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
@@ -45,7 +40,6 @@ class GoogleVertexEmbeddings(BaseModel):
     _db = PrivateAttr(default=None)
     _embedding_model = PrivateAttr(default=None)
     _client = PrivateAttr(default=None)
-    _lc_embedding_function = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def load_models(self) -> Self:
@@ -54,15 +48,13 @@ class GoogleVertexEmbeddings(BaseModel):
         # Instantiate a persistent chroma client in the persist_directory.
         self._client = chromadb.PersistentClient(path=self.persist_directory)
 
-        self._lc_embedding_function = create_langchain_embedding(self)
-
         return self
 
     @property
     def collection(self) -> Any:
         if not self._collection:
             self._collection = self._client.get_collection(
-                self.collection_name, embedding_function=self._lc_embedding_function
+                self.collection_name,
             )
         return self._collection
 
@@ -75,7 +67,9 @@ class GoogleVertexEmbeddings(BaseModel):
     def embed_records(self, chunked_documents: Sequence[ChunkedDocument]) -> Embeddings:
         inputs = [
             TextEmbeddingInput(
-                text=chunk.chunk_text, task_type=self.task, title=chunk.chunk_title
+                text=chunk.chunk_text,
+                task_type=self.task,
+                title=chunk.chunk_title,
             )
             for chunk in chunked_documents
         ]
@@ -116,7 +110,8 @@ class GoogleVertexEmbeddings(BaseModel):
         return chunked_documents
 
     def get_embedded_records(
-        self, chunked_documents: Sequence[ChunkedDocument]
+        self,
+        chunked_documents: Sequence[ChunkedDocument],
     ) -> Sequence[ChunkedDocument]:
         embeddings = self.embed_records(chunked_documents)
 
@@ -134,7 +129,8 @@ class GoogleVertexEmbeddings(BaseModel):
         # create a new collection (fails if exists)
         # Note we don't update the main collection object in this method
         collection = self._client.create_collection(
-            name=self.collection_name, get_or_create=False
+            name=self.collection_name,
+            get_or_create=False,
         )
 
         if create_embeddings:
@@ -149,14 +145,14 @@ class GoogleVertexEmbeddings(BaseModel):
             df_embeddings = pd.DataFrame.from_records([x.model_dump() for x in records])
         else:
             raise ValueError(
-                "You must pass an 'embedding' field in the record list or create new embeddings."
+                "You must pass an 'embedding' field in the record list or create new embeddings.",
             )
 
         ids = df_embeddings["record_id"].to_list()
         documents = df_embeddings["text"].to_list()
         embeddings = df_embeddings["embedding"].to_list()
         metadata = df_embeddings.drop(
-            columns=["record_id", "text", "embedding", "ground_truth"]
+            columns=["record_id", "text", "embedding", "ground_truth"],
         ).to_dict(orient="records")
         # remove nulls
         metadata = [{k: v for k, v in rec.items() if v} for rec in metadata]

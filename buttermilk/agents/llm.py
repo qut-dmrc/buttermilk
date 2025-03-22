@@ -113,12 +113,12 @@ class LLMAgent(Agent):
                     messages.append(
                         AssistantMessage(
                             content=content_without_vars,
-                            source=self.agent_id,
+                            source=self.id,
                         ),
                     )
                 else:
                     messages.append(
-                        UserMessage(content=content_without_vars, source=self.agent_id),
+                        UserMessage(content=content_without_vars, source=self.id),
                     )
 
         if unfilled_vars:
@@ -147,7 +147,7 @@ class LLMAgent(Agent):
             if v and k != "content"
         }
         output = AgentOutput(
-            agent=str(self.agent_id),
+            agent=str(self.id),
             payload=outputs,
             content=response.content,
             metadata=metadata,

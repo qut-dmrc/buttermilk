@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import Any
 
 import regex as re
@@ -8,14 +7,11 @@ from jinja2 import (
     Undefined,
     sandbox,
 )
-from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.runner_types import Record
 from buttermilk.defaults import TEMPLATE_PATHS
 from buttermilk.exceptions import FatalError
-from buttermilk.llms import LLMCapabilities
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
 
@@ -48,7 +44,7 @@ class KeyValueCollector(BaseModel):
     def get_dict(self) -> dict:
         return dict(self._data)
 
-    def get(self, key: str, default: Any =None) -> Any:
+    def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
 
     def __getitem__(self, key: str) -> Any:
@@ -163,28 +159,6 @@ def load_template(
     rendered = tpl.render(**all_vars)
 
     return rendered, set(undefined_vars)
-
-
-def prepare_placeholders(model_capabilities: LLMCapabilities, **input_vars) -> dict:
-    # Fill placeholders
-    placeholders = {}
-    for k, v in input_vars.items():
-        if isinstance(v, Record):
-            if rendered := v.as_langchain_message(
-                role="user",
-                model_capabilities=model_capabilities,
-            ):
-                placeholders[k] = [rendered]
-        elif isinstance(v, str):
-            placeholders[k] = [HumanMessage(v)]
-        elif isinstance(v, Sequence):
-            # Lists may need to be handled separately...?
-            placeholders[k] = "\n\n".join(v)
-            placeholders[k] = [HumanMessage(v)]
-        elif v:
-            placeholders[k] = [HumanMessage(v)]
-
-    return placeholders
 
 
 def make_messages(local_template: str) -> list[tuple[str, str]]:

@@ -32,33 +32,8 @@ class OrchestratorProtocol(Protocol):
 
 
 ######
-# Control communications
-#
-class ManagerMessage(BaseModel):
-    """OOB message to manage the flow.
-
-    Usually involves an automated
-    conductor or a human in the loop (or both).
-    """
-
-    type: str = "ManagerMessage"
-    content: str = Field(
-        default="",
-        description="The human-readable digest representation of the message.",
-    )
-    confirm: bool = Field(default=False, description="Ready to proceed?")
-    stop: bool = Field(default=False, description="Whether to stop the flow")
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors",
-    )
-
-
-######
 # Communication between Agents
 #
-
-
 class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
@@ -89,6 +64,21 @@ class FlowMessage(BaseModel):
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),
     )
+
+
+######
+# Control communications
+#
+class ManagerMessage(FlowMessage):
+    """OOB message to manage the flow.
+
+    Usually involves an automated
+    conductor or a human in the loop (or both).
+    """
+
+    type: str = "ManagerMessage"
+    confirm: bool = Field(default=False, description="Ready to proceed?")
+    stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
 class AgentInput(FlowMessage):

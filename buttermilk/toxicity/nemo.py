@@ -2,9 +2,6 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal
 
 import regex as re
-from langchain_core.prompts import (
-    ChatPromptTemplate,
-)
 from promptflow.tracing import trace
 
 from buttermilk.llms import LLMs

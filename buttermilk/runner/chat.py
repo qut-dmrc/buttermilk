@@ -26,7 +26,6 @@ class Selector(AutogenOrchestrator):
 
     async def _get_next_step(
         self,
-        prompt: str = "",
     ) -> AsyncGenerator[dict[str, str], None]:
         """Determine the next step based on the user's prompt"""
         self._next_step = None
@@ -34,14 +33,14 @@ class Selector(AutogenOrchestrator):
         # First, get user input
         yield {
             "role": MANAGER,
-            "question": "Enter your question or prompt.",
+            "question": f"Started {self.name}. Enter your question or prompt.",
         }
 
         while True:
             # store the last message received, so that any changes in instructions
             # are incorporated before executing the next step
             _last_message = self._last_message
-            responses = await self._execute_step(CONDUCTOR, prompt=prompt)
+            responses = await self._ask_agent(CONDUCTOR)
 
             if len(responses) > 1:
                 raise ProcessingError("Conductor returned multiple responses.")
@@ -52,7 +51,7 @@ class Selector(AutogenOrchestrator):
             # return
 
             # Determine the next step based on the response
-            if not (next_step := instructions.response.get("role")):
+            if not (next_step := instructions.payload.get("role")):
                 raise ProcessingError("Next step not found from conductor.")
 
             if next_step not in self._agents:
@@ -64,7 +63,7 @@ class Selector(AutogenOrchestrator):
                 # No change to inputs
                 yield {
                     "role": next_step,
-                    "question": instructions.response.get("question", ""),
+                    "question": instructions.payload.get("question", ""),
                 }
             # wait a bit and go around again
             await asyncio.sleep(5)

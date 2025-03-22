@@ -140,10 +140,6 @@ class LLMs(BaseModel):
         description="A dict of dicts each specifying connection information and parameters for an LLM.",
     )
 
-    langchain_models: dict[str, LLMClient] = Field(
-        default={},
-        description="Holds the instantiated model objects",
-    )
     autogen_models: dict[str, AutoGenWrapper] = Field(
         default={},
         description="Holds the instantiated model objects",

@@ -1,5 +1,4 @@
 import pytest
-from langchain_core.prompts import ChatPromptTemplate
 
 from buttermilk.utils.templating import make_messages
 

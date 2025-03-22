@@ -2,7 +2,6 @@ import pytest
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import SaveInfo
-
 from buttermilk.agents.sheetexporter import GSheetExporter
 
 
@@ -10,24 +9,26 @@ from buttermilk.agents.sheetexporter import GSheetExporter
 def flow() -> Agent:
     return GSheetExporter(
         save=SaveInfo(
-            type="gsheets", sheet_name="testing_gsheet_export", sheet_id=None
+            type="gsheets",
+            sheet_name="testing_gsheet_export",
+            sheet_id=None,
         ),
     )
 
 
-## Flow config
+# Flow config
 export_config = {
     "convert_json_columns": [
         "record",
         "owl",
         "reasons",
-        "differences"
+        "differences",
     ],
     "save": {
         "type": "gsheets",
         "sheet_id": None,
         "sheet_name": "testing",
-        "title": "testing only"
+        "title": "testing only",
     },
     "inputs": {
         "flow_id": "flow_id",
@@ -38,16 +39,17 @@ export_config = {
         "owl": "context_owl",
         "scores": "scorer.score",
         "reasons": "scorer",
-        "differences": "eval.differences"
-    }
+        "differences": "eval.differences",
+    },
 }
+
 
 @pytest.mark.anyio
 async def test_gsheet_exporter(flow: Agent):
     job = Job(
         job_id="job_id",
         source="testing",
-        flow_id=flow.agent_id,
+        flow_id=flow.id,
         parameters={
             "sheet_name": "evals",
             "title": "Trans Guidelines Judger",
@@ -69,4 +71,4 @@ async def test_gsheet_exporter(flow: Agent):
     )
     result = await flow.process_job(job=job)
 
-    assert result.outputs['sheet_url']
+    assert result.outputs["sheet_url"]

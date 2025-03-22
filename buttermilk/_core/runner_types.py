@@ -5,7 +5,6 @@ from typing import Any, Literal, Self
 
 import shortuuid
 from cloudpathlib import CloudPath
-from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -18,7 +17,6 @@ from pydantic import (
 )
 
 from buttermilk import logger
-from buttermilk.llms import LLMCapabilities
 
 
 class MediaObj(BaseModel):
@@ -207,7 +205,7 @@ class Record(BaseModel):
         exclude_none=True,
         exclude=["components", "fulltext"],
         positional_args=True,
-    ) # type: ignore
+    )  # type: ignore
 
     @model_validator(mode="after")
     def vld_input(self) -> Self:
@@ -280,24 +278,8 @@ class Record(BaseModel):
 
         return self
 
-    def as_langchain_message(
-        self,
-        model_capabilities: LLMCapabilities,
-        role: Literal["user", "human", "system"] = "user",
-    ) -> BaseMessage | None:
-        components = self.as_openai_message(
-            role=role,
-            model_capabilities=model_capabilities,
-        )
-        if components and (components := components.get("content")):
-            if role in {"user", "human"}:
-                return HumanMessage(content=components)
-            return BaseMessage(content=components, type=role)
-        return None
-
     def as_openai_message(
         self,
-        model_capabilities: LLMCapabilities,
         role: Literal["user", "human", "system", "assistant"] = "user",
     ) -> dict | None:
         # Prepare input for model consumption
@@ -307,14 +289,14 @@ class Record(BaseModel):
         for obj in self.components:
             # attach media objects if the model supports them
             if (
-                (obj.mime.startswith("image") and model_capabilities.image)
-                or (obj.mime.startswith("video") and model_capabilities.video)
-                or (obj.mime.startswith("audio") and model_capabilities.audio)
+                obj.mime.startswith("image")
+                or obj.mime.startswith("video")
+                or obj.mime.startswith("audio")
             ):
                 leading_components.append(obj.as_content_part())
-            elif obj.mime.startswith("text") and model_capabilities.chat:
+            elif obj.mime.startswith("text"):
                 trailing_components.append(obj.as_content_part())
-            elif "uri" in obj.model_fields_set and model_capabilities.media_uri:
+            elif "uri" in obj.model_fields_set:
                 trailing_components.append(obj.as_image_url_message())
 
         for k, v in self.metadata.items():
@@ -329,15 +311,8 @@ class Record(BaseModel):
             )
             return None
 
-        if model_capabilities.expects_text_with_media and not any([
-            c.get("type") == "text" for c in components
-        ]):
-            text = "see attached media"
-            components.append({"type": "text", "text": text})
-
         message = {
             "role": role,
             "content": components,
         }
         return message
-
