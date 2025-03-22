@@ -35,6 +35,7 @@ from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from omegaconf import DictConfig
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     PrivateAttr,
     field_validator,
@@ -130,12 +131,13 @@ class Project(BaseModel):
     verbose: bool = True
     run: RunCfg
 
-    class Config:
-        extra = "forbid"
-        arbitrary_types_allowed = False
-        populate_by_name = True
-        exclude_none = True
-        exclude_unset = True
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
 
     @model_validator(mode="after")
     def register(self) -> Project:
@@ -326,6 +328,31 @@ class BM(Singleton, BaseModel):
         warnings.filterwarnings(
             action="ignore",
             message="Passing field metadata as keyword arguments is deprecated",
+        )
+        warnings.filterwarnings(
+            action="ignore",
+            message="`sentry_sdk.Hub` is deprecated",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            action="ignore",
+            message="Support for class-based `config` is deprecated",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            action="ignore",
+            message="`json_encoders` is deprecated",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            action="ignore",
+            module="marshmallow",
+            category=Warning,
+        )
+        warnings.filterwarnings(
+            action="ignore",
+            message="jsonschema.RefResolver is deprecated",
+            category=DeprecationWarning,
         )
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"

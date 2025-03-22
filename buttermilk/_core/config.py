@@ -39,15 +39,16 @@ CloudProvider = Literal[
 class CloudProviderCfg(BaseModel):
     type: CloudProvider
 
-    class Config:
+    model_config = ConfigDict(
         # Exclude fields with None values when serializing
-        exclude_none = True
-        arbitrary_types_allowed = True
-        populate_by_name = True
+        exclude_none=True,
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
         # Ignore extra fields not defined in the model
-        extra = "allow"
-        exclude_unset = True
-        include_extra = True
+        extra="allow",
+        exclude_unset=True,
+        include_extra=True,
+    )
 
 
 class SaveInfo(CloudProviderCfg):
@@ -112,12 +113,13 @@ class DataSource(BaseModel):
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
 
-    class Config:
-        extra = "forbid"
-        arbitrary_types_allowed = False
-        populate_by_name = True
-        exclude_none = True
-        exclude_unset = True
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
 
 
 class Tracing(BaseModel):

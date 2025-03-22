@@ -4,7 +4,14 @@ from collections.abc import AsyncGenerator, Sequence
 from typing import Any, Self
 
 import pandas as pd
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -39,9 +46,7 @@ class Flow(BaseModel):
     data: list[DataSource] | None = Field(default_factory=list)
     _data: dict = {}
     _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
-
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _ensure_list = field_validator("source", mode="before")(
         make_list_validator(),

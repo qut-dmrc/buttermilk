@@ -3,7 +3,13 @@ from typing import Any
 
 import shortuuid
 from omegaconf import OmegaConf
-from pydantic import BaseModel, PrivateAttr, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PrivateAttr,
+    field_serializer,
+    model_validator,
+)
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -21,7 +27,7 @@ class MultiFlowOrchestrator(BaseModel):
     _num_runs: int = 1
     _concurrent: int = 20
     _tasks: Sequence[Coroutine] = PrivateAttr(default_factory=list)
-    _dataset: Any = PrivateAttr(default_factory=None)
+    _dataset: Any = PrivateAttr(default=None)
     _data_generator: Any = PrivateAttr(default=None)
 
     _tasks_remaining: int = PrivateAttr(default=0)
@@ -29,9 +35,7 @@ class MultiFlowOrchestrator(BaseModel):
     _tasks_failed: int = PrivateAttr(default=0)
 
     _agents: list[Agent] = PrivateAttr(default_factory=list)
-
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_serializer("flow")
     def serialize_omegaconf(cls, value):

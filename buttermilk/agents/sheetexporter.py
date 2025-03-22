@@ -1,5 +1,5 @@
 import pandas as pd
-from pydantic import Field, PrivateAttr
+from pydantic import ConfigDict, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -21,9 +21,7 @@ class GSheetExporter(Agent):
     )
 
     _gsheet: GSheet = PrivateAttr(default_factory=GSheet)
-
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     async def process_job(
         self,

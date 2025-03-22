@@ -12,7 +12,7 @@ from autogen_ext.models.openai import (
     OpenAIChatCompletionClient,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk._core.retry import RetryWrapper
 
@@ -145,8 +145,7 @@ class LLMs(BaseModel):
         description="Holds the instantiated model objects",
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
     @property
     def all_model_names(self) -> Enum:
