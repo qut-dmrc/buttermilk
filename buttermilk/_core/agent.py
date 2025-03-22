@@ -36,11 +36,18 @@ def get_agent_name_tracing(call: Any) -> str:
 #
 ##########
 class AgentConfig(BaseModel):
-    agent_id: str = Field(
+    agent_obj: str = Field(
+        ...,
+        description="The object name to instantiate",
+    )
+    id: str = Field(
         ...,
         description="The unique name of this agent.",
     )
-    name: str = Field(..., description="The name of the step this agent type performs")
+    name: str = Field(
+        ...,
+        description="A human-readable name for this agent.",
+    )
     description: str = Field(
         ...,
         description="Short explanation of what this agent type does",
@@ -54,14 +61,21 @@ class AgentConfig(BaseModel):
         description="A mapping of data to agent inputs",
     )
     outputs: dict[str, Any] = {}
-
-    class Config:
-        extra = "forbid"
-        arbitrary_types_allowed = False
+    model_config = {
+        "extra": "forbid",
+        "arbitrary_types_allowed": False,
+        "populate_by_name": True,
+    }
 
 
 class Agent(AgentConfig, ABC):
     """Base Agent interface for all processing units"""
+
+    agent_obj: str = Field(
+        default="",
+        description="The object name to instantiate",
+        exclude=True,
+    )
 
     @trace
     @weave.op(call_display_name=get_agent_name_tracing)
@@ -74,7 +88,7 @@ class Agent(AgentConfig, ABC):
             job.error = extract_error_info(e=e)
             if job.record:
                 logger.error(
-                    f"Error processing task {self.agent_id} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
+                    f"Error processing task {self.id} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
                 )
         return job
 

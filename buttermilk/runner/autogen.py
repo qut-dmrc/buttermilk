@@ -194,10 +194,12 @@ class AutogenOrchestrator(Orchestrator):
         for step in self.steps:
             step_agent_type = []
             for agent_cls, variant in step.get_configs():
+                agent_cfg = variant.model_dump()
+                agent_cfg["id"] = f"{step.id}-{shortuuid.uuid()[:6]}"
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    variant.name,
+                    agent_cfg["id"],
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,

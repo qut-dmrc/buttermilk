@@ -1,36 +1,20 @@
 moa:
   # _target_: buttermilk.runner.simple.Sequencer
   orchestrator: Selector
+  name: Mixture of Agents directed chat
   # save:
 
-  chat:
-    judge:
-      description: >
-        The purpose of this conversation is assess a single piece of content. Each JUDGE is an expert analyst with 
-        extensive subject matter expertise. They bring their own set of criteria to apply and will provide draft
-        inputs into the conversation. Other ANALYSTS will assist where they are able to contribute. The group will
-        work as a team to develop a final answer, which will then be submitted to the MANAGER for approval. The
-        MANAGER may step in at any time to refocus or halt the conversation. The HOST will direct the conversation,
-        allowing participants to contribute where they have particular expertise. Once initial responses have been
-        received, the HOST will ask a SYNTHESISER to prepare an integrated answer. The HOST will then ask an EVALUATOR
-        to outline common areas of agreement and unresolved areas of disagreement among participants. The HOST will then
-        break the discussion down into discrete components, tackling each area of disagreement one at a time. All ANALYSTS
-        will have an opportunity to contribute at this point. When an issue has been adequately considered (and before the
-        discussion becomes repetitive or off-topic), the HOST will once again ask a SYNTHESISER to prepare one or more 
-        consolidated answers and will then call a VOTE to identify the preferred answer. The HOST will repeat this process
-        until all discrete components of the issue have been discussed. The HOST will then once again ask a SYNTHESISER to
-        provide a set of draft overall answers and call a VOTE to identify the best answer. The HOST will then ask the 
-        INTROSPECTOR to review the discussion before submitting to the MANAGER for approval.
-
   steps:
-    - name: MANAGER
+    - id: MANAGER
+      name: "👔 Manager"
       agent_obj: CLIUserAgent
       num_runs: 1
       description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
       inputs:
         prompt: prompt
 
-    - name: HOST
+    - id: HOST
+      name: "🎯 Host"
       description: Your role, facilitating the discussion and directing questions to those best placed to answer.
       agent_obj: LLMAgent
       num_runs: 1
@@ -43,14 +27,30 @@ moa:
         history: history
         prompt: prompt
         record: record
-
-    # - name: fetch
+        description: >
+          The purpose of this conversation is assess a single piece of content. Each JUDGE is an expert analyst with 
+          extensive subject matter expertise. They bring their own set of criteria to apply and will provide draft
+          inputs into the conversation. Other ANALYSTS will assist where they are able to contribute. The group will
+          work as a team to develop a final answer, which will then be submitted to the MANAGER for approval. The
+          MANAGER may step in at any time to refocus or halt the conversation. The HOST will direct the conversation,
+          allowing participants to contribute where they have particular expertise. Once initial responses have been
+          received, the HOST will ask a SYNTHESISER to prepare an integrated answer. The HOST will then ask an EVALUATOR
+          to outline common areas of agreement and unresolved areas of disagreement among participants. The HOST will then
+          break the discussion down into discrete components, tackling each area of disagreement one at a time. All ANALYSTS
+          will have an opportunity to contribute at this point. When an issue has been adequately considered (and before the
+          discussion becomes repetitive or off-topic), the HOST will once again ask a SYNTHESISER to prepare one or more 
+          consolidated answers and will then call a VOTE to identify the preferred answer. The HOST will repeat this process
+          until all discrete components of the issue have been discussed. The HOST will then once again ask a SYNTHESISER to
+          provide a set of draft overall answers and call a VOTE to identify the best answer. The HOST will then ask the 
+          INTROSPECTOR to review the discussion before submitting to the MANAGER for approval.
+    # - name: 🔍 fetch
     #   agent_obj: Fetch
     #   description: An agent responsible for providing the content of URLs and stored records required for the discussion.
     #   inputs:
     #     prompt: prompt
 
-    - name: JUDGE
+    - id: JUDGE
+      name: "⚖️ Judge"
       description: Expert analyst, particularly suited to assess content with subject matter expertise.
       agent_obj: LLMAgent
       num_runs: 2
@@ -62,7 +62,8 @@ moa:
       inputs:
         record: record
 
-    - name: ANALYST
+    - id: ANALYST
+      name: "🧑‍💻 Analyst"
       description: General purpose analyst, responsible for identifying potential mistakes.
       agent_obj: LLMAgent
       num_runs: 1
@@ -72,7 +73,8 @@ moa:
       inputs:
         history: history
 
-    - name: SYNTHESISER
+    - id: SYNTHESISER
+      name: "🎨 Synthesiser"
       agent_obj: LLMAgent
       description: Team leader, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
       num_runs: 1
@@ -88,7 +90,8 @@ moa:
         answers: judge
         feedback: feedback
 
-    - name: EVALUATOR
+    - id: EVALUATOR
+      name: "📊 Evaluator"
       agent_obj: LLMAgent
       num_runs: 1
       description: Prepares analysis of the discussion and differences between draft answers (Required step after synthesizing a response).
@@ -104,4 +107,5 @@ moa:
           - synth
         feedback: feedback
     
-    - name: INTROSPECTOR
+    # - name: 🔮 introspector
+        # id: INTROSPECTOR

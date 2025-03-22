@@ -33,6 +33,7 @@ class Orchestrator(BaseModel, ABC):
         default_factory=shortuuid.uuid,
         description="A unique session id for this set of flow runs.",
     )
+    name: str
     save: SaveInfo | None = Field(default=None)
     data: Sequence[DataSource] = Field(default_factory=list)
     steps: Sequence[AgentVariants] = Field(

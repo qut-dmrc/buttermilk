@@ -3,7 +3,7 @@ import pkgutil
 
 import shortuuid
 from omegaconf import DictConfig, ListConfig, OmegaConf
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk.utils.utils import expand_dict
@@ -57,7 +57,7 @@ class AgentRegistry:
             cls.register(subclass)
 
 
-class AgentVariants(BaseModel):
+class AgentVariants(AgentConfig):
     """A factory for creating Agent instance variants for a single
     step of a workflow.
 
@@ -67,17 +67,16 @@ class AgentVariants(BaseModel):
     have an inputs mapping that does not get multiplied.
     """
 
-    agent_obj: str = Field(..., description="The object name to instantiate")
-    name: str = Field(..., description="The name of the step this agent type performs")
-    description: str = Field(
-        ...,
-        description="Short explanation of what this agent type does",
-    )
     num_runs: int = Field(
         default=1,
         description="Number of times to run the agent for each variant",
+        exclude=True,
     )
-    variants: dict = {}
+    variants: dict = Field(
+        default={},
+        description="Variables that will be cross-multiplied to generate multiple agents",
+        exclude=True,
+    )
 
     validate_parameters = field_validator(
         "variants",
@@ -96,7 +95,7 @@ class AgentVariants(BaseModel):
 
     def get_configs(self) -> list[tuple[type, AgentConfig]]:
         # Get static config
-        static = dict(name=self.name, description=self.description, **self.model_extra)
+        static = dict(**self.model_dump())
 
         # Get object
         agent_class = AgentRegistry.get(self.agent_obj)
@@ -107,7 +106,7 @@ class AgentVariants(BaseModel):
         variant_configs = self.num_runs * expand_dict(self.variants)
 
         if not variant_configs:
-            return [(agent_class, static)]
+            return [(agent_class, AgentConfig(**static))]
 
         agents = []
         for variant in variant_configs:
@@ -115,11 +114,9 @@ class AgentVariants(BaseModel):
             cfg = dict(**static)
 
             # Generate unique ID for this agent
-            cfg["agent_id"] = f"{self.name}-{shortuuid.uuid()[:6]}"
+            cfg["id"] = f"{self.id}-{shortuuid.uuid()[:6]}"
 
             # Add variant config to parameters
-            if "parameters" not in cfg:
-                cfg["parameters"] = {}
             cfg["parameters"].update(variant)
 
             agents.append((agent_class, AgentConfig(**cfg)))
