@@ -54,8 +54,8 @@ class FlowMessage(BaseModel):
         description="A list of errors that occurred during the agent's execution",
     )
 
-    payload: Any = Field(
-        default=None,
+    payload: dict[str, Any] = Field(
+        default={},
         description="The data to or response from the agent",
     )
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -21,6 +21,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
+    FlowMessage,
     ManagerMessage,
     UserConfirm,
 )
@@ -124,8 +125,8 @@ class AutogenOrchestrator(Orchestrator):
 
                 next_step = await anext(self._step_generator)
 
-                user_input = await self._ask_agent(
-                    agent=MANAGER,
+                user_input = await self._ask_agents(
+                    step_name=MANAGER,
                     message=UserConfirm(
                         content=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
                     ),
@@ -233,17 +234,21 @@ class AutogenOrchestrator(Orchestrator):
             # Store the registered agents for this step
             self._agents[step.id] = step_agent_type
 
-    async def _ask_agent(
+    async def _ask_agents(
         self,
-        agent,
-        message: ManagerMessage,
-    ) -> list[ManagerMessage]:
-        """Ask user for input"""
+        step_name,
+        message: FlowMessage,
+    ) -> list[FlowMessage]:
+        """Ask agent directly for input"""
         tasks = []
-        for agent_type, _ in self._agents[agent]:
+        input_message = await self._prepare_step_message(
+            step_name=step_name,
+            **message.model_dump(),
+        )
+        for agent_type, _ in self._agents[step_name]:
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
-                message=message,
+                message=input_message,
                 recipient=agent_id,
             )
 
@@ -253,12 +258,12 @@ class AutogenOrchestrator(Orchestrator):
         responses = await asyncio.gather(*tasks)
         return responses
 
-    async def _execute_step(
+    async def _prepare_step_message(
         self,
         step_name: str,
         content: str = "",
         **inputs,
-    ) -> None:
+    ) -> AgentInput:
         """Execute a step by sending requests to relevant agents and collecting responses"""
         config = None
         for config in self.steps:
@@ -270,10 +275,18 @@ class AutogenOrchestrator(Orchestrator):
         # Send message with appropriate inputs for this step
         mapped_inputs = await self._prepare_inputs(config=config)
         mapped_inputs.update(inputs)
-        message = AgentInput(
+        return AgentInput(
             content=content,
             payload=mapped_inputs,
         )
+
+    async def _execute_step(
+        self,
+        step_name: str,
+        content: str = "",
+        **inputs,
+    ) -> None:
+        message = await self._prepare_step_message(step_name, content, **inputs)
         topic_id = DefaultTopicId(type=step_name)
         await self._runtime.publish_message(message, topic_id=topic_id)
 

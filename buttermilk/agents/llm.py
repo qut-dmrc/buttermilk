@@ -22,7 +22,7 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
-    fail_on_unfilled_parameters: bool = Field(default=False)
+    fail_on_unfilled_parameters: bool = Field(default=True)
 
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
@@ -51,7 +51,7 @@ class LLMAgent(Agent):
         """Fill the template with the given inputs and return a list of messages."""
         untrusted_inputs = {}
         if inputs:
-            untrusted_inputs = inputs.payload
+            untrusted_inputs.update(dict(inputs.payload))
             untrusted_inputs["prompt"] = inputs.content
 
         # Render the template using Jinja2
