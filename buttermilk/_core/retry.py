@@ -45,7 +45,7 @@ class RetryWrapper(BaseModel):
 
     """
 
-    client: object
+    client: Any
     max_concurrent_calls: int = 3
     cooldown_seconds: float = 0.1
     max_retries: int = 6
@@ -121,7 +121,7 @@ class RetryWrapper(BaseModel):
             raise e.last_attempt.exception()
         except Exception as e:
             logger.error(
-                f"{type(self.client).__qualname__} client hit unexpected exception: {e!s}"
+                f"{type(self.client).__qualname__} client hit unexpected exception: {e!s}",
             )
             raise e
 

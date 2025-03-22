@@ -44,7 +44,7 @@ class AutogenAgentAdapter(RoutedAgent):
             self.agent = agent
         else:
             if not agent_cfg:
-                agent_cfg = AgentConfig()
+                raise ValueError("Either agent or agent_cfg must be provided")
             self.agent: Agent = agent_cls(**agent_cfg.model_dump())
         self.topic_type = topic_type
         super().__init__(description=self.agent.description)
@@ -74,7 +74,7 @@ class AutogenAgentAdapter(RoutedAgent):
         message: ManagerMessage,
         ctx: MessageContext,
     ) -> ManagerMessage | None:
-        """Control messages are only sent to the User Interface."""
+        """Control messages between only User Interfaces and the Conductor."""
         if isinstance(self.agent, UIAgent):
             return await self.agent.confirm(message)
         return None
@@ -218,7 +218,7 @@ class AutogenOrchestrator(Orchestrator):
 
         if prompt:
             await self._context.add_message(
-                message=UserMessage(content=prompt, source=step_name)
+                message=UserMessage(content=prompt, source=step_name),
             )
 
         # Send message to each agent for this step

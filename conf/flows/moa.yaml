@@ -25,11 +25,11 @@ moa:
         prompt: prompt
         record: record
 
-    - name: fetch
-      agent_obj: Fetch
-      description: An agent responsible for providing the content of URLs and stored records required for the discussion.
-      inputs:
-        prompt: prompt
+    # - name: fetch
+    #   agent_obj: Fetch
+    #   description: An agent responsible for providing the content of URLs and stored records required for the discussion.
+    #   inputs:
+    #     prompt: prompt
 
     - name: judge
       description: Expert analyst, particularly suited to assess content with subject matter expertise.

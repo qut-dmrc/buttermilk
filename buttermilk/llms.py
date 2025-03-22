@@ -5,7 +5,6 @@ from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
 )
-from autogen import OpenAIWrapper
 from autogen_core.models import ChatCompletionClient
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
@@ -17,7 +16,6 @@ from google.cloud import aiplatform
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 
 from buttermilk._core.retry import RetryWrapper
-from buttermilk.utils.utils import scrub_keys
 
 _ = "ChatCompletionClient"
 
@@ -194,6 +192,8 @@ class AutoGenWrapper(RetryWrapper):
     plus robust retry logic for handling API failures.
     """
 
+    client: ChatCompletionClient
+
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""
         # Use the retry logic
@@ -222,7 +222,7 @@ class AutoGenWrapper(RetryWrapper):
                 **kwargs,
             )
 
-            return result
+        return result
 
 
 class LLMs(BaseModel):
@@ -247,34 +247,19 @@ class LLMs(BaseModel):
     def all_model_names(self) -> Enum:
         return Enum("AllModelNames", list(self.connections.keys()))
 
-    def get_autogen_generic(self, name):
-        params = self.connections[name].configs.copy()
-        params["api_type"] = self.connections[name].api_type
-        params["api_key"] = self.connections[name].api_key
-        params["base_url"] = self.connections[name].base_url
-        params["model_info"] = self.connections[name].model_info
-
-        wrapper = OpenAIWrapper(config_list=[params])
-
-        return wrapper
-
-    def get_autogen_chat_client(self, name) -> ChatCompletionClient:
+    def get_autogen_chat_client(self, name) -> AutoGenWrapper:
         from buttermilk.bm import bm
+
         if name in self.autogen_models:
             return self.autogen_models[name]
 
-        # Let Autogen handle the correct arguments for different models
-        # wrapper = self.get_autogen_generic(name)
+        client: ChatCompletionClient = None
 
-        # Add in any config keys autogen has removed
-        # params = {k:v for k, v in self.connections[name].configs.items() if k not in params}
         params = self.connections[name].configs.copy()
 
         params["base_url"] = self.connections[name].base_url
         params["model_info"] = self.connections[name].model_info
         params["api_key"] = self.connections[name].api_key
-
-        # params.update(**wrapper._config_list[0])
 
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**params)
@@ -290,7 +275,7 @@ class LLMs(BaseModel):
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**params)
-            client._client = _vertex_client  # replace client with vertexai version
+            client._client = _vertex_client  # type: ignore # replace client with vertexai version
         else:
             client = OpenAIChatCompletionClient(**params)
         # from autogen_core.models import    UserMessage
@@ -300,28 +285,12 @@ class LLMs(BaseModel):
 
         return self.autogen_models[name]
 
-    def __getattr__(self, __name: str) -> LLMClient:
-        if __name in self.langchain_models:
-            return self.langchain_models[__name]
+    def __getattr__(self, __name: str) -> AutoGenWrapper:
+        if __name in self.autogen_models:
+            return self.autogen_models[__name]
         if __name not in self.connections:
             raise AttributeError
-
-        model_config = self.connections[__name]
-
-        # Merge global with model specific configs
-        params = dict(**global_langchain_configs)
-        params.update(**model_config.configs)
-
-        # Instantiate the model client object
-        _llm = LLMClient(
-            client=globals()[model_config.obj](
-                **params,
-            ),
-            connection=scrub_keys(model_config.connection),
-            params=scrub_keys(params),
-        )
-        self.langchain_models[__name] = _llm
-        return self.langchain_models[__name]
+        return self.get_autogen_chat_client(__name)
 
     def __getitem__(self, __name: str):
         return self.__getattr__(__name)
