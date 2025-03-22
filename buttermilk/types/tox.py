@@ -73,7 +73,7 @@ class EvalRecord(BaseModel):
         arbitrary_types_allowed=True,
         populate_by_name=True,
         use_enum_values=True,
-        json_encoders={np.bool_: lambda v: bool(v)},
+        # json_encoders={np.bool_: lambda v: bool(v)},
     )
 
     @field_validator("prediction")

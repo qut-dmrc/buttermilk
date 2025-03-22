@@ -1,4 +1,3 @@
-import datetime
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from tempfile import mkdtemp
@@ -8,8 +7,6 @@ from typing import (
 )
 
 import cloudpathlib
-import numpy as np
-from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -59,14 +56,14 @@ class SaveInfo(CloudProviderCfg):
     )
     dataset: str | None = Field(default=None)
 
-    model_config = ConfigDict(
-        json_encoders={
-            np.bool_: bool,
-            datetime.datetime: lambda v: v.isoformat(),
-            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-        },
-    )
+    # model_config = ConfigDict(
+    #     json_encoders={
+    #         np.bool_: bool,
+    #         datetime.datetime: lambda v: v.isoformat(),
+    #         ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+    #         DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+    #     },
+    # )
 
     @field_validator("db_schema")
     def file_must_exist(cls, v):

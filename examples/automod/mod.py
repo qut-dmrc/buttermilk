@@ -7,8 +7,7 @@ import asyncio
 import hydra
 from tqdm.asyncio import tqdm as atqdm
 
-from buttermilk.bm import bm
-from buttermilk.runner.orchestrator import MultiFlowOrchestrator
+from buttermilk.runner.batch import MultiFlowOrchestrator
 from buttermilk.runner.runloop import run_tasks
 
 # Run with, e.g.:

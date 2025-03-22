@@ -2,10 +2,8 @@ import datetime
 from collections.abc import Sequence
 from typing import Any, Self
 
-import numpy as np
 import pydantic
 import shortuuid
-from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -63,12 +61,12 @@ class Job(BaseModel):
         arbitrary_types_allowed=False,
         populate_by_name=True,
         use_enum_values=True,
-        json_encoders={
-            np.bool_: bool,
-            datetime.datetime: lambda v: v.isoformat(),
-            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-        },
+        # json_encoders={
+        #     np.bool_: bool,
+        #     datetime.datetime: lambda v: v.isoformat(),
+        #     ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        #     DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        # },
         validate_assignment=True,
         exclude_unset=True,
         exclude_none=True,

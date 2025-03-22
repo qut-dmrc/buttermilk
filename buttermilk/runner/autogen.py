@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     UserConfirm,
 )
 from buttermilk._core.orchestrator import Orchestrator
+from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
 from buttermilk.exceptions import ProcessingError
@@ -32,10 +33,6 @@ from buttermilk.exceptions import ProcessingError
 CONDUCTOR = "HOST"
 MANAGER = "MANAGER"
 CLOSURE = "COLLECTOR"
-
-
-class HostAgent(Agent):
-    """Special agent that can receive OOB requests."""
 
 
 class AutogenAgentAdapter(RoutedAgent):
