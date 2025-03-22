@@ -6,7 +6,6 @@ from typing import Any
 
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
-from autogen_core.models import AssistantMessage
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -17,7 +16,6 @@ from pydantic import (
 
 from buttermilk._core.agent import AgentConfig
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.contract import AgentOutput
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
@@ -44,10 +42,11 @@ class Orchestrator(BaseModel, ABC):
 
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
     _records: list = PrivateAttr(default_factory=list)
-
     _context: UnboundedChatCompletionContext = PrivateAttr(
         default_factory=UnboundedChatCompletionContext,
     )
+    _history: list[str] = PrivateAttr(default_factory=list)
+
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=False,
@@ -81,17 +80,6 @@ class Orchestrator(BaseModel, ABC):
     async def __call__(self, request=None) -> Job:
         return await self.run(request=request)
 
-    async def store_results(self, step: str, result: AgentOutput):
-        if not result.error:
-            self._flow_data.add(key=step, value=result)
-
-            await self._context.add_message(
-                message=AssistantMessage(content=result.content, source=result.agent),
-            )
-
-            # Harvest records
-            self._records.extend(result.records)
-
     async def _prepare_inputs(self, config: AgentConfig) -> dict[str, Any]:
         """Fill inputs according to specification.
 
@@ -113,10 +101,7 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = records
                 elif value == "history":
-                    history = await self._context.get_messages()
-                    history = [f"- {msg.source}: {msg.content}" for msg in history]
-                    history = "\n".join(history)
-                    input_dict[value] = history
+                    input_dict[value] = "\n".join(self._history)
                 elif value == "context":
                     # Get the chat context and records
                     input_dict[value] = await self._context.get_messages()

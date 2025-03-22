@@ -148,7 +148,7 @@ class LLMAgent(Agent):
         }
         output = AgentOutput(
             agent=str(self.agent_id),
-            response=outputs,
+            payload=outputs,
             content=response.content,
             metadata=metadata,
         )

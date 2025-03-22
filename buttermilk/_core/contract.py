@@ -7,7 +7,6 @@ from pydantic import (
     BaseModel,
     Field,
     field_validator,
-    model_validator,
 )
 
 from buttermilk._core.config import DataSource, SaveInfo
@@ -33,12 +32,36 @@ class OrchestratorProtocol(Protocol):
 
 
 ######
+# Control communications
+#
+class ManagerMessage(BaseModel):
+    """OOB message to manage the flow.
+
+    Usually involves an automated
+    conductor or a human in the loop (or both).
+    """
+
+    type: str = "ManagerMessage"
+    content: str = Field(
+        default="",
+        description="The human-readable digest representation of the message.",
+    )
+    confirm: bool = Field(default=False, description="Ready to proceed?")
+    stop: bool = Field(default=False, description="Whether to stop the flow")
+    error: list[str] = Field(
+        default_factory=list,
+        description="A list of errors",
+    )
+
+
+######
 # Communication between Agents
 #
 
 
-# A base class
 class FlowMessage(BaseModel):
+    """A base class for all conversation messages."""
+
     type: str = "AgentMessage"
 
     content: str = Field(
@@ -51,44 +74,27 @@ class FlowMessage(BaseModel):
         description="Records relevant to this message",
     )
 
+    error: list[str] = Field(
+        default_factory=list,
+        description="A list of errors that occurred during the agent's execution",
+    )
+
+    payload: Any = Field(
+        default=None,
+        description="The response from the agent",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_content_to_string(cls, values):
-        if "content" in values:
-            content = values["content"]
-            if isinstance(content, str):
-                pass  # Already a string
-            elif hasattr(content, "content"):  # Handle LLMMessage case
-                values["content"] = str(content.content)
-            else:
-                values["content"] = str(content)
-        return values
-
-
-class ManagerMessage(FlowMessage):
-    """OOB message to manage the flow.
-
-    Usually involves an automated
-    conductor or a human in the loop (or both).
-    """
-
-    type: str = "ManagerMessage"
-    confirm: bool = Field(default=False, description="Ready to proceed?")
-    stop: bool = Field(default=False, description="Whether to stop the flow")
-
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors",
+    _ensure_error_list = field_validator("error", mode="before")(
+        make_list_validator(),
     )
 
 
 class AgentInput(FlowMessage):
-    type: str = "InputRequest"
     """Base class for agent inputs with built-in validation"""
-    prompt: str = Field(default="", description="A question or prompt from a user")
+
+    type: str = "InputRequest"
     context: list[Any] = Field(
         default=[],
         description="History or context to provide to the agent.",
@@ -97,8 +103,7 @@ class AgentInput(FlowMessage):
         default_factory=dict,
         description="A dictionary of inputs to the agent",
     )
-
-    _ensure_list = field_validator("records", "context", mode="before")(
+    _ensure_record_context_list = field_validator("records", "context", mode="before")(
         make_list_validator(),
     )
 
@@ -107,21 +112,6 @@ class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     type: str = "Answer"
-    agent: str
-
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors that occurred during the agent's execution",
-    )
-
-    response: Any = Field(
-        default=None,
-        description="The response from the agent",
-    )
-
-    _ensure_list = field_validator("error", "records", mode="before")(
-        make_list_validator(),
-    )
 
 
 AgentMessages = Union[FlowMessage, AgentInput, AgentOutput]
