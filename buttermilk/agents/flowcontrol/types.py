@@ -1,9 +1,9 @@
-from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, ManagerMessage
+from buttermilk.agents.llm import LLMAgent
 
 
-class HostAgent(Agent):
-    """Special agent that can receive OOB requests."""
+class HostAgent(LLMAgent):
+    """Coordinators for group chats that use an LLM."""
 
     async def handle_control_message(self, message: ManagerMessage) -> ManagerMessage:
         result = await self.process(
