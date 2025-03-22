@@ -91,8 +91,9 @@ class Orchestrator(BaseModel, ABC):
             - "context": list of history messages in message format
             - "record": list of InputRecords"
         """
-        input_dict = {}
-        input_dict = self._flow_data._resolve_mappings(config.inputs)
+        input_dict = dict(config.inputs)
+        # Overwrite any of the input dict values that are mappings to other data
+        input_dict.update(self._flow_data._resolve_mappings(input_dict))
 
         for value in PLACEHOLDER_VARIABLES:
             if value in config.inputs:

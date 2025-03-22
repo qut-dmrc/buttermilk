@@ -66,9 +66,9 @@ class FlowMessage(BaseModel):
     )
 
     @computed_field
-    @classmethod
-    def type(cls) -> str:
-        return cls._type
+    @property
+    def type(self) -> str:
+        return self._type
 
 
 ######

@@ -60,7 +60,9 @@ class AutogenAgentAdapter(RoutedAgent):
         # Process using the wrapped agent
         source = str(ctx.sender) if ctx and ctx.sender else message.type
         agent_output = await self.agent(message, source=source)
-
+        await self._runtime.publish_message(agent_output, topic_id=self.topic_type)
+        # give this a second to make sure messages are collected before proceeding.
+        await asyncio.sleep(1)
         return agent_output
 
     @message_handler
@@ -120,7 +122,7 @@ class AutogenOrchestrator(Orchestrator):
             while True:
                 await self._execute_step(
                     step_name=next_step["role"],
-                    content=next_step.get("question", ""),
+                    prompt=next_step.get("question", ""),
                 )
 
                 next_step = await anext(self._step_generator)
@@ -261,34 +263,37 @@ class AutogenOrchestrator(Orchestrator):
     async def _prepare_step_message(
         self,
         step_name: str,
-        content: str = "",
+        prompt: str = "",
         **inputs,
     ) -> AgentInput:
         """Execute a step by sending requests to relevant agents and collecting responses"""
         config = None
         for config in self.steps:
-            if config.name == step_name:
+            if config.id == step_name:
                 break
         if not config:
             raise ProcessingError(f"Cannot find config for step {step_name}.")
 
         # Send message with appropriate inputs for this step
         mapped_inputs = await self._prepare_inputs(config=config)
-        mapped_inputs.update(inputs)
+        mapped_inputs.update(dict(prompt=prompt, **inputs))
+
         return AgentInput(
-            content=content,
+            content=prompt,
             payload=mapped_inputs,
         )
 
     async def _execute_step(
         self,
         step_name: str,
-        content: str = "",
+        prompt: str = "",
         **inputs,
     ) -> None:
-        message = await self._prepare_step_message(step_name, content, **inputs)
+        message = await self._prepare_step_message(step_name, prompt, **inputs)
         topic_id = DefaultTopicId(type=step_name)
         await self._runtime.publish_message(message, topic_id=topic_id)
+        # give this a second to make sure messages are collected before proceeding.
+        await asyncio.sleep(1)
 
     async def _cleanup(self):
         """Clean up resources when flow is complete"""
