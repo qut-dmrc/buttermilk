@@ -264,7 +264,7 @@ class AutogenOrchestrator(Orchestrator):
                 content=prompt,
                 payload=mapped_inputs,
         )
-        topic_id = self._runtime.get(self._topic_type)
+        topic_id = await self._runtime.get(self._topic_type)
         await self._runtime.publish_message(message, topic_id=topic_id)
 
         # Wait for all agents to respond
