@@ -20,7 +20,7 @@ from .log import logger
 
 def get_agent_name_tracing(call: Any) -> str:
     try:
-        name = f"{call.inputs['self'].name}: {call.inputs['job'].record.metadata.get('name', call.inputs['job'].record.record_id)}"
+        name = f"{call.inputs['self'].id}"
         return name
     except:
         return "unknown flow"

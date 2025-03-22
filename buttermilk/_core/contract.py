@@ -6,6 +6,7 @@ from typing import Any, Protocol, Union
 from pydantic import (
     BaseModel,
     Field,
+    computed_field,
     field_validator,
 )
 
@@ -37,8 +38,7 @@ class OrchestratorProtocol(Protocol):
 class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
-    type: str = "AgentMessage"
-
+    _type = "GenericFlowMessage"
     content: str = Field(
         default="",
         description="The human-readable digest representation of the message.",
@@ -56,7 +56,7 @@ class FlowMessage(BaseModel):
 
     payload: Any = Field(
         default=None,
-        description="The response from the agent",
+        description="The data to or response from the agent",
     )
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
@@ -64,6 +64,11 @@ class FlowMessage(BaseModel):
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),
     )
+
+    @computed_field
+    @classmethod
+    def type(cls) -> str:
+        return cls._type
 
 
 ######
@@ -76,7 +81,10 @@ class ManagerMessage(FlowMessage):
     conductor or a human in the loop (or both).
     """
 
-    type: str = "ManagerMessage"
+    _type = "ManagerMessage"
+
+
+class UserConfirm(ManagerMessage):
     confirm: bool = Field(default=False, description="Ready to proceed?")
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
@@ -84,14 +92,10 @@ class ManagerMessage(FlowMessage):
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
-    type: str = "InputRequest"
+    _type = "InputRequest"
     context: list[Any] = Field(
         default=[],
         description="History or context to provide to the agent.",
-    )
-    inputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="A dictionary of inputs to the agent",
     )
     _ensure_record_context_list = field_validator("records", "context", mode="before")(
         make_list_validator(),
@@ -101,7 +105,7 @@ class AgentInput(FlowMessage):
 class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
-    type: str = "Answer"
+    _type = "Answer"
 
 
 AgentMessages = Union[FlowMessage, AgentInput, AgentOutput]

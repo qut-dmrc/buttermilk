@@ -64,8 +64,8 @@ class Fetch(Agent):
         return record
 
     async def process(self, input_data: AgentInput) -> AgentOutput:
-        if input_data.prompt:
-            record = await self.get_record(input_data.prompt)
+        if input_data.content:
+            record = await self.get_record(input_data.content)
             if record:
                 return AgentOutput(
                     agent=self.id,
@@ -73,6 +73,6 @@ class Fetch(Agent):
                 )
             return AgentOutput(
                 agent=self.id,
-                records=[Record(data=input_data.prompt)],
+                records=[Record(data=input_data.content)],
             )
         return AgentOutput(agent=self.id, error="No input provided.")

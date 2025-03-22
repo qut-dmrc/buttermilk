@@ -9,25 +9,26 @@ from buttermilk._core.contract import (
     AgentMessages,
     AgentOutput,
     ManagerMessage,
+    UserConfirm,
 )
 
 
 class UIAgent(Agent):
-    async def confirm(self, message: ManagerMessage) -> ManagerMessage:
+    async def handle_control_message(self, message: ManagerMessage) -> ManagerMessage:
         """Ask the user for confirmation."""
-        prompt = message.content or "Would you like to proceed? y/n"
         result = await self.process(
             input_data=AgentInput(
-                prompt=prompt,
+                content=message.content,
             ),
         )
-        try:
-            confirm = bool(strtobool(result.content))
-        except ValueError:
-            confirm = False
+        if isinstance(message, UserConfirm):
+            try:
+                confirm = bool(strtobool(result.content))
+            except ValueError:
+                confirm = False
 
-        response = ManagerMessage(content=result.content, confirm=confirm)
-        return response
+            return UserConfirm(confirm=confirm, **result.model_dump())
+        return ManagerMessage(**result.model_dump())
 
     async def initialize(self) -> None:
         """Initialize the interface"""
@@ -51,7 +52,7 @@ class CLIUserAgent(UIAgent):
     async def process(self, input_data: AgentMessages, **kwargs) -> AgentMessages:
         """Request input from the user interface"""
         user_input = input(
-            input_data.prompt or "Do you want to proceed? y/n \n",
+            input_data.content or "Do you want to proceed? y/n \n",
         )
         Console().print(Markdown(f"### User: \n{user_input}"))
         return AgentOutput(content=user_input, agent=self.name)

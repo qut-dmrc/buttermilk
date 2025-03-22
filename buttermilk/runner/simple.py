@@ -20,7 +20,7 @@ class Sequencer(Orchestrator):
             for obj, cfg in step.get_configs():
                 step_agents.append(obj(**cfg))
             self.agents.append(step_agents)
-            roles.append({"role": step.name, "description": step.description})
+            roles.append({"role": step.id, "description": step.description})
 
         self._flow_data.add(key="participants", value=roles)
         return self
@@ -33,7 +33,11 @@ class Sequencer(Orchestrator):
             for variant in step:
                 mapped_inputs = self._flow_data._resolve_mappings(variant.inputs)
 
-                step_inputs = AgentInput(prompt=prompt, inputs=mapped_inputs, records=self._records)
+                step_inputs = AgentInput(
+                    content=prompt,
+                    payload=mapped_inputs,
+                    records=self._records,
+                )
                 result = await variant(step_inputs)
                 await self.store_results(step=variant.name, result=result)
 

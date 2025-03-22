@@ -51,8 +51,8 @@ class LLMAgent(Agent):
         """Fill the template with the given inputs and return a list of messages."""
         untrusted_inputs = {}
         if inputs:
-            untrusted_inputs = inputs.inputs
-            untrusted_inputs["prompt"] = inputs.prompt
+            untrusted_inputs = inputs.payload
+            untrusted_inputs["prompt"] = inputs.content
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
@@ -95,7 +95,9 @@ class LLMAgent(Agent):
                         if var_name in unfilled_vars:
                             unfilled_vars.remove(var_name)
                     except KeyError:
-                        err = (f"Missing {var_name} in template or placeholder vars.",)
+                        err = (
+                            f"Missing {var_name} in template or placeholder vars for agent {self.id}.",
+                        )
                         if self.fail_on_unfilled_parameters:
                             raise ValueError(err)
                         logger.warning(err)
@@ -122,7 +124,7 @@ class LLMAgent(Agent):
                     )
 
         if unfilled_vars:
-            err = f"Template has unfilled parameters: {', '.join(unfilled_vars)}"
+            err = f"Template for agent {self.id} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ValueError(err)
             logger.warning(err)
@@ -147,7 +149,6 @@ class LLMAgent(Agent):
             if v and k != "content"
         }
         output = AgentOutput(
-            agent=str(self.id),
             payload=outputs,
             content=response.content,
             metadata=metadata,

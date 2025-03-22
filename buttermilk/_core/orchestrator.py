@@ -72,8 +72,8 @@ class Orchestrator(BaseModel, ABC):
         self._flow_data = copy.deepcopy(self.data)  # process if needed
         # add request data
         # ...
-        for step in self.flow:
-            self._flow_data[step.name] = await step(self._flow_data)
+        for step in self.steps:
+            self._flow_data[step.id] = await step(self._flow_data)
 
         # save the results
         # flow_data ...
@@ -110,7 +110,7 @@ class Orchestrator(BaseModel, ABC):
                     input_dict[value] = self._records
                 elif value == "participants":
                     participants = [
-                        f"- {step.name}: {step.description}" for step in self.steps
+                        f"- {step.id}: {step.description}" for step in self.steps
                     ]
                     input_dict[value] = "\n".join(participants)
 

@@ -82,10 +82,11 @@ def register_handlers():
                 from buttermilk.ui.formatting.slackblock import confirm_block
 
                 confirm_blocks = confirm_block(
-                    message=request.prompt or "Would you like to proceed?"
+                    message=request.content or "Would you like to proceed?",
                 )
                 response = await self.send_to_thread(
-                    text=confirm_blocks["text"], blocks=confirm_blocks["blocks"]
+                    text=confirm_blocks["text"],
+                    blocks=confirm_blocks["blocks"],
                 )
 
                 # Setup action handlers for the buttons
@@ -107,7 +108,7 @@ def register_handlers():
                                     "type": "mrkdwn",
                                     "text": ":white_check_mark: You selected: *Yes*",
                                 },
-                            }
+                            },
                         ],
                     )
 
@@ -129,7 +130,7 @@ def register_handlers():
                                     "type": "mrkdwn",
                                     "text": ":x: You selected: *No*",
                                 },
-                            }
+                            },
                         ],
                     )
 

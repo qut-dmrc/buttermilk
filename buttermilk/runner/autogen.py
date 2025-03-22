@@ -22,6 +22,7 @@ from buttermilk._core.contract import (
     AgentMessages,
     AgentOutput,
     ManagerMessage,
+    UserConfirm,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.ui.console import UIAgent
@@ -31,6 +32,10 @@ from buttermilk.exceptions import ProcessingError
 CONDUCTOR = "HOST"
 MANAGER = "MANAGER"
 CLOSURE = "COLLECTOR"
+
+
+class HostAgent(Agent):
+    """Special agent that can receive OOB requests."""
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -78,8 +83,8 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> ManagerMessage | None:
         """Control messages between only User Interfaces and the Conductor."""
-        if isinstance(self.agent, UIAgent):
-            return await self.agent.confirm(message)
+        if isinstance(self.agent, (UIAgent, HostAgent)):
+            return await self.agent.handle_control_message(message)
         return None
 
 
@@ -117,14 +122,16 @@ class AutogenOrchestrator(Orchestrator):
             while True:
                 await self._execute_step(
                     step_name=next_step["role"],
-                    prompt=next_step.get("question", ""),
+                    content=next_step.get("question", ""),
                 )
 
                 next_step = await anext(self._step_generator)
 
                 user_input = await self._ask_agent(
                     agent=MANAGER,
-                    question=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
+                    message=UserConfirm(
+                        content=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
+                    ),
                 )
                 if not all(ui.confirm for ui in user_input):
                     # User does not want to proceed
@@ -141,7 +148,7 @@ class AutogenOrchestrator(Orchestrator):
     async def _get_next_step(self) -> AsyncGenerator[dict[str, str]]:
         for step in self.steps:
             yield {
-                "role": step.name,
+                "role": step.id,
                 "question": "",
             }
 
@@ -206,7 +213,6 @@ class AutogenOrchestrator(Orchestrator):
                         topic_type=self._topic_type,
                     ),
                 )
-
                 # Add subscription for this agent
                 await self._runtime.add_subscription(
                     TypeSubscription(
@@ -218,24 +224,26 @@ class AutogenOrchestrator(Orchestrator):
                 # Also subscribe to a step-specific topic
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=step.name,
+                        topic_type=step.id,
                         agent_type=agent_type,
                     ),
+                )
+                logger.debug(
+                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic_type} and {step.id}.",
                 )
 
                 step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
-            self._agents[step.name] = step_agent_type
+            self._agents[step.id] = step_agent_type
 
     async def _ask_agent(
         self,
         agent,
-        question: str = "",
+        message: ManagerMessage,
     ) -> list[ManagerMessage]:
         """Ask user for input"""
         tasks = []
         for agent_type, _ in self._agents[agent]:
-            message = ManagerMessage(content=question)
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
                 message=message,
@@ -255,9 +263,6 @@ class AutogenOrchestrator(Orchestrator):
         **inputs,
     ) -> None:
         """Execute a step by sending requests to relevant agents and collecting responses"""
-        if step_name not in self._agents or len(self._agents[step_name]) == 0:
-            raise ProcessingError(f"No agents registered for step {step_name}")
-
         config = None
         for config in self.steps:
             if config.name == step_name:
@@ -272,7 +277,7 @@ class AutogenOrchestrator(Orchestrator):
             content=content,
             payload=mapped_inputs,
         )
-        topic_id = DefaultTopicId(type=self._topic_type)
+        topic_id = DefaultTopicId(type=step_name)
         await self._runtime.publish_message(message, topic_id=topic_id)
 
     async def _cleanup(self):

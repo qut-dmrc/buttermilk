@@ -16,7 +16,7 @@ moa:
     - id: HOST
       name: "🎯 Host"
       description: Your role, facilitating the discussion and directing questions to those best placed to answer.
-      agent_obj: LLMAgent
+      agent_obj: LLMHostAgent
       num_runs: 1
       parameters:
         template: panel_host
