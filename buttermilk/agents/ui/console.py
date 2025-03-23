@@ -48,12 +48,12 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
-        Console(highlight=True).print(
-            Markdown(f"### {source}: \n{message.content}"),
-        )
+        console = Console(highlight=True)
+        console.print(Markdown(f"### {source}: \n{message.content}\n"))
 
     async def process(self, input_data: AgentMessages, **kwargs) -> AgentMessages:
         """Request input from the user interface"""
         user_input = input(input_data.content)
-        Console().print(Markdown(f"### User: \n{user_input}"))
-        return AgentOutput(content=user_input, agent=self.name)
+        Console(highlight=True).print(Markdown(f"### User: \n{user_input}\n"))
+
+        return AgentOutput(content=user_input)

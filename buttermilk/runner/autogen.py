@@ -35,6 +35,7 @@ from buttermilk.exceptions import ProcessingError
 CONDUCTOR = "HOST"
 MANAGER = "MANAGER"
 CLOSURE = "COLLECTOR"
+CONFIRM = "CONFIRM"
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -104,7 +105,7 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=dict,
     )  # mapping of step to registered agents and their individual configs
     _step_generator = PrivateAttr(default=None)
-
+    _user_confirmation: asyncio.Queue = PrivateAttr(default_factory=asyncio.Queue)
     # Additional configuration
     max_wait_time: int = Field(
         default=300,
@@ -123,31 +124,14 @@ class AutogenOrchestrator(Orchestrator):
         try:
             # Setup autogen runtime environment
             await self._setup_runtime()
-
-            # Initialize the generator once
             self._step_generator = self._get_next_step()
 
-            next_step = await anext(self._step_generator)
-            while True:
-                await self._execute_step(
-                    step_name=next_step["role"],
-                    prompt=next_step.get("question", ""),
-                )
+            while await self._user_confirmation.get():
+                step = await anext(self._step_generator)
+                await self._execute_step(step["role"], step.get("question", ""))
 
-                next_step = await anext(self._step_generator)
-
-                user_input = await self._ask_agents(
-                    step_name=MANAGER,
-                    message=UserConfirm(
-                        content=f"Proceed with next step: {next_step}? Otherwise, please provide alternate instructions.",
-                    ),
-                )
-                if not all(ui.confirm for ui in user_input):
-                    # User does not want to proceed
-                    raise ProcessingError("User does not want to proceed.")
-        except ProcessingError:
-            logger.error("User does not want to proceed.")
-            raise
+        except ProcessingError as e:
+            logger.error(f"Error in AutogenOrchestrator.run: {e}")
         except Exception as e:
             logger.exception(f"Error in AutogenOrchestrator.run: {e}")
         finally:
@@ -161,18 +145,51 @@ class AutogenOrchestrator(Orchestrator):
                 "question": "",
             }
 
+    async def _confirm_next_step(self, request: Any = None) -> bool:
+        user_input = await self._ask_agents(
+            step_name=MANAGER,
+            message=UserConfirm(
+                content="Proceed with next step? Otherwise, please provide alternate instructions.",
+            ),
+        )
+        return all(ui.confirm for ui in user_input)
+
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""
         # loop = asyncio.get_running_loop()
         self._runtime = SingleThreadedAgentRuntime()
 
         await self._register_collectors()
-
+        await self._register_human_in_the_loop()
         # Register agents for each step
         await self._register_agents()
 
         # Start the runtime
         self._runtime.start()
+
+    async def _register_human_in_the_loop(self) -> None:
+        """Register a human in the loop agent"""
+
+        # Register a human in the loop agent
+        async def user_confirm(
+            _agent: ClosureContext,
+            message: UserConfirm,
+            ctx: MessageContext,
+        ) -> None:
+            # Add confirmation signal to queue
+            await self._user_confirmation.put(message.confirm)
+
+        await ClosureAgent.register_closure(
+            self._runtime,
+            CONFIRM,
+            user_confirm,
+            subscriptions=lambda: [
+                TypeSubscription(
+                    topic_type=MANAGER,
+                    agent_type=CONFIRM,
+                ),
+            ],
+        )
 
     async def _register_collectors(self) -> None:
         # Register a closure agent
@@ -272,22 +289,6 @@ class AutogenOrchestrator(Orchestrator):
         # Wait for all agents to respond
         responses = await asyncio.gather(*tasks)
         return responses
-
-    async def _prepare_step_message(
-        self,
-        step_name: str,
-        prompt: str = "",
-        **inputs,
-    ) -> AgentInput:
-        """Execute a step by sending requests to relevant agents and collecting responses"""
-        # Send message with appropriate inputs for this step
-        mapped_inputs = await self._prepare_inputs(step_name=step_name)
-        mapped_inputs.update(dict(prompt=prompt, **inputs))
-
-        return AgentInput(
-            content=prompt,
-            payload=mapped_inputs,
-        )
 
     async def _execute_step(
         self,

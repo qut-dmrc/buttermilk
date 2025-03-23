@@ -58,13 +58,24 @@ class AgentRegistry:
 
 
 class AgentVariants(AgentConfig):
-    """A factory for creating Agent instance variants for a single
-    step of a workflow.
+    """A factory for creating Agent instance variants.
 
     Creates a new agent for every combination of parameters in a given
     step of the workflow to run. Agents have a variants mapping;
     each permutation of these is multiplied by num_runs. Agents also
     have an inputs mapping that does not get multiplied.
+
+    Example:
+    ```yaml
+    - id: ANALYST
+      name: "Analyst"
+      agent_obj: LLMAgent
+      num_runs: 2  # Creates 2 instances
+      variants:
+        model: ["gpt-4", "claude-3"]  # Creates variants with different models
+      inputs:
+        history: history
+    ```
     """
 
     num_runs: int = Field(

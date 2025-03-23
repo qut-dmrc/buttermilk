@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.contract import AgentInput
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
@@ -125,3 +126,19 @@ class Orchestrator(BaseModel, ABC):
         input_dict.update(self._flow_data._resolve_mappings(config.inputs))
 
         return input_dict
+
+    async def _prepare_step_message(
+        self,
+        step_name: str,
+        prompt: str = "",
+        **inputs,
+    ) -> AgentInput:
+        """Execute a step by sending requests to relevant agents and collecting responses"""
+        # Send message with appropriate inputs for this step
+        mapped_inputs = await self._prepare_inputs(step_name=step_name)
+        mapped_inputs.update(dict(prompt=prompt, **inputs))
+
+        return AgentInput(
+            content=prompt,
+            payload=mapped_inputs,
+        )
