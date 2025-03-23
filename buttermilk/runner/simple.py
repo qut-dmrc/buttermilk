@@ -35,7 +35,7 @@ class Sequencer(Orchestrator):
 
                 step_inputs = AgentInput(
                     content=prompt,
-                    payload=mapped_inputs,
+                    inputs=mapped_inputs,
                     records=self._records,
                 )
                 result = await variant(step_inputs)

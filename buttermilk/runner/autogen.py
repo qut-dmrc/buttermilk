@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
 
 import shortuuid
@@ -57,19 +57,29 @@ class AutogenAgentAdapter(RoutedAgent):
         self.topic_id: TopicId = DefaultTopicId(type=topic_type)
         super().__init__(description=self.agent.description)
 
+        # Take care of any initialization the agent needs to do in this event loop
+        input_callback = self.handle_input()
+        asyncio.create_task(self.agent.initialize(input_callback=input_callback))
+
     @message_handler
-    async def handle_request(self, message: AgentInput, ctx: MessageContext) -> AgentOutput:
+    async def handle_request(
+        self,
+        message: AgentInput,
+        ctx: MessageContext,
+    ) -> AgentOutput | None:
         # Process using the wrapped agent
         source = str(ctx.sender) if ctx and ctx.sender else message.type
         agent_output = await self.agent(message, source=source)
-        await self._runtime.publish_message(
-            agent_output,
-            topic_id=self.topic_id,
-            sender=self.id,
-        )
-        # give this a second to make sure messages are collected before proceeding.
-        await asyncio.sleep(1)
-        return agent_output
+        if agent_output:
+            await self._runtime.publish_message(
+                agent_output,
+                topic_id=self.topic_id,
+                sender=self.id,
+            )
+            # give this a second to make sure messages are collected before proceeding.
+            await asyncio.sleep(1)
+            return agent_output
+        return None
 
     @message_handler
     async def handle_output(self, message: AgentOutput, ctx: MessageContext) -> None:
@@ -94,6 +104,28 @@ class AutogenAgentAdapter(RoutedAgent):
         if isinstance(self.agent, (UIAgent, HostAgent)):
             return await self.agent.handle_control_message(message)
         return None
+
+    def handle_input(self) -> Callable[[str], Awaitable[None]]:
+        async def input_callback(user_input: str) -> None:
+            """Callback function to handle user input"""
+            if user_input.strip() == "":
+                await self._runtime.publish_message(
+                    UserConfirm(confirm=True),
+                    topic_id=self.topic_id,
+                    sender=self.id,
+                )
+            else:
+                await self._runtime.publish_message(
+                    AgentOutput(
+                        agent_id=self.agent.id,
+                        agent_name=self.agent.name,
+                        content=user_input,
+                    ),
+                    topic_id=self.topic_id,
+                    sender=self.id,
+                )
+
+        return input_callback
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -126,6 +158,11 @@ class AutogenOrchestrator(Orchestrator):
             await self._setup_runtime()
             self._step_generator = self._get_next_step()
 
+            # start the agents
+            await self._runtime.publish_message(
+                FlowMessage(),
+                topic_id=self._topic,
+            )
             while await self._user_confirmation.get():
                 step = await anext(self._step_generator)
                 await self._execute_step(step["role"], step.get("question", ""))
@@ -144,15 +181,6 @@ class AutogenOrchestrator(Orchestrator):
                 "role": step.id,
                 "question": "",
             }
-
-    async def _confirm_next_step(self, request: Any = None) -> bool:
-        user_input = await self._ask_agents(
-            step_name=MANAGER,
-            message=UserConfirm(
-                content="Proceed with next step? Otherwise, please provide alternate instructions.",
-            ),
-        )
-        return all(ui.confirm for ui in user_input)
 
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""
@@ -185,9 +213,11 @@ class AutogenOrchestrator(Orchestrator):
             user_confirm,
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=MANAGER,
+                    topic_type=topic_type,
                     agent_type=CONFIRM,
-                ),
+                )
+                # Subscribe to the general topic and all step topics.
+                for topic_type in [self._topic.type] + [step.id for step in self.steps]
             ],
         )
 
@@ -200,15 +230,36 @@ class AutogenOrchestrator(Orchestrator):
         ) -> None:
             # Process and collect responses
             if not message.error:
-                if message.payload:
-                    self._flow_data.add(key=str(_agent.id.type), value=message.payload)
+                source = None
+                if ctx and ctx.sender:
+                    try:
+                        # get the step name from the list of agents if we can
+                        source = [
+                            k
+                            for k, v in self._agents.items()
+                            if any([a[0].type == ctx.sender.type for a in v])
+                        ][0]
+                    except:
+                        logger.warning(
+                            f"{self.name} collector is relying on relies on agent naming conventions to find source keys. Please look into this and try to fix.",
+                        )
+                if not source:
+                    source = (
+                        str(ctx.sender.type) if ctx and ctx.sender else message.type
+                    )
+
+                    source = source.split(
+                        "-",
+                        1,
+                    )[0]
+                if message.inputs:
+                    self._flow_data.add(key=source, value=message.inputs)
 
                 # Harvest any records
                 if message.records:
                     self._records.extend(message.records)
 
                 # Add to the shared history
-                source = str(ctx.sender.type) if ctx and ctx.sender else message.type
                 self._history.append(f"{source}: {message.content}")
 
         await ClosureAgent.register_closure(
@@ -274,8 +325,8 @@ class AutogenOrchestrator(Orchestrator):
         tasks = []
         # Send message with appropriate inputs for this agent
         input_message = message.model_copy()
-        input_message.payload = await self._prepare_inputs(step_name=step_name)
-        input_message.payload.update({"prompt": message.content})
+        input_message.inputs = await self._prepare_inputs(step_name=step_name)
+        input_message.inputs.update({"prompt": message.content})
 
         for agent_type, _ in self._agents[step_name]:
             agent_id = await self._runtime.get(agent_type)

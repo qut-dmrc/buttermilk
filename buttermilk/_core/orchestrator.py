@@ -140,5 +140,5 @@ class Orchestrator(BaseModel, ABC):
 
         return AgentInput(
             content=prompt,
-            payload=mapped_inputs,
+            inputs=mapped_inputs,
         )

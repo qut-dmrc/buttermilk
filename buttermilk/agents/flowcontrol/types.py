@@ -9,4 +9,5 @@ class HostAgent(LLMAgent):
         self,
         message: ManagerMessage | UserConfirm,
     ) -> ManagerMessage | UserConfirm:
-        raise NotImplementedError("HostAgent does not handle control messages yet...")
+        pass
+        # raise NotImplementedError("HostAgent does not handle control messages yet...")

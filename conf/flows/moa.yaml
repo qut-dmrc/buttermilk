@@ -87,7 +87,7 @@ moa:
         record: record
         instructions: >
           Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
-        answers: judge
+        answers: JUDGE
         feedback: feedback
 
     - id: EVALUATOR
@@ -103,8 +103,8 @@ moa:
       inputs:
         content: content
         answers:
-          - judge
-          - synth
+          - JUDGE
+          - SYNTH
         feedback: feedback
     
     # - name: 🔮 introspector

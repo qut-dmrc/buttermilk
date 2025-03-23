@@ -54,10 +54,16 @@ class FlowMessage(BaseModel):
         description="A list of errors that occurred during the agent's execution",
     )
 
-    payload: dict[str, Any] = Field(
+    inputs: dict[str, Any] = Field(
         default={},
-        description="The data to or response from the agent",
+        description="The data to provide the agent",
     )
+
+    outputs: dict[str, Any] = Field(
+        default={},
+        description="The data returned from the agent",
+    )
+
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
 
@@ -106,6 +112,15 @@ class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Answer"
+
+    agent_id: str = Field(
+        ...,
+        description="The ID of the agent that generated this output.",
+    )
+    agent_name: str = Field(
+        ...,
+        description="The name of the agent that generated this output.",
+    )
 
 
 AgentMessages = Union[FlowMessage, AgentInput, AgentOutput]

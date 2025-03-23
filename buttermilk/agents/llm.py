@@ -51,7 +51,7 @@ class LLMAgent(Agent):
         """Fill the template with the given inputs and return a list of messages."""
         untrusted_inputs = {}
         if inputs:
-            untrusted_inputs.update(dict(inputs.payload))
+            untrusted_inputs.update(dict(inputs.inputs))
             untrusted_inputs["prompt"] = inputs.content
 
         # Render the template using Jinja2
@@ -149,7 +149,9 @@ class LLMAgent(Agent):
             if v and k != "content"
         }
         output = AgentOutput(
-            payload=outputs,
+            agent_id=self.id,
+            agent_name=self.name,
+            outputs=outputs,
             content=response.content,
             metadata=metadata,
         )

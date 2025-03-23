@@ -103,7 +103,7 @@ class Agent(AgentConfig, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def process(self, input_data: AgentMessages, **kwargs) -> AgentMessages:
+    async def process(self, input_data: AgentMessages, **kwargs) -> AgentOutput | None:
         """Process input data and return output
 
         Inputs:
@@ -116,9 +116,12 @@ class Agent(AgentConfig, ABC):
         raise NotImplementedError
         return job
 
-    async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput:
+    async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Allow agents to be called directly as functions"""
         return await self.process(input_data, **kwargs)
+
+    async def initialize(self, **kwargs) -> None:
+        """Initialize the agent"""
 
 
 def save_job(job: "Job", save_info: SaveInfo) -> str:
