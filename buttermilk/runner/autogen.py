@@ -86,9 +86,9 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage,
+        message: ManagerMessage | UserConfirm,
         ctx: MessageContext,
-    ) -> ManagerMessage | None:
+    ) -> ManagerMessage | UserConfirm | None:
         """Control messages between only User Interfaces and the Conductor."""
         if isinstance(self.agent, (UIAgent, HostAgent)):
             return await self.agent.handle_control_message(message)

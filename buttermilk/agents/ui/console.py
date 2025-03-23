@@ -15,8 +15,9 @@ from buttermilk._core.contract import (
 
 class UIAgent(Agent):
     async def handle_control_message(
-        self, message: ManagerMessage | UserConfirm
-    ) -> ManagerMessage:
+        self,
+        message: ManagerMessage | UserConfirm,
+    ) -> ManagerMessage | UserConfirm:
         """Ask the user for confirmation."""
         result = await self.process(
             input_data=AgentInput(
