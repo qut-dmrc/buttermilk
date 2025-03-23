@@ -11,6 +11,7 @@ from autogen_core import (
     MessageContext,
     RoutedAgent,
     SingleThreadedAgentRuntime,
+    TopicId,
     TypeSubscription,
     message_handler,
 )
@@ -52,7 +53,7 @@ class AutogenAgentAdapter(RoutedAgent):
             if not agent_cfg:
                 raise ValueError("Either agent or agent_cfg must be provided")
             self.agent: Agent = agent_cls(**agent_cfg.model_dump())
-        self.topic_type = topic_type
+        self.topic_id: TopicId = DefaultTopicId(type=topic_type)
         super().__init__(description=self.agent.description)
 
     @message_handler
@@ -60,7 +61,11 @@ class AutogenAgentAdapter(RoutedAgent):
         # Process using the wrapped agent
         source = str(ctx.sender) if ctx and ctx.sender else message.type
         agent_output = await self.agent(message, source=source)
-        await self._runtime.publish_message(agent_output, topic_id=self.topic_type)
+        await self._runtime.publish_message(
+            agent_output,
+            topic_id=self.topic_id,
+            sender=self.id,
+        )
         # give this a second to make sure messages are collected before proceeding.
         await asyncio.sleep(1)
         return agent_output
@@ -69,7 +74,9 @@ class AutogenAgentAdapter(RoutedAgent):
     async def handle_output(self, message: AgentOutput, ctx: MessageContext) -> None:
         try:
             source = str(ctx.sender) if ctx and ctx.sender else message.type
-            agent_output = await self.agent.receive_output(message, source=source)
+            # ignore messages sent by us
+            if source != self.id:
+                agent_output = await self.agent.receive_output(message, source=source)
             return
         except ValueError:
             logger.warning(
@@ -104,8 +111,10 @@ class AutogenOrchestrator(Orchestrator):
         description="Maximum time to wait for agent responses in seconds",
     )
 
-    _topic_type: str = PrivateAttr(
-        default_factory=lambda: f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}",
+    _topic: TopicId = PrivateAttr(
+        default_factory=lambda: DefaultTopicId(
+            type=f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}",
+        ),
     )
     _last_message: AgentOutput | None = PrivateAttr(default=None)
 
@@ -182,7 +191,8 @@ class AutogenOrchestrator(Orchestrator):
                     self._records.extend(message.records)
 
                 # Add to the shared history
-                self._history.append(f"{_agent.id} {ctx.sender}: {message.content}")
+                source = str(ctx.sender.type) if ctx and ctx.sender else message.type
+                self._history.append(f"{source}: {message.content}")
 
         await ClosureAgent.register_closure(
             self._runtime,
@@ -190,11 +200,11 @@ class AutogenOrchestrator(Orchestrator):
             collect_result,
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=topic,
+                    topic_type=topic_type,
                     agent_type=CLOSURE,
                 )
                 # Subscribe to the general topic and all step topics.
-                for topic in [self._topic_type] + [step.id for step in self.steps]
+                for topic_type in [self._topic.type] + [step.id for step in self.steps]
             ],
         )
 
@@ -212,13 +222,13 @@ class AutogenOrchestrator(Orchestrator):
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,
-                        topic_type=self._topic_type,
+                        topic_type=self._topic.type,
                     ),
                 )
                 # Add subscription for this agent
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=self._topic_type,
+                        topic_type=self._topic.type,
                         agent_type=agent_type,
                     ),
                 )
@@ -231,7 +241,7 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                 )
                 logger.debug(
-                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic_type} and {step.id}.",
+                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic.type} and {step.id}.",
                 )
 
                 step_agent_type.append((agent_type, variant))
@@ -245,10 +255,11 @@ class AutogenOrchestrator(Orchestrator):
     ) -> list[FlowMessage]:
         """Ask agent directly for input"""
         tasks = []
-        input_message = await self._prepare_step_message(
-            step_name=step_name,
-            **message.model_dump(),
-        )
+        # Send message with appropriate inputs for this agent
+        input_message = message.model_copy()
+        input_message.payload = await self._prepare_inputs(step_name=step_name)
+        input_message.payload.update({"prompt": message.content})
+
         for agent_type, _ in self._agents[step_name]:
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
@@ -269,15 +280,8 @@ class AutogenOrchestrator(Orchestrator):
         **inputs,
     ) -> AgentInput:
         """Execute a step by sending requests to relevant agents and collecting responses"""
-        config = None
-        for config in self.steps:
-            if config.id == step_name:
-                break
-        if not config:
-            raise ProcessingError(f"Cannot find config for step {step_name}.")
-
         # Send message with appropriate inputs for this step
-        mapped_inputs = await self._prepare_inputs(config=config)
+        mapped_inputs = await self._prepare_inputs(step_name=step_name)
         mapped_inputs.update(dict(prompt=prompt, **inputs))
 
         return AgentInput(

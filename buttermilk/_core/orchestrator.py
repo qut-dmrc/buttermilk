@@ -14,11 +14,11 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk._core.agent import AgentConfig
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
+from buttermilk.exceptions import ProcessingError
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -81,7 +81,7 @@ class Orchestrator(BaseModel, ABC):
     async def __call__(self, request=None) -> Job:
         return await self.run(request=request)
 
-    async def _prepare_inputs(self, config: AgentConfig) -> dict[str, Any]:
+    async def _prepare_inputs(self, step_name: str) -> dict[str, Any]:
         """Fill inputs according to specification.
 
         Includes several special case keywords:
@@ -91,6 +91,13 @@ class Orchestrator(BaseModel, ABC):
             - "context": list of history messages in message format
             - "record": list of InputRecords"
         """
+        config = None
+        for config in self.steps:
+            if config.id == step_name:
+                break
+        if not config:
+            raise ProcessingError(f"Cannot find config for step {step_name}.")
+
         input_dict = dict(config.inputs)
         # Overwrite any of the input dict values that are mappings to other data
         input_dict.update(self._flow_data._resolve_mappings(input_dict))
