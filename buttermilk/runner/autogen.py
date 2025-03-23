@@ -190,9 +190,11 @@ class AutogenOrchestrator(Orchestrator):
             collect_result,
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=self._topic_type,
+                    topic_type=topic,
                     agent_type=CLOSURE,
-                ),
+                )
+                # Subscribe to the general topic and all step topics.
+                for topic in [self._topic_type] + [step.id for step in self.steps]
             ],
         )
 
