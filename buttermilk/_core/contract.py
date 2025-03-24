@@ -21,6 +21,8 @@ class FlowProtocol(Protocol):
     save: SaveInfo
     data: Sequence[DataSource]
     steps: Sequence["Agent"]
+    orchestrator: str
+    name: str  # flow name
 
     async def run(self, job: "Job") -> "Job": ...
 
@@ -30,6 +32,7 @@ class FlowProtocol(Protocol):
 class OrchestratorProtocol(Protocol):
     bm: "BM"
     flows: Mapping[str, FlowProtocol]
+    entry: str
 
 
 ######

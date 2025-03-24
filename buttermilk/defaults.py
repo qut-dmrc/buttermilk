@@ -5,3 +5,6 @@ TEMPLATE_PATHS = [BASE_DIR.parent / "templates"]
 BQ_SCHEMA_DIR = BASE_DIR.parent / "schemas"
 
 COL_PREDICTION = "prediction"
+
+
+SLACK_MAX_MESSAGE_LENGTH = 3000

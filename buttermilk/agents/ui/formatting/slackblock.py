@@ -1,11 +1,11 @@
 import pprint
 import textwrap
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 import regex as re
 from pydantic import BaseModel
 
-SLACK_MAX_MESSAGE_LENGTH=3000
+from buttermilk.defaults import SLACK_MAX_MESSAGE_LENGTH
 
 
 def format_response(inputs) -> list[str]:
@@ -64,7 +64,7 @@ def format_slack_message(result: dict) -> dict:
             "type": "plain_text",
             "text": header_text,
             "emoji": True,
-        }
+        },
     })
 
     # Handle error case
@@ -74,7 +74,7 @@ def format_slack_message(result: dict) -> dict:
             "text": {
                 "type": "mrkdwn",
                 "text": "*Error!*\n" + "\n".join(format_response(result.get("error"))),
-            }
+            },
         })
 
     else:
@@ -89,7 +89,7 @@ def format_slack_message(result: dict) -> dict:
             if "mistake" in result:
                 mistake = result.get("mistake")
                 icon = ":x:" if mistake and mistake not in [False, "False"] else ":white_check_mark:"
-                feedback_text += f"{icon} *Mistake:* {str(mistake)}\n\n"
+                feedback_text += f"{icon} *Mistake:* {mistake!s}\n\n"
 
             # Format intervention field
             if "intervention" in result and result.get("intervention"):
@@ -101,8 +101,8 @@ def format_slack_message(result: dict) -> dict:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": feedback_text.strip()
-                    }
+                        "text": feedback_text.strip(),
+                    },
                 })
 
                 # Add a divider after feedback if we have other content
@@ -121,7 +121,7 @@ def format_slack_message(result: dict) -> dict:
                 if "prediction" in outputs:
                     prediction = outputs.pop("prediction", None)
                     icon = ":white_check_mark:" if prediction else ":no_entry:"
-                    special_text += f"{icon} *Prediction:* {str(prediction)}\n"
+                    special_text += f"{icon} *Prediction:* {prediction!s}\n"
 
                 if "confidence" in outputs:
                     confidence = outputs.pop("confidence", "")
@@ -136,12 +136,12 @@ def format_slack_message(result: dict) -> dict:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": special_text.strip()
-                        }
+                            "text": special_text.strip(),
+                        },
                     })
 
             # Add labels as chips if present
-            if "labels" in outputs and outputs["labels"]:
+            if outputs.get("labels"):
                 labels = outputs.pop("labels", [])
                 if labels:
                     label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels])
@@ -149,8 +149,8 @@ def format_slack_message(result: dict) -> dict:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": label_text
-                        }
+                            "text": label_text,
+                        },
                     })
 
             # Handle any remaining fields in outputs
@@ -163,32 +163,34 @@ def format_slack_message(result: dict) -> dict:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": text
-                        }
+                            "text": text,
+                        },
                     })
 
             # Add divider before reasons if there are any
             if reasons:
                 blocks.append({
-                    "type": "divider"
+                    "type": "divider",
                 })
 
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*Reasoning:*"
-                    }
+                        "text": "*Reasoning:*",
+                    },
                 })
 
                 # Add each reason as its own contextual block for better readability
                 for i, reason in enumerate(reasons):
                     blocks.append({
                         "type": "context",
-                        "elements": [{
-                            "type": "mrkdwn",
-                            "text": f"{i+1}. {reason}"
-                        }]
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"{i + 1}. {reason}",
+                            }
+                        ],
                     })
         else:
             # Handle case where outputs is not a dict
@@ -197,32 +199,41 @@ def format_slack_message(result: dict) -> dict:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": text
-                    }
+                        "text": text,
+                    },
                 })
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
 
     # Also provide a text fallback for clients that don't support blocks
-    fallback_text = header_text + "\n" + pprint.pformat(result, indent=2)[:SLACK_MAX_MESSAGE_LENGTH-len(header_text)-10]
+    fallback_text = (
+        header_text
+        + "\n"
+        + pprint.pformat(result, indent=2)[
+            : SLACK_MAX_MESSAGE_LENGTH - len(header_text) - 10
+        ]
+    )
 
     return {
         "blocks": blocks,
-        "text": fallback_text
+        "text": fallback_text,
     }
 
-def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No") -> dict:
-    """
-    Format a confirmation block for Slack with Yes/No buttons and decorative elements.
-    
+
+def confirm_block(
+    message="Do you want to proceed?", yes_text="Yes", no_text="No"
+) -> dict:
+    """Format a confirmation block for Slack with Yes/No buttons and decorative elements.
+
     Args:
         message: The confirmation question to display
         yes_text: Text for the confirmation button
         no_text: Text for the decline button
-    
+
     Returns:
         dict: Slack blocks format for a confirmation message
+
     """
     return {
         "blocks": [
@@ -230,8 +241,8 @@ def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f":question: *{message}*"
-                }
+                    "text": f":question: *{message}*",
+                },
             },
             {
                 "type": "actions",
@@ -241,25 +252,25 @@ def confirm_block(message="Do you want to proceed?", yes_text="Yes", no_text="No
                         "text": {
                             "type": "plain_text",
                             "text": f":white_check_mark: {yes_text}",
-                            "emoji": True
+                            "emoji": True,
                         },
                         "style": "primary",
                         "value": "confirm",
-                        "action_id": "confirm_action"
+                        "action_id": "confirm_action",
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
                             "text": f":x: {no_text}",
-                            "emoji": True
+                            "emoji": True,
                         },
                         "style": "danger",
                         "value": "cancel",
-                        "action_id": "cancel_action"
-                    }
-                ]
+                        "action_id": "cancel_action",
+                    },
+                ],
             },
         ],
-        "text": f"Confirmation required: {message}"  # Fallback text
+        "text": f"Confirmation required: {message}",  # Fallback text
     }

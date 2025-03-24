@@ -42,23 +42,6 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "flow mod debug",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.api.flow",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": [
-        "+flows=[trans]",
-        "+flow=trans",
-        //"+flows=[simple,osb,hate,trans,describer]",
-        "llms=lite"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
       "name": "cli debug",
       "type": "debugpy",
       "request": "launch",
@@ -69,9 +52,26 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[moa]",
-        "+flow=moa",
+        "flow=moa",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "slack debug",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
+      "justMyCode": false,
+      "args": [
+        "hydra.verbose=false",
+        "+flows=[moa]",
+        "entry=slackbot",
+        "llms=full"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

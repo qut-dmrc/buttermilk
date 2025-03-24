@@ -1,5 +1,4 @@
 import asyncio
-from distutils.util import strtobool
 from typing import Any
 
 from aioconsole import ainput
@@ -8,55 +7,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from buttermilk import logger
-from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
-    AgentInput,
     AgentMessages,
-    ManagerMessage,
-    UserConfirm,
 )
-
-
-class UIAgent(Agent):
-    _input_task: asyncio.Task
-    _input_callback: Any = PrivateAttr(...)
-
-    def __init__(self, input_callback=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if input_callback:
-            self._input_callback = input_callback
-            asyncio.create_task(
-                self.initialize(
-                    input_callback=input_callback,
-                ),
-            )
-
-    async def handle_control_message(
-        self,
-        message: ManagerMessage | UserConfirm,
-    ) -> ManagerMessage | UserConfirm:
-        """Ask the user for confirmation."""
-        result = await self.process(
-            input_data=AgentInput(
-                content=message.content,
-            ),
-        )
-        if isinstance(message, UserConfirm):
-            try:
-                confirm = bool(strtobool(result.content))
-            except ValueError:
-                confirm = False
-
-            return UserConfirm(confirm=confirm, **result.model_dump())
-        if result:
-            return ManagerMessage(**result.model_dump())
-        return ManagerMessage()
-
-    async def initialize(self, **kwargs) -> None:
-        """Initialize the interface"""
-
-    async def cleanup(self) -> None:
-        """Clean up resources"""
+from buttermilk.agents.ui.generic import UIAgent
 
 
 class CLIUserAgent(UIAgent):
