@@ -1,7 +1,8 @@
-import functools
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Self
 
+import pydantic
 import weave
 from pydantic import (
     BaseModel,
@@ -64,14 +65,19 @@ class Agent(AgentConfig, ABC):
         exclude=True,
     )
     _trace_this = True
+    _run_fn: Callable | Awaitable
 
-    def _get_process_func(self):
+    @pydantic.model_validator(mode="after")
+    def _get_process_func(self) -> Self:
         """Returns the appropriate processing function based on tracing setting."""
-        if self._trace_this:
-            return weave.op(call_display_name=f"{self.id}")(
-                functools.partial(self._process),
-            )
-        return self._process
+
+        def _process_fn():
+            if self._trace_this:
+                return weave.op(self._process, call_display_name=f"{self.id}")
+            return self._process
+
+        self._run_fn = _process_fn()
+        return self
 
     # @workflow(name="run_agent")
     # @trace
@@ -102,8 +108,7 @@ class Agent(AgentConfig, ABC):
 
     async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Allow agents to be called directly as functions"""
-        process_func = self._get_process_func()
-        return await process_func(input_data, **kwargs)
+        return await self._run_fn(input_data, **kwargs)
 
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent"""

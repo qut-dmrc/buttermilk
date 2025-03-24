@@ -282,7 +282,7 @@ class AutogenOrchestrator(Orchestrator):
                         )[0]
 
                     if message.outputs:
-                        self._flow_data.add(key=source, value=message.outputs)
+                        self._flow_data.add(key=source, value=message)
 
                 # Add to the shared history
                 if message.content:

@@ -58,7 +58,7 @@ def format_slack_message(result: AgentOutput) -> dict:
     blocks = []
 
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result_copy.agent_name}"
+    header_text = f":robot_face: {result_copy.agent_name}"
     blocks.append({
         "type": "header",
         "text": {
@@ -93,7 +93,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
             # Format intervention field
             if "intervention" in result_copy.outputs and result_copy.outputs.get(
-                "intervention"
+                "intervention",
             ):
                 intervention = result_copy.outputs.get("intervention")
                 feedback_text += f"*Intervention:*\n{intervention}\n"
@@ -112,13 +112,6 @@ def format_slack_message(result: AgentOutput) -> dict:
                     blocks.append({"type": "divider"})
 
         if isinstance(result_copy.outputs, dict):
-            # Extract reasons for special handling
-            reasons = (
-                result_copy.outputs.pop("reasons", [])
-                if isinstance(result_copy.outputs, dict)
-                else []
-            )
-
             # Format prediction, confidence and severity with special styling if present
             key_fields = ["prediction", "confidence", "severity"]
             if any(k in result.outputs for k in key_fields):
@@ -159,18 +152,18 @@ def format_slack_message(result: AgentOutput) -> dict:
                         },
                     })
 
-            # Handle any remaining fields in outputs
-            remaining_outputs = {
-                k: v
-                for k, v in result.outputs.items()
-                if k
-                not in ["reasons", "prediction", "confidence", "severity", "labels"]
-            }
+            # Extract reasons for special handling
+            reasons = (
+                result_copy.outputs.pop("reasons", [])
+                if isinstance(result_copy.outputs, dict)
+                else []
+            )
 
-            if remaining_outputs:
-                for text in format_response(remaining_outputs):
+            # Handle any remaining fields in outputs
+            for k, v in result_copy.outputs.items():
+                for text in format_response(result_copy.outputs):
                     blocks.append({
-                        "type": "section",
+                        "type": "context",
                         "text": {
                             "type": "mrkdwn",
                             "text": text,
@@ -187,7 +180,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*Reasoning:*",
+                        "text": "### Reasoning:",
                     },
                 })
 

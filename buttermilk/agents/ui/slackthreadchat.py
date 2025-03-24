@@ -12,7 +12,6 @@ from buttermilk.agents.ui.formatting.slackblock import (
     confirm_block,
     format_slack_message,
 )
-from buttermilk.agents.ui.formatting.slackblock_reasons import format_slack_reasons
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 
@@ -41,14 +40,10 @@ class SlackUIAgent(UIAgent):
         """Send output to the Slack thread"""
         if isinstance(message, AgentOutput):
             try:
-                formatted_blocks = format_slack_reasons(message)
+                formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
             except:
-                try:
-                    formatted_blocks = format_slack_message(message)
-                    await self.send_to_thread(**formatted_blocks)
-                except:
-                    await self.send_to_thread(text=message.content)
+                await self.send_to_thread(text=message.content)
         else:
             await self.send_to_thread(text=message.content)
 

@@ -32,8 +32,6 @@ class KeyValueCollector(BaseModel):
         value: Any,
     ) -> None:
         if key in self._data:
-            if not isinstance(self._data[key], list):
-                self._data[key] = [self._data[key]]
             self._data[key].append(value)
         else:
             self._data[key] = [value]
