@@ -106,6 +106,10 @@ class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
     _type = "InputRequest"
+    agent_id: str = Field(
+        ...,
+        description="The ID of the agent to which this request is made.",
+    )
     context: list[Any] = Field(
         default=[],
         description="History or context to provide to the agent.",

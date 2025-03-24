@@ -182,7 +182,12 @@ class AutogenOrchestrator(Orchestrator):
 
                 # send another confirmation message
                 topic_id = DefaultTopicId(type=MANAGER)
-                await self._runtime.publish_message(AgentInput(), topic_id=topic_id)
+                await self._runtime.publish_message(
+                    AgentInput(
+                        agent_id=CONDUCTOR,
+                    ),
+                    topic_id=topic_id,
+                )
 
         except ProcessingError as e:
             logger.error(f"Error in AutogenOrchestrator.run: {e}")
@@ -222,7 +227,9 @@ class AutogenOrchestrator(Orchestrator):
             ctx: MessageContext,
         ) -> None:
             # Add confirmation signal to queue
-            await self._user_confirmation.put(message.confirm)
+            if isinstance(message, UserConfirm):
+                await self._user_confirmation.put(message.confirm)
+            # Ignore other messages right now.
 
         await ClosureAgent.register_closure(
             self._runtime,
@@ -248,37 +255,43 @@ class AutogenOrchestrator(Orchestrator):
         ) -> None:
             # Process and collect responses
             if not message.error:
-                source = None
-                if ctx and ctx.sender:
-                    try:
-                        # get the step name from the list of agents if we can
-                        source = [
-                            k
-                            for k, v in self._agents.items()
-                            if any([a[0].type == ctx.sender.type for a in v])
-                        ][0]
-                    except:
-                        logger.warning(
-                            f"{self.name} collector is relying on relies on agent naming conventions to find source keys. Please look into this and try to fix.",
+                if isinstance(AgentMessages, AgentOutput):
+                    source = None
+                    if ctx and ctx.sender:
+                        try:
+                            # get the step name from the list of agents if we can
+                            source = [
+                                k
+                                for k, v in self._agents.items()
+                                if any([a[0].type == ctx.sender.type for a in v])
+                            ][0]
+                        except:
+                            logger.warning(
+                                f"{self.name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
+                            )
+                    if not source:
+                        source = (
+                            str(ctx.sender.type)
+                            if ctx and ctx.sender
+                            else message.agent_id
                         )
-                if not source:
-                    source = (
-                        str(ctx.sender.type) if ctx and ctx.sender else message.type
-                    )
 
-                    source = source.split(
-                        "-",
-                        1,
-                    )[0]
-                if message.inputs:
-                    self._flow_data.add(key=source, value=message.inputs)
+                        source = source.split(
+                            "-",
+                            1,
+                        )[0]
 
+                    if message.outputs:
+                        self._flow_data.add(key=source, value=message.outputs)
+
+                    # Add to the shared history
+                    self._history.append(f"{message._type}: {message.content}")
+                else:
+                    # Add to the shared history
+                    self._history.append(f"{message._type}: {message.content}")
                 # Harvest any records
                 if message.records:
                     self._records.extend(message.records)
-
-                # Add to the shared history
-                self._history.append(f"{source}: {message.content}")
 
         await ClosureAgent.register_closure(
             self._runtime,

@@ -1,17 +1,18 @@
 import pprint
 
+from buttermilk._core.contract import AgentOutput
 from buttermilk.agents.ui.formatting.slackblock import format_response
 from buttermilk.defaults import SLACK_MAX_MESSAGE_LENGTH
 
 
-def format_slack_reasons(result) -> dict:
+def format_slack_reasons(result: AgentOutput) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
-    # don't modify the original object
-    result_copy = result.model_copy(deep=True)
     blocks = []
 
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result_copy.agent_id} {result_copy.config.parameters.get('model')}"
+    header_text = (
+        f"Model: :robot_face: {result.agent_name} {result.metadata.get('model')}"
+    )
     blocks.append({
         "type": "header",
         "text": {
@@ -24,23 +25,23 @@ def format_slack_reasons(result) -> dict:
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": ", ".join(result_copy.config.parameters.values()),
+            "text": ", ".join(result.inputs.values()),
         },
     })
 
     # Handle error case
-    if result_copy.outputs.get("error"):
+    if result.outputs.get("error"):
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
                 "text": "*Error!*\n"
-                + "\n".join(format_response(result_copy.outputs.get("error"))),
+                + "\n".join(format_response(result.outputs.get("error"))),
             },
         })
 
     else:
-        outputs = result_copy.outputs
+        outputs = result.outputs
         if isinstance(outputs, dict):
             # Extract reasons for special handling
             reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []
@@ -142,7 +143,7 @@ def format_slack_reasons(result) -> dict:
     fallback_text = (
         header_text
         + "\n"
-        + pprint.pformat(result_copy, indent=2)[
+        + pprint.pformat(result, indent=2)[
             : SLACK_MAX_MESSAGE_LENGTH - len(header_text) - 10
         ]
     )

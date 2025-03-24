@@ -1,5 +1,6 @@
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from pydantic import PrivateAttr
 
@@ -66,23 +67,17 @@ class FlowVariableRouter(KeyValueCollector):
     each list is the output of an agent in a step.
     """
 
-    _data: dict[str, Any ] = PrivateAttr(default_factory=dict)
+    _data: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-
-    def _resolve_mappings(self, mappings: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_mappings(self, mappings: dict[Any, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
         resolved = {}
 
         for target, source_spec in mappings.items():
             if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case
-                resolved[target] = []
-                for src in source_spec:
-                    if isinstance(src, dict):
-                        resolved[target].extend(self._resolve_mappings(src))
-                    else:
-                        resolved[target].extend(self._resolve_simple_path(src))
-            elif isinstance(source_spec, Mapping|dict):
+                resolved[target] = [self._resolve_mappings(src) for src in source_spec]
+            elif isinstance(source_spec, Mapping | dict):
                 # Handle nested mappings
                 resolved[target] = self._resolve_mappings(source_spec)
             else:
@@ -99,7 +94,6 @@ class FlowVariableRouter(KeyValueCollector):
         When a step has multiple outputs, returns a list with all matching results.
         For JMESPath expressions that return lists, flattens the results.
         """
-
         if "." not in path:
             # Direct reference to a step's complete output list
             return self._data.get(path, [])
@@ -138,4 +132,3 @@ class FlowVariableRouter(KeyValueCollector):
             return None
 
         return all_matches
-

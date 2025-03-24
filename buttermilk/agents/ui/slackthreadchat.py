@@ -5,8 +5,13 @@ from pydantic import PrivateAttr
 from buttermilk._core.contract import (
     AgentMessages,
     AgentOutput,
+    ManagerMessage,
+    UserConfirm,
 )
-from buttermilk.agents.ui.formatting.slackblock import confirm_block
+from buttermilk.agents.ui.formatting.slackblock import (
+    confirm_block,
+    format_slack_message,
+)
 from buttermilk.agents.ui.formatting.slackblock_reasons import format_slack_reasons
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
@@ -29,14 +34,21 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages,
+        message: AgentOutput | ManagerMessage | UserConfirm,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
-        if hasattr(message, "reasons") and message.reasons:
-            formatted_blocks = format_slack_reasons(message)
-            await self.send_to_thread(**formatted_blocks)
+        if isinstance(message, AgentOutput):
+            try:
+                formatted_blocks = format_slack_reasons(message)
+                await self.send_to_thread(**formatted_blocks)
+            except:
+                try:
+                    formatted_blocks = format_slack_message(message)
+                    await self.send_to_thread(**formatted_blocks)
+                except:
+                    await self.send_to_thread(text=message.content)
         else:
             await self.send_to_thread(text=message.content)
 
@@ -49,7 +61,7 @@ class SlackUIAgent(UIAgent):
             blocks=confirm_blocks["blocks"],
         )
 
-    async def process(
+    async def _process(
         self,
         input_data: AgentMessages,
         **kwargs,
@@ -83,13 +95,13 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
 
     async def matcher(message):
         return (
+            # It's a message in our thread, not from us.
             message.get("thread_ts") == thread_ts
             and message.get("subtype") != "bot_message"
         )
 
     @agent.app.message(matchers=[matcher])
     async def feed_in(message, say):
-        # if hasattr(agent, "_input_callback") and agent._input_callback:
         await agent._input_callback(message["text"])
 
     # Button action handlers

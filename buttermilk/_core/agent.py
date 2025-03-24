@@ -9,13 +9,9 @@ from pydantic import (
 )
 from traceloop.sdk.decorators import workflow
 
-from buttermilk import logger
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
-from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.save import save
-
-from .log import logger
 
 
 def get_agent_name_tracing(call: Any) -> str:
@@ -80,17 +76,8 @@ class Agent(AgentConfig, ABC):
     @trace
     @weave.op(call_display_name=get_agent_name_tracing)
     @workflow(name="run_agent")
-    async def run(self, job: "Job", **kwargs) -> "Job":
-        try:
-            job.agent_info = self.model_dump(mode="json")
-            job = await self.process(input_data=job, **kwargs)
-        except Exception as e:
-            job.error = extract_error_info(e=e)
-            if job.record:
-                logger.error(
-                    f"Error processing task {self.id} with job {job.job_id} and record {job.record.record_id}. Error: {e or type(e)} {e.args=}",
-                )
-        return job
+    async def run(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
+        return await self._process(input_data, **kwargs)
 
     @abstractmethod
     async def receive_output(
@@ -103,7 +90,7 @@ class Agent(AgentConfig, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def process(self, input_data: AgentMessages, **kwargs) -> AgentOutput | None:
+    async def _process(self, input_data: AgentMessages, **kwargs) -> AgentOutput | None:
         """Process input data and return output
 
         Inputs:
@@ -118,7 +105,7 @@ class Agent(AgentConfig, ABC):
 
     async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Allow agents to be called directly as functions"""
-        return await self.process(input_data, **kwargs)
+        return await self.run(input_data, **kwargs)
 
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent"""

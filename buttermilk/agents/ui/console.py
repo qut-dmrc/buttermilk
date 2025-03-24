@@ -26,7 +26,7 @@ class CLIUserAgent(UIAgent):
         console = Console(highlight=True)
         console.print(Markdown(f"### {source}: \n{message.content}\n"))
 
-    async def process(
+    async def _process(
         self,
         input_data: AgentMessages,
         **kwargs,

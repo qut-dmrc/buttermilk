@@ -43,7 +43,9 @@ class Selector(AutogenOrchestrator):
             # store the last message received, so that any changes in instructions
             # are incorporated before executing the next step
             _last_message = self._last_message
-            responses = await self._ask_agents(CONDUCTOR, message=AgentInput())
+            responses = await self._ask_agents(
+                CONDUCTOR, message=AgentInput(agent_id=CONDUCTOR)
+            )
 
             if len(responses) > 1:
                 raise ProcessingError("Conductor returned multiple responses.")

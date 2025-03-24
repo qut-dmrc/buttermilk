@@ -21,8 +21,9 @@ class UIAgent(Agent):
         message: ManagerMessage | UserConfirm,
     ) -> ManagerMessage | UserConfirm:
         """Ask the user for confirmation."""
-        result = await self.process(
+        result = await self._process(
             input_data=AgentInput(
+                agent_id=self.name,
                 content=message.content,
             ),
         )

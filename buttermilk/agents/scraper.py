@@ -48,7 +48,7 @@ class WebScraperRequests(Agent):
         raise NotImplementedError
 
     # A processor operates on a record and returns a result
-    def process(self, record, **kwargs):
+    def _process(self, record, **kwargs):
         url = record["url"]
 
         logger.debug(f"Fetching URL: {url}, child of {record.get('parent_id')}")
@@ -162,7 +162,7 @@ class WebScraperSelenium(WebScraperRequests):
         recurse_records = []
 
         for i, record in enumerate(records):
-            record = self.process(record)
+            record = self._process(record)
 
             # Add this page's info to our stored results
             self.results.append(record)
@@ -336,7 +336,7 @@ class WebScraperSelenium(WebScraperRequests):
         delay=120,
         tries=1,
     )
-    def process(self, record, **kwargs):
+    def _process(self, record, **kwargs):
         try:
             self.get(record["url"], **kwargs)
 

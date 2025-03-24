@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from collections.abc import Mapping
 from functools import partial
@@ -55,10 +56,16 @@ async def register_handlers(
     flows: Mapping[str, FlowProtocol],
     orchestrator_tasks: asyncio.Queue,
 ):
+    async def _flow_start_matcher(body):
+        logger.debug(f"Received request: {json.dumps(body)}")
+        # don't trigger on self-messages or within a thread
+        return (
+            body
+            and body["event"].get("subtype") != "bot_message"
+            and (body["event"].get("event_ts") == body["event"].get("ts"))
+        )
+
     async def handle_mentions(body, say, logger):
-        if (ts := body["event"].get("ts")) != body["event"].get("event_ts"):
-            # don't trigger within a thread
-            return
 
         # Start conversation
         try:
@@ -74,7 +81,7 @@ async def register_handlers(
         # Create context for this conversation
         context = SlackContext(
             channel_id=body["event"].get("channel"),
-            thread_ts=ts,
+            thread_ts=body["event"].get("ts"),
             user_id=body["event"].get("user"),
             event_ts=body["event"].get("event_ts"),
             say=say,
@@ -94,8 +101,13 @@ async def register_handlers(
         user = message["user"]
         await say(f"Hi there, <@{user}>!")
 
+    async def handle_message_events(body, logger):
+        # just ignore other events to shut Bolt up about it.
+        return True
+
     slack_app.message(":wave:")(say_hello)
-    slack_app.event("app_mention")(handle_mentions)
+    slack_app.event("app_mention", matchers=[_flow_start_matcher])(handle_mentions)
+    slack_app.event("message")(handle_message_events)
 
 
 async def start_flow_thread(
@@ -113,7 +125,6 @@ async def start_flow_thread(
     try:
         flow_config = dict(flow_cfg)
         orchestrator_name = flow_config.pop("orchestrator")
-
         thread_agent_name = f"slack_thread_{context.thread_ts}"
         # partially fill the SlackUIAgent object and add it to the registry
         AgentRegistry._agents[thread_agent_name] = partial(  # type: ignore

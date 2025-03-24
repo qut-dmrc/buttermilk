@@ -63,7 +63,7 @@ class Fetch(Agent):
 
         return record
 
-    async def process(self, input_data: AgentInput) -> AgentOutput:
+    async def _process(self, input_data: AgentInput) -> AgentOutput:
         if input_data.content:
             record = await self.get_record(input_data.content)
             if record:

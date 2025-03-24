@@ -5,7 +5,6 @@ from typing import Any, Self
 
 import requests
 import urllib3
-import weave
 from anthropic import (
     APIConnectionError as AnthropicAPIConnectionError,
     RateLimitError as AnthropicRateLimitError,
@@ -98,7 +97,6 @@ class RetryWrapper(BaseModel):
             "reraise": True,
         }
 
-    @weave.op
     async def _execute_with_retry(
         self,
         func: Callable,

@@ -34,6 +34,7 @@ class Sequencer(Orchestrator):
                 mapped_inputs = self._flow_data._resolve_mappings(variant.inputs)
 
                 step_inputs = AgentInput(
+                    agent_id=step[0].name,
                     content=prompt,
                     inputs=mapped_inputs,
                     records=self._records,

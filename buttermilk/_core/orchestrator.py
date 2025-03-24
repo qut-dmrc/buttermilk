@@ -123,8 +123,6 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = "\n".join(participants)
 
-        input_dict.update(self._flow_data._resolve_mappings(config.inputs))
-
         return input_dict
 
     async def _prepare_step_message(
@@ -139,6 +137,7 @@ class Orchestrator(BaseModel, ABC):
         mapped_inputs.update(dict(prompt=prompt, **inputs))
 
         return AgentInput(
+            agent_id=step_name,
             content=prompt,
             inputs=mapped_inputs,
         )

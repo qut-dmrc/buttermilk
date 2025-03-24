@@ -131,7 +131,7 @@ class LLMAgent(Agent):
 
         return messages
 
-    async def process(self, input_data: AgentInput, **kwargs) -> AgentOutput:
+    async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput:
 
         messages = await self.fill_template(
             inputs=input_data,
