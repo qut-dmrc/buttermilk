@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from distutils.util import strtobool
 from typing import Any
 
 import shortuuid
@@ -25,6 +26,7 @@ from buttermilk._core.contract import (
     FlowMessage,
     ManagerMessage,
     UserConfirm,
+    UserInput,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
@@ -108,7 +110,20 @@ class AutogenAgentAdapter(RoutedAgent):
     def handle_input(self) -> Callable[[str], Awaitable[None]]:
         async def input_callback(user_input: str) -> None:
             """Callback function to handle user input"""
+            try:
+                confirm = bool(strtobool(user_input))
+                await self._runtime.publish_message(
+                    UserConfirm(confirm=confirm),
+                    topic_id=self.topic_id,
+                    sender=self.id,
+                )
+                return
+            except:
+                # Not a simple yes / no, send as text.
+                pass
+
             if user_input.strip() == "":
+                # newline on console
                 await self._runtime.publish_message(
                     UserConfirm(confirm=True),
                     topic_id=self.topic_id,
@@ -116,9 +131,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 )
             else:
                 await self._runtime.publish_message(
-                    AgentOutput(
-                        agent_id=self.agent.id,
-                        agent_name=self.agent.name,
+                    UserInput(
                         content=user_input,
                     ),
                     topic_id=self.topic_id,
@@ -166,6 +179,10 @@ class AutogenOrchestrator(Orchestrator):
             while await self._user_confirmation.get():
                 step = await anext(self._step_generator)
                 await self._execute_step(step["role"], step.get("question", ""))
+
+                # send another confirmation message
+                topic_id = DefaultTopicId(type=MANAGER)
+                await self._runtime.publish_message(AgentInput(), topic_id=topic_id)
 
         except ProcessingError as e:
             logger.error(f"Error in AutogenOrchestrator.run: {e}")
@@ -219,13 +236,14 @@ class AutogenOrchestrator(Orchestrator):
                 # Subscribe to the general topic and all step topics.
                 for topic_type in [self._topic.type] + [step.id for step in self.steps]
             ],
+            unknown_type_policy="ignore",  # only react to appropriate messages
         )
 
     async def _register_collectors(self) -> None:
         # Register a closure agent
         async def collect_result(
             _agent: ClosureContext,
-            message: AgentMessages,
+            message: AgentMessages | UserInput,
             ctx: MessageContext,
         ) -> None:
             # Process and collect responses
@@ -274,6 +292,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Subscribe to the general topic and all step topics.
                 for topic_type in [self._topic.type] + [step.id for step in self.steps]
             ],
+            unknown_type_policy="ignore",  # only react to appropriate messages
         )
 
     async def _register_agents(self) -> None:

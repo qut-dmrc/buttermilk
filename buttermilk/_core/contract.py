@@ -98,6 +98,10 @@ class UserConfirm(ManagerMessage):
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
+class UserInput(FlowMessage):
+    """Instructions from the user."""
+
+
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 

@@ -16,16 +16,6 @@ class UIAgent(Agent):
     _input_task: asyncio.Task
     _input_callback: Any = PrivateAttr(...)
 
-    def __init__(self, input_callback=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if input_callback:
-            self._input_callback = input_callback
-            asyncio.create_task(
-                self.initialize(
-                    input_callback=input_callback,
-                ),
-            )
-
     async def handle_control_message(
         self,
         message: ManagerMessage | UserConfirm,
@@ -47,8 +37,9 @@ class UIAgent(Agent):
             return ManagerMessage(**result.model_dump())
         return ManagerMessage()
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface"""
+        self._input_callback = input_callback
 
     async def cleanup(self) -> None:
         """Clean up resources"""

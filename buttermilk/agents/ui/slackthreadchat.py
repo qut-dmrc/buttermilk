@@ -1,13 +1,6 @@
-import asyncio
-import re
 from typing import Any
 
 from pydantic import PrivateAttr
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from buttermilk._core.contract import (
     AgentMessages,
@@ -16,34 +9,23 @@ from buttermilk._core.contract import (
 from buttermilk.agents.ui.formatting.slackblock import confirm_block
 from buttermilk.agents.ui.formatting.slackblock_reasons import format_slack_reasons
 from buttermilk.agents.ui.generic import UIAgent
-from buttermilk.runner.slackbot import SlackContext
-
-BOTPATTERNS = re.compile(
-    r"^!?[<@>\w\d]*\s+(\w+)",
-    re.IGNORECASE | re.MULTILINE,
-)
+from buttermilk.libs.slack import SlackContext, post_message_with_retry
 
 
 class SlackUIAgent(UIAgent):
-    app: Any
-    context: "SlackContext"
+    # these need to be populated after the agent is created by the factory
+    app: Any = None
+    context: "SlackContext" = None
     _input_callback: Any = PrivateAttr(default=None)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-    )
-    async def _post_message_with_retry(self, **kwargs):
-        return await self.app.client.chat_postMessage(**kwargs)
-
     async def send_to_thread(self, text, blocks=None, **kwargs):
-        kwargs.update({
-            "channel": self.context.channel_id,
-            "text": text,
-            "blocks": blocks,
-            "thread_ts": self.context.thread_ts,
-        })
-        return await self._post_message_with_retry(**kwargs)
+        return await post_message_with_retry(
+            app=self.app,
+            context=self.context,
+            text=text,
+            blocks=blocks,
+            **kwargs,
+        )
 
     async def receive_output(
         self,
@@ -58,6 +40,15 @@ class SlackUIAgent(UIAgent):
         else:
             await self.send_to_thread(text=message.content)
 
+    async def confirm(self, message: str = ""):
+        confirm_blocks = confirm_block(
+            message=message or "Would you like to proceed?",
+        )
+        await self.send_to_thread(
+            text=confirm_blocks["text"],
+            blocks=confirm_blocks["blocks"],
+        )
+
     async def process(
         self,
         input_data: AgentMessages,
@@ -66,25 +57,18 @@ class SlackUIAgent(UIAgent):
         """Handle input requests including confirmations"""
         # For confirmation requests, display buttons
         if not input_data.content or "confirm" in input_data.content.lower():
-            confirm_blocks = confirm_block(
-                message=input_data.content or "Would you like to proceed?",
-            )
-            await self.send_to_thread(
-                text=confirm_blocks["text"],
-                blocks=confirm_blocks["blocks"],
-            )
-        else:
-            # For regular prompts, just display the message
-            await self.send_to_thread(text=input_data.content)
+            return await self.confirm(input_data.content)
+        # For regular prompts, just display the message
+        await self.send_to_thread(text=input_data.content)
 
         return None  # We'll handle responses via the callback system
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""
-        if "input_callback" in kwargs:
-            self._input_callback = kwargs["input_callback"]
+        self._input_callback = input_callback
 
         await self.send_to_thread(text="I'm on it! Starting conversation...")
+        await self.confirm()
 
         # Register this agent's thread for message handling
         register_chat_thread_handler(self.context.thread_ts, self)
@@ -105,8 +89,8 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
 
     @agent.app.message(matchers=[matcher])
     async def feed_in(message, say):
-        if hasattr(agent, "_input_callback") and agent._input_callback:
-            await agent._input_callback(message["text"])
+        # if hasattr(agent, "_input_callback") and agent._input_callback:
+        await agent._input_callback(message["text"])
 
     # Button action handlers
     @agent.app.action("confirm_action")
@@ -151,41 +135,3 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
             # Call callback with boolean False
             if hasattr(agent, "_input_callback") and agent._input_callback:
                 await agent._input_callback("False")
-
-
-async def start_flow_thread(body, app, flows, orchestrator_tasks) -> None:
-    # TODO: don't trigger within a thread
-
-    # Start conversation
-    try:
-        match = BOTPATTERNS.search(body["text"])
-        flow_name = match[1]
-        pattern_length = len(match[0])
-        init_text = body["text"][pattern_length:]
-
-    except Exception:
-        # not formatted properly, ignore.
-        return
-
-    # Create context for this conversation
-    context = SlackContext(
-        channel_id=body["channel"],
-        thread_ts=body.get("thread_ts", body["ts"]),
-        user_id=body["user"],
-        event_ts=body.get("event_ts"),
-    )
-    flow_cfg = flows[flow_name]
-    orchestrator_name = flow_cfg.orchestrator
-
-    # Instantiate the slack thread agent before the orchestrator
-    ui_config = flow_cfg.steps[0]
-    ui_config.agent_obj = SlackUIAgent(
-        context=context,
-        app=app,
-        **ui_config,
-    )
-    thread_orchestrator = globals()[orchestrator_name](**flow_cfg)
-    t = asyncio.create_task(thread_orchestrator.run())
-    await orchestrator_tasks.put(t)
-
-    return

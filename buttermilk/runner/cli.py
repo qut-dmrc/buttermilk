@@ -8,6 +8,7 @@ from buttermilk.bm import BM
 from buttermilk.runner.autogen import AutogenOrchestrator
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.simple import Sequencer
+from buttermilk.runner.slackbot import register_handlers
 
 orchestrators = [Sequencer, AutogenOrchestrator, Selector]
 
@@ -42,16 +43,19 @@ def main(cfg: OrchestratorProtocol) -> None:
 
             orchestrator_tasks: asyncio.Queue[asyncio.Task] = asyncio.Queue()
             # Start the slack bot, which has its own triggers to respond to events
-            handler = initialize_slack_bot(
+            slack_app, handler = initialize_slack_bot(
                 bot_token=bot_token,
                 app_token=app_token,
-                flows=objs.flows,
                 loop=loop,
-                orchestrator_tasks=orchestrator_tasks,
             )
             t = loop.create_task(handler.start_async())
 
             async def runloop():
+                await register_handlers(
+                    slack_app=slack_app,
+                    flows=objs.flows,
+                    orchestrator_tasks=orchestrator_tasks,
+                )
                 while True:
                     await asyncio.sleep(1)
 

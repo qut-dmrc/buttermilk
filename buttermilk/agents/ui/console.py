@@ -51,11 +51,9 @@ class CLIUserAgent(UIAgent):
                 logger.error(f"Unable to poll input: {e}")
                 raise
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and start input polling"""
-        # Store the input_callback from kwargs
-        if "input_callback" in kwargs:
-            self._input_callback = kwargs["input_callback"]
+        self._input_callback = input_callback
 
         Console(highlight=True).print(
             Markdown(
