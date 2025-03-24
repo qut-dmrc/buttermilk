@@ -101,13 +101,8 @@ async def register_handlers(
         user = message["user"]
         await say(f"Hi there, <@{user}>!")
 
-    async def handle_message_events(body, logger):
-        # just ignore other events to shut Bolt up about it.
-        return True
-
     slack_app.message(":wave:")(say_hello)
     slack_app.event("app_mention", matchers=[_flow_start_matcher])(handle_mentions)
-    slack_app.event("message")(handle_message_events)
 
 
 async def start_flow_thread(

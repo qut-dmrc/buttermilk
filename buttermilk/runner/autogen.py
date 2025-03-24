@@ -255,7 +255,7 @@ class AutogenOrchestrator(Orchestrator):
         ) -> None:
             # Process and collect responses
             if not message.error:
-                if isinstance(AgentMessages, AgentOutput):
+                if isinstance(message, AgentOutput):
                     source = None
                     if ctx and ctx.sender:
                         try:
@@ -284,10 +284,8 @@ class AutogenOrchestrator(Orchestrator):
                     if message.outputs:
                         self._flow_data.add(key=source, value=message.outputs)
 
-                    # Add to the shared history
-                    self._history.append(f"{message._type}: {message.content}")
-                else:
-                    # Add to the shared history
+                # Add to the shared history
+                if message.content:
                     self._history.append(f"{message._type}: {message.content}")
                 # Harvest any records
                 if message.records:

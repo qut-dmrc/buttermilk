@@ -16,6 +16,8 @@ class UIAgent(Agent):
     _input_task: asyncio.Task
     _input_callback: Any = PrivateAttr(...)
 
+    _trace_this = False
+
     async def handle_control_message(
         self,
         message: ManagerMessage | UserConfirm,

@@ -1,13 +1,12 @@
+import functools
 from abc import ABC, abstractmethod
 from typing import Any
 
 import weave
-from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     Field,
 )
-from traceloop.sdk.decorators import workflow
 
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
@@ -72,12 +71,18 @@ class Agent(AgentConfig, ABC):
         description="The object name to instantiate",
         exclude=True,
     )
+    _trace_this = True
 
-    @trace
-    @weave.op(call_display_name=get_agent_name_tracing)
-    @workflow(name="run_agent")
-    async def run(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
-        return await self._process(input_data, **kwargs)
+    def _get_process_func(self):
+        """Returns the appropriate processing function based on tracing setting."""
+        if self._trace_this:
+            return weave.op(call_display_name=get_agent_name_tracing)(
+                functools.partial(self._process),
+            )
+        return self._process
+
+    # @workflow(name="run_agent")
+    # @trace
 
     @abstractmethod
     async def receive_output(
@@ -105,7 +110,8 @@ class Agent(AgentConfig, ABC):
 
     async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Allow agents to be called directly as functions"""
-        return await self.run(input_data, **kwargs)
+        process_func = self._get_process_func()
+        return await process_func(input_data, **kwargs)
 
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent"""

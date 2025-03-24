@@ -94,11 +94,13 @@ class ManagerMessage(FlowMessage):
 
 
 class UserConfirm(ManagerMessage):
+    _type = "UserConfirm"
     confirm: bool = Field(default=False, description="Ready to proceed?")
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
 class UserInput(FlowMessage):
+    _type = "User"
     """Instructions from the user."""
 
 
@@ -122,7 +124,7 @@ class AgentInput(FlowMessage):
 class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
-    _type = "Answer"
+    _type = "Agent"
 
     agent_id: str = Field(
         ...,
