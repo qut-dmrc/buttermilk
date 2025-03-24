@@ -13,14 +13,6 @@ from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
 from buttermilk.utils.save import save
 
 
-def get_agent_name_tracing(call: Any) -> str:
-    try:
-        name = f"{call.inputs['self'].id}"
-        return name
-    except:
-        return "unknown flow"
-
-
 #########
 # Agent
 #
@@ -76,7 +68,7 @@ class Agent(AgentConfig, ABC):
     def _get_process_func(self):
         """Returns the appropriate processing function based on tracing setting."""
         if self._trace_this:
-            return weave.op(call_display_name=get_agent_name_tracing)(
+            return weave.op(call_display_name=f"{self.id}")(
                 functools.partial(self._process),
             )
         return self._process
