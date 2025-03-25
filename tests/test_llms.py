@@ -1,64 +1,63 @@
 import pytest
+from autogen_core.models import AssistantMessage, UserMessage
 
 from buttermilk._core.runner_types import Record
-from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, LLMClient
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", CHATMODELS)
-async def test_all_llm(llms, model):
-    llm = llms[model]
+async def test_all_llm(llm_expensive):
+    assert llm_expensive
+
+    messages = [
+        UserMessage(content="What is the capital of France?", source="user"),
+    ]
+    response = await llm_expensive.create(messages=messages)
+
+    assert "Paris" in response.content
+
+
+@pytest.mark.anyio
+async def test_cheap_llm(llm):
     assert llm
 
-    q = "hi! what's your name?"
-    messages = {"role": "user", "content": q}
-    create_result = await llm.create(messages=[messages])
-    content = str(create_result.content)
-    assert content
+    messages = [
+        UserMessage(content="What is the capital of France?", source="user"),
+    ]
+    response = await llm.create(messages=messages)
 
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
-async def test_cheap_llm(llms, model: str):
-    llm = llms[model]
-    assert llm
-
-    q = "hi! what's your name?"
-    messages = {"role": "user", "content": q}
-    create_result = await llm.create(messages=[messages])
-    content = str(create_result.content)
-    assert content
-
-
-@pytest.mark.anyio
-async def test_text_question(
-    llm: LLMClient,
-    text_record: Record,
-):
-    messages = []
-    messages.append(("user", "Hi, can you please summarise this content for me?"))
-    # messages.append(
-    #     text_record.as_langchain_message(
-    #         model_capabilities=llm.capabilities,
-    #     ),
-    # )
-
-    chain = ChatPromptTemplate.from_messages(messages) | llm.client
-    response = await chain.ainvoke(input={})
-
-    assert response
+    assert "Paris" in response.content
 
 
 class TestPromptStyles:
-    @pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
-    def test_words_in_mouth(self, cheapchatmodel, llms):
-        llm = llms[cheapchatmodel]
+    @pytest.mark.anyio
+    async def test_usertext_and_placeholder(
+        self,
+        llm,
+        text_record: Record,
+    ):
         messages = [
-            ("human", "hi! I'm Siobhan. What's your name?"),
-            ("ai", "Hi Siobhan! I'm a chatbot, my developers call me"),
+            UserMessage(
+                content="Hi, can you please summarise this content for me?",
+                source="user",
+            ),
+            UserMessage(content=text_record.fulltext, source="user"),
         ]
-        chain = ChatPromptTemplate.from_messages(messages) | llm.client
-        answer = chain.invoke({})
-        assert answer
-        assert answer.content.startswith(" ")  # starts with a space
-        assert "Siobhan" not in answer.content
+
+        response = await llm.create(messages=messages)
+
+        assert response.content
+
+    @pytest.mark.anyio
+    async def test_words_in_mouth(self, llm):
+        messages = [
+            UserMessage("hi! I'm Siobhan. What's your name?", source="test"),
+            AssistantMessage(
+                "Hi Siobhan! I'm a chatbot, my developers call me", source="assistant"
+            ),
+        ]
+
+        response = await llm.create(messages=messages)
+
+        assert response.content
+        assert response.content.startswith(" ")  # starts with a space
+        assert "Siobhan" not in response.content
