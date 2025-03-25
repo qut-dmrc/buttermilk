@@ -6,7 +6,6 @@ from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscri
 from buttermilk._core.agent import Agent
 from buttermilk._core.runner_types import Record
 from buttermilk.tools.fetch import Fetch
-from buttermilk.runner.chat import FlowMessage, FlowRequest, InputRecord
 
 
 class TestFetch:

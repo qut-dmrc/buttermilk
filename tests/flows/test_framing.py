@@ -1,8 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import  MediaObj, Record
-from buttermilk.agents.lc import LC
-from buttermilk.bm import bm
+from buttermilk._core.runner_types import MediaObj, Record
 from buttermilk.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk.runner.flow import Flow
 

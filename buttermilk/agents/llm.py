@@ -66,7 +66,6 @@ class LLMAgent(Agent):
         untrusted_inputs = {}
         if inputs:
             untrusted_inputs.update(dict(inputs.inputs))
-            untrusted_inputs["prompt"] = inputs.content
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(

@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 from buttermilk._core.agent import save_job
-
 from buttermilk.utils.save import data_to_export_rows
 
 SAMPLE_DATA = [
@@ -50,7 +49,7 @@ SAMPLE_DATA = [
 
 
 @pytest.fixture
-def joblist(job_minimal: Job):
+def joblist(job_minimal):
     data = []
     for line in SAMPLE_DATA:
         job = job_minimal.model_copy()
@@ -65,8 +64,8 @@ def test_issue_14_job(joblist):
         assert isinstance(job.outputs, dict)
         assert len(job.outputs["reasons"]) == 5
         assert job.outputs["labels"] == []
-    assert joblist[1].outputs['score'] == 0.5
-    assert joblist[2].outputs['score'] == 0.85
+    assert joblist[1].outputs["score"] == 0.5
+    assert joblist[2].outputs["score"] == 0.85
     assert joblist[2].outputs["reasons"][4].startswith("The response demonstrates")
 
 

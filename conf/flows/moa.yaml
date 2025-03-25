@@ -62,7 +62,7 @@ moa:
       name: "⚖️ Judge"
       description: Expert analysts, particularly suited to assess content with subject matter expertise.
       agent_obj: LLMAgent
-      num_runs: 2
+      num_runs: 1
       variants:
         template: judge
         model: ${llms.judgers}

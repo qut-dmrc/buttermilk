@@ -4,21 +4,30 @@ from buttermilk._core.runner_types import Record
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, LLMClient
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize("model", CHATMODELS)
-def test_all_llm(llms, model):
+async def test_all_llm(llms, model):
     llm = llms[model]
     assert llm
 
     q = "hi! what's your name?"
-    assert answer
+    messages = {"role": "user", "content": q}
+    create_result = await llm.create(messages=[messages])
+    content = str(create_result.content)
+    assert content
 
 
-@pytest.mark.parametrize("cheapchatmodel", CHEAP_CHAT_MODELS)
-def test_cheap_llm(llms, cheapchatmodel: str):
-    llm = llms[cheapchatmodel]
+@pytest.mark.anyio
+@pytest.mark.parametrize("model", CHEAP_CHAT_MODELS)
+async def test_cheap_llm(llms, model: str):
+    llm = llms[model]
     assert llm
 
     q = "hi! what's your name?"
+    messages = {"role": "user", "content": q}
+    create_result = await llm.create(messages=[messages])
+    content = str(create_result.content)
+    assert content
 
 
 @pytest.mark.anyio

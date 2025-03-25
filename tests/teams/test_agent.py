@@ -12,9 +12,8 @@ from autogen_core.models import (
 )
 
 from buttermilk._core.agent import Agent
-from buttermilk.agents.llmchat import LLMAgent
+from buttermilk.agents.llm import LLMAgent
 from buttermilk.llms import CHATMODELS
-from buttermilk.runner.moa import FlowRequest
 
 
 @pytest.fixture
@@ -23,7 +22,7 @@ def runtime():
 
 
 @pytest.fixture(params=CHATMODELS, scope="function")
-async def llm_autogen(request, bm: BM):
+async def llm_autogen(request, bm):
     return bm.llms.get_autogen_chat_client(request.param)
 
 
