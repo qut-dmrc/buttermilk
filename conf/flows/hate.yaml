@@ -44,9 +44,6 @@ hate:
         model: ${llms.general}
         formatting: json_rules
         criteria:
-          - criteria_ordinary
-          - criteria_gelber
-          - criteria_hatefb_factorised
       inputs:
         record: record
         feedback: context_owl

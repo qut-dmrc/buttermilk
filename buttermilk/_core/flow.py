@@ -73,6 +73,10 @@ class FlowVariableRouter(KeyValueCollector):
         """Resolve all variable mappings to their values"""
         resolved = {}
 
+        if isinstance(mappings, str):
+            # We have reached the end of the recursive road
+            return self._resolve_simple_path(mappings)
+
         for target, source_spec in mappings.items():
             if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case

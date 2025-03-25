@@ -1,0 +1,12 @@
+- id: FETCH
+  name: 🔍 fetch
+  agent_obj: Fetch
+  description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
+  inputs:
+    prompt: prompt

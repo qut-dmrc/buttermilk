@@ -9,8 +9,10 @@ from pydantic import (
     Field,
 )
 
+from buttermilk import logger
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
+from buttermilk.exceptions import FatalError, ProcessingError
 from buttermilk.utils.save import save
 
 
@@ -134,7 +136,14 @@ class Agent(AgentConfig, ABC):
 
     async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Allow agents to be called directly as functions"""
-        return await self._run_fn(input_data, **kwargs)
+        try:
+            return await self._run_fn(input_data, **kwargs)
+        except ProcessingError as e:
+            logger.error(
+                f"Agent {self.id} {self.name} hit error: {e}. Task content: {input_data.content[:100]}"
+            )
+        except FatalError as e:
+            raise e
 
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent"""

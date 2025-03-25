@@ -1,0 +1,12 @@
+- id: JUDGE
+  name: "⚖️ Judge"
+  description: Expert analysts, particularly suited to assess content with subject matter expertise.
+  agent_obj: LLMAgent
+  num_runs: 2
+  variants:
+    template: judge
+    model: ${llms.judgers}
+    criteria: ${flows.criteria}
+    formatting: json_rules
+  inputs:
+    record: record
