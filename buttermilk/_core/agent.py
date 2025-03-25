@@ -4,31 +4,26 @@ from typing import Any, Self
 
 import pydantic
 import weave
-from autogen_core.tools import FunctionTool
 from pydantic import (
     BaseModel,
     Field,
 )
 
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
 from buttermilk.utils.save import save
 
 
 class ToolConfig(BaseModel):
+    id: str
     name: str
-    tool_obj: str
     description: str
+    tool_obj: str | None = None
+
     data_cfg: list[DataSource] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
-
-    def get_tool_fn(self) -> FunctionTool:
-        return FunctionTool(
-            self._run,
-            description="Look up an article by its RECORD_ID or URI.",
-        )
 
     def _run(self, *args, **kwargs):
         raise NotImplementedError
@@ -66,6 +61,10 @@ class AgentConfig(BaseModel):
         default=[],
         description="Tools the agent can invoke",
     )
+    data: list[DataSource] = Field(
+        default=[],
+        description="Specifications for data that the Agent should load",
+    )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
@@ -90,6 +89,7 @@ class Agent(AgentConfig, ABC):
         description="The object name to instantiate",
         exclude=True,
     )
+
     _trace_this = True
     _run_fn: Callable | Awaitable
 
@@ -111,7 +111,7 @@ class Agent(AgentConfig, ABC):
     @abstractmethod
     async def receive_output(
         self,
-        message: AgentMessages,
+        message: AgentMessages | UserInput,
         source: str,
         **kwargs,
     ) -> AgentMessages | None:

@@ -34,7 +34,7 @@ class Selector(AutogenOrchestrator):
         # First, get user input
         yield {
             "role": MANAGER,
-            "question": f"Started {self.name}. Enter your question or prompt.",
+            "prompt": f"Started {self.name}. Enter your question or prompt.",
         }
 
         await asyncio.sleep(1)
@@ -44,7 +44,8 @@ class Selector(AutogenOrchestrator):
             # are incorporated before executing the next step
             _last_message = self._last_message
             responses = await self._ask_agents(
-                CONDUCTOR, message=AgentInput(agent_id=CONDUCTOR)
+                CONDUCTOR,
+                message=AgentInput(agent_id=CONDUCTOR),
             )
 
             if len(responses) > 1:
@@ -68,7 +69,8 @@ class Selector(AutogenOrchestrator):
                 # No change to inputs
                 yield {
                     "role": next_step,
-                    "question": instructions.outputs.get("question", ""),
+                    "prompt": instructions.outputs.get("prompt", ""),
+                    **instructions.outputs.get("arguments", {}),
                 }
             # wait a bit and go around again
             await asyncio.sleep(5)

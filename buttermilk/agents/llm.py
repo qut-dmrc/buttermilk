@@ -16,7 +16,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
-from buttermilk._core.contract import AgentMessages, ToolOutput
+from buttermilk._core.contract import AgentMessages, ToolOutput, UserInput
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
 from buttermilk.runner.helpers import create_tool_functions
@@ -31,7 +31,7 @@ class LLMAgent(Agent):
     fail_on_unfilled_parameters: bool = Field(default=True)
 
     _tools: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
-        default_factory=list
+        default_factory=list,
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
@@ -51,7 +51,7 @@ class LLMAgent(Agent):
 
     async def receive_output(
         self,
-        message: AgentMessages,
+        message: AgentMessages | UserInput,
         source: str,
         **kwargs,
     ) -> AgentMessages | None:
@@ -180,7 +180,7 @@ class LLMAgent(Agent):
         cancellation_token: CancellationToken | None,
     ) -> ToolOutput:
         # Find the tool by name.
-        tool = next((tool for tool in self.tools if tool.name == call.name), None)
+        tool = next((tool for tool in self._tools if tool.name == call.name), None)
         assert tool is not None
 
         # Run the tool and capture the result.

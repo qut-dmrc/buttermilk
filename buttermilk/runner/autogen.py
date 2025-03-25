@@ -89,7 +89,7 @@ class AutogenAgentAdapter(RoutedAgent):
             source = str(ctx.sender) if ctx and ctx.sender else message.type
             # ignore messages sent by us
             if source != self.id:
-                agent_output = await self.agent.receive_output(message, source=source)
+                await self.agent.receive_output(message, source=source)
             return
         except ValueError:
             logger.warning(
@@ -178,7 +178,7 @@ class AutogenOrchestrator(Orchestrator):
             )
             while await self._user_confirmation.get():
                 step = await anext(self._step_generator)
-                await self._execute_step(step["role"], step.get("question", ""))
+                await self._execute_step(step_name=step.pop("role"), **step)
 
                 # send another confirmation message
                 topic_id = DefaultTopicId(type=MANAGER)
@@ -201,7 +201,7 @@ class AutogenOrchestrator(Orchestrator):
         for step in self.steps:
             yield {
                 "role": step.id,
-                "question": "",
+                "prompt": "",
             }
 
     async def _setup_runtime(self):

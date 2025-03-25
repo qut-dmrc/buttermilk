@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 import cloudpathlib
 import pandas as pd
 from autogen_core import FunctionCall
+from autogen_core.tools import FunctionTool
 
 from buttermilk._core.agent import ToolConfig
 from buttermilk._core.config import DataSource
@@ -265,9 +266,13 @@ def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall]:
         try:
             obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
             tool = obj(**cfg.model_dump())
-            _fns.append(tool.get_tool_fn())
+            fn = FunctionTool(
+                tool._run,
+                description="Look up an article by its RECORD_ID or URI.",
+            )
+            _fns.append(fn)
         except Exception as e:
-            raise ValueError(f"Unable to instantiate tool: {cfg}") from e
+            raise ValueError(f"Unable to instantiate tool: {cfg}: {e}") from e
     return _fns
 
 

@@ -9,6 +9,7 @@ from rich.markdown import Markdown
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentMessages,
+    UserInput,
 )
 from buttermilk.agents.ui.generic import UIAgent
 
@@ -18,11 +19,13 @@ class CLIUserAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages,
+        message: AgentMessages | UserInput,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
+        if isinstance(message, UserInput):
+            return
         console = Console(highlight=True)
         console.print(Markdown(f"### {source}: \n{message.content}\n"))
 

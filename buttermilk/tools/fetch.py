@@ -3,36 +3,51 @@ import re
 from typing import Any, Self
 
 import pydantic
-from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent, ToolConfig
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
 from buttermilk._core.runner_types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
-from buttermilk.utils.utils import extract_url
+from buttermilk.utils.utils import URL_PATTERN, extract_url
+
+MATCH_PATTERNS = rf"!([\d\w_]+)|({URL_PATTERN})"
 
 
 class Fetch(Agent, ToolConfig):
-    _data: dict[str, Any] = PrivateAttr(default={})
-    _data_task: asyncio.Task = PrivateAttr()
+    _data: dict[str, Any] = pydantic.PrivateAttr(default={})
+    _data_task: asyncio.Task = pydantic.PrivateAttr()
+    _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
 
     @pydantic.model_validator(mode="after")
-    def load_data(self) -> Self:
-        self._data_task = asyncio.create_task(prepare_step_df(self.data_cfg))
+    def load_data_task(self) -> Self:
+        self._data_task = asyncio.create_task(self.load_data())
         return self
 
-    async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
+    async def load_data(self):
+        self._data = await prepare_step_df(self.data)
+
+    async def _process(
+        self,
+        input_data: AgentInput,
+        **kwargs,
+    ) -> AgentOutput | None:
         """Entry point when running this as an agent."""
-        prompt = input_data.inputs["prompt"]
-        if uri := extract_url(prompt):
-            record = await self._run(uri=uri)
+        if "uri" in input_data.inputs or "record_id" in input_data.inputs:
+            record = await self._run(
+                uri=input_data.inputs.get("uri"),
+                record_id=input_data.inputs.get("record_id"),
+            )
         else:
-            record = await self._run(record_id=prompt)
+            prompt = input_data.inputs["prompt"]
+            if uri := extract_url(prompt):
+                record = await self._run(uri=uri)
+            else:
+                record = await self._run(record_id=prompt)
         return AgentOutput(
             agent_id=self.id,
             agent_name=self.name,
-            content=record.fulltext(),
+            content=record.fulltext,
             records=[record],
         )
 
@@ -46,14 +61,8 @@ class Fetch(Agent, ToolConfig):
             "You must provide EITHER record_id OR uri."
         )
         if record_id:
-            # Try to get by record_id
-            match = re.match(r"!([\d\w_]+)", record_id)
-            record = await self.get_record_dataset(match.group(1))
-            return record
-        if uri:
-            uri = extract_url(uri)
-            record = download_and_convert(uri=uri)
-            return record
+            return await self.get_record_dataset(record_id)
+        return await download_and_convert(uri)
         return None
 
     async def get_record_dataset(self, record_id: str) -> Record | None:
@@ -69,4 +78,33 @@ class Fetch(Agent, ToolConfig):
                     f"More than one record found for query record_id == {record_id}",
                 )
 
+        return None
+
+    async def receive_output(
+        self,
+        message: AgentMessages | UserInput,
+        source: str,
+        **kwargs,
+    ) -> AgentMessages | None:
+        """Watch for URLs or record ids and inject them into the chat."""
+        # not built yet.
+        if not isinstance(message, UserInput):
+            return None
+        if not re.match(self._pat, message.content):
+            return None
+        record = None
+        match = re.match(r"!([\d\w_]+)", message.content)
+        if match:
+            # Try to get by record_id
+            record = await self.get_record_dataset(match.group(1))
+        elif uri := extract_url(message.content):
+            record = await download_and_convert(uri=uri)
+
+        if record:
+            return AgentOutput(
+                agent_id=self.id,
+                agent_name=self.name,
+                content=record.fulltext,
+                records=[record],
+            )
         return None

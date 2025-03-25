@@ -7,6 +7,7 @@ from buttermilk._core.contract import (
     AgentOutput,
     ManagerMessage,
     UserConfirm,
+    UserInput,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_block,
@@ -33,11 +34,13 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentOutput | ManagerMessage | UserConfirm,
+        message: AgentOutput | ManagerMessage | UserConfirm | UserInput,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
+        if isinstance(message, (UserInput, UserConfirm)):
+            return
         if isinstance(message, AgentOutput):
             try:
                 formatted_blocks = format_slack_message(message)

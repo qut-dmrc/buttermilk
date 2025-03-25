@@ -20,9 +20,10 @@ moa:
       num_runs: 1
       parameters:
         template: panel_host
-        model: gemini2flashthinking
+        model: o3-mini-high
       tools:
-        - name: 🔍 fetch
+        - id: fetch_tool
+          name: 🔍 fetch
           tool_obj: Fetch
           description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
           data:
@@ -58,7 +59,7 @@ moa:
 
     - id: FETCH
       name: 🔍 fetch
-      tool_obj: Fetch
+      agent_obj: Fetch
       description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
       data:
         - name: tja_train

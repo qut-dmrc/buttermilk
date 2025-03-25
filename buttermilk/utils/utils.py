@@ -501,8 +501,10 @@ def load_json_flexi(contents):
     return json5.loads(contents)
 
 
+URL_PATTERN = r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+"
+
+
 def extract_url(text):
     # Simple regex pattern that matches common URL formats
-    url_pattern = r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+"
-    match = re.search(url_pattern, text)
+    match = re.search(URL_PATTERN, text)
     return match.group(0) if match else None
