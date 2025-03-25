@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol, Union
 
+from autogen_core.models import FunctionExecutionResult
 from pydantic import (
     BaseModel,
     Field,
@@ -133,6 +134,13 @@ class AgentOutput(FlowMessage):
     agent_name: str = Field(
         ...,
         description="The name of the agent that generated this output.",
+    )
+
+
+class ToolOutput(FunctionExecutionResult):
+    payload: Any = Field(
+        ...,
+        description="The output of the tool.",
     )
 
 

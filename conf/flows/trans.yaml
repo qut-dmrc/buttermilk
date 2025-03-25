@@ -39,6 +39,7 @@ trans:
       num_runs: 1
       variants:
         template: judge
+        model: ${llms.judgers}
         criteria:
           - trans_simplified
           - cte
@@ -47,7 +48,6 @@ trans:
           - hrc
           - trans_factored
         formatting: json_rules
-        model: ${llms.judgers}
       inputs:
         record: record
         feedback: context_owl

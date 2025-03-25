@@ -1,19 +1,25 @@
+import asyncio
+import json
 from typing import Any, Self
 
 import pydantic
 import regex as re
+from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import (
     AssistantMessage,
     ChatCompletionClient,
     SystemMessage,
     UserMessage,
 )
+from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
-from buttermilk._core.contract import AgentMessages
+from buttermilk._core.contract import AgentMessages, ToolOutput
+from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
+from buttermilk.runner.helpers import create_tool_functions
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
     _parse_prompty,
@@ -24,15 +30,23 @@ from buttermilk.utils.templating import (
 class LLMAgent(Agent):
     fail_on_unfilled_parameters: bool = Field(default=True)
 
+    _tools: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
+        default_factory=list
+    )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
         if self.parameters.get("model"):
-            self._model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
+            self._model_client = bm.llms.get_autogen_chat_client(
+                self.parameters["model"],
+            )
         else:
             raise ValueError("Must provide a model in the parameters.")
+
+        # Initialise tools
+        self._tools = create_tool_functions(self.tools)
         return self
 
     async def receive_output(
@@ -56,7 +70,8 @@ class LLMAgent(Agent):
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
-            parameters=self.parameters, untrusted_inputs=untrusted_inputs,
+            parameters=self.parameters,
+            untrusted_inputs=untrusted_inputs,
         )
 
         # Interpret the template as a Prompty; split it into separate messages with
@@ -84,7 +99,9 @@ class LLMAgent(Agent):
                 if var_name.lower() == "records" and inputs:
                     for rec in inputs.records:
                         # TODO make this multimodal later
-                        messages.append(UserMessage(content=rec.fulltext, source="record"))
+                        messages.append(
+                            UserMessage(content=rec.fulltext, source="record"),
+                        )
                     # Remove the placeholder from the list of unfilled variables
                     if var_name in unfilled_vars:
                         unfilled_vars.remove(var_name)
@@ -131,28 +148,103 @@ class LLMAgent(Agent):
 
         return messages
 
-    async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput:
+    async def _execute_tools(
+        self,
+        calls: list[FunctionCall],
+        cancellation_token: CancellationToken | None,
+    ) -> dict[str, Any]:
+        """Execute the tools and return the results."""
+        assert isinstance(calls, list) and all(
+            isinstance(call, FunctionCall) for call in calls
+        )
 
+        # Execute the tool calls.
+        results = await asyncio.gather(
+            *[self._call_tool(call, cancellation_token) for call in calls],
+        )
+        outputs = {"_records": []}
+        for r in results:
+            if r.is_error:
+                logger.warning(f"Tool {r.name} failed with error: {r.content}")
+                continue
+            if r.payload and isinstance(r.payload, Record):
+                outputs["_records"].append(r.payload)
+            else:
+                outputs[r.name] = r.content
+
+        return outputs
+
+    async def _call_tool(
+        self,
+        call: FunctionCall,
+        cancellation_token: CancellationToken | None,
+    ) -> ToolOutput:
+        # Find the tool by name.
+        tool = next((tool for tool in self.tools if tool.name == call.name), None)
+        assert tool is not None
+
+        # Run the tool and capture the result.
+        try:
+            arguments = json.loads(call.arguments)
+            result = await tool.run_json(arguments, cancellation_token)
+            return ToolOutput(
+                call_id=call.id,
+                content=tool.return_value_as_string(result),
+                payload=result,
+                is_error=False,
+                name=tool.name,
+            )
+        except Exception as e:
+            return ToolOutput(
+                call_id=call.id,
+                content=str(e),
+                is_error=True,
+                name=tool.name,
+                payload=e,
+            )
+
+    async def _process(
+        self,
+        input_data: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AgentOutput:
         messages = await self.fill_template(
             inputs=input_data,
         )
+        records = []
+        create_result = await self._model_client.create(
+            messages=messages,
+            tools=self._tools,
+            cancellation_token=cancellation_token,
+        )
+        if isinstance(create_result.content, str):
+            outputs = self._json_parser.parse(create_result.content)
+            # create human readable content
+            content = str(create_result.content)
+        else:
+            outputs = await self._execute_tools(
+                calls=create_result.content,
+                cancellation_token=cancellation_token,
+            )
+            records = outputs.pop("_records", [])
+            content = str(outputs)
 
-        response = await self._model_client.create(messages=messages)
-
-        outputs = self._json_parser.parse(response.content)
         metadata = {
             k: v
-            for k, v in response.model_dump(
+            for k, v in create_result.model_dump(
                 exclude_unset=True,
                 exclude_none=True,
             ).items()
             if v and k != "content"
         }
+        metadata.update(self.parameters)
         output = AgentOutput(
             agent_id=self.id,
             agent_name=self.name,
             outputs=outputs,
-            content=response.content,
+            content=content,
             metadata=metadata,
+            records=records,
         )
         return output

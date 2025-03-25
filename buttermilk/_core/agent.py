@@ -4,14 +4,34 @@ from typing import Any, Self
 
 import pydantic
 import weave
+from autogen_core.tools import FunctionTool
 from pydantic import (
     BaseModel,
     Field,
 )
 
-from buttermilk._core.config import SaveInfo
+from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput
 from buttermilk.utils.save import save
+
+
+class ToolConfig(BaseModel):
+    name: str
+    tool_obj: str
+    description: str
+    data_cfg: list[DataSource] = Field(
+        default=[],
+        description="Specifications for data that the Agent should load",
+    )
+
+    def get_tool_fn(self) -> FunctionTool:
+        return FunctionTool(
+            self._run,
+            description="Look up an article by its RECORD_ID or URI.",
+        )
+
+    def _run(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 #########
@@ -23,6 +43,8 @@ from buttermilk.utils.save import save
 # The completed Job is stored in a database (BigQuery) for tracing and analysis.
 #
 ##########
+
+
 class AgentConfig(BaseModel):
     agent_obj: str = Field(
         ...,
@@ -39,6 +61,10 @@ class AgentConfig(BaseModel):
     description: str = Field(
         ...,
         description="Short explanation of what this agent type does",
+    )
+    tools: list[ToolConfig] = Field(
+        default=[],
+        description="Tools the agent can invoke",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -93,7 +119,7 @@ class Agent(AgentConfig, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _process(self, input_data: AgentMessages, **kwargs) -> AgentOutput | None:
+    async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
         """Process input data and return output
 
         Inputs:

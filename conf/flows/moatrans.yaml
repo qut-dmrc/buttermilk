@@ -1,13 +1,13 @@
 moa:
   # _target_: buttermilk.runner.simple.Sequencer
   orchestrator: Selector
-  name: Mixture of Agents directed chat
-  save: ${save}
+  name: Mixture of Agents directed chat (trans journalists criteria)
+  # save:
 
   steps:
     - id: MANAGER
       name: "👔 Manager"
-      agent_obj: ${ui}
+      agent_obj: _fake_slack_agent # CLIUserAgent
       num_runs: 1
       description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
       inputs:
@@ -15,23 +15,12 @@ moa:
 
     - id: HOST
       name: "🎯 Host"
-      description: Your role, facilitating the discussion and directing questions to those best placed to answer. You have access to some tools that you can run directly if required.
+      description: Your role, facilitating the discussion and directing questions to those best placed to answer.
       agent_obj: HostAgent
       num_runs: 1
       parameters:
         template: panel_host
-        model: o3-mini-high
-      tools:
-        - name: 🔍 fetch
-          tool_obj: Fetch
-          description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
-          data:
-            - name: tja_train
-              type: file
-              path: gs://prosocial-dev/data/tja_train.jsonl
-              index:
-                - record_id
-            
+        model: gemini2pro
       inputs:
         participants: participants
         context: context
@@ -54,6 +43,12 @@ moa:
           until all discrete components of the issue have been discussed. The HOST will then once again ask a SYNTHESISER to
           provide a set of draft overall answers and call a VOTE to identify the best answer. The HOST will then ask the 
           INTROSPECTOR to review the discussion before submitting to the MANAGER for approval.
+          
+    - name: 🔍 fetch
+      agent_obj: Fetch
+      description: An agent responsible for providing the content of URLs and stored records required for the discussion.
+      inputs:
+        prompt: prompt
 
     - id: JUDGE
       name: "⚖️ Judge"
@@ -62,8 +57,14 @@ moa:
       num_runs: 2
       variants:
         template: judge
-        model: gemini2flashthinking
-        criteria: criteria_ordinary
+        model: ${llms.judgers}
+        criteria:
+          - trans_simplified
+          - cte
+          - tja
+          - glaad
+          - hrc
+          - trans_factored
         formatting: json_rules
       inputs:
         record: record
@@ -87,7 +88,7 @@ moa:
       variants:
         model: gemini2flashthinking
         template: synthesise_judger
-        criteria: criteria_ordinary
+        criteria: trans_simplified
         formatting: json_rules
       inputs:
         record: record
@@ -112,6 +113,6 @@ moa:
           - JUDGE
           - SYNTH
         feedback: feedback
-    
+
     # - name: 🔮 introspector
-        # id: INTROSPECTOR
+    # id: INTROSPECTOR

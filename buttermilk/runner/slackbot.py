@@ -139,7 +139,7 @@ async def start_flow_thread(
         # await ui_config.agent_obj._input_callback(init_text)
     except Exception as e:
         logger.error(f"Error creating flow: {e}, {e.args=}")
-        post_message_with_retry(
+        await post_message_with_retry(
             slack_app,
             context,
             f"Error creating flow: {e}",

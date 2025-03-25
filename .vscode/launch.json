@@ -52,7 +52,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[moa]",
-        "flow=moa",
+        "+flow=moa",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
       ],
