@@ -1,4 +1,3 @@
-import pprint
 import textwrap
 from collections.abc import Mapping, Sequence
 
@@ -44,12 +43,18 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
 
     for line in lines:
         text = re.sub(r"\n{2,+}", "\n", line)
-        text = str(text) + " "  # add trailing space here, and we'll remove it in the next step if it's duplicated
+        text = (
+            str(text) + " "
+        )  # add trailing space here, and we'll remove it in the next step if it's duplicated
         text = re.sub(r"\s{2,+}", " ", text)
         stripped += text
 
     # Break output into a list of strings of max length 3000 characters, wrapping nicely
-    return textwrap.wrap(stripped, width=SLACK_MAX_MESSAGE_LENGTH, replace_whitespace=False)  # Preserve newlines
+    return textwrap.wrap(
+        stripped,
+        width=SLACK_MAX_MESSAGE_LENGTH,
+        replace_whitespace=False,
+    )  # Preserve newlines
 
 
 def format_slack_message(result: AgentOutput) -> dict:
@@ -58,7 +63,9 @@ def format_slack_message(result: AgentOutput) -> dict:
     blocks = []
 
     # Add header with model identifier
-    header_text = f":robot_face: {result_copy.agent_name}"
+    header_text = (
+        f":robot_face: {result_copy.agent_name} {result_copy.metadata.get('model')}"
+    )
     blocks.append({
         "type": "header",
         "text": {
@@ -69,7 +76,7 @@ def format_slack_message(result: AgentOutput) -> dict:
     })
 
     # Handle error case
-    if result_copy.error:
+    if any(result_copy.error):
         blocks.append({
             "type": "section",
             "text": {
@@ -79,7 +86,6 @@ def format_slack_message(result: AgentOutput) -> dict:
         })
 
     else:
-
         # Handle feedback metadata fields if present
         feedback_fields = ["mistake", "intervention"]
         if any(result_copy.outputs.get(k) for k in feedback_fields):
@@ -88,7 +94,11 @@ def format_slack_message(result: AgentOutput) -> dict:
             # Format mistake field with special styling
             if "mistake" in result_copy.outputs:
                 mistake = result_copy.outputs.get("mistake")
-                icon = ":x:" if mistake and mistake not in [False, "False"] else ":white_check_mark:"
+                icon = (
+                    ":x:"
+                    if mistake and mistake not in [False, "False"]
+                    else ":white_check_mark:"
+                )
                 feedback_text += f"{icon} *Mistake:* {mistake!s}\n\n"
 
             # Format intervention field
@@ -106,10 +116,16 @@ def format_slack_message(result: AgentOutput) -> dict:
                         "text": feedback_text.strip(),
                     },
                 })
-
-                # Add a divider after feedback if we have other content
-                if result_copy.outputs:
-                    blocks.append({"type": "divider"})
+        for k, v in result_copy.metadata.items():
+            match k:
+                case "criteria":
+                    blocks.append({
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f":clipboard: *Criteria:* {v}",
+                        },
+                    })
 
         if isinstance(result_copy.outputs, dict):
             # Format prediction, confidence and severity with special styling if present
@@ -119,7 +135,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
                 if "prediction" in result.outputs:
                     prediction = result.outputs.pop("prediction", None)
-                    icon = ":white_check_mark:" if prediction else ":no_entry:"
+                    icon = ":biohazard:" if not prediction else ":white_check_mark:"
                     special_text += f"{icon} *Prediction:* {prediction!s}\n"
 
                 if "confidence" in result.outputs:
@@ -143,7 +159,9 @@ def format_slack_message(result: AgentOutput) -> dict:
             if result.outputs.get("labels"):
                 labels = result.outputs.pop("labels", [])
                 if labels:
-                    label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels])
+                    label_text = "*Labels:* " + " ".join([
+                        f"`{label}`" for label in labels
+                    ])
                     blocks.append({
                         "type": "section",
                         "text": {
@@ -161,14 +179,16 @@ def format_slack_message(result: AgentOutput) -> dict:
 
             # Handle any remaining fields in outputs
             for k, v in result_copy.outputs.items():
-                for text in format_response(result_copy.outputs):
-                    blocks.append({
-                        "type": "context",
-                        "text": {
+                blocks.append({
+                    "type": "context",
+                    "elements": [
+                        {
                             "type": "mrkdwn",
                             "text": text,
-                        },
-                    })
+                        }
+                        for text in format_response(result_copy.outputs)
+                    ],
+                })
 
             # Add divider before reasons if there are any
             if reasons:
@@ -176,25 +196,17 @@ def format_slack_message(result: AgentOutput) -> dict:
                     "type": "divider",
                 })
 
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "### Reasoning:",
-                    },
-                })
-
                 # Add each reason as its own contextual block for better readability
-                for i, reason in enumerate(reasons):
-                    blocks.append({
-                        "type": "context",
-                        "elements": [
-                            {
-                                "type": "mrkdwn",
-                                "text": f"{i + 1}. {reason}",
-                            },
-                        ],
-                    })
+                blocks.append({
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"{i + 1}. {reason}",
+                        }
+                        for i, reason in enumerate(reasons)
+                    ],
+                })
         else:
             # Handle case where outputs is not a dict
             for text in format_response(result.outputs):
@@ -206,21 +218,54 @@ def format_slack_message(result: AgentOutput) -> dict:
                     },
                 })
 
+        # Handle records if present
+        if hasattr(result_copy, "records") and result_copy.records:
+            # Process each record
+            for record in result_copy.records:
+                # Extract metadata
+                metadata = record.metadata
+                title = metadata.get("title", "Untitled")
+                outlet = metadata.get("outlet", "Unknown Source")
+                date = (
+                    metadata.get("date", "").split("T")[0]
+                    if metadata.get("date")
+                    else ""
+                )
+                url = metadata.get("url", "")
+                record_id = record.record_id
+
+                # Format title and source info
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{title}*\n{outlet} | {date} | <{url}|View Source> | ID: `{record_id}`",
+                    },
+                })
+
+                elements = []
+                for para in record.paragraphs:
+                    # Split text into chunks of ~3000 chars to ensure we don't exceed Slack block limits
+                    chunk_size = 2950
+                    for i in range(0, len(para), chunk_size):
+                        chunk = para[i : i + chunk_size]
+                        elements.append({
+                            "type": "mrkdwn",
+                            "text": chunk,
+                        })
+
+                # Add each chunk as a separate element
+                blocks.append({
+                    "type": "context",
+                    "elements": elements,
+                })
+
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
 
-    # Also provide a text fallback for clients that don't support blocks
-    fallback_text = (
-        header_text
-        + "\n"
-        + pprint.pformat(result_copy, indent=2)[
-            : SLACK_MAX_MESSAGE_LENGTH - len(header_text) - 10
-        ]
-    )
-
     return {
         "blocks": blocks,
-        "text": fallback_text,
+        "text": result.content,
     }
 
 

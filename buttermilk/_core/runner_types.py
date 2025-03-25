@@ -185,6 +185,7 @@ class Record(BaseModel):
     components: list[MediaObj] = Field(default=[])
 
     @computed_field
+    @property
     def fulltext(self) -> str:
         # Metadata, Text, but not paragraph labels.
         # Ground truth not included
@@ -196,6 +197,23 @@ class Record(BaseModel):
                 all_text.append(part.content)
 
         return "\n".join(all_text)
+
+    @computed_field
+    @property
+    def text(self) -> str:
+        # Only text. Metadata and Ground truth not included
+        return "\n".join(self.paragraphs)
+
+    @computed_field
+    @property
+    def paragraphs(self) -> list[str]:
+        # Only text. Metadata and Ground truth not included
+        all_text = []
+        for part in self.components:
+            if part.content:
+                all_text.append(part.content)
+
+        return all_text
 
     model_config = ConfigDict(
         extra="allow",
