@@ -1,17 +1,12 @@
 general:
   - gemini2pro
-  - gemini2flashthinking
   - sonnet
-  - haiku
-  - o3-mini-high
+  - gpt4o
 
 judgers:
-  - gemini2pro
   - gemini2flashthinking
-  - sonnet
   - haiku
   - o3-mini-high
-  - gpt4o
   - llama32_90b_azure
 
 synthesisers:

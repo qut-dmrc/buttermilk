@@ -69,7 +69,7 @@
       "justMyCode": false,
       "args": [
         "hydra.verbose=false",
-        "+flows=[moa]",
+        "+flows=[moa,moatrans]",
         "entry=slackbot",
         "llms=full"
       ],

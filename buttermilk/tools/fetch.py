@@ -90,15 +90,14 @@ class Fetch(Agent, ToolConfig):
         # not built yet.
         if not isinstance(message, UserInput):
             return None
-        if not re.match(self._pat, message.content):
+        if not (match := re.match(self._pat, message.content)):
             return None
         record = None
-        match = re.match(r"!([\d\w_]+)", message.content)
-        if match:
-            # Try to get by record_id
-            record = await self.get_record_dataset(match.group(1))
-        elif uri := extract_url(message.content):
+        if uri := match[2]:
             record = await download_and_convert(uri=uri)
+        else:
+            # Try to get by record_id
+            record = await self.get_record_dataset(match[1])
 
         if record:
             return AgentOutput(

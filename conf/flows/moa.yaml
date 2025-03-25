@@ -1,5 +1,4 @@
 moa:
-  # _target_: buttermilk.runner.simple.Sequencer
   orchestrator: Selector
   name: Mixture of Agents directed chat
   save: ${save}
@@ -21,17 +20,6 @@ moa:
       parameters:
         template: panel_host
         model: o3-mini-high
-      tools:
-        - id: fetch_tool
-          name: 🔍 fetch
-          tool_obj: Fetch
-          description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
-          data:
-            - name: tja_train
-              type: file
-              path: gs://prosocial-dev/data/tja_train.jsonl
-              index:
-                - record_id
       inputs:
         participants: participants
         context: context
@@ -77,7 +65,7 @@ moa:
       num_runs: 2
       variants:
         template: judge
-        model: gemini2flashthinking
+        model: ${llms.judgers}
         criteria: criteria_ordinary
         formatting: json_rules
       inputs:
@@ -100,7 +88,7 @@ moa:
       description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
       num_runs: 1
       variants:
-        model: gemini2flashthinking
+        model: ${llms.synthesisers}
         template: synthesise_judger
         criteria: criteria_ordinary
         formatting: json_rules

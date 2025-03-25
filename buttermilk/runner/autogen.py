@@ -84,12 +84,22 @@ class AutogenAgentAdapter(RoutedAgent):
         return None
 
     @message_handler
-    async def handle_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+    async def handle_output(
+        self,
+        message: AgentOutput | UserInput,
+        ctx: MessageContext,
+    ) -> None:
         try:
             source = str(ctx.sender) if ctx and ctx.sender else message.type
             # ignore messages sent by us
             if source != self.id:
-                await self.agent.receive_output(message, source=source)
+                response = await self.agent.receive_output(message, source=source)
+                if response:
+                    await self._runtime.publish_message(
+                        response,
+                        topic_id=self.topic_id,
+                        sender=self.id,
+                    )
             return
         except ValueError:
             logger.warning(
@@ -188,6 +198,7 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                     topic_id=topic_id,
                 )
+                await asyncio.sleep(0.1)
 
         except ProcessingError as e:
             logger.error(f"Error in AutogenOrchestrator.run: {e}")

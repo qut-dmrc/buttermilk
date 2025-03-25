@@ -30,17 +30,3 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 
 # Placeholder:
 {{records}}
-
-# Placeholder:
-{{ context }}
-
-# User:
-{{ prompt }}
-
-{% if feedback %}
-<BEGIN ANALYST NOTES>
-{% for answer in feedback %}
-  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
-{% endfor %}
-<END ANALYST NOTES>
-{% endif %}

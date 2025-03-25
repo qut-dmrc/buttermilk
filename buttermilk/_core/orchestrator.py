@@ -135,9 +135,11 @@ class Orchestrator(BaseModel, ABC):
         # Send message with appropriate inputs for this step
         mapped_inputs = await self._prepare_inputs(step_name=step_name)
         mapped_inputs.update(dict(prompt=prompt, **inputs))
+        records = mapped_inputs.pop("record", [])
 
         return AgentInput(
             agent_id=step_name,
             content=prompt,
             inputs=mapped_inputs,
+            records=records,
         )
