@@ -20,7 +20,7 @@ moa:
       num_runs: 1
       parameters:
         template: panel_host
-        model: o3-mini-high
+        model: gemini2flashthinking
       tools:
         - name: 🔍 fetch
           tool_obj: Fetch
@@ -31,7 +31,6 @@ moa:
               path: gs://prosocial-dev/data/tja_train.jsonl
               index:
                 - record_id
-            
       inputs:
         participants: participants
         context: context
@@ -39,21 +38,36 @@ moa:
         prompt: prompt
         record: record
         description: >
-          The purpose of this conversation is assess a single piece of content. Each JUDGE is an expert analyst with 
-          extensive subject matter expertise. They bring their own set of criteria to apply and will provide draft
-          inputs into the conversation. Other ANALYSTS will assist where they are able to contribute. The group will
-          work as a team to develop a final answer, which will then be submitted to the MANAGER for approval. The
-          MANAGER may step in at any time to refocus or halt the conversation. The HOST will direct the conversation,
-          allowing participants to contribute where they have particular expertise. Once initial responses have been
-          received, the HOST will ask a SYNTHESISER to prepare an integrated answer. The HOST will then ask an EVALUATOR
-          to outline common areas of agreement and unresolved areas of disagreement among participants. The HOST will then
-          break the discussion down into discrete components, tackling each area of disagreement one at a time. All ANALYSTS
-          will have an opportunity to contribute at this point. When an issue has been adequately considered (and before the
+          The purpose of this conversation is assess a single piece of content. The content may be provided directly,
+          or it may be referred to by a RECORD_ID or URL, in which case you should ask the FETCH agent to retrieve
+          the full RECORD. Each JUDGE is an expert analyst with  extensive subject matter expertise. They bring their own 
+          set of criteria to apply and will provide draft inputs into the conversation. Other ANALYSTS will assist 
+          where they are able to contribute. The group will work as a team to develop a final answer, which will then 
+          be submitted to the MANAGER for approval. The MANAGER may step in at any time to refocus or halt the 
+          conversation. You, the HOST, will direct the conversation, allowing participants to contribute where they have 
+          particular expertise. Each participant is an expert; do not tell them how to do their job, it is sufficient to call
+          upon them to speak. Once initial responses have been received, the HOST will ask a SYNTHESISER to prepare an 
+          integrated answer. The HOST will then ask an EVALUATOR to outline common areas of agreement and unresolved areas of 
+          disagreement among participants. The HOST will then break the discussion down into discrete components, tackling 
+          each area of disagreement one at a time. When an issue has been adequately considered (and before the
           discussion becomes repetitive or off-topic), the HOST will once again ask a SYNTHESISER to prepare one or more 
           consolidated answers and will then call a VOTE to identify the preferred answer. The HOST will repeat this process
           until all discrete components of the issue have been discussed. The HOST will then once again ask a SYNTHESISER to
           provide a set of draft overall answers and call a VOTE to identify the best answer. The HOST will then ask the 
           INTROSPECTOR to review the discussion before submitting to the MANAGER for approval.
+
+    - id: FETCH
+      name: 🔍 fetch
+      tool_obj: Fetch
+      description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
+      data:
+        - name: tja_train
+          type: file
+          path: gs://prosocial-dev/data/tja_train.jsonl
+          index:
+            - record_id
+      inputs:
+        prompt: prompt
 
     - id: JUDGE
       name: "⚖️ Judge"
@@ -112,6 +126,6 @@ moa:
           - JUDGE
           - SYNTH
         feedback: feedback
-    
+
     # - name: 🔮 introspector
-        # id: INTROSPECTOR
+    # id: INTROSPECTOR
