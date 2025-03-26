@@ -1,4 +1,5 @@
-- id: MANAGER
+manager:
+  id: MANAGER
   name: "👔 Manager"
   agent_obj: ${ui}
   num_runs: 1

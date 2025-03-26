@@ -1,4 +1,5 @@
-- id: JUDGE
+judge:
+  id: JUDGE
   name: "⚖️ Judge"
   description: Expert analysts, particularly suited to assess content with subject matter expertise.
   agent_obj: LLMAgent

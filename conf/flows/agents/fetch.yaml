@@ -1,4 +1,5 @@
-- id: FETCH
+fetch:
+  id: FETCH
   name: 🔍 fetch
   agent_obj: Fetch
   description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.

@@ -1,4 +1,5 @@
-- id: HOST
+host:
+  id: HOST
   name: "🎯 Host"
   description: Your role, facilitating the discussion and directing questions to those best placed to answer. You have access to some tools that you can run directly if required.
   agent_obj: HostAgent
