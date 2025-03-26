@@ -345,12 +345,12 @@ class AutogenOrchestrator(Orchestrator):
                 # Also subscribe to a step-specific topic
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=step.id,
+                        topic_type=step_name,
                         agent_type=agent_type,
                     ),
                 )
                 logger.debug(
-                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic.type} and {step.id}.",
+                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic.type} and {step_name}.",
                 )
 
                 step_agent_type.append((agent_type, variant))

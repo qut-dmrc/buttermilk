@@ -391,10 +391,16 @@ def split(l, num_chunks):
     yield from (l[i : i + chunk_size] for i in range(0, len(l), chunk_size))
 
 
-def get_ip() -> str:
+async def get_ip() -> str:
     # Get external IP address
     try:
-        ip_addr = requests.get("https://api.ipify.org").content.decode("utf8")
+        url = "https://api.ipify.org"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                timeout=10,
+            )
+        ip_addr = response.content.decode("utf8")
         return ip_addr
     except Exception:
         logger.error("Unable to get host IP address from external source.")

@@ -149,22 +149,23 @@ class BM(Singleton, Project):
                 # list available models
                 models = aiplatform.Model.list()
 
-        self.setup_logging(verbose=self.logger_cfg.verbose)
+        if self.logger_cfg:
+            self.setup_logging(verbose=self.logger_cfg.verbose)
 
-        # Print config to console and save to default save dir
-        print(self.model_dump())
-        try:
-            self.save(
-                data=[self.model_dump(), self.run_info.model_dump()],
-                basename="config",
-                extension=".json",
-                save_dir=self.save_dir,
-            )
+            # Print config to console and save to default save dir
+            print(self.model_dump())
+            try:
+                self.save(
+                    data=[self.model_dump(), self.run_info.model_dump()],
+                    basename="config",
+                    extension=".json",
+                    save_dir=self.save_dir,
+                )
 
-        except Exception as e:
-            self.logger.error(f"Could not save config to default save dir: {e}")
+            except Exception as e:
+                self.logger.error(f"Could not save config to default save dir: {e}")
 
-        if self.tracing:
+        if self.tracing and self.run_info:
             collection = f"{self.run_info.name}-{self.run_info.job}"
             if self.tracing.provider == "weave":
                 import weave
@@ -482,7 +483,7 @@ class BMProxy:
 
 
 # Create the global instance
-bm = BMProxy()
+bm = BM()
 
 if __name__ == "__main__":
     pass

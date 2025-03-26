@@ -133,8 +133,10 @@ class Project(BaseModel):
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
-    verbose: bool = True
-    run_info: SessionInfo
+    run_info: SessionInfo = Field(
+        default=None,
+        description="Information about the context in which this project runs",
+    )
 
     model_config = ConfigDict(
         extra="forbid",

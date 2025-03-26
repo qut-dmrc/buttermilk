@@ -14,7 +14,6 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.flow import FlowVariableRouter
@@ -41,8 +40,8 @@ class Orchestrator(BaseModel, ABC):
     )
     save: SaveInfo | None = Field(default=None)
     data: Sequence[DataSource] = Field(default_factory=list)
-    agents: Mapping[str, list[Agent]] = Field(
-        default_factory=list,
+    agents: Mapping[str, AgentVariants] = Field(
+        default_factory=dict,
         description="Agent factories available to run.",
     )
     params: dict = Field(
@@ -77,14 +76,14 @@ class Orchestrator(BaseModel, ABC):
 
     @field_validator("agents", mode="before")
     @classmethod
-    def validate_agents(cls, value: dict):
+    def validate_agents(cls, value: dict) -> dict[str, AgentVariants]:
         # Ensure that agents is a dict of AgentVariants specifications
         agent_dict = {}
-        for step_name, agent in value.items():
-            if isinstance(agent, (AgentVariants)):
-                agent_dict[step_name] = agent
+        for step_name, defn in value.items():
+            if isinstance(defn, (AgentVariants)):
+                agent_dict[step_name] = defn
             else:
-                agent_dict[step_name] = AgentVariants(**agent)
+                agent_dict[step_name] = AgentVariants(**defn)
         return agent_dict
 
     @abstractmethod

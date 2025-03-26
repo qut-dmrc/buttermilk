@@ -6,7 +6,7 @@ name: default_project
 job: development
 ui: console
 bm:
-  _target_: buttermilk.BM
+  _target_: buttermilk.bm.BM
 
   logger_cfg:
   clouds:

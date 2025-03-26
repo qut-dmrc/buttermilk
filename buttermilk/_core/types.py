@@ -1,4 +1,5 @@
 
+import asyncio
 import datetime
 import platform
 from pathlib import Path
@@ -45,7 +46,7 @@ class SessionInfo(pydantic.BaseModel):
     job: str
     run_id: str = Field(default=_global_run_id)
     max_concurrency: int = -1
-    ip: str = Field(default_factory=get_ip)
+    ip: str = Field(default="")
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(
         default_factory=lambda: psutil.Process().username().split("\\")[-1],
@@ -85,3 +86,12 @@ class SessionInfo(pydantic.BaseModel):
         save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
         self.save_dir = str(save_dir)
         return self
+
+    @pydantic.model_validator(mode="after")
+    def schedule_get_ip(self) -> Self:
+        asyncio.get_event_loop().create_task(self.get_ip())
+        return self
+
+    async def get_ip(self):
+        if not self.ip:
+            self.ip = await get_ip()

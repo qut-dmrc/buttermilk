@@ -7,7 +7,7 @@ evaluator:
   variants:
     template: differences
     model: gemini2flashthinking
-    criteria: >
+    criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
     content: content

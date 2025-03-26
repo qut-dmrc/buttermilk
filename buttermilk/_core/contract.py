@@ -11,15 +11,16 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk._core.config import DataSource, Project, SaveInfo
+from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Record
+from buttermilk.bm import BM
 from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
 
 
 class FlowProtocol(Protocol):
-    name: str  # flow name
+    flow_name: str  # flow name
     save: SaveInfo
     data: Sequence[DataSource]
     agents: Sequence["Agent"]
@@ -31,7 +32,7 @@ class FlowProtocol(Protocol):
 
 
 class OrchestratorProtocol(Protocol):
-    bm: Project
+    bm: BM
     flows: Mapping[str, FlowProtocol]
     ui: Literal["console", "slackbot"]
 
