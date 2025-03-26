@@ -3,11 +3,15 @@ judge:
   name: "⚖️ Judge"
   description: Expert analysts, particularly suited to assess content with subject matter expertise.
   agent_obj: LLMAgent
-  num_runs: 2
+  num_runs: 1
   variants:
     template: judge
     model: ${llms.judgers}
-    criteria: ${flows.criteria}
+    criteria: ${....params.criteria}
+    #criteria: ${flows[${....flow_name}].criteria}
+    # criteria: ${flow_criteria:${oc.select:....flow_name}}
+    # criteria: ${flow_criteria:${oc.select:_global_.current_flow}}
     formatting: json_rules
   inputs:
     record: record
+  save: ${save}

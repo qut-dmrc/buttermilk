@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import sys
-from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
@@ -34,11 +33,7 @@ from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from omegaconf import DictConfig
 from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
     PrivateAttr,
-    field_validator,
     model_validator,
 )
 
@@ -47,14 +42,12 @@ try:
 except:
     pass
 
-from buttermilk.exceptions import FatalError
+from buttermilk._core.config import Project
 from buttermilk.llms import LLMs
 from buttermilk.utils.keys import SecretsManager
 from buttermilk.utils.utils import load_json_flexi
 
-from ._core.config import CloudProviderCfg, RunCfg, Tracing
 from ._core.log import logger
-from ._core.types import SessionInfo
 from .utils import save
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -118,60 +111,11 @@ class Singleton:
         return self
 
 
-class Project(BaseModel):
-    name: str
-    job: str
-    connections: Sequence[str] = Field(default_factory=list)
-    secret_provider: CloudProviderCfg = Field(default=None)
-    logger: CloudProviderCfg = Field(default=None)
-    pubsub: CloudProviderCfg = Field(default=None)
-    clouds: list[CloudProviderCfg] = Field(default_factory=list)
-    # flows: list[Flow] = Field(default_factory=list)
-    tracing: Tracing | None = Field(default_factory=Tracing)
-    verbose: bool = True
-    run: RunCfg
-
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        exclude_none=True,
-        exclude_unset=True,
-    )
-
-    @model_validator(mode="after")
-    def register(self) -> Project:
-        global _REGISTRY
-        if not _REGISTRY.get(_CONFIG):
-            _REGISTRY[_CONFIG] = self
-        else:
-            raise ValueError("Config already initialised; refusing to overwrite!")
-        return self
-
-
-class BM(Singleton, BaseModel):
-    cfg: Project | None = Field(default=None, validate_default=True)
-
-    _run_info: SessionInfo = PrivateAttr()
+class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr(default=None)
     _gcp_credentials: str = PrivateAttr(default=None)
+
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-
-    @field_validator("cfg")
-    @classmethod
-    def set_config(cls, cfg) -> dict:
-        """Ensure cfg is populated."""
-        global _REGISTRY
-
-        if not cfg:  # check here that cfg has not been passed in
-            try:
-                cfg = _REGISTRY["BM"].cfg
-            except KeyError as e:
-                raise FatalError(
-                    "BM() called without config information before it was initialised.",
-                ) from e
-
-        return cfg
 
     @model_validator(mode="before")
     @classmethod
@@ -180,22 +124,7 @@ class BM(Singleton, BaseModel):
 
     @model_validator(mode="after")
     def ensure_config(self) -> Self:
-        global _REGISTRY
-
-        if _run_info := _REGISTRY.get("run_info"):
-            # Already configured, just wrap up.
-            self._run_info = self.model_fields.get("_run_info", _run_info)
-            return self
-
-        # Initialise Run Metadata
-        _REGISTRY["run_info"] = SessionInfo(
-            name=self.cfg.name,
-            job=self.cfg.job,
-            save_dir_base=self.cfg.run.save_dir_base,
-        )
-        self._run_info = _REGISTRY["run_info"]
-
-        for cloud in self.cfg.clouds:
+        for cloud in self.clouds:
             if cloud.type == "gcp":
                 # authenticate to GCP
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
@@ -220,14 +149,13 @@ class BM(Singleton, BaseModel):
                 # list available models
                 models = aiplatform.Model.list()
 
-        self.setup_logging(verbose=self.cfg.logger.verbose)
+        self.setup_logging(verbose=self.logger_cfg.verbose)
 
         # Print config to console and save to default save dir
-        print(self.cfg)
-        print(self.run_info)
+        print(self.model_dump())
         try:
             self.save(
-                data=[self.cfg.model_dump(), self.run_info.model_dump()],
+                data=[self.model_dump(), self.run_info.model_dump()],
                 basename="config",
                 extension=".json",
                 save_dir=self.save_dir,
@@ -236,20 +164,20 @@ class BM(Singleton, BaseModel):
         except Exception as e:
             self.logger.error(f"Could not save config to default save dir: {e}")
 
-        if self.cfg.tracing:
-            collection = f"{self.cfg.name}-{self.cfg.job}"
-            if self.cfg.tracing.provider == "weave":
+        if self.tracing:
+            collection = f"{self.run_info.name}-{self.run_info.job}"
+            if self.tracing.provider == "weave":
                 import weave
 
                 weave.init(collection)
-            elif self.cfg.tracing.provider == "traceloop":
+            elif self.tracing.provider == "traceloop":
                 from traceloop.sdk import Traceloop
 
                 Traceloop.init(
                     disable_batch=True,
-                    api_key=self.cfg.tracing.api_key,
+                    api_key=self.tracing.api_key,
                 )
-            elif self.cfg.tracing.provider == "promptflow":
+            elif self.tracing.provider == "promptflow":
                 from promptflow.tracing import start_trace
 
                 start_trace(
@@ -258,10 +186,6 @@ class BM(Singleton, BaseModel):
                 )
 
         return self
-
-    @property
-    def run_info(self) -> SessionInfo:
-        return self._run_info
 
     @property
     def save_dir(self) -> str:
@@ -282,7 +206,6 @@ class BM(Singleton, BaseModel):
 
     @property
     def logger(self) -> logging.Logger:
-        global logger
         return logger
 
     def setup_logging(
@@ -370,27 +293,29 @@ class BM(Singleton, BaseModel):
             )
 
         resource = None
-        if self.cfg.logger.type == "gcp":
+        if self.logger_cfg.type == "gcp":
             # Labels for cloud logger
             resource = google.cloud.logging.Resource(
                 type="generic_task",
                 labels={
-                    "project_id": self.cfg.logger.project,
-                    "location": self.cfg.logger.location,
-                    "namespace": self.cfg.name,
-                    "job": self.cfg.job,
+                    "project_id": self.logger_cfg.project,
+                    "location": self.logger_cfg.location,
+                    "namespace": self.run_info.name,
+                    "job": self.run_info.job,
                     "task_id": self.run_info.run_id,
                 },
             )
 
             _REGISTRY["gcslogging"] = google.cloud.logging.Client(
-                project=self.cfg.logger.project,
+                project=self.logger_cfg.project,
             )
             cloudHandler = CloudLoggingHandler(
                 client=_REGISTRY["gcslogging"],
                 resource=resource,
-                name=self.cfg.name,
-                labels=self.run_info.model_dump(),
+                name=self.run_info.name,
+                labels=self.run_info.model_dump(
+                    include={"run_id", "name", "job", "platform", "username"},
+                ),
             )
             cloudHandler.setLevel(
                 logging.INFO,
@@ -428,7 +353,7 @@ class BM(Singleton, BaseModel):
     def secret_manager(self) -> SecretsManager:
         if _REGISTRY.get("secret_manager") is None:
             _REGISTRY["secret_manager"] = SecretsManager(
-                **self.cfg.secret_provider.model_dump(),
+                **self.secret_provider.model_dump(),
             )
         return _REGISTRY["secret_manager"]
 

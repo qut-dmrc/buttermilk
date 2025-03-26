@@ -2,6 +2,7 @@
 import datetime
 import platform
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import Self
 
 import psutil
@@ -39,21 +40,28 @@ _global_run_id = _make_run_id()
 
 
 class SessionInfo(pydantic.BaseModel):
+    platform: str = "local"
     name: str
     job: str
     run_id: str = Field(default=_global_run_id)
+    max_concurrency: int = -1
     ip: str = Field(default_factory=get_ip)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(
         default_factory=lambda: psutil.Process().username().split("\\")[-1],
     )
-    save_dir_base: str
     save_dir: str | None = None
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
     )
+    save_dir_base: str = Field(
+        default_factory=mkdtemp,
+        validate_default=True,
+    )  # Default to temp dir
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
     def __str__(self):
         return _global_run_id

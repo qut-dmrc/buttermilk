@@ -1,97 +1,17 @@
 defaults:
   - _self_
+  - /flows@hate: moa
+  - criteria@hate.params.criteria: hate
 
 hate:
-  _target_: buttermilk.runner.moa.MoA
-  source: hate speech guidelines
+  flow_name: hate
+  description: Hate speech analysis using existing, simplified, and theory-driven critiera
   save: ${save}
-  conductor: conductor
+  data:
+    - name: tja_train
+      type: file
+      path: gs://dmrc-platforms/data/osb_drag_toxic_train.jsonl
+      index:
+        - record_id
+  criteria:
 
-  steps:
-    - name: fetch
-      agent: Fetch
-      description: fetch urls and stored records for the chat
-      inputs:
-        prompt: q
-    # - name: describer
-    #   num_runs: 1
-    #   variants:
-    #     template: describe
-    #     download_if_necessary: true
-    #     model:
-    #       - gemini2pro
-
-    - name: context_owl
-      agent: LLMAgent
-      description: Spots little things that are easy to miss.
-      num_runs: 1
-      save: ${save}
-      variants:
-        template: owl
-        watch: 
-          - ambiguity
-          - power
-        model: ${llms.general}
-      inputs:
-        record: record
-
-    - name: judge
-      description: Applies criteria to content.
-      agent: LLMAgent
-      num_runs: 1
-      variants:
-        template: judge
-        model: ${llms.general}
-        formatting: json_rules
-        criteria:
-      inputs:
-        record: record
-        feedback: context_owl
-
-    - name: feedback
-      description: QA for mistakes.
-      agent: LLMAgent
-      num_runs: 1
-      save: ${save}
-      variants:
-        template: feedback
-        model: ${llms.general}
-      inputs:
-        history: history
-
-    - name: synth
-      agent: LLMAgent
-      description: Synthesizes draft answers.
-      num_runs: 1
-      save: ${save}
-      variants:
-        model: ${llms.synthesisers}
-        template: synthesise_judger
-        criteria: 
-          - criteria_ordinary
-          - criteria_gelber
-          - criteria_hatefb_factorised
-        formatting: json_rules
-      inputs:
-        instructions: >
-          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
-        record: record
-        answers: judge
-        content: content
-        feedback: 
-          - context_owl
-          - feedback
-
-    - name: eval
-      agent: LLMAgent
-      description: show differences between answers
-      num_runs: 1
-      variants:
-        template: differences
-        criteria: criteria_ordinary
-        model: ${llms.synthesisers}
-      inputs:
-        content: content
-        answers:
-          - judger
-          - synth

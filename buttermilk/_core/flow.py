@@ -17,7 +17,7 @@ from other agents, defined parameters, and datasets.
 
 Example YAML:
 ```yaml
-    steps:
+    agents:
     - judge: 
         # ...judge config...
     - draft:

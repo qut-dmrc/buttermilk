@@ -16,10 +16,10 @@ class Selector(AutogenOrchestrator):
 
     @model_validator(mode="after")
     def _init_conductor(self) -> Self:
-        for step in self.steps:
+        for step_name, step in self.agents.items():
             self._participants.append(
                 {
-                    "role": step.id,
+                    "role": step_name,
                     "description": step.description,
                 },
             )
@@ -34,7 +34,7 @@ class Selector(AutogenOrchestrator):
         # First, get user input
         yield {
             "role": MANAGER,
-            "prompt": f"Started {self.name}. Enter your question or prompt.",
+            "prompt": f"Started {self.flow_name}. Enter your question or prompt.",
         }
 
         await asyncio.sleep(1)

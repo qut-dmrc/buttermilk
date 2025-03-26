@@ -13,7 +13,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.runner.autogen import AutogenOrchestrator
+from buttermilk.runner.autogen import MANAGER, AutogenOrchestrator
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.simple import Sequencer
 
@@ -70,7 +70,7 @@ async def register_handlers(
         # Start conversation
         try:
             match = BOTPATTERNS.search(body["event"]["text"])
-            flow_name = match[1]
+            flow_id = match[1]
             pattern_length = len(match[0])
             init_text = body["event"]["text"][pattern_length:]
 
@@ -91,7 +91,7 @@ async def register_handlers(
             start_flow_thread(
                 context=context,
                 slack_app=slack_app,
-                flow_cfg=flows[flow_name],
+                flow_cfg=flows[flow_id],
                 orchestrator_tasks=orchestrator_tasks,
                 init_text=init_text,
             ),
@@ -118,8 +118,8 @@ async def start_flow_thread(
 
     # Instantiate the slack thread agent before the orchestrator
     try:
-        flow_config = dict(flow_cfg)
-        orchestrator_name = flow_config.pop("orchestrator")
+        _config = dict(flow_cfg)
+        orchestrator_name = _config.pop("orchestrator")
         thread_agent_name = f"slack_thread_{context.thread_ts}"
         # partially fill the SlackUIAgent object and add it to the registry
         AgentRegistry._agents[thread_agent_name] = partial(  # type: ignore
@@ -128,9 +128,9 @@ async def start_flow_thread(
             app=slack_app,
         )
         # and replace the fake name in the config with an identifier for this one
-        flow_config["steps"][0]["agent_obj"] = thread_agent_name
+        _config["agents"][MANAGER]["agent_obj"] = thread_agent_name
 
-        thread_orchestrator = globals()[orchestrator_name](**flow_config)
+        thread_orchestrator = globals()[orchestrator_name](**_config)
 
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)

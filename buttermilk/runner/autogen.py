@@ -34,10 +34,10 @@ from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
 from buttermilk.exceptions import ProcessingError
 
-CONDUCTOR = "HOST"
-MANAGER = "MANAGER"
-CLOSURE = "COLLECTOR"
-CONFIRM = "CONFIRM"
+CONDUCTOR = "host"
+MANAGER = "manager"
+CLOSURE = "collector"
+CONFIRM = "confirm"
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -209,9 +209,9 @@ class AutogenOrchestrator(Orchestrator):
             await self._cleanup()
 
     async def _get_next_step(self) -> AsyncGenerator[dict[str, str]]:
-        for step in self.steps:
+        for step_name in self.agents.keys():
             yield {
-                "role": step.id,
+                "role": step_name,
                 "prompt": "",
             }
 
@@ -252,7 +252,7 @@ class AutogenOrchestrator(Orchestrator):
                     agent_type=CONFIRM,
                 )
                 # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + [step.id for step in self.steps]
+                for topic_type in [self._topic.type] + list(self.agents.keys())
             ],
             unknown_type_policy="ignore",  # only react to appropriate messages
         )
@@ -278,7 +278,7 @@ class AutogenOrchestrator(Orchestrator):
                             ][0]
                         except:
                             logger.warning(
-                                f"{self.name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
+                                f"{self.flow_name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
                             )
                     if not source:
                         source = (
@@ -312,18 +312,18 @@ class AutogenOrchestrator(Orchestrator):
                     agent_type=CLOSURE,
                 )
                 # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + [step.id for step in self.steps]
+                for topic_type in [self._topic.type] + list(self.agents.keys())
             ],
             unknown_type_policy="ignore",  # only react to appropriate messages
         )
 
     async def _register_agents(self) -> None:
         """Register all agent variants for each step"""
-        for step in self.steps:
+        for step_name, step in self.agents.items():
             step_agent_type = []
             for agent_cls, variant in step.get_configs():
                 agent_cfg = variant.model_dump()
-                agent_cfg["id"] = f"{step.id}-{shortuuid.uuid()[:6]}"
+                agent_cfg["id"] = f"{step_name}-{shortuuid.uuid()[:6]}"
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,

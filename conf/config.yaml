@@ -4,18 +4,17 @@ defaults:
 
 name: default_project
 job: development
-entry: console
-
+ui: console
 bm:
   _target_: buttermilk.BM
-  cfg:
+
+  logger_cfg:
+  clouds:
+  tracing:
+  run_info:
     name: ${name}
     job: ${job}
-    logger:
-    clouds:
-    tracing:
-    run:
-      platform: local
-      max_concurrency: 16
-      flow_api: http://flow:8000/flow/
-      
+    platform: local
+    max_concurrency: 16
+    flow_api: http://flow:8000/flow/
+    

@@ -1,0 +1,11 @@
+analyst:
+  id: ANALYST
+  name: "🧑‍💻 Analyst"
+  description: Get feedback from a team of analysts, responsible for identifying potential mistakes (Required step before synthesising results).
+  agent_obj: LLMAgent
+  num_runs: 1
+  variants:
+    template: feedback
+    model: ${llms.general}
+  inputs:
+    history: history

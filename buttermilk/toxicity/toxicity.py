@@ -808,6 +808,10 @@ class GPTJT(ToxicityModel):
 ####
 
 
+class OpenAIOmni(ToxicityModel):
+    model: str = ""
+
+
 class OpenAIModerator(ToxicityModel):
     model: str = "text-moderation-latest"
     process_chain: str = "api"

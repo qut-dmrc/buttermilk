@@ -1,16 +1,13 @@
 defaults:
   - _self_
-  - agents@moa.steps: 
-      - manager
-      - host
-      - judge
-  - criteria: trans
+  - agents: 
+    - manager
+    - host
+    - fetch
+    - judge
+    - analyst
+    - evaluator
 
-ui:  CLIUserAgent #_fake_slack_agent # 
+orchestrator: Selector
+description: Mixture of Agents directed chat
 
-moa:
-  orchestrator: Selector
-  name: Mixture of Agents directed chat (trans journalists criteria)
-  save: ${save}
-
-  steps:

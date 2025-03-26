@@ -36,7 +36,7 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     bm = objs.bm
     logger = bm.logger
     logger.info(
-        f"Starting interactive run for {bm.cfg.name} job {bm.cfg.job} in notebook",
+        f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",
     )
 
     return objs

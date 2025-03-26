@@ -1,7 +1,7 @@
 
 from typing import Self
 
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import PrivateAttr, model_validator
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput
@@ -9,18 +9,18 @@ from buttermilk._core.orchestrator import Orchestrator
 
 
 class Sequencer(Orchestrator):
-    agents: list[list[Agent]] = Field(default_factory=list)
+    _agents: list[list[Agent]] = PrivateAttr(default_factory=list)
     _records: list = PrivateAttr(default_factory=list)
 
     @model_validator(mode="after")
     def _register_agents(self) -> Self:
         roles: list[dict[str, str]] = []
-        for step in self.steps:
+        for step_name, step in self.agents.items():
             step_agents = []
             for obj, cfg in step.get_configs():
                 step_agents.append(obj(**cfg))
-            self.agents.append(step_agents)
-            roles.append({"role": step.id, "description": step.description})
+            self._agents.append(step_agents)
+            roles.append({"role": step_name, "description": step.description})
 
         self._flow_data.add(key="participants", value=roles)
         return self
@@ -29,12 +29,12 @@ class Sequencer(Orchestrator):
         prompt = await self._interface.get_input(
             message="Enter your prompt or record info...",
         )
-        for step in self.agents:
+        for step_name, step in self.agents.items():
             for variant in step:
                 mapped_inputs = self._flow_data._resolve_mappings(variant.inputs)
 
                 step_inputs = AgentInput(
-                    agent_id=step[0].name,
+                    agent_id=step_name,
                     content=prompt,
                     inputs=mapped_inputs,
                     records=self._records,

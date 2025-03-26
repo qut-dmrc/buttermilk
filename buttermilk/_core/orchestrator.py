@@ -1,6 +1,6 @@
 import copy
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -14,12 +14,12 @@ from pydantic import (
     field_validator,
 )
 
+from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
-from buttermilk.exceptions import ProcessingError
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -34,14 +34,22 @@ class Orchestrator(BaseModel, ABC):
         default_factory=shortuuid.uuid,
         description="A unique session id for this set of flow runs.",
     )
-    name: str
+    flow_name: str
+    description: str = Field(
+        default_factory=shortuuid.uuid,
+        description="Short description of this flow",
+    )
     save: SaveInfo | None = Field(default=None)
     data: Sequence[DataSource] = Field(default_factory=list)
-    steps: Sequence[AgentVariants] = Field(
+    agents: Mapping[str, list[Agent]] = Field(
         default_factory=list,
         description="Agent factories available to run.",
     )
-
+    params: dict = Field(
+        default={},
+        description="Flow-level parameters available for use by agents.",
+        exclude=True,
+    )
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
     _records: list = PrivateAttr(default_factory=list)
     _context: UnboundedChatCompletionContext = PrivateAttr(
@@ -57,15 +65,27 @@ class Orchestrator(BaseModel, ABC):
         exclude_unset=True,
     )
 
-    @field_validator("steps", mode="before")
+    @field_validator("data", mode="before")
     @classmethod
-    def validate_steps(cls, value):
-        if isinstance(value, Sequence) and not isinstance(value, str):
-            return [
-                AgentVariants(**step) if not isinstance(step, AgentVariants) else step
-                for step in value
-            ]
-        return value
+    def validate_data(cls, value: Sequence[DataSource | dict]) -> list[DataSource]:
+        _data = []
+        for source in value:
+            if not isinstance(source, DataSource):
+                source = DataSource(**source)
+                _data.append(source)
+        return _data
+
+    @field_validator("agents", mode="before")
+    @classmethod
+    def validate_agents(cls, value: dict):
+        # Ensure that agents is a dict of AgentVariants specifications
+        agent_dict = {}
+        for step_name, agent in value.items():
+            if isinstance(agent, (AgentVariants)):
+                agent_dict[step_name] = agent
+            else:
+                agent_dict[step_name] = AgentVariants(**agent)
+        return agent_dict
 
     @abstractmethod
     async def run(self, request: Any = None) -> None:
@@ -73,8 +93,8 @@ class Orchestrator(BaseModel, ABC):
         self._flow_data = copy.deepcopy(self.data)  # process if needed
         # add request data
         # ...
-        for step in self.steps:
-            self._flow_data[step.id] = await step(self._flow_data)
+        for step_name, step in self.agents.items():
+            self._flow_data[step_name] = await step(self._flow_data)
 
         # save the results
         # flow_data ...
@@ -92,12 +112,7 @@ class Orchestrator(BaseModel, ABC):
             - "context": list of history messages in message format
             - "record": list of InputRecords"
         """
-        config = None
-        for config in self.steps:
-            if config.id == step_name:
-                break
-        if not config:
-            raise ProcessingError(f"Cannot find config for step {step_name}.")
+        config = self.agents[step_name]
 
         input_dict = dict(config.inputs)
         # Overwrite any of the input dict values that are mappings to other data

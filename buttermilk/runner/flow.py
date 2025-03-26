@@ -41,7 +41,7 @@ def get_flow_name_tracing(call: Any) -> str:
 
 class Flow(BaseModel):
     source: Sequence[str]
-    steps: list[Agent]
+    agents: list[Agent]
 
     data: list[DataSource] | None = Field(default_factory=list)
     _data: dict = {}
@@ -67,9 +67,9 @@ class Flow(BaseModel):
             existing_df=self._results,
             datasources=self.data,
         )
-        for agent in self.steps:
+        for step_name, agent in self.agents.items():
             # Create empty list for results from each step
-            self._data[agent.id] = self._data.get(agent.id, [])
+            self._data[step_name] = self._data.get(step_name, [])
 
         # # this is a hack, it wont work later:
         # self._data[self.data[0].name] = self._results.to_dict(
@@ -99,7 +99,7 @@ class Flow(BaseModel):
     ) -> AsyncGenerator[Any, None]:
         job.source = list(set(self.source + job.source)) if job.source else self.source
 
-        for agent in self.steps:
+        for step_name, agent in self.agents.items():
             async for result in self.run_step_variants(
                 agent=agent,
                 job=job,

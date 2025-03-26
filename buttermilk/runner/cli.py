@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import hydra
+from omegaconf import OmegaConf
 
 from buttermilk._core.contract import OrchestratorProtocol
 from buttermilk.bm import BM
@@ -11,6 +12,12 @@ from buttermilk.runner.simple import Sequencer
 from buttermilk.runner.slackbot import register_handlers
 
 orchestrators = [Sequencer, AutogenOrchestrator, Selector]
+
+# Register a resolver that can determine the criteria based on the current flow
+OmegaConf.register_new_resolver(
+    "flow_criteria",
+    lambda flow_name: f"${{{flow_name}.criteria}}",
+)
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -23,7 +30,7 @@ def main(cfg: OrchestratorProtocol) -> None:
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
 
-    match objs.entry:
+    match objs.ui:
         case "console":
             flow_name = cfg.flow
             orchestrator_name = objs.flows[flow_name].pop("orchestrator")

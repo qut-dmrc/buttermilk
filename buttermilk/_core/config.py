@@ -1,8 +1,6 @@
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from tempfile import mkdtemp
 from typing import (
-    Any,
     Literal,
 )
 
@@ -16,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from buttermilk._core.types import SessionInfo
 from buttermilk.defaults import BQ_SCHEMA_DIR
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -127,12 +126,20 @@ class Tracing(BaseModel):
     otlp_headers: Mapping | None = Field(default_factory=dict)
 
 
-class RunCfg(BaseModel):
-    platform: str = "local"
-    max_concurrency: int = -1
-    parameters: Mapping[str, Any] = Field(default_factory=dict)
-    flow_api: str = "http://localhost:8000/flow"
-    save_dir_base: str = Field(default_factory=mkdtemp, validate_default=True)  # Default to temp dir
-    ui: str = "cli"
+class Project(BaseModel):
+    connections: Sequence[str] = Field(default_factory=list)
+    secret_provider: CloudProviderCfg = Field(default=None)
+    logger_cfg: CloudProviderCfg = Field(default=None)
+    pubsub: CloudProviderCfg = Field(default=None)
+    clouds: list[CloudProviderCfg] = Field(default_factory=list)
+    tracing: Tracing | None = Field(default_factory=Tracing)
+    verbose: bool = True
+    run_info: SessionInfo
 
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )

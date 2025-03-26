@@ -1,12 +1,12 @@
 
 from cloudpathlib import AnyPath
 
-from buttermilk.bm import bm, BM
+from buttermilk.bm import BM
 
 
 def test_has_test_info(bm: BM):
-    assert bm.cfg.name == "buttermilk"
-    assert bm.cfg.job == "testing"
+    assert bm.run_info.name == "buttermilk"
+    assert bm.run_info.job == "testing"
     assert bm.save_dir is not None
     assert bm.save_dir != ""
 

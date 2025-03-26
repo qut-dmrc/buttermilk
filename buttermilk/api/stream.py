@@ -156,7 +156,7 @@ async def flow_stream(
     return_json=True,
 ) -> AsyncGenerator[str, None]:
     if not flow_request.source:
-        flow_request.source = [bm.cfg.job]
+        flow_request.source = [bm.run_info.job]
 
     job = flow_request.to_job()
 
