@@ -6,10 +6,9 @@ evaluator:
   description: Prepares analysis of the discussion and differences between draft answers (Required step after synthesizing a response).
   variants:
     template: differences
-    model: gemini2flashthinking
+    model: ${llms.general}
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
     answers:
-      - judge
-      - synth
+      - synth.outputs.reasons

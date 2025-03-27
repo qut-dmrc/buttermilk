@@ -1,11 +1,12 @@
 analyst:
   id: ANALYSTS
   name: "🧑‍💻 Analyst"
-  description: Get feedback from a team of analysts, responsible for identifying potential mistakes (Required step before synthesising results).
+  description: General purpose analysts. This is the group you want to talk to if you have questions.
   agent_obj: LLMAgent
   num_runs: 1
   variants:
-    template: feedback
+    template: analyst
     model: ${llms.general}
   inputs:
     history: history
+    prompt: prompt

@@ -15,5 +15,5 @@ synth:
     instructions: >
       Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
     answers: 
-      - judge
+      - judge.outputs.reasons
     feedback: feedback

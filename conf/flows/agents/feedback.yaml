@@ -1,0 +1,11 @@
+feedback:
+  id: FEEDBACK
+  name: "Feedback"
+  agent_obj: LLMAgent
+  num_runs: 1
+  description: Checks for any concerns with the discussion so far.
+  variants:
+    template: feedback
+    model: ${llms.general}
+  inputs:
+    history: history

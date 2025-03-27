@@ -1,5 +1,6 @@
 import textwrap
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 import regex as re
 from pydantic import BaseModel
@@ -84,6 +85,27 @@ def create_context_blocks(elements_list, max_elements_per_block=10):
     return blocks
 
 
+def blocks_with_icon(
+    data: dict,
+    keys_to_icon_map: list[tuple[str, str]],
+) -> dict[str, Any]:
+    """Convert matching keys to formatted blocks with icons"""
+    for key, icon in keys_to_icon_map:
+        special_text = []
+        if key in data:
+            value = data.pop(key)
+            special_text.append(f"{icon} *{key.capitalize()}:* {value}")
+        if special_text:
+            return {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "\n".join(special_text),
+                },
+            }
+    return {}
+
+
 def format_slack_message(result: AgentOutput) -> dict:
     result_copy = result.model_copy()
     """Format message for Slack API with attractive blocks for structured data"""
@@ -103,166 +125,105 @@ def format_slack_message(result: AgentOutput) -> dict:
     })
 
     # Handle error case
-    if any(result_copy.error):
+    if error := result_copy.pop(error):
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Error!*\n" + "\n".join(format_response(result_copy.error)),
+                "text": "*Error!*\n" + "\n".join(format_response(error)),
             },
         })
 
     else:
-        # Handle feedback metadata fields if present
-        feedback_fields = ["mistake", "intervention"]
-        if any(result_copy.outputs.get(k) for k in feedback_fields):
-            feedback_text = ""
+        icontext = blocks_with_icon(
+            result_copy.metadata,
+            [
+                ("input", ":mag:"),
+                ("criteria", ":clipboard:"),
+            ],
+        )
+        if icontext:
+            blocks.append(icontext)
 
-            # Format mistake field with special styling
-            if "mistake" in result_copy.outputs:
-                mistake = result_copy.outputs.get("mistake")
-                icon = (
-                    ":x:"
-                    if mistake and mistake not in [False, "False"]
-                    else ":white_check_mark:"
-                )
-                feedback_text += f"{icon} *Mistake:* {mistake!s}\n\n"
+        icontext = blocks_with_icon(
+            result_copy.outputs,
+            [
+                ("prediction", ":biohazard_sign:"),
+                ("confidence", ":bar_chart:"),
+                ("severity", ":warning:"),
+            ],
+        )
+        if icontext:
+            blocks.append(icontext)
 
-            # Format intervention field
-            if "intervention" in result_copy.outputs and result_copy.outputs.get(
-                "intervention",
-            ):
-                intervention = result_copy.outputs.get("intervention")
-                feedback_text += f"*Intervention:*\n{intervention}\n"
-
-            if feedback_text:
+        # Add labels as chips if present
+        if labels := result.outputs.get("labels"):
+            label_text = "*Labels:* " + " ".join([
+                f"`{label}`" for label in labels if label
+            ])
+            if label_text:
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": feedback_text.strip(),
+                        "text": label_text,
                     },
                 })
-        for k, v in result_copy.metadata.items():
-            match k:
-                case "criteria":
-                    blocks.append({
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f":clipboard: *Criteria:* {v}",
-                        },
-                    })
 
-        if isinstance(result_copy.outputs, dict):
-            # Format prediction, confidence and severity with special styling if present
-            key_fields = ["prediction", "confidence", "severity"]
-            if any(k in result.outputs for k in key_fields):
-                special_text = ""
+        # Extract reasons for special handling
+        reasons = (
+            result_copy.outputs.pop("reasons", [])
+            if isinstance(result_copy.outputs, dict)
+            else []
+        )
 
-                if "prediction" in result.outputs:
-                    prediction = result.outputs.pop("prediction", None)
-                    icon = ":biohazard_sign:" if prediction else ":white_check_mark:"
-                    special_text += f"{icon} *Prediction:* {prediction!s}\n"
+        # Handle any remaining fields in outputs
+        if text_list := format_response(result_copy.outputs):
+            # Convert text items to mrkdwn elements
+            mrkdwn_elements = [
+                {"type": "mrkdwn", "text": text} for text in text_list if text
+            ]
+            # Add chunked context blocks
+            blocks.extend(create_context_blocks(mrkdwn_elements))
 
-                if "confidence" in result.outputs:
-                    confidence = result.outputs.pop("confidence", "")
-                    special_text += f":bar_chart: *Confidence:* {confidence}\n"
+        # Add divider before reasons if there are any
+        if reasons:
+            blocks.append({
+                "type": "divider",
+            })
 
-                if "severity" in result.outputs:
-                    severity = result.outputs.pop("severity", "")
-                    special_text += f":warning: *Severity:* {severity}\n"
+            # Add each reason as its own contextual block for better readability
 
-                if special_text:
-                    blocks.append({
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": special_text.strip(),
-                        },
-                    })
-
-            # Add labels as chips if present
-            if labels := result.outputs.get("labels"):
-                label_text = "*Labels:* " + " ".join([
-                    f"`{label}`" for label in labels if label
-                ])
-                if label_text:
-                    blocks.append({
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": label_text,
-                        },
-                    })
-
-            # Extract reasons for special handling
-            reasons = (
-                result_copy.outputs.pop("reasons", [])
-                if isinstance(result_copy.outputs, dict)
-                else []
-            )
-
-            # Handle any remaining fields in outputs
-            if text_list := format_response(result_copy.outputs):
-                # Convert text items to mrkdwn elements
-                mrkdwn_elements = [
-                    {"type": "mrkdwn", "text": text} for text in text_list if text
-                ]
-                # Add chunked context blocks
-                blocks.extend(create_context_blocks(mrkdwn_elements))
-
-            # Add divider before reasons if there are any
-            if reasons:
-                blocks.append({
-                    "type": "divider",
-                })
-
-                # Add each reason as its own contextual block for better readability
-
-                # Convert reasons to mrkdwn elements
-                reason_elements = [
-                    {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
-                    for i, reason in enumerate(reasons)
-                ]
-                # Add chunked context blocks
-                blocks.extend(create_context_blocks(reason_elements))
-
-        else:
-            # Handle case where outputs is not a dict
-            for text in format_response(result.outputs):
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": text,
-                    },
-                })
+            # Convert reasons to mrkdwn elements
+            reason_elements = [
+                {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
+                for i, reason in enumerate(reasons)
+            ]
+            # Add chunked context blocks
+            blocks.extend(create_context_blocks(reason_elements))
 
         # Handle records if present
         if hasattr(result_copy, "records") and result_copy.records:
             # Process each record
             for record in result_copy.records:
-                # Extract metadata
-                metadata = record.metadata
-                title = metadata.get("title", "Untitled")
-                outlet = metadata.get("outlet", "Unknown Source")
-                date = (
-                    metadata.get("date", "").split("T")[0]
-                    if metadata.get("date")
-                    else ""
-                )
-                url = metadata.get("url", "")
-                record_id = record.record_id
+                metadata = dict(record.metadata)
+                metadata["record_id"] = record.record_id
+                metadata["title"] = metadata.get("title") or record.title
 
-                # Format title and source info
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*{title}*\n{outlet} | {date} | <{url}|View Source> | ID: `{record_id}`",
-                    },
-                })
+                # Extract metadata
+                icontext = blocks_with_icon(
+                    record.metadata,
+                    keys_to_icon_map=[
+                        ("title", ":bookmark:"),
+                        ("outlet", ":newspaper:"),
+                        ("date", ":calendar:"),
+                        ("url", ":link:"),
+                        ("record_id", ":id:"),
+                    ],
+                )
+
+                if icontext:
+                    blocks.append(icontext)
 
                 elements = []
                 for para in record.paragraphs:
@@ -280,7 +241,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     return {
         "blocks": blocks,
-        "text": result.content,
+        # "text": result.content,
     }
 
 
