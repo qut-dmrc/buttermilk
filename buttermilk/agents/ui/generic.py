@@ -8,7 +8,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     AgentInput,
     ManagerMessage,
-    UserConfirm,
+    UserRequest,
 )
 
 
@@ -20,8 +20,8 @@ class UIAgent(Agent):
 
     async def handle_control_message(
         self,
-        message: ManagerMessage | UserConfirm,
-    ) -> ManagerMessage | UserConfirm:
+        message: ManagerMessage | UserRequest,
+    ) -> ManagerMessage | UserRequest:
         """Ask the user for confirmation."""
         result = await self._process(
             input_data=AgentInput(
@@ -29,13 +29,13 @@ class UIAgent(Agent):
                 content=message.content,
             ),
         )
-        if isinstance(message, UserConfirm):
+        if isinstance(message, UserRequest):
             try:
                 confirm = bool(strtobool(result.content))
             except ValueError:
                 confirm = False
 
-            return UserConfirm(confirm=confirm, **result.model_dump())
+            return UserRequest(confirm=confirm, **result.model_dump())
         if result:
             return ManagerMessage(**result.model_dump())
         return ManagerMessage()

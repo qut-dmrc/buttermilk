@@ -2,10 +2,10 @@ defaults:
   - _self_
   - agents: 
     - manager
-    - host
     - fetch
+    - host
     - judge
-    - analyst
+    - synth
     - evaluator
 
 orchestrator: Selector

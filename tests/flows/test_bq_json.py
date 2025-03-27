@@ -70,7 +70,7 @@ def test_issue_14_job(joblist):
 
 
 def test_issue_14_rows(joblist, bm, flow):
-    schema = flow.steps[0].save.db_schema
+    schema = flow.agents[0].save.db_schema
 
     if isinstance(schema, str):
         schema = bm.bq.schema_from_json(schema)
@@ -88,7 +88,7 @@ def test_issue_14_rows(joblist, bm, flow):
 def test_issue_14_df(joblist, bm, flow):
     df = pd.DataFrame([job.model_dump() for job in joblist])
 
-    schema = flow.steps[0].save.db_schema
+    schema = flow.agents[0].save.db_schema
 
     if isinstance(schema, str):
         schema = bm.bq.schema_from_json(schema)
@@ -104,7 +104,7 @@ def test_issue_14_df(joblist, bm, flow):
 
 
 def test_issue_14_upload(joblist, flow, bm):
-    save_info = flow.steps[0].save
+    save_info = flow.agents[0].save
     job_ids = ", ".join([f"'{job.job_id}'" for job in joblist])
 
     for job in joblist:

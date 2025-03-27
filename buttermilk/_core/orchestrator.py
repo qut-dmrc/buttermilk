@@ -133,7 +133,8 @@ class Orchestrator(BaseModel, ABC):
                     input_dict[value] = self._records
                 elif value == "participants":
                     participants = [
-                        f"- {step.id}: {step.description}" for step in self.steps
+                        f"- {id}: {step.description}"
+                        for id, step in self.agents.items()
                     ]
                     input_dict[value] = "\n".join(participants)
 

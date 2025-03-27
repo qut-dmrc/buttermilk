@@ -1,11 +1,16 @@
+import logging
 from typing import Any
 
 from pydantic import BaseModel
+
 from tenacity import (
+    before_sleep_log,
     retry,
     stop_after_attempt,
     wait_exponential,
 )
+
+from buttermilk.bm import logger
 
 
 class SlackContext(BaseModel):
@@ -16,9 +21,11 @@ class SlackContext(BaseModel):
     say: Any = None
 
 
+
 @retry(
-    stop=stop_after_attempt(3),
+    stop=stop_after_attempt(2),
     wait=wait_exponential(multiplier=1, min=4, max=10),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 async def post_message_with_retry(
     app,

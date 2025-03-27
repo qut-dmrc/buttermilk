@@ -64,6 +64,7 @@ class ChatParser(BaseModel):
             return dict(response=text, error="Unable to decode JSON in result")
 
         if not isinstance(output, dict):
+            logger.warning(f"Unable to decode JSON in result: {text}")
             output = dict(response=output)
 
         output = convert_dict_types(output)

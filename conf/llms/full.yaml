@@ -5,12 +5,11 @@ general:
 
 judgers:
   - gemini2flashthinking
-  - haiku
+  - sonnet
   - o3-mini-high
   - llama32_90b_azure
 
 synthesisers:
   - gemini2pro
   - sonnet
-  - o3-mini-high
   - gpt4o

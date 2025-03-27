@@ -78,6 +78,12 @@ async def register_handlers(
             # not formatted properly, ignore.
             return
 
+        if flow_id not in flows:
+            # not a valid flow, ignore.
+            raise ValueError(f"I don't know how to run flow {flow_id}!")
+
+            return
+
         # Create context for this conversation
         context = SlackContext(
             channel_id=body["event"].get("channel"),

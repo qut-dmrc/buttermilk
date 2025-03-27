@@ -1,5 +1,5 @@
 evaluator:
-  id: EVALUATOR
+  id: EVALUATORS
   name: "📊 Evaluator"
   agent_obj: LLMAgent
   num_runs: 1
@@ -10,8 +10,6 @@ evaluator:
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
-    content: content
     answers:
-      - JUDGE
-      - SYNTH
-    feedback: feedback
+      - judge
+      - synth

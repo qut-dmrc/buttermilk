@@ -31,13 +31,15 @@ You should not refer to the analyst or their response in your answer; just expla
 {{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
 
+{% if expected %}
 <BEGIN EXPECTED ANSWER>
 {{ expected }}
 <END EXPECTED ANSWER>
+{% endif %}
 
 # User:
 {% for answer in answers %}
 <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-{{ answer.outputs }}
+{{ answer.content }}
 <END DRAFT ANSWER>
 {% endfor %}

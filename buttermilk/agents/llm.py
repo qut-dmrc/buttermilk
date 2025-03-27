@@ -212,15 +212,27 @@ class LLMAgent(Agent):
             inputs=input_data,
         )
         records = []
-        create_result = await self._model_client.create(
-            messages=messages,
-            tools=self._tools,
-            cancellation_token=cancellation_token,
-        )
+        try:
+            create_result = await self._model_client.create(
+                messages=messages,
+                tools=self._tools,
+                cancellation_token=cancellation_token,
+            )
+        except Exception as e:
+            error_msg = f"Error creating chat completion: {e} {e.args=}"
+            logger.warning(error_msg)
+            return AgentOutput(
+                agent_id=self.id,
+                agent_name=self.name,
+                content=error_msg,
+                metadata=dict(self.parameters),
+            )
         if isinstance(create_result.content, str):
             outputs = self._json_parser.parse(create_result.content)
+
             # create human readable content
-            content = str(create_result.content)
+            # Pretty-print with standard library
+            content = json.dumps(outputs, indent=2, sort_keys=True)
         else:
             outputs = await self._execute_tools(
                 calls=create_result.content,

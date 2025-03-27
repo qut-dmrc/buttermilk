@@ -1,5 +1,5 @@
 judge:
-  id: JUDGE
+  id: JUDGES
   name: "⚖️ Judge"
   description: Expert analysts, particularly suited to assess content with subject matter expertise.
   agent_obj: LLMAgent
@@ -14,4 +14,3 @@ judge:
     formatting: json_rules
   inputs:
     record: record
-  save: ${save}

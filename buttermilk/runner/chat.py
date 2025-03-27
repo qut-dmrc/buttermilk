@@ -5,7 +5,6 @@ from typing import Self
 from autogen_core import AgentId
 from pydantic import PrivateAttr, model_validator
 
-from buttermilk._core.contract import AgentInput
 from buttermilk.exceptions import ProcessingError
 from buttermilk.runner.autogen import CONDUCTOR, MANAGER, AutogenOrchestrator
 
@@ -40,12 +39,14 @@ class Selector(AutogenOrchestrator):
         await asyncio.sleep(1)
 
         while True:
-            # store the last message received, so that any changes in instructions
-            # are incorporated before executing the next step
+            # store the last message received, so that any changes in instructions are incorporated before executing the next step
             _last_message = self._last_message
+
+            # Ask message with appropriate inputs for this agent
+            message = await self._prepare_step_message(step_name=CONDUCTOR)
             responses = await self._ask_agents(
                 CONDUCTOR,
-                message=AgentInput(agent_id=CONDUCTOR),
+                message=message,
             )
 
             if len(responses) > 1:
@@ -60,7 +61,7 @@ class Selector(AutogenOrchestrator):
             if not instructions or not (next_step := instructions.outputs.get("role")):
                 raise ProcessingError("Next step not found from conductor.")
 
-            if next_step not in self._agents:
+            if next_step not in self._agent_types:
                 raise ProcessingError(
                     f"Step {next_step} not found in registered agents.",
                 )

@@ -22,10 +22,11 @@ def format_response(inputs) -> list[str]:
 
     elif isinstance(inputs, Mapping):
         for k, v in inputs.items():
-            output_lines += [f"*{k}*: {v}\n"]
+            if v:
+                output_lines += [f"*{k}*: {v}\n"]
 
     elif isinstance(inputs, Sequence):
-        output_lines.extend(inputs)
+        output_lines.extend([x for x in inputs if x])
 
     else:
         output_lines += [f"*Unexpected response type*: {type(inputs)}"]
@@ -35,7 +36,7 @@ def format_response(inputs) -> list[str]:
     if isinstance(output_lines, str):
         output_lines = [output_lines]
 
-    return output_lines
+    return [x for x in output_lines if x]
 
 
 def strip_and_wrap(lines: list[str]) -> list[str]:
@@ -55,6 +56,32 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
         width=SLACK_MAX_MESSAGE_LENGTH,
         replace_whitespace=False,
     )  # Preserve newlines
+
+# Add this helper function after the strip_and_wrap function
+
+
+def create_context_blocks(elements_list, max_elements_per_block=10):
+    """Create Slack context blocks with element chunking to respect Slack's limits.
+
+    Args:
+        elements_list: List of mrkdwn text elements to include
+        max_elements_per_block: Maximum elements per context block (Slack limit is 10)
+
+    Returns:
+        List of context block dictionaries ready for Slack API
+
+    """
+    blocks = []
+
+    # Process elements in chunks respecting Slack's element limit
+    for i in range(0, len(elements_list), max_elements_per_block):
+        chunk = elements_list[i : i + max_elements_per_block]
+        blocks.append({
+            "type": "context",
+            "elements": chunk,
+        })
+
+    return blocks
 
 
 def format_slack_message(result: AgentOutput) -> dict:
@@ -135,7 +162,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
                 if "prediction" in result.outputs:
                     prediction = result.outputs.pop("prediction", None)
-                    icon = ":biohazard:" if not prediction else ":white_check_mark:"
+                    icon = ":biohazard_sign:" if prediction else ":white_check_mark:"
                     special_text += f"{icon} *Prediction:* {prediction!s}\n"
 
                 if "confidence" in result.outputs:
@@ -156,12 +183,11 @@ def format_slack_message(result: AgentOutput) -> dict:
                     })
 
             # Add labels as chips if present
-            if result.outputs.get("labels"):
-                labels = result.outputs.pop("labels", [])
-                if labels:
-                    label_text = "*Labels:* " + " ".join([
-                        f"`{label}`" for label in labels
-                    ])
+            if labels := result.outputs.get("labels"):
+                label_text = "*Labels:* " + " ".join([
+                    f"`{label}`" for label in labels if label
+                ])
+                if label_text:
                     blocks.append({
                         "type": "section",
                         "text": {
@@ -178,17 +204,13 @@ def format_slack_message(result: AgentOutput) -> dict:
             )
 
             # Handle any remaining fields in outputs
-            for k, v in result_copy.outputs.items():
-                blocks.append({
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": text,
-                        }
-                        for text in format_response(result_copy.outputs)
-                    ],
-                })
+            if text_list := format_response(result_copy.outputs):
+                # Convert text items to mrkdwn elements
+                mrkdwn_elements = [
+                    {"type": "mrkdwn", "text": text} for text in text_list if text
+                ]
+                # Add chunked context blocks
+                blocks.extend(create_context_blocks(mrkdwn_elements))
 
             # Add divider before reasons if there are any
             if reasons:
@@ -197,16 +219,15 @@ def format_slack_message(result: AgentOutput) -> dict:
                 })
 
                 # Add each reason as its own contextual block for better readability
-                blocks.append({
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"{i + 1}. {reason}",
-                        }
-                        for i, reason in enumerate(reasons)
-                    ],
-                })
+
+                # Convert reasons to mrkdwn elements
+                reason_elements = [
+                    {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
+                    for i, reason in enumerate(reasons)
+                ]
+                # Add chunked context blocks
+                blocks.extend(create_context_blocks(reason_elements))
+
         else:
             # Handle case where outputs is not a dict
             for text in format_response(result.outputs):
@@ -245,7 +266,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
                 elements = []
                 for para in record.paragraphs:
-                    # Split text into chunks of ~3000 chars to ensure we don't exceed Slack block limits
+                    # Split text into chunks of ~3000 chars
                     chunk_size = 2950
                     for i in range(0, len(para), chunk_size):
                         chunk = para[i : i + chunk_size]
@@ -253,12 +274,6 @@ def format_slack_message(result: AgentOutput) -> dict:
                             "type": "mrkdwn",
                             "text": chunk,
                         })
-
-                # Add each chunk as a separate element
-                blocks.append({
-                    "type": "context",
-                    "elements": elements,
-                })
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
@@ -269,7 +284,67 @@ def format_slack_message(result: AgentOutput) -> dict:
     }
 
 
-def confirm_block(
+def confirm_options(
+    options: list[str],
+    message="Select an option:",
+    placeholder="Choose an option...",
+    action_id="option_selection",
+) -> dict:
+    """Format a selection block for Slack with dropdown menu for multiple options.
+
+    Args:
+        message: The selection prompt to display
+        options: List of string options for the user to choose from
+        placeholder: Text to show in the dropdown before selection
+        action_id: ID for the action, useful for handling responses
+
+    Returns:
+        dict: Slack blocks format for a selection menu
+
+    """
+    # Convert string options to Slack option objects
+    slack_options = [
+        {
+            "text": {
+                "type": "plain_text",
+                "text": option,
+                "emoji": True,
+            },
+            "value": f"option_{i}",  # Use index as value for tracking selected option
+        }
+        for i, option in enumerate(options)
+    ]
+
+    return {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f":thinking_face: *{message}*",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "static_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": placeholder,
+                            "emoji": True,
+                        },
+                        "options": slack_options,
+                        "action_id": action_id,
+                    },
+                ],
+            },
+        ],
+        "text": f"Selection required: {message}",  # Fallback text
+    }
+
+
+def confirm_bool(
     message="Do you want to proceed?",
     yes_text="Yes",
     no_text="No",

@@ -1,8 +1,8 @@
 import asyncio
-import re
 from typing import Any, Self
 
 import pydantic
+import regex as re
 
 from buttermilk._core.agent import Agent, ToolConfig
 from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
@@ -11,7 +11,7 @@ from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
 
-MATCH_PATTERNS = rf"!([\d\w_]+)|({URL_PATTERN})"
+MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
 class Fetch(Agent, ToolConfig):
@@ -96,7 +96,7 @@ class Fetch(Agent, ToolConfig):
         if uri := match[2]:
             record = await download_and_convert(uri=uri)
         else:
-            # Try to get by record_id
+            # Try to get by record_id (remove bang! first)
             record = await self.get_record_dataset(match[1])
 
         if record:

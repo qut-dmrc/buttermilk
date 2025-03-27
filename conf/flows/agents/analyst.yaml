@@ -1,5 +1,5 @@
 analyst:
-  id: ANALYST
+  id: ANALYSTS
   name: "🧑‍💻 Analyst"
   description: Get feedback from a team of analysts, responsible for identifying potential mistakes (Required step before synthesising results).
   agent_obj: LLMAgent

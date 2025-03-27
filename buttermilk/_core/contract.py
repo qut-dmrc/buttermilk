@@ -95,9 +95,14 @@ class ManagerMessage(FlowMessage):
     _type = "ManagerMessage"
 
 
-class UserConfirm(ManagerMessage):
+class UserRequest(ManagerMessage):
+    """Request for input from the user"""
+
     _type = "UserConfirm"
-    confirm: bool = Field(default=False, description="Ready to proceed?")
+    options: bool | list[str] | None = Field(
+        default=False,
+        description="Require answer from a set of options",
+    )
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 

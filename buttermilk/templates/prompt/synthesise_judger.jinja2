@@ -32,28 +32,15 @@ You may be provided with additional feedback to consider. You should incorporate
 {{ criteria }}
 <END CRITERIA>
 
+{% if content %}
 <BEGIN CONTENT>
 {{ content }}
 <END CONTENT>
-
-# User:
-
-{% if context_owl %}
-<BEGIN ANALYST NOTES>
-{% for answer in context_owl %}
-  - {{ answer.agent_id }}: {{ answer.content['intervention'] }}
-{% endfor %}
-<END ANALYST NOTES>
 {% endif %}
+# User:
 
 {% for answer in answers %}
 <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
 {{ answer.content }}
 <END DRAFT ANSWER>
 {% endfor %}
-
-{% if feedback %}
-{% for answer in feedback %}
-<BEGIN FEEDBACK {{ answer.agent_id }}>{{ answer.content['intervention'] }}<END FEEDBACK>
-{% endfor %}
-{% endif %}

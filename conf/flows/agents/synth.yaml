@@ -1,5 +1,5 @@
 synth:
-  id: SYNTHESISER
+  id: SYNTHESISERS
   name: "🎨 Synthesiser"
   agent_obj: LLMAgent
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
@@ -14,5 +14,6 @@ synth:
     record: record
     instructions: >
       Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
-    answers: JUDGE
+    answers: 
+      - judge
     feedback: feedback

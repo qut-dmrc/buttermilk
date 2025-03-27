@@ -80,7 +80,14 @@ class FlowVariableRouter(KeyValueCollector):
         for target, source_spec in mappings.items():
             if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case
-                resolved[target] = [self._resolve_mappings(src) for src in source_spec]
+                results = []
+                for src in source_spec:
+                    result = self._resolve_mappings(src)
+                    if isinstance(result, list):
+                        results.extend(result)
+                    else:
+                        results.append(result)
+                resolved[target] = results
             elif isinstance(source_spec, Mapping | dict):
                 # Handle nested mappings
                 resolved[target] = self._resolve_mappings(source_spec)

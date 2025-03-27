@@ -1,8 +1,9 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from distutils.util import strtobool
-from typing import Any
+from typing import Any, Self
 
+import pydantic
 import shortuuid
 from autogen_core import (
     AgentType,
@@ -25,14 +26,14 @@ from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
     ManagerMessage,
-    UserConfirm,
     UserInput,
+    UserRequest,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
-from buttermilk.exceptions import ProcessingError
+from buttermilk.exceptions import FatalError, ProcessingError
 
 CONDUCTOR = "host"
 MANAGER = "manager"
@@ -109,9 +110,9 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage | UserConfirm,
+        message: ManagerMessage | UserRequest,
         ctx: MessageContext,
-    ) -> ManagerMessage | UserConfirm | None:
+    ) -> ManagerMessage | UserRequest | None:
         """Control messages between only User Interfaces and the Conductor."""
         if isinstance(self.agent, (UIAgent, HostAgent)):
             return await self.agent.handle_control_message(message)
@@ -123,7 +124,7 @@ class AutogenAgentAdapter(RoutedAgent):
             try:
                 confirm = bool(strtobool(user_input))
                 await self._runtime.publish_message(
-                    UserConfirm(confirm=confirm),
+                    UserRequest(confirm=confirm),
                     topic_id=self.topic_id,
                     sender=self.id,
                 )
@@ -135,7 +136,7 @@ class AutogenAgentAdapter(RoutedAgent):
             if user_input.strip() == "":
                 # newline on console
                 await self._runtime.publish_message(
-                    UserConfirm(confirm=True),
+                    UserRequest(confirm=True),
                     topic_id=self.topic_id,
                     sender=self.id,
                 )
@@ -156,11 +157,9 @@ class AutogenOrchestrator(Orchestrator):
 
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _agents: dict[str, list[tuple[AgentType, AgentConfig]]] = PrivateAttr(
-        default_factory=dict,
-    )  # mapping of step to registered agents and their individual configs
     _step_generator = PrivateAttr(default=None)
-    _user_confirmation: asyncio.Queue = PrivateAttr(default_factory=asyncio.Queue)
+    _user_confirmation: asyncio.Queue
+    _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
     # Additional configuration
     max_wait_time: int = Field(
         default=300,
@@ -174,6 +173,11 @@ class AutogenOrchestrator(Orchestrator):
     )
     _last_message: AgentOutput | None = PrivateAttr(default=None)
 
+    @pydantic.model_validator(mode="after")
+    def open_queue(self) -> Self:
+        self._user_confirmation = asyncio.Queue(maxsize=1)
+        return self
+
     async def run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow"""
         try:
@@ -186,23 +190,38 @@ class AutogenOrchestrator(Orchestrator):
                 FlowMessage(),
                 topic_id=self._topic,
             )
-            while await self._user_confirmation.get():
-                step = await anext(self._step_generator)
-                await self._execute_step(step_name=step.pop("role"), **step)
+            while True:
+                try:
+                    # Yes / No from the user:
+                    await self._execute_step(
+                        step_name=MANAGER,
+                    )
+                    await self._user_confirmation.get()
 
-                # send another confirmation message
-                topic_id = DefaultTopicId(type=MANAGER)
-                await self._runtime.publish_message(
-                    AgentInput(
-                        agent_id=CONDUCTOR,
-                    ),
-                    topic_id=topic_id,
-                )
+                    # Get next step
+                    step = await anext(self._step_generator)
+
+                    # Get confirmation from the user
+                    await self._execute_step(
+                        step_name=MANAGER,
+                        prompt="Do you want to proceed?",
+                        content=step["prompt"],
+                    )
+                    await self._user_confirmation.get()
+
+                    # Run next step
+                    await self._execute_step(step_name=step.pop("role"), **step)
+
+                except ProcessingError as e:
+                    logger.error(f"Error in AutogenOrchestrator.run: {e}")
+                except FatalError:
+                    raise
+                except Exception as e:
+                    logger.exception(f"Error in AutogenOrchestrator.run: {e}")
+
                 await asyncio.sleep(0.1)
 
-        except ProcessingError as e:
-            logger.error(f"Error in AutogenOrchestrator.run: {e}")
-        except Exception as e:
+        except FatalError as e:
             logger.exception(f"Error in AutogenOrchestrator.run: {e}")
         finally:
             # Clean up resources
@@ -234,11 +253,11 @@ class AutogenOrchestrator(Orchestrator):
         # Register a human in the loop agent
         async def user_confirm(
             _agent: ClosureContext,
-            message: UserConfirm,
+            message: UserRequest,
             ctx: MessageContext,
         ) -> None:
             # Add confirmation signal to queue
-            if isinstance(message, UserConfirm):
+            if isinstance(message, UserRequest):
                 await self._user_confirmation.put(message.confirm)
             # Ignore other messages right now.
 
@@ -273,10 +292,10 @@ class AutogenOrchestrator(Orchestrator):
                             # get the step name from the list of agents if we can
                             source = [
                                 k
-                                for k, v in self._agents.items()
+                                for k, v in self._agent_types.items()
                                 if any([a[0].type == ctx.sender.type for a in v])
                             ][0]
-                        except:
+                        except Exception as e:  # noqa
                             logger.warning(
                                 f"{self.flow_name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
                             )
@@ -355,21 +374,18 @@ class AutogenOrchestrator(Orchestrator):
 
                 step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
-            self._agents[step.id] = step_agent_type
+            self._agent_types[step_name] = step_agent_type
 
     async def _ask_agents(
         self,
         step_name,
-        message: FlowMessage,
-    ) -> list[FlowMessage]:
+        message: AgentInput,
+    ) -> list[AgentOutput]:
         """Ask agent directly for input"""
         tasks = []
-        # Send message with appropriate inputs for this agent
         input_message = message.model_copy()
-        input_message.inputs = await self._prepare_inputs(step_name=step_name)
-        input_message.inputs.update({"prompt": message.content})
 
-        for agent_type, _ in self._agents[step_name]:
+        for agent_type, _ in self._agent_types[step_name]:
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
                 message=input_message,

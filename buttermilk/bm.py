@@ -120,6 +120,7 @@ class BM(Singleton, Project):
     @model_validator(mode="before")
     @classmethod
     def get_vars(cls, vars) -> dict:
+        # Not sure why this does nothing... maybe debugging?
         return vars
 
     @model_validator(mode="after")

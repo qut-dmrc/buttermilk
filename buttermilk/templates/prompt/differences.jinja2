@@ -79,23 +79,14 @@ Analyse the underlying reasons behind differences among the answers below.
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
+{% if content %}
 <BEGIN CONTENT>
 {{ content }}
 <END CONTENT>
+{% endif %}
 
 {% for answer in answers %}
 <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
 {{ answer.outputs }}
 <END DRAFT ANSWER>
 {% endfor %}
-
-{% if context_owl or feedback %}
-<BEGIN ANALYST NOTES>
-{% for answer in context_owl %}
-  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
-{% endfor %}
-{% for answer in feedback %}
-  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
-{% endfor %}
-<END ANALYST NOTES>
-{% endif %}

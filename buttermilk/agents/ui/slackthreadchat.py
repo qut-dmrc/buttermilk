@@ -1,20 +1,35 @@
 from typing import Any
 
 from pydantic import PrivateAttr
+from rich.console import Console
+from rich.markdown import Markdown
 
+from buttermilk import logger
 from buttermilk._core.contract import (
     AgentMessages,
     AgentOutput,
     ManagerMessage,
-    UserConfirm,
     UserInput,
+    UserRequest,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
-    confirm_block,
+    confirm_bool,
+    confirm_options,
     format_slack_message,
 )
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
+
+
+def _fn_debug_blocks(message: AgentOutput):
+    return
+    try:
+        console = Console(highlight=True)
+        console.print(Markdown("## -----DEBUG BLOCKS------"))
+        console.print_json(data=format_slack_message(message.outputs))
+        console.print(Markdown("## -----DEBUG BLOCKS------"))
+    except:
+        pass
 
 
 class SlackUIAgent(UIAgent):
@@ -34,42 +49,55 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentOutput | ManagerMessage | UserConfirm | UserInput,
+        message: AgentOutput | ManagerMessage | UserRequest | UserInput,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
-        if isinstance(message, (UserInput, UserConfirm)):
+        if isinstance(message, (UserInput, UserRequest)):
             return
         if isinstance(message, AgentOutput):
             try:
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
-            except:
+            except Exception as e:  # noqa
+                _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
         else:
             await self.send_to_thread(text=message.content)
 
-    async def confirm(self, message: str = ""):
-        confirm_blocks = confirm_block(
-            message=message or "Would you like to proceed?",
-        )
-        await self.send_to_thread(
-            text=confirm_blocks["text"],
-            blocks=confirm_blocks["blocks"],
-        )
+    async def confirm(self, message: UserRequest):
+        if message.options is not None:
+            if isinstance(message.options, bool):
+                # If there are binary options, display buttons
+                confirm_blocks = confirm_bool(
+                    message=message.content,
+                )
+            elif isinstance(message.options, list):
+                # If there are multiple options, display a dropdown
+                confirm_blocks = confirm_options(
+                    message=message.content,
+                    options=message.options,
+                )
+            else:
+                raise ValueError("Invalid options type")
+
+            ret = await self.send_to_thread(
+                text=confirm_blocks["text"],
+                blocks=confirm_blocks["blocks"],
+            )
+        else:
+            # For regular prompts, just display the message
+            formatted_blocks = format_slack_message(message)
+            await self.send_to_thread(**formatted_blocks)
 
     async def _process(
         self,
         input_data: AgentMessages,
         **kwargs,
     ) -> AgentOutput | None:
-        """Handle input requests including confirmations"""
-        # For confirmation requests, display buttons
-        if not input_data.content or "confirm" in input_data.content.lower():
-            return await self.confirm(input_data.content)
-        # For regular prompts, just display the message
-        await self.send_to_thread(text=input_data.content)
+        """Provide a message or question for the user"""
+        await self.message_user(input_data)
 
         return None  # We'll handle responses via the callback system
 
@@ -105,26 +133,29 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
     # Button action handlers
     @agent.app.action("confirm_action")
     async def handle_confirm(ack, body, client):
-        if body.get("message", {}).get("thread_ts") == thread_ts:
-            await ack()
-            # Update UI to show confirmation
-            await client.chat_update(
-                channel=agent.context.channel_id,
-                ts=body["message"]["ts"],
-                text="You selected: Yes",
-                blocks=[
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": ":white_check_mark: You selected: *Yes*",
-                        },
+        await ack()
+        if not body.get("message", {}).get("thread_ts") == thread_ts:
+            # why are we here?
+            logger.debug("Received message not for us.")
+            return
+        # Update UI to show confirmation
+        await client.chat_update(
+            channel=agent.context.channel_id,
+            ts=body["message"]["ts"],
+            text="You selected: Yes",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": ":white_check_mark: You selected: *Yes*",
                     },
-                ],
-            )
-            # Call callback with boolean True
-            if hasattr(agent, "_input_callback") and agent._input_callback:
-                await agent._input_callback("True")
+                },
+            ],
+        )
+        # Call callback with boolean True
+        if hasattr(agent, "_input_callback") and agent._input_callback:
+            await agent._input_callback("True")
 
     @agent.app.action("cancel_action")
     async def handle_cancel(ack, body, client):
