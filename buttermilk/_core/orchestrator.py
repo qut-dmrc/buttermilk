@@ -26,6 +26,15 @@ BASE_DIR = Path(__file__).absolute().parent
 PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "record"]
 
 
+class StepDefinition(BaseModel):
+    """Type definition for a step in the flow execution."""
+
+    role: str
+    prompt: str = Field(default="")
+    description: str = Field(default="")
+    arguments: dict[str, Any] = Field(default={})
+
+
 class Orchestrator(BaseModel, ABC):
     """Runs a single instance of a flow."""
 

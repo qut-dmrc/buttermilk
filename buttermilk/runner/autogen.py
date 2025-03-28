@@ -16,7 +16,7 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
-from pydantic import Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk._core.contract import (
@@ -220,12 +220,32 @@ class AutogenOrchestrator(Orchestrator):
             # Clean up resources
             await self._cleanup()
 
-    async def _get_next_step(self) -> AsyncGenerator[dict[str, str]]:
+    class StepDefinition(BaseModel):
+        """Type definition for a step in the flow execution."""
+
+        role: str
+        prompt: str = Field(default="")
+        inputs: dict[str, Any] = Field(default={})
+
+    async def _get_next_step(self) -> AsyncGenerator[StepDefinition, None]:
+        """Determine the next step based on the current flow data.
+
+        This generator yields a series of steps to be executed in sequence,
+        with each step containing the role and prompt information.
+
+        Yields:
+            StepDefinition: An object containing:
+                - 'role' (str): The agent role/step name to execute
+                - 'prompt' (str): The prompt text to send to the agent
+                - Additional key-value pairs that might be needed for agent execution
+
+        Example:
+            >>> async for step in self._get_next_step():
+            >>>     await self._execute_step(**step)
+
+        """
         for step_name in self.agents.keys():
-            yield {
-                "role": step_name,
-                "prompt": "",
-            }
+            yield StepDefinition(role=step_name, prompt="")
 
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""

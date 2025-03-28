@@ -81,40 +81,97 @@ async def register_handlers(
         return False
 
     async def handle_mentions(body, say, logger):
-        init_text = ""
-        # Start conversation
-        flow_id = None
-        if match := BOTPATTERNS.search(body["event"]["text"]):
-            flow_id = match[1]
-            if str.lower(match[1]) == RESUME:
-                text = match[2].split(maxsplit=1)
-                flow_id = text[0]
-                init_text = text[1] if len(text) > 1 else ""
-            else:
-                init_text = match[2]
+        try:
+            init_text = ""
+            # Start conversation
+            flow_id = None
+            if match := BOTPATTERNS.search(body["event"]["text"]):
+                flow_id = match[1]
+                if str.lower(match[1]) == RESUME:
+                    text = match[2].split(maxsplit=1)
+                    flow_id = text[0]
+                    init_text = text[1] if len(text) > 1 else ""
+                else:
+                    init_text = match[2]
 
-            if flow_id not in flows:
-                # not a valid flow, ignore.
-                raise ValueError(f"I don't know how to run flow {flow_id}!")
+                logger.info(
+                    "Received flow request",
+                    extra={
+                        "flow_id": flow_id,
+                        "channel_id": body["event"].get("channel"),
+                        "user_id": body["event"].get("user"),
+                        "thread_ts": body["event"].get(
+                            "thread_ts", body["event"].get("ts")
+                        ),
+                    },
+                )
 
-        # Create context for this conversation
-        context = SlackContext(
-            channel_id=body["event"].get("channel"),
-            thread_ts=body["event"].get("thread_ts", body["event"].get("ts")),
-            user_id=body["event"].get("user"),
-            event_ts=body["event"].get("event_ts"),
-            say=say,
-        )
-        # Spin up the flow in a new task so that we can get back to slack
-        asyncio.create_task(
-            start_flow_thread(
-                context=context,
-                slack_app=slack_app,
-                flow_cfg=flows[flow_id],
-                orchestrator_tasks=orchestrator_tasks,
-                init_text=init_text,
-            ),
-        )
+                if flow_id not in flows:
+                    logger.warning(
+                        "Invalid flow requested",
+                        extra={
+                            "flow_id": flow_id,
+                            "available_flows": list(flows.keys()),
+                            "user_id": body["event"].get("user"),
+                        },
+                    )
+                    await post_message_with_retry(
+                        slack_app,
+                        context=SlackContext(
+                            channel_id=body["event"].get("channel"),
+                            thread_ts=body["event"].get(
+                                "thread_ts", body["event"].get("ts")
+                            ),
+                            user_id=body["event"].get("user"),
+                            event_ts=body["event"].get("event_ts"),
+                            say=say,
+                        ),
+                        text=f"I don't know how to run flow '{flow_id}'. Available flows: {', '.join(flows.keys())}",
+                    )
+                    return
+
+            # Create context for this conversation
+            context = SlackContext(
+                channel_id=body["event"].get("channel"),
+                thread_ts=body["event"].get("thread_ts", body["event"].get("ts")),
+                user_id=body["event"].get("user"),
+                event_ts=body["event"].get("event_ts"),
+                say=say,
+            )
+            # Spin up the flow in a new task so that we can get back to slack
+            logger.info(
+                "Starting flow task",
+                extra={
+                    "flow_id": flow_id,
+                    "channel_id": context.channel_id,
+                    "thread_ts": context.thread_ts,
+                    "user_id": context.user_id,
+                },
+            )
+            asyncio.create_task(
+                start_flow_thread(
+                    context=context,
+                    slack_app=slack_app,
+                    flow_cfg=flows[flow_id],
+                    orchestrator_tasks=orchestrator_tasks,
+                    init_text=init_text,
+                ),
+            )
+        except Exception as e:
+            logger.exception(
+                "Error handling mention",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "body": body,
+                    "traceback": traceback.format_exc(),
+                },
+            )
+            # Try to notify the user if we can
+            try:
+                await say(f"Error processing your request: {e}")
+            except Exception:
+                pass
 
     async def say_hello(message, say):
         user = message["user"]
@@ -150,7 +207,15 @@ async def start_flow_thread(
     orchestrator_tasks: asyncio.Queue,
     init_text: str,
 ) -> None:
-    logger.info("Starting autogen flow in a slack thread...")
+    logger.info(
+        "Starting flow in Slack thread",
+        extra={
+            "flow_name": flow_cfg.get("flow_name", "unknown"),
+            "channel_id": context.channel_id,
+            "thread_ts": context.thread_ts,
+            "user_id": context.user_id,
+        },
+    )
 
     from buttermilk.agents.ui.slackthreadchat import SlackUIAgent
 
@@ -169,20 +234,52 @@ async def start_flow_thread(
         _config["agents"][MANAGER]["agent_obj"] = thread_agent_name
 
         # Read thread history and append init text
+        logger.debug(
+            "Fetching thread history",
+            extra={
+                "thread_ts": context.thread_ts,
+                "channel_id": context.channel_id,
+            },
+        )
         history = await read_thread_history(slack_app=slack_app, context=context)
         # Append init_text if it's not empty
         if init_text.strip():
             history.append({"user": MANAGER, "text": init_text})
+            logger.debug(
+                "Added initial text to history",
+                extra={"text_length": len(init_text)},
+            )
 
+        logger.info(
+            f"Creating {orchestrator_name} orchestrator",
+            extra={
+                "orchestrator": orchestrator_name,
+                "flow_name": _config.get("flow_name", "unknown"),
+                "history_length": len(history),
+            },
+        )
         thread_orchestrator = globals()[orchestrator_name](**_config, history=history)
 
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)
-        # # add seed message
-
-        # await ui_config.agent_obj._input_callback(init_text)
+        logger.debug(
+            "Flow task created and queued",
+            extra={
+                "flow_name": _config.get("flow_name", "unknown"),
+                "thread_ts": context.thread_ts,
+            },
+        )
     except Exception as e:
-        logger.error(f"Error creating flow: {e}, {e.args=}")
+        logger.error(
+            "Error creating flow",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "flow_name": flow_cfg.get("flow_name", "unknown"),
+                "thread_ts": context.thread_ts,
+                "traceback": traceback.format_exc(),
+            },
+        )
         await post_message_with_retry(
             slack_app,
             context,
