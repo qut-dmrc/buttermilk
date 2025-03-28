@@ -16,7 +16,7 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk._core.contract import (
@@ -28,7 +28,7 @@ from buttermilk._core.contract import (
     ManagerRequest,
     UserInstructions,
 )
-from buttermilk._core.orchestrator import Orchestrator
+from buttermilk._core.orchestrator import Orchestrator, StepDefinition
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
@@ -41,7 +41,17 @@ CONFIRM = "confirm"
 
 
 class AutogenAgentAdapter(RoutedAgent):
-    """Adapter for Autogen runtime"""
+    """Adapter for integrating Buttermilk agents with Autogen runtime.
+
+    This adapter wraps a Buttermilk agent to make it compatible with the Autogen
+    routing and messaging system. It handles message passing between the systems
+    and manages agent initialization.
+
+    Attributes:
+        agent (Agent): The wrapped Buttermilk agent
+        topic_id (TopicId): The topic identifier for message routing
+
+    """
 
     def __init__(
         self,
@@ -50,6 +60,18 @@ class AutogenAgentAdapter(RoutedAgent):
         agent_cls: type = None,
         agent_cfg: AgentConfig = None,
     ):
+        """Initialize the adapter with either an agent instance or configuration.
+
+        Args:
+            topic_type: The topic type for message routing
+            agent: Optional pre-instantiated agent
+            agent_cls: Optional agent class to instantiate
+            agent_cfg: Optional agent configuration for instantiation
+
+        Raises:
+            ValueError: If neither agent nor agent_cfg is provided
+
+        """
         if agent:
             self.agent = agent
         else:
@@ -62,11 +84,18 @@ class AutogenAgentAdapter(RoutedAgent):
         super().__init__(description=self.agent.description)
 
         # Take care of any initialization the agent needs to do in this event loop
-
         asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
 
     async def _process_request(self, message: AgentInput) -> None:
-        """Process a request from the conductor"""
+        """Process an incoming request by delegating to the wrapped agent.
+
+        Args:
+            message: The input message to process
+
+        Returns:
+            Optional agent output from processing the request
+
+        """
         # Process using the wrapped agent
         agent_output = await self.agent(message)
 
@@ -91,7 +120,19 @@ class AutogenAgentAdapter(RoutedAgent):
         message: AgentInput,
         ctx: MessageContext,
     ) -> AgentOutput | None:
-        """An AgentInput message means this agent is being asked for input."""
+        """Handle incoming agent input messages.
+
+        This handler is triggered when an agent receives an input message requesting
+        its services.
+
+        Args:
+            message: The input message to process
+            ctx: Message context with sender information
+
+        Returns:
+            Optional agent output from processing the request
+
+        """
         source = str(ctx.sender) if ctx and ctx.sender else message.type
         return await self._process_request(message)
 
@@ -101,7 +142,16 @@ class AutogenAgentAdapter(RoutedAgent):
         message: AgentOutput | UserInstructions,
         ctx: MessageContext,
     ) -> None:
-        """Agents listen for messages sent by other agents and sometimes take action."""
+        """Handle output messages from other agents.
+
+        This handler processes outputs from other agents that might be relevant to
+        this agent.
+
+        Args:
+            message: The output message to process
+            ctx: Message context with sender information
+
+        """
         try:
             source = str(ctx.sender.type)
             # if ctx and ctx.sender else message.type
@@ -123,6 +173,15 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: ManagerMessage | ManagerRequest,
     ) -> ManagerMessage | ManagerRequest | None:
+        """Process control messages for agent coordination.
+
+        Args:
+            message: The control message to process
+
+        Returns:
+            Optional response to the control message
+
+        """
         """Agents generally do not listen in to control messages."""
 
     @message_handler
@@ -131,10 +190,26 @@ class AutogenAgentAdapter(RoutedAgent):
         message: ManagerMessage | ManagerRequest,
         ctx: MessageContext,
     ) -> ManagerMessage | ManagerRequest | None:
+        """Handle out-of-band control messages.
+
+        Args:
+            message: The control message to process
+            ctx: Message context with sender information
+
+        Returns:
+            Optional response to the control message
+
+        """
         """Control messages do not get broadcast around."""
         return await self.handle_control_message(message)
 
     def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
+        """Create a callback for handling user input if needed.
+
+        Returns:
+            Optional callback function for user input handling
+
+        """
         """Messages come in from the UI and get sent back out through Autogen."""
 
         async def input_callback(user_message: UserInstructions) -> None:
@@ -219,13 +294,6 @@ class AutogenOrchestrator(Orchestrator):
         finally:
             # Clean up resources
             await self._cleanup()
-
-    class StepDefinition(BaseModel):
-        """Type definition for a step in the flow execution."""
-
-        role: str
-        prompt: str = Field(default="")
-        inputs: dict[str, Any] = Field(default={})
 
     async def _get_next_step(self) -> AsyncGenerator[StepDefinition, None]:
         """Determine the next step based on the current flow data.
