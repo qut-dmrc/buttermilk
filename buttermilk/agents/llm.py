@@ -16,7 +16,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
-from buttermilk._core.contract import AgentMessages, ToolOutput, UserInput
+from buttermilk._core.contract import AgentMessages, ToolOutput, UserResponse
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
 from buttermilk.runner.helpers import create_tool_functions
@@ -51,7 +51,7 @@ class LLMAgent(Agent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInput,
+        message: AgentMessages | UserResponse,
         source: str,
         **kwargs,
     ) -> AgentMessages | None:

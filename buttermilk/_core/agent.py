@@ -11,7 +11,12 @@ from pydantic import (
 
 from buttermilk import logger
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentMessages,
+    AgentOutput,
+    UserResponse,
+)
 from buttermilk.exceptions import FatalError, ProcessingError
 from buttermilk.utils.save import save
 
@@ -113,7 +118,7 @@ class Agent(AgentConfig, ABC):
     @abstractmethod
     async def receive_output(
         self,
-        message: AgentMessages | UserInput,
+        message: AgentMessages | UserResponse,
         source: str,
         **kwargs,
     ) -> AgentMessages | None:
@@ -140,7 +145,7 @@ class Agent(AgentConfig, ABC):
             return await self._run_fn(input_data, **kwargs)
         except ProcessingError as e:
             logger.error(
-                f"Agent {self.id} {self.name} hit error: {e}. Task content: {input_data.content[:100]}"
+                f"Agent {self.id} {self.name} hit error: {e}. Task content: {input_data.content[:100]}",
             )
         except FatalError as e:
             raise e

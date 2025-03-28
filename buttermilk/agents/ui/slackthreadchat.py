@@ -9,9 +9,8 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
-    ManagerMessage,
-    UserInput,
     UserRequest,
+    UserResponse,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
@@ -50,24 +49,21 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentOutput | ManagerMessage | UserRequest | UserInput,
+        message: AgentOutput,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
-        if isinstance(message, (UserInput, UserRequest)):
-            return
-        if isinstance(message, AgentOutput):
+        if isinstance(message, AgentOutput | AgentInput):
             try:
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
             except Exception as e:  # noqa
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
-        else:
-            await self.send_to_thread(text=message.content)
 
-    async def message_user(self, message: AgentOutput | AgentInput | UserRequest):
+    async def _get_user_input(self, message: UserRequest, **kwargs) -> UserResponse:
+        """Get user input from the UI"""
         if isinstance(message, (AgentInput, UserRequest)):
             if isinstance(message, UserRequest) and message.options is not None:
                 if isinstance(message.options, bool):
@@ -102,16 +98,14 @@ class SlackUIAgent(UIAgent):
         input_data: AgentMessages,
         **kwargs,
     ) -> AgentOutput | None:
-        """Provide a message or question for the user"""
-        await self.message_user(input_data)
+        """Tell the user we're expecting some data, but don't wait around"""
+        await self.receive_output(input_data)
 
         return None  # We'll handle responses via the callback system
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""
         self._input_callback = input_callback
-
-        await self.send_to_thread(text="I'm on it! Starting conversation...")
 
         # Register this agent's thread for message handling
         register_chat_thread_handler(self.context.thread_ts, self)
@@ -133,7 +127,7 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
 
     @agent.app.message(matchers=[matcher])
     async def feed_in(message, say):
-        await agent._input_callback(message["text"])
+        await agent._input_callback(UserResponse(content=message["text"]))
 
     # Button action handlers
     @agent.app.action("confirm_action")

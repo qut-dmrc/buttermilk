@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentMessages,
-    UserInput,
+    UserResponse,
 )
 from buttermilk.agents.ui.generic import UIAgent
 
@@ -19,12 +19,12 @@ class CLIUserAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInput,
+        message: AgentMessages | UserResponse,
         source: str,
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
-        if isinstance(message, UserInput):
+        if isinstance(message, UserResponse):
             return
         console = Console(highlight=True)
         console.print(Markdown(f"### {source}: \n{message.content}\n"))
@@ -47,7 +47,7 @@ class CLIUserAgent(UIAgent):
         while True:
             try:
                 user_input = await ainput()
-                await self._input_callback(user_input)
+                await self._input_callback(UserResponse(content=user_input))
             except asyncio.CancelledError:
                 break
             except Exception as e:

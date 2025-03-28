@@ -100,19 +100,25 @@ class UserRequest(ManagerMessage):
 
     _type = "UserConfirm"
     options: bool | list[str] | None = Field(
-        default=False,
+        default=None,
         description="Require answer from a set of options",
     )
+    confirm: bool | None = Field(
+        default=None,
+        description="Response from user: confirm y/n",
+    )
+
+
+class UserResponse(ManagerMessage):
+    """Instructions from the user."""
+
+    _type = "UserInput"
+
     confirm: bool = Field(
         default=False,
         description="Response from user: confirm y/n",
     )
     stop: bool = Field(default=False, description="Whether to stop the flow")
-
-
-class UserInput(FlowMessage):
-    _type = "User"
-    """Instructions from the user."""
 
 
 class AgentInput(FlowMessage):

@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from distutils.util import strtobool
 from typing import Any, Self
 
 import pydantic
@@ -26,8 +25,8 @@ from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
     ManagerMessage,
-    UserInput,
     UserRequest,
+    UserResponse,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
@@ -87,7 +86,7 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_output(
         self,
-        message: AgentOutput | UserInput,
+        message: AgentOutput | UserResponse,
         ctx: MessageContext,
     ) -> None:
         try:
@@ -110,7 +109,7 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage | UserRequest,
+        message: ManagerMessage | UserRequest | UserResponse,
         ctx: MessageContext,
     ) -> ManagerMessage | UserRequest | None:
         """Control messages between only User Interfaces and the Conductor."""
@@ -119,35 +118,17 @@ class AutogenAgentAdapter(RoutedAgent):
         return None
 
     def handle_input(self) -> Callable[[str], Awaitable[None]]:
-        async def input_callback(user_input: str) -> None:
+        async def input_callback(user_message: UserResponse) -> None:
             """Callback function to handle user input"""
             try:
-                confirm = bool(strtobool(user_input))
                 await self._runtime.publish_message(
-                    UserRequest(confirm=confirm),
+                    user_message,
                     topic_id=self.topic_id,
                     sender=self.id,
                 )
-                return
             except:
                 # Not a simple yes / no, send as text.
                 pass
-
-            if user_input.strip() == "":
-                # newline on console
-                await self._runtime.publish_message(
-                    UserRequest(confirm=True),
-                    topic_id=self.topic_id,
-                    sender=self.id,
-                )
-            else:
-                await self._runtime.publish_message(
-                    UserInput(
-                        content=user_input,
-                    ),
-                    topic_id=self.topic_id,
-                    sender=self.id,
-                )
 
         return input_callback
 
@@ -192,22 +173,18 @@ class AutogenOrchestrator(Orchestrator):
             )
             while True:
                 try:
-                    # Yes / No from the user:
-                    await self._execute_step(
-                        step_name=MANAGER,
-                    )
-                    await self._user_confirmation.get()
-
-                    # Get next step
+                    # Get next step from our CONDUCTOR agent
                     step = await anext(self._step_generator)
 
-                    # Get confirmation from the user
+                    # For now, ALWAYS get confirmation from the user (MANAGER) role
                     await self._execute_step(
                         step_name=MANAGER,
-                        prompt="Do you want to proceed?",
+                        prompt="Here's my proposed next step. Do you want to proceed?",
                         content=step["prompt"],
                     )
-                    await self._user_confirmation.get()
+                    if not await self._user_confirmation.get():
+                        # User did not confirm plan; go back and get new instructions
+                        continue
 
                     # Run next step
                     await self._execute_step(step_name=step.pop("role"), **step)
@@ -216,7 +193,7 @@ class AutogenOrchestrator(Orchestrator):
                     logger.error(f"Error in AutogenOrchestrator.run: {e}")
                 except FatalError:
                     raise
-                except Exception as e:
+                except Exception as e:  # This is only here for debugging for now.
                     logger.exception(f"Error in AutogenOrchestrator.run: {e}")
 
                 await asyncio.sleep(0.1)
@@ -280,7 +257,7 @@ class AutogenOrchestrator(Orchestrator):
         # Register a closure agent
         async def collect_result(
             _agent: ClosureContext,
-            message: AgentMessages | UserInput,
+            message: AgentMessages | UserResponse,
             ctx: MessageContext,
         ) -> None:
             # Process and collect responses

@@ -30,19 +30,20 @@ class Selector(AutogenOrchestrator):
         """Determine the next step based on the user's prompt"""
         self._next_step = None
 
-        # First, get user input
+        # First, introduce ourselves, and prompt the user for input
         yield {
             "role": MANAGER,
-            "prompt": f"Started {self.flow_name}. Enter your question or prompt.",
+            "prompt": f"Started {self.flow_name}: {self.description}. Please enter your question or prompt.",
         }
 
         await asyncio.sleep(1)
 
         while True:
-            # store the last message received, so that any changes in instructions are incorporated before executing the next step
+            # store the last message received, so that any changes in instructions
+            # are incorporated before executing the next step
             _last_message = self._last_message
 
-            # Ask message with appropriate inputs for this agent
+            # Each step, we proceed by asking the CONDUCTOR agent what to do.
             message = await self._prepare_step_message(step_name=CONDUCTOR)
             responses = await self._ask_agents(
                 CONDUCTOR,

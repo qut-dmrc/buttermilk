@@ -5,7 +5,12 @@ import pydantic
 import regex as re
 
 from buttermilk._core.agent import Agent, ToolConfig
-from buttermilk._core.contract import AgentInput, AgentMessages, AgentOutput, UserInput
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentMessages,
+    AgentOutput,
+    UserResponse,
+)
 from buttermilk._core.runner_types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
@@ -82,13 +87,13 @@ class Fetch(Agent, ToolConfig):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInput,
+        message: AgentMessages | UserResponse,
         source: str,
         **kwargs,
     ) -> AgentMessages | None:
         """Watch for URLs or record ids and inject them into the chat."""
         # not built yet.
-        if not isinstance(message, UserInput):
+        if not isinstance(message, UserResponse):
             return None
         if not (match := re.match(self._pat, message.content)):
             return None
