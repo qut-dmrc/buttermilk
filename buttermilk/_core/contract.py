@@ -103,6 +103,10 @@ class UserRequest(ManagerMessage):
         default=False,
         description="Require answer from a set of options",
     )
+    confirm: bool = Field(
+        default=False,
+        description="Response from user: confirm y/n",
+    )
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
@@ -118,6 +122,10 @@ class AgentInput(FlowMessage):
     agent_id: str = Field(
         ...,
         description="The ID of the agent to which this request is made.",
+    )
+    agent_name: str = Field(
+        ...,
+        description="The name of the agent that generated this output.",
     )
     context: list[Any] = Field(
         default=[],

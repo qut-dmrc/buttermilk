@@ -6,6 +6,7 @@ from rich.markdown import Markdown
 
 from buttermilk import logger
 from buttermilk._core.contract import (
+    AgentInput,
     AgentMessages,
     AgentOutput,
     ManagerMessage,
@@ -66,30 +67,35 @@ class SlackUIAgent(UIAgent):
         else:
             await self.send_to_thread(text=message.content)
 
-    async def confirm(self, message: UserRequest):
-        if message.options is not None:
-            if isinstance(message.options, bool):
-                # If there are binary options, display buttons
+    async def message_user(self, message: AgentOutput | AgentInput | UserRequest):
+        if isinstance(message, (AgentInput, UserRequest)):
+            if isinstance(message, UserRequest) and message.options is not None:
+                if isinstance(message.options, bool):
+                    # If there are binary options, display buttons
+                    confirm_blocks = confirm_bool(
+                        message=message.content,
+                    )
+                elif isinstance(message.options, list):
+                    # If there are multiple options, display a dropdown
+                    confirm_blocks = confirm_options(
+                        message=message.content,
+                        options=message.options,
+                    )
+                else:
+                    raise ValueError("Invalid options type")
+            else:
+                # Assume binary yes / no
                 confirm_blocks = confirm_bool(
                     message=message.content,
                 )
-            elif isinstance(message.options, list):
-                # If there are multiple options, display a dropdown
-                confirm_blocks = confirm_options(
-                    message=message.content,
-                    options=message.options,
-                )
-            else:
-                raise ValueError("Invalid options type")
-
             ret = await self.send_to_thread(
                 text=confirm_blocks["text"],
                 blocks=confirm_blocks["blocks"],
             )
-        else:
+        elif message.content:
             # For regular prompts, just display the message
             formatted_blocks = format_slack_message(message)
-            await self.send_to_thread(**formatted_blocks)
+            await self.send_to_thread(text=message.content, **formatted_blocks)
 
     async def _process(
         self,
@@ -106,7 +112,6 @@ class SlackUIAgent(UIAgent):
         self._input_callback = input_callback
 
         await self.send_to_thread(text="I'm on it! Starting conversation...")
-        await self.confirm()
 
         # Register this agent's thread for message handling
         register_chat_thread_handler(self.context.thread_ts, self)

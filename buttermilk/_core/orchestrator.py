@@ -54,7 +54,10 @@ class Orchestrator(BaseModel, ABC):
     _context: UnboundedChatCompletionContext = PrivateAttr(
         default_factory=UnboundedChatCompletionContext,
     )
-    _history: list[str] = PrivateAttr(default_factory=list)
+    history: list[str] = Field(
+        default_factory=list,
+        description="List of messages previously exchanged between agents.",
+    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -63,6 +66,18 @@ class Orchestrator(BaseModel, ABC):
         exclude_none=True,
         exclude_unset=True,
     )
+
+    @field_validator("history", mode="before")
+    @classmethod
+    def _parse_history(cls, value: Sequence[dict[str, str] | str]) -> list[str]:
+        history = []
+        for item in value:
+            if isinstance(item, str):
+                history.append(item)
+            elif isinstance(item, dict):
+                history.append(f"{item['type']}: {item['content']}")
+
+        return history
 
     @field_validator("data", mode="before")
     @classmethod
@@ -125,7 +140,7 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = records
                 elif value == "history":
-                    input_dict[value] = "\n".join(self._history)
+                    input_dict[value] = "\n".join(self.history)
                 elif value == "context":
                     # Get the chat context and records
                     input_dict[value] = await self._context.get_messages()
@@ -144,6 +159,7 @@ class Orchestrator(BaseModel, ABC):
         self,
         step_name: str,
         prompt: str = "",
+        source: str = "",
         **inputs,
     ) -> AgentInput:
         """Execute a step by sending requests to relevant agents and collecting responses"""
@@ -153,7 +169,8 @@ class Orchestrator(BaseModel, ABC):
         records = mapped_inputs.pop("record", [])
 
         return AgentInput(
-            agent_id=step_name,
+            agent_id=self.flow_name,
+            agent_name=source,
             content=prompt,
             inputs=mapped_inputs,
             records=records,

@@ -3,7 +3,7 @@ evaluator:
   name: "📊 Evaluator"
   agent_obj: LLMAgent
   num_runs: 1
-  description: Prepares analysis of the discussion and differences between draft answers (Required step after synthesizing a response).
+  description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
     template: differences
     model: ${llms.general}

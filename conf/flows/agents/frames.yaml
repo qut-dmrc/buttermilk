@@ -1,0 +1,12 @@
+frames:
+  id: FRAMES
+  name: "👓 Frames"
+  description: Expert analysts who will specifically (and only) identify the FRAMING of a piece of content.
+  agent_obj: LLMAgent
+  num_runs: 1
+  variants:
+    template: frames
+    model: ${llms.general}
+  inputs:
+    records: records
+    history: history

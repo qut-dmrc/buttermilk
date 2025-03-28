@@ -1,7 +1,7 @@
 analyst:
   id: ANALYSTS
   name: "🧑‍💻 Analyst"
-  description: General purpose analysts. This is the group you want to talk to if you have questions.
+  description: General purpose analysts. This is the group you want to talk to by default or if you have specific questions.
   agent_obj: LLMAgent
   num_runs: 1
   variants:

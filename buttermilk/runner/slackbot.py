@@ -24,10 +24,10 @@ MODPATTERN = re.compile(
 )
 
 BOTPATTERNS = re.compile(
-    r"^!?[<@>\w\d]*\s+(\w+)",
+    r"^!?[<@>\w\d]*\s+(\w+)(.*)",
     re.IGNORECASE | re.MULTILINE,
 )
-
+RESUME = "resume"
 
 ALLPATTERNS = re.compile(r"mod(.*)")
 
@@ -59,35 +59,48 @@ async def register_handlers(
     async def _flow_start_matcher(body):
         logger.debug(f"Received request: {json.dumps(body)}")
         # don't trigger on self-messages or within a thread
-        return (
+        if (
             body
             and body["event"].get("subtype") != "bot_message"
-            and (body["event"].get("event_ts") == body["event"].get("ts"))
-        )
+            and (body["event"].get("event_ts") != body["event"].get("thread_ts"))
+        ):
+            match = BOTPATTERNS.search(body["event"]["text"])
+            if match:
+                return True
+
+        # trigger on a 'resume' message in a thread
+        if (
+            body
+            and body["event"].get("subtype") != "bot_message"
+            and body["event"].get("thread_ts")
+            and (body["event"].get("event_ts") == body["event"].get("thread_ts"))
+        ):
+            if match := BOTPATTERNS.search(body["event"]["text"]):
+                if str.lower(match[1]) == RESUME:
+                    return True
+        return False
 
     async def handle_mentions(body, say, logger):
-
+        init_text = ""
         # Start conversation
-        try:
-            match = BOTPATTERNS.search(body["event"]["text"])
+        flow_id = None
+        if match := BOTPATTERNS.search(body["event"]["text"]):
             flow_id = match[1]
-            pattern_length = len(match[0])
-            init_text = body["event"]["text"][pattern_length:]
+            if str.lower(match[1]) == RESUME:
+                text = match[2].split(maxsplit=1)
+                flow_id = text[0]
+                init_text = text[1] if len(text) > 1 else ""
+            else:
+                init_text = match[2]
 
-        except Exception:
-            # not formatted properly, ignore.
-            return
-
-        if flow_id not in flows:
-            # not a valid flow, ignore.
-            raise ValueError(f"I don't know how to run flow {flow_id}!")
-
-            return
+            if flow_id not in flows:
+                # not a valid flow, ignore.
+                raise ValueError(f"I don't know how to run flow {flow_id}!")
 
         # Create context for this conversation
         context = SlackContext(
             channel_id=body["event"].get("channel"),
-            thread_ts=body["event"].get("ts"),
+            thread_ts=body["event"].get("thread_ts", body["event"].get("ts")),
             user_id=body["event"].get("user"),
             event_ts=body["event"].get("event_ts"),
             say=say,
@@ -111,6 +124,25 @@ async def register_handlers(
     slack_app.event("app_mention", matchers=[_flow_start_matcher])(handle_mentions)
 
 
+async def read_thread_history(
+    slack_app: AsyncApp,
+    context: SlackContext,
+) -> list[dict[str, str]]:
+    # Read thread history
+    history = []
+    replies = await slack_app.client.conversations_replies(
+        channel=context.channel_id,
+        ts=context.thread_ts,
+    )
+    history = []
+    if replies and "messages" in replies:
+        for message in replies["messages"]:
+            user = message.get("user", "Unknown")
+            text = message.get("text", "")
+            history.append({"type": user, "content": text})
+    return history
+
+
 async def start_flow_thread(
     context: SlackContext,
     slack_app: AsyncApp,
@@ -118,7 +150,7 @@ async def start_flow_thread(
     orchestrator_tasks: asyncio.Queue,
     init_text: str,
 ) -> None:
-    logger.info("Starting autogen flow in a new slack thread...")
+    logger.info("Starting autogen flow in a slack thread...")
 
     from buttermilk.agents.ui.slackthreadchat import SlackUIAgent
 
@@ -136,7 +168,13 @@ async def start_flow_thread(
         # and replace the fake name in the config with an identifier for this one
         _config["agents"][MANAGER]["agent_obj"] = thread_agent_name
 
-        thread_orchestrator = globals()[orchestrator_name](**_config)
+        # Read thread history and append init text
+        history = await read_thread_history(slack_app=slack_app, context=context)
+        # Append init_text if it's not empty
+        if init_text.strip():
+            history.append({"user": MANAGER, "text": init_text})
+
+        thread_orchestrator = globals()[orchestrator_name](**_config, history=history)
 
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)

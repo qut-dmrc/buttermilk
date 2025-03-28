@@ -125,12 +125,12 @@ def format_slack_message(result: AgentOutput) -> dict:
     })
 
     # Handle error case
-    if error := result_copy.pop(error):
+    if result.error:
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Error!*\n" + "\n".join(format_response(error)),
+                "text": "*Error!*\n" + "\n".join(format_response(result.error)),
             },
         })
 

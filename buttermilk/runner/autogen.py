@@ -316,7 +316,7 @@ class AutogenOrchestrator(Orchestrator):
 
                 # Add to the shared history
                 if message.content:
-                    self._history.append(f"{message._type}: {message.content}")
+                    self.history.append(f"{message._type}: {message.content}")
                 # Harvest any records
                 if message.records:
                     self._records.extend(message.records)
