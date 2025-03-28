@@ -4,6 +4,7 @@ import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.runner_types import Record
 from buttermilk.tools.fetch import Fetch
 
@@ -93,28 +94,27 @@ class TestFetch:
     ):
         """Test handle_urls with a URL."""
         # Setup
-        message = FlowMessage(
+        agent_input = AgentInput(
+            agent_id="test_agent",
             content="Check out https://example.com",
-            step="testing",
+            inputs={"step": "testing"},
         )
         ctx = MagicMock()
-
         mock_extract_url.return_value = "https://example.com"
         mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Example page content"
         mock_download.return_value = mock_record
 
         # Execute
-        result = await mock_fetch.handle_urls(message, ctx)
+        result = await mock_fetch.handle_urls(agent_input, ctx)
 
         # Assert
-        mock_extract_url.assert_called_once_with(message.content)
+        mock_extract_url.assert_called_once_with(agent_input.content)
         mock_download.assert_called_once_with(uri="https://example.com")
         mock_fetch.publish.assert_called_once()
-        assert isinstance(result, InputRecord)
+        assert isinstance(result, AgentOutput)
         assert result.content == mock_record.fulltext
-        assert result.payload == mock_record
-        assert result.step == "test_step"
+        assert result.outputs["step"] == "test_step"
 
     @pytest.mark.anyio
     @patch("buttermilk.utils.utils.extract_url")
@@ -127,33 +127,31 @@ class TestFetch:
     ):
         """Test handle_urls with a record ID."""
         # Setup
-        message = FlowMessage(
+        agent_input = AgentInput(
+            agent_id="test_agent",
             content="Get `#record123`",
-            step="testing",
+            inputs={"step": "testing"},
         )
         ctx = MagicMock()
-
         mock_extract_url.return_value = None  # No URL
-
         match_result = MagicMock()
         match_result.group.return_value = "record123"
         mock_re_match.return_value = match_result
-
         mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Record content"
         mock_fetch.get_record = MagicMock(return_value=mock_record)
 
         # Execute
-        result = await mock_fetch.handle_urls(message, ctx)
+        result = await mock_fetch.handle_urls(agent_input, ctx)
 
         # Assert
-        mock_extract_url.assert_called_once_with(message.content)
-        mock_re_match.assert_called_once_with(r"`#([\s\w]+)`", message.content)
+        mock_extract_url.assert_called_once_with(agent_input.content)
+        mock_re_match.assert_called_once_with(r"`#([\s\w]+)`", agent_input.content)
         mock_fetch.get_record.assert_called_once_with("record123")
         mock_fetch.publish.assert_called_once()
-        assert isinstance(result, InputRecord)
+        assert isinstance(result, AgentOutput)
         assert result.content == mock_record.fulltext
-        assert result.step == "test_step"
+        assert result.outputs["step"] == "test_step"
 
     @pytest.mark.anyio
     @patch("buttermilk.utils.utils.extract_url")
@@ -166,21 +164,21 @@ class TestFetch:
     ):
         """Test handle_urls with neither URL nor record ID."""
         # Setup
-        message = FlowMessage(
+        agent_input = AgentInput(
+            agent_id="test_agent",
             content="Just a regular message",
-            step="testing",
+            inputs={"step": "testing"},
         )
         ctx = MagicMock()
-
         mock_extract_url.return_value = None  # No URL
         mock_re_match.return_value = None  # No record ID
 
         # Execute
-        result = await mock_fetch.handle_urls(message, ctx)
+        result = await mock_fetch.handle_urls(agent_input, ctx)
 
         # Assert
-        mock_extract_url.assert_called_once_with(message.content)
-        mock_re_match.assert_called_once_with(r"`#([\s\w]+)`", message.content)
+        mock_extract_url.assert_called_once_with(agent_input.content)
+        mock_re_match.assert_called_once_with(r"`#([\s\w]+)`", agent_input.content)
         mock_fetch.publish.assert_not_called()
         assert result is None
 
@@ -193,11 +191,12 @@ class TestFetch:
     ):
         """Test handle_urls works with RequestToSpeak messages."""
         # Setup
-        message = FlowRequest(
+        agent_input = AgentInput(
+            agent_id="test_agent",
             content="Check out https://example.com",
+            inputs={},
         )
         ctx = MagicMock()
-
         mock_extract_url.return_value = "https://example.com"
         mock_record = MagicMock(spec=Record)
         mock_record.fulltext = "Example page content"
@@ -207,13 +206,13 @@ class TestFetch:
             return_value=mock_record,
         ) as mock_download:
             # Execute
-            result = await mock_fetch.handle_urls(message, ctx)
+            result = await mock_fetch.handle_urls(agent_input, ctx)
 
             # Assert
-            mock_extract_url.assert_called_once_with(message.content)
+            mock_extract_url.assert_called_once_with(agent_input.content)
             mock_download.assert_called_once_with(uri="https://example.com")
             mock_fetch.publish.assert_called_once()
-            assert isinstance(result, InputRecord)
+            assert isinstance(result, AgentOutput)
 
 
 @pytest.fixture
@@ -236,33 +235,37 @@ def fetch_agent_cfg():
 messages = [
     (
         None,
-        FlowMessage(
+        AgentInput(
+            agent_id="test_agent",
             content="Just a regular message",
-            step="testing",
+            inputs={"step": "testing"},
         ),
     ),
     (
         "error",
-        FlowRequest(
+        AgentInput(
+            agent_id="test_agent",
             content="Check out https://example.com",
+            inputs={},
         ),
     ),
     (
         "missing",
-        FlowMessage(
+        AgentInput(
+            agent_id="test_agent",
             content="Get `#record123`",
-            step="testing",
+            inputs={"step": "testing"},
         ),
     ),
 ]
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(["expected", "message"], messages)
+@pytest.mark.parametrize(["expected", "agent_input"], messages)
 async def test_run_record_agent(
     fetch_agent_cfg,
     expected,
-    message,
+    agent_input,
 ):
     runtime = SingleThreadedAgentRuntime()
     agent_id = await Fetch.register(
@@ -279,7 +282,7 @@ async def test_run_record_agent(
     runtime.start()
 
     result = await runtime.send_message(
-        message,
+        agent_input,
         await runtime.get("default"),
     )
     await runtime.stop_when_idle()

@@ -1,14 +1,15 @@
 import pytest
 
-from buttermilk._core.runner_types import  Record
-from buttermilk.agents.lc import LC
-from buttermilk.bm import bm
+from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.runner_types import Record
+from buttermilk.agents.llm import LLMAgent
 from buttermilk.llms import CHATMODELS
+from buttermilk.runner.flow import Flow
 
 
 @pytest.fixture(params=CHATMODELS)
 def judger(request):
-    agent = LC(
+    return LLMAgent(
         agent_id="testjudger",
         parameters={
             "template": "judge",
@@ -23,27 +24,24 @@ def judger(request):
             "db_schema": "flow.json",
         },
     )
-    return agent
 
 
 @pytest.fixture
 def single_step_flow(judger):
-    from buttermilk.runner.flow import Flow
-
     return Flow(source="testing", steps=[judger])
 
 
 @pytest.mark.anyio
-async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm: BM):
-    job = Job(
+async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm):
+    agent_input = AgentInput(
         source="testing",
         flow_id="testflow",
         record=fight_no_more_forever,
         run_info=bm.run_info,
     )
-    async for result in single_step_flow.run_flows(job=job):
+    async for result in single_step_flow.run_flows(agent_input=agent_input):
         assert result
-        assert isinstance(result, Job)
+        assert isinstance(result, AgentOutput)
         assert not result.error
         assert isinstance(result.record, Record)
         assert result.outputs and isinstance(result.outputs, dict)

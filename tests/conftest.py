@@ -21,6 +21,11 @@ def objs():
 
 
 @pytest.fixture(scope="session", autouse=True)
+def bm(objs):
+    return objs.bm
+
+
+@pytest.fixture(scope="session", autouse=True)
 def flow(objs):
     return objs.flows["test"]
 

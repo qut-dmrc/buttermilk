@@ -56,7 +56,7 @@ async def test_append_rows(monkeypatch, writer):
 
 @pytest.mark.anyio
 @pytest.mark.integration
-async def test_append_rows_integration(writer, bm):
+async def test_append_rows_integration(writer):
     """Test appending rows to a BigQuery table."""
     # Call the append_rows method
     results = await writer.append_rows(rows=MOCK_ROWS)
@@ -70,7 +70,7 @@ async def test_append_rows_integration(writer, bm):
     client = bigquery.Client()
     query = f"""
         SELECT *
-        FROM `{bm.cfg.save.destination}`
+        FROM `{writer.table_path}`
     """
     query_job = client.query(query)
     results = query_job.result()
