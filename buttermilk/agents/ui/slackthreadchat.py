@@ -50,7 +50,6 @@ class SlackUIAgent(UIAgent):
     async def receive_output(
         self,
         message: AgentOutput,
-        source: str,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -62,8 +61,8 @@ class SlackUIAgent(UIAgent):
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
 
-    async def _get_user_input(self, message: UserRequest, **kwargs) -> UserResponse:
-        """Get user input from the UI"""
+    async def _get_user_input(self, message: UserRequest, **kwargs) -> None:
+        """Get user input from the UI."""
         if isinstance(message, (AgentInput, UserRequest)):
             if isinstance(message, UserRequest) and message.options is not None:
                 if isinstance(message.options, bool):
@@ -99,7 +98,7 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        await self.receive_output(input_data)
+        await self._get_user_input(input_data)
 
         return None  # We'll handle responses via the callback system
 
@@ -154,7 +153,7 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
         )
         # Call callback with boolean True
         if hasattr(agent, "_input_callback") and agent._input_callback:
-            await agent._input_callback("True")
+            await agent._input_callback(UserResponse(confirm=True))
 
     @agent.app.action("cancel_action")
     async def handle_cancel(ack, body, client):
@@ -174,4 +173,4 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
             )
             # Call callback with boolean False
             if hasattr(agent, "_input_callback") and agent._input_callback:
-                await agent._input_callback("False")
+                await agent._input_callback(UserResponse(confirm=False))

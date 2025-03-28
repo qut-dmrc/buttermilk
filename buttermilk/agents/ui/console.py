@@ -20,14 +20,13 @@ class CLIUserAgent(UIAgent):
     async def receive_output(
         self,
         message: AgentMessages | UserResponse,
-        source: str,
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
         if isinstance(message, UserResponse):
             return
         console = Console(highlight=True)
-        console.print(Markdown(f"### {source}: \n{message.content}\n"))
+        console.print(Markdown(f"### {message.agent_id}: \n{message.content}\n"))
 
     async def _process(
         self,

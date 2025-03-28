@@ -88,7 +88,6 @@ class Fetch(Agent, ToolConfig):
     async def receive_output(
         self,
         message: AgentMessages | UserResponse,
-        source: str,
         **kwargs,
     ) -> AgentMessages | None:
         """Watch for URLs or record ids and inject them into the chat."""

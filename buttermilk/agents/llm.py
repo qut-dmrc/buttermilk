@@ -52,7 +52,6 @@ class LLMAgent(Agent):
     async def receive_output(
         self,
         message: AgentMessages | UserResponse,
-        source: str,
         **kwargs,
     ) -> AgentMessages | None:
         """Log data or send output to the user interface"""

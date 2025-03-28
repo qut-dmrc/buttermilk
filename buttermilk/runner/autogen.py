@@ -73,10 +73,9 @@ class AutogenAgentAdapter(RoutedAgent):
         source = str(ctx.sender) if ctx and ctx.sender else message.type
         agent_output = await self.agent(message, source=source)
         if agent_output:
-            await self._runtime.publish_message(
+            await self.publish_message(
                 agent_output,
                 topic_id=self.topic_id,
-                sender=self.id,
             )
             # give this a second to make sure messages are collected before proceeding.
             await asyncio.sleep(1)
@@ -93,12 +92,11 @@ class AutogenAgentAdapter(RoutedAgent):
             source = str(ctx.sender) if ctx and ctx.sender else message.type
             # ignore messages sent by us
             if source != self.id:
-                response = await self.agent.receive_output(message, source=source)
+                response = await self.agent.receive_output(message)
                 if response:
-                    await self._runtime.publish_message(
+                    await self.publish_message(
                         response,
                         topic_id=self.topic_id,
-                        sender=self.id,
                     )
             return
         except ValueError:
@@ -117,14 +115,13 @@ class AutogenAgentAdapter(RoutedAgent):
             return await self.agent.handle_control_message(message)
         return None
 
-    def handle_input(self) -> Callable[[str], Awaitable[None]]:
+    def handle_input(self) -> Callable[[UserResponse], Awaitable[None]]:
         async def input_callback(user_message: UserResponse) -> None:
             """Callback function to handle user input"""
             try:
-                await self._runtime.publish_message(
+                await self.publish_message(
                     user_message,
                     topic_id=self.topic_id,
-                    sender=self.id,
                 )
             except:
                 # Not a simple yes / no, send as text.
