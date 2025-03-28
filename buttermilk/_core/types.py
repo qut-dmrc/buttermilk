@@ -1,4 +1,3 @@
-
 import asyncio
 import datetime
 import platform
@@ -52,11 +51,14 @@ class SessionInfo(pydantic.BaseModel):
         default_factory=lambda: psutil.Process().username().split("\\")[-1],
     )
     save_dir: str | None = None
+    flow_api: str | None = None
+
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
     )
+
     save_dir_base: str = Field(
         default_factory=mkdtemp,
         validate_default=True,

@@ -42,7 +42,6 @@ from transformers import (
 
 from buttermilk import logger
 from buttermilk._core.job import Job
-from buttermilk.libs import hf_pipeline
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from ..types.tox import EvalRecord, Score

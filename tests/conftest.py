@@ -3,7 +3,7 @@ import pytest
 from pytest import MarkDecorator
 
 from buttermilk._core.runner_types import Record
-from buttermilk.bm import BM, bm
+from buttermilk.bm import BM
 from buttermilk.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
@@ -18,11 +18,6 @@ def objs():
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
     return objs
-
-
-@pytest.fixture(scope="session", autouse=True)
-def bm(objs) -> BM:
-    return objs.bm
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -269,14 +264,14 @@ def video_url(request) -> str:
 
 
 @pytest.fixture
-def job_minimal(fight_no_more_forever, bm: BM):
-    job = Job(
-        source="testing",
-        flow_id="testflow",
-        record=fight_no_more_forever,
-        run_info=bm.run_info,
-    )
-    return job
+def job_minimal(fight_no_more_forever):
+    """Provide a minimal job-like structure for tests."""
+    return {
+        "source": "testing",
+        "flow_id": "testflow",
+        "record": fight_no_more_forever,
+        "run_info": {"info": "test_run_info"},
+    }
 
 
 def skipif_no_gpu(reason: str = "No GPU available") -> MarkDecorator:

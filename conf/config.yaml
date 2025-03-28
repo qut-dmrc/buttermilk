@@ -11,6 +11,7 @@ bm:
   logger_cfg:
   clouds:
   tracing:
+    enabled: true
   run_info:
     name: ${name}
     job: ${job}

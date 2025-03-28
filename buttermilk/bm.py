@@ -115,7 +115,10 @@ class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr(default=None)
     _gcp_credentials: str = PrivateAttr(default=None)
 
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    model_config = pydantic.ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow",  # Allow extra fields
+    )
 
     @model_validator(mode="before")
     @classmethod

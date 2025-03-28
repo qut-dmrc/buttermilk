@@ -1,18 +1,29 @@
 defaults:
   - config
+  - local
   - _self_
+  - llms: lite
 
 name: buttermilk
 job: testing
+ui: console
+
+bm:
+  _target_: buttermilk.bm.BM
+
+  run_info:
+    name: ${name}
+    job: ${job}
+    platform: local
+    max_concurrency: 16
+    flow_api: http://flow:8000/flow/
+    
 
 save:
   type: bq
   dataset: prosocial-443205.testing.flow
   db_schema: flow.json
 
-bm:
-  run:    
-      flow_api: http://flow:8000/flow
 
 flows:
   test:

@@ -16,7 +16,6 @@ from pydantic import (
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from buttermilk.libs import HFInferenceClient
 from buttermilk.toxicity.toxicity import _HF, ToxicityModel
 from buttermilk.utils.utils import read_yaml
 
@@ -290,6 +289,7 @@ class LlamaGuard2HF(LlamaGuardTox):
     client: Any = None
 
     def init_client(self) -> None:
+        from buttermilk.libs import HFInferenceClient
         self.client = HFInferenceClient(hf_model_path=self.model, **self.options)
 
 

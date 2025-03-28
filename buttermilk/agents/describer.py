@@ -1,11 +1,9 @@
-
-
 from buttermilk import logger
-from buttermilk.agents.lc import LC
+from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils.media import download_and_convert
 
 
-class Describer(LC):
+class Describer(LLMAgent):
     template: str | None = "describe"
 
     async def process_job(
