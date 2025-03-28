@@ -9,7 +9,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
-    UserResponse,
+    UserInstructions,
 )
 from buttermilk._core.runner_types import Record
 from buttermilk.runner.helpers import prepare_step_df
@@ -38,17 +38,8 @@ class Fetch(Agent, ToolConfig):
         **kwargs,
     ) -> AgentOutput | None:
         """Entry point when running this as an agent."""
-        if "uri" in input_data.inputs or "record_id" in input_data.inputs:
-            record = await self._run(
-                uri=input_data.inputs.get("uri"),
-                record_id=input_data.inputs.get("record_id"),
-            )
-        else:
-            prompt = input_data.inputs["prompt"]
-            if uri := extract_url(prompt):
-                record = await self._run(uri=uri)
-            else:
-                record = await self._run(record_id=prompt)
+        record = await self._run(**input_data.inputs)
+
         return AgentOutput(
             agent_id=self.id,
             agent_name=self.name,
@@ -60,8 +51,13 @@ class Fetch(Agent, ToolConfig):
         self,
         record_id: str | None = None,
         uri: str | None = None,
+        prompt: str | None = None,
+        **kwargs,
     ) -> Record | None:
         """Entry point when running as a tool."""
+        if prompt and not record_id and not uri:
+            if not (uri := extract_url(prompt)):
+                record_id = prompt.strip().strip("!")
         assert (record_id or uri) and not (record_id and uri), (
             "You must provide EITHER record_id OR uri."
         )
@@ -87,12 +83,11 @@ class Fetch(Agent, ToolConfig):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserResponse,
+        message: AgentMessages | UserInstructions,
         **kwargs,
     ) -> AgentMessages | None:
         """Watch for URLs or record ids and inject them into the chat."""
-        # not built yet.
-        if not isinstance(message, UserResponse):
+        if not isinstance(message, UserInstructions):
             return None
         if not (match := re.match(self._pat, message.content)):
             return None

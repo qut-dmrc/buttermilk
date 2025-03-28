@@ -2,7 +2,6 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Self
 
-from autogen_core import AgentId
 from pydantic import PrivateAttr, model_validator
 
 from buttermilk.exceptions import ProcessingError
@@ -11,7 +10,6 @@ from buttermilk.runner.autogen import CONDUCTOR, MANAGER, AutogenOrchestrator
 
 class Selector(AutogenOrchestrator):
     _participants: list = PrivateAttr(default_factory=list)
-    _conductor_id: AgentId = PrivateAttr()
 
     @model_validator(mode="after")
     def _init_conductor(self) -> Self:

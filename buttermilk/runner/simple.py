@@ -35,6 +35,7 @@ class Sequencer(Orchestrator):
 
                 step_inputs = AgentInput(
                     agent_id=step_name,
+                    agent_name="",
                     content=prompt,
                     inputs=mapped_inputs,
                     records=self._records,

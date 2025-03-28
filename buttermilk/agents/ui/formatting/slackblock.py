@@ -106,6 +106,12 @@ def blocks_with_icon(
     return {}
 
 
+def dict_to_blocks(input) -> list[dict]:
+    """Convert a dict to a list of blocks with mrkdwn elements"""
+    elements = [{"type": "mrkdwn", "text": text} for text in format_response(input)]
+    return create_context_blocks(elements_list=elements)
+
+
 def format_slack_message(result: AgentOutput) -> dict:
     result_copy = result.model_copy()
     """Format message for Slack API with attractive blocks for structured data"""
@@ -178,13 +184,7 @@ def format_slack_message(result: AgentOutput) -> dict:
         )
 
         # Handle any remaining fields in outputs
-        if text_list := format_response(result_copy.outputs):
-            # Convert text items to mrkdwn elements
-            mrkdwn_elements = [
-                {"type": "mrkdwn", "text": text} for text in text_list if text
-            ]
-            # Add chunked context blocks
-            blocks.extend(create_context_blocks(mrkdwn_elements))
+        blocks.extend(dict_to_blocks(result.outputs))
 
         # Add divider before reasons if there are any
         if reasons:
@@ -250,6 +250,7 @@ def confirm_options(
     message="Select an option:",
     placeholder="Choose an option...",
     action_id="option_selection",
+    extra_blocks: list[dict] | None = None,
 ) -> dict:
     """Format a selection block for Slack with dropdown menu for multiple options.
 
@@ -275,32 +276,36 @@ def confirm_options(
         }
         for i, option in enumerate(options)
     ]
-
-    return {
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f":thinking_face: *{message}*",
-                },
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f":thinking_face: *{message}*",
             },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "static_select",
-                        "placeholder": {
-                            "type": "plain_text",
-                            "text": placeholder,
-                            "emoji": True,
-                        },
-                        "options": slack_options,
-                        "action_id": action_id,
+        },
+    ]
+    if extra_blocks:
+        blocks.extend(extra_blocks)
+    blocks.extend([
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "static_select",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": placeholder,
+                        "emoji": True,
                     },
-                ],
-            },
-        ],
+                    "options": slack_options,
+                    "action_id": action_id,
+                },
+            ],
+        },
+    ])
+    return {
+        "blocks": blocks,
         "text": f"Selection required: {message}",  # Fallback text
     }
 
@@ -309,6 +314,7 @@ def confirm_bool(
     message="Do you want to proceed?",
     yes_text="Yes",
     no_text="No",
+    extra_blocks: list[dict] | None = None,
 ) -> dict:
     """Format a confirmation block for Slack with Yes/No buttons and decorative elements.
 
@@ -316,20 +322,26 @@ def confirm_bool(
         message: The confirmation question to display
         yes_text: Text for the confirmation button
         no_text: Text for the decline button
+        extra_blocks:
 
     Returns:
         dict: Slack blocks format for a confirmation message
 
     """
-    return {
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f":question: *{message}*",
-                },
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f":question: *{message}*",
             },
+        },
+    ]
+    if extra_blocks:
+        blocks.extend(extra_blocks)
+
+    blocks.extend(
+        [
             {
                 "type": "actions",
                 "elements": [
@@ -358,5 +370,8 @@ def confirm_bool(
                 ],
             },
         ],
+    )
+    return {
+        "blocks": blocks,
         "text": f"Confirmation required: {message}",  # Fallback text
     }

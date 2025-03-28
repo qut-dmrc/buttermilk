@@ -5,7 +5,7 @@ from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
-    UserRequest,
+    ManagerRequest,
 )
 
 
@@ -15,17 +15,17 @@ class UIAgent(Agent):
 
     _trace_this = False
 
-    async def _get_user_input(self, message: UserRequest, **kwargs) -> None:
+    async def _request_user_input(self, message: ManagerRequest, **kwargs) -> None:
         """Get user input from the UI"""
         raise NotImplementedError
 
     async def handle_control_message(
         self,
-        message: UserRequest,
+        message: ManagerRequest,
     ) -> None:
         """Ask the user for confirmation."""
-        if isinstance(message, UserRequest):
-            await self._get_user_input(message)
+        if isinstance(message, ManagerRequest):
+            await self._request_user_input(message)
         raise ValueError(f"Unknown message type: {type(message)}")
 
     async def initialize(self, input_callback, **kwargs) -> None:

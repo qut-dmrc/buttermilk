@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentMessages,
-    UserResponse,
+    UserInstructions,
 )
 from buttermilk.agents.ui.generic import UIAgent
 
@@ -19,11 +19,11 @@ class CLIUserAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserResponse,
+        message: AgentMessages | UserInstructions,
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
-        if isinstance(message, UserResponse):
+        if isinstance(message, UserInstructions):
             return
         console = Console(highlight=True)
         console.print(Markdown(f"### {message.agent_id}: \n{message.content}\n"))
@@ -46,7 +46,7 @@ class CLIUserAgent(UIAgent):
         while True:
             try:
                 user_input = await ainput()
-                await self._input_callback(UserResponse(content=user_input))
+                await self._input_callback(UserInstructions(content=user_input))
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -57,9 +57,4 @@ class CLIUserAgent(UIAgent):
         """Initialize the interface and start input polling"""
         self._input_callback = input_callback
 
-        Console(highlight=True).print(
-            Markdown(
-                "# Console activated\n\nHit return to continue with the next step, or enter a prompt when you are ready.",
-            ),
-        )
         self._input_task = asyncio.create_task(self._poll_input())

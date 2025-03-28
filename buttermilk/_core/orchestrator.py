@@ -165,7 +165,7 @@ class Orchestrator(BaseModel, ABC):
         """Execute a step by sending requests to relevant agents and collecting responses"""
         # Send message with appropriate inputs for this step
         mapped_inputs = await self._prepare_inputs(step_name=step_name)
-        mapped_inputs.update(dict(prompt=prompt, **inputs))
+        mapped_inputs.update(**inputs)
         records = mapped_inputs.pop("record", [])
 
         return AgentInput(

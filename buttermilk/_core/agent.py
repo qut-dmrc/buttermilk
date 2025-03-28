@@ -15,7 +15,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
-    UserResponse,
+    UserInstructions,
 )
 from buttermilk.exceptions import FatalError, ProcessingError
 from buttermilk.utils.save import save
@@ -118,7 +118,7 @@ class Agent(AgentConfig, ABC):
     @abstractmethod
     async def receive_output(
         self,
-        message: AgentMessages | UserResponse,
+        message: AgentMessages | UserInstructions,
         **kwargs,
     ) -> AgentMessages | None:
         """Log data or send output to the user interface"""
@@ -138,7 +138,9 @@ class Agent(AgentConfig, ABC):
         raise NotImplementedError
         return job
 
-    async def __call__(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
+    async def __call__(
+        self, input_data: AgentInput, **kwargs
+    ) -> AgentOutput | UserInstructions | None:
         """Allow agents to be called directly as functions"""
         try:
             return await self._run_fn(input_data, **kwargs)

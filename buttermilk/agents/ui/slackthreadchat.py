@@ -9,12 +9,13 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentMessages,
     AgentOutput,
-    UserRequest,
-    UserResponse,
+    ManagerRequest,
+    UserInstructions,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
     confirm_options,
+    dict_to_blocks,
     format_slack_message,
 )
 from buttermilk.agents.ui.generic import UIAgent
@@ -49,7 +50,7 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentOutput,
+        message: AgentMessages | UserInstructions,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -61,20 +62,23 @@ class SlackUIAgent(UIAgent):
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
 
-    async def _get_user_input(self, message: UserRequest, **kwargs) -> None:
-        """Get user input from the UI."""
-        if isinstance(message, (AgentInput, UserRequest)):
-            if isinstance(message, UserRequest) and message.options is not None:
+    async def _request_user_input(self, message: ManagerRequest, **kwargs) -> None:
+        """Ask for user input from the UI."""
+        if isinstance(message, (AgentInput, ManagerRequest)):
+            extra_blocks = dict_to_blocks(message.inputs)
+            if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons
                     confirm_blocks = confirm_bool(
                         message=message.content,
+                        extra_blocks=extra_blocks,
                     )
                 elif isinstance(message.options, list):
                     # If there are multiple options, display a dropdown
                     confirm_blocks = confirm_options(
                         message=message.content,
                         options=message.options,
+                        extra_blocks=extra_blocks,
                     )
                 else:
                     raise ValueError("Invalid options type")
@@ -82,6 +86,7 @@ class SlackUIAgent(UIAgent):
                 # Assume binary yes / no
                 confirm_blocks = confirm_bool(
                     message=message.content,
+                    extra_blocks=extra_blocks,
                 )
             ret = await self.send_to_thread(
                 text=confirm_blocks["text"],
@@ -98,7 +103,7 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        await self._get_user_input(input_data)
+        await self._request_user_input(input_data)
 
         return None  # We'll handle responses via the callback system
 
@@ -119,14 +124,14 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
 
     async def matcher(message):
         return (
-            # It's a message in our thread, not from us.
+            # It's a message in our thread, not from the bot.
             message.get("thread_ts") == thread_ts
             and message.get("subtype") != "bot_message"
         )
 
     @agent.app.message(matchers=[matcher])
     async def feed_in(message, say):
-        await agent._input_callback(UserResponse(content=message["text"]))
+        await agent._input_callback(UserInstructions(content=message["text"]))
 
     # Button action handlers
     @agent.app.action("confirm_action")
@@ -152,8 +157,7 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
             ],
         )
         # Call callback with boolean True
-        if hasattr(agent, "_input_callback") and agent._input_callback:
-            await agent._input_callback(UserResponse(confirm=True))
+        await agent._input_callback(UserInstructions(confirm=True))
 
     @agent.app.action("cancel_action")
     async def handle_cancel(ack, body, client):
@@ -172,5 +176,4 @@ def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
                 ],
             )
             # Call callback with boolean False
-            if hasattr(agent, "_input_callback") and agent._input_callback:
-                await agent._input_callback(UserResponse(confirm=False))
+            await agent._input_callback(UserInstructions(confirm=False))

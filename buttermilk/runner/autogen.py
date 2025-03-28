@@ -25,8 +25,8 @@ from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
     ManagerMessage,
-    UserRequest,
-    UserResponse,
+    ManagerRequest,
+    UserInstructions,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
@@ -55,24 +55,27 @@ class AutogenAgentAdapter(RoutedAgent):
         else:
             if not agent_cfg:
                 raise ValueError("Either agent or agent_cfg must be provided")
-            self.agent: Agent = agent_cls(**agent_cfg.model_dump())
+            self.agent: Agent = agent_cls(
+                **agent_cfg.model_dump(),
+            )
         self.topic_id: TopicId = DefaultTopicId(type=topic_type)
         super().__init__(description=self.agent.description)
 
         # Take care of any initialization the agent needs to do in this event loop
-        input_callback = self.handle_input()
-        asyncio.create_task(self.agent.initialize(input_callback=input_callback))
 
-    @message_handler
-    async def handle_request(
-        self,
-        message: AgentInput,
-        ctx: MessageContext,
-    ) -> AgentOutput | None:
+        asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
+
+    async def _process_request(self, message: AgentInput) -> None:
+        """Process a request from the conductor"""
         # Process using the wrapped agent
-        source = str(ctx.sender) if ctx and ctx.sender else message.type
-        agent_output = await self.agent(message, source=source)
+        agent_output = await self.agent(message)
+
         if agent_output:
+            if self.id.type.startswith(CONDUCTOR):
+                # If we are the host, our replies are coordination, not content.
+                # In that case, don't publish them, only return them directly.
+                return agent_output
+            # Otherwise, send it out to all subscribed agents.
             await self.publish_message(
                 agent_output,
                 topic_id=self.topic_id,
@@ -83,13 +86,25 @@ class AutogenAgentAdapter(RoutedAgent):
         return None
 
     @message_handler
+    async def handle_request(
+        self,
+        message: AgentInput,
+        ctx: MessageContext,
+    ) -> AgentOutput | None:
+        """An AgentInput message means this agent is being asked for input."""
+        source = str(ctx.sender) if ctx and ctx.sender else message.type
+        return await self._process_request(message)
+
+    @message_handler
     async def handle_output(
         self,
-        message: AgentOutput | UserResponse,
+        message: AgentOutput | UserInstructions,
         ctx: MessageContext,
     ) -> None:
+        """Agents listen for messages sent by other agents and sometimes take action."""
         try:
-            source = str(ctx.sender) if ctx and ctx.sender else message.type
+            source = str(ctx.sender.type)
+            # if ctx and ctx.sender else message.type
             # ignore messages sent by us
             if source != self.id:
                 response = await self.agent.receive_output(message)
@@ -104,30 +119,34 @@ class AutogenAgentAdapter(RoutedAgent):
                 f"Agent {self.agent.id} received unsupported message type: {type(message)}",
             )
 
+    async def handle_control_message(
+        self,
+        message: ManagerMessage | ManagerRequest,
+    ) -> ManagerMessage | ManagerRequest | None:
+        """Agents generally do not listen in to control messages."""
+
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage | UserRequest | UserResponse,
+        message: ManagerMessage | ManagerRequest,
         ctx: MessageContext,
-    ) -> ManagerMessage | UserRequest | None:
-        """Control messages between only User Interfaces and the Conductor."""
-        if isinstance(self.agent, (UIAgent, HostAgent)):
-            return await self.agent.handle_control_message(message)
-        return None
+    ) -> ManagerMessage | ManagerRequest | None:
+        """Control messages do not get broadcast around."""
+        return await self.handle_control_message(message)
 
-    def handle_input(self) -> Callable[[UserResponse], Awaitable[None]]:
-        async def input_callback(user_message: UserResponse) -> None:
+    def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
+        """Messages come in from the UI and get sent back out through Autogen."""
+
+        async def input_callback(user_message: UserInstructions) -> None:
             """Callback function to handle user input"""
-            try:
-                await self.publish_message(
-                    user_message,
-                    topic_id=self.topic_id,
-                )
-            except:
-                # Not a simple yes / no, send as text.
-                pass
+            await self.publish_message(
+                user_message,
+                topic_id=self.topic_id,
+            )
 
-        return input_callback
+        if isinstance(self.agent, (UIAgent, HostAgent)):
+            return input_callback
+        return None
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -177,7 +196,7 @@ class AutogenOrchestrator(Orchestrator):
                     await self._execute_step(
                         step_name=MANAGER,
                         prompt="Here's my proposed next step. Do you want to proceed?",
-                        content=step["prompt"],
+                        inputs=step,
                     )
                     if not await self._user_confirmation.get():
                         # User did not confirm plan; go back and get new instructions
@@ -227,12 +246,17 @@ class AutogenOrchestrator(Orchestrator):
         # Register a human in the loop agent
         async def user_confirm(
             _agent: ClosureContext,
-            message: UserRequest,
+            message: UserInstructions,
             ctx: MessageContext,
         ) -> None:
             # Add confirmation signal to queue
-            if isinstance(message, UserRequest):
-                await self._user_confirmation.put(message.confirm)
+            if isinstance(message, UserInstructions):
+                try:
+                    self._user_confirmation.put_nowait(message.confirm)
+                except asyncio.QueueFull:
+                    logger.debug(
+                        f"User confirmation queue is full. Discarding confirmation: {message.confirm}",
+                    )
             # Ignore other messages right now.
 
         await ClosureAgent.register_closure(
@@ -254,7 +278,7 @@ class AutogenOrchestrator(Orchestrator):
         # Register a closure agent
         async def collect_result(
             _agent: ClosureContext,
-            message: AgentMessages | UserResponse,
+            message: AgentMessages | UserInstructions,
             ctx: MessageContext,
         ) -> None:
             # Process and collect responses
@@ -378,7 +402,7 @@ class AutogenOrchestrator(Orchestrator):
         prompt: str = "",
         **inputs,
     ) -> None:
-        message = await self._prepare_step_message(step_name, prompt, **inputs)
+        message = await self._prepare_step_message(step_name, prompt=prompt, **inputs)
         topic_id = DefaultTopicId(type=step_name)
         await self._runtime.publish_message(message, topic_id=topic_id)
         # give this a second to make sure messages are collected before proceeding.

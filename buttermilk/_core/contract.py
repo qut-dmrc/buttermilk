@@ -95,7 +95,7 @@ class ManagerMessage(FlowMessage):
     _type = "ManagerMessage"
 
 
-class UserRequest(ManagerMessage):
+class ManagerRequest(ManagerMessage):
     """Request for input from the user"""
 
     _type = "UserConfirm"
@@ -109,7 +109,7 @@ class UserRequest(ManagerMessage):
     )
 
 
-class UserResponse(ManagerMessage):
+class UserInstructions(FlowMessage):
     """Instructions from the user."""
 
     _type = "UserInput"
