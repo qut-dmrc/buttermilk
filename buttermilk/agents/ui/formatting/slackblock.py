@@ -241,7 +241,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     return {
         "blocks": blocks,
-        # "text": result.content,
+        "text": result.content,
     }
 
 

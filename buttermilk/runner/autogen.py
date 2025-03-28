@@ -196,7 +196,7 @@ class AutogenOrchestrator(Orchestrator):
                     await self._execute_step(
                         step_name=MANAGER,
                         prompt="Here's my proposed next step. Do you want to proceed?",
-                        inputs=step,
+                        inputs=step.get("inputs", step.get("prompt")),
                     )
                     if not await self._user_confirmation.get():
                         # User did not confirm plan; go back and get new instructions
