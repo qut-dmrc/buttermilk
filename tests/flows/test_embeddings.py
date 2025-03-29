@@ -1,11 +1,14 @@
+import asyncio
 import uuid
-from unittest.mock import ANY, AsyncMock, MagicMock, patch  # Added AsyncMock
+from collections.abc import AsyncIterator # Added AsyncIterator
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import chromadb
 import pytest
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Mock the logger if it's not easily accessible or configured for tests
-from buttermilk import logger as vector_logger  # Use alias to avoid conflict
+from buttermilk import logger as vector_logger # Use alias to avoid conflict
 
 # Assuming your module is structured like: buttermilk/data/vector.py
 # Adjust the import path based on your project structure
@@ -13,7 +16,8 @@ from buttermilk.data.vector import (
     MODEL_NAME,
     ChromaDBEmbeddings,
     ChunkedDocument,
-    InputDocument,  # Import default for type hinting if needed
+    InputDocument,
+    _batch_iterator, # Import helper for testing if needed
 )
 
 # --- Fixtures ---
@@ -35,9 +39,9 @@ def mock_text_embedding_model():
     mock_model = MagicMock()
     # Simulate the structure returned by get_embeddings
     mock_embedding_result = MagicMock()
-    mock_embedding_result.values = [0.1, 0.2, 0.3]  # Example embedding
-    # Mock the synchronous get_embeddings method
-    mock_model.get_embeddings.return_value = [mock_embedding_result]
+    mock_embedding_result.values = [0.1, 0.2, 0.3] # Example embedding
+    # Mock the async get_embeddings method
+    mock_model.get_embeddings = AsyncMock(return_value=[mock_embedding_result])
     return mock_model
 
 
@@ -49,18 +53,18 @@ def mock_chroma_collection():
     mock_collection.upsert = MagicMock()
     return mock_collection
 
-
 @pytest.fixture
-def mock_async_citation_generator():
-    """Fixture for a mocked async citation generator function."""
-    # Use AsyncMock for async functions
-    mock_generator = AsyncMock(return_value="Generated Citation: Test")
-    return mock_generator
+def mock_text_splitter():
+    """Fixture for a mocked RecursiveCharacterTextSplitter."""
+    mock_splitter = MagicMock(spec=RecursiveCharacterTextSplitter)
+    # Default behavior: return a list of simple chunks
+    mock_splitter.split_text.return_value = ["Chunk 1", "Chunk 2"]
+    return mock_splitter
 
 
-@pytest.fixture(autouse=True)  # Apply mocking automatically to relevant tests
-def mock_dependencies(mocker, mock_text_embedding_model, mock_chroma_collection):
-    """Mocks external dependencies like ChromaDB client and Vertex AI model loading."""
+@pytest.fixture(autouse=True) # Apply mocking automatically to relevant tests
+def mock_dependencies(mocker, mock_text_embedding_model, mock_chroma_collection, mock_text_splitter):
+    """Mocks external dependencies like ChromaDB client, Vertex AI model loading, and text splitter."""
     # Mock Vertex AI model loading
     mocker.patch(
         "vertexai.language_models.TextEmbeddingModel.from_pretrained",
@@ -70,45 +74,45 @@ def mock_dependencies(mocker, mock_text_embedding_model, mock_chroma_collection)
     mock_client = MagicMock()
     mock_client.get_or_create_collection.return_value = mock_chroma_collection
     mocker.patch("chromadb.PersistentClient", return_value=mock_client)
-    # Mock pdfminer text extraction
+
+    # Mock the RecursiveCharacterTextSplitter instantiation within the class
+    # This ensures our mock_text_splitter instance is used by the vector_store
     mocker.patch(
-        "pdfminer.high_level.extract_text",
-        return_value="Paragraph 1.\n\nParagraph 2, which is longer.",
+        "buttermilk.data.vector.RecursiveCharacterTextSplitter",
+        return_value=mock_text_splitter
     )
-    # Mock asyncio.to_thread to avoid actual threading in tests if _run_embedding_task is called directly
-    # Often mocking higher-level methods like _embed makes this unnecessary
+
+    # Mock asyncio.to_thread used for upsert
     mocker.patch("asyncio.to_thread", new_callable=AsyncMock)
 
 
 @pytest.fixture
 def input_doc_factory():
     """Factory fixture to create InputDocument instances."""
-
     def _factory(
-        file_path="dummy/path.pdf",
         record_id="doc1",
         title="Test Doc",
+        full_text="Default full text.", # Added full_text
         metadata=None,
+        file_path="dummy/path.pdf" # Keep file_path for now if needed elsewhere
     ):
         if metadata is None:
-            metadata = {"doi": "10.1234/test", "url": "http://example.com"}
-        # Ensure metadata is always a dict
+            metadata = {"doi": "10.1234/test"}
         elif not isinstance(metadata, dict):
             metadata = {}
         return InputDocument(
-            file_path=file_path,
             record_id=record_id,
             title=title,
-            metadata=metadata.copy(),  # Return a copy
+            full_text=full_text,
+            metadata=metadata.copy(),
+            file_path=file_path
         )
-
     return _factory
 
 
 @pytest.fixture
 def chunked_doc_factory():
     """Factory fixture to create ChunkedDocument instances."""
-
     def _factory(
         chunk_id=None,
         doc_title="Test Doc",
@@ -121,8 +125,7 @@ def chunked_doc_factory():
         if chunk_id is None:
             chunk_id = str(uuid.uuid4())
         if metadata is None:
-            metadata = {"doi": "10.1234/test", "url": "http://example.com"}
-        # Ensure metadata is always a dict
+            metadata = {"doi": "10.1234/test"}
         elif not isinstance(metadata, dict):
             metadata = {}
         return ChunkedDocument(
@@ -132,612 +135,373 @@ def chunked_doc_factory():
             chunk_text=text,
             document_id=doc_id,
             embedding=embedding,
-            metadata=metadata.copy(),  # Return a copy
+            metadata=metadata.copy(),
         )
-
     return _factory
 
 
 @pytest.fixture
 def vector_store(
     tmp_path,
-    mock_async_citation_generator,
     mock_text_embedding_model,
     mock_chroma_collection,
+    mock_text_splitter # Inject the mock splitter fixture
 ):
     """Fixture for a ChromaDBEmbeddings instance with mocked dependencies."""
     persist_dir = tmp_path / "chroma_test"
     persist_dir.mkdir()
-    # Initialization triggers mocked load_models
+    # Initialization triggers mocked load_models and splitter creation
     store = ChromaDBEmbeddings(
         collection_name="test_collection",
         persist_directory=str(persist_dir),
-        chunk_size=50,  # Set a small chunk size for testing splitting
-        chunk_overlap=5,
-        citation_generator=mock_async_citation_generator,  # Inject mock generator
+        chunk_size=100, # Example values, will be used by mock splitter if needed
+        chunk_overlap=10,
+        concurrency=5, # Example concurrency
+        upsert_batch_size=50, # Example upsert batch size
+        embedding_batch_size=5 # Example embedding batch size
     )
     # Re-assign mocks as PrivateAttr might not be accessible otherwise post-init
     store._embedding_model = mock_text_embedding_model
     store._collection = mock_chroma_collection
+    store._text_splitter = mock_text_splitter # Ensure the instance uses our mock
     # Ensure the client mock is also available if needed directly
-    store._client = chromadb.PersistentClient(
-        path=str(persist_dir),
-    )  # Get the mock client instance
+    store._client = chromadb.PersistentClient(path=str(persist_dir)) # Get the mock client instance
     return store
 
+# Helper to convert list to async iterator for tests
+async def list_to_async_iterator(items):
+    for item in items:
+        yield item
+        await asyncio.sleep(0) # Yield control briefly
+
+# Helper to collect results from an async iterator
+async def collect_async_iterator(aiter):
+    return [item async for item in aiter]
 
 # --- Test Cases ---
 
-
-# Basic model tests remain synchronous
-def test_input_document_creation():
-    """Test basic InputDocument creation."""
-    doc = InputDocument(
-        file_path="a.pdf",
-        record_id="r1",
-        title="T1",
-        metadata={"key": "value"},
-    )
-    assert doc.file_path == "a.pdf"
-    assert doc.record_id == "r1"
-    assert doc.title == "T1"
-    assert doc.metadata == {"key": "value"}
-
-
-def test_chunked_document_creation(chunked_doc_factory):
-    """Test basic ChunkedDocument creation and defaults."""
-    chunk = chunked_doc_factory(text="Test chunk content")
-    assert isinstance(chunk.chunk_id, str)
-    assert len(chunk.chunk_id) > 0
-    assert chunk.document_title == "Test Doc"
-    assert chunk.chunk_index == 0
-    assert chunk.chunk_text == "Test chunk content"
-    assert chunk.document_id == "doc1"
-    assert chunk.embedding is None
-    assert chunk.metadata == {"doi": "10.1234/test", "url": "http://example.com"}
-    assert chunk.chunk_title == "Test Doc_0"
-
-
-# Initialization test remains synchronous as validator runs during init
+# Initialization test updated for text splitter
 def test_vector_store_initialization(
     vector_store,
     mock_logger,
     tmp_path,
-    mock_async_citation_generator,
+    mock_text_splitter # Add mock splitter
 ):
     """Test that dependencies are loaded during initialization."""
     persist_dir = str(tmp_path / "chroma_test")
     # Check if mocks were called during initialization via the fixture
-    vector_logger.info.assert_any_call(f"Loading embedding model: {MODEL_NAME}")
-    vector_logger.info.assert_any_call(
-        f"Initializing ChromaDB client at: {persist_dir}",
+    mock_logger.info.assert_any_call(f"Loading embedding model: {MODEL_NAME}")
+    mock_logger.info.assert_any_call(f"Initializing ChromaDB client at: {persist_dir}")
+    mock_logger.info.assert_any_call("Using ChromaDB collection: test_collection")
+    # Check splitter initialization log
+    mock_logger.info.assert_any_call(
+        f"Initialized RecursiveCharacterTextSplitter (chunk_size={vector_store.chunk_size}, chunk_overlap={vector_store.chunk_overlap})"
     )
-    vector_logger.info.assert_any_call("Using ChromaDB collection: test_collection")
 
     # Verify mocks were called
     vector_store._embedding_model.from_pretrained.assert_called_once_with(MODEL_NAME)
     vector_store._client.PersistentClient.assert_called_once_with(path=persist_dir)
-    vector_store._client.get_or_create_collection.assert_called_once_with(
-        "test_collection",
+    vector_store._client.get_or_create_collection.assert_called_once_with("test_collection")
+    # Verify the splitter mock was called during init
+    vector_store._text_splitter.__init__.assert_called_once_with(
+         chunk_size=vector_store.chunk_size,
+         chunk_overlap=vector_store.chunk_overlap,
+         length_function=len,
+         add_start_index=False,
     )
     assert vector_store.collection is not None
-    # Check that the citation generator was assigned
-    assert vector_store.citation_generator is mock_async_citation_generator
 
 
-@patch(
-    "pdfminer.high_level.extract_text",
-    return_value="First paragraph.\n\nSecond paragraph, slightly longer.\n\nThird one.",
-)
-@pytest.mark.anyio
-async def test_prepare_docs_basic(
-    mock_extract,
+# --- Tests for prepare_docs (Async Generator) ---
+
+async def test_prepare_docs_uses_splitter_and_yields(
     vector_store,
     input_doc_factory,
-    mock_async_citation_generator,
+    mock_text_splitter,
 ):
-    """Test basic document preparation, paragraph splitting, and citation generation."""
-    input_doc = input_doc_factory(metadata={"original": "value"})
-    full_text = mock_extract.return_value
+    """Test that prepare_docs uses the text splitter and yields ChunkedDocuments."""
+    input_text = "This is the input text to be split."
+    input_doc = input_doc_factory(full_text=input_text, metadata={"orig": "val"})
+    # Configure mock splitter for this test
+    mock_text_splitter.split_text.return_value = ["Chunk 1 text", "Chunk 2 text"]
 
-    chunks = await vector_store.prepare_docs([input_doc])  # Await async method
+    input_iterator = list_to_async_iterator([input_doc])
+    output_chunks = await collect_async_iterator(vector_store.prepare_docs(input_iterator))
 
-    mock_extract.assert_called_once_with(input_doc.file_path, laparams=ANY)
+    # Verify splitter was called with the correct text
+    mock_text_splitter.split_text.assert_called_once_with(input_text)
 
-    assert len(chunks) == 3
-    assert chunks[0].chunk_text == "First paragraph."
-    assert chunks[0].chunk_index == 0
-    assert chunks[0].document_id == input_doc.record_id
+    # Verify output
+    assert len(output_chunks) == 2
+    assert isinstance(output_chunks[0], ChunkedDocument)
+    assert output_chunks[0].chunk_text == "Chunk 1 text"
+    assert output_chunks[0].chunk_index == 0
+    assert output_chunks[0].document_id == input_doc.record_id
+    assert output_chunks[0].metadata == {"orig": "val"} # Metadata copied
 
-    assert chunks[1].chunk_text == "Second paragraph, slightly longer."
-    assert chunks[1].chunk_index == 1
-    assert chunks[2].chunk_text == "Third one."
-    assert chunks[2].chunk_index == 2
+    assert isinstance(output_chunks[1], ChunkedDocument)
+    assert output_chunks[1].chunk_text == "Chunk 2 text"
+    assert output_chunks[1].chunk_index == 1
+    assert output_chunks[1].document_id == input_doc.record_id
+    assert output_chunks[1].metadata == {"orig": "val"}
 
 
-@patch(
-    "pdfminer.high_level.extract_text",
-    return_value="This is a single paragraph that is definitely longer than the chunk size limit set in the fixture.",
-)
-@pytest.mark.anyio
-async def test_prepare_docs_splitting(
-    mock_extract,
+async def test_prepare_docs_empty_full_text(
     vector_store,
     input_doc_factory,
-    mock_async_citation_generator,
+    mock_logger,
+    mock_text_splitter
 ):
-    """Test splitting of paragraphs larger than chunk_size, includes citation."""
-    input_doc = input_doc_factory(metadata={"key": "val"})
-    vector_store.chunk_size = 30  # Override for this test
-    vector_store.chunk_overlap = 5
-    full_text = mock_extract.return_value
+    """Test that prepare_docs skips documents with empty full_text."""
+    input_doc = input_doc_factory(full_text="")
+    input_iterator = list_to_async_iterator([input_doc])
+    output_chunks = await collect_async_iterator(vector_store.prepare_docs(input_iterator))
 
-    chunks = await vector_store.prepare_docs([input_doc])  # Await async method
-
-    mock_extract.assert_called_once_with(input_doc.file_path, laparams=ANY)
-
-    assert len(chunks) > 1  # Should be split
-    assert chunks[0].chunk_text == "This is a single paragraph th"  # First 30 chars
-    assert chunks[1].chunk_text.startswith(
-        "graph that is definitely",
-    )  # Starts after overlap
-    assert chunks[0].chunk_index == 0
-    assert chunks[1].chunk_index == 1
-    assert all(c.document_id == input_doc.record_id for c in chunks)
-    # Check metadata propagation in split chunks
-    expected_metadata = {"key": "val", "citation": "Generated Citation: Test"}
-    assert all(c.metadata == expected_metadata for c in chunks)
-
-
-@pytest.mark.anyio
-async def test_prepare_docs_missing_path(vector_store, input_doc_factory, mock_logger):
-    """Test skipping document if file_path is missing (async)."""
-    input_doc = input_doc_factory(file_path=None)
-    chunks = await vector_store.prepare_docs([input_doc])  # Await async method
-    assert len(chunks) == 0
+    assert len(output_chunks) == 0
+    mock_text_splitter.split_text.assert_not_called()
     mock_logger.warning.assert_called_with(
-        f"Skipping record {input_doc.record_id} (index 0): missing file_path.",
+        f"Skipping record {input_doc.record_id} (document #1): missing full_text."
     )
 
 
-@patch("pdfminer.high_level.extract_text", side_effect=Exception("PDF read error"))
-@pytest.mark.anyio
-async def test_prepare_docs_extraction_error(
-    mock_extract,
+async def test_prepare_docs_splitter_error(
     vector_store,
     input_doc_factory,
     mock_logger,
+    mock_text_splitter
 ):
-    """Test skipping document if PDF extraction fails (async)."""
-    input_doc = input_doc_factory()
-    chunks = await vector_store.prepare_docs([input_doc])  # Await async method
-    assert len(chunks) == 0
+    """Test that prepare_docs handles errors during text splitting."""
+    input_doc = input_doc_factory(full_text="Some text")
+    mock_text_splitter.split_text.side_effect = Exception("Splitter failed")
+
+    input_iterator = list_to_async_iterator([input_doc])
+    output_chunks = await collect_async_iterator(vector_store.prepare_docs(input_iterator))
+
+    assert len(output_chunks) == 0
+    mock_text_splitter.split_text.assert_called_once_with("Some text")
     mock_logger.error.assert_called_with(
-        f"Error extracting text from PDF {input_doc.file_path}: PDF read error",
-        exc_info=True,
+        f"Error splitting text for doc {input_doc.record_id}: Splitter failed",
+        exc_info=True
     )
 
+# --- Tests for get_embedded_records (Async Generator) ---
 
-# Mock the internal _embed method for simplicity in testing higher-level embed methods
-@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
-@pytest.mark.anyio
-async def test_embed_records(mock_embed, vector_store, chunked_doc_factory):
-    """Test embedding multiple ChunkedDocument objects (async)."""
-    mock_embed.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]  # Mocked embeddings
-    chunks = [
-        chunked_doc_factory(index=0, text="text1"),
-        chunked_doc_factory(index=1, text="text2"),
-    ]
-
-    embeddings = await vector_store.embed_records(chunks)  # Await async method
-
-    assert len(embeddings) == 2
-    assert embeddings[0] == [0.1, 0.2, 0.3]
-    assert embeddings[1] == [0.4, 0.5, 0.6]
-
-    # Check that _embed was called with correctly formatted TextEmbeddingInput
-    mock_embed.assert_awaited_once()
-    call_args = mock_embed.call_args[0][0]  # Get the 'inputs' sequence
-    assert len(call_args) == 2
-    assert call_args[0].text == "text1"
-    assert call_args[0].task_type == "RETRIEVAL_DOCUMENT"
-    assert call_args[0].title == "Test Doc_0"
-    assert call_args[1].text == "text2"
-    assert call_args[1].task_type == "RETRIEVAL_DOCUMENT"
-    assert call_args[1].title == "Test Doc_1"
-
-
-@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
-@pytest.mark.anyio
-async def test_embed_query(mock_embed, vector_store):
-    """Test embedding a single query string (async)."""
-    mock_embed.return_value = [[0.7, 0.8, 0.9]]  # Mocked embedding
-    query = "What is the meaning of life?"
-
-    embedding = await vector_store.embed_query(query)  # Await async method
-
-    assert embedding == [0.7, 0.8, 0.9]
-
-    # Check that _embed was called correctly
-    mock_embed.assert_awaited_once()
-    call_args = mock_embed.call_args[0][0]
-    assert len(call_args) == 1
-    assert call_args[0].text == query
-    assert call_args[0].task_type == "RETRIEVAL_QUERY"
-    assert call_args[0].title is None
-
-
-@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
-@pytest.mark.anyio
-async def test_embed_query_failure(mock_embed, vector_store):
-    """Test query embedding returning None on failure."""
-    mock_embed.return_value = [None]  # Simulate embedding failure
-    query = "A failing query"
-    embedding = await vector_store.embed_query(query)
-    assert embedding is None
-
-
-# Test the internal _embed method's handling of failures
-@pytest.mark.anyio
-async def test_internal_embed_handling_failure(
-    vector_store,
-    mock_text_embedding_model,
-    mock_logger,
-):
-    """Test that _embed returns None for failed tasks, preserving order."""
-    # Configure the mock model's side effect for get_embeddings
-    good_result = MagicMock()
-    good_result.values = [1.0, 2.0]
-    mock_text_embedding_model.get_embeddings.side_effect = [
-        [good_result],  # First call succeeds
-        Exception("API Error"),  # Second call fails
-        [good_result],  # Third call succeeds
-    ]
-
-    # Mock asyncio.to_thread to directly call the side effect
-    async def mock_to_thread(func, *args, **kwargs):
-        try:
-            # Simulate the behavior of calling the mocked get_embeddings
-            return func(*args, **kwargs)
-        except Exception as e:
-            # Propagate the exception as the real to_thread would
-            raise e
-
-    with patch("asyncio.to_thread", mock_to_thread):
-        inputs = [MagicMock(), MagicMock(), MagicMock()]  # Dummy inputs
-        results = await vector_store._embed(inputs)
-
-    assert len(results) == 3
-    assert results[0] == [1.0, 2.0]
-    assert results[1] is None  # Failure represented by None
-    assert results[2] == [1.0, 2.0]
-    mock_logger.error.assert_called_once_with(
-        "Error getting embedding for input 1: API Error",
-        exc_info=True,
-    )
-    mock_logger.info.assert_called_with(
-        "Embedding process completed. Success: 2, Failed: 1.",
-    )
-
-
-@pytest.mark.anyio
-async def test_get_embedded_records(vector_store, chunked_doc_factory, mock_logger):
-    """Test assigning embeddings back to ChunkedDocument objects (async)."""
-    chunks_in = [chunked_doc_factory(index=0), chunked_doc_factory(index=1)]
-    # Mock the embed_records call within get_embedded_records
-    # Simulate one success and one failure
-    mock_embedding_results = [[1.0], None]
-    with patch.object(
-        vector_store,
-        "embed_records",
-        new_callable=AsyncMock,
-        return_value=mock_embedding_results,
-    ) as mock_embed:
-        chunks_out = await vector_store.get_embedded_records(
-            chunks_in,
-        )  # Await async method
-
-        mock_embed.assert_awaited_once_with(chunks_in)
-        assert len(chunks_out) == 2
-        # First chunk should have embedding
-        assert chunks_out[0].embedding == [1.0]
-        # Second chunk should have None embedding due to simulated failure
-        assert chunks_out[1].embedding is None
-        # Ensure original objects were modified
-        assert chunks_in[0].embedding == [1.0]
-        assert chunks_in[1].embedding is None
-        # Check logs
-        mock_logger.warning.assert_called_once_with(
-            f"Embedding failed for chunk 1 (ID: {chunks_in[1].chunk_id}), skipping assignment.",
-        )
-        mock_logger.info.assert_called_with(
-            "Finished assigning embeddings. Assigned: 1, Failed/Skipped: 1.",
-        )
-
-
-@pytest.mark.anyio
-async def test_create_vectorstore_from_input_docs(
-    vector_store,
-    input_doc_factory,
-    mock_chroma_collection,
-    mock_logger,
-    mock_async_citation_generator,
-):
-    """Test the full async pipeline starting from InputDocument objects."""
-    input_docs = [
-        input_doc_factory(record_id="doc1", metadata={"orig": "v1"}),
-        input_doc_factory(record_id="doc2", metadata={"orig": "v2"}),
-    ]
-    # Mock intermediate steps
-    mock_prepared_chunks = [
-        ChunkedDocument(
-            chunk_id="c1",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P1",
-            document_id="doc1",
-            metadata={"orig": "v1", "citation": "Gen1"},
-        ),
-        ChunkedDocument(
-            chunk_id="c2",
-            document_title="Test Doc",
-            chunk_index=1,
-            chunk_text="P2",
-            document_id="doc1",
-            metadata={"orig": "v1", "citation": "Gen1"},
-        ),
-        ChunkedDocument(
-            chunk_id="c3",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P3",
-            document_id="doc2",
-            metadata={"orig": "v2", "citation": "Gen2"},
-        ),
-    ]
-    # Simulate one embedding failure
-    mock_embedded_chunks = [
-        ChunkedDocument(
-            chunk_id="c1",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P1",
-            document_id="doc1",
-            metadata={"orig": "v1", "citation": "Gen1"},
-            embedding=[1.0],
-        ),
-        ChunkedDocument(
-            chunk_id="c2",
-            document_title="Test Doc",
-            chunk_index=1,
-            chunk_text="P2",
-            document_id="doc1",
-            metadata={"orig": "v1", "citation": "Gen1"},
-            embedding=None,
-        ),  # Failed
-        ChunkedDocument(
-            chunk_id="c3",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P3",
-            document_id="doc2",
-            metadata={"orig": "v2", "citation": "Gen2"},
-            embedding=[3.0],
-        ),
-    ]
-    # Mock the citation generator to return different values based on input if needed, or just use the default mock
-    mock_async_citation_generator.side_effect = ["Gen1", "Gen2"]
-
-    with (
-        patch.object(
-            vector_store,
-            "prepare_docs",
-            new_callable=AsyncMock,
-            return_value=mock_prepared_chunks,
-        ) as mock_prepare,
-        patch.object(
-            vector_store,
-            "get_embedded_records",
-            new_callable=AsyncMock,
-            return_value=mock_embedded_chunks,
-        ) as mock_get_embedded,
-    ):
-        count = await vector_store.create_vectorstore_chromadb(
-            input_docs,
-        )  # Await async method
-
-        mock_prepare.assert_awaited_once_with(input_docs=input_docs)
-        mock_get_embedded.assert_awaited_once_with(mock_prepared_chunks)
-        # Verify filtering: only c1 and c3 should be upserted
-        mock_chroma_collection.upsert.assert_called_once_with(
-            ids=["c1", "c3"],
-            embeddings=[[1.0], [3.0]],
-            metadatas=[
-                {
-                    "document_title": "Test Doc",
-                    "chunk_index": 0,
-                    "document_id": "doc1",
-                    "orig": "v1",
-                    "citation": "Gen1",
-                },
-                {
-                    "document_title": "Test Doc",
-                    "chunk_index": 0,
-                    "document_id": "doc2",
-                    "orig": "v2",
-                    "citation": "Gen2",
-                },
-            ],
-            documents=["P1", "P3"],
-        )
-        assert count == 2  # Only 2 records upserted
-        mock_logger.info.assert_any_call(
-            "Processing 2 input documents: Chunking, citation generation, and embedding asynchronously...",
-        )
-        mock_logger.warning.assert_any_call(
-            "Excluded 1 records due to missing/failed embeddings before upserting.",
-        )
-        mock_logger.info.assert_any_call(
-            "Upserting 2 chunks into ChromaDB collection 'test_collection'...",
-        )
-
-
-@pytest.mark.anyio
-async def test_create_vectorstore_from_pre_chunked(
+async def test_get_embedded_records_yields_embedded_chunks(
     vector_store,
     chunked_doc_factory,
-    mock_chroma_collection,
-    mock_logger,
+    mock_logger
 ):
-    """Test async pipeline with pre-chunked documents (need embedding)."""
-    chunked_docs_no_embedding = [
-        chunked_doc_factory(chunk_id="c1", index=0, text="P1", embedding=None),
-        chunked_doc_factory(chunk_id="c2", index=1, text="P2", embedding=None),
-    ]
-    mock_embedded_chunks = [
-        chunked_doc_factory(chunk_id="c1", index=0, text="P1", embedding=[1.0]),
-        chunked_doc_factory(chunk_id="c2", index=1, text="P2", embedding=[2.0]),
-    ]
+    """Test that get_embedded_records yields chunks with embeddings."""
+    chunk1 = chunked_doc_factory(chunk_id="c1", index=0, text="Text 1")
+    chunk2 = chunked_doc_factory(chunk_id="c2", index=1, text="Text 2")
+    input_iterator = list_to_async_iterator([chunk1, chunk2])
 
-    with (
-        patch.object(
-            vector_store,
-            "prepare_docs",
-            new_callable=AsyncMock,
-        ) as mock_prepare,
-        patch.object(
-            vector_store,
-            "get_embedded_records",
-            new_callable=AsyncMock,
-            return_value=mock_embedded_chunks,
-        ) as mock_get_embedded,
-    ):
-        count = await vector_store.create_vectorstore_chromadb(
-            chunked_docs_no_embedding,
-        )  # Await
-
-        mock_prepare.assert_not_awaited()  # Should not prepare docs
-        mock_get_embedded.assert_awaited_once_with(chunked_docs_no_embedding)
-        mock_chroma_collection.upsert.assert_called_once()  # Check details in previous test
-        assert count == 2
-        mock_logger.info.assert_any_call(
-            "Using 2 pre-chunked documents, generating embeddings asynchronously...",
+    # Mock the internal embed_records call
+    mock_embeddings = [[1.0], [2.0]]
+    with patch.object(vector_store, "embed_records", new_callable=AsyncMock, return_value=mock_embeddings) as mock_embed:
+        output_chunks = await collect_async_iterator(
+            vector_store.get_embedded_records(input_iterator, batch_size=2)
         )
 
+        # Verify embed_records was called (likely once for the batch)
+        mock_embed.assert_awaited_once()
+        # Check the batch passed to embed_records
+        assert mock_embed.await_args[0][0] == [chunk1, chunk2]
 
-@pytest.mark.anyio
-async def test_create_vectorstore_from_pre_embedded(
+        # Verify output
+        assert len(output_chunks) == 2
+        assert output_chunks[0].chunk_id == "c1"
+        assert output_chunks[0].embedding == [1.0]
+        assert output_chunks[1].chunk_id == "c2"
+        assert output_chunks[1].embedding == [2.0]
+
+
+async def test_get_embedded_records_skips_failed_embeddings(
     vector_store,
     chunked_doc_factory,
-    mock_chroma_collection,
-    mock_logger,
+    mock_logger
 ):
-    """Test async pipeline with pre-chunked and pre-embedded documents."""
-    chunked_docs_with_embedding = [
-        chunked_doc_factory(chunk_id="c1", index=0, text="P1", embedding=[1.0]),
-        chunked_doc_factory(chunk_id="c2", index=1, text="P2", embedding=[2.0]),
-    ]
+    """Test that get_embedded_records skips yielding chunks where embedding failed."""
+    chunk1 = chunked_doc_factory(chunk_id="c1", index=0, text="Text 1")
+    chunk2 = chunked_doc_factory(chunk_id="c2", index=1, text="Text 2") # This one will fail
+    chunk3 = chunked_doc_factory(chunk_id="c3", index=2, text="Text 3")
+    input_iterator = list_to_async_iterator([chunk1, chunk2, chunk3])
 
-    with (
-        patch.object(
-            vector_store,
-            "prepare_docs",
-            new_callable=AsyncMock,
-        ) as mock_prepare,
-        patch.object(
-            vector_store,
-            "get_embedded_records",
-            new_callable=AsyncMock,
-        ) as mock_get_embedded,
-    ):
-        count = await vector_store.create_vectorstore_chromadb(
-            chunked_docs_with_embedding,
-        )  # Await
+    # Mock the internal embed_records call - simulate one failure
+    mock_embeddings = [[1.0], None, [3.0]]
+    with patch.object(vector_store, "embed_records", new_callable=AsyncMock, return_value=mock_embeddings) as mock_embed:
+        # Use a batch size smaller than the total number of chunks to test batching log messages
+        output_chunks = await collect_async_iterator(
+            vector_store.get_embedded_records(input_iterator, batch_size=2)
+        )
 
-        mock_prepare.assert_not_awaited()
-        mock_get_embedded.assert_not_awaited()  # Should not embed again
-        mock_chroma_collection.upsert.assert_called_once()  # Check details in previous test
-        assert count == 2
+        # Verify embed_records was called (likely twice for batches of 2)
+        assert mock_embed.await_count == 2
+
+        # Verify output - only chunks with successful embeddings should be yielded
+        assert len(output_chunks) == 2
+        assert output_chunks[0].chunk_id == "c1"
+        assert output_chunks[0].embedding == [1.0]
+        assert output_chunks[1].chunk_id == "c3"
+        assert output_chunks[1].embedding == [3.0]
+
+        # Check warning log for the skipped chunk
+        mock_logger.warning.assert_called_with(
+             f"Embedding failed for chunk 1 (ID: {chunk2.chunk_id}), skipping."
+        )
+        # Check final log message
         mock_logger.info.assert_any_call(
-            "Using 2 pre-chunked and pre-embedded documents.",
+            "Finished embedding process. Total Chunks Processed: 3, Succeeded: 2, Failed: 1."
         )
 
 
-@pytest.mark.anyio
-async def test_create_vectorstore_empty_input(vector_store, mock_logger):
-    """Test create_vectorstore_chromadb with empty input list (async)."""
-    count = await vector_store.create_vectorstore_chromadb([])  # Await
-    assert count == 0
-    mock_logger.warning.assert_called_with(
-        "No input data provided to create_vectorstore_chromadb.",
-    )
+# --- Tests for create_vectorstore_chromadb (Pipeline Orchestration) ---
 
-
-@pytest.mark.anyio
-async def test_create_vectorstore_invalid_input_type(vector_store, mock_logger):
-    """Test create_vectorstore_chromadb with invalid input type (async)."""
-    count = await vector_store.create_vectorstore_chromadb([
-        {"invalid": "data"},
-    ])  # Await
-    assert count == 0
-    mock_logger.error.assert_called_with(
-        f"Invalid input type: {type({'invalid': 'data'})}. Expected InputDocument or ChunkedDocument.",
-    )
-
-
-@pytest.mark.anyio
-async def test_create_vectorstore_upsert_error(
+async def test_create_vectorstore_pipeline(
     vector_store,
     input_doc_factory,
+    chunked_doc_factory,
     mock_chroma_collection,
-    mock_logger,
+    mock_logger
 ):
-    """Test handling of errors during ChromaDB upsert (async)."""
-    input_docs = [input_doc_factory()]
-    mock_chroma_collection.upsert.side_effect = Exception("DB connection failed")
+    """Test the full pipeline orchestration in create_vectorstore_chromadb."""
+    # Input data
+    input_doc1 = input_doc_factory(record_id="d1", full_text="Text one.")
+    input_doc2 = input_doc_factory(record_id="d2", full_text="Text two.")
+    input_iterator = list_to_async_iterator([input_doc1, input_doc2])
 
-    # Mocks for prepare/embed steps are needed even if we test the final upsert error
-    mock_prepared_chunks = [
-        ChunkedDocument(
-            chunk_id="c1",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P1",
-            document_id="doc1",
-            metadata={"citation": "Gen1"},
-        ),
-    ]
-    mock_embedded_chunks = [
-        ChunkedDocument(
-            chunk_id="c1",
-            document_title="Test Doc",
-            chunk_index=0,
-            chunk_text="P1",
-            document_id="doc1",
-            metadata={"citation": "Gen1"},
-            embedding=[1.0],
-        ),
-    ]
+    # Mock outputs of pipeline stages
+    prepared_chunk1 = chunked_doc_factory(doc_id="d1", index=0, text="Chunk 1.1")
+    prepared_chunk2 = chunked_doc_factory(doc_id="d2", index=0, text="Chunk 2.1")
+    prepared_chunk3 = chunked_doc_factory(doc_id="d2", index=1, text="Chunk 2.2")
+
+    embedded_chunk1 = chunked_doc_factory(doc_id="d1", index=0, text="Chunk 1.1", embedding=[1.0])
+    # Simulate embedding failure for prepared_chunk2
+    embedded_chunk3 = chunked_doc_factory(doc_id="d2", index=1, text="Chunk 2.2", embedding=[3.0])
+
+    # Mock the generator methods
+    async def mock_prepare_gen(*args, **kwargs):
+        yield prepared_chunk1
+        yield prepared_chunk2
+        yield prepared_chunk3
+        await asyncio.sleep(0)
+
+    async def mock_embed_gen(*args, **kwargs):
+        # Simulate filtering based on embedding success
+        yield embedded_chunk1
+        # Skip chunk 2
+        yield embedded_chunk3
+        await asyncio.sleep(0)
 
     with (
-        patch.object(
-            vector_store,
-            "prepare_docs",
-            new_callable=AsyncMock,
-            return_value=mock_prepared_chunks,
-        ),
-        patch.object(
-            vector_store,
-            "get_embedded_records",
-            new_callable=AsyncMock,
-            return_value=mock_embedded_chunks,
-        ),
+        patch.object(vector_store, "prepare_docs", side_effect=mock_prepare_gen) as mock_prepare,
+        patch.object(vector_store, "get_embedded_records", side_effect=mock_embed_gen) as mock_embed,
+        patch("buttermilk.data.vector._batch_iterator", wraps=_batch_iterator) as mock_batch_iter # Wrap to test batching
     ):
-        count = await vector_store.create_vectorstore_chromadb(input_docs)  # Await
+        # Set a small upsert batch size to test batching
+        vector_store.upsert_batch_size = 1
+        count = await vector_store.create_vectorstore_chromadb(input_iterator)
+
+        # Verify pipeline calls
+        mock_prepare.assert_called_once()
+        # Check the input to prepare_docs was the original iterator
+        assert mock_prepare.call_args[0][0] is input_iterator
+
+        mock_embed.assert_called_once()
+        # Check the input to get_embedded_records was the output of prepare_docs
+        # (Difficult to assert directly on the generator object, rely on flow)
+        assert mock_embed.call_args[1]['batch_size'] == vector_store.concurrency # Check batch size used
+
+        # Verify batching for upsert (expect 2 batches of size 1)
+        assert mock_batch_iter.call_count >= 1 # Called at least for the upsert stage
+        upsert_batch_args = [call for call in mock_batch_iter.call_args_list if call[0][1] == vector_store.upsert_batch_size]
+        assert len(upsert_batch_args) == 1 # Should be called once for the upsert stage batching
+
+        # Verify upsert calls (should be 2 calls due to batch size 1)
+        assert mock_chroma_collection.upsert.call_count == 2
+        upsert_calls = vector_store._client.mock_calls # Access upsert calls via mocked client->collection
+        # Call 1
+        call1_args = upsert_calls[0].args # Adjust index if other client methods were mocked/called
+        assert call1_args[0]['ids'] == [embedded_chunk1.chunk_id]
+        assert call1_args[0]['embeddings'] == [embedded_chunk1.embedding]
+        # Call 2
+        call2_args = upsert_calls[1].args
+        assert call2_args[0]['ids'] == [embedded_chunk3.chunk_id]
+        assert call2_args[0]['embeddings'] == [embedded_chunk3.embedding]
+
+        # Verify final count
+        assert count == 2 # embedded_chunk1 and embedded_chunk3 were upserted
+
+        # Verify logs
+        mock_logger.info.assert_any_call(f"Starting vector store creation pipeline for collection '{vector_store.collection_name}' (upsert batch size: {vector_store.upsert_batch_size}).")
+        mock_logger.info.assert_any_call("Upserting batch #1 (1 chunks) into ChromaDB collection 'test_collection'...")
+        mock_logger.info.assert_any_call("Upserting batch #2 (1 chunks) into ChromaDB collection 'test_collection'...")
+        mock_logger.info.assert_any_call("Vector store creation pipeline finished. Total chunks successfully upserted: 2.")
+
+
+async def test_create_vectorstore_empty_iterator(vector_store, mock_logger):
+    """Test create_vectorstore with an empty input iterator."""
+    input_iterator = list_to_async_iterator([])
+
+    with (
+        patch.object(vector_store, "prepare_docs") as mock_prepare,
+        patch.object(vector_store, "get_embedded_records") as mock_embed,
+    ):
+        async def mock_empty_prepare(*args, **kwargs):
+            if False: # Never yield
+                yield
+            await asyncio.sleep(0)
+        mock_prepare.side_effect = mock_empty_prepare
+
+        count = await vector_store.create_vectorstore_chromadb(input_iterator)
 
         assert count == 0
-        mock_chroma_collection.upsert.assert_called_once()  # It was called
+        mock_prepare.assert_called_once()
+        mock_embed.assert_not_called() # Should not be called if prepare yields nothing
+        vector_store._collection.upsert.assert_not_called()
+        # Check for the final log message indicating 0 upserts
+        mock_logger.info.assert_any_call("Vector store creation pipeline finished. Total chunks successfully upserted: 0.")
+
+
+async def test_create_vectorstore_upsert_error_handling(
+    vector_store,
+    input_doc_factory,
+    chunked_doc_factory,
+    mock_chroma_collection,
+    mock_logger
+):
+    """Test that the pipeline continues and logs errors if one upsert batch fails."""
+    input_iterator = list_to_async_iterator([input_doc_factory()])
+    embedded_chunk1 = chunked_doc_factory(embedding=[1.0], chunk_id="c1")
+    embedded_chunk2 = chunked_doc_factory(embedding=[2.0], chunk_id="c2")
+
+    async def mock_prepare(*_a, **_kw): yield chunked_doc_factory(); yield chunked_doc_factory() # Dummy prepare
+    async def mock_embed(*_a, **_kw): yield embedded_chunk1; yield embedded_chunk2 # Dummy embed
+
+    # Simulate failure on the first upsert call, success on the second
+    mock_chroma_collection.upsert.side_effect = [Exception("DB Write Error"), None]
+
+    with (
+        patch.object(vector_store, "prepare_docs", side_effect=mock_prepare),
+        patch.object(vector_store, "get_embedded_records", side_effect=mock_embed),
+        patch("asyncio.to_thread", wraps=asyncio.to_thread) # Use real to_thread but allow mocking collection inside
+    ):
+        vector_store.upsert_batch_size = 1 # Ensure two batches
+        count = await vector_store.create_vectorstore_chromadb(input_iterator)
+
+        # Verify upsert was attempted twice
+        assert mock_chroma_collection.upsert.call_count == 2
+        # Verify error was logged for the first batch
         mock_logger.error.assert_called_with(
-            "Failed to upsert data into ChromaDB: DB connection failed",
-            exc_info=True,
+            "Failed to upsert batch #1 into ChromaDB: DB Write Error", exc_info=True
         )
+        # Verify the second batch was still processed and logged
+        mock_logger.info.assert_any_call("Upserting batch #2 (1 chunks) into ChromaDB collection 'test_collection'...")
+        # Verify final count reflects only the successful upsert
+        assert count == 1
+        mock_logger.info.assert_any_call("Vector store creation pipeline finished. Total chunks successfully upserted: 1.")
+
+
+# Remove or adapt old tests that used list-based processing if they are now obsolete
+# e.g., test_create_vectorstore_from_input_docs, test_create_vectorstore_from_pre_chunked, etc.
+# might be fully replaced by test_create_vectorstore_pipeline.

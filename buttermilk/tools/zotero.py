@@ -4,16 +4,12 @@ from pathlib import Path
 from typing import Self
 
 import pydantic
-from pdfminer.high_level import extract_text
-from pdfminer.layout import LAParams
 from pydantic import BaseModel, Field, PrivateAttr
 from pyzotero import zotero
 
 from buttermilk.bm import bm, logger
 from buttermilk.data.vector import InputDocument
-from buttermilk.utils import download_limited_async
-
-CITATION_TEXT_CHAR_LIMIT = 4000  # characters
+from buttermilk.utils import download_limited_async, get_pdf_text
 
 
 # Placeholder implementation (replace with your actual function)
@@ -42,37 +38,6 @@ class ZotDownloader(BaseModel):
         )
         return self
 
-    async def generate_citation(self, item: InputDocument) -> InputDocument:
-        try:
-            full_text = extract_text(item.file_path, laparams=LAParams())
-        except Exception as e:
-            logger.error(
-                f"Error extracting text from PDF {item.file_path}: {e} {e.args=}",
-            )
-            return item
-
-        try:
-            # Take the first N characters for citation generation
-            citation_text = full_text[:CITATION_TEXT_CHAR_LIMIT]
-            logger.debug(
-                f"Generating citation for doc {item.record_id} using first {len(citation_text)} chars.",
-            )
-
-            generated_citation = await self.citation_generator(citation_text)
-
-            # Store it in the metadata (overwrites if 'citation' key already exists)
-            item.metadata["citation"] = generated_citation
-            logger.debug(
-                f"Generated citation for doc {item.record_id}: '{generated_citation[:100]}...'",
-            )
-            return item
-        except Exception as e:
-            logger.error(
-                f"Error generating citation for doc {item.record_id}: {e}",
-                exc_info=True,
-            )
-            return item
-
     async def get_all_records(self, **kwargs) -> AsyncIterator[InputDocument]:
         items = []
         items.extend(self._zot.items(itemType="book || journalArticle", **kwargs))
@@ -83,10 +48,11 @@ class ZotDownloader(BaseModel):
                 try:
                     # Ensure download returns InputDocument | None
                     tasks.append(asyncio.create_task(self.download(item)))
-                    # Consider removing or adjusting sleep if not needed for rate limiting
-                    await asyncio.sleep(0.01)
+
                 except Exception as e:
-                    logger.error(f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}")
+                    logger.error(
+                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
+                    )
 
             # Process completed tasks as they finish
             for future in asyncio.as_completed(tasks):
@@ -110,7 +76,7 @@ class ZotDownloader(BaseModel):
             elif not items:
                 break
 
-    async def download(self, item) -> InputDocument | None:
+    async def download_and_convert(self, item) -> InputDocument | None:
         uri = item.get("links", {}).get("attachment", {}).get("href")
         mime = item.get("links", {}).get("attachment", {}).get("attachmentType")
         key = item.get("key")
@@ -129,18 +95,23 @@ class ZotDownloader(BaseModel):
                     pdf_content = await download_limited_async(uri)
                     with file.open("wb") as f:
                         f.write(pdf_content)
+                        f.seek(0)
+                        full_text = get_pdf_text()
                 else:
                     logger.debug(f"File already exists: {file}")
+                    full_text = get_pdf_text(file)
 
                 record = InputDocument(
                     file_path=file.as_posix(),
+                    full_text=full_text,
                     record_id=key,
                     title=title,
                     metadata=dict(doi=doi),
                 )
 
                 # Generate citation after download/retrieval
-                record = await self.generate_citation(record)
+                record = await self.citation_generator(record)
+
                 return record
 
             except Exception as e:

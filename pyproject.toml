@@ -77,6 +77,7 @@ dependencies = [
     "autogen-core>=0.4.9.2",
     "pdfminer-six>=20250327",
     "pyzotero>=1.6.11",
+    "langchain-text-splitters>=0.3.7",
 ]
 
 [dependency-groups]

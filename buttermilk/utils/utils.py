@@ -7,6 +7,7 @@ import mimetypes
 import pathlib
 import uuid
 from collections.abc import Mapping, Sequence
+from io import IOBase
 from typing import Any, TypeVar
 from urllib.parse import urlparse
 
@@ -22,6 +23,8 @@ import yaml
 from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
 from omegaconf import DictConfig, ListConfig, OmegaConf
+from pdfminer.high_level import extract_text
+from pdfminer.layout import LAParams
 
 from .._core.log import logger
 
@@ -514,3 +517,13 @@ def extract_url_regex(text):
     # Simple regex pattern that matches common URL formats
     match = re.search(URL_PATTERN, text)
     return match.group(0) if match else None
+
+
+def get_pdf_text(file: str | IOBase) -> str | None:
+    try:
+        return extract_text(file, laparams=LAParams())
+    except Exception as e:
+        logger.error(
+            f"Error extracting text from PDF {file}: {e} {e.args=}",
+        )
+        return None

@@ -7,6 +7,7 @@ import weave
 from pydantic import (
     BaseModel,
     Field,
+    PrivateAttr,
 )
 
 from buttermilk import logger
@@ -98,7 +99,7 @@ class Agent(AgentConfig, ABC):
     )
 
     _trace_this = True
-    _run_fn: Callable | Awaitable
+    _run_fn: Callable | Awaitable = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
     def _get_process_func(self) -> Self:
@@ -139,7 +140,9 @@ class Agent(AgentConfig, ABC):
         return job
 
     async def __call__(
-        self, input_data: AgentInput, **kwargs
+        self,
+        input_data: AgentInput,
+        **kwargs,
     ) -> AgentOutput | UserInstructions | None:
         """Allow agents to be called directly as functions"""
         try:
