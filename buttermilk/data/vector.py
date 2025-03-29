@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence  # Added AsyncIterator
 from typing import Any, Self
 
 import chromadb
@@ -184,24 +184,28 @@ class ChromaDBEmbeddings(BaseModel):
 
     async def prepare_docs(
         self,
-        input_docs: Sequence[InputDocument],
+        input_docs: AsyncIterator[InputDocument],  # Changed type hint
     ) -> Sequence[ChunkedDocument]:
         """Extracts text from PDFs, chunks by paragraphs, copies metadata,
-        and handles overlaps/size limits. (Async)
+        and handles overlaps/size limits. Accepts an async iterator of InputDocuments.
         """
         chunked_documents = []
-        logger.info(f"Preparing {len(input_docs)} input documents...")
-        for i, input_doc in enumerate(input_docs):
+        processed_doc_count = 0
+        logger.info("Starting preparation of input documents from async iterator...")
+        async for input_doc in input_docs:  # Changed to async for
+            processed_doc_count += 1
             if not input_doc.file_path:
                 logger.warning(
-                    f"Skipping record {input_doc.record_id} (index {i}): missing file_path.",
+                    f"Skipping record {input_doc.record_id} (document #{processed_doc_count}): missing file_path.",
                 )
                 continue
 
             logger.debug(
-                f"Processing document {i + 1}/{len(input_docs)}: {input_doc.file_path}",
+                f"Processing document #{processed_doc_count}: {input_doc.file_path}",
             )
             try:
+                # Consider making extract_text async if it becomes a bottleneck
+                # For now, assume it's acceptable to run synchronously within the async loop
                 full_text = extract_text(input_doc.file_path, laparams=LAParams())
             except Exception as e:
                 logger.error(
@@ -214,6 +218,7 @@ class ChromaDBEmbeddings(BaseModel):
             paragraphs = [p.strip() for p in paragraphs if p.strip()]
 
             current_chunk_index = 0
+            doc_chunk_count = 0  # Count chunks for this specific document
             for paragraph in paragraphs:
                 if len(paragraph) > self.chunk_size:
                     logger.debug(
@@ -233,9 +238,18 @@ class ChromaDBEmbeddings(BaseModel):
                             )
                             chunked_documents.append(chunk)
                             current_chunk_index += 1
+                            doc_chunk_count += 1
+                        # Adjust start for overlap, ensuring it moves forward
                         start += self.chunk_size - self.chunk_overlap
-                        start = max(start, end - self.chunk_overlap + 1)
-                elif paragraph:
+                        # Ensure start doesn't get stuck if overlap is large or chunk_size is small
+                        start = max(
+                            start,
+                            end - self.chunk_overlap + 1
+                            if self.chunk_overlap < self.chunk_size
+                            else end,
+                        )
+
+                elif paragraph:  # Ensure paragraph is not empty after strip
                     chunk = ChunkedDocument(
                         document_title=input_doc.title,
                         chunk_index=current_chunk_index,
@@ -245,12 +259,13 @@ class ChromaDBEmbeddings(BaseModel):
                     )
                     chunked_documents.append(chunk)
                     current_chunk_index += 1
+                    doc_chunk_count += 1
             logger.debug(
-                f"Finished processing doc {input_doc.record_id}, generated {current_chunk_index} chunks.",
+                f"Finished processing doc {input_doc.record_id}, generated {doc_chunk_count} chunks.",
             )
 
         logger.info(
-            f"Generated a total of {len(chunked_documents)} chunks from {len(input_docs)} documents.",
+            f"Generated a total of {len(chunked_documents)} chunks from {processed_doc_count} processed documents.",
         )
         return chunked_documents
 
@@ -287,9 +302,10 @@ class ChromaDBEmbeddings(BaseModel):
     # create_vectorstore_chromadb remains async
     async def create_vectorstore_chromadb(
         self,
-        input_data: list[InputDocument | ChunkedDocument],
+        input_data: list[InputDocument | ChunkedDocument]
+        | AsyncIterator[InputDocument],  # Allow AsyncIterator
     ) -> int:
-        """Processes input data, generates embeddings asynchronously if needed,
+        """Processes input data (Sequence or AsyncIterator), generates embeddings asynchronously if needed,
         and upserts the data into the ChromaDB collection. Ensures only records
         with successful embeddings are stored. (Async)
         """
@@ -298,38 +314,71 @@ class ChromaDBEmbeddings(BaseModel):
             return 0
 
         processed_records: Sequence[ChunkedDocument] = []
-        first_item = input_data[0]
 
-        if isinstance(first_item, ChunkedDocument):
-            chunked_docs: Sequence[ChunkedDocument] = [
-                doc for doc in input_data if isinstance(doc, ChunkedDocument)
-            ]
-            if hasattr(first_item, "embedding") and first_item.embedding:
-                logger.info(
-                    f"Using {len(chunked_docs)} pre-chunked and pre-embedded documents.",
-                )
-                processed_records = chunked_docs
-            else:
-                logger.info(
-                    f"Using {len(chunked_docs)} pre-chunked documents, generating embeddings asynchronously...",
-                )
-                processed_records = await self.get_embedded_records(chunked_docs)
-        elif isinstance(first_item, InputDocument):
+        # Determine input type and process accordingly
+        if isinstance(input_data, AsyncIterator):
             logger.info(
-                f"Processing {len(input_data)} input documents: Chunking, citation generation, and embedding asynchronously...",
+                "Processing input documents from async iterator: Chunking, citation generation, and embedding asynchronously...",
             )
-            input_docs: Sequence[InputDocument] = [
-                doc for doc in input_data if isinstance(doc, InputDocument)
-            ]
-
-            docs = await self.prepare_docs(input_docs=input_docs)
+            # Pass the async iterator directly to prepare_docs
+            docs = await self.prepare_docs(input_docs=input_data)
             if not docs:
-                logger.warning("No documents could be prepared from the input.")
+                logger.warning(
+                    "No documents could be prepared from the input iterator."
+                )
                 return 0
             processed_records = await self.get_embedded_records(docs)
+
+        elif isinstance(input_data, list) and input_data:
+            first_item = input_data[0]
+            if isinstance(first_item, ChunkedDocument):
+                chunked_docs: Sequence[ChunkedDocument] = [
+                    doc for doc in input_data if isinstance(doc, ChunkedDocument)
+                ]
+                if hasattr(first_item, "embedding") and first_item.embedding:
+                    logger.info(
+                        f"Using {len(chunked_docs)} pre-chunked and pre-embedded documents.",
+                    )
+                    processed_records = chunked_docs
+                else:
+                    logger.info(
+                        f"Using {len(chunked_docs)} pre-chunked documents, generating embeddings asynchronously...",
+                    )
+                    processed_records = await self.get_embedded_records(chunked_docs)
+            elif isinstance(first_item, InputDocument):
+                # This case now requires collecting the list into an async iterator
+                # or handling it differently. For simplicity, let's assume
+                # if a list of InputDocument is passed, it's small enough to collect.
+                # A more robust solution might involve a separate pathway or
+                # converting the list to an async iterator internally.
+                logger.warning(
+                    "Processing a list of InputDocument. Consider passing an AsyncIterator for large datasets."
+                )
+
+                async def _list_to_async_iter(items):
+                    for item in items:
+                        yield item
+                        await asyncio.sleep(0)  # Yield control briefly
+
+                input_docs_iter = _list_to_async_iter([
+                    doc for doc in input_data if isinstance(doc, InputDocument)
+                ])
+                docs = await self.prepare_docs(input_docs=input_docs_iter)
+                if not docs:
+                    logger.warning(
+                        "No documents could be prepared from the input list."
+                    )
+                    return 0
+                processed_records = await self.get_embedded_records(docs)
+
+            else:
+                logger.error(
+                    f"Invalid input type in list: {type(first_item)}. Expected InputDocument or ChunkedDocument.",
+                )
+                return 0
         else:
             logger.error(
-                f"Invalid input type: {type(first_item)}. Expected InputDocument or ChunkedDocument.",
+                f"Invalid input type: {type(input_data)}. Expected list or AsyncIterator.",
             )
             return 0
 
@@ -350,7 +399,10 @@ class ChromaDBEmbeddings(BaseModel):
 
         ids = [rec.chunk_id for rec in records_to_upsert]
         documents = [rec.chunk_text for rec in records_to_upsert]
-        embeddings_list: Embeddings = [rec.embedding for rec in records_to_upsert]
+        # Ensure embeddings are lists, not tuples or other sequences if ChromaDB requires lists
+        embeddings_list: Embeddings = [
+            list(rec.embedding) for rec in records_to_upsert if rec.embedding
+        ]
 
         metadatas = []
         for rec in records_to_upsert:
@@ -368,7 +420,9 @@ class ChromaDBEmbeddings(BaseModel):
         )
         try:
             # Consider wrapping in asyncio.to_thread if upsert is blocking
-            self.collection.upsert(
+            # ChromaDB client operations might be network-bound or CPU-bound depending on setup
+            await asyncio.to_thread(
+                self.collection.upsert,
                 ids=ids,
                 embeddings=embeddings_list,
                 metadatas=metadatas,

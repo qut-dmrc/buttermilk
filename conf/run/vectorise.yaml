@@ -1,0 +1,10 @@
+defaults:
+  - _self_
+  - override /name: vectoriser
+  - override /job: zotero
+
+zot:
+  _target_: buttermilk.tools.zotero.ZotDownloader
+  library: 2281727
+  data_dir: "/home/nic/data/prosocial_zot"
+  
