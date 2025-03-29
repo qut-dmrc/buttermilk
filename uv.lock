@@ -330,19 +330,19 @@ wheels = [
 
 [[package]]
 name = "autogen-agentchat"
-version = "0.4.9.2"
+version = "0.4.9.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "autogen-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/6b/2109a558f41449560847a5da54bb274f7b5b2056042faa6684c7d0cc25da/autogen_agentchat-0.4.9.2.tar.gz", hash = "sha256:85b608e5641310381d1d1b81b241ef3e86e59002856113510a28228637ddb516", size = 72190 }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/8c/83c166239ffe9ebfc257c27f87f126208c07dcb86ca63d5c141c5d1382b1/autogen_agentchat-0.4.9.3.tar.gz", hash = "sha256:d101fa3d536df3aef845f6038ba77a1603e06fdd4e2547a89accc59128d5aaa1", size = 72183 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/d9/bd74f1cd6d7aa93f41f8798fbdc74230514659bfd84619daa261e56e0683/autogen_agentchat-0.4.9.2-py3-none-any.whl", hash = "sha256:f21019e08728b890ad2c4fe9594b713fc7f14d4aacea77efd63d5ab650ea631b", size = 75943 },
+    { url = "https://files.pythonhosted.org/packages/da/09/581048695159d166f6fcf36564cb436a5f81d94d432507a70da99d23dbb1/autogen_agentchat-0.4.9.3-py3-none-any.whl", hash = "sha256:574956e65fad2029ec267ed143388c81f8fd308a06ca08773e63c2757ed9a1d1", size = 75943 },
 ]
 
 [[package]]
 name = "autogen-core"
-version = "0.4.9.2"
+version = "0.4.9.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonref" },
@@ -352,21 +352,21 @@ dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/4f/7f18640c21e1796befbb1bdeb36b76dbcf6c96a62a093ba294ae6a33d3a6/autogen_core-0.4.9.2.tar.gz", hash = "sha256:f264d809d80a299a9aa851bc4c3280bc57fc57d2f6ae7c7b5384cc9e3454cb57", size = 2393231 }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/3c/750801b3b3fa9af049c284f9c3ff4cc7f4a21d537eef8e931ff31df61d0b/autogen_core-0.4.9.3.tar.gz", hash = "sha256:a32d53f80d7aa00588d8c5ecf21b8e20fbbef3c4812d5e1862911ba24dc30d3f", size = 2393235 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/10/50841e960143b397c2201d8b47222e41d3ea15c546580ffa2e83b15dbb67/autogen_core-0.4.9.2-py3-none-any.whl", hash = "sha256:4d7df0db8f914dd974ee64d32edbcb821549794553a188f55d959f0aacf2acb7", size = 83890 },
+    { url = "https://files.pythonhosted.org/packages/f7/7f/714dcd4528bc5235bc0ac1614870557112fedf05a586ef16d63e3ac76622/autogen_core-0.4.9.3-py3-none-any.whl", hash = "sha256:7e3680182bb968d2f63318dc1c3c427c964807aa6ad45e203924051a7a2333f8", size = 83889 },
 ]
 
 [[package]]
 name = "autogen-ext"
-version = "0.4.9.2"
+version = "0.4.9.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "autogen-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/55/86982c763d47043743f3f1c98de85e6de5fb409173c8f45d83b8566acfd0/autogen_ext-0.4.9.2.tar.gz", hash = "sha256:988eda56016be9f4594a473dea074bb8d94ef28b563123f1792b1faafda9e9cd", size = 255195 }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/7a/f677c8bb3875fcc508fb7fb6900ac5bb4a3475d5c4a377eaab5634c1b31d/autogen_ext-0.4.9.3.tar.gz", hash = "sha256:c7bef82324ffb9e33b0f8c4cea783b24d1e48e7a9d852889ca5cc19e287500dc", size = 256181 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/69/babb25d5c33e39053b90536493b2eb329537d92f0d4614bf55942c53e37c/autogen_ext-0.4.9.2-py3-none-any.whl", hash = "sha256:29cb6f65a818aed8172db8a31fb37f0ecdf61c5952c24b85104a4f082f20c1ee", size = 234181 },
+    { url = "https://files.pythonhosted.org/packages/c9/4c/db18181dba60d38e5a31a6129d9d5702310e026d563d521d34c7baf9a881/autogen_ext-0.4.9.3-py3-none-any.whl", hash = "sha256:ac3780ec584be71eedd884483fc1a7db0f60318c369d05d7603bb7d27fe25883", size = 234499 },
 ]
 
 [package.optional-dependencies]
@@ -1021,6 +1021,7 @@ dependencies = [
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.2.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pathlib" },
+    { name = "pdfminer-six" },
     { name = "pillow" },
     { name = "promptflow" },
     { name = "promptflow-azure" },
@@ -1132,6 +1133,7 @@ requires-dist = [
     { name = "newspaper4k", specifier = ">=0.9.3.1" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pathlib", specifier = ">=1.0.1,<2.0.0" },
+    { name = "pdfminer-six", specifier = ">=20250327" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "promptflow", specifier = ">=0.17.dev0" },
     { name = "promptflow-azure", specifier = ">=1.17.2" },
@@ -3264,11 +3266,11 @@ wheels = [
 
 [[package]]
 name = "jsonpickle"
-version = "4.0.2"
+version = "4.0.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/2c/6f/e73cb91f774ad1077929a29b3a4af6e5603beb446cb99a55debe240664c3/jsonpickle-4.0.2.tar.gz", hash = "sha256:3e650b9853adcdab9d9d62a88412b6d36e9a59ba423b01cacf0cd4ee80733aca", size = 315121 }
+sdist = { url = "https://files.pythonhosted.org/packages/10/7f/53c5534899311d1b76d524c7dcb99ba1f31fcf153204a482d97c15da27d7/jsonpickle-4.0.4.tar.gz", hash = "sha256:2ac818e5dfc316b57fb7a86641c1c84d21b8f355518054ffe7f697be078f2f63", size = 315600 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/c8/e9dc0af97ce006616abbd7f522d0b45ac322a77f72bb29d901b5114a49ba/jsonpickle-4.0.2-py3-none-any.whl", hash = "sha256:cd3c90d32a68dcaa7f0e4b918bda7d4bb61f3c03b182d82dae2caf9ded0ab6b3", size = 46325 },
+    { url = "https://files.pythonhosted.org/packages/b1/45/6df4d4ac5cc733d822dd22a94a82b5f8fab974c62ddd62d12d122f07b29f/jsonpickle-4.0.4-py3-none-any.whl", hash = "sha256:356c42ca5b03e371b6cf527d588bfddfe35109cdd1acbb455428f44cbc16a36e", size = 46374 },
 ]
 
 [[package]]
@@ -5234,6 +5236,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712", size = 51043 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191 },
+]
+
+[[package]]
+name = "pdfminer-six"
+version = "20250327"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "charset-normalizer" },
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/08/e9/4688ff2dd985f21380b9c8cd2fa8004bc0f2691f2c301082d767caea7136/pdfminer_six-20250327.tar.gz", hash = "sha256:57f6c34c2702df04cfa3191622a3db0a922ced686d35283232b00094f8914aa1", size = 7381506 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/2f/409e174b5a0195aa6a814c7359a1285f1c887a4c84aff17ed03f607c06ba/pdfminer_six-20250327-py3-none-any.whl", hash = "sha256:5af494c85b1ecb7c28df5e3a26bb5234a8226a307503d9a09f4958bc154b16a9", size = 5617445 },
 ]
 
 [[package]]
