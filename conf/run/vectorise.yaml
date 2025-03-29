@@ -1,20 +1,22 @@
+# @package _global_
+
 defaults:
   - _self_
-  - override /name: vectoriser
-  - override /job: zotero
 
+name: vectoriser
+job: zotero
 vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
+  persist_directory: "/home/nic/data/prosocial_zot/files"
   embedding_model: "text-embedding-large-exp-03-07"
-  collection_name: "/home/nic/data/prosocial_zot"
-  persist_dir: "/home/nic/data/prosocial_zot/files"
-  
+  collection_name: "prosocial_zot"
+
 input_docs:
-    _target_: buttermilk.tools.zotero.ZotDownloader
-    library: 2281727
-    data_dir: "/home/nic/data/prosocial_zot/files"
-    citation_generator:
-      _target_: buttermilk.tools.citator.Citator
-      model: "gemini-25-pro"
+  _target_: buttermilk.tools.zotero.ZotDownloader
+  library: 2281727
+  data_dir: "/home/nic/data/prosocial_zot/files"
+  citation_generator:
+    _target_: buttermilk.tools.citator.Citator
+    model: "gemini-25-pro"
 
   

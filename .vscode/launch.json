@@ -77,17 +77,15 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "automod: osbcases",
+      "name": "vectorise",
       "type": "debugpy",
       "request": "launch",
-      "module": "examples.automod.mod",
+      "module": "buttermilk.data.vector",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "+flows=summarise_osb",
-        "job=batch"
-
+        "+run=vectorise",
         // "experiments.model=[haiku]"
       ],
       "envFile": "${workspaceFolder}/.env",

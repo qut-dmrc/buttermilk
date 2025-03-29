@@ -24,7 +24,7 @@ class Citator(BaseModel):
             name="Citator",
             description="Gets citation information from the first page or two.",
             parameters={"template": "citator"},
-            inputs=["text_extract"],
+            inputs={"text_extract": "text_extract"},
             fail_on_unfilled_parameters=True,
         )
         return self
