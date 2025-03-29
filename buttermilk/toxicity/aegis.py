@@ -4,7 +4,7 @@ from typing import (
     Any,
     ClassVar,
 )
-
+import torch
 from peft.config import PeftConfig
 from peft.peft_model import PeftModel
 from promptflow.tracing import trace

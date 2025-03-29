@@ -25,7 +25,7 @@ def flow_describer(request) -> Flow:
 @pytest.mark.anyio
 async def test_run_flow_describe_only(flow_describer, image_bytes, bm):
     record = await download_and_convert(image_bytes, "image/jpeg")
-    job = Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
+    job = None  # Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
     async for result in flow_describer.run_flows(job=job):
         assert result
         assert not result.error

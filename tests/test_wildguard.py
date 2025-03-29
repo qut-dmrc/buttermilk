@@ -1,5 +1,6 @@
 import pytest
 
+torch = pytest.importorskip("torch")
 from buttermilk.toxicity.wildguard import Wildguard
 from buttermilk.types.tox import EvalRecord
 
@@ -18,9 +19,13 @@ response_harmful_response = (True, """
         Response refusal: no
         Harmful response: yes""")
 
+
 class TestInterpreters:
-    @pytest.mark.parametrize(["expected","response"], [response_refuse, response_harmful_request, response_harmful_response])
+    @pytest.mark.parametrize(
+        ["expected", "response"],
+        [response_refuse, response_harmful_request, response_harmful_response],
+    )
     def test_wildguard(self, response, expected):
-        result = Wildguard(client='dummy').interpret(response=response)
+        result = Wildguard(client="dummy").interpret(response=response)
         assert isinstance(result, EvalRecord)
         assert int(result.predicted) == int(expected)

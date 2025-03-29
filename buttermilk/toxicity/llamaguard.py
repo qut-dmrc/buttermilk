@@ -9,6 +9,7 @@ from typing import (
 )
 
 import regex as re
+import torch
 from huggingface_hub import login
 from promptflow.tracing import trace
 from pydantic import (

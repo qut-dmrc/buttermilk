@@ -15,6 +15,7 @@ import evaluate
 import google.auth
 import openai
 import pandas as pd
+import torch
 import transformers
 from azure.ai.contentsafety import ContentSafetyClient
 from azure.ai.contentsafety.models import (

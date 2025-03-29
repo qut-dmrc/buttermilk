@@ -98,6 +98,7 @@ class TestFetch:
             agent_id="test_agent",
             content="Check out https://example.com",
             inputs={"step": "testing"},
+            agent_name="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -131,6 +132,7 @@ class TestFetch:
             agent_id="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
+            agent_name="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -168,6 +170,7 @@ class TestFetch:
             agent_id="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
+            agent_name="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -195,6 +198,7 @@ class TestFetch:
             agent_id="test_agent",
             content="Check out https://example.com",
             inputs={},
+            agent_name="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -239,6 +243,7 @@ messages = [
             agent_id="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
+            agent_name="test",
         ),
     ),
     (
@@ -247,6 +252,7 @@ messages = [
             agent_id="test_agent",
             content="Check out https://example.com",
             inputs={},
+            agent_name="test",
         ),
     ),
     (
@@ -255,6 +261,7 @@ messages = [
             agent_id="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
+            agent_name="test",
         ),
     ),
 ]

@@ -13,7 +13,7 @@ from google.cloud import pubsub
 from pydantic import BaseModel
 
 from buttermilk.api.stream import FlowRequest, flow_stream
-from buttermilk.bm import bm, logger
+from buttermilk.bm import BM, bm, logger
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.utils import load_json_flexi
 
@@ -128,7 +128,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 
 @app.api_route("/runs/", methods=["GET", "POST"])
-async def get_runs_json(request: Request) -> Sequence[Job]:
+async def get_runs_json(request: Request) -> Sequence:
     runs = get_recent_runs()
 
     results = [Job(**row) for _, row in runs.iterrows()]

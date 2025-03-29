@@ -1,3 +1,5 @@
+from typing import Any
+
 from buttermilk import logger
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils.media import download_and_convert
@@ -9,9 +11,9 @@ class Describer(LLMAgent):
     async def process_job(
         self,
         *,
-        job: Job,
+        job: Any,
         **kwargs,
-    ) -> Job:
+    ) -> Any:
         # First step, fetch the record if we need to.
         if job.parameters.pop("download_if_necessary", True):
             if not job.record and job.inputs:

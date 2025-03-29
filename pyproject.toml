@@ -132,6 +132,7 @@ warn_untyped_fields = true
 
 [tool.uv]
 upgrade = true
+default-groups = ["ml", "dev"]  # Add the groups you want installed by default
 
 [tool.ruff]
 extend-include = ["*.ipynb"]

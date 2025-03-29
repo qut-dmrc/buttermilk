@@ -4,6 +4,7 @@ from typing import (
 )
 
 import regex as re
+import torch
 from promptflow.tracing import trace
 from pydantic import Field
 

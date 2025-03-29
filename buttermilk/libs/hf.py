@@ -47,8 +47,13 @@ class HFInferenceClient:
 def hf_pipeline(hf_model_path, **model_kwargs):
     # access token with permission to access the model
     login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
-    if not (device := model_kwargs.pop("device", None)):
-        device = "auto" if torch.cuda.is_available() else "cpu"
+    try:
+        import torch
+
+        if not (device := model_kwargs.pop("device", None)):
+            device = "auto" if torch.cuda.is_available() else "cpu"
+    except:
+        device = "cpu"
     max_new_tokens = model_kwargs.pop("max_new_tokens", 1000)
     client = pipeline(
         "text-generation",
