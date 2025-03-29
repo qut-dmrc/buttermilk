@@ -76,6 +76,7 @@ dependencies = [
     "aioconsole>=0.8.1",
     "autogen-core>=0.4.9.2",
     "pdfminer-six>=20250327",
+    "pyzotero>=1.6.11",
 ]
 
 [dependency-groups]

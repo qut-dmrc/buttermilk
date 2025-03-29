@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from typing import Any, Self
 
 import chromadb
@@ -21,14 +21,6 @@ from vertexai.language_models import (
 from buttermilk import logger
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
-CITATION_TEXT_CHAR_LIMIT = 4000  # characters
-
-
-# Placeholder implementation (replace with your actual function)
-async def default_generate_citation(text: str) -> str:
-    logger.warning("Using placeholder citation generator.")
-    # Example: return first 100 chars as placeholder citation
-    return f"Placeholder Citation: {text[:100]}..."
 
 
 class InputDocument(BaseModel):
@@ -68,18 +60,11 @@ class ChromaDBEmbeddings(BaseModel):
     collection_name: str
     dimensionality: int | None = None
     chunk_size: int = 9000
-    chunk_overlap: int = 100
+    chunk_overlap: int = 1000
     persist_directory: str
+    concurrency: int = 20
 
-    data_generator: Callable[[str], Awaitable[str]] = Field(
-        ...,
-        exclude=True,
-    )
-    citation_generator: Callable[[str], Awaitable[str]] = Field(
-        default=default_generate_citation,
-        exclude=True,
-    )  # Exclude from model serialization
-
+    _semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
@@ -93,6 +78,10 @@ class ChromaDBEmbeddings(BaseModel):
         self._client = chromadb.PersistentClient(path=self.persist_directory)
         self._collection = self._client.get_or_create_collection(self.collection_name)
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
+
+        self._semaphore = asyncio.Semaphore(
+            self.concurrency,
+        )
         return self
 
     @property
@@ -151,23 +140,28 @@ class ChromaDBEmbeddings(BaseModel):
         index: int,
     ) -> list[float | int] | None:
         """Helper coroutine to run a single embedding task and handle errors."""
-        kwargs = dict(output_dimensionality=self.dimensionality, auto_truncate=False)
-        try:
-            embeddings_result: list[TextEmbedding] = await asyncio.to_thread(
-                self._embedding_model.get_embeddings,
-                [chunk_input],
-                **kwargs,
+        async with self._semaphore:
+            kwargs = dict(
+                output_dimensionality=self.dimensionality,
+                auto_truncate=False,
             )
-            if embeddings_result:
-                return embeddings_result[0].values
-            logger.warning(f"No embedding result returned for input {index}.")
-            return None
-        except Exception as exc:
-            logger.error(
-                f"Error getting embedding for input {index}: {exc}",
-                exc_info=True,
-            )
-            return None
+            try:
+                embeddings_result: list[
+                    TextEmbedding
+                ] = await self._embedding_model.get_embeddings(
+                    [chunk_input],
+                    **kwargs,
+                )
+                if embeddings_result:
+                    return embeddings_result[0].values
+                logger.warning(f"No embedding result returned for input {index}.")
+                return None
+            except Exception as exc:
+                logger.error(
+                    f"Error getting embedding for input {index}: {exc}",
+                    exc_info=True,
+                )
+                return None
 
     async def _embed(
         self,
@@ -192,8 +186,8 @@ class ChromaDBEmbeddings(BaseModel):
         self,
         input_docs: Sequence[InputDocument],
     ) -> Sequence[ChunkedDocument]:
-        """Extracts text from PDFs, generates citation via external async function,
-        chunks by paragraphs, copies metadata, and handles overlaps/size limits. (Async)
+        """Extracts text from PDFs, chunks by paragraphs, copies metadata,
+        and handles overlaps/size limits. (Async)
         """
         chunked_documents = []
         logger.info(f"Preparing {len(input_docs)} input documents...")
@@ -215,28 +209,6 @@ class ChromaDBEmbeddings(BaseModel):
                     exc_info=True,
                 )
                 continue
-
-            try:
-                # Take the first N characters for citation generation
-                citation_text = full_text[:CITATION_TEXT_CHAR_LIMIT]
-                logger.debug(
-                    f"Generating citation for doc {input_doc.record_id} using first {len(citation_text)} chars.",
-                )
-
-                generated_citation = await self.citation_generator(citation_text)
-
-                # Store it in the metadata (overwrites if 'citation' key already exists)
-                input_doc.metadata["citation"] = generated_citation
-                logger.debug(
-                    f"Generated citation for doc {input_doc.record_id}: '{generated_citation[:100]}...'",
-                )
-            except Exception as e:
-                logger.error(
-                    f"Error generating citation for doc {input_doc.record_id}: {e}",
-                    exc_info=True,
-                )
-                # Decide if you want to proceed without citation or skip the doc
-                # Here, we proceed but log the error. The 'citation' key might be missing or hold an old value.
 
             paragraphs = full_text.split("\n\n")
             paragraphs = [p.strip() for p in paragraphs if p.strip()]
@@ -282,7 +254,6 @@ class ChromaDBEmbeddings(BaseModel):
         )
         return chunked_documents
 
-    # get_embedded_records remains async
     async def get_embedded_records(
         self,
         chunked_documents: Sequence[ChunkedDocument],

@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import ANY, AsyncMock, MagicMock, patch  # Added AsyncMock
 
+import chromadb
 import pytest
 
 # Mock the logger if it's not easily accessible or configured for tests
@@ -9,7 +10,6 @@ from buttermilk import logger as vector_logger  # Use alias to avoid conflict
 # Assuming your module is structured like: buttermilk/data/vector.py
 # Adjust the import path based on your project structure
 from buttermilk.data.vector import (
-    CITATION_TEXT_CHAR_LIMIT,  # Import constant
     MODEL_NAME,
     ChromaDBEmbeddings,
     ChunkedDocument,
@@ -145,7 +145,7 @@ def vector_store(
     mock_text_embedding_model,
     mock_chroma_collection,
 ):
-    """Fixture for a GoogleVertexEmbeddings instance with mocked dependencies."""
+    """Fixture for a ChromaDBEmbeddings instance with mocked dependencies."""
     persist_dir = tmp_path / "chroma_test"
     persist_dir.mkdir()
     # Initialization triggers mocked load_models
@@ -229,6 +229,7 @@ def test_vector_store_initialization(
     "pdfminer.high_level.extract_text",
     return_value="First paragraph.\n\nSecond paragraph, slightly longer.\n\nThird one.",
 )
+@pytest.mark.anyio
 async def test_prepare_docs_basic(
     mock_extract,
     vector_store,
@@ -238,41 +239,27 @@ async def test_prepare_docs_basic(
     """Test basic document preparation, paragraph splitting, and citation generation."""
     input_doc = input_doc_factory(metadata={"original": "value"})
     full_text = mock_extract.return_value
-    citation_input_text = full_text[:CITATION_TEXT_CHAR_LIMIT]
 
     chunks = await vector_store.prepare_docs([input_doc])  # Await async method
 
     mock_extract.assert_called_once_with(input_doc.file_path, laparams=ANY)
-    # Verify citation generator was called
-    mock_async_citation_generator.assert_awaited_once_with(citation_input_text)
 
     assert len(chunks) == 3
     assert chunks[0].chunk_text == "First paragraph."
     assert chunks[0].chunk_index == 0
     assert chunks[0].document_id == input_doc.record_id
-    # Check that original metadata is preserved and citation is added
-    assert chunks[0].metadata == {
-        "original": "value",
-        "citation": "Generated Citation: Test",
-    }
+
     assert chunks[1].chunk_text == "Second paragraph, slightly longer."
     assert chunks[1].chunk_index == 1
-    assert chunks[1].metadata == {
-        "original": "value",
-        "citation": "Generated Citation: Test",
-    }
     assert chunks[2].chunk_text == "Third one."
     assert chunks[2].chunk_index == 2
-    assert chunks[2].metadata == {
-        "original": "value",
-        "citation": "Generated Citation: Test",
-    }
 
 
 @patch(
     "pdfminer.high_level.extract_text",
     return_value="This is a single paragraph that is definitely longer than the chunk size limit set in the fixture.",
 )
+@pytest.mark.anyio
 async def test_prepare_docs_splitting(
     mock_extract,
     vector_store,
@@ -284,12 +271,10 @@ async def test_prepare_docs_splitting(
     vector_store.chunk_size = 30  # Override for this test
     vector_store.chunk_overlap = 5
     full_text = mock_extract.return_value
-    citation_input_text = full_text[:CITATION_TEXT_CHAR_LIMIT]
 
     chunks = await vector_store.prepare_docs([input_doc])  # Await async method
 
     mock_extract.assert_called_once_with(input_doc.file_path, laparams=ANY)
-    mock_async_citation_generator.assert_awaited_once_with(citation_input_text)
 
     assert len(chunks) > 1  # Should be split
     assert chunks[0].chunk_text == "This is a single paragraph th"  # First 30 chars
@@ -304,30 +289,7 @@ async def test_prepare_docs_splitting(
     assert all(c.metadata == expected_metadata for c in chunks)
 
 
-async def test_prepare_docs_citation_error(
-    vector_store,
-    input_doc_factory,
-    mock_async_citation_generator,
-    mock_logger,
-):
-    """Test that prepare_docs proceeds even if citation generation fails."""
-    input_doc = input_doc_factory(metadata={"original": "value"})
-    mock_async_citation_generator.side_effect = Exception("Citation API down")
-
-    chunks = await vector_store.prepare_docs([input_doc])
-
-    # Should still produce chunks
-    assert len(chunks) == 2  # Based on default mock extract text
-    mock_async_citation_generator.assert_awaited_once()  # It was called
-    mock_logger.error.assert_called_with(
-        f"Error generating citation for doc {input_doc.record_id}: Citation API down",
-        exc_info=True,
-    )
-    # Metadata should not contain the citation key if generation failed
-    assert chunks[0].metadata == {"original": "value"}
-    assert chunks[1].metadata == {"original": "value"}
-
-
+@pytest.mark.anyio
 async def test_prepare_docs_missing_path(vector_store, input_doc_factory, mock_logger):
     """Test skipping document if file_path is missing (async)."""
     input_doc = input_doc_factory(file_path=None)
@@ -339,6 +301,7 @@ async def test_prepare_docs_missing_path(vector_store, input_doc_factory, mock_l
 
 
 @patch("pdfminer.high_level.extract_text", side_effect=Exception("PDF read error"))
+@pytest.mark.anyio
 async def test_prepare_docs_extraction_error(
     mock_extract,
     vector_store,
@@ -356,7 +319,8 @@ async def test_prepare_docs_extraction_error(
 
 
 # Mock the internal _embed method for simplicity in testing higher-level embed methods
-@patch("buttermilk.data.vector.GoogleVertexEmbeddings._embed", new_callable=AsyncMock)
+@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
+@pytest.mark.anyio
 async def test_embed_records(mock_embed, vector_store, chunked_doc_factory):
     """Test embedding multiple ChunkedDocument objects (async)."""
     mock_embed.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]  # Mocked embeddings
@@ -383,7 +347,8 @@ async def test_embed_records(mock_embed, vector_store, chunked_doc_factory):
     assert call_args[1].title == "Test Doc_1"
 
 
-@patch("buttermilk.data.vector.GoogleVertexEmbeddings._embed", new_callable=AsyncMock)
+@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
+@pytest.mark.anyio
 async def test_embed_query(mock_embed, vector_store):
     """Test embedding a single query string (async)."""
     mock_embed.return_value = [[0.7, 0.8, 0.9]]  # Mocked embedding
@@ -402,7 +367,8 @@ async def test_embed_query(mock_embed, vector_store):
     assert call_args[0].title is None
 
 
-@patch("buttermilk.data.vector.GoogleVertexEmbeddings._embed", new_callable=AsyncMock)
+@patch("buttermilk.data.vector.ChromaDBEmbeddings._embed", new_callable=AsyncMock)
+@pytest.mark.anyio
 async def test_embed_query_failure(mock_embed, vector_store):
     """Test query embedding returning None on failure."""
     mock_embed.return_value = [None]  # Simulate embedding failure
@@ -412,6 +378,7 @@ async def test_embed_query_failure(mock_embed, vector_store):
 
 
 # Test the internal _embed method's handling of failures
+@pytest.mark.anyio
 async def test_internal_embed_handling_failure(
     vector_store,
     mock_text_embedding_model,
@@ -453,6 +420,7 @@ async def test_internal_embed_handling_failure(
     )
 
 
+@pytest.mark.anyio
 async def test_get_embedded_records(vector_store, chunked_doc_factory, mock_logger):
     """Test assigning embeddings back to ChunkedDocument objects (async)."""
     chunks_in = [chunked_doc_factory(index=0), chunked_doc_factory(index=1)]
@@ -487,6 +455,7 @@ async def test_get_embedded_records(vector_store, chunked_doc_factory, mock_logg
         )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_from_input_docs(
     vector_store,
     input_doc_factory,
@@ -613,6 +582,7 @@ async def test_create_vectorstore_from_input_docs(
         )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_from_pre_chunked(
     vector_store,
     chunked_doc_factory,
@@ -655,6 +625,7 @@ async def test_create_vectorstore_from_pre_chunked(
         )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_from_pre_embedded(
     vector_store,
     chunked_doc_factory,
@@ -692,6 +663,7 @@ async def test_create_vectorstore_from_pre_embedded(
         )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_empty_input(vector_store, mock_logger):
     """Test create_vectorstore_chromadb with empty input list (async)."""
     count = await vector_store.create_vectorstore_chromadb([])  # Await
@@ -701,6 +673,7 @@ async def test_create_vectorstore_empty_input(vector_store, mock_logger):
     )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_invalid_input_type(vector_store, mock_logger):
     """Test create_vectorstore_chromadb with invalid input type (async)."""
     count = await vector_store.create_vectorstore_chromadb([
@@ -712,6 +685,7 @@ async def test_create_vectorstore_invalid_input_type(vector_store, mock_logger):
     )
 
 
+@pytest.mark.anyio
 async def test_create_vectorstore_upsert_error(
     vector_store,
     input_doc_factory,
