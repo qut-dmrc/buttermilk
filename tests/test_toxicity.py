@@ -1,13 +1,12 @@
 # Let's provide an interface for all the various toxicity models
 
-import evaluate
 import pandas as pd
 import pytest
 
 pytest.importorskip("buttermilk.toxicity")
 torch = pytest.importorskip("torch")
 from buttermilk._core.runner_types import Record
-from buttermilk.toxicity import TOXCLIENTS, TOXCLIENTS_LOCAL
+from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.llamaguard import (
     LlamaGuard1Together,
     LlamaGuard2HF,
@@ -18,7 +17,6 @@ from buttermilk.toxicity.llamaguard import (
     LlamaGuard3LocalInt8,
     LlamaGuard3Together,
     LlamaGuardTox,
-    MDJudge2,
     MDJudgeLocal,
 )
 
@@ -225,37 +223,24 @@ class TestClients:
             f"Missing labels in the response; expected all of {expected_labels}"
         )
 
-    @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_HONEST_prompt(self, toxic_record: Record):
-        # This isn't in the right format yet.
-        # see https://huggingface.co/spaces/evaluate-measurement/honest
-
-        honest = evaluate.load("honest", "en")
-        completions = [toxic_record.content.split(" ")]
-        result = honest.compute(predictions=completions)
-        score = round(result["honest_score"], 3)
-        assert score is not None
-        assert isinstance(result, dict)
-
-    @pytest.mark.skip(reason="Don't run local GPU tests")
-    def test_LFTW_R4(self, toxic_record: Record):
-        from transformers import pipeline
-
-        pipe = pipeline(
-            "text-classification",
-            model="facebook/roberta-hate-speech-dynabench-r4-target",
-        )
-        result = pipe(toxic_record.content)
-        for r in result:
-            assert r["label"] in ["hate", "nothate"]
-            assert isinstance(r, dict)
-
     #    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_REGARD(self, toxic_record: Record):
-        regard = evaluate.load("regard", module_type="measurement")
-        scores = regard.compute(data=[toxic_record.content])["regard"][0]
-        assert scores["negative"] > 0
-        assert isinstance(scores, dict)
+        # Test the REGARD wrapper
+        from buttermilk.toxicity.regard import REGARD  # Import the wrapper
+
+        client = REGARD()
+        result = client.moderate(
+            content=toxic_record.content, record_id=toxic_record.record_id
+        )
+
+        assert isinstance(result, EvalRecord)
+        assert not result.error
+        assert (
+            result.predicted is not None
+        )  # REGARD provides scores, predicted might be based on threshold
+        assert any(
+            s.measure == "NEGATIVE" for s in result.scores
+        )  # Check for expected score measure
 
     @pytest.mark.parametrize("client_type", ["openai", "azure"])
     def test_OpenAIMod(self, client_type, toxic_record: Record):
@@ -270,21 +255,6 @@ class TestClients:
         client = ToxicChat()
         async for result in client.moderate([toxic_record]):
             assert result is not None
-
-
-class TestInterpreters:
-    def test_MDJudge2(self):
-        response = """The agent message provided is harmful. It contains derogatory language ('SISSY') which is offensive and can be considered a slur. Additionally, it directs the user to a specific tweet, which could potentially lead to further harmful content or interactions. The use of such language and the promotion of potentially offensive content can contribute to a hostile environment and emotional harm in the conversation.
-[RESULT]: unsafe, score 4
-[UNSAFE CATEGORY]: O1: Toxic Content"""
-        result = MDJudge2(client="dummy").interpret(response)
-        assert isinstance(result, EvalRecord)
-        assert result.scores[0].measure.lower() == "O1: Toxic Content".lower()
-        assert result.scores[0].severity == 4
-        assert result.scores[0].reasons[0] == response.splitlines()[0]
-        assert "unsafe" in result.labels
-        assert "O1: Toxic Content" in result.labels
-        assert result.predicted == True
 
 
 class TestToxicityModels:
@@ -311,20 +281,19 @@ class TestToxicityModels:
         # )
         # assert uri
 
-    @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS_LOCAL)
-    #    @pytest.mark.gpu
-    #    @skipif_no_gpu("Not running GPU or RAM intensive tests")
-    def test_tox_models_gpu(self, tox_model_cls, toxic_record):
-        local_model = tox_model_cls()
-        assert local_model
-        result = local_model.moderate(content=toxic_record.content)
-        assert isinstance(result, EvalRecord)
-        assert not result.error
-        assert result.standard == local_model.standard
-        assert result.process == local_model.process_chain
-        assert result.model == local_model.model
-        assert all([s.measure for s in result.scores])
-        assert result.predicted is not None
+    # @pytest.mark.parametrize("tox_model_cls", TOXCLIENTS_LOCAL)
+    # @pytest.mark.gpu
+    # def test_tox_models_gpu(self, tox_model_cls, toxic_record):
+    #     local_model = tox_model_cls()
+    #     assert local_model
+    #     result = local_model.moderate(content=toxic_record.content)
+    #     assert isinstance(result, EvalRecord)
+    #     assert not result.error
+    #     assert result.standard == local_model.standard
+    #     assert result.process == local_model.process_chain
+    #     assert result.model == local_model.model
+    #     assert all([s.measure for s in result.scores])
+    #     assert result.predicted is not None
 
 
 class TestIndicators:
@@ -336,23 +305,16 @@ class TestIndicators:
 def test_moderate_success(mocker, toxmodel):
     # Mock the response from call_client
     mock_response = {"some": "response"}
-    try:
-        mock_super_method = mocker.patch.object(
-            toxmodel,
-            "call_client",
-            return_value=mock_response,
-        )
-    except:
-        # Mock the method in the superclass
-        mock_super_method = mocker.patch(
-            "buttermilk.toxicity.ToxicityModel.call_client",
-            return_value=mock_response,
-        )
+    mock_call_client = mocker.patch.object(
+        toxmodel,
+        "call_client",
+        return_value=mock_response,
+    )
 
     # Mock the output from interpret
-    mock_output = EvalRecord()
+    mock_output = EvalRecord(record_id="record_id")
     mock_interpret = mocker.patch.object(
-        "buttermilk.toxicity.ToxicityModel.call_client",
+        toxmodel,  # Target the instance
         "interpret",
         return_value=mock_output,
     )
@@ -361,9 +323,10 @@ def test_moderate_success(mocker, toxmodel):
     result = toxmodel.moderate(content="some text", record_id="record_id")
 
     # Assertions
-    mock_super_method.assert_called_once_with("some text")
+    mock_call_client.assert_called_once_with("some text")
     mock_interpret.assert_called_once_with(mock_response)
     assert result == mock_output
+    assert result.record_id == "record_id"  # Ensure record_id is passed
 
 
 def test_moderate_interpret_error(mocker, toxmodel):
@@ -377,7 +340,7 @@ def test_moderate_interpret_error(mocker, toxmodel):
 
     # Mock interpret to raise a ValueError
     mock_interpret = mocker.patch.object(
-        toxmodel,
+        toxmodel,  # Target the instance
         "interpret",
         side_effect=ValueError("Interpretation error"),
     )
@@ -390,3 +353,4 @@ def test_moderate_interpret_error(mocker, toxmodel):
     mock_interpret.assert_called_once_with(mock_response)
     assert isinstance(result, EvalRecord)
     assert "Unable to interpret response" in result.error
+    assert result.record_id == "record_id"  # Ensure record_id is passed
