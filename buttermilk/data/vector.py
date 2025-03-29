@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any, Self, TypeVar
 
 import chromadb
+import hydra
 import pydantic
 from chromadb import Collection, Documents, Embeddings
 from chromadb.api import ClientAPI
@@ -16,6 +17,7 @@ from vertexai.language_models import (
 )
 
 from buttermilk import logger
+from buttermilk.bm import BM
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
 DEFAULT_UPSERT_BATCH_SIZE = 100
@@ -177,7 +179,7 @@ class ChromaDBEmbeddings(BaseModel):
             try:
                 embeddings_result: list[
                     TextEmbedding
-                ] = await self._embedding_model.get_embeddings(
+                ] = await self._embedding_model.get_embeddings_async(
                     [chunk_input],
                     **kwargs,
                 )
@@ -405,3 +407,21 @@ class ChromaDBEmbeddings(BaseModel):
             f"Vector store creation pipeline finished. Total chunks successfully upserted: {total_upserted_count}.",
         )
         return total_upserted_count
+
+
+@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
+def main(cfg) -> None:
+    # Hydra will automatically instantiate the objects
+    objs = hydra.utils.instantiate(cfg)
+    bm: BM = objs.bm
+    vectoriser = objs.vectoriser
+    input_docs_iter = objs.input_docs.get_all_records()
+
+    # give our flows a little longer to set up
+    loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 35.0
+    loop.run_until_complete(objs.vectoriser.create_vectorstore_chromadb())
+
+
+if __name__ == "__main__":
+    main()

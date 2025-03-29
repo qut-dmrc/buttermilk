@@ -3,8 +3,18 @@ defaults:
   - override /name: vectoriser
   - override /job: zotero
 
-zot:
-  _target_: buttermilk.tools.zotero.ZotDownloader
-  library: 2281727
-  data_dir: "/home/nic/data/prosocial_zot"
+vectoriser:
+  _target_: buttermilk.data.vector.ChromaDBEmbeddings
+  embedding_model: "text-embedding-large-exp-03-07"
+  collection_name: "/home/nic/data/prosocial_zot"
+  persist_dir: "/home/nic/data/prosocial_zot/files"
+  
+input_docs:
+    _target_: buttermilk.tools.zotero.ZotDownloader
+    library: 2281727
+    data_dir: "/home/nic/data/prosocial_zot/files"
+    citation_generator:
+      _target_: buttermilk.tools.citator.Citator
+      model: "gemini-25-pro"
+
   

@@ -1,3 +1,5 @@
+from typing import Self
+
 import pydantic
 from pydantic import BaseModel, PrivateAttr
 
@@ -16,7 +18,7 @@ class Citator(BaseModel):
     _agent: LLMAgent = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
-    def init_agent(self) -> Self:
+    def _init_agent(self) -> Self:
         self._agent = LLMAgent(
             id="citator",
             name="Citator",

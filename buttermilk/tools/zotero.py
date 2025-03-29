@@ -47,7 +47,7 @@ class ZotDownloader(BaseModel):
                 item = items.pop()
                 try:
                     # Ensure download returns InputDocument | None
-                    tasks.append(asyncio.create_task(self.download(item)))
+                    tasks.append(asyncio.create_task(self.download_and_convert(item)))
 
                 except Exception as e:
                     logger.error(
@@ -63,6 +63,8 @@ class ZotDownloader(BaseModel):
                 except Exception as e:
                     # Log errors from awaited tasks if necessary, though download handles its own
                     logger.error(f"Error processing download result: {e}")
+
+            break  # for debugging only
 
             # Fetch next page if available
             if self._zot.links.get("next"):
@@ -92,7 +94,7 @@ class ZotDownloader(BaseModel):
             try:
                 if not file.exists():
                     logger.debug(f"Downloading {key} to {file}")
-                    pdf_content = await download_limited_async(uri)
+                    pdf_content, _mimetype = await download_limited_async(uri)
                     with file.open("wb") as f:
                         f.write(pdf_content)
                         f.seek(0)
@@ -101,12 +103,13 @@ class ZotDownloader(BaseModel):
                     logger.debug(f"File already exists: {file}")
                     full_text = get_pdf_text(file)
 
+                metadata = dict(doi=doi, zotero_data=item.get("data"))
                 record = InputDocument(
                     file_path=file.as_posix(),
                     full_text=full_text,
                     record_id=key,
                     title=title,
-                    metadata=dict(doi=doi),
+                    metadata=metadata,
                 )
 
                 # Generate citation after download/retrieval
@@ -115,10 +118,10 @@ class ZotDownloader(BaseModel):
                 return record
 
             except Exception as e:
-                logger.error(f"Error downloading or processing {key}: {e}", exc_info=True)
-                # Optionally remove partially downloaded file
-                # if file.exists():
-                #     file.unlink(missing_ok=True)
+                logger.error(
+                    f"Error downloading or processing {key}: {e}",
+                    exc_info=True,
+                )
                 return None
         else:
             logger.debug(f"Skipping item {key}: No PDF attachment found.")
