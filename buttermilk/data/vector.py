@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Self, TypeVar
 
 import chromadb
@@ -211,6 +211,7 @@ class ChromaDBEmbeddings(BaseModel):
     async def prepare_docs(
         self,
         input_docs: AsyncIterator[InputDocument],
+        processor: Callable,
     ) -> AsyncIterator[ChunkedDocument]:
         """Chunks text from InputDocuments using LangChain's RecursiveCharacterTextSplitter,
         copies metadata, and yields ChunkedDocument objects asynchronously.
@@ -232,6 +233,9 @@ class ChromaDBEmbeddings(BaseModel):
                     f"Skipping record {input_doc.record_id} (document #{processed_doc_count}): missing full_text.",
                 )
                 continue
+
+            # process (get citation or whatever)
+            input_doc = await processor(input_doc)
 
             # Use the initialized text splitter
             # Note: split_text is synchronous. If it becomes a bottleneck for very large
@@ -324,7 +328,8 @@ class ChromaDBEmbeddings(BaseModel):
 
     async def create_vectorstore_chromadb(
         self,
-        input_docs_iter: AsyncIterator[InputDocument],
+        input_docs_iter: Any,
+        processor: Any,
     ) -> int:
         """Processes input documents from an async iterator through a pipeline:
         chunking -> embedding -> batch upserting into ChromaDB.
@@ -341,7 +346,7 @@ class ChromaDBEmbeddings(BaseModel):
         )
 
         # 1. Prepare (Chunk) Documents using LangChain splitter
-        chunked_docs_iter = self.prepare_docs(input_docs_iter)
+        chunked_docs_iter = self.prepare_docs(input_docs_iter, processor)
 
         # 2. Get Embeddings (in batches)
         embedded_docs_iter = self.get_embedded_records(
@@ -415,12 +420,19 @@ def main(cfg) -> None:
     objs = hydra.utils.instantiate(cfg)
     bm: BM = objs.bm
     vectoriser = objs.vectoriser
-    input_docs_iter = objs.input_docs.get_all_records()
+    input_docs = objs.input_docs
+    processor = objs.processor
 
     # give our flows a little longer to set up
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 35.0
-    loop.run_until_complete(objs.vectoriser.create_vectorstore_chromadb())
+    input_docs_iter = objs.input_docs
+    loop.run_until_complete(
+        objs.vectoriser.create_vectorstore_chromadb(
+            input_docs_iter.get_all_records(),
+            processor.process,
+        ),
+    )
 
 
 if __name__ == "__main__":

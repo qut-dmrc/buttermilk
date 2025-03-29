@@ -1,10 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+import os
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Self
 
 import pydantic
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 from pyzotero import zotero
 
 from buttermilk.bm import bm, logger
@@ -23,10 +24,6 @@ class ZotDownloader(BaseModel):
     save_dir: str
     library: str
 
-    citation_generator: Callable[[str], Awaitable[str]] = Field(
-        default=default_generate_citation,
-        exclude=True,
-    )  # Exclude from model serialization
     _zot: zotero.Zotero = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
@@ -36,6 +33,7 @@ class ZotDownloader(BaseModel):
             library_type="group",
             api_key=bm.credentials.get("ZOTERO_API_KEY"),
         )
+        os.makedirs(self.save_dir, exist_ok=True)
         return self
 
     async def get_all_records(self, **kwargs) -> AsyncIterator[InputDocument]:
@@ -97,11 +95,10 @@ class ZotDownloader(BaseModel):
                     pdf_content, _mimetype = await download_limited_async(uri)
                     with file.open("wb") as f:
                         f.write(pdf_content)
-                        f.seek(0)
-                        full_text = get_pdf_text()
                 else:
                     logger.debug(f"File already exists: {file}")
-                    full_text = get_pdf_text(file)
+
+                full_text = get_pdf_text(file.as_posix())
 
                 metadata = dict(doi=doi, zotero_data=item.get("data"))
                 record = InputDocument(
@@ -111,9 +108,6 @@ class ZotDownloader(BaseModel):
                     title=title,
                     metadata=metadata,
                 )
-
-                # Generate citation after download/retrieval
-                record = await self.citation_generator(record)
 
                 return record
 

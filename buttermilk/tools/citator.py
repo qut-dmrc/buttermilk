@@ -15,6 +15,7 @@ class Citator(BaseModel):
     """Generates a citation for a given text using an LLM."""
 
     template: str = "citator"
+    model: str
     _agent: LLMAgent = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
@@ -23,13 +24,13 @@ class Citator(BaseModel):
             id="citator",
             name="Citator",
             description="Gets citation information from the first page or two.",
-            parameters={"template": "citator"},
+            parameters={"template": "citator", "model": self.model},
             inputs={"text_extract": "text_extract"},
             fail_on_unfilled_parameters=True,
         )
         return self
 
-    async def _process(self, item: InputDocument, **kwargs) -> InputDocument | None:
+    async def process(self, item: InputDocument, **kwargs) -> InputDocument | None:
         try:
             # Take the first N characters for citation generation
             citation_text = item.full_text[:CITATION_TEXT_CHAR_LIMIT]

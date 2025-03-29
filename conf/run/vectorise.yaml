@@ -13,10 +13,11 @@ vectoriser:
 
 input_docs:
   _target_: buttermilk.tools.zotero.ZotDownloader
-  library: 2281727
-  data_dir: "/home/nic/data/prosocial_zot/files"
-  citation_generator:
-    _target_: buttermilk.tools.citator.Citator
-    model: "gemini-25-pro"
+  library: "2281727"
+  save_dir: "/home/nic/data/prosocial_zot/pdfs"
+
+processor:
+  _target_: buttermilk.tools.citator.Citator
+  model: "gemini25pro"
 
   
