@@ -1,12 +1,16 @@
 import asyncio
+import json
 import uuid
-from collections.abc import AsyncIterator, Callable, Sequence
-from typing import Any, Self, TypeVar
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from pathlib import Path
+from typing import Any, Self, TypeVar  # Corrected import for Tuple
 
 import chromadb
 import hydra
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pydantic
-from chromadb import Collection, Documents, Embeddings
+from chromadb import Collection, Embeddings
 from chromadb.api import ClientAPI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field, PrivateAttr
@@ -17,35 +21,27 @@ from vertexai.language_models import (
 )
 
 from buttermilk import logger
-from buttermilk.bm import BM
+from buttermilk.bm import BM, bm
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
-DEFAULT_UPSERT_BATCH_SIZE = 100
+DEFAULT_UPSERT_BATCH_SIZE = 100  # Still used for failed batch saving logic if needed
+FAILED_BATCH_DIR = "failed_upsert_batches"
+ARROW_SAVE_DIR = "arrow_embeddings"
 
 T = TypeVar("T")
 
 
-class InputDocument(BaseModel):
-    """Represents a single input document with its text content."""
-
-    record_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
-        description="Unique ID for the original document",
-    )
-    file_path: str = Field(..., description="Path to the input document")
-    full_text: str
-    title: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
+# --- Pydantic Models ---
 class ChunkedDocument(BaseModel):
     """Represents a single chunk derived from an InputDocument."""
+
+    model_config = pydantic.ConfigDict(extra="ignore")
 
     chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     document_title: str
     chunk_index: int
     chunk_text: str
-    document_id: str
+    document_id: str  # References InputDocument.record_id
     embedding: Sequence[float] | Sequence[int] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -55,6 +51,28 @@ class ChunkedDocument(BaseModel):
         return f"{self.document_title}_{self.chunk_index}"
 
 
+class InputDocument(BaseModel):
+    """Represents a single input document with its text content."""
+
+    model_config = pydantic.ConfigDict(extra="ignore")
+
+    record_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    file_path: str = Field(...)
+    record_path: str = Field(default="")
+    chunks_path: str = Field(
+        default="", description="Path to PyArrow file with chunks and embeddings."
+    )
+    full_text: str = Field(default="")
+    chunks: list[ChunkedDocument] = Field(default_factory=list)
+    title: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Type Aliases ---
+ProcessorCallable = Callable[[InputDocument], Awaitable[InputDocument]]
+
+
+# --- Helper Functions ---
 async def _batch_iterator(
     aiter: AsyncIterator[T],
     batch_size: int,
@@ -70,10 +88,60 @@ async def _batch_iterator(
         yield batch
 
 
+def _sanitize_metadata_for_chroma(
+    metadata: dict[str, Any],
+) -> dict[str, str | int | float | bool]:
+    """Converts metadata values to types supported by ChromaDB."""
+    sanitized = {}
+    if not isinstance(metadata, dict):
+        logger.warning(f"Metadata is not a dict: {metadata}. Skipping sanitization.")
+        return {}
+
+    for k, v in metadata.items():
+        if isinstance(v, (str, int, float, bool)):
+            sanitized[k] = v
+        elif v is None:
+            continue
+        elif isinstance(v, (list, dict, BaseModel)):
+            try:
+                if isinstance(v, BaseModel):
+                    json_str = v.model_dump_json()
+                else:
+                    json_str = json.dumps(v, ensure_ascii=False)
+                sanitized[k] = json_str
+                logger.debug(
+                    f"Sanitized metadata key '{k}' by converting value to JSON string.",
+                )
+            except (TypeError, Exception) as e:
+                logger.warning(
+                    f"Could not JSON serialize metadata value for key '{k}': {type(v)}. Error: {e}. Skipping key.",
+                )
+        else:
+            try:
+                sanitized[k] = str(v)
+                logger.debug(
+                    f"Sanitized metadata key '{k}' by converting value to string: {type(v)} -> str",
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Could not convert metadata value for key '{k}' to string: {type(v)}. Error: {e}. Skipping key.",
+                )
+    return sanitized
+
+
+# --- Add list_to_async_iterator helper ---
+async def list_to_async_iterator(items: list[T]) -> AsyncIterator[T]:
+    """Converts a list into an asynchronous iterator."""
+    for item in items:
+        yield item
+        await asyncio.sleep(0)  # Yield control briefly
+
+
+# --- Core Embedding and DB Interaction Class ---
 class ChromaDBEmbeddings(BaseModel):
-    """Handles chunking using LangChain, async embedding generation using Google Vertex AI,
-    and storage in a ChromaDB vector store via an async pipeline.
-    """
+    """Handles configuration, embedding model interaction, and ChromaDB connection."""
+
+    model_config = pydantic.ConfigDict(extra="ignore")
 
     embedding_model: str = MODEL_NAME
     task: str = "RETRIEVAL_DOCUMENT"
@@ -85,6 +153,7 @@ class ChromaDBEmbeddings(BaseModel):
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
+    arrow_save_dir: str = ARROW_SAVE_DIR
 
     _semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -102,18 +171,17 @@ class ChromaDBEmbeddings(BaseModel):
         self._collection = self._client.get_or_create_collection(self.collection_name)
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
         self._semaphore = asyncio.Semaphore(self.concurrency)
-        # Initialize the text splitter here
         self._text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            length_function=len,  # Use character length by default
-            # You can customize separators if needed:
-            # separators=["\n\n", "\n", ". ", " ", ""],
-            add_start_index=False,  # Don't need start index metadata
+            length_function=len,
+            add_start_index=False,
         )
         logger.info(
             f"Initialized RecursiveCharacterTextSplitter (chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap})",
         )
+        Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
+        Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
         return self
 
     @property
@@ -128,48 +196,154 @@ class ChromaDBEmbeddings(BaseModel):
             )
         return self._collection
 
-    async def embed_records(
+    @property
+    def text_splitter(self) -> RecursiveCharacterTextSplitter:
+        """Provides access to the text splitter instance."""
+        return self._text_splitter
+
+    async def embed_document(
         self,
-        chunked_documents: Sequence[ChunkedDocument],
-    ) -> list[list[float | int] | None]:
-        """Generates embeddings asynchronously for a sequence of ChunkedDocument objects."""
-        if not chunked_documents:
-            return []
-        logger.debug(
-            f"Generating embeddings asynchronously for {len(chunked_documents)} chunks.",
-        )
-        inputs = [
-            TextEmbeddingInput(
-                text=chunk.chunk_text,
-                task_type=self.task,
-                title=chunk.chunk_title,
+        input_doc: InputDocument,
+    ) -> InputDocument | None:
+        """Generates embeddings asynchronously for chunks within an InputDocument,
+        assigns them, and saves the result to a Parquet file.
+        """
+        if not input_doc.chunks:
+            logger.warning(
+                f"No chunks found for document {input_doc.record_id}, cannot embed or save."
             )
-            for chunk in chunked_documents
-        ]
-        return await self._embed(inputs)
+            return None
 
-    async def embed_documents(self, texts: Documents) -> list[list[float | int] | None]:
-        """Generates embeddings asynchronously for a list of raw text strings."""
-        if not texts:
-            return []
-        logger.info(
-            f"Generating embeddings asynchronously for {len(texts)} raw text documents.",
+        logger.debug(
+            f"Generating embeddings asynchronously for doc {input_doc.record_id} with {len(input_doc.chunks)} chunks.",
         )
-        inputs = [TextEmbeddingInput(text=text, task_type=self.task) for text in texts]
-        return await self._embed(inputs)
 
-    async def embed_query(self, query: str) -> list[float | int] | None:
-        """Generates an embedding asynchronously for a single query string."""
-        logger.debug(f"Generating embedding for query: '{query[:50]}...'")
-        inputs = [TextEmbeddingInput(text=query, task_type="RETRIEVAL_QUERY")]
-        results = await self._embed(inputs)
-        return results[0] if results else None
+        embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
+        for chunk in input_doc.chunks:
+            if chunk.chunk_index is not None:
+                embeddings_input.append((
+                    chunk.chunk_index,
+                    TextEmbeddingInput(
+                        text=chunk.chunk_text,
+                        task_type=self.task,
+                        title=chunk.chunk_title,
+                    ),
+                ))
+            else:
+                logger.warning(
+                    f"Chunk missing index in doc {input_doc.record_id}, skipping embedding for this chunk."
+                )
+
+        embedding_results = await self._embed(embeddings_input)
+
+        successful_embeddings = 0
+        for idx, embedding in embedding_results:
+            try:
+                list_index = next(
+                    i
+                    for i, chk in enumerate(input_doc.chunks)
+                    if chk.chunk_index == idx
+                )
+                if embedding is not None:
+                    input_doc.chunks[list_index].embedding = embedding
+                    successful_embeddings += 1
+                else:
+                    logger.warning(
+                        f"Embedding failed for chunk index {idx} in doc {input_doc.record_id}"
+                    )
+            except StopIteration:
+                logger.error(
+                    f"Could not find chunk with index {idx} in doc {input_doc.record_id} to assign embedding."
+                )
+
+        if successful_embeddings == 0 and len(input_doc.chunks) > 0:
+            logger.error(
+                f"All embeddings failed for document {input_doc.record_id}. Skipping save."
+            )
+            return None
+
+        arrow_file_path = Path(self.arrow_save_dir) / f"{input_doc.record_id}.parquet"
+        input_doc.chunks_path = arrow_file_path.as_posix()
+
+        try:
+            await asyncio.to_thread(
+                self._write_document_to_parquet,
+                input_doc,
+                arrow_file_path,
+            )
+            logger.info(
+                f"Successfully saved document chunks and embeddings to {arrow_file_path}"
+            )
+            return input_doc
+        except Exception as e:
+            logger.error(
+                f"Failed to save document {input_doc.record_id} to Parquet file {arrow_file_path}: {e}",
+                exc_info=True,
+            )
+            input_doc.chunks_path = ""
+            return None
+
+    def _write_document_to_parquet(self, doc: InputDocument, file_path: Path):
+        """Synchronous helper to write InputDocument chunks to a Parquet file."""
+        if not doc.chunks:
+            logger.warning(
+                f"Attempted to write empty chunks for doc {doc.record_id} to {file_path}. Skipping."
+            )
+            return
+
+        data = {
+            "chunk_id": [c.chunk_id for c in doc.chunks],
+            "document_id": [c.document_id for c in doc.chunks],
+            "document_title": [c.document_title for c in doc.chunks],
+            "chunk_index": [c.chunk_index for c in doc.chunks],
+            "chunk_text": [c.chunk_text for c in doc.chunks],
+            "embedding": [
+                list(c.embedding) if c.embedding is not None else None
+                for c in doc.chunks
+            ],
+            "chunk_metadata": [
+                json.dumps(c.metadata) if c.metadata else None for c in doc.chunks
+            ],
+        }
+
+        embedding_type = pa.list_(pa.float32())
+        if self.dimensionality:
+            embedding_type = pa.list_(pa.float32(), self.dimensionality)
+
+        schema = pa.schema([
+            pa.field("chunk_id", pa.string()),
+            pa.field("document_id", pa.string()),
+            pa.field("document_title", pa.string()),
+            pa.field("chunk_index", pa.int32()),
+            pa.field("chunk_text", pa.string()),
+            pa.field("embedding", embedding_type),
+            pa.field("chunk_metadata", pa.string()),
+        ])
+
+        table = pa.Table.from_pydict(data, schema=schema)
+
+        doc_meta_serializable = {
+            "record_id": doc.record_id,
+            "title": doc.title,
+            "file_path": doc.file_path,
+            "record_path": doc.record_path,
+            "metadata": json.dumps(doc.metadata),
+        }
+        arrow_metadata = {
+            k.encode("utf-8"): str(v).encode("utf-8")
+            for k, v in doc_meta_serializable.items()
+        }
+
+        final_schema = table.schema.with_metadata(arrow_metadata)
+        table = table.cast(final_schema)
+
+        pq.write_table(table, file_path, compression="snappy")
 
     async def _run_embedding_task(
         self,
         chunk_input: TextEmbeddingInput,
         index: int,
-    ) -> list[float | int] | None:
+    ) -> tuple[int, list[float | int] | None]:
         """Helper coroutine to run a single embedding task and handle errors."""
         async with self._semaphore:
             kwargs = dict(
@@ -179,260 +353,339 @@ class ChromaDBEmbeddings(BaseModel):
             try:
                 embeddings_result: list[
                     TextEmbedding
-                ] = await self._embedding_model.get_embeddings_async(
+                ] = await self._embedding_model.get_embeddings(
                     [chunk_input],
                     **kwargs,
                 )
                 if embeddings_result:
-                    return embeddings_result[0].values
+                    return index, embeddings_result[0].values
                 logger.warning(f"No embedding result returned for input {index}.")
-                return None
+                return index, None
             except Exception as exc:
                 logger.error(
-                    f"Error getting embedding for input {index}: {exc}",
-                    exc_info=True,
+                    f"Error getting embedding for input {index}: {exc} {exc.args=}",
                 )
-                return None
+                return index, None
 
     async def _embed(
         self,
-        inputs: Sequence[TextEmbeddingInput],
-    ) -> list[list[float | int] | None]:
+        inputs: Sequence[tuple[int, TextEmbeddingInput]],
+    ) -> list[tuple[int, list[float | int] | None]]:
         """Internal async method to call the Vertex AI embedding model concurrently."""
         if not inputs:
             return []
         tasks = [
-            self._run_embedding_task(chunk_input, i)
-            for i, chunk_input in enumerate(inputs)
+            self._run_embedding_task(chunk_input=chunk_input, index=idx)
+            for idx, chunk_input in inputs
         ]
-        results: list[list[float | int] | None] = await asyncio.gather(*tasks)
+        results: list[tuple[int, list[float | int] | None]] = await asyncio.gather(
+            *tasks
+        )
         return results
 
-    async def prepare_docs(
-        self,
-        input_docs: AsyncIterator[InputDocument],
-        processor: Callable,
-    ) -> AsyncIterator[ChunkedDocument]:
-        """Chunks text from InputDocuments using LangChain's RecursiveCharacterTextSplitter,
-        copies metadata, and yields ChunkedDocument objects asynchronously.
-        """
-        processed_doc_count = 0
-        total_chunks_yielded = 0
-        logger.info(
-            "Starting preparation (chunking with LangChain splitter) of input documents...",
-        )
-        async for input_doc in input_docs:
-            processed_doc_count += 1
-            logger.debug(
-                f"Processing document #{processed_doc_count}: {input_doc.record_id} ({input_doc.title})",
+    # --- DB Interaction ---
+    def check_document_exists(self, document_id: str) -> bool:
+        """Checks if a document with the given ID already exists in the collection."""
+        if not document_id:
+            return False
+        try:
+            results = self.collection.get(
+                where={"document_id": document_id},
+                limit=1,
+                include=[],
             )
+            exists = len(results.get("ids", [])) > 0
+            if exists:
+                logger.debug(f"Document ID '{document_id}' found in ChromaDB.")
+            return exists
+        except Exception as e:
+            logger.error(
+                f"Error checking existence of document ID '{document_id}' in ChromaDB: {e}",
+                exc_info=True,
+            )
+            return False
 
-            full_text = input_doc.full_text
-            if not full_text:
+
+# --- Async Pipeline Stages ---
+async def preprocess_documents(
+    doc_iterator: AsyncIterator[InputDocument],
+    extractor: Callable[[str], Awaitable[str | None]],
+) -> AsyncIterator[InputDocument]:
+    """Extracts full text for documents that don't have it."""
+    processed_count = 0
+    async for doc in doc_iterator:
+        if doc.full_text:
+            yield doc
+            continue
+        try:
+            full_text = await asyncio.to_thread(extractor, doc.file_path)
+            if full_text is None:
                 logger.warning(
-                    f"Skipping record {input_doc.record_id} (document #{processed_doc_count}): missing full_text.",
+                    f"Text extraction failed for {doc.record_id} ({doc.file_path}). Skipping doc."
                 )
                 continue
 
-            # process (get citation or whatever)
-            input_doc = await processor(input_doc)
+            doc.full_text = full_text
+            processed_count += 1
+            yield doc
+        except Exception as e:
+            logger.error(
+                f"Text extraction processor failed for doc {doc.record_id}: {e}",
+                exc_info=True,
+            )
+            logger.warning(
+                f"Skipping document {doc.record_id} due to extraction processor error."
+            )
+    logger.info(
+        f"Text Extractor finished. Processed {processed_count} documents needing extraction."
+    )
 
-            # Use the initialized text splitter
-            # Note: split_text is synchronous. If it becomes a bottleneck for very large
-            # documents or complex splitting, consider running it in a thread pool executor.
-            # For typical document sizes, this should be acceptable within an async loop.
-            try:
-                text_chunks = self._text_splitter.split_text(full_text)
-            except Exception as e:
-                logger.error(
-                    f"Error splitting text for doc {input_doc.record_id}: {e}",
-                    exc_info=True,
-                )
-                continue  # Skip this document if splitting fails
 
+async def process_documents(
+    doc_iterator: AsyncIterator[InputDocument],
+    processor: ProcessorCallable,
+) -> AsyncIterator[InputDocument]:
+    """Applies an async processor to each document."""
+    processed_count = 0
+    async for doc in doc_iterator:
+        try:
+            processed_doc = await processor(doc)
+            processed_count += 1
+            yield processed_doc
+        except Exception as e:
+            logger.error(
+                f"Processor failed for doc {doc.record_id}: {e}", exc_info=True
+            )
+            logger.warning(
+                f"Skipping document {doc.record_id} due to processor error, yielding original."
+            )
+            yield doc
+    logger.info(f"Processor finished. Processed {processed_count} documents.")
+
+
+async def chunk_documents(
+    doc_iterator: AsyncIterator[InputDocument],
+    text_splitter: RecursiveCharacterTextSplitter,
+) -> AsyncIterator[InputDocument]:
+    """Chunks documents and adds the chunks list to the InputDocument."""
+    processed_doc_count = 0
+    async for doc in doc_iterator:
+        processed_doc_count += 1
+        if not doc.full_text:
+            logger.warning(
+                f"Skipping chunking for record {doc.record_id} (doc #{processed_doc_count}) due to missing full_text."
+            )
+            continue
+        try:
+            text_chunks = await asyncio.to_thread(
+                text_splitter.split_text, doc.full_text
+            )
+            doc.chunks = []
             doc_chunk_count = 0
             for i, text_chunk in enumerate(text_chunks):
-                # Ensure the chunk is not just whitespace
                 if not text_chunk.strip():
                     continue
-
-                chunk = ChunkedDocument(
-                    document_title=input_doc.title,
-                    chunk_index=i,  # Use the index from the splitter's output list
-                    chunk_text=text_chunk.strip(),  # Store the stripped chunk
-                    document_id=input_doc.record_id,
-                    metadata=input_doc.metadata.copy(),
+                doc.chunks.append(
+                    ChunkedDocument(
+                        document_title=doc.title,
+                        chunk_index=i,
+                        chunk_text=text_chunk.strip(),
+                        document_id=doc.record_id,
+                        metadata=doc.metadata.copy(),
+                    )
                 )
-                yield chunk
-                total_chunks_yielded += 1
                 doc_chunk_count += 1
 
-            logger.debug(
-                f"Finished processing doc {input_doc.record_id}, yielded {doc_chunk_count} chunks.",
-            )
-
-        logger.info(
-            f"Finished preparation. Yielded a total of {total_chunks_yielded} chunks from {processed_doc_count} processed documents.",
-        )
-
-    async def get_embedded_records(
-        self,
-        chunked_documents_iter: AsyncIterator[ChunkedDocument],
-        batch_size: int | None = None,
-    ) -> AsyncIterator[ChunkedDocument]:
-        """Generates embeddings asynchronously for chunks from an iterator and yields
-        ChunkedDocument objects with embeddings assigned. Processes in batches.
-        """
-        embed_batch_size = batch_size or self.embedding_batch_size
-        total_processed = 0
-        total_succeeded = 0
-        total_failed = 0
-        logger.info(
-            f"Starting embedding process for chunk iterator (batch size: {embed_batch_size})...",
-        )
-
-        async for batch in _batch_iterator(chunked_documents_iter, embed_batch_size):
-            if not batch:
-                continue
-
-            batch_start_index = total_processed
-            total_processed += len(batch)
-            logger.debug(
-                f"Processing embedding batch #{batch_start_index // embed_batch_size + 1} (chunks {batch_start_index + 1}-{total_processed})...",
-            )
-
-            embedding_results = await self.embed_records(batch)
-            batch_succeeded = 0
-            batch_failed = 0
-
-            for i, embedding in enumerate(embedding_results):
-                chunk = batch[i]
-                if embedding is not None:
-                    chunk.embedding = embedding
-                    yield chunk
-                    batch_succeeded += 1
-                else:
-                    batch_failed += 1
-                    logger.warning(
-                        f"Embedding failed for chunk {i + batch_start_index} (ID: {chunk.chunk_id}), skipping.",
-                    )
-            total_succeeded += batch_succeeded
-            total_failed += batch_failed
-            logger.debug(
-                f"Finished embedding batch. Success: {batch_succeeded}, Failed: {batch_failed}.",
-            )
-
-        logger.info(
-            f"Finished embedding process. Total Chunks Processed: {total_processed}, Succeeded: {total_succeeded}, Failed: {total_failed}.",
-        )
-
-    async def create_vectorstore_chromadb(
-        self,
-        input_docs_iter: Any,
-        processor: Any,
-    ) -> int:
-        """Processes input documents from an async iterator through a pipeline:
-        chunking -> embedding -> batch upserting into ChromaDB.
-
-        Args:
-            input_docs_iter: An async iterator yielding InputDocument objects.
-
-        Returns:
-            The total number of chunked records successfully upserted into ChromaDB.
-
-        """
-        logger.info(
-            f"Starting vector store creation pipeline for collection '{self.collection_name}' (upsert batch size: {self.upsert_batch_size}).",
-        )
-
-        # 1. Prepare (Chunk) Documents using LangChain splitter
-        chunked_docs_iter = self.prepare_docs(input_docs_iter, processor)
-
-        # 2. Get Embeddings (in batches)
-        embedded_docs_iter = self.get_embedded_records(
-            chunked_docs_iter,
-            batch_size=self.embedding_batch_size,
-        )
-
-        # 3. Batch Upsert to ChromaDB
-        total_upserted_count = 0
-        batch_num = 0
-        async for batch in _batch_iterator(embedded_docs_iter, self.upsert_batch_size):
-            batch_num += 1
-            if not batch:
-                continue
-
-            records_to_upsert = [rec for rec in batch if rec.embedding is not None]
-
-            if not records_to_upsert:
-                logger.warning(
-                    f"Upsert batch #{batch_num} was empty or contained only records with failed embeddings.",
+            if doc_chunk_count > 0:
+                logger.debug(
+                    f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks."
                 )
-                continue
+                yield doc
+            else:
+                logger.warning(
+                    f"No chunks generated for doc {doc.record_id} after splitting."
+                )
 
-            ids = [rec.chunk_id for rec in records_to_upsert]
-            documents = [rec.chunk_text for rec in records_to_upsert]
-            embeddings_list: Embeddings = [
-                list(rec.embedding) for rec in records_to_upsert if rec.embedding
-            ]
+        except Exception as e:
+            logger.error(
+                f"Error splitting text for doc {doc.record_id}: {e}", exc_info=True
+            )
+    logger.info(f"Chunking finished processing {processed_doc_count} documents.")
 
-            metadatas = []
-            for rec in records_to_upsert:
-                meta = {
-                    "document_title": rec.document_title,
-                    "chunk_index": rec.chunk_index,
-                    "document_id": rec.document_id,
-                }
-                meta.update({k: v for k, v in rec.metadata.items() if v is not None})
-                metadatas.append(meta)
 
-            logger.info(
-                f"Upserting batch #{batch_num} ({len(ids)} chunks) into ChromaDB collection '{self.collection_name}'...",
+# --- Upsert Function (can still be used per document) ---
+async def upsert_document_chunks(
+    doc_iterator: AsyncIterator[InputDocument],
+    db_handler: ChromaDBEmbeddings,
+) -> tuple[int, int]:
+    """Upserts all chunks for each InputDocument from the iterator into ChromaDB."""
+    total_docs_processed = 0
+    successful_docs_upserted = 0
+    failed_docs_upserted = 0
+
+    async for doc in doc_iterator:
+        total_docs_processed += 1
+        if not doc.chunks:
+            logger.warning(f"Document {doc.record_id} has no chunks, skipping upsert.")
+            continue
+
+        chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
+
+        if not chunks_to_upsert:
+            logger.warning(
+                f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert."
+            )
+            continue
+
+        ids = []
+        documents = []
+        embeddings_list = []
+        metadatas = []
+
+        for rec in chunks_to_upsert:
+            ids.append(rec.chunk_id)
+            documents.append(rec.chunk_text)
+            embeddings_list.append(list(rec.embedding))  # type: ignore
+            base_meta = {
+                "document_title": rec.document_title,
+                "chunk_index": rec.chunk_index,
+                "document_id": rec.document_id,
+            }
+            combined_meta = {**rec.metadata, **base_meta}
+            metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
+
+        chroma_embeddings: Embeddings = embeddings_list
+
+        logger.info(
+            f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{db_handler.collection_name}'..."
+        )
+        try:
+            await asyncio.to_thread(
+                db_handler.collection.upsert,
+                ids=ids,
+                embeddings=chroma_embeddings,
+                metadatas=metadatas,
+                documents=documents,
+            )
+            successful_docs_upserted += 1
+            logger.debug(f"Successfully upserted chunks for document {doc.record_id}.")
+        except Exception as e:
+            failed_docs_upserted += 1
+            logger.error(
+                f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e}",
+                exc_info=True,
             )
             try:
-                await asyncio.to_thread(
-                    self.collection.upsert,
-                    ids=ids,
-                    embeddings=embeddings_list,
-                    metadatas=metadatas,
-                    documents=documents,
+                failed_doc_filename = (
+                    Path(FAILED_BATCH_DIR)
+                    / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 )
-                upserted_in_batch = len(ids)
-                total_upserted_count += upserted_in_batch
-                logger.debug(
-                    f"Upsert batch #{batch_num} complete. Added/Updated {upserted_in_batch} items.",
+                logger.info(
+                    f"Saving failed document {doc.record_id} to {failed_doc_filename}"
                 )
-            except Exception as e:
+                bm.save(doc, failed_doc_filename)
+            except Exception as save_e:
                 logger.error(
-                    f"Failed to upsert batch #{batch_num} into ChromaDB: {e}",
+                    f"Could not save failed document {doc.record_id} to disk: {save_e}",
                     exc_info=True,
                 )
 
-        logger.info(
-            f"Vector store creation pipeline finished. Total chunks successfully upserted: {total_upserted_count}.",
-        )
-        return total_upserted_count
+    # This logging might be less useful now as it runs per document in the main loop
+    # logger.info(f"Upsert process finished. Total documents processed: {total_docs_processed}. Successfully upserted: {successful_docs_upserted}. Failed: {failed_docs_upserted}.")
+    return successful_docs_upserted, failed_docs_upserted
 
+
+# --- Main Execution ---
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg) -> None:
-    # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)
-    bm: BM = objs.bm
-    vectoriser = objs.vectoriser
-    input_docs = objs.input_docs
-    processor = objs.processor
+    bm_instance: BM = objs.bm
+    vectoriser: ChromaDBEmbeddings = objs.vectoriser
+    input_docs_source = objs.input_docs
+    preprocessor_instance = objs.preprocessor
+    processor_instance = objs.processor
 
-    # give our flows a little longer to set up
+    if hasattr(input_docs_source, "set_vector_store") and isinstance(
+        vectoriser, ChromaDBEmbeddings
+    ):
+        logger.info("Setting vector store instance on input document source.")
+        input_docs_source.set_vector_store(vectoriser)
+    else:
+        logger.warning(
+            "Input document source does not support vector store injection or type mismatch. Cannot check for existing documents."
+        )
+
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 35.0
-    input_docs_iter = objs.input_docs
-    loop.run_until_complete(
-        objs.vectoriser.create_vectorstore_chromadb(
-            input_docs_iter.get_all_records(),
-            processor.process,
-        ),
-    )
+
+    async def run_pipeline():
+        logger.info("Starting data processing pipeline...")
+        total_processed_docs = 0
+        total_saved_docs = 0
+        total_upserted_docs = 0
+        total_failed_upsert_docs = 0
+
+        # 1. Source Documents
+        doc_iterator = input_docs_source.get_all_records()
+
+        # 2. Pre-process (Extract Text if needed)
+        pre_processed_iterator = preprocess_documents(
+            doc_iterator, preprocessor_instance.extract
+        )
+
+        # 3. Process Documents (e.g., add citations)
+        processed_doc_iterator = process_documents(
+            pre_processed_iterator, processor_instance.process
+        )
+
+        # 4. Chunk Documents (Adds chunks to InputDocument)
+        chunked_doc_iterator = chunk_documents(
+            processed_doc_iterator, vectoriser.text_splitter
+        )
+
+        # 5. Embed, Save, and Upsert each document
+        async for doc_with_chunks in chunked_doc_iterator:
+            total_processed_docs += 1
+            logger.debug(f"Processing document {doc_with_chunks.record_id}...")
+
+            # Embed chunks and save the result to Parquet
+            saved_doc = await vectoriser.embed_document(doc_with_chunks)
+
+            if saved_doc:
+                total_saved_docs += 1
+                logger.debug(
+                    f"Document {saved_doc.record_id} saved to Parquet. Attempting upsert..."
+                )
+
+                # Upsert this single document immediately
+                # Wrap the single saved_doc in an async iterator
+                single_doc_iterator = list_to_async_iterator([saved_doc])
+                upserted_count, failed_count = await upsert_document_chunks(
+                    single_doc_iterator,
+                    vectoriser,
+                )
+                total_upserted_docs += upserted_count
+                total_failed_upsert_docs += failed_count
+                if failed_count > 0:
+                    logger.warning(f"Upsert failed for document {saved_doc.record_id}.")
+                else:
+                    logger.debug(
+                        f"Upsert successful for document {saved_doc.record_id}."
+                    )
+            else:
+                logger.warning(
+                    f"Embedding/Saving failed for document {doc_with_chunks.record_id}, skipping upsert."
+                )
+
+        # Removed separate Step 6
+
+        logger.info("Data processing pipeline finished.")
+        logger.info(
+            f"Summary: Total Docs Processed: {total_processed_docs}, Saved to Parquet: {total_saved_docs}, Successfully Upserted: {total_upserted_docs}, Failed Upsert: {total_failed_upsert_docs}"
+        )
+
+    loop.run_until_complete(run_pipeline())
 
 
 if __name__ == "__main__":

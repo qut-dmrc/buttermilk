@@ -1,23 +1,24 @@
 import asyncio
+import json  # Import json module
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Self
+from typing import TYPE_CHECKING, Self  # Import TYPE_CHECKING
 
 import pydantic
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr  # Import Field
 from pyzotero import zotero
 
 from buttermilk.bm import bm, logger
-from buttermilk.data.vector import InputDocument
-from buttermilk.utils import download_limited_async, get_pdf_text
 
+# Import ChromaDBEmbeddings for type hinting
+from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument
 
-# Placeholder implementation (replace with your actual function)
-async def default_generate_citation(text: str) -> str:
-    logger.warning("Using placeholder citation generator.")
-    # Example: return first 100 chars as placeholder citation
-    return f"Placeholder Citation: {text[:100]}..."
+# Add TYPE_CHECKING block for forward reference if ChromaDBEmbeddings is in a different module
+# and causes circular import issues. If they are in the same module or structure prevents
+# circular imports, this might not be strictly necessary but is good practice.
+if TYPE_CHECKING:
+    from buttermilk.data.vector import ChromaDBEmbeddings
 
 
 class ZotDownloader(BaseModel):
@@ -25,6 +26,8 @@ class ZotDownloader(BaseModel):
     library: str
 
     _zot: zotero.Zotero = PrivateAttr()
+    # Add private attribute to store the vector store instance
+    _vector_store: "ChromaDBEmbeddings | None" = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
@@ -36,87 +39,197 @@ class ZotDownloader(BaseModel):
         os.makedirs(self.save_dir, exist_ok=True)
         return self
 
+    def set_vector_store(self, vectoriser: "ChromaDBEmbeddings") -> None:
+        """Stores the vectoriser instance to allow checking for existing documents."""
+        self._vector_store = vectoriser
+        logger.info("Vector store instance set for ZotDownloader.")
+
     async def get_all_records(self, **kwargs) -> AsyncIterator[InputDocument]:
+        """Fetches Zotero items, checks existence, downloads, extracts, and yields InputDocuments."""
         items = []
-        items.extend(self._zot.items(itemType="book || journalArticle", **kwargs))
+        try:
+            # Fetch only parent items (books, articles), not attachments directly
+            items.extend(self._zot.items(itemType="book || journalArticle", **kwargs))
+        except Exception as e:
+            logger.error(
+                f"Error fetching initial items from Zotero: {e}",
+                exc_info=True,
+            )
+            return
+
+        processed_count = 0
+        skipped_count = 0
+
         while items or self._zot.links.get("next"):
             tasks = []
-            while items:
-                item = items.pop()
-                try:
-                    # Ensure download returns InputDocument | None
-                    tasks.append(asyncio.create_task(self.download_and_convert(item)))
+            items_to_process_this_batch = []
 
+            while items:
+                item = items.pop(0)  # Process in order
+                key = item.get("key")
+
+                if not key:
+                    logger.warning(
+                        f"Item missing key, skipping: {item.get('data', {}).get('title', 'N/A')}",
+                    )
+                    continue
+
+                # --- Check for existence using the stored vector_store ---
+                if self._vector_store and self._vector_store.check_document_exists(key):
+                    logger.info(
+                        f"Document {key} already exists in vector store, skipping.",
+                    )
+                    skipped_count += 1
+                    continue
+                # --- End existence check ---
+
+                # If not skipped, add to list for task creation
+                items_to_process_this_batch.append(item)
+
+            # Create tasks only for items not skipped
+            for item_to_process in items_to_process_this_batch:
+                try:
+                    # Run download_and_convert in a separate thread to avoid blocking
+                    # the event loop with synchronous file I/O and API calls within the loop.
+                    # Note: self._zot calls might still be synchronous internally.
+                    # Consider a thread pool executor for true non-blocking I/O if needed.
+                    tasks.append(
+                        asyncio.create_task(self.download_record(item_to_process)),
+                    )
                 except Exception as e:
                     logger.error(
-                        f"Error creating task for {item.get('key', 'unknown')}: {e} {e.args=}",
+                        f"Error creating task for {item_to_process.get('key', 'unknown')}: {e}",
+                        exc_info=True,
                     )
 
-            # Process completed tasks as they finish
+            # Process completed tasks for this batch
             for future in asyncio.as_completed(tasks):
                 try:
                     result = await future
                     if result:
+                        processed_count += 1
                         yield result
                 except Exception as e:
-                    # Log errors from awaited tasks if necessary, though download handles its own
-                    logger.error(f"Error processing download result: {e}")
-
-            break  # for debugging only
+                    logger.error(
+                        f"Error processing download/convert result: {e}",
+                        exc_info=True,
+                    )
 
             # Fetch next page if available
             if self._zot.links.get("next"):
                 try:
+                    logger.debug("Following 'next' link for more Zotero items...")
                     items.extend(self._zot.follow())
                 except Exception as e:
-                    logger.error(f"Error fetching next page from Zotero: {e}")
+                    logger.error(
+                        f"Error fetching next page from Zotero: {e}",
+                        exc_info=True,
+                    )
                     break  # Stop if pagination fails
-            # Explicitly break if there are no more items and no next link
-            # This prevents an infinite loop if the initial items list was empty
-            elif not items:
+            elif (
+                not items
+            ):  # Break if no next link AND no items left from previous fetch
+                logger.debug(
+                    "No 'next' link and no more items, finishing Zotero item retrieval.",
+                )
                 break
 
-    async def download_and_convert(self, item) -> InputDocument | None:
-        uri = item.get("links", {}).get("attachment", {}).get("href")
-        mime = item.get("links", {}).get("attachment", {}).get("attachmentType")
+        logger.info(
+            f"Finished Zotero processing. Processed: {processed_count}, Skipped (already exist): {skipped_count}",
+        )
+
+    async def download_record(self, item) -> InputDocument | None:
+        """Downloads PDF, saves item JSON, and creates an InputDocument."""
         key = item.get("key")
         title = item.get("data", {}).get("title", "Unknown Title")
-        doi = item.get("data", {}).get("DOI", item.get("data", {}).get("url"))
+        doi_or_url = item.get("data", {}).get("DOI") or item.get("data", {}).get("url")
+        zotero_data = item.get("data", {})
 
         if not key:
             logger.warning(f"Item missing key: {item}")
             return None
 
-        if uri and mime == "application/pdf":
-            file = Path(self.save_dir) / f"{key}.pdf"
+        # Define file paths
+        pdf_file = Path(self.save_dir) / f"{key}.pdf"
+        json_file = Path(self.save_dir) / f"{key}.json"
+
+        # Find the PDF attachment link
+        pdf_attachment = None
+        try:
+            # Wrap synchronous Zotero call if running in async context
+            children = await asyncio.to_thread(self._zot.children, key)
+        except Exception as e:
+            logger.error(f"Error fetching children for item {key}: {e}", exc_info=True)
+            return None  # Cannot proceed without children info
+
+        for child in children:
+            if (
+                child.get("data", {}).get("itemType") == "attachment"
+                and child.get("data", {}).get("contentType") == "application/pdf"
+                and child.get("links", {}).get("self", {}).get("href")
+            ):
+                pdf_attachment = child
+                break
+
+        if pdf_attachment:
+            attachment_key = pdf_attachment.get("key")
             try:
-                if not file.exists():
-                    logger.debug(f"Downloading {key} to {file}")
-                    pdf_content, _mimetype = await download_limited_async(uri)
-                    with file.open("wb") as f:
-                        f.write(pdf_content)
+                # --- Download PDF ---
+                if not pdf_file.exists():
+                    logger.debug(
+                        f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
+                    )
+                    # Wrap synchronous Zotero call
+                    success = await asyncio.to_thread(
+                        self._zot.dump,
+                        attachment_key,
+                        str(pdf_file),
+                    )
+                    if not success:
+                        logger.warning(
+                            f"Download failed for attachment {attachment_key} (item {key}).",
+                        )
+                        return None
                 else:
-                    logger.debug(f"File already exists: {file}")
+                    logger.debug(f"PDF file already exists: {pdf_file}")
 
-                full_text = get_pdf_text(file.as_posix())
+                # --- Save Item JSON ---
+                try:
+                    with json_file.open("w", encoding="utf-8") as f:
+                        json.dump(item, f, ensure_ascii=False, indent=4)
+                    logger.debug(f"Saved item metadata to {json_file}")
+                except Exception as json_e:
+                    logger.error(
+                        f"Failed to save item JSON for {key} to {json_file}: {json_e}",
+                        exc_info=True,
+                    )
 
-                metadata = dict(doi=doi, zotero_data=item.get("data"))
+                # --- Prepare InputDocument ---
+                metadata = {"doi_or_url": doi_or_url, "zotero_data": zotero_data}
                 record = InputDocument(
-                    file_path=file.as_posix(),
-                    full_text=full_text,
+                    file_path=pdf_file.as_posix(),
                     record_id=key,
                     title=title,
                     metadata=metadata,
                 )
-
                 return record
 
             except Exception as e:
                 logger.error(
-                    f"Error downloading or processing {key}: {e}",
+                    f"Error during download/convert for {key}: {e}",
                     exc_info=True,
                 )
                 return None
         else:
             logger.debug(f"Skipping item {key}: No PDF attachment found.")
-            return None
+            # --- Save Item JSON even if no PDF ---
+            try:
+                with json_file.open("w", encoding="utf-8") as f:
+                    json.dump(item, f, ensure_ascii=False, indent=4)
+                logger.debug(f"Saved item metadata (no PDF) to {json_file}")
+            except Exception as json_e:
+                logger.error(
+                    f"Failed to save item JSON for {key} (no PDF) to {json_file}: {json_e}",
+                    exc_info=True,
+                )
+            return None  # Return None as no PDF means no InputDocument for embedding pipeline
