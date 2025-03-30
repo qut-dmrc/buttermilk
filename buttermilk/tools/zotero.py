@@ -49,7 +49,9 @@ class ZotDownloader(BaseModel):
         items = []
         try:
             # Fetch only parent items (books, articles), not attachments directly
-            items.extend(self._zot.items(itemType="book || journalArticle", **kwargs))
+            items.extend(
+                self._zot.items(itemType="book || journalArticle", limit=10, **kwargs),
+            )
         except Exception as e:
             logger.error(
                 f"Error fetching initial items from Zotero: {e}",
@@ -114,7 +116,7 @@ class ZotDownloader(BaseModel):
                         f"Error processing download/convert result: {e}",
                         exc_info=True,
                     )
-
+            break  # testing only
             # Fetch next page if available
             if self._zot.links.get("next"):
                 try:
@@ -162,17 +164,11 @@ class ZotDownloader(BaseModel):
             logger.error(f"Error fetching children for item {key}: {e}", exc_info=True)
             return None  # Cannot proceed without children info
 
-        for child in children:
-            if (
-                child.get("data", {}).get("itemType") == "attachment"
-                and child.get("data", {}).get("contentType") == "application/pdf"
-                and child.get("links", {}).get("self", {}).get("href")
-            ):
-                pdf_attachment = child
-                break
-
-        if pdf_attachment:
-            attachment_key = pdf_attachment.get("key")
+        attachment = item["links"].get("attachment", {})
+        if (attachment.get("attachmentType") == "application/pdf") and (
+            pdf_attachment := attachment.get("href")
+        ):
+            attachment_key = pdf_attachment.split("/")[-1]
             try:
                 # --- Download PDF ---
                 if not pdf_file.exists():

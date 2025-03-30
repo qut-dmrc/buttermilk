@@ -60,7 +60,8 @@ class InputDocument(BaseModel):
     file_path: str = Field(...)
     record_path: str = Field(default="")
     chunks_path: str = Field(
-        default="", description="Path to PyArrow file with chunks and embeddings."
+        default="",
+        description="Path to PyArrow file with chunks and embeddings.",
     )
     full_text: str = Field(default="")
     chunks: list[ChunkedDocument] = Field(default_factory=list)
@@ -210,7 +211,7 @@ class ChromaDBEmbeddings(BaseModel):
         """
         if not input_doc.chunks:
             logger.warning(
-                f"No chunks found for document {input_doc.record_id}, cannot embed or save."
+                f"No chunks found for document {input_doc.record_id}, cannot embed or save.",
             )
             return None
 
@@ -231,7 +232,7 @@ class ChromaDBEmbeddings(BaseModel):
                 ))
             else:
                 logger.warning(
-                    f"Chunk missing index in doc {input_doc.record_id}, skipping embedding for this chunk."
+                    f"Chunk missing index in doc {input_doc.record_id}, skipping embedding for this chunk.",
                 )
 
         embedding_results = await self._embed(embeddings_input)
@@ -249,16 +250,16 @@ class ChromaDBEmbeddings(BaseModel):
                     successful_embeddings += 1
                 else:
                     logger.warning(
-                        f"Embedding failed for chunk index {idx} in doc {input_doc.record_id}"
+                        f"Embedding failed for chunk index {idx} in doc {input_doc.record_id}",
                     )
             except StopIteration:
                 logger.error(
-                    f"Could not find chunk with index {idx} in doc {input_doc.record_id} to assign embedding."
+                    f"Could not find chunk with index {idx} in doc {input_doc.record_id} to assign embedding.",
                 )
 
         if successful_embeddings == 0 and len(input_doc.chunks) > 0:
             logger.error(
-                f"All embeddings failed for document {input_doc.record_id}. Skipping save."
+                f"All embeddings failed for document {input_doc.record_id}. Skipping save.",
             )
             return None
 
@@ -272,7 +273,7 @@ class ChromaDBEmbeddings(BaseModel):
                 arrow_file_path,
             )
             logger.info(
-                f"Successfully saved document chunks and embeddings to {arrow_file_path}"
+                f"Successfully saved document chunks and embeddings to {arrow_file_path}",
             )
             return input_doc
         except Exception as e:
@@ -287,7 +288,7 @@ class ChromaDBEmbeddings(BaseModel):
         """Synchronous helper to write InputDocument chunks to a Parquet file."""
         if not doc.chunks:
             logger.warning(
-                f"Attempted to write empty chunks for doc {doc.record_id} to {file_path}. Skipping."
+                f"Attempted to write empty chunks for doc {doc.record_id} to {file_path}. Skipping.",
             )
             return
 
@@ -379,7 +380,7 @@ class ChromaDBEmbeddings(BaseModel):
             for idx, chunk_input in inputs
         ]
         results: list[tuple[int, list[float | int] | None]] = await asyncio.gather(
-            *tasks
+            *tasks,
         )
         return results
 
@@ -421,7 +422,7 @@ async def preprocess_documents(
             full_text = await asyncio.to_thread(extractor, doc.file_path)
             if full_text is None:
                 logger.warning(
-                    f"Text extraction failed for {doc.record_id} ({doc.file_path}). Skipping doc."
+                    f"Text extraction failed for {doc.record_id} ({doc.file_path}). Skipping doc.",
                 )
                 continue
 
@@ -434,10 +435,10 @@ async def preprocess_documents(
                 exc_info=True,
             )
             logger.warning(
-                f"Skipping document {doc.record_id} due to extraction processor error."
+                f"Skipping document {doc.record_id} due to extraction processor error.",
             )
     logger.info(
-        f"Text Extractor finished. Processed {processed_count} documents needing extraction."
+        f"Text Extractor finished. Processed {processed_count} documents needing extraction.",
     )
 
 
@@ -454,10 +455,11 @@ async def process_documents(
             yield processed_doc
         except Exception as e:
             logger.error(
-                f"Processor failed for doc {doc.record_id}: {e}", exc_info=True
+                f"Processor failed for doc {doc.record_id}: {e}",
+                exc_info=True,
             )
             logger.warning(
-                f"Skipping document {doc.record_id} due to processor error, yielding original."
+                f"Skipping document {doc.record_id} due to processor error, yielding original.",
             )
             yield doc
     logger.info(f"Processor finished. Processed {processed_count} documents.")
@@ -473,12 +475,13 @@ async def chunk_documents(
         processed_doc_count += 1
         if not doc.full_text:
             logger.warning(
-                f"Skipping chunking for record {doc.record_id} (doc #{processed_doc_count}) due to missing full_text."
+                f"Skipping chunking for record {doc.record_id} (doc #{processed_doc_count}) due to missing full_text.",
             )
             continue
         try:
             text_chunks = await asyncio.to_thread(
-                text_splitter.split_text, doc.full_text
+                text_splitter.split_text,
+                doc.full_text,
             )
             doc.chunks = []
             doc_chunk_count = 0
@@ -492,23 +495,24 @@ async def chunk_documents(
                         chunk_text=text_chunk.strip(),
                         document_id=doc.record_id,
                         metadata=doc.metadata.copy(),
-                    )
+                    ),
                 )
                 doc_chunk_count += 1
 
             if doc_chunk_count > 0:
                 logger.debug(
-                    f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks."
+                    f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks.",
                 )
                 yield doc
             else:
                 logger.warning(
-                    f"No chunks generated for doc {doc.record_id} after splitting."
+                    f"No chunks generated for doc {doc.record_id} after splitting.",
                 )
 
         except Exception as e:
             logger.error(
-                f"Error splitting text for doc {doc.record_id}: {e}", exc_info=True
+                f"Error splitting text for doc {doc.record_id}: {e}",
+                exc_info=True,
             )
     logger.info(f"Chunking finished processing {processed_doc_count} documents.")
 
@@ -533,7 +537,7 @@ async def upsert_document_chunks(
 
         if not chunks_to_upsert:
             logger.warning(
-                f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert."
+                f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert.",
             )
             continue
 
@@ -557,7 +561,7 @@ async def upsert_document_chunks(
         chroma_embeddings: Embeddings = embeddings_list
 
         logger.info(
-            f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{db_handler.collection_name}'..."
+            f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{db_handler.collection_name}'...",
         )
         try:
             await asyncio.to_thread(
@@ -581,7 +585,7 @@ async def upsert_document_chunks(
                     / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 )
                 logger.info(
-                    f"Saving failed document {doc.record_id} to {failed_doc_filename}"
+                    f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                 )
                 bm.save(doc, failed_doc_filename)
             except Exception as save_e:
@@ -606,15 +610,8 @@ def main(cfg) -> None:
     preprocessor_instance = objs.preprocessor
     processor_instance = objs.processor
 
-    if hasattr(input_docs_source, "set_vector_store") and isinstance(
-        vectoriser, ChromaDBEmbeddings
-    ):
-        logger.info("Setting vector store instance on input document source.")
-        input_docs_source.set_vector_store(vectoriser)
-    else:
-        logger.warning(
-            "Input document source does not support vector store injection or type mismatch. Cannot check for existing documents."
-        )
+    logger.info("Setting vector store instance on input document source.")
+    input_docs_source.set_vector_store(vectoriser)
 
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 35.0
@@ -631,17 +628,20 @@ def main(cfg) -> None:
 
         # 2. Pre-process (Extract Text if needed)
         pre_processed_iterator = preprocess_documents(
-            doc_iterator, preprocessor_instance.extract
+            doc_iterator,
+            preprocessor_instance.extract,
         )
 
         # 3. Process Documents (e.g., add citations)
         processed_doc_iterator = process_documents(
-            pre_processed_iterator, processor_instance.process
+            pre_processed_iterator,
+            processor_instance.process,
         )
 
         # 4. Chunk Documents (Adds chunks to InputDocument)
         chunked_doc_iterator = chunk_documents(
-            processed_doc_iterator, vectoriser.text_splitter
+            processed_doc_iterator,
+            vectoriser.text_splitter,
         )
 
         # 5. Embed, Save, and Upsert each document
@@ -655,7 +655,7 @@ def main(cfg) -> None:
             if saved_doc:
                 total_saved_docs += 1
                 logger.debug(
-                    f"Document {saved_doc.record_id} saved to Parquet. Attempting upsert..."
+                    f"Document {saved_doc.record_id} saved to Parquet. Attempting upsert...",
                 )
 
                 # Upsert this single document immediately
@@ -671,18 +671,18 @@ def main(cfg) -> None:
                     logger.warning(f"Upsert failed for document {saved_doc.record_id}.")
                 else:
                     logger.debug(
-                        f"Upsert successful for document {saved_doc.record_id}."
+                        f"Upsert successful for document {saved_doc.record_id}.",
                     )
             else:
                 logger.warning(
-                    f"Embedding/Saving failed for document {doc_with_chunks.record_id}, skipping upsert."
+                    f"Embedding/Saving failed for document {doc_with_chunks.record_id}, skipping upsert.",
                 )
 
         # Removed separate Step 6
 
         logger.info("Data processing pipeline finished.")
         logger.info(
-            f"Summary: Total Docs Processed: {total_processed_docs}, Saved to Parquet: {total_saved_docs}, Successfully Upserted: {total_upserted_docs}, Failed Upsert: {total_failed_upsert_docs}"
+            f"Summary: Total Docs Processed: {total_processed_docs}, Saved to Parquet: {total_saved_docs}, Successfully Upserted: {total_upserted_docs}, Failed Upsert: {total_failed_upsert_docs}",
         )
 
     loop.run_until_complete(run_pipeline())

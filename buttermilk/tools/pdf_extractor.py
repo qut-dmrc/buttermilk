@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pdfminer.high_level import extract_text
 from pdfminer.layout import LAParams
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
 from buttermilk.data.vector import InputDocument
@@ -13,7 +13,9 @@ class PdfTextExtractor(BaseModel):
     """Extracts text content from PDF files."""
 
     save_dir: str
-    laparams: LAParams = LAParams()  # Allow customization if needed
+    _laparams: LAParams = PrivateAttr(
+        default_factory=LAParams
+    )  # Allow customization if needed
 
     async def process(self, item: InputDocument, **kwargs) -> InputDocument | None:
         if item.full_text:
@@ -46,7 +48,7 @@ class PdfTextExtractor(BaseModel):
         """
         try:
             logger.debug(f"Extracting text from PDF: {file_path}")
-            full_text = extract_text(file_path, laparams=self.laparams)
+            full_text = extract_text(file_path, laparams=self._laparams)
             logger.debug(f"Successfully extracted text from {file_path} (length: {len(full_text)}).")
             return full_text
         except Exception as e:
