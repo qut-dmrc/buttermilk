@@ -119,6 +119,8 @@ dev = [
     "promptflow-tracing>=1.16.2",
     "anyio>=4.7.0",
     "pandas-stubs>=2.2.3.241126",
+    "ipykernel>=6.29.5",
+    "buttermilk",
 ]
 
 [tool.mypy]
@@ -137,6 +139,9 @@ warn_untyped_fields = true
 [tool.uv]
 upgrade = true
 default-groups = ["ml", "dev"]  # Add the groups you want installed by default
+
+[tool.uv.sources]
+buttermilk = { workspace = true }
 
 [tool.ruff]
 extend-include = ["*.ipynb"]

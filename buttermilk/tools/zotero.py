@@ -164,17 +164,9 @@ class ZotDownloader(BaseModel):
                     logger.debug(
                         f"Downloading attachment {attachment_key} for item {key} to {pdf_file}",
                     )
-                    # Wrap synchronous Zotero call
-                    success = await asyncio.to_thread(
-                        self._zot.dump,
-                        attachment_key,
-                        str(pdf_file),
-                    )
-                    if not success:
-                        logger.warning(
-                            f"Download failed for attachment {attachment_key} (item {key}).",
-                        )
-                        return None
+                    # Zotero python library is synchronous.
+                    # Don't try to get around it, it's not thread safe
+                    self._zot.dump(attachment_key, str(pdf_file))
                 else:
                     logger.debug(f"PDF file already exists: {pdf_file}")
 

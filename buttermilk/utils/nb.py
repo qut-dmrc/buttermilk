@@ -13,7 +13,9 @@ import pandas as pd
 import pydantic
 import seaborn as sns
 from cmap import Colormap
-from rich import print
+from rich.console import Console
+
+print = Console().print
 
 import hydra
 from hydra import compose, initialize_config_dir
