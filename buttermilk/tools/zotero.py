@@ -50,7 +50,7 @@ class ZotDownloader(BaseModel):
         try:
             # Fetch only parent items (books, articles), not attachments directly
             items.extend(
-                self._zot.items(itemType="book || journalArticle", limit=10, **kwargs),
+                self._zot.items(itemType="book || journalArticle", limit=100, **kwargs),
             )
         except Exception as e:
             logger.error(
@@ -116,7 +116,6 @@ class ZotDownloader(BaseModel):
                         f"Error processing download/convert result: {e}",
                         exc_info=True,
                     )
-            break  # testing only
             # Fetch next page if available
             if self._zot.links.get("next"):
                 try:
@@ -156,14 +155,6 @@ class ZotDownloader(BaseModel):
         json_file = Path(self.save_dir) / f"{key}.json"
 
         # Find the PDF attachment link
-        pdf_attachment = None
-        try:
-            # Wrap synchronous Zotero call if running in async context
-            children = await asyncio.to_thread(self._zot.children, key)
-        except Exception as e:
-            logger.error(f"Error fetching children for item {key}: {e}", exc_info=True)
-            return None  # Cannot proceed without children info
-
         attachment = item["links"].get("attachment", {})
         if (attachment.get("attachmentType") == "application/pdf") and (
             pdf_attachment := attachment.get("href")

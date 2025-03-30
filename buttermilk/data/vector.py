@@ -24,9 +24,8 @@ from buttermilk import logger
 from buttermilk.bm import BM, bm
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
-DEFAULT_UPSERT_BATCH_SIZE = 100  # Still used for failed batch saving logic if needed
+DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
 FAILED_BATCH_DIR = "failed_upsert_batches"
-ARROW_SAVE_DIR = "arrow_embeddings"
 
 T = TypeVar("T")
 
@@ -154,7 +153,7 @@ class ChromaDBEmbeddings(BaseModel):
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
-    arrow_save_dir: str = ARROW_SAVE_DIR
+    arrow_save_dir: str = Field(...)
 
     _semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -354,7 +353,7 @@ class ChromaDBEmbeddings(BaseModel):
             try:
                 embeddings_result: list[
                     TextEmbedding
-                ] = await self._embedding_model.get_embeddings(
+                ] = await self._embedding_model.get_embeddings_async(
                     [chunk_input],
                     **kwargs,
                 )

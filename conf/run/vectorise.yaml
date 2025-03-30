@@ -11,7 +11,8 @@ vectoriser:
   embedding_model: "text-embedding-large-exp-03-07"
   collection_name: "prosocial_zot"
   chunk_size: 9000
-  chunk_overlap: 1000
+  chunk_overlap: 3000
+  arrow_save_dir: "/home/nic/data/prosocial_zot/data"
 
 input_docs:
   _target_: buttermilk.tools.zotero.ZotDownloader
