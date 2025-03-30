@@ -117,7 +117,9 @@ class ZotDownloader(BaseModel):
             # Fetch next page if available
             if _next:
                 try:
-                    logger.debug("Following 'next' link for more Zotero items...")
+                    logger.debug(
+                        f"Following 'next' link for more Zotero items: {_next}"
+                    )
                     items = self._zot._retrieve_data(_next).json()
                     _next = self._zot._extract_links().get("next")
                 except Exception as e:

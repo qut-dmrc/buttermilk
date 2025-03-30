@@ -26,6 +26,7 @@ from buttermilk.bm import BM, bm
 MODEL_NAME = "text-embedding-large-exp-03-07"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
 FAILED_BATCH_DIR = "failed_upsert_batches"
+MAX_TOTAL_TASKS_PER_RUN = 500
 
 T = TypeVar("T")
 
@@ -150,6 +151,7 @@ class ChromaDBEmbeddings(BaseModel):
     arrow_save_dir: str = Field(...)
 
     _semaphore: asyncio.Semaphore = PrivateAttr()
+    _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
@@ -164,7 +166,10 @@ class ChromaDBEmbeddings(BaseModel):
         self._client = chromadb.PersistentClient(path=self.persist_directory)
         self._collection = self._client.get_or_create_collection(self.collection_name)
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
+
+        self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
         self._semaphore = asyncio.Semaphore(self.concurrency)
+
         self._text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
@@ -338,7 +343,7 @@ class ChromaDBEmbeddings(BaseModel):
         index: int,
     ) -> tuple[int, list[float | int] | None]:
         """Helper coroutine to run a single embedding task and handle errors."""
-        async with self._semaphore:
+        async with self._embedding_semaphore:
             kwargs = dict(
                 output_dimensionality=self.dimensionality,
                 auto_truncate=False,
@@ -397,6 +402,178 @@ class ChromaDBEmbeddings(BaseModel):
             )
             return False
 
+    async def upsert_document_chunks(
+        self,
+        doc_iterator: AsyncIterator[InputDocument],
+    ) -> tuple[int, int]:
+        """Upserts all chunks for each InputDocument from the iterator into ChromaDB."""
+        total_docs_processed = 0
+        successful_docs_upserted = 0
+        failed_docs_upserted = 0
+
+        async for doc in doc_iterator:
+            total_docs_processed += 1
+            if not doc.chunks:
+                logger.warning(
+                    f"Document {doc.record_id} has no chunks, skipping upsert.",
+                )
+                continue
+
+            chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
+
+            if not chunks_to_upsert:
+                logger.warning(
+                    f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert.",
+                )
+                continue
+
+            ids = []
+            documents = []
+            embeddings_list = []
+            metadatas = []
+
+            for rec in chunks_to_upsert:
+                ids.append(rec.chunk_id)
+                documents.append(rec.chunk_text)
+                embeddings_list.append(list(rec.embedding))  # type: ignore
+                base_meta = {
+                    "document_title": rec.document_title,
+                    "chunk_index": rec.chunk_index,
+                    "document_id": rec.document_id,
+                }
+                combined_meta = {**rec.metadata, **base_meta}
+                metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
+
+            chroma_embeddings: Embeddings = embeddings_list
+
+            logger.info(
+                f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{self.collection_name}'...",
+            )
+            try:
+                await asyncio.to_thread(
+                    self.collection.upsert,
+                    ids=ids,
+                    embeddings=chroma_embeddings,
+                    metadatas=metadatas,
+                    documents=documents,
+                )
+                successful_docs_upserted += 1
+                logger.debug(
+                    f"Successfully upserted chunks for document {doc.record_id}.",
+                )
+            except Exception as e:
+                failed_docs_upserted += 1
+                logger.error(
+                    f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
+                )
+                try:
+                    failed_doc_filename = (
+                        Path(FAILED_BATCH_DIR)
+                        / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                    )
+                    logger.info(
+                        f"Saving failed document {doc.record_id} to {failed_doc_filename}",
+                    )
+                    bm.save(doc, failed_doc_filename)
+                except Exception as save_e:
+                    logger.error(
+                        f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
+                    )
+
+        return successful_docs_upserted, failed_docs_upserted
+
+    # --- Process a single document  ---
+    async def _process_and_upsert_single_doc(
+        self,
+        doc_with_chunks: InputDocument,
+    ) -> dict:
+        """Embeds, saves, and upserts a single document."""
+        async with self._semaphore:
+            logger.debug(f"Processing document {doc_with_chunks.record_id}...")
+            record_id = doc_with_chunks.record_id
+            logger.debug(f"Processing document {record_id}...")
+            # Embed chunks and save the result to Parquet
+            saved_doc = await self.embed_document(doc_with_chunks)
+            saved = False
+            upserted = False
+
+            if saved_doc:
+                saved = True
+                logger.debug(
+                    f"Document {record_id} saved to Parquet. Attempting upsert...",
+                )
+
+                # Upsert this single document immediately
+                # Wrap the single saved_doc in an async iterator
+                single_doc_iterator = list_to_async_iterator([saved_doc])
+                # Assuming upsert_document_chunks handles its own potential errors internally
+                upserted_count, failed_count = await upsert_document_chunks(
+                    single_doc_iterator,
+                    self,
+                )
+                if upserted_count > 0:
+                    upserted = True
+                    logger.debug(f"Upsert successful for document {record_id}.")
+                # failed_count > 0 is handled by upsert_document_chunks logging/saving
+                # We just care if *at least one* chunk batch succeeded for this doc.
+            else:
+                logger.warning(
+                    f"Embedding/Saving failed for document {record_id}, skipping upsert.",
+                )
+            # Return status for aggregation
+            return {"record_id": record_id, "saved": saved, "upserted": upserted}
+
+
+async def chunk_documents(
+    doc_iterator: AsyncIterator[InputDocument],
+    text_splitter: RecursiveCharacterTextSplitter,
+) -> AsyncIterator[InputDocument]:
+    """Chunks documents and adds the chunks list to the InputDocument."""
+    processed_doc_count = 0
+    async for doc in doc_iterator:
+        processed_doc_count += 1
+        if not doc.full_text:
+            logger.warning(
+                f"Skipping chunking for record {doc.record_id} (doc #{processed_doc_count}) due to missing full_text.",
+            )
+            continue
+        try:
+            text_chunks = await asyncio.to_thread(
+                text_splitter.split_text,
+                doc.full_text,
+            )
+            doc.chunks = []
+            doc_chunk_count = 0
+            for i, text_chunk in enumerate(text_chunks):
+                if not text_chunk.strip():
+                    continue
+                doc.chunks.append(
+                    ChunkedDocument(
+                        document_title=doc.title,
+                        chunk_index=i,
+                        chunk_text=text_chunk.strip(),
+                        document_id=doc.record_id,
+                        metadata=doc.metadata.copy(),
+                    ),
+                )
+                doc_chunk_count += 1
+
+            if doc_chunk_count > 0:
+                logger.debug(
+                    f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks.",
+                )
+                yield doc
+            else:
+                logger.warning(
+                    f"No chunks generated for doc {doc.record_id} after splitting.",
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Error splitting text for doc {doc.record_id}: {e} {e.args=}",
+            )
+    logger.info(f"Chunking finished processing {processed_doc_count} documents.")
+
 
 # --- Async Pipeline Stages ---
 async def preprocess_documents(
@@ -454,137 +631,6 @@ async def process_documents(
     logger.info(f"Processor finished. Processed {processed_count} documents.")
 
 
-async def chunk_documents(
-    doc_iterator: AsyncIterator[InputDocument],
-    text_splitter: RecursiveCharacterTextSplitter,
-) -> AsyncIterator[InputDocument]:
-    """Chunks documents and adds the chunks list to the InputDocument."""
-    processed_doc_count = 0
-    async for doc in doc_iterator:
-        processed_doc_count += 1
-        if not doc.full_text:
-            logger.warning(
-                f"Skipping chunking for record {doc.record_id} (doc #{processed_doc_count}) due to missing full_text.",
-            )
-            continue
-        try:
-            text_chunks = await asyncio.to_thread(
-                text_splitter.split_text,
-                doc.full_text,
-            )
-            doc.chunks = []
-            doc_chunk_count = 0
-            for i, text_chunk in enumerate(text_chunks):
-                if not text_chunk.strip():
-                    continue
-                doc.chunks.append(
-                    ChunkedDocument(
-                        document_title=doc.title,
-                        chunk_index=i,
-                        chunk_text=text_chunk.strip(),
-                        document_id=doc.record_id,
-                        metadata=doc.metadata.copy(),
-                    ),
-                )
-                doc_chunk_count += 1
-
-            if doc_chunk_count > 0:
-                logger.debug(
-                    f"Finished chunking doc {doc.record_id}, created {doc_chunk_count} chunks.",
-                )
-                yield doc
-            else:
-                logger.warning(
-                    f"No chunks generated for doc {doc.record_id} after splitting.",
-                )
-
-        except Exception as e:
-            logger.error(
-                f"Error splitting text for doc {doc.record_id}: {e} {e.args=}",
-            )
-    logger.info(f"Chunking finished processing {processed_doc_count} documents.")
-
-
-# --- Upsert Function (can still be used per document) ---
-async def upsert_document_chunks(
-    doc_iterator: AsyncIterator[InputDocument],
-    db_handler: ChromaDBEmbeddings,
-) -> tuple[int, int]:
-    """Upserts all chunks for each InputDocument from the iterator into ChromaDB."""
-    total_docs_processed = 0
-    successful_docs_upserted = 0
-    failed_docs_upserted = 0
-
-    async for doc in doc_iterator:
-        total_docs_processed += 1
-        if not doc.chunks:
-            logger.warning(f"Document {doc.record_id} has no chunks, skipping upsert.")
-            continue
-
-        chunks_to_upsert = [c for c in doc.chunks if c.embedding is not None]
-
-        if not chunks_to_upsert:
-            logger.warning(
-                f"Document {doc.record_id} has no chunks with successful embeddings, skipping upsert.",
-            )
-            continue
-
-        ids = []
-        documents = []
-        embeddings_list = []
-        metadatas = []
-
-        for rec in chunks_to_upsert:
-            ids.append(rec.chunk_id)
-            documents.append(rec.chunk_text)
-            embeddings_list.append(list(rec.embedding))  # type: ignore
-            base_meta = {
-                "document_title": rec.document_title,
-                "chunk_index": rec.chunk_index,
-                "document_id": rec.document_id,
-            }
-            combined_meta = {**rec.metadata, **base_meta}
-            metadatas.append(_sanitize_metadata_for_chroma(combined_meta))
-
-        chroma_embeddings: Embeddings = embeddings_list
-
-        logger.info(
-            f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{db_handler.collection_name}'...",
-        )
-        try:
-            await asyncio.to_thread(
-                db_handler.collection.upsert,
-                ids=ids,
-                embeddings=chroma_embeddings,
-                metadatas=metadatas,
-                documents=documents,
-            )
-            successful_docs_upserted += 1
-            logger.debug(f"Successfully upserted chunks for document {doc.record_id}.")
-        except Exception as e:
-            failed_docs_upserted += 1
-            logger.error(
-                f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
-            )
-            try:
-                failed_doc_filename = (
-                    Path(FAILED_BATCH_DIR)
-                    / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
-                )
-                logger.info(
-                    f"Saving failed document {doc.record_id} to {failed_doc_filename}",
-                )
-                bm.save(doc, failed_doc_filename)
-            except Exception as save_e:
-                logger.error(
-                    f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
-                )
-
-    # This logging might be less useful now as it runs per document in the main loop
-    # logger.info(f"Upsert process finished. Total documents processed: {total_docs_processed}. Successfully upserted: {successful_docs_upserted}. Failed: {failed_docs_upserted}.")
-    return successful_docs_upserted, failed_docs_upserted
-
-
 # --- Main Execution ---
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -610,7 +656,7 @@ def main(cfg) -> None:
         total_failed_upsert_docs = 0
 
         # 1. Source Documents
-        doc_iterator = input_docs_source.get_all_records()
+        doc_iterator = input_docs_source.get_all_records(start=objs.start_from)
 
         # 2. Pre-process (Extract Text if needed)
         pre_processed_iterator = preprocess_documents(
@@ -630,45 +676,63 @@ def main(cfg) -> None:
             vectoriser.text_splitter,
         )
 
-        # 5. Embed, Save, and Upsert each document
+        # 5. Create concurrent tasks for embedding, saving, and upserting
+        logger.info(
+            f"Processing documents with concurrency limit: {vectoriser.concurrency}",
+        )
+        tasks = []
         async for doc_with_chunks in chunked_doc_iterator:
-            total_processed_docs += 1
-            logger.debug(f"Processing document {doc_with_chunks.record_id}...")
-
-            # Embed chunks and save the result to Parquet
-            saved_doc = await vectoriser.embed_document(doc_with_chunks)
-
-            if saved_doc:
-                total_saved_docs += 1
-                logger.debug(
-                    f"Document {saved_doc.record_id} saved to Parquet. Attempting upsert...",
+            if len(tasks) >= MAX_TOTAL_TASKS_PER_RUN:
+                logger.info(
+                    f"Created all {len(tasks)} tasks, not running any more in this run.",
                 )
+                break
+            task = asyncio.create_task(
+                vectoriser._process_and_upsert_single_doc(doc_with_chunks),
+            )
+            tasks.append(task)
 
-                # Upsert this single document immediately
-                # Wrap the single saved_doc in an async iterator
-                single_doc_iterator = list_to_async_iterator([saved_doc])
-                upserted_count, failed_count = await upsert_document_chunks(
-                    single_doc_iterator,
-                    vectoriser,
-                )
-                total_upserted_docs += upserted_count
-                total_failed_upsert_docs += failed_count
-                if failed_count > 0:
-                    logger.warning(f"Upsert failed for document {saved_doc.record_id}.")
-                else:
-                    logger.debug(
-                        f"Upsert successful for document {saved_doc.record_id}.",
-                    )
+        # Wait for all tasks to complete and gather results
+        if tasks:
+            logger.info(
+                f"Waiting for {len(tasks)} document processing tasks to complete...",
+            )
+            # Capture exceptions from tasks as well
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info("All document processing tasks finished.")
+        else:
+            logger.info("No documents found to process.")
+            results = []
+
+        # Aggregate results, handling potential exceptions gathered
+        total_tasks = len(results)
+        successful_tasks = 0
+        total_saved_docs = 0
+        total_upserted_docs = 0
+        exceptions_count = 0
+
+        for result in results:
+            if isinstance(result, Exception):
+                exceptions_count += 1
+                # Log the exception details
+                logger.error(f"A processing task failed: {result}", exc_info=result)
+            elif isinstance(result, dict):
+                successful_tasks += 1
+                if result.get("saved"):
+                    total_saved_docs += 1
+                if result.get("upserted"):
+                    total_upserted_docs += 1
             else:
+                # Log unexpected result types if any
                 logger.warning(
-                    f"Embedding/Saving failed for document {doc_with_chunks.record_id}, skipping upsert.",
+                    f"Unexpected result type from task: {type(result)} - {result}",
                 )
-
-        # Removed separate Step 6
 
         logger.info("Data processing pipeline finished.")
         logger.info(
-            f"Summary: Total Docs Processed: {total_processed_docs}, Saved to Parquet: {total_saved_docs}, Successfully Upserted: {total_upserted_docs}, Failed Upsert: {total_failed_upsert_docs}",
+            f"Summary: Total Tasks Initiated: {total_tasks}, Successful Tasks: {successful_tasks}, "
+            f"Task Exceptions: {exceptions_count}, Saved to Parquet: {total_saved_docs}, "
+            f"Successfully Upserted: {total_upserted_docs}",
         )
 
     loop.run_until_complete(run_pipeline())

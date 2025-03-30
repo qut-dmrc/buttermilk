@@ -3,6 +3,9 @@
 defaults:
   - _self_
 
+
+start_from: 5000
+
 name: vectoriser
 job: zotero
 vectoriser:
