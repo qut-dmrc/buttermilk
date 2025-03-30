@@ -109,9 +109,6 @@ def _sanitize_metadata_for_chroma(
                 else:
                     json_str = json.dumps(v, ensure_ascii=False)
                 sanitized[k] = json_str
-                logger.debug(
-                    f"Sanitized metadata key '{k}' by converting value to JSON string.",
-                )
             except (TypeError, Exception) as e:
                 logger.warning(
                     f"Could not JSON serialize metadata value for key '{k}': {type(v)}. Error: {e}. Skipping key.",
@@ -119,9 +116,6 @@ def _sanitize_metadata_for_chroma(
         else:
             try:
                 sanitized[k] = str(v)
-                logger.debug(
-                    f"Sanitized metadata key '{k}' by converting value to string: {type(v)} -> str",
-                )
             except Exception as e:
                 logger.warning(
                     f"Could not convert metadata value for key '{k}' to string: {type(v)}. Error: {e}. Skipping key.",
@@ -277,8 +271,7 @@ class ChromaDBEmbeddings(BaseModel):
             return input_doc
         except Exception as e:
             logger.error(
-                f"Failed to save document {input_doc.record_id} to Parquet file {arrow_file_path}: {e}",
-                exc_info=True,
+                f"Failed to save document {input_doc.record_id} to Parquet file {arrow_file_path}: {e} {e.args=}",
             )
             input_doc.chunks_path = ""
             return None
@@ -400,8 +393,7 @@ class ChromaDBEmbeddings(BaseModel):
             return exists
         except Exception as e:
             logger.error(
-                f"Error checking existence of document ID '{document_id}' in ChromaDB: {e}",
-                exc_info=True,
+                f"Error checking existence of document ID '{document_id}' in ChromaDB: {e} {e.args=}",
             )
             return False
 
@@ -430,8 +422,7 @@ async def preprocess_documents(
             yield doc
         except Exception as e:
             logger.error(
-                f"Text extraction processor failed for doc {doc.record_id}: {e}",
-                exc_info=True,
+                f"Text extraction processor failed for doc {doc.record_id}: {e} {e.args=}",
             )
             logger.warning(
                 f"Skipping document {doc.record_id} due to extraction processor error.",
@@ -454,8 +445,7 @@ async def process_documents(
             yield processed_doc
         except Exception as e:
             logger.error(
-                f"Processor failed for doc {doc.record_id}: {e}",
-                exc_info=True,
+                f"Processor failed for doc {doc.record_id}: {e} {e.args=}",
             )
             logger.warning(
                 f"Skipping document {doc.record_id} due to processor error, yielding original.",
@@ -510,8 +500,7 @@ async def chunk_documents(
 
         except Exception as e:
             logger.error(
-                f"Error splitting text for doc {doc.record_id}: {e}",
-                exc_info=True,
+                f"Error splitting text for doc {doc.record_id}: {e} {e.args=}",
             )
     logger.info(f"Chunking finished processing {processed_doc_count} documents.")
 
@@ -575,8 +564,7 @@ async def upsert_document_chunks(
         except Exception as e:
             failed_docs_upserted += 1
             logger.error(
-                f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e}",
-                exc_info=True,
+                f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
             )
             try:
                 failed_doc_filename = (
@@ -589,8 +577,7 @@ async def upsert_document_chunks(
                 bm.save(doc, failed_doc_filename)
             except Exception as save_e:
                 logger.error(
-                    f"Could not save failed document {doc.record_id} to disk: {save_e}",
-                    exc_info=True,
+                    f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
                 )
 
     # This logging might be less useful now as it runs per document in the main loop

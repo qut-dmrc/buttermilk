@@ -52,17 +52,17 @@ class ZotDownloader(BaseModel):
             items.extend(
                 self._zot.items(itemType="book || journalArticle", limit=100, **kwargs),
             )
+            _next = self._zot.links.get("next")
         except Exception as e:
             logger.error(
-                f"Error fetching initial items from Zotero: {e}",
-                exc_info=True,
+                f"Error fetching initial items from Zotero: {e} {e.args=}",
             )
             return
 
         processed_count = 0
         skipped_count = 0
 
-        while items or self._zot.links.get("next"):
+        while items or _next:
             tasks = []
             items_to_process_this_batch = []
 
@@ -100,8 +100,7 @@ class ZotDownloader(BaseModel):
                     )
                 except Exception as e:
                     logger.error(
-                        f"Error creating task for {item_to_process.get('key', 'unknown')}: {e}",
-                        exc_info=True,
+                        f"Error creating task for {item_to_process.get('key', 'unknown')}: {e} {e.args=}",
                     )
 
             # Process completed tasks for this batch
@@ -113,18 +112,17 @@ class ZotDownloader(BaseModel):
                         yield result
                 except Exception as e:
                     logger.error(
-                        f"Error processing download/convert result: {e}",
-                        exc_info=True,
+                        f"Error processing download/convert result: {e} {e.args=}",
                     )
             # Fetch next page if available
-            if self._zot.links.get("next"):
+            if _next:
                 try:
                     logger.debug("Following 'next' link for more Zotero items...")
-                    items.extend(self._zot.follow())
+                    items = self._zot._retrieve_data(_next).json()
+                    _next = self._zot.links.get("next")
                 except Exception as e:
                     logger.error(
-                        f"Error fetching next page from Zotero: {e}",
-                        exc_info=True,
+                        f"Error fetching next page from Zotero: {e} {e.args=}",
                     )
                     break  # Stop if pagination fails
             elif (
@@ -187,8 +185,7 @@ class ZotDownloader(BaseModel):
                     logger.debug(f"Saved item metadata to {json_file}")
                 except Exception as json_e:
                     logger.error(
-                        f"Failed to save item JSON for {key} to {json_file}: {json_e}",
-                        exc_info=True,
+                        f"Failed to save item JSON for {key} to {json_file}: {json_e} {json_e.args=}",
                     )
 
                 # --- Prepare InputDocument ---
@@ -203,8 +200,7 @@ class ZotDownloader(BaseModel):
 
             except Exception as e:
                 logger.error(
-                    f"Error during download/convert for {key}: {e}",
-                    exc_info=True,
+                    f"Error during download/convert for {key}: {e} {e.args=}",
                 )
                 return None
         else:
@@ -216,7 +212,6 @@ class ZotDownloader(BaseModel):
                 logger.debug(f"Saved item metadata (no PDF) to {json_file}")
             except Exception as json_e:
                 logger.error(
-                    f"Failed to save item JSON for {key} (no PDF) to {json_file}: {json_e}",
-                    exc_info=True,
+                    f"Failed to save item JSON for {key} (no PDF) to {json_file}: {json_e} {json_e.args=}",
                 )
             return None  # Return None as no PDF means no InputDocument for embedding pipeline

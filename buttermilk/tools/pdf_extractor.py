@@ -14,7 +14,7 @@ class PdfTextExtractor(BaseModel):
 
     save_dir: str
     _laparams: LAParams = PrivateAttr(
-        default_factory=LAParams
+        default_factory=LAParams,
     )  # Allow customization if needed
 
     async def process(self, item: InputDocument, **kwargs) -> InputDocument | None:
@@ -53,7 +53,6 @@ class PdfTextExtractor(BaseModel):
             return full_text
         except Exception as e:
             logger.error(
-                f"Error extracting text from PDF {file_path}: {e}",
-                exc_info=True,
+                f"Error extracting text from PDF {file_path}: {e} {e.args=}",
             )
             return None

@@ -55,7 +55,6 @@ class Citator(BaseModel):
             return item
         except Exception as e:
             logger.error(
-                f"Error generating citation for doc {item.record_id}: {e}",
-                exc_info=True,
+                f"Error generating citation for doc {item.record_id}: {e} {e.args=}",
             )
             return item

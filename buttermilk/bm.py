@@ -278,6 +278,11 @@ class BM(Singleton, Project):
             category=DeprecationWarning,
             module="flask_restx",
         )
+        warnings.filterwarnings(
+            action="ignore",
+            message="CropBox missing from",
+            module="pdfminer.pdfpage",
+        )
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         if not verbose:
