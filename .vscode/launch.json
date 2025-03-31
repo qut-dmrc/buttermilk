@@ -51,8 +51,9 @@
       "justMyCode": false,
       "args": [
         "hydra.verbose=false",
-        "+flows=[moa]",
-        "+flow=moa",
+        "+flows=[simple]",
+        "+flow=simple",
+        "ui=console",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
       ],

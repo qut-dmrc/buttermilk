@@ -3,14 +3,14 @@ import json
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Any, Self, TypeVar  # Corrected import for Tuple
+from typing import Any, Self, TypeVar, cast  # Corrected import for Tuple
 
 import chromadb
 import hydra
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pydantic
-from chromadb import Collection, Embeddings
+from chromadb import Collection, EmbeddingFunction, Embeddings
 from chromadb.api import ClientAPI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field, PrivateAttr
@@ -189,6 +189,30 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
         return None
 
 
+class VertexAIEmbeddingFunction(EmbeddingFunction):
+    def __init__(
+        self,
+        embedding_model: str,
+        dimensionality: int = 3072,
+    ):
+        self.dimensionality = dimensionality
+        self._embedding_model = TextEmbeddingModel.from_pretrained(embedding_model)
+        super().__init__()
+
+    def __call__(self, input) -> Embeddings:
+        kwargs = dict(
+            auto_truncate=False,
+            output_dimensionality=self.dimensionality,
+        )
+
+        # Vertex batch_size is 1
+        results = [
+            self._embedding_model.get_embeddings(texts=[text], **kwargs)
+            for text in input
+        ]
+        return [cast("list[float]", r.values) for r in results]
+
+
 # --- Core Embedding and DB Interaction Class ---
 class ChromaDBEmbeddings(BaseModel):
     """Handles configuration, embedding model interaction, and ChromaDB connection."""
@@ -205,7 +229,6 @@ class ChromaDBEmbeddings(BaseModel):
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
 
-    _semaphore: asyncio.Semaphore = PrivateAttr()
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
@@ -222,7 +245,6 @@ class ChromaDBEmbeddings(BaseModel):
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
-        self._semaphore = asyncio.Semaphore(self.concurrency)
 
         logger.info(
             f"Initialized RecursiveCharacterTextSplitter (chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap})",
@@ -240,6 +262,10 @@ class ChromaDBEmbeddings(BaseModel):
                 self._client = chromadb.PersistentClient(path=self.persist_directory)
             self._collection = self._client.get_or_create_collection(
                 self.collection_name,
+                embedding_function=VertexAIEmbeddingFunction(
+                    embedding_model=self.embedding_model,
+                    dimensionality=self.dimensionality,
+                ),
             )
         return self._collection
 
@@ -641,25 +667,29 @@ async def preprocess_documents(
 class DocProcessor(BaseModel):
     """Callable class for processing documents from an iterator."""
 
-    doc_iterator: AsyncIterator[InputDocument]
-    processor: ProcessorCallable
     concurrency: int = Field(default=20)
     _semaphore: asyncio.Semaphore = PrivateAttr()
+    doc_iterator: AsyncIterator[InputDocument] = Field(default=None, exclude=True)
+    processor: ProcessorCallable = Field(default=None, exclude=True)
     _name: str = PrivateAttr(default="")
+
+    model_config = pydantic.ConfigDict(
+        arbitrary_types_allowed=True,
+    )
 
     @pydantic.model_validator(mode="after")
     def _init(self) -> Self:
         self._semaphore = asyncio.Semaphore(self.concurrency)
-        if hasattr(self.processor, "__name__"):
-            self._name = self.processor.__name__
+        if hasattr(self._processor, "__name__"):
+            self._name = self._processor.__name__
         else:
-            self._name = self.processor.__class__.__name__
+            self._name = self._processor.__class__.__name__
         return self
 
     async def _process(self, doc: InputDocument) -> InputDocument | None:
         async with self._semaphore:
             try:
-                processed_doc = await self.processor(doc)
+                processed_doc = await self._processor(doc)
                 return processed_doc
             except Exception as e:
                 logger.error(
@@ -683,7 +713,7 @@ class DocProcessor(BaseModel):
                 # Add new tasks up to our max_pending limit
                 while len(pending_tasks) < max_pending and not iterator_exhausted:
                     try:
-                        doc = await anext(self.doc_iterator)
+                        doc = await anext(self._doc_iterator)
                         task = asyncio.create_task(self._process(doc))
                         pending_tasks.add(task)
                         # Set up task completion callback to remove it from pending set
@@ -752,26 +782,26 @@ def main(cfg) -> None:
 
         # 2. Pre-process (Extract Text if needed)
         pre_processed_iterator = DocProcessor(
-            doc_iterator=doc_iterator,
-            processor=preprocessor_instance.process,
+            _doc_iterator=doc_iterator,
+            _processor=preprocessor_instance.process,
         )
 
         # 3. Process Documents (e.g., add citations)
         processed_doc_iterator = DocProcessor(
-            doc_iterator=pre_processed_iterator(),
-            processor=processor_instance.process,
+            _doc_iterator=pre_processed_iterator(),
+            _processor=processor_instance.process,
         )
 
         # 4. Chunk Documents (Adds chunks to InputDocument)
         chunked_doc_iterator = DocProcessor(
-            doc_iterator=processed_doc_iterator(),
-            processor=text_splitter_instance.process,
+            _doc_iterator=processed_doc_iterator(),
+            _processor=text_splitter_instance.process,
         )
 
         # 5. Vectorize and Upsert - now using the same DocProcessor pattern
         vectorizer_processor = DocProcessor(
-            doc_iterator=chunked_doc_iterator(),
-            processor=vectoriser.process,
+            _doc_iterator=chunked_doc_iterator(),
+            _processor=vectoriser.process,
             concurrency=vectoriser.concurrency,
         )
 

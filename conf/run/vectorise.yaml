@@ -12,10 +12,14 @@ vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
   persist_directory: "/home/nic/data/prosocial_zot/files"
   embedding_model: "text-embedding-large-exp-03-07"
+  dimensionality: 3072
   collection_name: "prosocial_zot"
+  arrow_save_dir: "/home/nic/data/prosocial_zot/data"
+  
+chunker:
+  _target_: buttermilk.data.vector.DefaultTextSplitter
   chunk_size: 9000
   chunk_overlap: 3000
-  arrow_save_dir: "/home/nic/data/prosocial_zot/data"
 
 input_docs:
   _target_: buttermilk.tools.zotero.ZotDownloader

@@ -1,68 +1,16 @@
+defaults:
+  - _self_
+  - agents@simple.agents: 
+    - manager
+    - host
+    - analyst
+    - ragzot
+
 simple:
-  # _target_: buttermilk.runner.simple.Sequencer
-  orchestrator: Sequencer
-  # data:
-  interface: 
-    _target_: buttermilk.ui.console.CLIUserAgent
-  # save:
-
-  steps:
-    - name: fetch
-      agent_obj: Fetch
-      description: fetch urls and stored records for the chat
-      inputs:
-        prompt: prompt
-
-    - name: judge
-      description: Applies criteria to content.
-      agent_obj: LLMAgent
-      num_runs: 2
-      variants:
-        template: judge
-        model: gemini2flashthinking
-        criteria: criteria_ordinary
-        formatting: json_rules
-      inputs:
-        record: record
-
-    # - name: feedback
-    #   description: QA for mistakes.
-    #   agent_obj: LLMAgent
-    #   num_runs: 1
-    #   variants:
-    #     template: feedback
-    #     model: ${llms.general}
-    #   inputs:
-    #     history: history
-
-    - name: synth
-      agent_obj: LLMAgent
-      description: Synthesizes draft answers.
-      num_runs: 1
-      variants:
-        model: gemini2flashthinking
-        template: synthesise_judger
-        criteria: criteria_ordinary
-        formatting: json_rules
-      inputs:
-        record: record
-        instructions: >
-          Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
-        answers: judge
-        feedback: feedback
-
-    - name: eval
-      agent_obj: LLMAgent
-      num_runs: 1
-      description: show differences between answers
-      variants:
-        template: differences
-        model: gemini2flashthinking
-        criteria: >
-          Evaluate how well the provided content aligns with the rules.
-      inputs:
-        content: content
-        answers:
-          - judge
-          - synth
-        feedback: feedback
+  flow_name: simple
+  orchestrator: Selector
+  description: Mixture of Agents directed chat
+  agents:
+  params:
+    task: >
+      The MANAGER has called us together for a conversation. We should help them answer thoroughly and reliably. You are the HOST.

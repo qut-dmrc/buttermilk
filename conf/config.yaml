@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - local
+  - llms: lite
 
 name: default_project
 job: development

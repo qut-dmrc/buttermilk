@@ -14,13 +14,15 @@ import pydantic
 import seaborn as sns
 from cmap import Colormap
 from rich.console import Console
-
-print = Console().print
+console = Console()
+print = console.print
 
 import hydra
 from hydra import compose, initialize_config_dir
+import nest_asyncio
 
-
+# Apply nest_asyncio to handle potential event loop issues in notebooks
+nest_asyncio.apply()
 # Configuration files are stored in the local directory, and
 # options can be passed in at initialization.
 def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
