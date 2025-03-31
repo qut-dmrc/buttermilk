@@ -507,9 +507,8 @@ class ChromaDBEmbeddings(BaseModel):
                 # Wrap the single saved_doc in an async iterator
                 single_doc_iterator = list_to_async_iterator([saved_doc])
                 # Assuming upsert_document_chunks handles its own potential errors internally
-                upserted_count, failed_count = await upsert_document_chunks(
-                    single_doc_iterator,
-                    self,
+                upserted_count, failed_count = await self.upsert_document_chunks(
+                    single_doc_iterator
                 )
                 if upserted_count > 0:
                     upserted = True
