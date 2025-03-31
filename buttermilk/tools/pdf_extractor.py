@@ -22,7 +22,7 @@ class PdfTextExtractor(BaseModel):
             # Got it already; return
             return item
 
-        item.full_text = self.extract(item.file_path)
+        item.full_text = self.extract(item.file_path) or ""
         metadata_file = Path(item.record_path)
 
         # --- Save Item JSON with text ---
