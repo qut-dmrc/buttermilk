@@ -125,13 +125,13 @@ class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
     _type = "InputRequest"
-    agent_id: str = Field(
+    role: str = Field(
         ...,
-        description="The ID of the agent to which this request is made.",
+        description="The role of the agent(s) to which this request is made.",
     )
-    agent_name: str = Field(
+    source: str = Field(
         ...,
-        description="The name of the agent that generated this output.",
+        description="The name of the agent that requested this step.",
     )
     context: list[Any] = Field(
         default=[],

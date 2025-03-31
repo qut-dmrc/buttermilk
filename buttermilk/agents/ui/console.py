@@ -26,7 +26,7 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, UserInstructions):
             return
         console = Console(highlight=True)
-        console.print(Markdown(f"### {message.agent_id}: \n{message.content}\n"))
+        console.print(Markdown(f"### {message.role}: \n{message.content}\n"))
 
     async def _process(
         self,

@@ -39,7 +39,7 @@ def fetch_agent():
 async def test_fetch_process(fetch_agent, mock_record):
     """Test the process method of the fetch agent."""
     input_data = AgentInput(
-        agent_id="test",
+        role="test",
         content="fetch this",
         inputs={"record_id": "test_id"},
     )

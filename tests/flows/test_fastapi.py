@@ -102,8 +102,8 @@ async def test_pubsub_callback(client: TestClient, monkeypatch):
     callback(message)
 
     agent_input = AgentInput(
-        agent_id="test_agent",
-        agent_name="TestAgent",
+        role="test_agent",
+        source="TestAgent",
         inputs={"value": 4},
     )
     response = await agent.process(agent_input=agent_input)

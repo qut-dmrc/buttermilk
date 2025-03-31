@@ -28,7 +28,7 @@ from buttermilk._core.contract import (
     ManagerRequest,
     UserInstructions,
 )
-from buttermilk._core.orchestrator import Orchestrator, StepDefinition
+from buttermilk._core.orchestrator import Orchestrator, StepRequest
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
@@ -268,17 +268,21 @@ class AutogenOrchestrator(Orchestrator):
                     step = await anext(self._step_generator)
 
                     # For now, ALWAYS get confirmation from the user (MANAGER) role
-                    await self._execute_step(
-                        step_name=MANAGER,
-                        prompt="Here's my proposed next step. Do you want to proceed?",
-                        inputs=step.get("inputs", step.get("prompt")),
-                    )
-                    if not await self._user_confirmation.get():
-                        # User did not confirm plan; go back and get new instructions
-                        continue
+                    if step.role != MANAGER:
+                        confirm_step = StepRequest(
+                            role=MANAGER,
+                            prompt="Here's my proposed next step. Do you want to proceed?",
+                            arguments=step.arguments,
+                        )
+                        confirm_step.arguments["prompt"] = step.prompt
+
+                        await self._execute_step(confirm_step)
+                        if not await self._user_confirmation.get():
+                            # User did not confirm plan; go back and get new instructions
+                            continue
 
                     # Run next step
-                    await self._execute_step(step_name=step.pop("role"), **step)
+                    await self._execute_step(step)
 
                 except ProcessingError as e:
                     logger.error(f"Error in AutogenOrchestrator.run: {e}")
@@ -295,14 +299,14 @@ class AutogenOrchestrator(Orchestrator):
             # Clean up resources
             await self._cleanup()
 
-    async def _get_next_step(self) -> AsyncGenerator[StepDefinition, None]:
+    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
         """Determine the next step based on the current flow data.
 
         This generator yields a series of steps to be executed in sequence,
         with each step containing the role and prompt information.
 
         Yields:
-            StepDefinition: An object containing:
+            StepRequest: An object containing:
                 - 'role' (str): The agent role/step name to execute
                 - 'prompt' (str): The prompt text to send to the agent
                 - Additional key-value pairs that might be needed for agent execution
@@ -313,7 +317,7 @@ class AutogenOrchestrator(Orchestrator):
 
         """
         for step_name in self.agents.keys():
-            yield StepDefinition(role=step_name, prompt="")
+            yield StepRequest(role=step_name, prompt="", source=self.flow_name)
 
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""
@@ -464,7 +468,7 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _ask_agents(
         self,
-        step_name,
+        step_name: str,
         message: AgentInput,
     ) -> list[AgentOutput]:
         """Ask agent directly for input"""
@@ -486,12 +490,10 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _execute_step(
         self,
-        step_name: str,
-        prompt: str = "",
-        **inputs,
+        step: StepRequest,
     ) -> None:
-        message = await self._prepare_step_message(step_name, prompt=prompt, **inputs)
-        topic_id = DefaultTopicId(type=step_name)
+        message = await self._prepare_step(step=step)
+        topic_id = DefaultTopicId(type=step.role)
         await self._runtime.publish_message(message, topic_id=topic_id)
         # give this a second to make sure messages are collected before proceeding.
         await asyncio.sleep(1)

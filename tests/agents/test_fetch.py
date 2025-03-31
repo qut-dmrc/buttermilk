@@ -95,10 +95,10 @@ class TestFetch:
         """Test handle_urls with a URL."""
         # Setup
         agent_input = AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Check out https://example.com",
             inputs={"step": "testing"},
-            agent_name="test",
+            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -129,10 +129,10 @@ class TestFetch:
         """Test handle_urls with a record ID."""
         # Setup
         agent_input = AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
-            agent_name="test",
+            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -167,10 +167,10 @@ class TestFetch:
         """Test handle_urls with neither URL nor record ID."""
         # Setup
         agent_input = AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
-            agent_name="test",
+            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -195,10 +195,10 @@ class TestFetch:
         """Test handle_urls works with RequestToSpeak messages."""
         # Setup
         agent_input = AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Check out https://example.com",
             inputs={},
-            agent_name="test",
+            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -240,28 +240,28 @@ messages = [
     (
         None,
         AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
-            agent_name="test",
+            source="test",
         ),
     ),
     (
         "error",
         AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Check out https://example.com",
             inputs={},
-            agent_name="test",
+            source="test",
         ),
     ),
     (
         "missing",
         AgentInput(
-            agent_id="test_agent",
+            role="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
-            agent_name="test",
+            source="test",
         ),
     ),
 ]

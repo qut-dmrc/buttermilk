@@ -181,7 +181,7 @@ async def test_update_existing_input_message(slack_ui_agent):
 async def test_process_method(slack_ui_agent):
     """Test the _process method that handles agent input."""
     input_data = AgentInput(
-        agent_id="test",
+        role="test",
         content="Test input",
     )
 

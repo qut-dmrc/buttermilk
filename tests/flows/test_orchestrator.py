@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from buttermilk._core.contract import AgentInput
-from buttermilk._core.orchestrator import Orchestrator
+from buttermilk._core.orchestrator import Orchestrator, StepRequest
 from buttermilk._core.variants import AgentVariants
 
 
@@ -47,20 +47,20 @@ async def test_orchestrator_initialization(simple_orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_prepare_inputs_basic(simple_orchestrator):
-    """Test that _prepare_inputs returns the expected inputs."""
-    inputs = await simple_orchestrator._prepare_inputs("step1")
+async def test_prepare_step_basic(simple_orchestrator):
+    """Test that _prepare_step returns the expected inputs."""
+    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step1"))
     assert "key1" in inputs
     assert inputs["key1"] == "value1"
 
 
 @pytest.mark.asyncio
-async def test_prepare_inputs_with_history(simple_orchestrator):
-    """Test that _prepare_inputs handles special variables correctly."""
+async def test_prepare_step_with_history(simple_orchestrator):
+    """Test that _prepare_step handles special variables correctly."""
     # Add some history
     simple_orchestrator.history = ["message1", "message2"]
 
-    inputs = await simple_orchestrator._prepare_inputs("step2")
+    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step2"))
     assert "key2" in inputs
     assert inputs["key2"] == "value2"
     assert "history" in inputs
@@ -69,17 +69,18 @@ async def test_prepare_inputs_with_history(simple_orchestrator):
 
 @pytest.mark.asyncio
 async def test_prepare_step_message(simple_orchestrator):
-    """Test that _prepare_step_message creates a proper AgentInput."""
-    message = await simple_orchestrator._prepare_step_message(
-        step_name="step1",
+    """Test that _prepare_step creates a proper AgentInput."""
+    step = StepRequest(
+        role="step1",
         prompt="Test prompt",
         source="test_source",
-        extra_input="extra_value",
+        arguments={"extra_input": "extra_value"},
     )
+    message = await simple_orchestrator._prepare_step(step)
 
     assert isinstance(message, AgentInput)
-    assert message.agent_id == "test_flow"
-    assert message.agent_name == "test_source"
+    assert message.role == "test_flow"
+    assert message.source == "test_source"
     assert message.content == "Test prompt"
     assert "key1" in message.inputs
     assert message.inputs["key1"] == "value1"

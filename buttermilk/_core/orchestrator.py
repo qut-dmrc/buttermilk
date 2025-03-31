@@ -26,10 +26,10 @@ BASE_DIR = Path(__file__).absolute().parent
 PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "record"]
 
 
-class StepDefinition(BaseModel):
-    """Type definition for a step in the flow execution.
+class StepRequest(BaseModel):
+    """Type definition for a request to execute a step in the flow execution.
 
-    A StepDefinition describes a single step within a flow, containing the agent role
+    A StepRequest describes a request for a step to run, containing the agent role
     that should execute the step along with prompt and other execution parameters.
 
     Attributes:
@@ -37,6 +37,7 @@ class StepDefinition(BaseModel):
         prompt (str): The prompt text to send to the agent
         description (str): Optional description of the step's purpose
         arguments (dict): Additional key-value pairs needed for step execution
+        source (str): Caller name
 
     """
 
@@ -44,6 +45,7 @@ class StepDefinition(BaseModel):
     prompt: str = Field(default="")
     description: str = Field(default="")
     arguments: dict[str, Any] = Field(default={})
+    source: str = Field(default="")
 
 
 class Orchestrator(BaseModel, ABC):
@@ -195,8 +197,13 @@ class Orchestrator(BaseModel, ABC):
         """
         return await self.run(request=request)
 
-    async def _prepare_inputs(self, step_name: str) -> dict[str, Any]:
-        """Prepares input data for a specific step in the flow.
+    async def _prepare_step(
+        self,
+        step: StepRequest,
+    ) -> AgentInput:
+        """Create an AgentInput message for sending to an agent.
+
+        Prepares a message with the appropriate inputs and context for the target agent.
 
         Resolves special keywords and mappings to provide the appropriate inputs
         for the given step.
@@ -207,22 +214,31 @@ class Orchestrator(BaseModel, ABC):
             - "history": list of history messages in string format
             - "context": list of history messages in message format
             - "record": list of InputRecords"
+            - "prompt": question from the user
 
         Args:
-            step_name: The name of the step to prepare inputs for
+            step: Definition of inputs for the step
 
         Returns:
-            dict[str, Any]: Dictionary of input data ready for the step
+            AgentInput: A prepared message that can be sent to an agent
 
         """
-        config = self.agents[step_name]
+        config = self.agents[step.role]
 
         input_dict = dict(config.inputs)
+
         # Overwrite any of the input dict values that are mappings to other data
         input_dict.update(self._flow_data._resolve_mappings(input_dict))
 
+        # Add any arguments from the step request
+        input_dict.update(step.arguments)
+
+        # Always include the prompt in the inputs
+        input_dict["prompt"] = step.prompt
+
+        # Special handling for named placeholder keywords
         for value in PLACEHOLDER_VARIABLES:
-            if value in config.inputs:
+            if value in input_dict:
                 if value == "content":
                     records = [
                         f"{rec.record_id}: {rec.fulltext}" for rec in self._records
@@ -242,38 +258,12 @@ class Orchestrator(BaseModel, ABC):
                     ]
                     input_dict[value] = "\n".join(participants)
 
-        return input_dict
-
-    async def _prepare_step_message(
-        self,
-        step_name: str,
-        prompt: str = "",
-        source: str = "",
-        **inputs,
-    ) -> AgentInput:
-        """Creates an AgentInput message for sending to an agent.
-
-        Prepares a message with the appropriate inputs and context for the target agent.
-
-        Args:
-            step_name: The name of the step to prepare a message for
-            prompt: Optional prompt text to include in the message
-            source: Optional source identifier
-            **inputs: Additional input parameters to include
-
-        Returns:
-            AgentInput: A prepared message that can be sent to an agent
-
-        """
-        # Send message with appropriate inputs for this step
-        mapped_inputs = await self._prepare_inputs(step_name=step_name)
-        mapped_inputs.update(**inputs, prompt=prompt)
-        records = mapped_inputs.pop("record", [])
+        records = input_dict.pop("record", [])
 
         return AgentInput(
-            agent_id=self.flow_name,
-            agent_name=source,
-            content=prompt,
-            inputs=mapped_inputs,
+            role=step.role,
+            source=self.flow_name,
+            content=step.prompt,
+            inputs=input_dict,
             records=records,
         )

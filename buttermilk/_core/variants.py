@@ -76,6 +76,7 @@ class AgentVariants(AgentConfig):
       inputs:
         history: history
     ```
+
     """
 
     num_runs: int = Field(

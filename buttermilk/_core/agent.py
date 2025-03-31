@@ -40,10 +40,8 @@ class ToolConfig(BaseModel):
 #########
 # Agent
 #
-# A simple class with a function that process a job.
+# A simple class with a function that process input.
 #
-# It takes a Job with Inputs and returns a Job with Inputs and Outputs.
-# The completed Job is stored in a database (BigQuery) for tracing and analysis.
 #
 ##########
 
@@ -137,7 +135,6 @@ class Agent(AgentConfig, ABC):
 
         """
         raise NotImplementedError
-        return job
 
     async def __call__(
         self,
@@ -151,6 +148,7 @@ class Agent(AgentConfig, ABC):
             logger.error(
                 f"Agent {self.id} {self.name} hit error: {e}. Task content: {input_data.content[:100]}",
             )
+            return None
         except FatalError as e:
             raise e
 
