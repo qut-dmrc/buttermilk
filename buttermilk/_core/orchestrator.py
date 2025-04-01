@@ -18,12 +18,13 @@ from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
+from buttermilk._core.runner_types import Record
 from buttermilk._core.variants import AgentVariants
 
 BASE_DIR = Path(__file__).absolute().parent
 
 
-PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "record"]
+PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "records"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -65,7 +66,7 @@ class Orchestrator(BaseModel, ABC):
         exclude=True,
     )
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
-    _records: list = PrivateAttr(default_factory=list)
+    _records: list[Record] = PrivateAttr(default_factory=list)
     _context: UnboundedChatCompletionContext = PrivateAttr(
         default_factory=UnboundedChatCompletionContext,
     )
@@ -191,7 +192,7 @@ class Orchestrator(BaseModel, ABC):
             - "content": list of string, fulltext from all records
             - "history": list of history messages in string format
             - "context": list of history messages in message format
-            - "record": list of InputRecords"
+            - "records": list of InputRecords"
             - "prompt": question from the user
 
         Args:
@@ -214,6 +215,8 @@ class Orchestrator(BaseModel, ABC):
         # Always include the prompt in the inputs
         input_dict["prompt"] = step.prompt
 
+        records = []
+
         # Special handling for named placeholder keywords
         for value in PLACEHOLDER_VARIABLES:
             if value in input_dict:
@@ -227,16 +230,15 @@ class Orchestrator(BaseModel, ABC):
                 elif value == "context":
                     # Get the chat context and records
                     input_dict[value] = await self._context.get_messages()
-                elif value == "record":
-                    input_dict[value] = self._records
+                elif value == "records":
+                    records = self._records
+                    del input_dict[value]
                 elif value == "participants":
                     participants = [
                         f"- {id}: {step.description}"
                         for id, step in self.agents.items()
                     ]
                     input_dict[value] = "\n".join(participants)
-
-        records = input_dict.pop("record", [])
 
         return AgentInput(
             role=step.role,

@@ -7,8 +7,8 @@ import regex as re
 from buttermilk._core.agent import Agent, ToolConfig
 from buttermilk._core.contract import (
     AgentInput,
-    AgentMessages,
     AgentOutput,
+    GroupchatMessages,
     UserInstructions,
 )
 from buttermilk._core.runner_types import Record
@@ -83,9 +83,9 @@ class Fetch(Agent, ToolConfig):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInstructions,
+        message: GroupchatMessages,
         **kwargs,
-    ) -> AgentMessages | None:
+    ) -> GroupchatMessages | None:
         """Watch for URLs or record ids and inject them into the chat."""
         if not isinstance(message, UserInstructions):
             return None

@@ -23,12 +23,15 @@ from buttermilk._core.contract import (
     CLOSURE,
     CONDUCTOR,
     CONFIRM,
+    MANAGER,
     AgentInput,
-    AgentMessages,
     AgentOutput,
+    ConductorRequest,
     FlowMessage,
+    GroupchatMessages,
     ManagerMessage,
     ManagerRequest,
+    ManagerResponse,
     StepRequest,
     UserInstructions,
 )
@@ -85,7 +88,10 @@ class AutogenAgentAdapter(RoutedAgent):
         # Take care of any initialization the agent needs to do in this event loop
         asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
 
-    async def _process_request(self, message: AgentInput) -> None:
+    async def _process_request(
+        self,
+        message: AgentInput | ConductorRequest,
+    ) -> AgentOutput:
         """Process an incoming request by delegating to the wrapped agent.
 
         Args:
@@ -108,8 +114,6 @@ class AutogenAgentAdapter(RoutedAgent):
                 agent_output,
                 topic_id=self.topic_id,
             )
-            # give this a second to make sure messages are collected before proceeding.
-            await asyncio.sleep(1)
             return agent_output
         return None
 
@@ -168,27 +172,12 @@ class AutogenAgentAdapter(RoutedAgent):
                 f"Agent {self.agent.id} received unsupported message type: {type(message)}",
             )
 
-    async def handle_control_message(
-        self,
-        message: ManagerMessage | ManagerRequest,
-    ) -> ManagerMessage | ManagerRequest | None:
-        """Process control messages for agent coordination.
-
-        Args:
-            message: The control message to process
-
-        Returns:
-            Optional response to the control message
-
-        """
-        """Agents generally do not listen in to control messages."""
-
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage | ManagerRequest,
+        message: ManagerMessage | ManagerRequest | ConductorRequest,
         ctx: MessageContext,
-    ) -> ManagerMessage | ManagerRequest | None:
+    ) -> ManagerMessage | ManagerRequest | AgentOutput | None:
         """Handle out-of-band control messages.
 
         Args:
@@ -200,7 +189,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         """
         """Control messages do not get broadcast around."""
-        return await self.handle_control_message(message)
+        return await self.agent.handle_control_message(message)
 
     def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
         """Create a callback for handling user input if needed.
@@ -261,6 +250,20 @@ class AutogenOrchestrator(Orchestrator):
                 FlowMessage(),
                 topic_id=self._topic,
             )
+            await asyncio.sleep(1)
+
+            # First, introduce ourselves, and prompt the user for input
+            await self._send_ui_message(
+                ManagerRequest(
+                    content="Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
+                ),
+            )
+            if not await self._user_confirmation.get():
+                await self._send_ui_message(
+                    ManagerMessage(content="OK, shutting down thread.")
+                )
+                return
+
             while True:
                 try:
                     # Get next step from our CONDUCTOR agent
@@ -272,14 +275,18 @@ class AutogenOrchestrator(Orchestrator):
                         inputs=step.arguments,
                     )
                     confirm_step.inputs["prompt"] = step.prompt
+                    confirm_step.inputs["description"] = step.description
 
-                    await self._execute_step(confirm_step)
+                    await self._send_ui_message(confirm_step)
                     if not await self._user_confirmation.get():
                         # User did not confirm plan; go back and get new instructions
                         continue
                     # Run next step
                     await self._execute_step(step)
 
+                except StopAsyncIteration:
+                    logger.info("AutogenOrchestrator.run: Flow completed.")
+                    break
                 except ProcessingError as e:
                     logger.error(f"Error in AutogenOrchestrator.run: {e}")
                 except FatalError:
@@ -313,7 +320,7 @@ class AutogenOrchestrator(Orchestrator):
 
         """
         for step_name in self.agents.keys():
-            yield StepRequest(role=step_name, prompt="", source=self.flow_name)
+            yield StepRequest(role=step_name, source=self.flow_name)
 
     async def _setup_runtime(self):
         """Initialize the autogen runtime and register agents"""
@@ -334,11 +341,11 @@ class AutogenOrchestrator(Orchestrator):
         # Register a human in the loop agent
         async def user_confirm(
             _agent: ClosureContext,
-            message: UserInstructions,
+            message: ManagerResponse,
             ctx: MessageContext,
         ) -> None:
             # Add confirmation signal to queue
-            if isinstance(message, UserInstructions):
+            if isinstance(message, ManagerResponse):
                 try:
                     self._user_confirmation.put_nowait(message.confirm)
                 except asyncio.QueueFull:
@@ -363,10 +370,10 @@ class AutogenOrchestrator(Orchestrator):
         )
 
     async def _register_collectors(self) -> None:
-        # Register a closure agent
+        # Collect data from groupchat messages
         async def collect_result(
             _agent: ClosureContext,
-            message: AgentMessages | UserInstructions,
+            message: GroupchatMessages,
             ctx: MessageContext,
         ) -> None:
             # Process and collect responses
@@ -404,7 +411,7 @@ class AutogenOrchestrator(Orchestrator):
                 if message.content:
                     self.history.append(f"{message._type}: {message.content}")
                 # Harvest any records
-                if message.records:
+                if isinstance(message, AgentOutput) and message.records:
                     self._records.extend(message.records)
 
         await ClosureAgent.register_closure(
@@ -484,6 +491,11 @@ class AutogenOrchestrator(Orchestrator):
         responses = await asyncio.gather(*tasks)
         return responses
 
+    async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
+        """Send a message to the UI agent"""
+        topic_id = DefaultTopicId(type=MANAGER)
+        await self._runtime.publish_message(message, topic_id=topic_id)
+
     async def _execute_step(
         self,
         step: StepRequest,
@@ -491,8 +503,6 @@ class AutogenOrchestrator(Orchestrator):
         message = await self._prepare_step(step=step)
         topic_id = DefaultTopicId(type=step.role)
         await self._runtime.publish_message(message, topic_id=topic_id)
-        # give this a second to make sure messages are collected before proceeding.
-        await asyncio.sleep(1)
 
     async def _cleanup(self):
         """Clean up resources when flow is complete"""

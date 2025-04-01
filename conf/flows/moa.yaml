@@ -8,6 +8,7 @@ defaults:
     - synth
     - evaluator
     - analyst
+    - scorer
     - owl
 
 

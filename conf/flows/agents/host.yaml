@@ -6,11 +6,11 @@ host:
   num_runs: 1
   parameters:
     template: panel_host
-    model: sonnet
+    model: gemini2flash
     description: ${....params.task}
   inputs:
     participants: participants
     context: context
     history: history
     prompt: prompt
-    record: record
+    records: records

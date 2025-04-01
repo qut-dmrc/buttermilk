@@ -15,7 +15,7 @@ ingest:
         model:
           - gemini15pro
       inputs:
-        record: record
+        records: records
       
     # - name: describe_synth
     #   _target_: buttermilk.agents.lc.LC

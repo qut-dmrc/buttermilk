@@ -19,6 +19,6 @@ context:
         template: context
         model: ${llm}
       inputs:
-        record: record
+        records: records
       outputs:
         context: description

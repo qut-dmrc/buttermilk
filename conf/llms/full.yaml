@@ -1,15 +1,11 @@
 general:
-  - gemini2pro
-  - sonnet
+  - gemini25pro
   - gpt4o
 
 judgers:
   - gemini2flashthinking
-  - sonnet
   - o3-mini-high
-  - llama32_90b_azure
 
 synthesisers:
-  - gemini2pro
-  - sonnet
+  - gemini25pro
   - gpt4o

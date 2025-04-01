@@ -1,4 +1,4 @@
-from buttermilk._core.contract import ManagerMessage, ManagerRequest
+from buttermilk._core.contract import ConductorRequest, ManagerMessage, ManagerRequest
 from buttermilk.agents.llm import LLMAgent
 
 
@@ -7,7 +7,7 @@ class HostAgent(LLMAgent):
 
     async def handle_control_message(
         self,
-        message: ManagerMessage | ManagerRequest,
+        message: ManagerMessage | ManagerRequest | ConductorRequest,
     ) -> ManagerMessage | ManagerRequest:
-        pass
-        # raise NotImplementedError("HostAgent does not handle control messages yet...")
+        # Respond to a control question addressed to us
+        return await self._process(message)

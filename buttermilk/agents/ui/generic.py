@@ -5,6 +5,8 @@ from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
+    AgentInput,
+    ManagerMessage,
     ManagerRequest,
 )
 
@@ -21,11 +23,28 @@ class UIAgent(Agent):
 
     async def handle_control_message(
         self,
-        message: ManagerRequest,
-    ) -> None:
-        """Ask the user for confirmation."""
-        if isinstance(message, ManagerRequest):
+        message: ManagerMessage | ManagerRequest,
+    ) -> ManagerMessage | ManagerRequest | None:
+        """Process control messages for agent coordination.
+
+        Args:
+            message: The control message to process
+
+        Returns:
+            Optional response to the control message
+
+        Agents generally do not listen in to control messages,
+        but user interfaces do.
+
+        """
+        # Ask the user for confirmation
+        if isinstance(message, (ManagerRequest, AgentInput)):
             await self._request_user_input(message)
+            return None
+        if isinstance(message, ManagerMessage):
+            # Just output these messages to the UI
+            await self.receive_output(message)
+            return None
         raise ValueError(f"Unknown message type: {type(message)}")
 
     async def initialize(self, input_callback, **kwargs) -> None:

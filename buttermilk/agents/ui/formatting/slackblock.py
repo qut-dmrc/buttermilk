@@ -235,6 +235,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                             "type": "mrkdwn",
                             "text": chunk,
                         })
+                blocks.extend(create_context_blocks(elements))
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit

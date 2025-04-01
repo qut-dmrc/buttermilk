@@ -14,8 +14,8 @@ from buttermilk import logger
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.contract import (
     AgentInput,
-    AgentMessages,
     AgentOutput,
+    AllMessages,
     UserInstructions,
 )
 from buttermilk.exceptions import FatalError, ProcessingError
@@ -117,9 +117,9 @@ class Agent(AgentConfig, ABC):
     @abstractmethod
     async def receive_output(
         self,
-        message: AgentMessages | UserInstructions,
+        message: AllMessages,
         **kwargs,
-    ) -> AgentMessages | None:
+    ) -> AllMessages:
         """Log data or send output to the user interface"""
         raise NotImplementedError
 
@@ -135,6 +135,13 @@ class Agent(AgentConfig, ABC):
 
         """
         raise NotImplementedError
+
+    async def handle_control_message(
+        self,
+        message: Any,
+    ) -> None:
+        """Most agents don't deal with control messages."""
+        logger.debug(f"Agent {self.id} {self.name} dropping control message: {message}")
 
     async def __call__(
         self,

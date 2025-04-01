@@ -4,7 +4,7 @@ from typing import Self
 
 from pydantic import PrivateAttr, model_validator
 
-from buttermilk._core.contract import CONDUCTOR, MANAGER, StepRequest
+from buttermilk._core.contract import CONDUCTOR, StepRequest
 from buttermilk.exceptions import ProcessingError
 from buttermilk.runner.autogen import (
     AutogenOrchestrator,
@@ -44,15 +44,6 @@ class Selector(AutogenOrchestrator):
         """
         self._next_step = None
 
-        # First, introduce ourselves, and prompt the user for input
-        yield StepRequest(
-            role=MANAGER,
-            source=self.flow_name,
-            prompt=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt.",
-        )
-
-        await asyncio.sleep(1)
-
         while True:
             # store the last message received, so that any changes in instructions
             # are incorporated before executing the next step
@@ -87,8 +78,10 @@ class Selector(AutogenOrchestrator):
                 # No change to inputs
                 yield StepRequest(
                     role=next_step,
-                    prompt=instructions.outputs.get("prompt", ""),
-                    arguments=instructions.outputs.get("arguments", {}),
+                    prompt=instructions.outputs.pop("prompt", ""),
+                    description=instructions.outputs.pop("plan", ""),
+                    tool=instructions.outputs.get("tool", None),
+                    arguments=instructions.outputs,
                 )
             # wait a bit and go around again
             await asyncio.sleep(5)

@@ -15,7 +15,7 @@ describer:
         model:
           - gemini15pro
       inputs:
-        record: record
+        records: records
       
     # - name: describe_synth
     #   _target_: buttermilk.agents.lc.LC
@@ -28,7 +28,7 @@ describer:
     #       - gemini15pro
     #       - sonnet
     #   inputs:
-    #     record: record
+    #     records: records
     #     answers: describe.outputs
     #   outputs:
     #     record: outputs

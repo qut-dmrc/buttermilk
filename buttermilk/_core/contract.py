@@ -46,16 +46,18 @@ class StepRequest(BaseModel):
         role (str): The agent role identifier to execute this step
         prompt (str): The prompt text to send to the agent
         description (str): Optional description of the step's purpose
+        tool (str): A tool request to make
         arguments (dict): Additional key-value pairs needed for step execution
         source (str): Caller name
 
     """
 
     role: str
-    prompt: str = Field(default="")
-    description: str = Field(default="")
+    prompt: str | None = Field(default=None)
+    description: str | None = Field(default=None)
+    tool: str | None = Field(default=None)
     arguments: dict[str, Any] = Field(default={})
-    source: str = Field(default="")
+    source: str | None = Field(default=None)
 
 
 class OrchestratorProtocol(Protocol):
@@ -71,8 +73,8 @@ class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
     _type = "GenericFlowMessage"
-    content: str = Field(
-        default="",
+    content: str | None = Field(
+        default=None,
         description="The human-readable digest representation of the message.",
     )
 
@@ -109,46 +111,6 @@ class FlowMessage(BaseModel):
         return self._type
 
 
-######
-# Control communications
-#
-class ManagerMessage(FlowMessage):
-    """OOB message to manage the flow.
-
-    Usually involves an automated
-    conductor or a human in the loop (or both).
-    """
-
-    _type = "ManagerMessage"
-
-
-class ManagerRequest(ManagerMessage, StepRequest):
-    """Request for input from the user"""
-
-    role: str = MANAGER
-    _type = "UserConfirm"
-    options: bool | list[str] | None = Field(
-        default=None,
-        description="Require answer from a set of options",
-    )
-    confirm: bool | None = Field(
-        default=None,
-        description="Response from user: confirm y/n",
-    )
-
-
-class UserInstructions(FlowMessage):
-    """Instructions from the user."""
-
-    _type = "UserInput"
-
-    confirm: bool = Field(
-        default=False,
-        description="Response from user: confirm y/n",
-    )
-    stop: bool = Field(default=False, description="Whether to stop the flow")
-
-
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
@@ -168,6 +130,60 @@ class AgentInput(FlowMessage):
     _ensure_record_context_list = field_validator("records", "context", mode="before")(
         make_list_validator(),
     )
+
+
+######
+# Control communications
+#
+class ManagerMessage(FlowMessage):
+    """OOB message to manage the flow.
+
+    Usually involves an automated
+    conductor or a human in the loop (or both).
+    """
+
+    _type = "ManagerMessage"
+
+
+class ConductorRequest(ManagerMessage, AgentInput):
+    """Request for input from the conductor."""
+
+    role: str = CONDUCTOR
+    _type = "ConductorRequest"
+
+
+class ManagerRequest(ManagerMessage, StepRequest):
+    """Request for input from the user"""
+
+    role: str = MANAGER
+    _type = "RequestForManagerInput"
+    options: bool | list[str] | None = Field(
+        default=None,
+        description="Require answer from a set of options",
+    )
+    confirm: bool | None = Field(
+        default=None,
+        description="Response from user: confirm y/n",
+    )
+
+
+class ManagerResponse(ManagerRequest):
+    """Response from the manager."""
+
+    role: str = CONDUCTOR
+    _type = "ManagerResponse"
+
+
+class UserInstructions(FlowMessage):
+    """Instructions from the user."""
+
+    _type = "UserInput"
+
+    confirm: bool = Field(
+        default=False,
+        description="Response from user: confirm y/n",
+    )
+    stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
 class AgentOutput(FlowMessage):
@@ -192,4 +208,19 @@ class ToolOutput(FunctionExecutionResult):
     )
 
 
-AgentMessages = Union[FlowMessage, AgentInput, AgentOutput]
+AllMessages = Union[
+    FlowMessage,
+    AgentInput,
+    AgentOutput,
+    ToolOutput,
+    UserInstructions,
+    ConductorRequest,
+    ManagerRequest,
+    ManagerMessage,
+]
+
+GroupchatMessages = Union[
+    AgentOutput,
+    ToolOutput,
+    UserInstructions,
+]

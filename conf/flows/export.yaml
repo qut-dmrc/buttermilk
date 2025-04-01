@@ -30,7 +30,7 @@ export:
         record_id: record.record_id
         job_id: job_id
         timestamp: timestamp
-        record: record.fulltext
+        records: records
         # owl: context_owl
         scores: scorer.score
         reasons: scorer

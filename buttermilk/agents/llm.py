@@ -16,7 +16,11 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
-from buttermilk._core.contract import AgentMessages, ToolOutput, UserInstructions
+from buttermilk._core.contract import (
+    ConductorRequest,
+    GroupchatMessages,
+    ToolOutput,
+)
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
 from buttermilk.runner.helpers import create_tool_functions
@@ -51,9 +55,9 @@ class LLMAgent(Agent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInstructions,
+        message: GroupchatMessages,
         **kwargs,
-    ) -> AgentMessages | None:
+    ) -> GroupchatMessages | None:
         """Log data or send output to the user interface"""
         # Not implemented on the agent right now; inputs come from conductor.
 
@@ -94,15 +98,15 @@ class LLMAgent(Agent):
             if message["role"] == "placeholder":
                 # Remove everything except word chars to get the variable name
                 var_name = re.sub(r"[^\w\d_]+", "", message["content"])
-                if var_name.lower() == "records" and inputs:
+                if var_name.lower() == "records" and inputs and inputs.records:
                     for rec in inputs.records:
                         # TODO make this multimodal later
                         messages.append(
                             UserMessage(content=rec.fulltext, source="record"),
                         )
-                    # Remove the placeholder from the list of unfilled variables
-                    if var_name in unfilled_vars:
-                        unfilled_vars.remove(var_name)
+                        # Remove the placeholder from the list of unfilled variables
+                        if var_name in unfilled_vars:
+                            unfilled_vars.remove(var_name)
                 else:
                     try:
                         messages.extend(getattr(inputs, var_name))
@@ -203,7 +207,7 @@ class LLMAgent(Agent):
 
     async def _process(
         self,
-        input_data: AgentInput,
+        input_data: AgentInput | ConductorRequest,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AgentOutput:

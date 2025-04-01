@@ -38,4 +38,4 @@ flows:
           template: owl
           model: ${llms.general}
         inputs:
-          record: record
+          records: records

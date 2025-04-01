@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import traceback
 from collections.abc import Mapping
 from functools import partial
 
@@ -16,10 +17,6 @@ from buttermilk.runner.chat import Selector
 from buttermilk.runner.simple import Sequencer
 
 orchestrators = [Sequencer, AutogenOrchestrator, Selector]
-MODPATTERN = re.compile(
-    r"^!((mod|osb|summarise_osb|trans|hate|describe|frames|simple|moa)\s+)",
-    re.IGNORECASE | re.MULTILINE,
-)
 
 BOTPATTERNS = re.compile(
     r"^!?[<@>\w\d]*\s+(\w+)(.*)",
@@ -46,6 +43,15 @@ def initialize_slack_bot(
         app_token=app_token,
         loop=loop,
     )
+
+    # Add reconnection handler
+    from buttermilk.agents.ui.slackthreadchat import reregister_all_active_threads
+
+    @slack_app.event("hello")
+    async def on_connect():
+        logger.info("Socket Mode client reconnected")
+        # Re-register handlers for all active threads
+        reregister_all_active_threads()
     return slack_app, handler
 
 
@@ -79,6 +85,11 @@ async def register_handlers(
         return False
 
     async def handle_mentions(body, say, logger):
+        await say.client.reactions_add(
+            channel=say.channel,
+            name="eyes",
+            timestamp=body["event"]["ts"],
+        )
         try:
             init_text = ""
             # Start conversation
@@ -180,13 +191,19 @@ async def register_handlers(
     slack_app.message(":wave:")(say_hello)
     slack_app.event("app_mention", matchers=[_flow_start_matcher])(handle_mentions)
 
+    # Add this catch-all handler at the end of the function
+    @slack_app.event("message")
+    async def handle_message_events(body, logger):
+        # Just silently acknowledge the message without doing anything
+        # Only log at debug level to avoid cluttering logs
+        logger.debug("Received unhandled message event")
+
 
 async def read_thread_history(
     slack_app: AsyncApp,
     context: SlackContext,
 ) -> list[dict[str, str]]:
     # Read thread history
-    history = []
     replies = await slack_app.client.conversations_replies(
         channel=context.channel_id,
         ts=context.thread_ts,
@@ -242,7 +259,10 @@ async def start_flow_thread(
             },
         )
         history = await read_thread_history(slack_app=slack_app, context=context)
-        # Append init_text if it's not empty
+        # Remove first entry (activation message)
+        history.pop(0)
+
+        # Prepend init_text if it's not empty
         if init_text.strip():
             history.append({"user": MANAGER, "text": init_text})
             logger.debug(
@@ -259,7 +279,6 @@ async def start_flow_thread(
             },
         )
         thread_orchestrator = globals()[orchestrator_name](**_config, history=history)
-
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)
         logger.debug(
@@ -271,7 +290,7 @@ async def start_flow_thread(
         )
     except Exception as e:
         logger.error(
-            "Error creating flow",
+            f"Error creating flow: {e} {e.args=}",
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
@@ -283,5 +302,5 @@ async def start_flow_thread(
         await post_message_with_retry(
             slack_app,
             context,
-            f"Error creating flow: {e}",
+            f"Error creating flow: {e} {e.args=}",
         )

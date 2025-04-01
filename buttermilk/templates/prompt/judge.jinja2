@@ -30,3 +30,13 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 
 # Placeholder:
 {{records}}
+
+{% if content %}
+# User:
+<CONTENT>
+{{content}}
+</CONTENT>
+{% elif prompt %}
+# User:
+{{prompt}}
+{% endif %}

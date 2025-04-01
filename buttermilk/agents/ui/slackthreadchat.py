@@ -9,9 +9,11 @@ from slack_bolt.async_app import AsyncApp
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
-    AgentMessages,
     AgentOutput,
+    GroupchatMessages,
+    ManagerMessage,
     ManagerRequest,
+    ManagerResponse,
     UserInstructions,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
@@ -21,7 +23,13 @@ from buttermilk.agents.ui.formatting.slackblock import (
     format_slack_message,
 )
 from buttermilk.agents.ui.generic import UIAgent
-from buttermilk.libs.slack import SlackContext, post_message_with_retry
+from buttermilk.libs.slack import (
+    SlackContext,
+    post_message_with_retry,
+    request_with_retry,
+)
+
+_active_thread_registry = {}
 
 
 def _fn_debug_blocks(message: AgentOutput):
@@ -54,7 +62,7 @@ class SlackUIAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInstructions,
+        message: GroupchatMessages,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -66,7 +74,11 @@ class SlackUIAgent(UIAgent):
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
 
-    async def _request_user_input(self, message: ManagerRequest, **kwargs) -> None:
+    async def _request_user_input(
+        self,
+        message: AgentInput | ManagerRequest | ManagerMessage,
+        **kwargs,
+    ) -> None:
         """Ask for user input from the UI."""
         if isinstance(message, (AgentInput, ManagerRequest)):
             extra_blocks = dict_to_blocks(message.inputs)
@@ -97,12 +109,13 @@ class SlackUIAgent(UIAgent):
                 try:
                     # we need to update the current message instead of
                     # opening a new one.
-                    await self.app.client.chat_update(
+                    fn = self.app.client.chat_update(
                         channel=self.context.channel_id,
                         ts=self._current_input_message.data["ts"],
                         text=confirm_blocks["text"],
                         blocks=confirm_blocks["blocks"],
                     )
+                    await request_with_retry(fn)
                 except:
                     pass
             # We don't have an open input message. Send a new one.
@@ -115,7 +128,7 @@ class SlackUIAgent(UIAgent):
 
     async def _process(
         self,
-        input_data: AgentMessages,
+        input_data: AgentInput,
         **kwargs,
     ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
@@ -127,90 +140,107 @@ class SlackUIAgent(UIAgent):
         """Initialize the interface and register handlers"""
         self._input_callback = input_callback
 
+        _active_thread_registry[self.context.thread_ts] = self
+
         # Register this agent's thread for message handling
-        register_chat_thread_handler(self.context.thread_ts, self)
+        self.register_chat_thread_handler(self.context.thread_ts)
 
     async def cleanup(self) -> None:
         """Clean up resources and unregister handlers"""
-        # Could add logic to unregister handlers if needed
+        # Remove this thread from the active registry
+        if self.context.thread_ts in _active_thread_registry:
+            del _active_thread_registry[self.context.thread_ts]
 
+    def register_chat_thread_handler(self, thread_ts):
+        """Connect messages in a Slack thread to the agent's callback"""
 
-def register_chat_thread_handler(thread_ts, agent: SlackUIAgent):
-    """Connect messages in a Slack thread to the agent's callback"""
+        async def matcher(message):
+            return (
+                # It's a message in our thread, not from the bot.
+                message.get("thread_ts") == thread_ts
+                and message.get("subtype") != "bot_message"
+            )
 
-    async def matcher(message):
-        return (
-            # It's a message in our thread, not from the bot.
-            message.get("thread_ts") == thread_ts
-            and message.get("subtype") != "bot_message"
-        )
+        @self.app.message(matchers=[matcher])
+        async def feed_in(message, say):
+            await self._input_callback(UserInstructions(content=message["text"]))
 
-    @agent.app.message(matchers=[matcher])
-    async def feed_in(message, say):
-        await agent._input_callback(UserInstructions(content=message["text"]))
+        # Button action handlers
+        @self.app.action("confirm_action")
+        async def handle_confirm(ack, body, client):
+            await ack()
 
-    # Button action handlers
-    @agent.app.action("confirm_action")
-    async def handle_confirm(ack, body, client):
-        await ack()
+            if not body.get("message", {}).get("thread_ts") == thread_ts:
+                # why are we here?
+                logger.debug("Received message not for us.")
+                return
 
-        if not body.get("message", {}).get("thread_ts") == thread_ts:
-            # why are we here?
-            logger.debug("Received message not for us.")
-            return
+            # Only proceed if we are sure this message has not been dealt with yet.
+            if self._current_input_message is None:
+                return
 
-        # Only proceed if we are sure this message has not been dealt with yet.
-        if agent._current_input_message is None:
-            return
+            # Clear reference to input message
+            self._current_input_message = None
 
-        # Clear reference to input message
-        agent._current_input_message = None
-
-        # Update UI to show confirmation
-        await client.chat_update(
-            channel=agent.context.channel_id,
-            ts=body["message"]["ts"],
-            text="You selected: Yes",
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": ":white_check_mark: You selected: *Yes*",
+            # Update UI to show confirmation
+            await client.chat_update(
+                channel=self.context.channel_id,
+                ts=body["message"]["ts"],
+                text="You selected: Yes",
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": ":white_check_mark: You selected: *Yes*",
+                        },
                     },
-                },
-            ],
-        )
-        # Call callback with boolean True
-        await agent._input_callback(UserInstructions(confirm=True))
-        agent._current_input_message = None
+                ],
+            )
+            # Call callback with boolean True
+            await self._input_callback(ManagerResponse(confirm=True))
+            self._current_input_message = None
 
-    @agent.app.action("cancel_action")
-    async def handle_cancel(ack, body, client):
-        await ack()
-        if not body.get("message", {}).get("thread_ts") == thread_ts:
-            # why are we here?
-            logger.debug("Received message not for us.")
-            return
+        @self.app.action("cancel_action")
+        async def handle_cancel(ack, body, client):
+            await ack()
+            if not body.get("message", {}).get("thread_ts") == thread_ts:
+                # why are we here?
+                logger.debug("Received message not for us.")
+                return
 
-        # Only proceed if we are sure this message has not been dealt with yet.
-        if agent._current_input_message is None:
-            return
+            # Only proceed if we are sure this message has not been dealt with yet.
+            if self._current_input_message is None:
+                return
 
-        # Clear reference to input message
-        agent._current_input_message = None
+            # Clear reference to input message
+            self._current_input_message = None
 
-        # Update UI to show cancellation
-        await client.chat_update(
-            channel=agent.context.channel_id,
-            ts=body["message"]["ts"],
-            text="You selected: No",
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": ":x: You selected: *No*"},
-                },
-            ],
-        )
-        # Call callback with boolean False
-        await agent._input_callback(UserInstructions(confirm=False))
+            # Update UI to show cancellation
+            await client.chat_update(
+                channel=self.context.channel_id,
+                ts=body["message"]["ts"],
+                text="You selected: No",
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": ":x: You selected: *No*"},
+                    },
+                ],
+            )
+            # Call callback with boolean False
+            await self._input_callback(ManagerResponse(confirm=False))
+
+
+def reregister_all_active_threads():
+    """Re-register handlers for all active threads after reconnection"""
+    logger.info(
+        f"Re-registering handlers for {len(_active_thread_registry)} active threads",
+    )
+    for thread_ts, agent in list(_active_thread_registry.items()):
+        try:
+            agent.register_chat_thread_handler()
+        except Exception as e:
+            logger.error(
+                f"Failed to re-register handlers for thread {thread_ts}: {e!s}",
+            )

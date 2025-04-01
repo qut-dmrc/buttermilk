@@ -4,10 +4,10 @@ from typing import Any
 
 import googleapiclient.errors
 import requests
-import selenium.common.exceptions
+
+# import selenium.common.exceptions
 import urllib3
 from pydantic import PrivateAttr
-from retry import retry
 
 from buttermilk._core.agent import Agent
 

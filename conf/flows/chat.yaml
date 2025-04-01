@@ -37,5 +37,5 @@ chat:
         formatting: json_rules
       inputs:
         prompt: q
-        record: record
+        records: records
         context: context

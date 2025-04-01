@@ -8,7 +8,9 @@ from rich.markdown import Markdown
 
 from buttermilk import logger
 from buttermilk._core.contract import (
-    AgentMessages,
+    AgentInput,
+    GroupchatMessages,
+    ManagerRequest,
     UserInstructions,
 )
 from buttermilk.agents.ui.generic import UIAgent
@@ -19,7 +21,7 @@ class CLIUserAgent(UIAgent):
 
     async def receive_output(
         self,
-        message: AgentMessages | UserInstructions,
+        message: GroupchatMessages,
         **kwargs,
     ) -> None:
         """Send output to the user interface"""
@@ -30,14 +32,13 @@ class CLIUserAgent(UIAgent):
 
     async def _process(
         self,
-        input_data: AgentMessages,
+        input_data: AgentInput | ManagerRequest,
         **kwargs,
-    ) -> AgentMessages | None:
+    ) -> None:
         """Request input from the user interface"""
         Console(highlight=True).print(
             Markdown(f"Input requested: {input_data.content}"),
         )
-        return None
 
     async def _poll_input(
         self,

@@ -42,3 +42,13 @@ async def post_message_with_retry(
     }
     message.update(kwargs)
     return await app.client.chat_postMessage(**message)
+
+async def request_with_retry(request_fn):
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
+    async def _request_with_retry():
+        return await request_fn()
+

@@ -5,9 +5,12 @@ from typing import Any, Self
 
 import requests
 import urllib3
-from anthropic import (
+from anthropic._exceptions import (
     APIConnectionError as AnthropicAPIConnectionError,
+    InternalServerError as AnthropicInternalServerError,
+    OverloadedError as AnthropicOverloadedError,
     RateLimitError as AnthropicRateLimitError,
+    ServiceUnavailableError as AnthropicServiceUnavailableError,
 )
 from google.api_core.exceptions import TooManyRequests
 from openai import (
@@ -79,6 +82,9 @@ class RetryWrapper(BaseModel):
                     OpenAIRateLimitError,
                     AnthropicAPIConnectionError,
                     AnthropicRateLimitError,
+                    AnthropicOverloadedError,
+                    AnthropicInternalServerError,
+                    AnthropicServiceUnavailableError,
                     ModelError,
                     ReplicateError,
                     TooManyRequests,

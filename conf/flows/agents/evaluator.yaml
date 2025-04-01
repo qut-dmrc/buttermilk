@@ -5,10 +5,10 @@ evaluator:
   num_runs: 1
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
-    template: differences
+    template: evaluate
     model: ${llms.general}
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
     answers:
-      - synth.outputs.reasons
+      - synth

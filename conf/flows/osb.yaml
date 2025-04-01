@@ -17,7 +17,7 @@ osb:
         model: ${llm}
         dataset: osbcasessummary
       inputs:
-        record: record
+        records: records
         content: record.text
 
     - _target_: buttermilk.agents.lc.LC

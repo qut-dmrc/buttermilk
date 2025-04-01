@@ -112,19 +112,32 @@ def get_news_record_from_uri(uri: str) -> Record:
     import newspaper
 
     article = newspaper.article(uri)
-    paragraphs = [
-        MediaObj(content=para, label="paragraph", mime="text/plain")
-        for para in article.text.splitlines()
-        if para
-    ]
-    metadta = dict(
+    paragraphs = []
+    chunks = []
+    for para in article.text.splitlines():
+        if para := para.strip():
+            # Text exists, add it to current chunk
+            chunks.append(para)
+        # New paragraph
+        elif chunks:
+            para = "\n".join(chunks)
+            paragraphs.append(
+                MediaObj(content=para, label="paragraph", mime="text/plain"),
+            )
+            chunks = []
+    if chunks:
+        para = "\n".join(chunks)
+        paragraphs.append(MediaObj(content=para, label="paragraph", mime="text/plain"))
+        chunks = []
+
+    metadata = dict(
         title=article.title,
         keywords=article.keywords,
         authors=article.authors,
         publish_date=article.publish_date,
     )
 
-    record = Record(uri=uri, components=paragraphs, metadata=metadta)
+    record = Record(uri=uri, components=paragraphs, metadata=metadata)
 
     return record
 
@@ -132,10 +145,24 @@ def get_news_record_from_uri(uri: str) -> Record:
 def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
-    paragraphs = [
-        MediaObj(content=para["text"], label="paragraph", mime="text/plain")
-        for para in doc.pop("plain_text")
-    ]
+    paragraphs = []
+    chunks = []
+    for span in doc.pop("plain_text"):
+        if chunk := span.get("text").strip():
+            # Text exists, add it to current chunk
+            chunks.append(chunk)
+        # New paragraph
+        elif chunks:
+            para = "\n".join(chunks)
+            paragraphs.append(
+                MediaObj(content=para, label="paragraph", mime="text/plain"),
+            )
+            chunks = []
+    if chunks:
+        para = "\n".join(chunks)
+        paragraphs.append(MediaObj(content=para, label="paragraph", mime="text/plain"))
+        chunks = []
+
     del doc["plain_content"]
     del doc["content"]
     doc.update(kwargs)
