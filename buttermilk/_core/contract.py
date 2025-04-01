@@ -18,6 +18,11 @@ from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
 
+CONDUCTOR = "host"
+MANAGER = "manager"
+CLOSURE = "collector"
+CONFIRM = "confirm"
+
 
 class FlowProtocol(Protocol):
     flow_name: str  # flow name
@@ -29,6 +34,28 @@ class FlowProtocol(Protocol):
     async def run(self, job: "Job") -> "Job": ...
 
     async def __call__(self, job: "Job") -> "Job": ...
+
+
+class StepRequest(BaseModel):
+    """Type definition for a request to execute a step in the flow execution.
+
+    A StepRequest describes a request for a step to run, containing the agent role
+    that should execute the step along with prompt and other execution parameters.
+
+    Attributes:
+        role (str): The agent role identifier to execute this step
+        prompt (str): The prompt text to send to the agent
+        description (str): Optional description of the step's purpose
+        arguments (dict): Additional key-value pairs needed for step execution
+        source (str): Caller name
+
+    """
+
+    role: str
+    prompt: str = Field(default="")
+    description: str = Field(default="")
+    arguments: dict[str, Any] = Field(default={})
+    source: str = Field(default="")
 
 
 class OrchestratorProtocol(Protocol):
@@ -95,9 +122,10 @@ class ManagerMessage(FlowMessage):
     _type = "ManagerMessage"
 
 
-class ManagerRequest(ManagerMessage):
+class ManagerRequest(ManagerMessage, StepRequest):
     """Request for input from the user"""
 
+    role: str = MANAGER
     _type = "UserConfirm"
     options: bool | list[str] | None = Field(
         default=None,

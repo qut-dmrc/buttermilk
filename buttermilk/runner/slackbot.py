@@ -7,13 +7,11 @@ from functools import partial
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
-from buttermilk._core.contract import (
-    FlowProtocol,
-)
+from buttermilk._core.contract import MANAGER, FlowProtocol
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.runner.autogen import MANAGER, AutogenOrchestrator
+from buttermilk.runner.autogen import AutogenOrchestrator
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.simple import Sequencer
 
@@ -101,7 +99,8 @@ async def register_handlers(
                         "channel_id": body["event"].get("channel"),
                         "user_id": body["event"].get("user"),
                         "thread_ts": body["event"].get(
-                            "thread_ts", body["event"].get("ts")
+                            "thread_ts",
+                            body["event"].get("ts"),
                         ),
                     },
                 )
@@ -120,7 +119,8 @@ async def register_handlers(
                         context=SlackContext(
                             channel_id=body["event"].get("channel"),
                             thread_ts=body["event"].get(
-                                "thread_ts", body["event"].get("ts")
+                                "thread_ts",
+                                body["event"].get("ts"),
                             ),
                             user_id=body["event"].get("user"),
                             event_ts=body["event"].get("event_ts"),

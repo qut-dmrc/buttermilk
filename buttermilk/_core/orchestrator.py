@@ -15,7 +15,7 @@ from pydantic import (
 )
 
 from buttermilk._core.config import DataSource, SaveInfo
-from buttermilk._core.contract import AgentInput
+from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.variants import AgentVariants
@@ -24,28 +24,6 @@ BASE_DIR = Path(__file__).absolute().parent
 
 
 PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "record"]
-
-
-class StepRequest(BaseModel):
-    """Type definition for a request to execute a step in the flow execution.
-
-    A StepRequest describes a request for a step to run, containing the agent role
-    that should execute the step along with prompt and other execution parameters.
-
-    Attributes:
-        role (str): The agent role identifier to execute this step
-        prompt (str): The prompt text to send to the agent
-        description (str): Optional description of the step's purpose
-        arguments (dict): Additional key-value pairs needed for step execution
-        source (str): Caller name
-
-    """
-
-    role: str
-    prompt: str = Field(default="")
-    description: str = Field(default="")
-    arguments: dict[str, Any] = Field(default={})
-    source: str = Field(default="")
 
 
 class Orchestrator(BaseModel, ABC):

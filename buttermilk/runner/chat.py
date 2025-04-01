@@ -4,9 +4,11 @@ from typing import Self
 
 from pydantic import PrivateAttr, model_validator
 
-from buttermilk._core.orchestrator import StepRequest
+from buttermilk._core.contract import CONDUCTOR, MANAGER, StepRequest
 from buttermilk.exceptions import ProcessingError
-from buttermilk.runner.autogen import CONDUCTOR, MANAGER, AutogenOrchestrator
+from buttermilk.runner.autogen import (
+    AutogenOrchestrator,
+)
 
 
 class Selector(AutogenOrchestrator):

@@ -20,24 +20,23 @@ from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentConfig
 from buttermilk._core.contract import (
+    CLOSURE,
+    CONDUCTOR,
+    CONFIRM,
     AgentInput,
     AgentMessages,
     AgentOutput,
     FlowMessage,
     ManagerMessage,
     ManagerRequest,
+    StepRequest,
     UserInstructions,
 )
-from buttermilk._core.orchestrator import Orchestrator, StepRequest
+from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
 from buttermilk.exceptions import FatalError, ProcessingError
-
-CONDUCTOR = "host"
-MANAGER = "manager"
-CLOSURE = "collector"
-CONFIRM = "confirm"
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -268,19 +267,16 @@ class AutogenOrchestrator(Orchestrator):
                     step = await anext(self._step_generator)
 
                     # For now, ALWAYS get confirmation from the user (MANAGER) role
-                    if step.role != MANAGER:
-                        confirm_step = StepRequest(
-                            role=MANAGER,
-                            prompt="Here's my proposed next step. Do you want to proceed?",
-                            arguments=step.arguments,
-                        )
-                        confirm_step.arguments["prompt"] = step.prompt
+                    confirm_step = ManagerRequest(
+                        content="Here's my proposed next step. Do you want to proceed?",
+                        inputs=step.arguments,
+                    )
+                    confirm_step.inputs["prompt"] = step.prompt
 
-                        await self._execute_step(confirm_step)
-                        if not await self._user_confirmation.get():
-                            # User did not confirm plan; go back and get new instructions
-                            continue
-
+                    await self._execute_step(confirm_step)
+                    if not await self._user_confirmation.get():
+                        # User did not confirm plan; go back and get new instructions
+                        continue
                     # Run next step
                     await self._execute_step(step)
 

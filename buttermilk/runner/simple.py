@@ -5,8 +5,8 @@ import shortuuid
 from pydantic import PrivateAttr, model_validator
 
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import ManagerRequest
-from buttermilk._core.orchestrator import Orchestrator, StepRequest
+from buttermilk._core.contract import ManagerRequest, StepRequest
+from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.ui.generic import UIAgent
 
 

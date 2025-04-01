@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from buttermilk._core.contract import AgentInput
-from buttermilk._core.orchestrator import Orchestrator, StepRequest
+from buttermilk._core.contract import AgentInput, StepRequest
+from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.variants import AgentVariants
 
 
