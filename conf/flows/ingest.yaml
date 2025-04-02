@@ -14,8 +14,6 @@ ingest:
         template: describe
         model:
           - gemini15pro
-      inputs:
-        records: records
       
     # - name: describe_synth
     #   _target_: buttermilk.agents.lc.LC

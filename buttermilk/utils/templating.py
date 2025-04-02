@@ -48,6 +48,10 @@ class KeyValueCollector(BaseModel):
     def __getitem__(self, key: str) -> Any:
         return self._data[key]
 
+    def init(self, keys: list[str]) -> None:
+        for key in keys:
+            self._data[key] = []
+
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
     templates = list_files_with_content(
@@ -146,6 +150,7 @@ def load_template(
                 # Not a template, use as regular string
                 processed_params[k] = v
         else:
+            # TODO @nicsuzor consider not including if we can tell it's a template var
             processed_params[k] = v
 
     # Create a combined variables dict with trusted parameters taking precedence

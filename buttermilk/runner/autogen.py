@@ -91,7 +91,7 @@ class AutogenAgentAdapter(RoutedAgent):
     async def _process_request(
         self,
         message: AgentInput | ConductorRequest,
-    ) -> AgentOutput:
+    ) -> AgentOutput | None:
         """Process an incoming request by delegating to the wrapped agent.
 
         Args:
@@ -101,8 +101,13 @@ class AutogenAgentAdapter(RoutedAgent):
             Optional agent output from processing the request
 
         """
-        # Process using the wrapped agent
-        agent_output = await self.agent(message)
+        agent_output = None
+        try:
+            # Process using the wrapped agent
+            agent_output = await self.agent(message)
+        except Exception as e:
+            logger.error(f"Error processing request: {e}")
+            # raise ProcessingError(f"Error processing request: {e}") from e
 
         if agent_output:
             if self.id.type.startswith(CONDUCTOR):
@@ -115,6 +120,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 topic_id=self.topic_id,
             )
             return agent_output
+
         return None
 
     @message_handler

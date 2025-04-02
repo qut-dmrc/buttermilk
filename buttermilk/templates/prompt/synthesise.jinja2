@@ -15,8 +15,11 @@ You are a team leader. Some members of your team have drafted answers to a quest
 
 You may be provided with additional feedback to consider. You should incorporate this feedback into your final answer where it is helpful and relevant.
 
+
 {% if formatting %}
+<BEGIN OUTPUT FORMAT>
 {{ formatting }}
+<END OUTPUT FORMAT>
 {% endif %}
 
 {% if instructions %}
@@ -25,26 +28,33 @@ You may be provided with additional feedback to consider. You should incorporate
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-<BEGIN CONTENT>
-{{ content }}
-<END CONTENT>
+{% if criteria %}
+<BEGIN CRITERIA>
+{{ criteria }}
+<END CRITERIA>
+{% endif %}
 
+{% if records %}
+# Placeholder:
+{{records}}
 
 # User:
+{% else %}
+# User:
+<CONTENT>
+{{content}}
+</CONTENT>
+{% endif %}
 
-{% for answer in answers %}
-<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-{{ answer.outputs }}
-<END DRAFT ANSWER>
-{% endfor %}
+{% if answers %}
+  {% for answer in answers %}
+  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+  {{ answer.outputs.reasons }}
+  <END DRAFT ANSWER>
+  {% endfor %}
+{% else %}
 
-{% if context_owl or feedback %}
-<BEGIN ANALYST NOTES>
-{% for answer in context_owl %}
-  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
-{% endfor %}
-{% for answer in feedback %}
-  - {{ answer.agent_id }}: {{ answer.outputs.intervention }}
-{% endfor %}
-<END ANALYST NOTES>
+<CONVERSATION SO FAR>
+  {{ history }}
+</CONVERSATION>
 {% endif %}

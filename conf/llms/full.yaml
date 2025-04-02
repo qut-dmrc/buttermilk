@@ -1,11 +1,14 @@
 general:
   - gemini25pro
   - gpt4o
+  - llama33_70b
 
 judgers:
   - gemini2flashthinking
   - o3-mini-high
+  - llama33_70b
 
 synthesisers:
   - gemini25pro
   - gpt4o
+  - llama33_70b

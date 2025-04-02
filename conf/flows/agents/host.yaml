@@ -13,4 +13,3 @@ host:
     context: context
     history: history
     prompt: prompt
-    records: records

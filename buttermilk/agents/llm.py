@@ -23,6 +23,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
+from buttermilk.exceptions import ProcessingError
 from buttermilk.runner.helpers import create_tool_functions
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -39,6 +40,21 @@ class LLMAgent(Agent):
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
+
+    @pydantic.model_validator(mode="after")
+    def custom_agent_name(self) -> Self:
+        # Set a custom name based on our major parameters
+        components = self.id.split("-")
+        components.extend([
+            v
+            for k, v in self.parameters.items()
+            if k not in ["formatting", "description", "template"]
+            and not re.search(r"\s", v)
+        ])
+        components = [c[:12] for c in components if c]
+        self.id = "-".join(components)[:63]
+
+        return self
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
@@ -69,6 +85,12 @@ class LLMAgent(Agent):
         untrusted_inputs = {}
         if inputs:
             untrusted_inputs.update(dict(inputs.inputs))
+            defined_inputs = {
+                k: v
+                for k, v in inputs.model_dump().items()
+                if k in ["content", "records", "metadata", "role", "source", "context"]
+            }
+            untrusted_inputs.update(defined_inputs)
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
@@ -145,7 +167,7 @@ class LLMAgent(Agent):
         if unfilled_vars:
             err = f"Template for agent {self.id} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
-                raise ValueError(err)
+                raise ProcessingError(err)
             logger.warning(err)
 
         return messages

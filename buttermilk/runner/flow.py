@@ -44,6 +44,7 @@ class Flow(BaseModel):
     agents: list[Agent]
 
     data: list[DataSource] | None = Field(default_factory=list)
+    params: dict = Field(default_factory=dict)
     _data: dict = {}
     _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)
     model_config = ConfigDict(arbitrary_types_allowed=True)

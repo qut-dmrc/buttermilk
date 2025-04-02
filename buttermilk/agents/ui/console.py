@@ -40,6 +40,12 @@ class CLIUserAgent(UIAgent):
             Markdown(f"Input requested: {input_data.content}"),
         )
 
+    async def _request_user_input(self, message: ManagerRequest, **kwargs) -> str:
+        """Get user input from the UI"""
+        Console(highlight=True).print(
+            Markdown(f"Input requested: {message.content}"),
+        )
+
     async def _poll_input(
         self,
     ) -> None:

@@ -4,7 +4,7 @@ import os
 import hydra
 from omegaconf import OmegaConf
 
-from buttermilk._core.contract import OrchestratorProtocol
+from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk.bm import BM
 from buttermilk.runner.autogen import AutogenOrchestrator
 from buttermilk.runner.chat import Selector

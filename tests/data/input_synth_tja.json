@@ -46,7 +46,7 @@
     },
     "q": null,
     "parameters": {
-        "template": "synthesise_judger",
+        "template": "synthesise",
         "instructions": "judge",
         "criteria": "trans_simplified",
         "formatting": "json_rules",

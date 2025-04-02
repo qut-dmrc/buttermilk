@@ -12,5 +12,3 @@ judge:
     # criteria: ${flow_criteria:${oc.select:....flow_name}}
     # criteria: ${flow_criteria:${oc.select:_global_.current_flow}}
     formatting: json_rules
-  inputs:
-    records: records

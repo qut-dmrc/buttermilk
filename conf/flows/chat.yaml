@@ -35,7 +35,3 @@ chat:
           - hrc
           - trans_factored
         formatting: json_rules
-      inputs:
-        prompt: q
-        records: records
-        context: context

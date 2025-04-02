@@ -83,10 +83,11 @@ class FlowVariableRouter(KeyValueCollector):
                 results = []
                 for src in source_spec:
                     result = self._resolve_mappings(src)
-                    if isinstance(result, list):
-                        results.extend(result)
-                    else:
-                        results.append(result)
+                    if result:
+                        if isinstance(result, list):
+                            results.extend(result)
+                        else:
+                            results.append(result)
                 resolved[target] = results
             elif isinstance(source_spec, Mapping | dict):
                 # Handle nested mappings
@@ -94,8 +95,9 @@ class FlowVariableRouter(KeyValueCollector):
             else:
                 resolved[target] = self._resolve_simple_path(source_spec)
 
-        # remove empty values
-        resolved = {k: v for k, v in resolved.items() if v is not None and v != []}
+        # remove empty values, but keep in empty lists etc where we found the
+        # variable to substitute but it was empty.
+        resolved = {k: v for k, v in resolved.items() if v is not None}
 
         return resolved
 
@@ -107,7 +109,7 @@ class FlowVariableRouter(KeyValueCollector):
         """
         if "." not in path:
             # Direct reference to a step's complete output list
-            return self._data.get(path, [])
+            return self._data.get(path, None)
 
         # Handle dot notation for nested fields
         step_name, field_path = path.split(".", 1)

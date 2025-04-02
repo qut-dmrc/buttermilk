@@ -186,8 +186,9 @@ class SlackUIAgent(UIAgent):
             await client.chat_update(
                 channel=self.context.channel_id,
                 ts=body["message"]["ts"],
-                text="You selected: Yes",
-                blocks=[
+                text=body["message"]["text"] + "\nYou selected: Yes",
+                blocks=body["message"]["blocks"][:-1]
+                + [
                     {
                         "type": "section",
                         "text": {
@@ -196,6 +197,7 @@ class SlackUIAgent(UIAgent):
                         },
                     },
                 ],
+                actions=None,
             )
             # Call callback with boolean True
             await self._input_callback(ManagerResponse(confirm=True))
@@ -220,8 +222,9 @@ class SlackUIAgent(UIAgent):
             await client.chat_update(
                 channel=self.context.channel_id,
                 ts=body["message"]["ts"],
-                text="You selected: No",
-                blocks=[
+                text=body["message"]["text"] + "\nYou selected: No",
+                blocks=body["message"]["blocks"][:-1]
+                + [
                     {
                         "type": "section",
                         "text": {"type": "mrkdwn", "text": ":x: You selected: *No*"},

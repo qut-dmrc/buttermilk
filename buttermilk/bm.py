@@ -217,7 +217,6 @@ class BM(Singleton, Project):
         self,
         verbose=False,
     ) -> None:
-        global logger
 
         # Quieten other loggers down a bit (particularly requests and google api client)
         root_logger = logging.getLogger()

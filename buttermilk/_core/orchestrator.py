@@ -2,7 +2,7 @@ import copy
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, Self
 
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
@@ -12,6 +12,7 @@ from pydantic import (
     Field,
     PrivateAttr,
     field_validator,
+    model_validator,
 )
 
 from buttermilk._core.config import DataSource, SaveInfo
@@ -20,6 +21,7 @@ from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
 from buttermilk._core.runner_types import Record
 from buttermilk._core.variants import AgentVariants
+from buttermilk.bm import BM
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -123,26 +125,21 @@ class Orchestrator(BaseModel, ABC):
                 _data.append(source)
         return _data
 
-    @field_validator("agents", mode="before")
-    @classmethod
-    def validate_agents(cls, value: dict) -> dict[str, AgentVariants]:
-        """Ensures all agent definitions are proper AgentVariants objects.
-
-        Args:
-            value: Dictionary of agent definitions
-
-        Returns:
-            dict[str, AgentVariants]: Dictionary of agent variants mapped by step name
-
-        """
+    @model_validator(mode="after")
+    def validate_agents(self) -> Self:
         # Ensure that agents is a dict of AgentVariants specifications
         agent_dict = {}
-        for step_name, defn in value.items():
+        for step_name, defn in self.agents.items():
             if isinstance(defn, (AgentVariants)):
                 agent_dict[step_name] = defn
             else:
                 agent_dict[step_name] = AgentVariants(**defn)
-        return agent_dict
+
+        self.agents = agent_dict
+
+        # initialise the data cache
+        self._flow_data.init(self.agents.keys())
+        return self
 
     @abstractmethod
     async def run(self, request: Any = None) -> None:
@@ -233,3 +230,9 @@ class Orchestrator(BaseModel, ABC):
             inputs=input_dict,
             records=records,
         )
+
+
+class OrchestratorProtocol(BaseModel):
+    bm: BM
+    flows: Mapping[str, Orchestrator]
+    ui: Literal["console", "slackbot"]

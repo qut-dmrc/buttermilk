@@ -7,6 +7,3 @@ frames:
   variants:
     template: frames
     model: ${llms.general}
-  inputs:
-    records: records
-    history: history

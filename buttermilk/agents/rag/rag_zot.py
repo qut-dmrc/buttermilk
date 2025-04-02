@@ -92,27 +92,14 @@ class RagZot(LLMAgent):
         search_tool = FunctionTool(
             name="search",
             description="Search for information in the knowledge base about a specific topic or question",
-            fn=self.search_knowledge_base,
-            parameters={
-                "query": {
-                    "type": "string",
-                    "description": "The search query for finding relevant information",
-                },
-            },
+            func=self.search_knowledge_base,
         )
 
         # Add concurrent search tool
         concurrent_search_tool = FunctionTool(
             name="concurrent_search",
             description="Search for multiple topics concurrently to find relevant information",
-            fn=self.concurrent_search,
-            parameters={
-                "queries": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of search queries to execute concurrently",
-                },
-            },
+            func=self.concurrent_search,
         )
 
         # Add tools to the agent

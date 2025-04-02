@@ -157,7 +157,7 @@ def format_slack_message(result: AgentOutput) -> dict:
         icontext = blocks_with_icon(
             result_copy.outputs,
             [
-                ("prediction", (":biohazard_sign:", ":check:")),
+                ("prediction", (":biohazard_sign:", ":ring_buoy:")),
                 ("confidence", ":bar_chart:"),
                 ("severity", ":warning:"),
             ],

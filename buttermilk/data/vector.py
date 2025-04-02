@@ -144,6 +144,9 @@ class DefaultTextSplitter(RecursiveCharacterTextSplitter):
             is_separator_regex=False,
             add_start_index=False,
         )
+        logger.info(
+            f"Initialized RecursiveCharacterTextSplitter (chunk_size={chunk_size}, chunk_overlap={chunk_overlap})",
+        )
 
     async def process(self, doc: InputDocument, **kwargs) -> InputDocument | None:
         """Chunks documents and adds the chunks list to the InputDocument."""
@@ -246,9 +249,6 @@ class ChromaDBEmbeddings(BaseModel):
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
 
-        logger.info(
-            f"Initialized RecursiveCharacterTextSplitter (chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap})",
-        )
         Path(FAILED_BATCH_DIR).mkdir(parents=True, exist_ok=True)
         Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
         return self

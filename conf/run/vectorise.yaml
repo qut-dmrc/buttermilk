@@ -11,9 +11,9 @@ job: zotero
 vectoriser:
   _target_: buttermilk.data.vector.ChromaDBEmbeddings
   persist_directory: "/home/nic/data/prosocial_zot/files"
+  collection_name: "prosocial_zot"
   embedding_model: "text-embedding-large-exp-03-07"
   dimensionality: 3072
-  collection_name: "prosocial_zot"
   arrow_save_dir: "/home/nic/data/prosocial_zot/data"
   
 chunker:

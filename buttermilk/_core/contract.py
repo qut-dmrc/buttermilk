@@ -1,7 +1,7 @@
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal, Protocol, Union
+from typing import Any, Union
 
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
@@ -13,7 +13,6 @@ from pydantic import (
 
 from buttermilk._core.config import DataSource, SaveInfo
 from buttermilk._core.runner_types import Record
-from buttermilk.bm import BM
 from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -24,16 +23,13 @@ CLOSURE = "collector"
 CONFIRM = "confirm"
 
 
-class FlowProtocol(Protocol):
+class FlowProtocol(BaseModel):
     flow_name: str  # flow name
-    save: SaveInfo
-    data: Sequence[DataSource]
-    agents: Sequence["Agent"]
+    description: str
+    save: SaveInfo | None = Field(default=None)
+    data: list[DataSource] | None = Field(default=[])
+    agents: Mapping[str, Any] = Field(default={})
     orchestrator: str
-
-    async def run(self, job: "Job") -> "Job": ...
-
-    async def __call__(self, job: "Job") -> "Job": ...
 
 
 class StepRequest(BaseModel):
@@ -58,12 +54,6 @@ class StepRequest(BaseModel):
     tool: str | None = Field(default=None)
     arguments: dict[str, Any] = Field(default={})
     source: str | None = Field(default=None)
-
-
-class OrchestratorProtocol(Protocol):
-    bm: BM
-    flows: Mapping[str, FlowProtocol]
-    ui: Literal["console", "slackbot"]
 
 
 ######

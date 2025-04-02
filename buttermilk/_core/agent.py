@@ -81,7 +81,7 @@ class AgentConfig(BaseModel):
     )
     outputs: dict[str, Any] = {}
     model_config = {
-        "extra": "forbid",
+        "extra": "allow",
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
     }

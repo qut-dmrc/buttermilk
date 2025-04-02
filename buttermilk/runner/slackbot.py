@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
+from omegaconf import OmegaConf
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
@@ -160,7 +161,7 @@ async def register_handlers(
                     "user_id": context.user_id,
                 },
             )
-            asyncio.create_task(
+            t = asyncio.create_task(
                 start_flow_thread(
                     context=context,
                     slack_app=slack_app,
@@ -215,6 +216,9 @@ async def read_thread_history(
     history = []
     if replies and "messages" in replies:
         for message in replies["messages"]:
+            if message.get("text", "").startswith("<@"):
+                # ignore directed messages
+                continue
             user = message.get("user", "Unknown")
             text = message.get("text", "")
             history.append({"type": user, "content": text})
@@ -229,9 +233,9 @@ async def start_flow_thread(
     init_text: str,
 ) -> None:
     logger.info(
-        "Starting flow in Slack thread",
+        f"Starting flow {flow_cfg.flow_name} in Slack thread {context.thread_ts}...",
         extra={
-            "flow_name": flow_cfg.get("flow_name", "unknown"),
+            "flow_name": flow_cfg.flow_name,
             "channel_id": context.channel_id,
             "thread_ts": context.thread_ts,
             "user_id": context.user_id,
@@ -242,7 +246,7 @@ async def start_flow_thread(
 
     # Instantiate the slack thread agent before the orchestrator
     try:
-        _config = dict(flow_cfg)
+        _config = OmegaConf.to_container(flow_cfg, resolve=True)
         orchestrator_name = _config.pop("orchestrator")
         thread_agent_name = f"slack_thread_{context.thread_ts}"
         # partially fill the SlackUIAgent object and add it to the registry
@@ -264,7 +268,8 @@ async def start_flow_thread(
         )
         history = await read_thread_history(slack_app=slack_app, context=context)
         # Remove first entry (activation message)
-        history.pop(0)
+        if history:
+            history.pop(0)
 
         # Prepend init_text if it's not empty
         if init_text.strip():
@@ -298,7 +303,7 @@ async def start_flow_thread(
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
-                "flow_name": flow_cfg.get("flow_name", "unknown"),
+                "flow_name": flow_cfg.flow_name,
                 "thread_ts": context.thread_ts,
                 "traceback": traceback.format_exc(),
             },

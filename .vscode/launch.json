@@ -70,7 +70,7 @@
       "justMyCode": false,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans,hate,ffa]",
+        "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
         "llms=full",
       ],
