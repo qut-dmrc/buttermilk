@@ -39,4 +39,9 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {% elif prompt %}
 # User:
 {{prompt}}
+{% elif history %}
+# User:
+<CONVERSATION SO FAR>
+{{history}}
+</CONVERSATION>
 {% endif %}

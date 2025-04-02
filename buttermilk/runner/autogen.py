@@ -255,12 +255,12 @@ class AutogenOrchestrator(Orchestrator):
             # First, introduce ourselves, and prompt the user for input
             await self._send_ui_message(
                 ManagerRequest(
-                    content="Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
+                    content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
                 ),
             )
             if not await self._user_confirmation.get():
                 await self._send_ui_message(
-                    ManagerMessage(content="OK, shutting down thread.")
+                    ManagerMessage(content="OK, shutting down thread."),
                 )
                 return
 

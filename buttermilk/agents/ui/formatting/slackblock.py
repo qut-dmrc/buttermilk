@@ -87,13 +87,16 @@ def create_context_blocks(elements_list, max_elements_per_block=10):
 
 def blocks_with_icon(
     data: dict,
-    keys_to_icon_map: list[tuple[str, str]],
+    keys_to_icon_map: list[tuple[str, str | tuple[str, str]]],
 ) -> dict[str, Any]:
     """Convert matching keys to formatted blocks with icons"""
     for key, icon in keys_to_icon_map:
         special_text = []
         if key in data:
             value = data.pop(key)
+            # check for binary icons
+            if isinstance(icon, tuple):
+                icon = icon[0] if value else icon[1]
             special_text.append(f"{icon} *{key.capitalize()}:* {value}")
         if special_text:
             return {
@@ -154,7 +157,7 @@ def format_slack_message(result: AgentOutput) -> dict:
         icontext = blocks_with_icon(
             result_copy.outputs,
             [
-                ("prediction", ":biohazard_sign:"),
+                ("prediction", (":biohazard_sign:", ":check:")),
                 ("confidence", ":bar_chart:"),
                 ("severity", ":warning:"),
             ],

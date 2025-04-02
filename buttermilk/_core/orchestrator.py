@@ -212,33 +212,19 @@ class Orchestrator(BaseModel, ABC):
         # Add any arguments from the step request
         input_dict.update(step.arguments)
 
-        # Always include the prompt in the inputs
-        input_dict["prompt"] = step.prompt
-
         records = []
 
         # Special handling for named placeholder keywords
-        for value in PLACEHOLDER_VARIABLES:
-            if value in input_dict:
-                if value == "content":
-                    records = [
-                        f"{rec.record_id}: {rec.fulltext}" for rec in self._records
-                    ]
-                    input_dict[value] = records
-                elif value == "history":
-                    input_dict[value] = "\n".join(self.history)
-                elif value == "context":
-                    # Get the chat context and records
-                    input_dict[value] = await self._context.get_messages()
-                elif value == "records":
-                    records = self._records
-                    del input_dict[value]
-                elif value == "participants":
-                    participants = [
-                        f"- {id}: {step.description}"
-                        for id, step in self.agents.items()
-                    ]
-                    input_dict[value] = "\n".join(participants)
+        input_dict["content"] = [
+            f"{rec.record_id}: {rec.fulltext}" for rec in self._records
+        ]
+        input_dict["history"] = "\n".join(self.history)
+        input_dict["context"] = await self._context.get_messages()
+        records = self._records
+        input_dict["participants"] = "\n".join([
+            f"- {id}: {step.description}" for id, step in self.agents.items()
+        ])
+        input_dict["prompt"] = step.prompt
 
         return AgentInput(
             role=step.role,

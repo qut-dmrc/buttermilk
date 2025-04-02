@@ -4,6 +4,7 @@ import re
 import traceback
 from collections.abc import Mapping
 from functools import partial
+from typing import Any
 
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
@@ -191,12 +192,15 @@ async def register_handlers(
     slack_app.message(":wave:")(say_hello)
     slack_app.event("app_mention", matchers=[_flow_start_matcher])(handle_mentions)
 
-    # Add this catch-all handler at the end of the function
-    @slack_app.event("message")
-    async def handle_message_events(body, logger):
+    def _handle_unmatched_requests(req: Any, resp: Any) -> Any:
         # Just silently acknowledge the message without doing anything
         # Only log at debug level to avoid cluttering logs
         logger.debug("Received unhandled message event")
+        # by default slack sends a warning:
+        # self._framework_logger.warning(warning_unhandled_request(req))
+        return resp
+
+    slack_app._handle_unmatched_requests = _handle_unmatched_requests
 
 
 async def read_thread_history(
