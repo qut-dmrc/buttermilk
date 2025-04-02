@@ -92,7 +92,15 @@ class SaveInfo(CloudProviderCfg):
 class DataSource(BaseModel):
     name: str
     max_records_per_group: int = -1
-    type: Literal["job", "file", "bq", "generator", "plaintext", "vector", "outputs"]
+    type: Literal[
+        "job",
+        "file",
+        "bq",
+        "generator",
+        "plaintext",
+        "vectorstore",
+        "outputs",
+    ]
     path: str = Field(
         default="",
         validation_alias=AliasChoices("path", "dataset", "uri", "func"),
@@ -108,6 +116,9 @@ class DataSource(BaseModel):
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
+
+    persist_directory: str = Field(default="")
+    collection_name: str = Field(default="")
 
     model_config = ConfigDict(
         extra="forbid",
@@ -137,6 +148,7 @@ class Project(BaseModel):
         default=None,
         description="Information about the context in which this project runs",
     )
+    datasets: dict[str, DataSource] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         extra="forbid",

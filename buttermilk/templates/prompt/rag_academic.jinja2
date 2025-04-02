@@ -44,21 +44,18 @@ You should answer only in strictly correct JSON in the following schema:
     }
 ```
 {% endraw %}
+
+Sometimes, search results are garbled. Make sure you filter out illegible results and format all results appropriately in your response.
 </INSTRUCTIONS>
 
+# User:
 
 <CONVERSATION HISTORY>
 {{history}}
 </CONVERSATION HISTORY>
-
-# User:
 
 {% if prompt %}
 <CURRENT QUERY>
 {{prompt}}
 <CURRENT QUERY>
 {% endif %}
-
-<BEGIN SEARCH RESULTS>
-{{rag}}
-<END SEARCH RESULTS>

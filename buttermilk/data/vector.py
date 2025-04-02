@@ -32,6 +32,8 @@ MAX_TOTAL_TASKS_PER_RUN = 500
 T = TypeVar("T")
 
 
+_db_registry = {}
+
 # --- Pydantic Models ---
 
 
@@ -209,10 +211,9 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
         )
 
         # Vertex batch_size is 1
-        results = [
-            self._embedding_model.get_embeddings(texts=[text], **kwargs)
-            for text in input
-        ]
+        results = self._embedding_model.get_embeddings(texts=input, **kwargs)
+
+        # convert from numpy
         return [cast("list[float]", r.values) for r in results]
 
 
@@ -225,7 +226,7 @@ class ChromaDBEmbeddings(BaseModel):
     embedding_model: str = Field(default=MODEL_NAME)
     task: str = "RETRIEVAL_DOCUMENT"
     collection_name: str
-    dimensionality: int | None = Field(default=3072)
+    dimensionality: int = Field(default=3072)
     persist_directory: str
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
@@ -235,6 +236,7 @@ class ChromaDBEmbeddings(BaseModel):
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
     _embedding_model: TextEmbeddingModel = PrivateAttr()
+    _embedding_function: Callable = PrivateAttr()
     _client: ClientAPI = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
@@ -242,9 +244,12 @@ class ChromaDBEmbeddings(BaseModel):
         """Initializes the embedding model, ChromaDB client, and text splitter."""
         logger.info(f"Loading embedding model: {self.embedding_model}")
         self._embedding_model = TextEmbeddingModel.from_pretrained(self.embedding_model)
+        self._embedding_function = VertexAIEmbeddingFunction(
+            embedding_model=self.embedding_model,
+            dimensionality=self.dimensionality,
+        )
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
         self._client = chromadb.PersistentClient(path=self.persist_directory)
-        self._collection = self._client.get_or_create_collection(self.collection_name)
         logger.info(f"Using ChromaDB collection: {self.collection_name}")
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
@@ -256,18 +261,17 @@ class ChromaDBEmbeddings(BaseModel):
     @property
     def collection(self) -> Collection:
         """Provides access to the ChromaDB collection."""
-        if not hasattr(self, "_collection") or not self._collection:
-            logger.warning("ChromaDB collection accessed before initialization.")
+        # This vector store is single-threaded, so we're only keeping one instance around
+        if _db_registry.get("vectorstore") is None:
+            # Initialize the vector store.
             if not hasattr(self, "_client") or not self._client:
                 self._client = chromadb.PersistentClient(path=self.persist_directory)
-            self._collection = self._client.get_or_create_collection(
+
+            _db_registry["vectorstore"] = self._client.get_or_create_collection(
                 self.collection_name,
-                embedding_function=VertexAIEmbeddingFunction(
-                    embedding_model=self.embedding_model,
-                    dimensionality=self.dimensionality,
-                ),
+                embedding_function=self._embedding_function,
             )
-        return self._collection
+        return _db_registry["vectorstore"]
 
     async def embed_document(
         self,

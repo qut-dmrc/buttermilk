@@ -278,7 +278,7 @@ class BM(Singleton, Project):
         warnings.filterwarnings(
             action="ignore",
             message="jsonschema.RefResolver is deprecated",
-            category=DeprecationWarning,
+            # category=DeprecationWarning,
             module="flask_restx",
         )
         warnings.filterwarnings(

@@ -6,6 +6,8 @@ defaults:
     - analyst
     - ragzot
 
+data:
+  
 simple:
   flow_name: simple
   orchestrator: Selector
