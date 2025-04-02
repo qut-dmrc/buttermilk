@@ -52,7 +52,8 @@ class TestPromptStyles:
         messages = [
             UserMessage("hi! I'm Siobhan. What's your name?", source="test"),
             AssistantMessage(
-                "Hi Siobhan! I'm a chatbot, my developers call me", source="assistant"
+                "Hi Siobhan! I'm a chatbot, my developers call me",
+                source="assistant",
             ),
         ]
 

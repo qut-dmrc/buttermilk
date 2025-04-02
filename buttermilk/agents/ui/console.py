@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any
 
+import regex as re
 from aioconsole import ainput
 from pydantic import PrivateAttr
 from rich.console import Console
@@ -11,6 +12,7 @@ from buttermilk._core.contract import (
     AgentInput,
     GroupchatMessages,
     ManagerRequest,
+    ManagerResponse,
     UserInstructions,
 )
 from buttermilk.agents.ui.generic import UIAgent
@@ -28,7 +30,7 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, UserInstructions):
             return
         console = Console(highlight=True)
-        console.print(Markdown(f"### {message.role}: \n{message.content}\n"))
+        console.print(message.content)
 
     async def _process(
         self,
@@ -42,9 +44,7 @@ class CLIUserAgent(UIAgent):
 
     async def _request_user_input(self, message: ManagerRequest, **kwargs) -> str:
         """Get user input from the UI"""
-        Console(highlight=True).print(
-            Markdown(f"Input requested: {message.content}"),
-        )
+        Console(highlight=True).print(Markdown("### Input requested: "), message)
 
     async def _poll_input(
         self,
@@ -53,7 +53,13 @@ class CLIUserAgent(UIAgent):
         while True:
             try:
                 user_input = await ainput()
-                await self._input_callback(UserInstructions(content=user_input))
+                if user_input == "exit":
+                    raise KeyboardInterrupt
+                # treat empty string as confirmation
+                if not re.sub(r"\W", "", user_input):
+                    await self._input_callback(ManagerResponse(confirm=True))
+                else:
+                    await self._input_callback(UserInstructions(content=user_input))
             except asyncio.CancelledError:
                 break
             except Exception as e:

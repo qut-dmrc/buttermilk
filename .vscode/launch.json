@@ -48,7 +48,7 @@
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
+      "justMyCode": true,
       "args": [
         "hydra.verbose=false",
         "+flows=[simple]",
@@ -67,7 +67,7 @@
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
+      "justMyCode": true,
       "args": [
         "hydra.verbose=false",
         "+flows=[trans,hate,ffa,simple]",

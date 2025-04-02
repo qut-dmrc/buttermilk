@@ -2,7 +2,6 @@ defaults:
   - config
   - local
   - _self_
-  - llms: lite
 
 name: buttermilk
 job: testing
@@ -18,6 +17,16 @@ bm:
     max_concurrency: 16
     flow_api: http://flow:8000/flow/
     
+  clouds:
+    - type: gcp
+      project: prosocial-443205
+      verbose: false
+    - type: vertex
+      project: prosocial-443205
+      region: us-central1
+      location: us-central1
+      bucket: prosocial-dev
+        
 
 save:
   type: bq

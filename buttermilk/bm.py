@@ -28,7 +28,7 @@ import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
-from google import auth
+from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from omegaconf import DictConfig
@@ -112,8 +112,8 @@ class Singleton:
 
 
 class BM(Singleton, Project):
-    _gcp_project: str = PrivateAttr(default=None)
-    _gcp_credentials: str = PrivateAttr(default=None)
+    _gcp_project: str = PrivateAttr()
+    _gcp_credentials: GoogleCredentials = PrivateAttr()
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
@@ -130,6 +130,7 @@ class BM(Singleton, Project):
     def ensure_config(self) -> Self:
         for cloud in self.clouds:
             if cloud.type == "gcp":
+                from google.auth import default, transport
                 # authenticate to GCP
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
                     "GOOGLE_CLOUD_PROJECT",
@@ -139,9 +140,12 @@ class BM(Singleton, Project):
                     "quota_project_id",
                     os.environ["GOOGLE_CLOUD_PROJECT"],
                 )
-                self._gcp_credentials, self._gcp_project = auth.default(
+                self._gcp_credentials, self._gcp_project = default(
                     quota_project_id=billing_project,
                 )
+                # GCP tokens last 60 minutes and need to be refreshed after that
+                auth_request = transport.requests.Request()
+                self._gcp_credentials.refresh(auth_request)
                 # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
             if cloud.type == "vertex":
                 # initialize vertexai

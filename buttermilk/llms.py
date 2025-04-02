@@ -70,9 +70,7 @@ CHATMODELS = [
     "gpt4o",
     "o3-mini-high",
     "llama31_8b",
-    "llama31_405b-azure",
-    "llama31_8b",
-    "llama32_90b_azure",
+    "llama32_90b",
     "llama33_70b",
     "haiku",
     "sonnet",
@@ -81,6 +79,7 @@ CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini2flash",
     "o3-mini-high",
+    "llama31_8b",
     "gemini2flashthinking",
     "gemini2flashlite",
 ]
@@ -170,7 +169,10 @@ class LLMs(BaseModel):
         elif self.connections[name].api_type == "google":
             client = GeminiChatCompletionClient(**params)
         elif self.connections[name].api_type == "vertex":
-            client = OpenAIChatCompletionClient(**params)
+            params["api_key"] = bm._gcp_credentials.token
+            client = OpenAIChatCompletionClient(
+                **params,
+            )
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
             _vertex_params = {

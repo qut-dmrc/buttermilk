@@ -250,6 +250,7 @@ class LLMAgent(Agent):
                 agent_id=self.id,
                 agent_name=self.name,
                 content=error_msg,
+                error=error_msg,
                 metadata=dict(self.parameters),
             )
         if isinstance(create_result.content, str):
