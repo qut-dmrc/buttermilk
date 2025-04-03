@@ -91,7 +91,7 @@ class SessionInfo(pydantic.BaseModel):
 
     @pydantic.model_validator(mode="after")
     def schedule_get_ip(self) -> Self:
-        asyncio.create_task(self.get_ip())
+        asyncio.get_event_loop().create_task(self.get_ip())
         return self
 
     async def get_ip(self):
