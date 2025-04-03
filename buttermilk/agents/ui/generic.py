@@ -17,7 +17,9 @@ class UIAgent(Agent):
 
     _trace_this = False
 
-    async def _request_user_input(self, message: ManagerRequest, **kwargs) -> str:
+    async def _request_user_input(
+        self, message: ManagerRequest, **kwargs
+    ) -> str | None:
         """Get user input from the UI"""
         raise NotImplementedError
 

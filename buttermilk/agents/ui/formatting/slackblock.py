@@ -318,6 +318,7 @@ def confirm_bool(
     message="Do you want to proceed?",
     yes_text="Yes",
     no_text="No",
+    cancel=True,
     extra_blocks: list[dict] | None = None,
 ) -> dict:
     """Format a confirmation block for Slack with Yes/No buttons and decorative elements.
@@ -364,7 +365,18 @@ def confirm_bool(
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": f":x: {no_text}",
+                            "text": f":thinking_face: {no_text}",
+                            "emoji": True,
+                        },
+                        # No style means default gray button
+                        "value": "decline",
+                        "action_id": "decline_action",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": ":x: Cancel",
                             "emoji": True,
                         },
                         "style": "danger",

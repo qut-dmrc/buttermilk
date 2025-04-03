@@ -1,7 +1,7 @@
 from typing import Any
 
 import pydantic
-from pydantic import PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
@@ -43,10 +43,18 @@ def _fn_debug_blocks(message: AgentOutput):
         pass
 
 
+class _ThreadInteractions(BaseModel):
+    confirm: Any = None
+    decline: Any = None
+    cancel: Any = None
+    text: Any = None
+
+
 class SlackUIAgent(UIAgent):
     # these need to be populated after the agent is created by the factory
     app: AsyncApp = None
     context: "SlackContext" = None
+    _handlers: _ThreadInteractions = PrivateAttr(default_factory=_ThreadInteractions)
     _input_callback: Any = PrivateAttr(default=None)
     _current_input_message: Any = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
@@ -153,6 +161,7 @@ class SlackUIAgent(UIAgent):
 
     def register_chat_thread_handler(self, thread_ts):
         """Connect messages in a Slack thread to the agent's callback"""
+        logger.debug(f"Registering thread handler for {thread_ts}")
 
         async def matcher(message):
             return (
@@ -161,12 +170,10 @@ class SlackUIAgent(UIAgent):
                 and message.get("subtype") != "bot_message"
             )
 
-        @self.app.message(matchers=[matcher])
         async def feed_in(message, say):
             await self._input_callback(UserInstructions(content=message["text"]))
 
         # Button action handlers
-        @self.app.action("confirm_action")
         async def handle_confirm(ack, body, client):
             await ack()
 
@@ -203,7 +210,6 @@ class SlackUIAgent(UIAgent):
             await self._input_callback(ManagerResponse(confirm=True))
             self._current_input_message = None
 
-        @self.app.action("cancel_action")
         async def handle_cancel(ack, body, client):
             await ack()
             if not body.get("message", {}).get("thread_ts") == thread_ts:
@@ -234,6 +240,11 @@ class SlackUIAgent(UIAgent):
             # Call callback with boolean False
             await self._input_callback(ManagerResponse(confirm=False))
 
+        self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
+        self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)
+        self._handlers.decline = self.app.action("decline_action")(handle_confirm)
+        self._handlers.cancel = self.app.action("cancel_action")(handle_cancel)
+
 
 def reregister_all_active_threads():
     """Re-register handlers for all active threads after reconnection"""
@@ -242,7 +253,7 @@ def reregister_all_active_threads():
     )
     for thread_ts, agent in list(_active_thread_registry.items()):
         try:
-            agent.register_chat_thread_handler()
+            agent.register_chat_thread_handler(thread_ts)
         except Exception as e:
             logger.error(
                 f"Failed to re-register handlers for thread {thread_ts}: {e!s}",
