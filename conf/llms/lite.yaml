@@ -1,10 +1,8 @@
 general:
-  - o3-mini-high
   - gemini2flashthinking
 
 judgers:
   - gemini2flashthinking
-  - o3-mini-high
 
 synthesisers:
   - gemini2flashthinking

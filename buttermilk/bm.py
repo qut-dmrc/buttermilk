@@ -136,10 +136,10 @@ class BM(Singleton, Project):
                     "GOOGLE_CLOUD_PROJECT",
                     cloud.project,
                 )
-                billing_project = cloud.model_fields.get(
-                    "quota_project_id",
-                    os.environ["GOOGLE_CLOUD_PROJECT"],
-                )
+                if "qutoa_project_id" in cloud.model_fields_set:
+                    billing_project = cloud.quota_project_id
+                else:
+                    billing_project = os.environ["GOOGLE_CLOUD_PROJECT"]
                 self._gcp_credentials, self._gcp_project = default(
                     quota_project_id=billing_project,
                 )

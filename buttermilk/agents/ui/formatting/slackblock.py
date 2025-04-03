@@ -116,7 +116,7 @@ def dict_to_blocks(input) -> list[dict]:
 
 
 def format_slack_message(result: AgentOutput) -> dict:
-    result_copy = result.model_copy()
+    result_copy = result.model_copy(deep=True)
     """Format message for Slack API with attractive blocks for structured data"""
     blocks = []
 

@@ -17,7 +17,7 @@ from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, PrivateAttr, model_validator
 from replicate.exceptions import ModelError, ReplicateError
 from tenacity import (
     AsyncRetrying,
@@ -48,22 +48,21 @@ class RetryWrapper(BaseModel):
     """
 
     client: Any
-    max_concurrent_calls: int = 3
+    concurrency: int = 2
     cooldown_seconds: float = 0.1
     max_retries: int = 6
     min_wait_seconds: float = 1.0
     max_wait_seconds: float = 30.0
     jitter_seconds: float = 1.0
 
-    semaphore: asyncio.Semaphore = Field(default=None)
+    _semaphore: asyncio.Semaphore = PrivateAttr()
 
     model_config = {"arbitrary_types_allowed": True}
 
     @model_validator(mode="after")
     def create_semaphore(self) -> Self:
-        # Use the proper setter for private attributes
-        self.semaphore = asyncio.Semaphore(
-            self.max_concurrent_calls,
+        self._semaphore = asyncio.Semaphore(
+            self.concurrency,
         )
         return self
 
@@ -113,7 +112,7 @@ class RetryWrapper(BaseModel):
         try:
             async for attempt in AsyncRetrying(**self._get_retry_config()):
                 with attempt:
-                    async with self.semaphore:
+                    async with self._semaphore:
                         # Execute the function
                         result = await func(*args, **kwargs)
                         # Add a small delay on success to prevent rate limiting
@@ -139,6 +138,7 @@ class RetryWrapper(BaseModel):
             or name in self.__annotations__
             or name in self.__class__.__dict__
             or (name.startswith("_") and hasattr(type(self), name))
+            or name in self.__private_attributes__
         ):
             # Let the normal attribute lookup process handle this (which will raise
             # AttributeError if appropriate)

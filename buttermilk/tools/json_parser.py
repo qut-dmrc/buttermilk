@@ -33,11 +33,6 @@ class ChatParser(BaseModel):
             The parsed JSON object.
 
         """
-        output = self.parse_json(text)
-
-        return output
-
-    def parse_json(self, text: str):
         output = dict()
         try:
             # First we're going to try to remove any text around a possible JSON string.
