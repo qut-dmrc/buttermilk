@@ -48,8 +48,9 @@ class ToolConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     agent_obj: str = Field(
-        ...,
+        default="",
         description="The object name to instantiate",
+        exclude=True,
     )
     id: str = Field(
         ...,
@@ -89,12 +90,6 @@ class AgentConfig(BaseModel):
 
 class Agent(AgentConfig, ABC):
     """Base Agent interface for all processing units"""
-
-    agent_obj: str = Field(
-        default="",
-        description="The object name to instantiate",
-        exclude=True,
-    )
 
     _trace_this = True
     _run_fn: Callable | Awaitable = PrivateAttr()
