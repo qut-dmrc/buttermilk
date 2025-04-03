@@ -209,15 +209,11 @@ class Orchestrator(BaseModel, ABC):
         # Add any arguments from the step request
         input_dict.update(step.arguments)
 
-        records = []
-
         # Special handling for named placeholder keywords
         input_dict["content"] = [
             f"{rec.record_id}: {rec.fulltext}" for rec in self._records
         ]
         input_dict["history"] = "\n".join(self.history)
-        input_dict["context"] = await self._context.get_messages()
-        records = self._records
         input_dict["participants"] = "\n".join([
             f"- {id}: {step.description}" for id, step in self.agents.items()
         ])
@@ -227,8 +223,9 @@ class Orchestrator(BaseModel, ABC):
             role=step.role,
             source=self.flow_name,
             content=step.prompt,
+            context=await self._context.get_messages(),
             inputs=input_dict,
-            records=records,
+            records=self._records,
         )
 
 

@@ -119,29 +119,27 @@ class LLMAgent(Agent):
             # entire Message objects
             if message["role"] == "placeholder":
                 # Remove everything except word chars to get the variable name
-                var_name = re.sub(r"[^\w\d_]+", "", message["content"])
-                if var_name.lower() == "records" and inputs and inputs.records:
-                    for rec in inputs.records:
-                        # TODO make this multimodal later
-                        messages.append(
-                            UserMessage(content=rec.fulltext, source="record"),
-                        )
-                        # Remove the placeholder from the list of unfilled variables
-                        if var_name in unfilled_vars:
-                            unfilled_vars.remove(var_name)
+                if (
+                    var_name := re.sub(r"[^\w\d_]+", "", message["content"]).lower()
+                ) in ["records", "context"]:
+                    if var_name == "records":
+                        for rec in inputs.records:
+                            # TODO make this multimodal later
+                            messages.append(
+                                UserMessage(content=rec.fulltext, source="record"),
+                            )
+                    elif var_name == "context":
+                        messages.extend(inputs.context)
+                    # Remove the placeholder from the list of unfilled variables
+                    if var_name in unfilled_vars:
+                        unfilled_vars.remove(var_name)
                 else:
-                    try:
-                        messages.extend(getattr(inputs, var_name))
-                        # Remove the placeholder from the list of unfilled variables
-                        if var_name in unfilled_vars:
-                            unfilled_vars.remove(var_name)
-                    except KeyError:
-                        err = (
-                            f"Missing {var_name} in template or placeholder vars for agent {self.id}.",
-                        )
-                        if self.fail_on_unfilled_parameters:
-                            raise ValueError(err)
-                        logger.warning(err)
+                    err = (
+                        f"Missing {var_name} in template or placeholder vars for agent {self.id}.",
+                    )
+                    if self.fail_on_unfilled_parameters:
+                        raise ValueError(err)
+                    logger.warning(err)
 
                 continue
 
