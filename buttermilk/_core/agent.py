@@ -114,7 +114,7 @@ class Agent(AgentConfig, ABC):
         self,
         message: AllMessages,
         **kwargs,
-    ) -> AllMessages:
+    ) -> AllMessages | None:
         """Log data or send output to the user interface"""
         raise NotImplementedError
 

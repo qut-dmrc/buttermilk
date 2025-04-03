@@ -198,6 +198,12 @@ class ToolOutput(FunctionExecutionResult):
     )
 
 
+GroupchatMessages = Union[
+    AgentOutput,
+    ToolOutput,
+    UserInstructions,
+]
+
 AllMessages = Union[
     FlowMessage,
     AgentInput,
@@ -207,10 +213,5 @@ AllMessages = Union[
     ConductorRequest,
     ManagerRequest,
     ManagerMessage,
-]
-
-GroupchatMessages = Union[
-    AgentOutput,
-    ToolOutput,
-    UserInstructions,
+    GroupchatMessages,
 ]

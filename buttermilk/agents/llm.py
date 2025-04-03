@@ -17,6 +17,7 @@ from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
 from buttermilk._core.contract import (
+    AllMessages,
     ConductorRequest,
     GroupchatMessages,
     ToolOutput,
@@ -71,7 +72,7 @@ class LLMAgent(Agent):
 
     async def receive_output(
         self,
-        message: GroupchatMessages,
+        message: AllMessages,
         **kwargs,
     ) -> GroupchatMessages | None:
         """Log data or send output to the user interface"""
