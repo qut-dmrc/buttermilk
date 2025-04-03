@@ -96,7 +96,7 @@ class Fetch(Agent, ToolConfig):
             record = await download_and_convert(uri=uri)
         else:
             # Try to get by record_id (remove bang! first)
-            record = await self.get_record_dataset(match[1])
+            record = await self.get_record_dataset(match[1]).strip("!")
 
         if record:
             return AgentOutput(

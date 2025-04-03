@@ -17,7 +17,7 @@ from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
-from pydantic import BaseModel, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, model_validator
 from replicate.exceptions import ModelError, ReplicateError
 from tenacity import (
     AsyncRetrying,
@@ -38,7 +38,7 @@ class RetryWrapper(BaseModel):
 
     Args:
         client: The object to wrap
-        max_concurrent_calls: Maximum number of concurrent calls allowed
+        concurrency: Maximum number of concurrent calls allowed
         cooldown_seconds: Time to wait between calls
         max_retries: Maximum number of retry attempts for failed API calls
         min_wait_seconds: Minimum wait time between retries (exponential backoff)
@@ -51,17 +51,17 @@ class RetryWrapper(BaseModel):
     concurrency: int = 2
     cooldown_seconds: float = 0.1
     max_retries: int = 6
-    min_wait_seconds: float = 1.0
-    max_wait_seconds: float = 30.0
-    jitter_seconds: float = 1.0
+    min_wait_seconds: float = 5.0
+    max_wait_seconds: float = 120.0
+    jitter_seconds: float = 5.0
 
-    _semaphore: asyncio.Semaphore = PrivateAttr()
+    semaphore: asyncio.Semaphore = Field(default=None)
 
     model_config = {"arbitrary_types_allowed": True}
 
     @model_validator(mode="after")
     def create_semaphore(self) -> Self:
-        self._semaphore = asyncio.Semaphore(
+        self.semaphore = asyncio.Semaphore(
             self.concurrency,
         )
         return self
@@ -110,9 +110,9 @@ class RetryWrapper(BaseModel):
     ) -> Any:
         """Execute a function with retry logic."""
         try:
-            async for attempt in AsyncRetrying(**self._get_retry_config()):
-                with attempt:
-                    async with self._semaphore:
+            async with self.semaphore:
+                async for attempt in AsyncRetrying(**self._get_retry_config()):
+                    with attempt:
                         # Execute the function
                         result = await func(*args, **kwargs)
                         # Add a small delay on success to prevent rate limiting

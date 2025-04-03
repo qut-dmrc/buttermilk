@@ -1,7 +1,7 @@
 scorer:
   id: SCORERS
   name: "📊 Scorer"
-  agent_obj: LLMAgent
+  agent_obj: LLMScorer
   num_runs: 1
   description: Checks and scores answers against our expected ground truth.
   variants:
@@ -11,5 +11,4 @@ scorer:
       Evaluate how well the provided content aligns with the rules.
   inputs:
     answers:
-      - synth
     expected: record.ground_truth

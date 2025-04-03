@@ -66,19 +66,6 @@ class ChatParser(BaseModel):
 
         return output
 
-    def parse_result(self, result: list, *, partial: bool = False) -> Any:
-        output = self.parse(" ".join([r.text for r in result]))
-
-        try:
-            # next, we're  going to see if we have any more information in the metadata
-            output["metadata"] = result[0].message.response_metadata
-
-            """(gemini) result[0].message.usage_metadata = {'prompt_token_count': 246, 'candidates_token_count': 268, 'total_token_count': 514, 'cached_content_token_count': 0}"""
-        except Exception:
-            pass
-
-        return output
-
 
 def convert_dict_types(obj: Any) -> Any:
     if isinstance(obj, dict):

@@ -112,20 +112,20 @@ class SlackUIAgent(UIAgent):
                     message=message.content,
                     extra_blocks=extra_blocks,
                 )
+                await self._cancel_input_request()
 
-            if self._current_input_message is not None:
-                try:
-                    # we need to update the current message instead of
-                    # opening a new one.
-                    fn = self.app.client.chat_update(
-                        channel=self.context.channel_id,
-                        ts=self._current_input_message.data["ts"],
-                        text=confirm_blocks["text"],
-                        blocks=confirm_blocks["blocks"],
-                    )
-                    await request_with_retry(fn)
-                except:
-                    pass
+                # try:
+                #     # we need to update the current message instead of
+                #     # opening a new one.
+                #     fn = self.app.client.chat_update(
+                #         channel=self.context.channel_id,
+                #         ts=self._current_input_message.data["ts"],
+                #         text=confirm_blocks["text"],
+                #         blocks=confirm_blocks["blocks"],
+                #     )
+                #     await request_with_retry(fn)
+                # except:
+                #     pass
             # We don't have an open input message. Send a new one.
             self._current_input_message = await self.send_to_thread(
                 text=confirm_blocks["text"],
@@ -133,6 +133,15 @@ class SlackUIAgent(UIAgent):
             )
         else:
             raise ValueError("Invalid message type")
+
+    async def _cancel_input_request(self):
+        if self._current_input_message is not None:
+            fn = self.app.client.chat_delete(
+                channel=self.context.channel_id,
+                ts=self._current_input_message.data["ts"],
+            )
+            await request_with_retry(fn)
+            self._current_input_message = None
 
     async def _process(
         self,
@@ -171,6 +180,8 @@ class SlackUIAgent(UIAgent):
             )
 
         async def feed_in(message, say):
+            await self._cancel_input_request()
+            await self._input_callback(ManagerResponse(confirm=False))
             await self._input_callback(UserInstructions(content=message["text"]))
 
         # Button action handlers
