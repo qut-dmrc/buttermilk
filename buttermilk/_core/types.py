@@ -58,6 +58,7 @@ class SessionInfo(pydantic.BaseModel):
         arbitrary_types_allowed=True,
         populate_by_name=True,
     )
+    _get_ip_task: asyncio.Task
 
     save_dir_base: str = Field(
         default_factory=mkdtemp,
@@ -91,7 +92,7 @@ class SessionInfo(pydantic.BaseModel):
 
     @pydantic.model_validator(mode="after")
     def schedule_get_ip(self) -> Self:
-        asyncio.get_event_loop().create_task(self.get_ip())
+        self._get_ip_task = asyncio.get_event_loop().create_task(self.get_ip())
         return self
 
     async def get_ip(self):

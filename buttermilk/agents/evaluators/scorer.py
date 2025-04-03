@@ -14,7 +14,7 @@ from buttermilk.agents.llm import LLMAgent
 
 
 class LLMScorer(LLMAgent):
-    """Scores an LLM result against provided ground truth."""
+    """Qualitatively scores an LLM result against provided ground truth."""
 
     _ground_truth: dict = PrivateAttr(default={})
     _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
@@ -34,27 +34,32 @@ class LLMScorer(LLMAgent):
                     self._ground_truth = dict(record.ground_truth)
                     logger.debug(f"Scorer found ground truth: {self._ground_truth}")
 
-            # Identify and store JUDGE results
-            if message.agent_id and message.agent_id.startswith("JUDGE"):
-                logger.debug(f"Scorer tracking JUDGE result: {message.agent_id}")
+            if message.agent_id.startswith(self.id.split("-")[0]):
+                # Ignore messages from our own kind
+                return None
+
+            # Identify and store results with qualitative reasons fields
+            if self._ground_truth and "reasons" in message.outputs:
+                logger.debug(f"Scorer tracking result: {message.agent_id}")
                 self._judge_results.append(message)
 
                 # Score immediately if we have ground truth
-                if self._ground_truth and "reasons" in message.outputs:
-                    input_data = AgentInput(
-                        inputs={"answer": message, "expected": self._ground_truth},
-                    )
-                    score_output = await self._process(input_data)
+                input_data = AgentInput(
+                    role=self.name,
+                    source=self.id,
+                    inputs={"answer": message, "expected": self._ground_truth},
+                )
+                score_output = await self._process(input_data)
 
-                    if score_output and score_output.outputs:
-                        # Store scores for later reporting
-                        self._scores.append({
-                            "judge_id": message.agent_id,
-                            "score": score_output.outputs.get("score"),
-                            "explanation": score_output.outputs.get("explanation"),
-                        })
+                if score_output and score_output.outputs:
+                    # Store scores for later reporting
+                    self._scores.append({
+                        "judge_id": message.agent_id,
+                        "score": score_output.outputs.get("score"),
+                        "explanation": score_output.outputs.get("explanation"),
+                    })
 
-                    return score_output
+                return score_output
         return None
 
     async def _process(
