@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import regex as re
@@ -10,7 +11,7 @@ from jinja2 import (
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.defaults import TEMPLATE_PATHS
+from buttermilk._core.defaults import TEMPLATES_PATH
 from buttermilk._core.exceptions import FatalError
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
@@ -55,7 +56,7 @@ class KeyValueCollector(BaseModel):
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
     templates = list_files_with_content(
-        TEMPLATE_PATHS,
+        TEMPLATES_PATH,
         filename=pattern,
         parent=parent,
         extension=extension,
@@ -68,7 +69,7 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
     return [
         file_path.stem
         for file_path in list_files(
-            TEMPLATE_PATHS,
+            TEMPLATES_PATH,
             filename=pattern,
             parent=parent,
             extension=extension,
@@ -101,8 +102,8 @@ def load_template(
     """
     template = parameters["template"]
 
-    recursive_paths = TEMPLATE_PATHS + [
-        x for p in TEMPLATE_PATHS for x in p.rglob("*") if x.is_dir()
+    recursive_paths = [TEMPLATES_PATH] + [
+        p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()
     ]
     loader = FileSystemLoader(searchpath=recursive_paths)
 

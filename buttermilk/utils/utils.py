@@ -323,7 +323,7 @@ def chunks(l, n):
 
 
 def list_files(
-    directory: str | list[pathlib.Path],
+    directory: str | pathlib.Path | list[pathlib.Path],
     filename: str = "",
     extension: str = "",
     parent: str = "",
@@ -340,6 +340,8 @@ def list_files(
     """
     if isinstance(directory, str):
         dir_path = [pathlib.Path(directory)]
+    elif isinstance(directory, pathlib.Path):
+        dir_path = [directory]
     else:
         dir_path = [pathlib.Path(d) if isinstance(d, str) else d for d in directory]
 
@@ -361,7 +363,7 @@ def list_files(
 
 
 def list_files_with_content(
-    directory: str | list[pathlib.Path],
+    directory: str | pathlib.Path | list[pathlib.Path],
     filename: str = "",
     extension: str = "",
     parent: str = "",

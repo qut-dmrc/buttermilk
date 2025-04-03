@@ -23,14 +23,13 @@ code in other projects.
 import json
 import random
 from functools import cached_property
-from pathlib import Path
 from typing import Literal, TypeAlias, get_type_hints
 
 from pydantic import BaseModel
 
-BASE_DIR = Path(__file__).absolute()
+from buttermilk._core.defaults import TEMPLATES_PATH
 
-CHARACTERISTICS_FILE = BASE_DIR / "templates/image_prompt_limited_identities.json"
+CHARACTERISTICS_FILE = TEMPLATES_PATH / "image_prompt_limited_identities.json"
 
 
 class ProtectedCharacteristics(BaseModel):
