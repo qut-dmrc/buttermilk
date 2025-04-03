@@ -20,7 +20,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from buttermilk.toxicity.toxicity import _HF, ToxicityModel
 from buttermilk.utils.utils import read_yaml
 
-from ..types.tox import EvalRecord, Score
+from .types import EvalRecord, Score
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 

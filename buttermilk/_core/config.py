@@ -15,7 +15,7 @@ from pydantic import (
 )
 
 from buttermilk._core.types import SessionInfo
-from buttermilk.defaults import BQ_SCHEMA_DIR
+from buttermilk._core.defaults import BQ_SCHEMA_DIR
 
 BASE_DIR = Path(__file__).absolute().parent
 

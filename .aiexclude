@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+venv/
+.env/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Large data files
+*.csv
+*.json
+*.parquet
+*.sqlite
+*.db
+
+# Credentials and secrets
+.env
+.env.*
+*_key.json
+credentials.json
+secrets.*
+
+# Generated files
+*.min.js
+*.min.css
+*.lock
+package-lock.json
+yarn.lock
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Large binary files
+*.zip
+*.tar.gz
+*.jar
+*.war
+*.mp4
+*.png
+*.jpg

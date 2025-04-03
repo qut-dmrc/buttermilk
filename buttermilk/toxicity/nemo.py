@@ -4,7 +4,7 @@ from typing import Any, ClassVar, Literal
 import regex as re
 from promptflow.tracing import trace
 
-from buttermilk.llms import LLMs
+from buttermilk._core.llms import LLMs
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.utils import read_yaml
 

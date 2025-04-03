@@ -2,7 +2,7 @@ import pprint
 
 from buttermilk._core.contract import AgentOutput
 from buttermilk.agents.ui.formatting.slackblock import format_response
-from buttermilk.defaults import SLACK_MAX_MESSAGE_LENGTH
+from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
 
 
 def format_slack_reasons(result: AgentOutput) -> dict:

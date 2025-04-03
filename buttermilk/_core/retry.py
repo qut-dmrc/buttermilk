@@ -29,7 +29,7 @@ from tenacity import (
 )
 
 from buttermilk._core.log import logger
-from buttermilk.exceptions import RateLimit
+from buttermilk._core.exceptions import RateLimit
 
 
 class RetryWrapper(BaseModel):

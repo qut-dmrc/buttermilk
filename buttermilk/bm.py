@@ -43,7 +43,7 @@ except:
     pass
 
 from buttermilk._core.config import Project
-from buttermilk.llms import LLMs
+from buttermilk._core.llms import LLMs
 from buttermilk.utils.keys import SecretsManager
 from buttermilk.utils.utils import load_json_flexi
 

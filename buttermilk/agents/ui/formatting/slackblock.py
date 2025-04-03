@@ -6,7 +6,7 @@ import regex as re
 from pydantic import BaseModel
 
 from buttermilk._core.contract import AgentOutput
-from buttermilk.defaults import SLACK_MAX_MESSAGE_LENGTH
+from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
 
 
 def format_response(inputs) -> list[str]:

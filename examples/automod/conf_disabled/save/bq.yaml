@@ -1,3 +1,0 @@
-type: bq
-destination: dmrc-analysis.toxicity.flow
-schema: flow.json

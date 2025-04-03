@@ -1,5 +1,0 @@
-defaults:
- - ordinary
-judger:
-  init:
-    standards_path: criteria_ordinary.jinja2

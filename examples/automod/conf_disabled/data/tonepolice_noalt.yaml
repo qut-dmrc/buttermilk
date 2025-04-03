@@ -1,6 +1,0 @@
-defaults:
-  - tonepolice
-tonepolice:
-  name: tonepolice_noalt
-  columns:
-    content: text

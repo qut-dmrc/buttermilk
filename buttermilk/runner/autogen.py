@@ -39,7 +39,7 @@ from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
-from buttermilk.exceptions import FatalError, ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 
 
 class AutogenAgentAdapter(RoutedAgent):

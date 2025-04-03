@@ -21,9 +21,9 @@ from buttermilk._core.contract import (
     GroupchatMessages,
     ToolOutput,
 )
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
-from buttermilk.exceptions import ProcessingError
 from buttermilk.runner.helpers import create_tool_functions
 from buttermilk.tools.json_parser import ChatParser
 from buttermilk.utils.templating import (

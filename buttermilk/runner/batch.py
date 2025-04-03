@@ -15,7 +15,7 @@ from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.flow import Flow
 from buttermilk.data.recordmaker import RecordMakerDF
-from buttermilk.exceptions import FatalError
+from buttermilk._core.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.utils import expand_dict
 

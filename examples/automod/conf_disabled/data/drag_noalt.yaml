@@ -1,9 +1,0 @@
-
-- drag:
-  name: drag queens - no alt text
-  type: file
-  uri: gs://dmrc-platforms/data/drag_train.jsonl
-  columns:
-    record_id: id
-    content: text
-    groundtruth: expected

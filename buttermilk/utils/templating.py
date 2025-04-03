@@ -10,8 +10,8 @@ from jinja2 import (
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
-from buttermilk.defaults import TEMPLATE_PATHS
-from buttermilk.exceptions import FatalError
+from buttermilk._core.defaults import TEMPLATE_PATHS
+from buttermilk._core.exceptions import FatalError
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
 

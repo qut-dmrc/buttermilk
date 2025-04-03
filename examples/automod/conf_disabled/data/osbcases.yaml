@@ -1,6 +1,0 @@
-- name: osb all cases
-  _target_: buttermilk.data.RecordMakerCloudStorageFiles
-  type: plaintext
-  uri: gs://dmrc-platforms/data/osb/
-  glob: "*.md"
-  columns:

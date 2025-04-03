@@ -16,7 +16,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
-from buttermilk.llms import CHATMODELS
+from buttermilk._core.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import load_json_flexi

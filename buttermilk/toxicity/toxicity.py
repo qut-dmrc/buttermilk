@@ -45,7 +45,7 @@ from buttermilk import logger
 from buttermilk._core.job import Job
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
-from ..types.tox import EvalRecord, Score
+from .types import EvalRecord, Score
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 

@@ -18,7 +18,7 @@ from buttermilk._core.contract import (
     AllMessages,
     UserInstructions,
 )
-from buttermilk.exceptions import FatalError, ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk.utils.save import save
 
 

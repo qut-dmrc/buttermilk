@@ -17,7 +17,7 @@ from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSource
 from buttermilk._core.runner_types import Record
-from buttermilk.exceptions import FatalError
+from buttermilk._core.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,
     parse_flow_vars,
