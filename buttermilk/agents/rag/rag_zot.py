@@ -60,6 +60,11 @@ class RefResult(pydantic.BaseModel):
         )
 
 
+class QueryResults(pydantic.BaseModel):
+    query: str
+    results: list[RefResult]
+
+
 class RagZot(LLMAgent):
     """Retrieval Augmented Generation Agent that queries a vector store
     and fills a template with the results.
@@ -88,43 +93,19 @@ class RagZot(LLMAgent):
             dimensionality=self.dimensionality,
         ).collection
 
-        # Add search tool
+        # Add concurrent search tool
         search_tool = FunctionTool(
             name="search",
             description="Search for information in the knowledge base about a specific topic or question",
-            func=self.search_knowledge_base,
-        )
-
-        # Add concurrent search tool
-        concurrent_search_tool = FunctionTool(
-            name="concurrent_search",
-            description="Search for multiple topics concurrently to find relevant information",
-            func=self.concurrent_search,
+            func=self.search,
         )
 
         # Add tools to the agent
-        self._tools.extend([search_tool, concurrent_search_tool])
+        self._tools.extend([search_tool])
 
         return self
 
-    async def search_knowledge_base(self, query: str) -> list[RefResult]:
-        """Search the vector store for information about a specific query."""
-        if not query or not self._vectorstore:
-            return "No query provided or vector store not initialized."
-
-        try:
-            # Get the results
-            results = await self._query_db(
-                query=query,
-            )
-
-            return results
-
-        except Exception as e:
-            logger.error(f"Error searching vector store for '{query}': {e!s} {e.args=}")
-            raise
-
-    async def concurrent_search(self, queries: list[str]) -> list[RefResult]:
+    async def search(self, queries: list[str]) -> list[RefResult]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
             return "No queries provided or vector store not initialized."
@@ -137,13 +118,18 @@ class RagZot(LLMAgent):
             queries = queries[: self.max_queries]
 
         # Execute searches concurrently
-        search_tasks = [self.search_knowledge_base(query) for query in queries]
+        search_tasks = [
+            self._query_db(
+                query=query,
+            )
+            for query in queries
+        ]
         results = await asyncio.gather(*search_tasks)
 
         # Combine all results
-        return [result for sublist in results for result in sublist]
+        return results
 
-    async def _query_db(self, query: str) -> list[RefResult]:
+    async def _query_db(self, query: str) -> QueryResults:
         results = self._vectorstore.query(
             query_texts=[query],
             n_results=self.n_results * 4 if self.no_duplicates else self.n_results,
@@ -168,27 +154,4 @@ class RagZot(LLMAgent):
                     break
             records = output
 
-        return records
-
-    # async def _process(
-    #     self,
-    #     input_data: AgentInput,
-    #     cancellation_token: CancellationToken | None = None,
-    #     **kwargs,
-    # ) -> AgentOutput:
-    #     """Process the input by querying the vector store and filling the template."""
-    #     # Get the query from input
-    #     query = input_data.inputs.get("prompt", "")
-
-    #     if query and not input_data.inputs['rag']:
-    #         try:
-    #         # Query the vector store
-    #             results = await self._query_db(query)
-    #             input_data.inputs["rag"] = self._format_results(results)
-    #         except Exception as e:
-    #             logger.error(f"Error querying vector store: {e}")
-    #             input_data.inputs["rag"] = "Error retrieving relevant information."
-    #     else:
-    #         input_data.inputs["rag"] = []
-    #     # Call the parent's _process method to handle the template filling
-    #     return await super()._process(input_data, cancellation_token, **kwargs)
+        return QueryResults(query=query, results=records)

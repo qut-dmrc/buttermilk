@@ -6,7 +6,7 @@ from pydantic import PrivateAttr, model_validator
 
 from buttermilk._core.contract import CONDUCTOR, StepRequest
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk.runner.autogen import (
+from buttermilk.runner.groupchat import (
     AutogenOrchestrator,
 )
 

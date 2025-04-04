@@ -541,7 +541,8 @@ class ChromaDBEmbeddings(BaseModel):
                 )
                 try:
                     failed_doc_filename = (
-                        Path(FAILED_BATCH_DIR)
+                        bm.save_dir
+                        / Path(FAILED_BATCH_DIR)
                         / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     )
                     logger.info(
@@ -619,7 +620,8 @@ class ChromaDBEmbeddings(BaseModel):
             # Save the failed document for retry
             try:
                 failed_doc_filename = (
-                    Path(FAILED_BATCH_DIR)
+                    bm.save_dir
+                    / Path(FAILED_BATCH_DIR)
                     / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 )
                 logger.info(

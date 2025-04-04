@@ -14,8 +14,8 @@ from buttermilk._core.contract import MANAGER, FlowProtocol
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.runner.autogen import AutogenOrchestrator
 from buttermilk.runner.chat import Selector
+from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.simple import Sequencer
 
 orchestrators = [Sequencer, AutogenOrchestrator, Selector]

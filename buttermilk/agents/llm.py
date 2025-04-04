@@ -267,9 +267,21 @@ class LLMAgent(Agent):
                 calls=create_result.content,
                 cancellation_token=cancellation_token,
             )
-            records = outputs.pop("_records", [])
+            if isinstance(outputs, dict) and len(outputs.get("search", [])) > 0:
+                # run again, without tools this time
+                input_data.inputs["results"] = input_data.inputs.get(
+                    "results",
+                    [],
+                ) + outputs.get("search", [])
+                messages = await self.fill_template(
+                    inputs=input_data,
+                )
+                create_result = await self._model_client.create(
+                    messages=messages,
+                    cancellation_token=cancellation_token,
+                )
+            outputs = self._json_parser.parse(create_result.content)
             content = json.dumps(outputs, indent=2, sort_keys=True)
-
         metadata = {
             k: v
             for k, v in create_result.model_dump(

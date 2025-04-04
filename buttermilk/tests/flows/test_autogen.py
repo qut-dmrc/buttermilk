@@ -3,8 +3,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from buttermilk._core.agent import Agent, AgentConfig
-from buttermilk._core.contract import AgentInput, AgentOutput, UserInstructions
-from buttermilk.runner.autogen import CONDUCTOR, AutogenAgentAdapter
+from buttermilk._core.contract import (
+    CONDUCTOR,
+    AgentInput,
+    AgentOutput,
+    UserInstructions,
+)
+from buttermilk.libs.autogen import AutogenAgentAdapter
 
 
 @pytest.fixture
