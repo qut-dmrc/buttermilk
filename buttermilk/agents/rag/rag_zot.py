@@ -107,7 +107,7 @@ class RagZot(LLMAgent):
 
         return self
 
-    async def search_knowledge_base(self, query: str) -> str:
+    async def search_knowledge_base(self, query: str) -> list[RefResult]:
         """Search the vector store for information about a specific query."""
         if not query or not self._vectorstore:
             return "No query provided or vector store not initialized."
@@ -117,17 +117,14 @@ class RagZot(LLMAgent):
             results = await self._query_db(
                 query=query,
             )
-            results = await self._format_results(results)
 
-            return f"### Search Results for: '{query}'\n\n" + "\n\n".join(
-                results,
-            )
+            return results
 
         except Exception as e:
-            logger.error(f"Error searching vector store: {e}")
-            return f"Error searching for '{query}': {e!s}"
+            logger.error(f"Error searching vector store for '{query}': {e!s} {e.args=}")
+            raise
 
-    async def concurrent_search(self, queries: list[str]) -> str:
+    async def concurrent_search(self, queries: list[str]) -> list[RefResult]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
             return "No queries provided or vector store not initialized."
@@ -139,28 +136,17 @@ class RagZot(LLMAgent):
             )
             queries = queries[: self.max_queries]
 
-        try:
-            # Execute searches concurrently
-            search_tasks = [self.search_knowledge_base(query) for query in queries]
-            results = await asyncio.gather(*search_tasks)
+        # Execute searches concurrently
+        search_tasks = [self.search_knowledge_base(query) for query in queries]
+        results = await asyncio.gather(*search_tasks)
 
-            # Combine all results
-            combined_results = "\n\n".join(results)
-            return combined_results
-
-        except Exception as e:
-            logger.error(f"Error executing concurrent searches: {e}")
-            return f"Error executing concurrent searches: {e!s}"
-
-    async def _format_results(self, results: list[RefResult]) -> str:
-        # Format results for template
-        formatted_results = "\n\n".join([str(r) for r in results])
-        return formatted_results
+        # Combine all results
+        return [result for sublist in results for result in sublist]
 
     async def _query_db(self, query: str) -> list[RefResult]:
         results = self._vectorstore.query(
             query_texts=[query],
-            n_results=self.n_results if self.no_duplicates else self.n_results * 4,
+            n_results=self.n_results * 4 if self.no_duplicates else self.n_results,
             include=[
                 "documents",
                 "metadatas",

@@ -3,7 +3,6 @@ defaults:
   - agents@simple.agents: 
     - manager
     - host
-    - analyst
     - ragzot
 
 data:

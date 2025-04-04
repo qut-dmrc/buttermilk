@@ -192,6 +192,10 @@ class LLMAgent(Agent):
                 continue
             if r.payload and isinstance(r.payload, Record):
                 outputs["_records"].append(r.payload)
+            elif r.name in outputs:
+                if not isinstance(outputs[r.name], list):
+                    outputs[r.name] = [outputs[r.name]]
+                outputs[r.name].append(r.content)
             else:
                 outputs[r.name] = r.content
 
@@ -264,7 +268,7 @@ class LLMAgent(Agent):
                 cancellation_token=cancellation_token,
             )
             records = outputs.pop("_records", [])
-            content = str(outputs)
+            content = json.dumps(outputs, indent=2, sort_keys=True)
 
         metadata = {
             k: v
