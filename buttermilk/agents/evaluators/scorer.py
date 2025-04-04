@@ -20,12 +20,12 @@ class LLMScorer(LLMAgent):
     _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
     _scores: list[dict[str, Any]] = PrivateAttr(default_factory=list)
 
-    async def receive_output(
+    async def on_messages(
         self,
-        message: AllMessages,
-        **kwargs,
-    ) -> AgentOutput | None:
-        """Process outputs from JUDGE agents and score them against ground truth."""
+        message: Sequence[AllMessages],
+        cancellation_token: CancellationToken,
+    ) -> AsyncGenerator[AllMessages, None]:
+        """Process outputs from other agents and score them against ground truth."""
         # Collect records fields with ground truth components
         if isinstance(message, AgentOutput):
             # Store ground truth from records

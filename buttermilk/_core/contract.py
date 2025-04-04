@@ -3,11 +3,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Union
 
+from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage  # noqa
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
     BaseModel,
     Field,
-    computed_field,
     field_validator,
 )
 
@@ -59,10 +59,9 @@ class StepRequest(BaseModel):
 ######
 # Communication between Agents
 #
-class FlowMessage(BaseModel):
+class FlowMessage(BaseChatMessage):
     """A base class for all conversation messages."""
 
-    _type = "GenericFlowMessage"
     content: str | None = Field(
         default=None,
         description="The human-readable digest representation of the message.",
@@ -95,13 +94,8 @@ class FlowMessage(BaseModel):
         make_list_validator(),
     )
 
-    @computed_field
-    @property
-    def type(self) -> str:
-        return self._type
 
-
-class AgentInput(FlowMessage):
+class AgentInput(BaseChatMessage):
     """Base class for agent inputs with built-in validation"""
 
     _type = "InputRequest"

@@ -18,7 +18,9 @@ class UIAgent(Agent):
     _trace_this = False
 
     async def _request_user_input(
-        self, message: ManagerRequest, **kwargs
+        self,
+        message: ManagerRequest,
+        **kwargs,
     ) -> str | None:
         """Get user input from the UI"""
         raise NotImplementedError
@@ -45,7 +47,7 @@ class UIAgent(Agent):
             return None
         if isinstance(message, ManagerMessage):
             # Just output these messages to the UI
-            await self.receive_output(message)
+            await self.on_messages([message])
             return None
         raise ValueError(f"Unknown message type: {type(message)}")
 

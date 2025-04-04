@@ -8,7 +8,6 @@ from buttermilk._core.agent import Agent, ToolConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    GroupchatMessages,
     UserInstructions,
 )
 from buttermilk._core.runner_types import Record
@@ -81,11 +80,12 @@ class Fetch(Agent, ToolConfig):
 
         return None
 
-    async def receive_output(
+    async def on_messages(
         self,
-        message: GroupchatMessages,
+        message: Sequence[AllMessages],
+        cancellation_token: CancellationToken,
         **kwargs,
-    ) -> GroupchatMessages | None:
+    ) -> AsyncGenerator[AllMessages, None]:
         """Watch for URLs or record ids and inject them into the chat."""
         if not isinstance(message, UserInstructions):
             return None
@@ -95,7 +95,7 @@ class Fetch(Agent, ToolConfig):
         if uri := match[2]:
             record = await download_and_convert(uri=uri)
         else:
-            # Try to get by record_id (remove bang! first)
+            # Try to get by record_id (remove bang! first if necessary)
             record = await self.get_record_dataset(match[1]).strip("!")
 
         if record:

@@ -1,9 +1,27 @@
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from typing import Any, Self
 
 import pydantic
 import weave
+from autogen_agentchat.base import Response
+from autogen_agentchat.messages import (  # noqa
+    BaseAgentEvent,
+    BaseChatMessage,
+    ChatMessage,
+    HandoffMessage,
+    MultiModalMessage,
+    StopMessage,
+    TextMessage,
+    ToolCallExecutionEvent,
+    ToolCallRequestEvent,
+    ToolCallSummaryMessage,
+    UserInputRequestedEvent,
+)
+from autogen_core import CancellationToken
+from autogen_core.model_context import (
+    UnboundedChatCompletionContext,
+)
 from pydantic import (
     BaseModel,
     Field,
@@ -11,15 +29,13 @@ from pydantic import (
 )
 
 from buttermilk import logger
-from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.config import DataSource
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    AllMessages,
     UserInstructions,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk.utils.save import save
 
 
 class ToolConfig(BaseModel):
@@ -94,6 +110,10 @@ class Agent(AgentConfig, ABC):
     _trace_this = True
     _run_fn: Callable | Awaitable = PrivateAttr()
 
+    _model_context: UnboundedChatCompletionContext = PrivateAttr(
+        default_factory=UnboundedChatCompletionContext,
+    )
+
     @pydantic.model_validator(mode="after")
     def _get_process_func(self) -> Self:
         """Returns the appropriate processing function based on tracing setting."""
@@ -106,17 +126,56 @@ class Agent(AgentConfig, ABC):
         self._run_fn = _process_fn()
         return self
 
-    # @workflow(name="run_agent")
-    # @trace
+    @property
+    def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
+        return (BaseChatMessage, MultiModalMessage)
+
+    async def on_messages(
+        self,
+        messages: Sequence[BaseChatMessage],
+        cancellation_token: CancellationToken,
+    ) -> Response:
+        final_response = None
+        async for message in self.on_messages_stream(messages, cancellation_token):
+            if isinstance(message, Response):
+                final_response = message
+
+        if final_response is not None:
+            return final_response
+        raise AssertionError("The stream should have returned the final result.")
 
     @abstractmethod
-    async def receive_output(
+    async def on_messages_stream(
         self,
-        message: AllMessages,
-        **kwargs,
-    ) -> AllMessages | None:
-        """Log data or send output to the user interface"""
-        raise NotImplementedError
+        messages: Sequence[BaseChatMessage],
+        cancellation_token: CancellationToken,
+    ) -> AsyncGenerator[BaseAgentEvent | BaseChatMessage, None]:
+        # Add messages to the model context
+        for msg in messages:
+            await self._model_context.add_message(msg.to_model_message())
+
+        # inputs = AgentIntput(...)
+        response = await self._process(input_data=inputs)
+        # # Create usage metadata
+        # usage = RequestUsage(
+        #     prompt_tokens=response.usage_metadata.prompt_token_count,
+        #     completion_tokens=response.usage_metadata.candidates_token_count,
+        # )
+
+        # # Add response to model context
+        # await self._model_context.add_message(
+        #     AssistantMessage(content=response.text, source=self.name),
+        # )
+
+        # # Yield the final response
+        # yield Response(
+        #     chat_message=TextMessage(
+        #         content=response.text,
+        #         source=self.name,
+        #         models_usage=usage,
+        #     ),
+        #     inner_messages=[],
+        # )
 
     @abstractmethod
     async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
@@ -157,17 +216,5 @@ class Agent(AgentConfig, ABC):
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent"""
 
-
-def save_job(job: "Job", save_info: SaveInfo) -> str:
-    rows = [job.model_dump(mode="json", exclude_none=True)]
-    if save_info.type == "bq":
-        dest = save(
-            data=rows,
-            dataset=save_info.dataset,
-            schema=save_info.db_schema,
-            save_dir=save_info.destination,
-        )
-    else:
-        dest = save(data=rows, save_dir=save_info.destination)
-
-    return dest
+    async def on_reset(self, cancellation_token: CancellationToken) -> None:
+        pass

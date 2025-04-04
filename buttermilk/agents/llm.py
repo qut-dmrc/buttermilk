@@ -70,7 +70,7 @@ class LLMAgent(Agent):
         self._tools = create_tool_functions(self.tools)
         return self
 
-    async def receive_output(
+    async def on_messages(
         self,
         message: AllMessages,
         **kwargs,

@@ -1,8 +1,10 @@
 import asyncio
+from collections.abc import Sequence
 from typing import Any
 
 import regex as re
 from aioconsole import ainput
+from autogen_core import CancellationToken
 from pydantic import PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
@@ -10,7 +12,7 @@ from rich.markdown import Markdown
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
-    GroupchatMessages,
+    AllMessages,
     ManagerRequest,
     ManagerResponse,
     UserInstructions,
@@ -21,16 +23,17 @@ from buttermilk.agents.ui.generic import UIAgent
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
 
-    async def receive_output(
+    async def on_messages(
         self,
-        message: GroupchatMessages,
-        **kwargs,
-    ) -> None:
+        messages: Sequence[AllMessages],
+        cancellation_token: CancellationToken,
+    ) -> AsyncGenerator[AllMessages, None]:
         """Send output to the user interface"""
-        if isinstance(message, UserInstructions):
-            return
-        console = Console(highlight=True)
-        console.print(message.content)
+        for message in messages:
+            if isinstance(message, UserInstructions):
+                continue
+            console = Console(highlight=True)
+            console.print(message.content)
 
     async def _process(
         self,

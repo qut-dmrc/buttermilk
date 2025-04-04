@@ -53,7 +53,7 @@ class Sequencer(Orchestrator):
                 result = await agent(step_inputs)
                 # await self.store_results(step=variant.name, result=result)
 
-                await self._manager.receive_output(result)
+                await self._manager.on_messages([result])
 
             prompt = await self._manager._request_user_input(
                 ManagerRequest(content="Proceed to next step?", confirm=True),

@@ -35,11 +35,11 @@ from buttermilk._core.contract import (
     StepRequest,
     UserInstructions,
 )
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.agents.flowcontrol.types import HostAgent
 from buttermilk.agents.ui.console import UIAgent
 from buttermilk.bm import bm, logger
-from buttermilk._core.exceptions import FatalError, ProcessingError
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -166,7 +166,7 @@ class AutogenAgentAdapter(RoutedAgent):
             # if ctx and ctx.sender else message.type
             # ignore messages sent by us
             if source != self.id:
-                response = await self.agent.receive_output(message)
+                response = await self.agent.on_messages([message])
                 if response:
                     await self.publish_message(
                         response,

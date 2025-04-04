@@ -10,7 +10,6 @@ from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    GroupchatMessages,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
@@ -68,19 +67,21 @@ class SlackUIAgent(UIAgent):
             **kwargs,
         )
 
-    async def receive_output(
+    async def on_messages(
         self,
-        message: GroupchatMessages,
+        messages: Sequence[AllMessages],
+        cancellation_token: CancellationToken,
         **kwargs,
-    ) -> None:
+    ) -> AsyncGenerator[AllMessages, None]:
         """Send output to the Slack thread"""
-        if isinstance(message, AgentOutput | AgentInput):
-            try:
-                formatted_blocks = format_slack_message(message)
-                await self.send_to_thread(**formatted_blocks)
-            except Exception as e:  # noqa
-                _fn_debug_blocks(message)
-                await self.send_to_thread(text=message.content)
+        for message in messages:
+            if isinstance(message, AgentOutput | AgentInput):
+                try:
+                    formatted_blocks = format_slack_message(message)
+                    await self.send_to_thread(**formatted_blocks)
+                except Exception as e:  # noqa
+                    _fn_debug_blocks(message)
+                    await self.send_to_thread(text=message.content)
 
     async def _request_user_input(
         self,
