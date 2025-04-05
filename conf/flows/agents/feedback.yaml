@@ -1,6 +1,6 @@
 feedback:
   id: FEEDBACK
-  name: "Feedback"
+  role: "Feedback"
   agent_obj: LLMAgent
   num_runs: 1
   description: Checks for any concerns with the discussion so far.

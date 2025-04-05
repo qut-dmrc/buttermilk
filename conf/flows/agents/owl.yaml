@@ -1,6 +1,6 @@
 owl:
   id: OWLS
-  name: "🦉 Owl"
+  role: "🦉 Owl"
   description: They will speak up if needed. You don't need to call on them.
   agent_obj: LLMAgent
   num_runs: 1

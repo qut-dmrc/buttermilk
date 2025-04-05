@@ -8,6 +8,10 @@ import requests
 # import selenium.common.exceptions
 import urllib3
 from pydantic import PrivateAttr
+from tenacity import (
+    retry,
+    stop_after_attempt,
+)
 
 from buttermilk._core.agent import Agent
 

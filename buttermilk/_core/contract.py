@@ -134,6 +134,10 @@ class ManagerMessage(BaseModel):
     """
 
     _type = "ManagerMessage"
+    content: str | None = Field(
+        default=None,
+        description="The human-readable digest representation of the message.",
+    )
 
 
 class ConductorRequest(ManagerMessage, AgentInput):

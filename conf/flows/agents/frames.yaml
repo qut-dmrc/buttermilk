@@ -1,6 +1,6 @@
 frames:
   id: FRAMES
-  name: "👓 Frames"
+  role: "👓 Frames"
   description: Expert analysts who will specifically (and only) identify the FRAMING of a piece of content.
   agent_obj: LLMAgent
   num_runs: 1

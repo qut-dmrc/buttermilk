@@ -33,8 +33,11 @@ def main(cfg: OrchestratorProtocol) -> None:
     match objs.ui:
         case "console":
             flow_name = cfg.flow
-            orchestrator_name = objs.flows[flow_name].pop("orchestrator")
-            orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+            orchestrator_name = objs.flows[flow_name].pop("orchestrator", None)
+            if orchestrator_name:
+                orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+            else:
+                orchestrator = AutogenOrchestrator(**objs.flows[flow_name])
             asyncio.run(orchestrator.run())
         case "slackbot":
             bm.logger.info("Slackbot starting...")

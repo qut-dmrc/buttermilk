@@ -1,62 +1,108 @@
 
-from typing import Self
+import asyncio
+from collections.abc import AsyncGenerator
+from typing import Any
 
-import shortuuid
-from pydantic import PrivateAttr, model_validator
+from pydantic import (
+    PrivateAttr,
+)
 
-from buttermilk._core.agent import Agent
-from buttermilk._core.contract import ManagerRequest, StepRequest
-from buttermilk._core.orchestrator import Orchestrator
-from buttermilk.agents.ui.generic import UIAgent
+from buttermilk._core.contract import (
+    FlowMessage,
+    ManagerMessage,
+    ManagerRequest,
+    StepRequest,
+)
+from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk.bm import logger
+from buttermilk.runner.groupchat import AutogenOrchestrator
 
 
-class Sequencer(Orchestrator):
-    _agents: dict[str, list[Agent]] = PrivateAttr(default_factory=dict)
-    _records: list = PrivateAttr(default_factory=list)
-    _manager: UIAgent
-    #  something like
-    # _manager = CLIUserAgent(id=MANAGER, name="Manager",
-    #   description="Console human interface", _input_task=None)
+class Sequencer(AutogenOrchestrator):
+    _step_generator = PrivateAttr(default=None)
 
-    @model_validator(mode="after")
-    def _register_agents(self) -> Self:
+    async def run(self, request: Any = None) -> None:
+        """Main execution method that sets up agents and manages the flow"""
+        try:
+            # Setup autogen runtime environment
+            await self._setup_runtime()
+            self._step_generator = self._get_next_step()
 
-        roles: list[dict[str, str]] = []
-        for step_name, variant_cfg in self.agents.items():
-            step_agents = []
-            for agent_cls, variant in variant_cfg.get_configs():
-                agent_cfg = variant.model_dump()
-                agent_cfg["id"] = f"{step_name}-{shortuuid.uuid()[:6]}"
-
-                step_agents.append(agent_cls(**agent_cfg))
-            self._agents[step_name] = step_agents
-            roles.append({"role": step_name, "description": variant_cfg.description})
-
-        self._flow_data.add(key="participants", value=roles)
-        return self
-
-    async def run(self, request=None) -> None:
-        if not (prompt := request):
-            input_req = ManagerRequest(
-                content="Enter your prompt or record info...",
+            # start the agents
+            await self._runtime.publish_message(
+                FlowMessage(agent_id=self.flow_name, agent_role="orchestrator"),
+                topic_id=self._topic,
             )
-            prompt = await self._manager._request_user_input(message=input_req)
+            await asyncio.sleep(1)
 
-        for step_name, agent_list in self._agents.items():
-            step_request = StepRequest(
-                role=step_name,
-                prompt=prompt,
-                source=self.flow_name,
+            # First, introduce ourselves, and prompt the user for input
+            await self._send_ui_message(
+                ManagerRequest(
+                    role=self.flow_name,
+                    content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
+                ),
             )
-            step_inputs = await self._prepare_step(step_request)
-            for agent in agent_list:
-                result = await agent(step_inputs)
-                # await self.store_results(step=variant.name, result=result)
+            if not await self._user_confirmation.get():
+                await self._send_ui_message(
+                    ManagerMessage(content="OK, shutting down thread."),
+                )
+                return
 
-                await self._manager.receive_output(result)
+            while True:
+                try:
+                    # Get next step from our CONDUCTOR agent
+                    step = await anext(self._step_generator)
 
-            prompt = await self._manager._request_user_input(
-                ManagerRequest(content="Proceed to next step?", confirm=True),
-            )
-            if not prompt:
-                break
+                    # For now, ALWAYS get confirmation from the user (MANAGER) role
+                    confirm_step = ManagerRequest(
+                        role=self.flow_name,
+                        content="Here's my proposed next step. Do you want to proceed?",
+                        inputs=step.arguments,
+                    )
+                    confirm_step.inputs["prompt"] = step.prompt
+                    confirm_step.inputs["description"] = step.description
+
+                    await self._send_ui_message(confirm_step)
+                    if not await self._user_confirmation.get():
+                        # User did not confirm plan; go back and get new instructions
+                        continue
+                    # Run next step
+                    await self._execute_step(step)
+
+                except StopAsyncIteration:
+                    logger.info("AutogenOrchestrator.run: Flow completed.")
+                    break
+                except ProcessingError as e:
+                    logger.error(f"Error in AutogenOrchestrator.run: {e}")
+                except FatalError:
+                    raise
+                except Exception as e:  # This is only here for debugging for now.
+                    logger.exception(f"Error in AutogenOrchestrator.run: {e}")
+
+                await asyncio.sleep(0.1)
+
+        except FatalError as e:
+            logger.exception(f"Error in AutogenOrchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()
+
+    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
+        """Determine the next step based on the current flow data.
+
+        This generator yields a series of steps to be executed in sequence,
+        with each step containing the role and prompt information.
+
+        Yields:
+            StepRequest: An object containing:
+                - 'role' (str): The agent role/step name to execute
+                - 'prompt' (str): The prompt text to send to the agent
+                - Additional key-value pairs that might be needed for agent execution
+
+        Example:
+            >>> async for step in self._get_next_step():
+            >>>     await self._execute_step(**step)
+
+        """
+        for step_name in self.agents.keys():
+            yield StepRequest(role=step_name, source=self.flow_name)

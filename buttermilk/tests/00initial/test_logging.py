@@ -42,10 +42,10 @@ def test_debug(capsys, logger_new):
 
 @pytest.fixture
 def cloud_logging_client_gcs(bm: BM):
-    return google.cloud.logging.Client(project=bm.cfg.clouds[0].project)
+    return google.cloud.logging.Client(project=bm._gcp_project)
 
 
-def test_info(capsys, cloud_logging_client_gcs, logger_new, bm):
+def test_info(capsys, cloud_logging_client_gcs, logger_new):
     logger_new.info(LOG_TEXT)
     captured = capsys.readouterr()
     assert LOG_TEXT in captured.err

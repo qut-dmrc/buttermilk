@@ -1,6 +1,6 @@
 evaluator:
   id: EVALUATORS
-  name: "📊 Evaluator"
+  role: "📊 Evaluator"
   agent_obj: LLMAgent
   num_runs: 1
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).

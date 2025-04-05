@@ -68,7 +68,7 @@ class AgentVariants(AgentConfig):
     Example:
     ```yaml
     - id: ANALYST
-      name: "Analyst"
+      role: "Analyst"
       agent_obj: LLMAgent
       num_runs: 2  # Creates 2 instances
       variants:
@@ -76,7 +76,6 @@ class AgentVariants(AgentConfig):
       inputs:
         history: history
     ```
-
     """
 
     num_runs: int = Field(

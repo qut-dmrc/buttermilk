@@ -14,6 +14,8 @@ class TestFetch:
 
     @pytest.fixture
     def mock_fetch(self):
+        # actually, don't.
+        return Fetch(id="test_fetch", role="fetch", description="test only")
         """Create a mock Fetch instance without dealing with initialization."""
         with patch.object(Fetch, "__init__", return_value=None):
             agent = Fetch()

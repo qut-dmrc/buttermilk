@@ -6,12 +6,12 @@ from pydantic import PrivateAttr, model_validator
 
 from buttermilk._core.contract import CONDUCTOR, StepRequest
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk.runner.groupchat import (
-    AutogenOrchestrator,
+from buttermilk.runner.simple import (
+    Sequencer,
 )
 
 
-class Selector(AutogenOrchestrator):
+class Selector(Sequencer):
     _participants: list = PrivateAttr(default_factory=list)
 
     @model_validator(mode="after")

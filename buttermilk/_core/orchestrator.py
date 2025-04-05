@@ -1,4 +1,3 @@
-import copy
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -152,11 +151,7 @@ class Orchestrator(BaseModel, ABC):
             request: Optional input data for starting the flow
 
         """
-        self._flow_data = copy.deepcopy(self.data)  # process if needed
-        # add request data
-        # ...
-        for step_name, step in self.agents.items():
-            self._flow_data[step_name] = await step(self._flow_data)
+        # loop
 
         # save the results
         # flow_data ...

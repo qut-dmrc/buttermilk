@@ -2,16 +2,11 @@ defaults:
   - _self_
   - agents@simple.agents: 
     - manager
-    - host
     - ragzot
 
 data:
   
 simple:
   flow_name: simple
-  orchestrator: Selector
-  description: Mixture of Agents directed chat
+  description: Mixture of Agents undirected whole group chat
   agents:
-  params:
-    task: >
-      The MANAGER has called us together for a conversation. We should help them answer thoroughly and reliably. You are the HOST.

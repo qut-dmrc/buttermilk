@@ -1,6 +1,6 @@
 scorer:
   id: SCORERS
-  name: "📊 Scorer"
+  role: "📊 Scorer"
   agent_obj: LLMScorer
   num_runs: 1
   description: Checks and scores answers against our expected ground truth.

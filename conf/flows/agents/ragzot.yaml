@@ -1,6 +1,6 @@
 ragzot:
   id: RESEARCHER
-  name: "🧑‍💻 Researcher"
+  role: "🧑‍💻 Researcher"
   agent_obj: RagZot
   description: a careful research assistant that provides relevant information from an academic knowledge base.
   variants:
