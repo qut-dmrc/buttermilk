@@ -2,9 +2,9 @@ import hydra
 import pytest
 from pytest import MarkDecorator
 
+from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import BM
-from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
@@ -13,7 +13,7 @@ from buttermilk.utils.utils import read_file
 def objs():
     from hydra import compose, initialize
 
-    with initialize(version_base=None, config_path="../conf"):
+    with initialize(version_base=None, config_path="../../conf"):
         cfg = compose(config_name="testing")
     # Hydra will automatically instantiate the objects
     objs = hydra.utils.instantiate(cfg)

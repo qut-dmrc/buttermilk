@@ -33,7 +33,7 @@ def slack_app():
                 {"user": "U123", "text": "Hello"},
                 {"user": "bot", "text": "Hi there!"},
             ],
-        }
+        },
     )
     app.message = MagicMock(return_value=lambda f: f)
     app.action = MagicMock(return_value=lambda f: f)
@@ -45,7 +45,7 @@ def slack_ui_agent(slack_app, slack_context):
     """Create a SlackUIAgent with mocked dependencies."""
     agent = SlackUIAgent(
         id="test_agent",
-        name="Test Agent",
+        role="Test Agent",
         description="Test agent for Slack",
     )
     agent.app = slack_app
@@ -59,12 +59,13 @@ async def test_slack_ui_agent_initialization(slack_ui_agent):
     input_callback = AsyncMock()
 
     with patch(
-        "buttermilk.agents.ui.slackthreadchat.register_chat_thread_handler"
+        "buttermilk.agents.ui.slackthreadchat.register_chat_thread_handler",
     ) as mock_register:
         await slack_ui_agent.initialize(input_callback=input_callback)
 
     mock_register.assert_called_once_with(
-        slack_ui_agent.context.thread_ts, slack_ui_agent
+        slack_ui_agent.context.thread_ts,
+        slack_ui_agent,
     )
     assert slack_ui_agent._input_callback == input_callback
 
@@ -96,11 +97,13 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     )
 
     with patch(
-        "buttermilk.agents.ui.slackthreadchat.format_slack_message"
+        "buttermilk.agents.ui.slackthreadchat.format_slack_message",
     ) as mock_format:
         mock_format.return_value = {"text": "Formatted text", "blocks": []}
         with patch.object(
-            slack_ui_agent, "send_to_thread", new_callable=AsyncMock
+            slack_ui_agent,
+            "send_to_thread",
+            new_callable=AsyncMock,
         ) as mock_send:
             await slack_ui_agent.receive_output(message)
 
@@ -118,11 +121,13 @@ async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     )
 
     with patch(
-        "buttermilk.agents.ui.slackthreadchat.format_slack_message"
+        "buttermilk.agents.ui.slackthreadchat.format_slack_message",
     ) as mock_format:
         mock_format.side_effect = Exception("Formatting error")
         with patch.object(
-            slack_ui_agent, "send_to_thread", new_callable=AsyncMock
+            slack_ui_agent,
+            "send_to_thread",
+            new_callable=AsyncMock,
         ) as mock_send:
             await slack_ui_agent.receive_output(message)
 
@@ -141,7 +146,9 @@ async def test_request_user_input_boolean(slack_ui_agent):
     with patch("buttermilk.agents.ui.slackthreadchat.confirm_bool") as mock_confirm:
         mock_confirm.return_value = {"text": "Confirm?", "blocks": []}
         with patch.object(
-            slack_ui_agent, "send_to_thread", new_callable=AsyncMock
+            slack_ui_agent,
+            "send_to_thread",
+            new_callable=AsyncMock,
         ) as mock_send:
             mock_send.return_value = MagicMock(data={"ts": "message_ts"})
             await slack_ui_agent._request_user_input(message)
@@ -163,7 +170,9 @@ async def test_request_user_input_options_list(slack_ui_agent):
     with patch("buttermilk.agents.ui.slackthreadchat.confirm_options") as mock_confirm:
         mock_confirm.return_value = {"text": "Choose:", "blocks": []}
         with patch.object(
-            slack_ui_agent, "send_to_thread", new_callable=AsyncMock
+            slack_ui_agent,
+            "send_to_thread",
+            new_callable=AsyncMock,
         ) as mock_send:
             mock_send.return_value = MagicMock(data={"ts": "message_ts"})
             await slack_ui_agent._request_user_input(message)
@@ -201,12 +210,14 @@ async def test_update_existing_input_message(slack_ui_agent):
 async def test_process_method(slack_ui_agent):
     """Test the _process method that handles agent input."""
     input_data = AgentInput(
-        role="test",
+        agent_role="test",
         content="Test input",
     )
 
     with patch.object(
-        slack_ui_agent, "_request_user_input", new_callable=AsyncMock
+        slack_ui_agent,
+        "_request_user_input",
+        new_callable=AsyncMock,
     ) as mock_request:
         result = await slack_ui_agent._process(input_data)
 

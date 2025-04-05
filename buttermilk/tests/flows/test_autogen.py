@@ -77,7 +77,7 @@ async def test_agent_adapter_init_with_config():
 @pytest.mark.asyncio
 async def test_agent_adapter_process_request(agent_adapter):
     """Test process_request method."""
-    message = AgentInput(role="test", content="test input")
+    message = AgentInput(agent_role="test", content="test input")
 
     # Non-conductor agent (publishes message)
     with patch.object(agent_adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
@@ -110,7 +110,7 @@ async def test_agent_adapter_process_request_conductor():
     # Set ID to be a conductor
     adapter.id.type = f"{CONDUCTOR}-test"
 
-    message = AgentInput(role="test", content="test input")
+    message = AgentInput(agent_role="test", content="test input")
 
     # Conductor agent (doesn't publish message)
     with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:

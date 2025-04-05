@@ -4,7 +4,7 @@ authors = [
     {name = "Nicolas Suzor", email = "nic@suzor.com"},
 ]
 name = "buttermilk"
-version = "0.2.1"
+version = "0.3.1"
 description = ""
 readme = "README.md"
 dependencies = [
@@ -196,6 +196,7 @@ addopts = [
     "--tb=line",
     "--show-capture=no",
     "--disable-warnings",
+    "-m not integration",
     ]
 
 #    "--no-summary",

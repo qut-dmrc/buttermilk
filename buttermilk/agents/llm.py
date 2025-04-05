@@ -43,7 +43,7 @@ class LLMAgent(Agent):
     _model_client: ChatCompletionClient = PrivateAttr()
 
     @pydantic.model_validator(mode="after")
-    def custom_agent_name(self) -> Self:
+    def custom_agent_id(self) -> Self:
         # Set a custom name based on our major parameters
         components = self.id.split("-")
         components.extend([
@@ -251,7 +251,7 @@ class LLMAgent(Agent):
             logger.warning(error_msg)
             return AgentOutput(
                 agent_id=self.id,
-                agent_name=self.name,
+                agent_role=self.role,
                 content=error_msg,
                 error=error_msg,
                 metadata=dict(self.parameters),
@@ -293,7 +293,7 @@ class LLMAgent(Agent):
         metadata.update(self.parameters)
         output = AgentOutput(
             agent_id=self.id,
-            agent_name=self.name,
+            agent_role=self.role,
             outputs=outputs,
             content=content,
             metadata=metadata,

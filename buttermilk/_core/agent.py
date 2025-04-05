@@ -56,9 +56,9 @@ class AgentConfig(BaseModel):
         ...,
         description="The unique name of this agent.",
     )
-    name: str = Field(
+    role: str = Field(
         ...,
-        description="A human-readable name for this agent.",
+        description="The role that this agent fulfils.",
     )
     description: str = Field(
         ...,
@@ -136,7 +136,7 @@ class Agent(AgentConfig, ABC):
         message: Any,
     ) -> None:
         """Most agents don't deal with control messages."""
-        logger.debug(f"Agent {self.id} {self.name} dropping control message: {message}")
+        logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
 
     async def __call__(
         self,
@@ -148,7 +148,7 @@ class Agent(AgentConfig, ABC):
             return await self._run_fn(input_data, **kwargs)
         except ProcessingError as e:
             logger.error(
-                f"Agent {self.id} {self.name} hit error: {e}. Task content: {input_data.content[:100]}",
+                f"Agent {self.id} {self.role} hit error: {e}. Task content: {input_data.content[:100]}",
             )
             return None
         except FatalError as e:

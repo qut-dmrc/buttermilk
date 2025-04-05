@@ -22,7 +22,7 @@ class Citator(BaseModel):
     def _init_agent(self) -> Self:
         self._agent = LLMAgent(
             id="citator",
-            name="Citator",
+            role="Citator",
             description="Gets citation information from the first page or two.",
             parameters={"template": "citator", "model": self.model},
             inputs={"text_extract": "text_extract"},
@@ -35,8 +35,8 @@ class Citator(BaseModel):
             # Take the first N characters for citation generation
             citation_text = item.full_text[:CITATION_TEXT_CHAR_LIMIT]
             input_data = AgentInput(
-                role="citator",
-                source="Citator",
+                agent_role="citator",
+                agent_id="Citator",
                 inputs={"text_extract": citation_text},
             )
             result = await self._agent(input_data, **kwargs)

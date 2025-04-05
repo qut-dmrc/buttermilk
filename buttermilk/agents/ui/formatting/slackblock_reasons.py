@@ -1,8 +1,8 @@
 import pprint
 
 from buttermilk._core.contract import AgentOutput
-from buttermilk.agents.ui.formatting.slackblock import format_response
 from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
+from buttermilk.agents.ui.formatting.slackblock import format_response
 
 
 def format_slack_reasons(result: AgentOutput) -> dict:
@@ -11,7 +11,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
     result_copy = result.model_copy(deep=True)
 
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result_copy.agent_name} {result_copy.metadata.get('model')}"
+    header_text = f"Model: :robot_face: {result_copy.agent_role} {result_copy.metadata.get('model')}"
     blocks.append({
         "type": "header",
         "text": {

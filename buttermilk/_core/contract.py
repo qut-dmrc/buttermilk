@@ -62,7 +62,16 @@ class StepRequest(BaseModel):
 class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
-    _type = "GenericFlowMessage"
+    _type = "FlowMessage"
+
+    agent_id: str = Field(
+        ...,
+        description="The ID of the agent that generated this output.",
+    )
+    agent_role: str = Field(
+        ...,
+        description="The role of the agent that generated this output.",
+    )
     content: str | None = Field(
         default=None,
         description="The human-readable digest representation of the message.",
@@ -105,14 +114,6 @@ class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
     _type = "InputRequest"
-    role: str = Field(
-        ...,
-        description="The role of the agent(s) to which this request is made.",
-    )
-    source: str = Field(
-        ...,
-        description="The name of the agent that requested this step.",
-    )
     context: list[Any] = Field(
         default=[],
         description="History or context to provide to the agent.",
@@ -125,7 +126,7 @@ class AgentInput(FlowMessage):
 ######
 # Control communications
 #
-class ManagerMessage(FlowMessage):
+class ManagerMessage(BaseModel):
     """OOB message to manage the flow.
 
     Usually involves an automated
@@ -138,14 +139,12 @@ class ManagerMessage(FlowMessage):
 class ConductorRequest(ManagerMessage, AgentInput):
     """Request for input from the conductor."""
 
-    role: str = CONDUCTOR
     _type = "ConductorRequest"
 
 
 class ManagerRequest(ManagerMessage, StepRequest):
     """Request for input from the user"""
 
-    role: str = MANAGER
     _type = "RequestForManagerInput"
     options: bool | list[str] | None = Field(
         default=None,
@@ -160,7 +159,6 @@ class ManagerRequest(ManagerMessage, StepRequest):
 class ManagerResponse(ManagerRequest):
     """Response from the manager."""
 
-    role: str = CONDUCTOR
     _type = "ManagerResponse"
 
 
@@ -180,15 +178,6 @@ class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Agent"
-
-    agent_id: str = Field(
-        ...,
-        description="The ID of the agent that generated this output.",
-    )
-    agent_name: str = Field(
-        ...,
-        description="The name of the agent that generated this output.",
-    )
 
 
 class ToolOutput(FunctionExecutionResult):

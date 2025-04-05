@@ -34,7 +34,7 @@ class LLMScorer(LLMAgent):
                     self._ground_truth = dict(record.ground_truth)
                     logger.debug(f"Scorer found ground truth: {self._ground_truth}")
 
-            if message.agent_id.startswith(self.id.split("-")[0]):
+            if message.agent_role == self.role:
                 # Ignore messages from our own kind
                 return None
 
@@ -45,8 +45,8 @@ class LLMScorer(LLMAgent):
 
                 # Score immediately if we have ground truth
                 input_data = AgentInput(
-                    role=self.name,
-                    source=self.id,
+                    agent_role=self.role,
+                    agent_id=self.id,
                     inputs={"answer": message, "expected": self._ground_truth},
                 )
                 score_output = await self._process(input_data)
@@ -72,7 +72,7 @@ class LLMScorer(LLMAgent):
             # Return a summary of all scores
             return AgentOutput(
                 agent_id=self.id,
-                agent_name=self.name,
+                agent_role=self.role,
                 content=f"Scoring summary for {len(self._scores)} responses",
                 outputs={"scores": self._scores},
             )

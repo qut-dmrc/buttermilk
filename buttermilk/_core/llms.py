@@ -5,11 +5,14 @@ from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
 )
-from autogen_core.models import ChatCompletionClient
+from autogen_core.models import ChatCompletionClient, ModelFamily
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
+)
+from autogen_ext.models.openai._transformation.registry import (
+    _find_model_family,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -62,7 +65,7 @@ class MLPlatformTypes(Enum):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 CHATMODELS = [
-    "gemini15pro",
+    "gemini25pro",
     "gemini2flash",
     "gemini2flashlite",
     "gemini2flashthinking",
@@ -158,34 +161,43 @@ class LLMs(BaseModel):
 
         client: ChatCompletionClient = None
 
-        params = self.connections[name].configs.copy()
+        client_params = {}
+        client_params["base_url"] = self.connections[name].base_url
+        client_params["model_info"] = self.connections[name].model_info
+        client_params["api_key"] = self.connections[name].api_key
+        family = client_params["model_info"].get("family", ModelFamily.UNKNOWN)
+        if _find_model_family("openai", family) == ModelFamily.UNKNOWN:
+            # In future we may need to register a pipeline for models not explicitly
+            # supported by Autogen. Ideally it's fixed upstream, but user beware.
+            client_params["model_info"]["family"] = ModelFamily.UNKNOWN
 
-        params["base_url"] = self.connections[name].base_url
-        params["model_info"] = self.connections[name].model_info
-        params["api_key"] = self.connections[name].api_key
-
+        # add in model parameters from the config dict
+        client_params.update(**self.connections[name].configs)
         if self.connections[name].api_type == "azure":
-            client = AzureOpenAIChatCompletionClient(**params)
+            client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
-            client = GeminiChatCompletionClient(**params)
+            client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(
+                **client_params,
+            )
         elif self.connections[name].api_type == "vertex":
-            params["api_key"] = bm._gcp_credentials.token
+            client_params["api_key"] = bm._gcp_credentials.token
+            #             client = GeminiChatCompletionClient(**params)
             client = OpenAIChatCompletionClient(
-                **params,
+                **client_params,
             )
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
             _vertex_params = {
-                k: v for k, v in params.items() if k in ["region", "project_id"]
+                k: v for k, v in client_params.items() if k in ["region", "project_id"]
             }
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-            client = AnthropicChatCompletionClient(**params)
+            # client = OpenAIChatCompletionClient(**client_params)
+            client = AnthropicChatCompletionClient(**client_params)
             client._client = _vertex_client  # type: ignore # replace client with vertexai version
         else:
-            client = OpenAIChatCompletionClient(**params)
-        # from autogen_core.models import    UserMessage
-        # test:  await client.create([UserMessage(content="hi", source="dev")])
+            client = OpenAIChatCompletionClient(**client_params)
+
         # Store for next time so that we only maintain one client
         self.autogen_models[name] = AutoGenWrapper(client=client)
 

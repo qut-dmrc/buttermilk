@@ -1,9 +1,9 @@
 import pytest
 
 from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.llms import CHATMODELS
 from buttermilk._core.runner_types import Record
 from buttermilk.agents.llm import LLMAgent
-from buttermilk._core.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
 
 
@@ -34,7 +34,7 @@ def single_step_flow(judger):
 @pytest.mark.anyio
 async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm):
     agent_input = AgentInput(
-        source="testing",
+        agent_id="testing",
         flow_id="testflow",
         record=fight_no_more_forever,
         run_info=bm.run_info,

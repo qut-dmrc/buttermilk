@@ -17,7 +17,7 @@ class TestFetch:
         """Create a mock Fetch instance without dealing with initialization."""
         with patch.object(Fetch, "__init__", return_value=None):
             agent = Fetch()
-            agent.name = "test_step"
+            agent.role = "test_step"
             agent.publish = AsyncMock()
             return agent
 
@@ -95,10 +95,10 @@ class TestFetch:
         """Test handle_urls with a URL."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Check out https://example.com",
             inputs={"step": "testing"},
-            source="test",
+            agent_id="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -129,10 +129,10 @@ class TestFetch:
         """Test handle_urls with a record ID."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
-            source="test",
+            agent_id="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -167,10 +167,10 @@ class TestFetch:
         """Test handle_urls with neither URL nor record ID."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
-            source="test",
+            agent_id="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -195,10 +195,10 @@ class TestFetch:
         """Test handle_urls works with RequestToSpeak messages."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Check out https://example.com",
             inputs={},
-            source="test",
+            agent_id="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -240,28 +240,28 @@ messages = [
     (
         None,
         AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Just a regular message",
             inputs={"step": "testing"},
-            source="test",
+            agent_id="test",
         ),
     ),
     (
         "error",
         AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Check out https://example.com",
             inputs={},
-            source="test",
+            agent_id="test",
         ),
     ),
     (
         "missing",
         AgentInput(
-            role="test_agent",
+            agent_role="test_agent",
             content="Get `#record123`",
             inputs={"step": "testing"},
-            source="test",
+            agent_id="test",
         ),
     ),
 ]

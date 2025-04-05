@@ -42,7 +42,7 @@ class Fetch(Agent, ToolConfig):
 
         return AgentOutput(
             agent_id=self.id,
-            agent_name=self.name,
+            agent_role=self.role,
             content=record.fulltext,
             records=[record],
         )
@@ -101,7 +101,7 @@ class Fetch(Agent, ToolConfig):
         if record:
             return AgentOutput(
                 agent_id=self.id,
-                agent_name=self.name,
+                agent_role=self.role,
                 content=record.fulltext,
                 records=[record],
             )

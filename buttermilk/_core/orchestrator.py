@@ -220,8 +220,8 @@ class Orchestrator(BaseModel, ABC):
         input_dict["prompt"] = step.prompt
 
         return AgentInput(
-            role=step.role,
-            source=self.flow_name,
+            agent_role=step.role,
+            agent_id=self.flow_name,
             content=step.prompt,
             context=await self._context.get_messages(),
             inputs=input_dict,

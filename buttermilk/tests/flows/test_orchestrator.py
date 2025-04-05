@@ -79,8 +79,8 @@ async def test_prepare_step_message(simple_orchestrator):
     message = await simple_orchestrator._prepare_step(step)
 
     assert isinstance(message, AgentInput)
-    assert message.role == "test_flow"
-    assert message.source == "test_source"
+    assert message.agent_role == "test_flow"
+    assert message.agent_id == "test_source"
     assert message.content == "Test prompt"
     assert "key1" in message.inputs
     assert message.inputs["key1"] == "value1"
