@@ -5,7 +5,7 @@ from typing import Any, Self
 import pydantic
 import regex as re
 
-from buttermilk._core.agent import Agent, ToolConfig
+from buttermilk._core.agent import Agent, CancellationToken, ToolConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
@@ -35,11 +35,14 @@ class Fetch(Agent, ToolConfig):
 
     async def _process(
         self,
-        input_data: AgentInput,
+        message: GroupchatMessages,
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | None, None]:
         """Entry point when running this as an agent."""
-        record = await self._run(**input_data.inputs)
+        if not isinstance(message, AgentInput):
+            return
+        record = await self._run(**message.inputs)
         if record:
             yield AgentOutput(
                 source=self.id,
