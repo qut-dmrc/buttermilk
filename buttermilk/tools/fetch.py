@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from typing import Any, Self
 
 import pydantic
@@ -36,16 +37,17 @@ class Fetch(Agent, ToolConfig):
         self,
         input_data: AgentInput,
         **kwargs,
-    ) -> AgentOutput | None:
+    ) -> AsyncGenerator[AgentOutput | None, None]:
         """Entry point when running this as an agent."""
         record = await self._run(**input_data.inputs)
-
-        return AgentOutput(
-            source=self.id,
-            role=self.role,
-            content=record.fulltext,
-            records=[record],
-        )
+        if record:
+            yield AgentOutput(
+                source=self.id,
+                role=self.role,
+                content=record.fulltext,
+                records=[record],
+            )
+        return
 
     async def _run(
         self,
@@ -64,7 +66,6 @@ class Fetch(Agent, ToolConfig):
         if record_id:
             return await self.get_record_dataset(record_id)
         return await download_and_convert(uri)
-        return None
 
     async def get_record_dataset(self, record_id: str) -> Record | None:
         while not self._data_task.done():

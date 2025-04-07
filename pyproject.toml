@@ -145,6 +145,7 @@ buttermilk = { workspace = true }
 
 [tool.black]
 line-length = 150
+
 [tool.ruff]
 extend-include = ["*.ipynb"]
 
@@ -154,8 +155,8 @@ line-length = 150
 # Assume Python 3.11
 target-version = "py311"
 
-
 [tool.ruff.lint]
+
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
 select = ["E", "F", "W", "Q", "I"] # ["E", "F"]
 ignore = [
