@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
@@ -20,23 +20,41 @@ class LLMScorer(LLMAgent):
     _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
     _scores: list[dict[str, Any]] = PrivateAttr(default_factory=list)
 
-    async def receive_output(
+    async def _process(
         self,
-        message: AllMessages,
+        input_data: AgentInput | ConductorRequest,
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AgentOutput | None:
-        """Process outputs from JUDGE agents and score them against ground truth."""
+    ) -> AsyncGenerator[AgentOutput | None, None]: # Changed return type
+        """Scores JUDGE agent results against ground truth."""
+
+        if isinstance(input_data, ConductorRequest):
+            # Handle conductor requests if needed, e.g., for final summary.
+            logger.warning(f"{self.id} received ConductorRequest. Summarization logic TBD.")
+            yield AgentOutput(
+                source=self.id,
+                role=self.role,
+                content=f"Scoring summary for {len(self._scores)} responses",
+                outputs={"scores": self._scores},
+            )
+            yield None # Placeholder
+            return
+        
+        # not implemented yet
+        return 
+        # Store ground truth from records
+        for record in message.records:
+            if record.ground_truth:
+                self._ground_truth = dict(record.ground_truth)
+                logger.debug(f"Scorer found ground truth: {self._ground_truth}")
+    
+        # --- Scoring Logic ---
         # Collect records fields with ground truth components
         if isinstance(message, AgentOutput):
-            # Store ground truth from records
-            for record in message.records:
-                if record.ground_truth:
-                    self._ground_truth = dict(record.ground_truth)
-                    logger.debug(f"Scorer found ground truth: {self._ground_truth}")
 
-            if message.agent_role == self.role:
+            if message.role == self.role:
                 # Ignore messages from our own kind
-                return None
+                return
 
             # Identify and store results with qualitative reasons fields
             if self._ground_truth and "reasons" in message.outputs:
@@ -45,11 +63,12 @@ class LLMScorer(LLMAgent):
 
                 # Score immediately if we have ground truth
                 input_data = AgentInput(
-                    agent_role=self.role,
-                    agent_id=self.id,
+                    role=self.role,
+                    source=self.id,
                     inputs={"answer": message, "expected": self._ground_truth},
                 )
-                score_output = await self._process(input_data)
+                async for _ in self._process():
+                    pass
 
                 if score_output and score_output.outputs:
                     # Store scores for later reporting
@@ -59,22 +78,5 @@ class LLMScorer(LLMAgent):
                         "explanation": score_output.outputs.get("explanation"),
                     })
 
-                return score_output
-        return None
-
-    async def _process(
-        self,
-        input_data: AgentInput | ConductorRequest,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs,
-    ) -> AgentOutput:
-        if isinstance(input_data, ConductorRequest):
-            # Return a summary of all scores
-            return AgentOutput(
-                agent_id=self.id,
-                agent_role=self.role,
-                content=f"Scoring summary for {len(self._scores)} responses",
-                outputs={"scores": self._scores},
-            )
-
-        return await super()._process(input_data, cancellation_token, **kwargs)
+                yield score_output
+        return 

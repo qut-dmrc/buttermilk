@@ -27,6 +27,7 @@ from buttermilk._core.contract import (
     ManagerRequest,
     ManagerResponse,
     StepRequest,
+    UserInstructions,
 )
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.bm import bm, logger
@@ -58,6 +59,7 @@ class AutogenOrchestrator(Orchestrator):
         self._user_confirmation = asyncio.Queue(maxsize=1)
         return self
 
+
     async def run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow.
 
@@ -70,13 +72,13 @@ class AutogenOrchestrator(Orchestrator):
 
             # start the agents
             await self._runtime.publish_message(
-                FlowMessage(agent_id=self.flow_name, agent_role="orchestrator"),
+                FlowMessage(source=self.flow_name, role="orchestrator"),
                 topic_id=self._topic,
             )
             if request:
                 await self._runtime.publish_message(request, topic_id=self._topic)
             while True:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
         except StopAsyncIteration:
             logger.info("AutogenOrchestrator.run: Flow completed.")
         finally:
@@ -88,107 +90,12 @@ class AutogenOrchestrator(Orchestrator):
         # loop = asyncio.get_running_loop()
         self._runtime = SingleThreadedAgentRuntime()
 
-        await self._register_collectors()
-        await self._register_human_in_the_loop()
         # Register agents for each step
         await self._register_agents()
 
         # Start the runtime
         self._runtime.start()
 
-    async def _register_human_in_the_loop(self) -> None:
-        """Register a human in the loop agent"""
-
-        # Register a human in the loop agent
-        async def user_confirm(
-            _agent: ClosureContext,
-            message: ManagerResponse,
-            ctx: MessageContext,
-        ) -> None:
-            # Add confirmation signal to queue
-            if isinstance(message, ManagerResponse):
-                try:
-                    self._user_confirmation.put_nowait(message.confirm)
-                except asyncio.QueueFull:
-                    logger.debug(
-                        f"User confirmation queue is full. Discarding confirmation: {message.confirm}",
-                    )
-            # Ignore other messages right now.
-
-        await ClosureAgent.register_closure(
-            self._runtime,
-            CONFIRM,
-            user_confirm,
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=topic_type,
-                    agent_type=CONFIRM,
-                )
-                # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + list(self.agents.keys())
-            ],
-            unknown_type_policy="ignore",  # only react to appropriate messages
-        )
-
-    async def _register_collectors(self) -> None:
-        # Collect data from groupchat messages
-        async def collect_result(
-            _agent: ClosureContext,
-            message: GroupchatMessages,
-            ctx: MessageContext,
-        ) -> None:
-            # Process and collect responses
-            if not message.error:
-                if isinstance(message, AgentOutput):
-                    source = None
-                    if ctx and ctx.sender:
-                        try:
-                            # get the step name from the list of agents if we can
-                            source = [
-                                k
-                                for k, v in self._agent_types.items()
-                                if any([a[0].type == ctx.sender.type for a in v])
-                            ][0]
-                        except Exception as e:  # noqa
-                            logger.warning(
-                                f"{self.flow_name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
-                            )
-                    if not source:
-                        source = (
-                            str(ctx.sender.type)
-                            if ctx and ctx.sender
-                            else message.agent_id
-                        )
-
-                        source = source.split(
-                            "-",
-                            1,
-                        )[0]
-
-                    if message.outputs:
-                        self._flow_data.add(key=source, value=message)
-
-                # Add to the shared history
-                if message.content:
-                    self.history.append(f"{message._type}: {message.content}")
-                # Harvest any records
-                if isinstance(message, AgentOutput) and message.records:
-                    self._records.extend(message.records)
-
-        await ClosureAgent.register_closure(
-            self._runtime,
-            CLOSURE,
-            collect_result,
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=topic_type,
-                    agent_type=CLOSURE,
-                )
-                # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + list(self.agents.keys())
-            ],
-            unknown_type_policy="ignore",  # only react to appropriate messages
-        )
 
     async def _register_agents(self) -> None:
         """Register all agent variants for each step"""
@@ -233,7 +140,7 @@ class AutogenOrchestrator(Orchestrator):
     async def _ask_agents(
         self,
         step_name: str,
-        message: AgentInput,
+        message: AgentInput|StepRequest,
     ) -> list[AgentOutput]:
         """Ask agent directly for input"""
         tasks = []

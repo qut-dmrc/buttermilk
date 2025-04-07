@@ -122,7 +122,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     # Add header with model identifier
     header_text = (
-        f":robot_face: {result_copy.agent_role} {result_copy.metadata.get('model')}"
+        f":robot_face: {result_copy.role} {result_copy.metadata.get('model')}"
     )
     blocks.append({
         "type": "header",

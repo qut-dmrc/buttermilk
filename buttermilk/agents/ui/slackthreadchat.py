@@ -68,9 +68,10 @@ class SlackUIAgent(UIAgent):
             **kwargs,
         )
 
-    async def receive_output(
+    async def listen(
         self,
         message: GroupchatMessages,
+        ctx: MessageContext = None,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -82,7 +83,7 @@ class SlackUIAgent(UIAgent):
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
 
-    async def _request_user_input(
+    async def _request_input(
         self,
         message: AgentInput | ManagerRequest | ManagerMessage,
         **kwargs,
@@ -149,9 +150,8 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        await self._request_user_input(input_data)
-
-        return None  # We'll handle responses via the callback system
+        await self._request_input(input_data)
+        yield # Required for async generator typing
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""

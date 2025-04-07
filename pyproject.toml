@@ -143,11 +143,13 @@ default-groups = ["ml", "dev"]  # Add the groups you want installed by default
 [tool.uv.sources]
 buttermilk = { workspace = true }
 
+[tool.black]
+line-length = 150
 [tool.ruff]
 extend-include = ["*.ipynb"]
 
 # Same as Black.
-line-length = 88
+line-length = 150
 
 # Assume Python 3.11
 target-version = "py311"

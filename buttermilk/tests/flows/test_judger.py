@@ -10,7 +10,7 @@ from buttermilk.runner.flow import Flow
 @pytest.fixture(params=CHATMODELS)
 def judger(request):
     return LLMAgent(
-        agent_id="testjudger",
+        source="testjudger",
         parameters={
             "template": "judge",
             "model": request.param,
@@ -34,7 +34,7 @@ def single_step_flow(judger):
 @pytest.mark.anyio
 async def test_run_flow_judge(single_step_flow, fight_no_more_forever, bm):
     agent_input = AgentInput(
-        agent_id="testing",
+        source="testing",
         flow_id="testflow",
         record=fight_no_more_forever,
         run_info=bm.run_info,

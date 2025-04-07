@@ -15,7 +15,7 @@ from pydantic import (
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import DataSource
+from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.runner_types import Record
 from buttermilk._core.exceptions import FatalError
 from buttermilk.runner.helpers import (
@@ -43,7 +43,7 @@ class Flow(BaseModel):
     source: Sequence[str]
     agents: list[Agent]
 
-    data: list[DataSource] | None = Field(default_factory=list)
+    data: list[DataSourceConfig] | None = Field(default_factory=list)
     params: dict = Field(default_factory=dict)
     _data: dict = {}
     _results: pd.DataFrame = PrivateAttr(default_factory=pd.DataFrame)

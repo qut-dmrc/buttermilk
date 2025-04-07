@@ -136,7 +136,7 @@ class BM(Singleton, Project):
                     "GOOGLE_CLOUD_PROJECT",
                     cloud.project,
                 )
-                if "qutoa_project_id" in cloud.model_fields_set:
+                if "quota_project_id" in cloud.model_fields_set:
                     billing_project = cloud.quota_project_id
                 else:
                     billing_project = os.environ["GOOGLE_CLOUD_PROJECT"]

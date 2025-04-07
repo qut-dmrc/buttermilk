@@ -89,7 +89,7 @@ class SaveInfo(CloudProviderCfg):
         return self
 
 
-class DataSource(BaseModel):
+class DataSourceConfig(BaseModel):
     name: str
     max_records_per_group: int = -1
     type: Literal[
@@ -98,7 +98,7 @@ class DataSource(BaseModel):
         "bq",
         "generator",
         "plaintext",
-        "vectorstore",
+        "chromadb",
         "outputs",
     ]
     path: str = Field(
@@ -116,7 +116,8 @@ class DataSource(BaseModel):
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
-
+    embedding_model: str = Field(default="")
+    dimensionality: int = Field(default=-1)
     persist_directory: str = Field(default="")
     collection_name: str = Field(default="")
 
@@ -128,6 +129,8 @@ class DataSource(BaseModel):
         exclude_unset=True,
     )
 
+class DataSouce(DataSourceConfig):
+    pass
 
 class Tracing(BaseModel):
     enabled: bool = False
@@ -148,7 +151,7 @@ class Project(BaseModel):
         default=None,
         description="Information about the context in which this project runs",
     )
-    datasets: dict[str, DataSource] = Field(default_factory=dict)
+    datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         extra="forbid",

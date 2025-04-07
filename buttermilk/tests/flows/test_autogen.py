@@ -19,7 +19,7 @@ def mock_agent():
     agent.id = "test_agent"
     agent.description = "Test agent description"
     agent.__call__ = AsyncMock(return_value=AgentOutput(
-        agent_id="test_agent",
+        source="test_agent",
         content="Test output",
     ))
     agent.initialize = AsyncMock()
@@ -77,7 +77,7 @@ async def test_agent_adapter_init_with_config():
 @pytest.mark.asyncio
 async def test_agent_adapter_process_request(agent_adapter):
     """Test process_request method."""
-    message = AgentInput(agent_role="test", content="test input")
+    message = AgentInput(role="test", content="test input")
 
     # Non-conductor agent (publishes message)
     with patch.object(agent_adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
@@ -96,7 +96,7 @@ async def test_agent_adapter_process_request_conductor():
     agent.id = f"{CONDUCTOR}-test"
     agent.description = "Test conductor"
     agent.__call__ = AsyncMock(return_value=AgentOutput(
-        agent_id=f"{CONDUCTOR}-test",
+        source=f"{CONDUCTOR}-test",
         content="Test output",
     ))
     agent.initialize = AsyncMock()
@@ -110,7 +110,7 @@ async def test_agent_adapter_process_request_conductor():
     # Set ID to be a conductor
     adapter.id.type = f"{CONDUCTOR}-test"
 
-    message = AgentInput(agent_role="test", content="test input")
+    message = AgentInput(role="test", content="test input")
 
     # Conductor agent (doesn't publish message)
     with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
@@ -128,7 +128,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = "different_agent"
 
-    message = AgentOutput(agent_id="other_agent", content="test output")
+    message = AgentOutput(source="other_agent", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 
@@ -143,7 +143,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = agent_adapter.id
 
-    message = AgentOutput(agent_id=agent_adapter.agent.id, content="test output")
+    message = AgentOutput(source=agent_adapter.agent.id, content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 

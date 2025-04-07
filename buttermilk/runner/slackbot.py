@@ -16,9 +16,8 @@ from buttermilk.bm import logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
-from buttermilk.runner.simple import Sequencer
 
-orchestrators = [Sequencer, AutogenOrchestrator, Selector]
+orchestrators = [AutogenOrchestrator, Selector]
 
 BOTPATTERNS = re.compile(
     r"^!?[<@>\w\d]*\s+(\w+)(.*)",

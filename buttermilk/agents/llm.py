@@ -1,10 +1,12 @@
 import asyncio
 import json
-from typing import Any, Self
+from typing import Any, AsyncGenerator, Self
 
+from autogen_core.models._types import UserMessage
 import pydantic
 import regex as re
-from autogen_core import CancellationToken, FunctionCall
+from autogen_core import CancellationToken, FunctionCall, MessageContext
+from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import (
     AssistantMessage,
     ChatCompletionClient,
@@ -19,8 +21,10 @@ from buttermilk._core.agent import Agent, AgentInput, AgentOutput
 from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
+    FlowMessage,
     GroupchatMessages,
     ToolOutput,
+    UserInstructions,
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.runner_types import Record
@@ -36,7 +40,7 @@ from buttermilk.utils.templating import (
 class LLMAgent(Agent):
     fail_on_unfilled_parameters: bool = Field(default=True)
 
-    _tools: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
+    _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
         default_factory=list,
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
@@ -53,7 +57,7 @@ class LLMAgent(Agent):
             and not re.search(r"\s", v)
         ])
         components = [c[:12] for c in components if c]
-        self.id = "-".join(components)[:63]
+        self.id = "_".join(components)[:63]
 
         return self
 
@@ -66,17 +70,7 @@ class LLMAgent(Agent):
         else:
             raise ValueError("Must provide a model in the parameters.")
 
-        # Initialise tools
-        self._tools = create_tool_functions(self.tools)
         return self
-
-    async def receive_output(
-        self,
-        message: AllMessages,
-        **kwargs,
-    ) -> GroupchatMessages | None:
-        """Log data or send output to the user interface"""
-        # Not implemented on the agent right now; inputs come from conductor.
 
     async def fill_template(
         self,
@@ -86,13 +80,16 @@ class LLMAgent(Agent):
         untrusted_inputs = {}
         if inputs:
             untrusted_inputs.update(dict(inputs.inputs))
-            defined_inputs = {
-                k: v
-                for k, v in inputs.model_dump().items()
-                if k in ["content", "records", "metadata", "role", "source", "context"]
-            }
-            untrusted_inputs.update(defined_inputs)
 
+            # Special handling for named placeholder keywords
+            untrusted_inputs['context'] = await self._model_context.get_messages()
+            untrusted_inputs["history"] = "\n\n".join([
+                f"**{msg.source}**: {msg.content}" for msg in untrusted_inputs['context']
+            ])
+            untrusted_inputs['records'] = self._records
+            untrusted_inputs["content"] = [
+                f"{rec.record_id}: {rec.fulltext}" for rec in self._records
+            ]
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
             parameters=self.parameters,
@@ -175,7 +172,7 @@ class LLMAgent(Agent):
         self,
         calls: list[FunctionCall],
         cancellation_token: CancellationToken | None,
-    ) -> dict[str, Any]:
+    ) -> list[ToolOutput]:
         """Execute the tools and return the results."""
         assert isinstance(calls, list) and all(
             isinstance(call, FunctionCall) for call in calls
@@ -185,118 +182,231 @@ class LLMAgent(Agent):
         results = await asyncio.gather(
             *[self._call_tool(call, cancellation_token) for call in calls],
         )
-        outputs = {"_records": []}
-        for r in results:
-            if r.is_error:
-                logger.warning(f"Tool {r.name} failed with error: {r.content}")
-                continue
-            if r.payload and isinstance(r.payload, Record):
-                outputs["_records"].append(r.payload)
-            elif r.name in outputs:
-                if not isinstance(outputs[r.name], list):
-                    outputs[r.name] = [outputs[r.name]]
-                outputs[r.name].append(r.content)
-            else:
-                outputs[r.name] = r.content
+        results = [record for result in results for record in result if record is not None]
 
-        return outputs
+        return results
 
     async def _call_tool(
         self,
         call: FunctionCall,
         cancellation_token: CancellationToken | None,
-    ) -> ToolOutput:
+    ) -> list[ToolOutput]:
         # Find the tool by name.
-        tool = next((tool for tool in self._tools if tool.name == call.name), None)
+        tool = next((tool for tool in self._tools_list if tool.name == call.name), None)
         assert tool is not None
 
         # Run the tool and capture the result.
         try:
             arguments = json.loads(call.arguments)
-            result = await tool.run_json(arguments, cancellation_token)
-            return ToolOutput(
-                call_id=call.id,
-                content=tool.return_value_as_string(result),
-                payload=result,
-                is_error=False,
-                name=tool.name,
-            )
+            results = await tool.run_json(arguments, cancellation_token)
         except Exception as e:
-            return ToolOutput(
+            return [ToolOutput(
                 call_id=call.id,
                 content=str(e),
                 is_error=True,
                 name=tool.name,
-                payload=e,
-            )
-
-    async def _process(
-        self,
-        input_data: AgentInput | ConductorRequest,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs,
-    ) -> AgentOutput:
-        messages = await self.fill_template(
-            inputs=input_data,
-        )
-        records = []
-        try:
-            create_result = await self._model_client.create(
-                messages=messages,
-                tools=self._tools,
-                cancellation_token=cancellation_token,
-            )
-        except Exception as e:
-            error_msg = f"Error creating chat completion: {e} {e.args=}"
-            logger.warning(error_msg)
-            return AgentOutput(
-                agent_id=self.id,
-                agent_role=self.role,
-                content=error_msg,
-                error=error_msg,
-                metadata=dict(self.parameters),
-            )
-        if isinstance(create_result.content, str):
-            outputs = self._json_parser.parse(create_result.content)
-
-            # create human readable content
-            # Pretty-print with standard library
-            content = json.dumps(outputs, indent=2, sort_keys=True)
+            )]
+        outputs = []
+        if isinstance(results, list):
+            for call_result in results:
+                outputs.append(ToolOutput(
+                    call_id=call.id,
+                    content=f"{tool.name} ({str(arguments)})",
+                    results=call_result.results,
+                    args=call_result.args,
+                    messages=call_result.messages,
+                    is_error=False,
+                    name=tool.name,
+                ))
         else:
-            outputs = await self._execute_tools(
-                calls=create_result.content,
-                cancellation_token=cancellation_token,
-            )
-            if isinstance(outputs, dict) and len(outputs.get("search", [])) > 0:
-                # run again, without tools this time
-                input_data.inputs["results"] = input_data.inputs.get(
-                    "results",
-                    [],
-                ) + outputs.get("search", [])
-                messages = await self.fill_template(
-                    inputs=input_data,
-                )
-                create_result = await self._model_client.create(
-                    messages=messages,
-                    cancellation_token=cancellation_token,
-                )
-            outputs = self._json_parser.parse(create_result.content)
-            content = json.dumps(outputs, indent=2, sort_keys=True)
-        metadata = {
-            k: v
-            for k, v in create_result.model_dump(
-                exclude_unset=True,
-                exclude_none=True,
-            ).items()
-            if v and k != "content"
-        }
-        metadata.update(self.parameters)
-        output = AgentOutput(
-            agent_id=self.id,
-            agent_role=self.role,
+            outputs = [results]
+        return outputs
+
+
+    async def _create_agent_output(
+        self,
+        raw_content: str | list[Any],
+        llm_metadata: dict | None = None,
+        records: list[Record] | None = None,
+        error_msg: str | None = None,
+    ) -> AgentOutput:
+        """Helper method to create AgentOutput instances."""
+        outputs = {}
+        content = ""
+        if isinstance(raw_content, str):
+            try:
+                outputs = self._json_parser.parse(raw_content)
+                # Pretty-print JSON if parsing is successful
+                content = json.dumps(outputs, indent=2, sort_keys=True)
+            except Exception as parse_error:
+                logger.warning(f"Failed to parse LLM response as JSON: {parse_error}")
+                content = raw_content # Use raw content if parsing fails
+                if not error_msg: # Add parsing error if no other error exists
+                    error_msg = f"JSON parsing error: {parse_error}"
+        else:
+            # Handle non-string content if necessary, or assume it's already structured
+            outputs = raw_content # Or process as needed
+            content = str(raw_content) # Basic string representation
+
+        metadata = dict(self.parameters)
+        if llm_metadata:
+            metadata.update({
+                k: v
+                for k, v in llm_metadata.items()
+                if v and k != "content" # Exclude content from metadata
+            })
+
+        return AgentOutput(
+            source=self.id,
+            role=self.role,
             outputs=outputs,
             content=content,
             metadata=metadata,
-            records=records,
+            records=records or [],
+            error=error_msg,
         )
-        return output
+
+    async def listen(self, message: GroupchatMessages, 
+        ctx: MessageContext = None,
+        **kwargs):
+        """Save incoming messages for later use."""
+        if message.content:
+            # Map Buttermilk message types to LLM input types
+            if isinstance(message, AgentOutput):
+                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+            elif isinstance(message, UserInstructions):
+                await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
+            else:
+                # don't log other types of messages
+                pass
+
+    async def _process(
+        self,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AsyncGenerator[AgentOutput|None, None]:
+        
+        if isinstance(message, AgentInput):
+            logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Handling as standard input.")
+        elif isinstance(message, GroupchatMessages):
+            logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Ignoring.")
+            return
+        else:
+            logger.warning(f"Agent {self.id} {self.role} dropping unknown message: {message.type} from {message.source}")
+            return
+
+        messages = await self.fill_template(inputs=message)
+        records = message.records
+
+        try:
+            # Initial LLM call (potentially with tools)
+            create_result = await self._model_client.create(
+                messages=messages,
+                tools=self._tools_list,
+                cancellation_token=cancellation_token,
+            )
+            llm_metadata = create_result.model_dump(
+                exclude_unset=True, exclude_none=True
+            )
+
+        except Exception as e:
+            error_msg = f"Error during initial LLM call: {e}"
+            logger.warning(error_msg, exc_info=True)
+            yield await self._create_agent_output(
+                raw_content=error_msg,
+                error_msg=error_msg,
+                records=records,
+            )
+            return
+
+        # --- Handle LLM Response ---
+        if isinstance(create_result.content, str):
+            # LLM returned a direct string response
+            yield await self._create_agent_output(
+                raw_content=create_result.content,
+                llm_metadata=llm_metadata,
+                records=records,
+            )
+        elif isinstance(create_result.content, list) and all(isinstance(item, FunctionCall) for item in create_result.content):
+            # LLM returned tool calls (ensure it's a list of FunctionCall)
+            try:
+                tool_outputs = await self._execute_tools(
+                    calls=create_result.content,
+                    cancellation_token=cancellation_token,
+                )
+            except Exception as e:
+                error_msg = f"Error executing tools: {e}"
+                logger.warning(error_msg, exc_info=True)
+                yield await self._create_agent_output(
+                    raw_content=error_msg,
+                    error_msg=error_msg,
+                    records=records,
+                    llm_metadata=llm_metadata, # Include metadata from initial call
+                )
+                return
+
+            # --- Reflection Phase (after tool execution) ---
+            reflection_tasks = []
+            for tool_result in tool_outputs:
+                if tool_result.is_error:
+                    # Optionally yield an error output for failed tool calls
+                    error_msg = f"Tool call '{tool_result.name}' failed: {tool_result.content}"
+                    logger.warning(error_msg)
+                    yield await self._create_agent_output(
+                        raw_content=error_msg,
+                        error_msg=error_msg,
+                        records=records,
+                        # Consider adding tool call info to metadata here
+                    )
+                    continue # Skip reflection for failed tools? Or reflect on the error?
+
+
+                try:
+                    reflection_messages = messages.copy()
+                    # Add the tool result message to the history for the reflection call
+                    reflection_messages.extend(tool_result.messages)
+
+                    # Create reflection task (call LLM without tools)
+                    task = self._model_client.create(
+                        messages=reflection_messages,
+                        cancellation_token=cancellation_token,
+                        # No tools passed for reflection call
+                    )
+                    reflection_tasks.append(task)
+                except Exception as e:
+                    error_msg = f"Error preparing reflection for tool '{tool_result.name}': {e}"
+                    logger.warning(error_msg, exc_info=True)
+                    yield await self._create_agent_output(
+                        raw_content=error_msg, error_msg=error_msg, records=records
+                    )
+
+
+            # Process completed reflection tasks
+            for task in asyncio.as_completed(reflection_tasks):
+                try:
+                    reflection_result = await task
+                    reflection_metadata = reflection_result.model_dump(
+                        exclude_unset=True, exclude_none=True
+                    )
+                    yield await self._create_agent_output(
+                        raw_content=reflection_result.content,
+                        llm_metadata=reflection_metadata,
+                        records=records, # Carry over original records
+                    )
+                except Exception as e:
+                    error_msg = f"Error during reflection LLM call: {e}"
+                    logger.warning(error_msg, exc_info=False)
+                    yield await self._create_agent_output(
+                        raw_content=error_msg, error_msg=error_msg, records=records
+                    )
+        else:
+             # Handle unexpected content type from LLM
+             error_msg = f"Unexpected content type from LLM: {type(create_result.content)}"
+             logger.error(error_msg)
+             yield await self._create_agent_output(
+                 raw_content=str(create_result.content), # Try string conversion
+                 error_msg=error_msg,
+                 records=records,
+                 llm_metadata=llm_metadata,
+             )

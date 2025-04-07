@@ -39,13 +39,3 @@ Sometimes, search results are garbled. Make sure you filter out illegible result
 <CONVERSATION HISTORY>
 {{history}}
 </CONVERSATION HISTORY>
-
-{% if results %}
-{% for query in results %}
-<RESULTS for QUERY: {{query.query}}>
-{% for ref in query.results %}
-{{ref}}
-{% endfor %}
-</RESULTS>
-{% endfor %}
-{% endif %}

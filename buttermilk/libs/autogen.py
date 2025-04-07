@@ -1,8 +1,9 @@
 import asyncio
 from collections.abc import Awaitable, Callable
+from typing import AsyncGenerator
 
 from autogen_core import (
-    DefaultTopicId,
+    DefaultTopicId,CancellationToken,
     MessageContext,
     RoutedAgent,
     TopicId,
@@ -15,12 +16,15 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
+    GroupchatMessages,
     ManagerMessage,
+    FlowMessage,
     ManagerRequest,
-    UserInstructions,
+    OOBMessages,
+    UserInstructions,AllMessages,
 )
 from buttermilk.agents.flowcontrol.types import HostAgent
-from buttermilk.agents.ui.console import UIAgent
+from buttermilk.agents.ui.generic import UIAgent 
 from buttermilk.bm import logger
 
 
@@ -67,117 +71,80 @@ class AutogenAgentAdapter(RoutedAgent):
         self.topic_id: TopicId = DefaultTopicId(type=topic_type)
         super().__init__(description=self.agent.description)
 
+        self.is_manager = isinstance(self.agent, UIAgent) or isinstance(self.agent, HostAgent)
+
         # Take care of any initialization the agent needs to do in this event loop
-        asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
-
-    async def _process_request(
-        self,
-        message: AgentInput | ConductorRequest,
-    ) -> AgentOutput | None:
-        """Process an incoming request by delegating to the wrapped agent.
-
-        Args:
-            message: The input message to process
-
-        Returns:
-            Optional agent output from processing the request
-
-        """
-        agent_output = None
-        try:
-            # Process using the wrapped agent
-            agent_output = await self.agent(message)
-        except Exception as e:
-            logger.error(f"Error processing request: {e}")
-            # raise ProcessingError(f"Error processing request: {e}") from e
-
-        if agent_output:
-            if self.id.type.startswith(CONDUCTOR):
-                # If we are the host, our replies are coordination, not content.
-                # In that case, don't publish them, only return them directly.
-                return agent_output
-            # Otherwise, send it out to all subscribed agents.
-            await self.publish_message(
-                agent_output,
-                topic_id=self.topic_id,
-            )
-            return agent_output
-
-        return None
+        if self.is_manager:
+            asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
+        else:
+            asyncio.create_task(self.agent.initialize())
 
     @message_handler
-    async def handle_request(
+    async def receive_message(
         self,
-        message: AgentInput,
+        message: AllMessages,
         ctx: MessageContext,
-    ) -> AgentOutput | None:
-        """Handle incoming agent input messages.
-
-        This handler is triggered when an agent receives an input message requesting
-        its services.
-
-        Args:
-            message: The input message to process
-            ctx: Message context with sender information
-
-        Returns:
-            Optional agent output from processing the request
-
-        """
-        source = str(ctx.sender) if ctx and ctx.sender else message.type
-        return await self._process_request(message)
-
-    @message_handler
-    async def handle_output(
-        self,
-        message: AgentOutput | UserInstructions,
-        ctx: MessageContext,
-    ) -> None:
-        """Handle output messages from other agents.
-
-        This handler processes outputs from other agents that might be relevant to
-        this agent.
-
-        Args:
-            message: The output message to process
-            ctx: Message context with sender information
-
-        """
+    ) -> AllMessages | None: 
+        """Handle incoming messages by delegating to the wrapped agent."""
+        # Pass messages along to the agent, which then responds if required.
+        # The agent's internal logic or orchestrator-provided context handles history.
+        
+        # First, divide into control and in-band messages
+        if isinstance(message, GroupchatMessages):
+            # For normal messages, extract and record data from the message.
+            await self.agent.listen(message=message, ctx=ctx)
+        elif isinstance(message, OOBMessages):
+            # Control messages should be isolated out-of-band
+            if self.is_manager:
+                return await self.handle_oob(message=message, ctx=ctx)
+            # Otherwise, ignore the message.
+            return None
+        else:
+            raise ValueError(f"Unexpected message type: {type(message)}")
+        
+        # Process using the wrapped agent's _process method, which may yield outputs
         try:
-            source = str(ctx.sender.type)
-            # if ctx and ctx.sender else message.type
-            # ignore messages sent by us
-            if source != self.id:
-                response = await self.agent.receive_output(message)
-                if response:
+            agent_output = None
+            async for agent_output in self.agent._process(message, cancellation_token=ctx.cancellation_token):
+                if self.id.type.startswith(CONDUCTOR):
+                    # If we are the host, our replies are coordination, not content.
+                    # In that case, don't publish them, only return them directly.
+                    pass
+                elif agent_output:
+                    # Otherwise, send it out to all subscribed agents.
                     await self.publish_message(
-                        response,
+                        agent_output,
                         topic_id=self.topic_id,
                     )
-            return
-        except ValueError:
-            logger.warning(
-                f"Agent {self.agent.id} received unsupported message type: {type(message)}",
+                
+            return agent_output  # returns the last message generated
+
+        except Exception as e:
+            logger.error(f"Error processing request in agent {self.agent.id}: {e}", exc_info=True)
+            error_output = AgentOutput(
+                source=self.agent.id,
+                role=self.agent.role,
+                content=f"Error processing request: {e}",
+                error=[str(e)],
+                # Attempt to pass records if available in the input message
+                records=getattr(message, 'records', []),
             )
+            # Publish the error message 
+            await self.publish_message(error_output, topic_id=self.topic_id)
+            return error_output
+
+
 
     @message_handler
     async def handle_oob(
         self,
-        message: ManagerMessage | ManagerRequest | ConductorRequest,
+        message: OOBMessages,
         ctx: MessageContext,
-    ) -> ManagerMessage | ManagerRequest | AgentOutput | None:
-        """Handle out-of-band control messages.
-
-        Args:
-            message: The control message to process
-            ctx: Message context with sender information
-
-        Returns:
-            Optional response to the control message
-
-        """
-        """Control messages do not get broadcast around."""
-        return await self.agent.handle_control_message(message)
+    ) -> None:
+        """Handle out-of-band control messages."""
+        # Delegate to the agent's control message handler
+        # Note: handle_control_message is async but doesn't return anything significant for routing
+        await self.agent.handle_control_message(message)
 
     def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
         """Create a callback for handling user input if needed.
@@ -195,6 +162,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 topic_id=self.topic_id,
             )
 
-        if isinstance(self.agent, (UIAgent, HostAgent)):
+        # Check against the generic UIAgent base class
+        if isinstance(self.agent, UIAgent):
             return input_callback
         return None

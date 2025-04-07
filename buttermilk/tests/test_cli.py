@@ -25,18 +25,18 @@ def mock_console_app():
     mock_objs.ui = "console"
     mock_objs.flows = {
         "test_flow": {
-            "orchestrator": "Sequencer",
+            "orchestrator": "Selector",
             "flow_name": "test_flow",
             "description": "Test flow",
         },
     }
 
     mock_orchestrator = AsyncMock()
-    mock_sequencer = MagicMock(return_value=mock_orchestrator)
+    mock_selector = MagicMock(return_value=mock_orchestrator)
 
     with patch("buttermilk.runner.cli.globals") as mock_globals:
-        mock_globals.return_value = {"Sequencer": mock_sequencer}
-        yield mock_objs, mock_orchestrator, mock_sequencer
+        mock_globals.return_value = {"Selector": mock_selector}
+        yield mock_objs, mock_orchestrator, mock_selector
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def mock_slack_app():
 def test_main_console_mode(mock_hydra, mock_console_app):
     """Test CLI main function in console mode."""
     _, mock_instantiate, mock_main = mock_hydra
-    mock_objs, mock_orchestrator, mock_sequencer = mock_console_app
+    mock_objs, mock_orchestrator, mock_selector = mock_console_app
 
     mock_instantiate.return_value = mock_objs
     mock_cfg = MagicMock()
@@ -91,7 +91,7 @@ def test_main_console_mode(mock_hydra, mock_console_app):
     main(mock_cfg)
 
     # Verify Sequencer was created with correct params
-    mock_sequencer.assert_called_once()
+    mock_selector.assert_called_once()
     # Verify we tried to run it
     mock_orchestrator.run.assert_called_once()
 

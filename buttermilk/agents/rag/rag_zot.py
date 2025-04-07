@@ -3,6 +3,7 @@
 import asyncio
 from typing import Self
 
+from autogen_core.models._types import UserMessage
 from autogen_core.tools import FunctionTool
 from chromadb import Collection
 
@@ -10,11 +11,7 @@ from buttermilk import logger
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.data.vector import ChromaDBEmbeddings
 
-PERSIST_DIR = "/home/nic/data/prosocial_zot/files"
-COLLECTION_NAME = "prosocial_zot"
-MODEL_NAME = "text-embedding-large-exp-03-07"  # From your vector.py
 TASK_FOR_QUERY = "RETRIEVAL_QUERY"  # Use RETRIEVAL_QUERY for query embedding
-DIMENSIONALITY = 3072  # From your vector.py
 
 import pydantic
 
@@ -38,6 +35,9 @@ class RefResult(pydantic.BaseModel):
 
         return formatted_output
 
+    def as_message(self, source="search") -> UserMessage:
+        return UserMessage(content=str(self), source=source)
+
     @classmethod
     def from_chroma(cls, results, index) -> "RefResult":
         result = {
@@ -49,9 +49,7 @@ class RefResult(pydantic.BaseModel):
             ]
             if results[x]
         }
-        meta = {
-            k: v for k, v in result["metadatas"].items() if k in RefResult.model_fields
-        }
+        meta = {k: v for k, v in result["metadatas"].items() if k in RefResult.model_fields}
         return RefResult(
             id=result["ids"],
             full_text=result["documents"],
@@ -61,8 +59,13 @@ class RefResult(pydantic.BaseModel):
 
 
 class QueryResults(pydantic.BaseModel):
-    query: str
     results: list[RefResult]
+    args: dict[str, str]
+
+    @pydantic.computed_field
+    @property
+    def messages(self) -> list[UserMessage]:
+        return [result.as_message() for result in self.results]
 
 
 class RagZot(LLMAgent):
@@ -70,28 +73,24 @@ class RagZot(LLMAgent):
     and fills a template with the results.
     """
 
-    # Vector store configuration
-    persist_directory: str = pydantic.Field(...)
-    collection_name: str = pydantic.Field(...)
-    embedding_model: str = pydantic.Field(default="text-embedding-large-exp-03-07")
-    dimensionality: int = pydantic.Field(default=3072)
-
+    _chromadb: ChromaDBEmbeddings
     _vectorstore: Collection
 
     # RAG query settings
     n_results: int = pydantic.Field(default=20)
     no_duplicates: bool = pydantic.Field(default=True)
     max_queries: int = 3
+    max_words_per_query: int | None = pydantic.Field(
+        default=None, description="Optional maximum token count (approximated by word count) per query result set."
+    )
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
-        # Initialize the vector store
-        self._vectorstore = ChromaDBEmbeddings(
-            persist_directory=self.persist_directory,
-            collection_name=self.collection_name,
-            embedding_model=self.embedding_model,
-            dimensionality=self.dimensionality,
-        ).collection
+        for data_conf in self.data:
+            if data_conf.type == "chromadb":
+                self._chromadb = ChromaDBEmbeddings(**data_conf.model_dump())
+                self._vectorstore = self._chromadb.collection
+                break
 
         # Add concurrent search tool
         search_tool = FunctionTool(
@@ -101,11 +100,11 @@ class RagZot(LLMAgent):
         )
 
         # Add tools to the agent
-        self._tools.extend([search_tool])
+        self._tools_list.extend([search_tool])
 
         return self
 
-    async def search(self, queries: list[str]) -> list[RefResult]:
+    async def search(self, queries: list[str]) -> list[QueryResults]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
             return "No queries provided or vector store not initialized."
@@ -126,7 +125,6 @@ class RagZot(LLMAgent):
         ]
         results = await asyncio.gather(*search_tasks)
 
-        # Combine all results
         return results
 
     async def _query_db(self, query: str) -> QueryResults:
@@ -154,4 +152,20 @@ class RagZot(LLMAgent):
                     break
             records = output
 
-        return QueryResults(query=query, results=records)
+        messages = []
+        for i, rec in enumerate(records):
+            messages.append(rec.as_message())
+            try:
+                if self._model_client.client.remaining_tokens(messages=messages) < 5000:
+                    logger.warning(
+                        f"RAG search query exceeded token limit. Truncating to {i - 1} results.",
+                    )
+                    records = records[: i - 1]
+                    break
+            except KeyError:
+                # This happens when the model we are using is not known to autogen.
+                logger.debug(f"Tried to calculate token usage but couldn't: {self._model_client.model_info}")
+
+        records = records[: self.n_results]
+
+        return QueryResults(results=records, args=dict(query=query))

@@ -11,7 +11,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
     result_copy = result.model_copy(deep=True)
 
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result_copy.agent_role} {result_copy.metadata.get('model')}"
+    header_text = f"Model: :robot_face: {result_copy.role} {result_copy.metadata.get('model')}"
     blocks.append({
         "type": "header",
         "text": {

@@ -1,32 +1,37 @@
 import asyncio
-from typing import Any
+from typing import Any, AsyncGenerator
 
+from autogen_core import CancellationToken
 from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     AgentInput,
+    AgentOutput,
+    FlowMessage,
     ManagerMessage,
-    ManagerRequest,
+    ManagerRequest,OOBMessages
 )
 
 
 class UIAgent(Agent):
     _input_task: asyncio.Task
     _input_callback: Any = PrivateAttr(...)
-
     _trace_this = False
 
-    async def _request_user_input(
-        self, message: ManagerRequest, **kwargs
-    ) -> str | None:
-        """Get user input from the UI"""
+    async def _process(
+        self,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AsyncGenerator[AgentOutput|None, None]:
+        """Send or receive input from the UI."""
         raise NotImplementedError
+        yield # Required for async generator typing
 
     async def handle_control_message(
         self,
-        message: ManagerMessage | ManagerRequest,
-    ) -> ManagerMessage | ManagerRequest | None:
+        message: OOBMessages, **kwargs):
         """Process control messages for agent coordination.
 
         Args:
@@ -40,14 +45,10 @@ class UIAgent(Agent):
 
         """
         # Ask the user for confirmation
-        if isinstance(message, (ManagerRequest, AgentInput)):
-            await self._request_user_input(message)
-            return None
-        if isinstance(message, ManagerMessage):
-            # Just output these messages to the UI
-            await self.receive_output(message)
-            return None
-        raise ValueError(f"Unknown message type: {type(message)}")
+        await self.listen(message, **kwargs)
+        async for _ in self._process(message):
+            pass
+        return
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface"""

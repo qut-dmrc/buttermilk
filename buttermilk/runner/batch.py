@@ -89,7 +89,7 @@ class MultiFlowOrchestrator(BaseModel):
                     coroutine = self.task_wrapper(
                         task=coroutine,
                         job_id=job.job_id,
-                        agent_id=agent.id,
+                        source=agent.id,
                     )
                     yield coroutine
 

@@ -8,10 +8,9 @@ from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk.bm import BM
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
-from buttermilk.runner.simple import Sequencer
 from buttermilk.runner.slackbot import register_handlers
 
-orchestrators = [Sequencer, AutogenOrchestrator, Selector]
+orchestrators = [AutogenOrchestrator, Selector]
 
 # Register a resolver that can determine the criteria based on the current flow
 OmegaConf.register_new_resolver(

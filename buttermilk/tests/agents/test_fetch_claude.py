@@ -39,7 +39,7 @@ def fetch_agent():
 async def test_fetch_process(fetch_agent, mock_record):
     """Test the process method of the fetch agent."""
     input_data = AgentInput(
-        agent_role="test",
+        role="test",
         content="fetch this",
         inputs={"record_id": "test_id"},
     )
@@ -50,7 +50,7 @@ async def test_fetch_process(fetch_agent, mock_record):
 
     mock_run.assert_called_once_with(record_id="test_id")
     assert isinstance(result, AgentOutput)
-    assert result.agent_id == "test_fetch"
+    assert result.source == "test_fetch"
     assert result.content == "Test content"
     assert len(result.records) == 1
     assert result.records[0] == mock_record
@@ -159,7 +159,7 @@ async def test_receive_output_with_url(fetch_agent, mock_record):
 
     mock_download.assert_called_once_with(uri="https://example.com")
     assert isinstance(result, AgentOutput)
-    assert result.agent_id == "test_fetch"
+    assert result.source == "test_fetch"
     assert result.content == "Test content"
     assert len(result.records) == 1
 
@@ -175,7 +175,7 @@ async def test_receive_output_with_record_id(fetch_agent, mock_record):
 
     mock_get.assert_called_once_with("test_id")
     assert isinstance(result, AgentOutput)
-    assert result.agent_id == "test_fetch"
+    assert result.source == "test_fetch"
     assert result.content == "Test content"
     assert len(result.records) == 1
 

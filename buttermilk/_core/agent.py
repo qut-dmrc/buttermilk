@@ -1,6 +1,32 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import Any, Self
+from typing import Any, AsyncGenerator, Self
+
+from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
+import pydantic
+import weave
+from autogen_core import CancellationToken, MessageContext
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+)
+
+from buttermilk import logger
+from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentOutput,
+    AllMessages,
+    FlowMessage,
+    GroupchatMessages,
+    OOBMessages,
+    UserInstructions,
+)
+from buttermilk._core.exceptions import FatalError, ProcessingError
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
+from typing import Any, AsyncGenerator, Self
 
 import pydantic
 import weave
@@ -12,14 +38,16 @@ from pydantic import (
 )
 
 from buttermilk import logger
-from buttermilk._core.config import DataSource
+from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    AllMessages,
+    AllMessages, # Keep for type hinting if needed elsewhere, but not used in Agent interface directly
     UserInstructions,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.runner_types import Record
+
 
 
 class ToolConfig(BaseModel):
@@ -28,7 +56,7 @@ class ToolConfig(BaseModel):
     description: str
     tool_obj: str | None = None
 
-    data_cfg: list[DataSource] = Field(
+    data_cfg: list[DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
@@ -68,7 +96,7 @@ class AgentConfig(BaseModel):
         default=[],
         description="Tools the agent can invoke",
     )
-    data: list[DataSource] = Field(
+    data: list[DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
@@ -89,73 +117,108 @@ class AgentConfig(BaseModel):
 
 
 class Agent(AgentConfig, ABC):
-    """Base Agent interface for all processing units"""
+    """Base Agent interface for all processing units.
 
+    Agents are stateful. Context is stored internally by the agent
+    or passed via AgentInput. _reset() clears state.
+    """
     _trace_this = True
-    _run_fn: Callable | Awaitable = PrivateAttr()
+    _run_fn: AsyncGenerator = PrivateAttr()
 
+    _records: list[Record] = PrivateAttr(default_factory=list)
+    _model_context: ChatCompletionContext = PrivateAttr(
+        default_factory=UnboundedChatCompletionContext,
+    )
     @pydantic.model_validator(mode="after")
     def _get_process_func(self) -> Self:
         """Returns the appropriate processing function based on tracing setting."""
 
         def _process_fn():
             if self._trace_this:
+                # # Ensure weave.op wraps the async generator correctly
+                # # This might require adjustments depending on weave's async support
+                # async def traced_process(*args, **kwargs):
+                #      async for item in self._process(*args, **kwargs):
+                #          yield item
+                # return weave.op(traced_process, call_display_name=f"{self.id}")
                 return weave.op(self._process, call_display_name=f"{self.id}")
             return self._process
 
         self._run_fn = _process_fn()
         return self
 
-    # @workflow(name="run_agent")
-    # @trace
-
     @abstractmethod
-    async def receive_output(
-        self,
-        message: AllMessages,
-        **kwargs,
-    ) -> AllMessages | None:
-        """Log data or send output to the user interface"""
+    async def listen(self, message: GroupchatMessages, 
+        ctx: MessageContext = None,
+        **kwargs):
+        """Save incoming messages for later use."""
         raise NotImplementedError
 
+
     @abstractmethod
-    async def _process(self, input_data: AgentInput, **kwargs) -> AgentOutput | None:
-        """Process input data and return output
+    async def _process(
+        self,
+        message: GroupchatMessages,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AsyncGenerator[AgentOutput|None, None]:
+        """Process input data and (optionally) yield output(s).
 
         Inputs:
-            input_data: AgentInput with appropriate values required by the agent.
+            input_data: AgentInput containing content, context/history, and other relevant data.
+            cancellation_token: Token to signal cancellation.
 
         Outputs:
-            AgentOutput record with processed data or non-null Error field.
-
+            Yields AgentOutput messages.
         """
         raise NotImplementedError
+        yield # Required for async generator typing
 
     async def handle_control_message(
         self,
-        message: Any,
+        message: OOBMessages,
     ) -> None:
-        """Most agents don't deal with control messages."""
+        """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
 
     async def __call__(
         self,
         input_data: AgentInput,
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AgentOutput | UserInstructions | None:
-        """Allow agents to be called directly as functions"""
+    ) -> AsyncGenerator[AgentOutput | UserInstructions | None, None]:
+        """Allow agents to be called directly as functions by the orchestrator."""
         try:
-            return await self._run_fn(input_data, **kwargs)
+            async for output in self._run_fn(input_data, cancellation_token=cancellation_token, **kwargs):
+                yield output
         except ProcessingError as e:
             logger.error(
-                f"Agent {self.id} {self.role} hit error: {e}. Task content: {input_data.content[:100]}",
+                f"Agent {self.id} {self.role} hit processing error: {e}. Task content: {input_data.content[:100]}",
             )
-            return None
+            yield AgentOutput(
+                source=self.id,
+                role=self.role,
+                content=f"Processing Error: {e}",
+                error=[str(e)],
+                records=input_data.records,
+            )
         except FatalError as e:
+            logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
             raise e
+        except Exception as e:
+             logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
+             yield AgentOutput(
+                 source=self.id,
+                 role=self.role,
+                 content=f"Unexpected Error: {e}",
+                 error=[str(e)],
+                 records=input_data.records,
+             )
 
     async def initialize(self, **kwargs) -> None:
-        """Initialize the agent"""
+        """Initialize the agent (e.g., load resources)."""
+        pass # Default implementation
 
-    async def on_reset(self, cancellation_token: CancellationToken) -> None:
-        pass
+    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+        """Reset the agent's internal state."""
+        pass # Default implementation

@@ -11,8 +11,8 @@ from buttermilk._core.contract import AgentInput, AgentOutput
 class TestAgent:
     async def process(self, *, agent_input: AgentInput) -> AgentOutput:
         return AgentOutput(
-            agent_id="test_agent",
-            agent_role="TestAgent",
+            source="test_agent",
+            role="TestAgent",
             content="Processed",
             outputs={"result": 2 * agent_input.inputs["value"]},
         )
@@ -44,14 +44,14 @@ async def test_run_flow(client: TestClient):
             "/flow",
             json={
                 "agent_id": "test_agent",
-                "agent_role": "TestAgent",
+                "role": "TestAgent",
                 "inputs": {"value": 4},
             },
         )
         assert response.status_code == 200
         assert response.json() == {
             "agent_id": "test_agent",
-            "agent_role": "TestAgent",
+            "role": "TestAgent",
             "content": "Processed",
             "outputs": {"result": 8},
         }
@@ -71,7 +71,7 @@ async def test_pubsub_callback(client: TestClient, monkeypatch):
         return MockResponse(
             {
                 "agent_id": "test_agent",
-                "agent_role": "TestAgent",
+                "role": "TestAgent",
                 "content": "Processed",
                 "outputs": {"result": 8},
             },
@@ -92,7 +92,7 @@ async def test_pubsub_callback(client: TestClient, monkeypatch):
             {
                 "task": "flow",
                 "agent_id": "test_agent",
-                "agent_role": "TestAgent",
+                "role": "TestAgent",
                 "inputs": {"value": 4},
             },
         ).encode("utf-8"),
@@ -102,8 +102,8 @@ async def test_pubsub_callback(client: TestClient, monkeypatch):
     callback(message)
 
     agent_input = AgentInput(
-        agent_role="test_agent",
-        agent_id="TestAgent",
+        role="test_agent",
+        source="TestAgent",
         inputs={"value": 4},
     )
     response = await agent.process(agent_input=agent_input)

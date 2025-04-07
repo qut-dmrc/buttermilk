@@ -41,8 +41,8 @@ class Fetch(Agent, ToolConfig):
         record = await self._run(**input_data.inputs)
 
         return AgentOutput(
-            agent_id=self.id,
-            agent_role=self.role,
+            source=self.id,
+            role=self.role,
             content=record.fulltext,
             records=[record],
         )
@@ -100,8 +100,8 @@ class Fetch(Agent, ToolConfig):
 
         if record:
             return AgentOutput(
-                agent_id=self.id,
-                agent_role=self.role,
+                source=self.id,
+                role=self.role,
                 content=record.fulltext,
                 records=[record],
             )

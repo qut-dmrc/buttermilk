@@ -5,7 +5,7 @@ from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
 )
-from autogen_core.models import ChatCompletionClient, ModelFamily
+from autogen_core.models import ChatCompletionClient, ModelFamily, ModelInfo
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
@@ -47,7 +47,7 @@ class LLMConfig(BaseModel):
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
-    model_info: dict = {}
+    model_info: ModelInfo
     configs: dict = Field(default={}, description="Options to pass to the constructor")
 
 
@@ -104,7 +104,7 @@ class AutoGenWrapper(RetryWrapper):
     """
 
     client: ChatCompletionClient
-
+    model_info: ModelInfo
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""
         # Use the retry logic
@@ -199,7 +199,7 @@ class LLMs(BaseModel):
             client = OpenAIChatCompletionClient(**client_params)
 
         # Store for next time so that we only maintain one client
-        self.autogen_models[name] = AutoGenWrapper(client=client)
+        self.autogen_models[name] = AutoGenWrapper(client=client, model_info=client_params["model_info"])
 
         return self.autogen_models[name]
 

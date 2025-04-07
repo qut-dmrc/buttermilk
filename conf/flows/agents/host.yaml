@@ -8,8 +8,3 @@ host:
     template: panel_host
     model: gemini2flash
     description: ${....params.task}
-  inputs:
-    participants: participants
-    context: context
-    history: history
-    prompt: prompt
