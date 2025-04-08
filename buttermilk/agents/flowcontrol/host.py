@@ -29,10 +29,14 @@ class HostAgent(LLMAgent):
 
     async def handle_control_message(
         self,
-        message: OOBMessages,
-    ) -> None:
+        message: OOBMessages, ctx: MessageContext, **kwargs
+    ) -> OOBMessages:
         # Respond to certain control messages addressed to us
-        # for now drop everything though.
+        if isinstance(message, ConductorRequest):
+            next_step = await self._process(message, cancellation_token=ctx.cancellation_token)
+            return next_step
+            await self._input_callback(message)
+        
         return
 
     async def listen(self, message: GroupchatMessageTypes, 

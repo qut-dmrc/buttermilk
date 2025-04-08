@@ -10,6 +10,7 @@ from buttermilk._core.contract import (
     CONFIRM,
     AgentInput,
     AgentOutput,
+    ConductorRequest,
     FlowMessage,
     GroupchatMessageTypes,
     ManagerMessage,
@@ -49,7 +50,7 @@ class Selector(AutogenOrchestrator):
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
-        request = AgentInput(
+        request = ConductorRequest(
             source="Selector",
             role=self.flow_name,
             inputs={"participants": participants, "task": self.params.get("task")},

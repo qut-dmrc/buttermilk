@@ -23,7 +23,7 @@ from buttermilk._core.contract import (
     OOBMessages,
     UserInstructions,AllMessages,
 )
-from buttermilk.agents.flowcontrol.types import HostAgent
+from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.ui.generic import UIAgent 
 from buttermilk.bm import logger
 
@@ -79,10 +79,11 @@ class AutogenAgentAdapter(RoutedAgent):
         else:
             asyncio.create_task(self.agent.initialize())
 
+
     @message_handler
     async def receive_message(
         self,
-        message: AllMessages,
+        message: GroupchatMessageTypes,
         ctx: MessageContext,
     ) -> AllMessages | None: 
         """Handle incoming messages by delegating to the wrapped agent."""
@@ -97,14 +98,9 @@ class AutogenAgentAdapter(RoutedAgent):
         if isinstance(message, GroupchatMessageTypes):
             # For normal messages, extract and record data from the message.
             await self.agent.listen(message=message, ctx=ctx)
-        elif isinstance(message, OOBMessages):
-            # Control messages should be isolated out-of-band
-            if self.is_manager:
-                return await self.handle_oob(message=message, ctx=ctx)
-            # Otherwise, ignore the message.
-            return None
         else:
-            raise ValueError(f"Unexpected message type: {type(message)}")
+            logger.warning(f"{self.id} received unexpected message type: {type(message)}")
+            return
         
         # Process using the wrapped agent's _process method, which may yield outputs
         try:
@@ -145,17 +141,17 @@ class AutogenAgentAdapter(RoutedAgent):
             return error_output
 
 
-
-    @message_handler
-    async def handle_oob(
+    @message_handler(match=lambda self,x,y: self.is_manager)
+    async def receive_message(
         self,
         message: OOBMessages,
         ctx: MessageContext,
-    ) -> None:
-        """Handle out-of-band control messages."""
-        # Delegate to the agent's control message handler
-        # Note: handle_control_message is async but doesn't return anything significant for routing
-        await self.agent.handle_control_message(message)
+    ) -> OOBMessages | None: 
+        """Handle separately isolated out-of-band control messages"""
+        if self.is_manager:
+            return await self.agent.handle_control_message(message=message, ctx=ctx)
+        return None
+
 
     def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
         """Create a callback for handling user input if needed.

@@ -188,7 +188,9 @@ class Agent(AgentConfig, ABC):
     async def handle_control_message(
         self,
         message: OOBMessages,
-    ) -> None:
+        ctx: MessageContext = None,
+        **kwargs
+    ) -> OOBMessages | None:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
 

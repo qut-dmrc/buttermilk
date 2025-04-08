@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import pydantic
 from pydantic import BaseModel, PrivateAttr
@@ -11,6 +11,7 @@ from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
+    FlowMessage,
     GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
@@ -135,25 +136,25 @@ class SlackUIAgent(UIAgent):
                 text=confirm_blocks["text"],
                 blocks=confirm_blocks["blocks"],
             )
-        else:
-            raise ValueError("Invalid message type")
 
     async def _cancel_input_request(self):
         if self._current_input_message is not None:
-            fn = self.app.client.chat_delete(
+            await self.app.client.chat_delete(
                 channel=self.context.channel_id,
                 ts=self._current_input_message.data["ts"],
             )
-            await request_with_retry(fn)
             self._current_input_message = None
+
 
     async def _process(
         self,
-        input_data: AgentInput,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AgentOutput | None:
+    ) -> AsyncGenerator[AgentOutput | None, None]:
         """Tell the user we're expecting some data, but don't wait around"""
-        await self._request_input(input_data)
+        if isinstance(message, (AgentInput, ManagerRequest)):
+            await self._request_input(message)
         yield # Required for async generator typing
 
     async def initialize(self, input_callback, **kwargs) -> None:

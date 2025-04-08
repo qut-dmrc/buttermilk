@@ -237,7 +237,7 @@ class LLMAgent(Agent):
         if isinstance(message, AgentInput):
             logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Handling as standard input.")
         elif isinstance(message, GroupchatMessageTypes):
-            logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Ignoring.")
+            logger.warning(f"Agent {self.id} received {type(message)} directly in _process. Ignoring.")
             return
         else:
             logger.warning(f"Agent {self.id} {self.role} dropping unknown message: {message.type} from {message.source}")
@@ -270,6 +270,9 @@ class LLMAgent(Agent):
         # --- Handle LLM Response ---
         if isinstance(create_result.content, str):
             # LLM returned a direct string response
+            if create_result.content.strip() == "":
+                # Skip empty responses
+                return
             yield await self._create_agent_output(
                 raw_content=create_result.content,
                 llm_metadata=llm_metadata,
