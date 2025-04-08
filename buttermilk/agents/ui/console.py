@@ -14,7 +14,7 @@ from buttermilk import logger
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ManagerRequest,
     ManagerResponse,
     UserInstructions,
@@ -36,7 +36,7 @@ class CLIUserAgent(UIAgent):
             output += msg.content
         return Markdown(output)
 
-    async def listen(self, message: GroupchatMessages, ctx: MessageContext = None, **kwargs):
+    async def listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs):
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
@@ -66,8 +66,19 @@ class CLIUserAgent(UIAgent):
                 user_input = await ainput()
                 if user_input == "exit":
                     raise KeyboardInterrupt
+                
+                if re.sub(r"\W", "", user_input).lower() in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q"     ]:
+                    # confirm negative
+                    await self._input_callback(
+                        ManagerResponse(
+                            role=self.role,
+                            source=self.id,
+                            confirm=False,
+                        ),
+                    )
+
+                elif not re.sub(r"\W", "", user_input):
                 # treat empty string as confirmation
-                if not re.sub(r"\W", "", user_input):
                     await self._input_callback(
                         ManagerResponse(
                             role=self.role,

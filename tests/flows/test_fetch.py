@@ -1,11 +1,11 @@
 import pytest
 
-from buttermilk.tools.fetch import Fetch
+from buttermilk.tools.fetch import FetchRecord
 
 
 @pytest.fixture
 def ingester():
-    return Fetch()
+    return FetchRecord()
 
 
 NEWS_RECORDS = [

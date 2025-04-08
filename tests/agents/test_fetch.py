@@ -6,7 +6,7 @@ from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscri
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.runner_types import Record
-from buttermilk.tools.fetch import Fetch
+from buttermilk.tools.fetch import FetchRecord
 
 
 class TestFetch:
@@ -15,10 +15,10 @@ class TestFetch:
     @pytest.fixture
     def mock_fetch(self):
         # actually, don't.
-        return Fetch(id="test_fetch", role="fetch", description="test only")
+        return FetchRecord(id="test_fetch", role="fetch", description="test only")
         """Create a mock Fetch instance without dealing with initialization."""
-        with patch.object(Fetch, "__init__", return_value=None):
-            agent = Fetch()
+        with patch.object(FetchRecord, "__init__", return_value=None):
+            agent = FetchRecord()
             agent.role = "test_step"
             agent.publish = AsyncMock()
             return agent
@@ -277,10 +277,10 @@ async def test_run_record_agent(
     agent_input,
 ):
     runtime = SingleThreadedAgentRuntime()
-    agent_id = await Fetch.register(
+    agent_id = await FetchRecord.register(
         runtime,
         DefaultTopicId().type,
-        lambda: Fetch(config=fetch_agent_cfg),
+        lambda: FetchRecord(config=fetch_agent_cfg),
     )
     await runtime.add_subscription(
         TypeSubscription(

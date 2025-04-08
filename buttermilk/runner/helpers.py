@@ -3,10 +3,6 @@ from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
-from autogen_core import FunctionCall
-from autogen_core.tools import FunctionTool
-
-from buttermilk._core.agent import ToolConfig
 from buttermilk._core.config import DataSourceConfig
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
@@ -256,24 +252,6 @@ def cache_data(uri: str) -> str:
         f.write(data)
     return dataset
 
-
-def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall]:
-    """Instantiate tools and return their wrapped entry functions."""
-    _fns = []
-    for cfg in tool_cfg:
-        from buttermilk.tools import AVAILABLE_TOOLS
-
-        try:
-            obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
-            tool = obj(**cfg.model_dump())
-            fn = FunctionTool(
-                tool._run,
-                description="Look up an article by its RECORD_ID or URI.",
-            )
-            _fns.append(fn)
-        except Exception as e:
-            raise ValueError(f"Unable to instantiate tool: {cfg}: {e}") from e
-    return _fns
 
 
 async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.DataFrame]:

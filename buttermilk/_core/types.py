@@ -14,7 +14,6 @@ from pydantic import (
     Field,
 )
 
-from ..utils import get_ip
 
 _global_run_id = ""
 
@@ -97,4 +96,5 @@ class SessionInfo(pydantic.BaseModel):
 
     async def get_ip(self):
         if not self.ip:
+            from ..utils import get_ip
             self.ip = await get_ip()

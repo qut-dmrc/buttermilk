@@ -11,12 +11,12 @@ Read the following conversation and phrase a specific question for the next pane
 
 Once you have reached the end of the analysis and checked for any errors or improvements, you should address the User ROLE and ask for approval to finalise the answer.
 
-Your result should be presented in strictly compliant JSON format with the following keys:
+You may use the tools provided to help you decide on the next step.
+
+Provide your final decision in strictly compliant JSON format with the following keys:
 ```json
 {"plan": <STR: BRIEFLY describe the next step for the group.>,
 "role": <STR: the ROLE name (not the description) of the next expert to respond.>,
-"tool": <STR: the name of a TOOL that you want to execute, if required. Default: null>
-"arguments": <DICT[STR,STR]: A dictionary consisting of named parameters to pass to the tool or agent, if required. Default: {}>,
 "error": <STR: Normally NULL, unless you encounter an error performing this task.>}
 ```
 

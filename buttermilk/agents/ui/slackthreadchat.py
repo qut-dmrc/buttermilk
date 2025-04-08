@@ -10,7 +10,7 @@ from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
@@ -70,7 +70,7 @@ class SlackUIAgent(UIAgent):
 
     async def listen(
         self,
-        message: GroupchatMessages,
+        message: GroupchatMessageTypes,
         ctx: MessageContext = None,
         **kwargs,
     ) -> None:

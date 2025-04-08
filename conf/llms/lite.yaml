@@ -1,9 +1,11 @@
+host: gemini2flash
+
 general:
-  - gemini2flashthinking
+  - gemini2flashlite
 
 judgers:
-  - gemini2flashthinking
+  - gemini2flashlite
 
 synthesisers:
-  - gemini2flashthinking
+  - gemini2flashlite
   - o3-mini-high

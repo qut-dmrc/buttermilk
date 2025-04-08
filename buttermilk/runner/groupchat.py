@@ -22,7 +22,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     FlowMessage,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,

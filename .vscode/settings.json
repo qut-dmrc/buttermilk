@@ -19,16 +19,15 @@
     ],
   "ruff.lineLength": 120,
   "python.analysis.typeCheckingMode": "standard",
-  "python.analysis.exclude": [".venv", "**/node_modules", "**/__pycache__", ".git"],
+  // "python.analysis.include": ["buttermilk"],
+  // "python.analysis.exclude": ["**/node_modules", "**/__pycache__", ".git"],
   // "python.analysis.extraPaths": [".venv/**/*"],
-  "python.analysis.include": ["buttermilk"],
   "python.analysis.diagnosticMode": "workspace",
-  "python.analysis.autoSearchPaths": false,
+  "python.analysis.autoSearchPaths": true,
   "python.analysis.useLibraryCodeForTypes": true,
   "python.analysis.indexing": true,
   "python.analysis.autoImportCompletions": true,
   "python.analysis.packageIndexDepths": [
-
     {
       "name": "sklearn",
       "depth": 2

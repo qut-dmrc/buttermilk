@@ -19,7 +19,7 @@ from buttermilk._core.contract import (
     AgentOutput,
     AllMessages,
     FlowMessage,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     OOBMessages,
     UserInstructions,
 )
@@ -51,12 +51,11 @@ from buttermilk._core.runner_types import Record
 
 
 class ToolConfig(BaseModel):
-    id: str
     name: str
     description: str
-    tool_obj: str | None = None
+    tool_obj: str
 
-    data_cfg: list[DataSourceConfig] = Field(
+    data: list[DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
@@ -147,18 +146,18 @@ class Agent(AgentConfig, ABC):
         self._run_fn = _process_fn()
         return self
 
-    @abstractmethod
-    async def listen(self, message: GroupchatMessages, 
+    async def listen(self, message: GroupchatMessageTypes, 
         ctx: MessageContext = None,
         **kwargs):
         """Save incoming messages for later use."""
-        raise NotImplementedError
+        # Not implemented generically. Discard input.
+        pass
 
 
     @abstractmethod
     async def _process(
         self,
-        message: GroupchatMessages,
+        message: GroupchatMessageTypes,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput|None, None]:

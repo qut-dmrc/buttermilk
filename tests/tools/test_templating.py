@@ -2,7 +2,7 @@ from json import JSONDecodeError
 
 import pytest
 
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.templating import load_template
 from buttermilk.utils.utils import read_json
 

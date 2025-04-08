@@ -6,5 +6,11 @@ host:
   num_runs: 1
   parameters:
     template: panel_host
-    model: gemini2flash
-    description: ${....params.task}
+    model: ${llms.host}
+  tools:
+    - name: fetch_record 
+      tool_obj: fetch_record
+      description: Fetch a record from the database by ID or URL
+      data: 
+        - ${datasets.tja_train}
+

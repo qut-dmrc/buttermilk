@@ -198,7 +198,7 @@ class ToolOutput(FunctionExecutionResult):
 
 OOBMessages = Union[ManagerMessage, ManagerRequest, ManagerResponse, ConductorRequest]
 
-GroupchatMessages = Union[
+GroupchatMessageTypes = Union[
     AgentOutput,
     ToolOutput,
     UserInstructions,
@@ -206,5 +206,5 @@ GroupchatMessages = Union[
     
 ]
 
-AllMessages = Union[GroupchatMessages, OOBMessages]
+AllMessages = Union[GroupchatMessageTypes, OOBMessages]
     

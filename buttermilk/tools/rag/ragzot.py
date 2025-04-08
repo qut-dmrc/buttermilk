@@ -3,12 +3,14 @@
 import asyncio
 from typing import Self
 
+from autogen_core import FunctionCall
 from autogen_core.models._types import UserMessage
 from autogen_core.tools import FunctionTool
 from chromadb import Collection
 
 from buttermilk import logger
-from buttermilk.agents.llm import LLMAgent
+from buttermilk._core.agent import ToolConfig
+from buttermilk.agents.llm import LLMAgent, Tool, ToolSchema
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 TASK_FOR_QUERY = "RETRIEVAL_QUERY"  # Use RETRIEVAL_QUERY for query embedding
@@ -68,7 +70,7 @@ class QueryResults(pydantic.BaseModel):
         return [result.as_message() for result in self.results]
 
 
-class RagZot(LLMAgent):
+class RagZot(LLMAgent, ToolConfig):
     """Retrieval Augmented Generation Agent that queries a vector store
     and fills a template with the results.
     """
@@ -80,9 +82,6 @@ class RagZot(LLMAgent):
     n_results: int = pydantic.Field(default=20)
     no_duplicates: bool = pydantic.Field(default=True)
     max_queries: int = 3
-    max_words_per_query: int | None = pydantic.Field(
-        default=None, description="Optional maximum token count (approximated by word count) per query result set."
-    )
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
@@ -95,7 +94,7 @@ class RagZot(LLMAgent):
         # Add concurrent search tool
         search_tool = FunctionTool(
             name="search",
-            description="Search for information in the knowledge base about a specific topic or question",
+            description=self.description,
             func=self.search,
         )
 
@@ -104,10 +103,14 @@ class RagZot(LLMAgent):
 
         return self
 
+    @property
+    def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
+        return self._tools_list
+
     async def search(self, queries: list[str]) -> list[QueryResults]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
-            return "No queries provided or vector store not initialized."
+            raise ValueError("No queries provided or vector store not initialized.")
 
         # Limit the number of concurrent queries
         if len(queries) > self.max_queries:

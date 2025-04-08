@@ -4,12 +4,13 @@ from typing import Any, Self
 
 import pydantic
 import regex as re
+from shortuuid import uuid
 
 from buttermilk._core.agent import Agent, CancellationToken, ToolConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     UserInstructions,
 )
 from buttermilk._core.runner_types import Record
@@ -20,7 +21,9 @@ from buttermilk.utils.utils import URL_PATTERN, extract_url
 MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
-class Fetch(Agent, ToolConfig):
+class FetchRecord(Agent, ToolConfig):
+    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}" )
+    role: str = pydantic.Field(default="") 
     _data: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
@@ -35,7 +38,7 @@ class Fetch(Agent, ToolConfig):
 
     async def _process(
         self,
-        message: GroupchatMessages,
+        message: GroupchatMessageTypes,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | None, None]:
@@ -56,10 +59,10 @@ class Fetch(Agent, ToolConfig):
         self,
         record_id: str | None = None,
         uri: str | None = None,
-        prompt: str | None = None,
-        **kwargs,
-    ) -> Record | None:
+        prompt: str | None = None
+    ) -> AgentOutput | None:
         """Entry point when running as a tool."""
+        record  = None
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
                 record_id = prompt.strip().strip("!")
@@ -67,8 +70,17 @@ class Fetch(Agent, ToolConfig):
             "You must provide EITHER record_id OR uri."
         )
         if record_id:
-            return await self.get_record_dataset(record_id)
-        return await download_and_convert(uri)
+            record = await self.get_record_dataset(record_id)
+        else:
+            record =await download_and_convert(uri)
+        
+        if record:
+            return AgentOutput(
+                source=self.id,
+                role=self.role,
+                content=record.fulltext,
+                records=[record],
+            )
 
     async def get_record_dataset(self, record_id: str) -> Record | None:
         while not self._data_task.done():
@@ -87,10 +99,10 @@ class Fetch(Agent, ToolConfig):
 
     async def receive_output(
         self,
-        message: GroupchatMessages,
+        message: GroupchatMessageTypes,
         **kwargs,
-    ) -> GroupchatMessages | None:
-        """Watch for URLs or record ids and inject them into the chat."""
+    ) -> GroupchatMessageTypes | None:
+        """If running as an agent, watch for URLs or record ids and inject them into the chat."""
         if not isinstance(message, UserInstructions):
             return None
         if not (match := re.match(self._pat, message.content)):

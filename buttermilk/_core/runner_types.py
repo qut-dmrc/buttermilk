@@ -187,15 +187,24 @@ class Record(BaseModel):
     @computed_field
     @property
     def fulltext(self) -> str:
-        # Metadata, Text, but not paragraph labels.
-        # Ground truth not included
+        """Combines metadata and text content into a single string.
+
+        Excludes ground truth and component labels.
+        """
+        parts = []
 
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
 
-        for part in self.components:
-            if part.content:
-                all_text.append(part.content)
+        if self.metadata:
+            parts.append("--- Metadata ---")
+            for k, v in self.metadata.items():
+                parts.append(f"{k}: {v}")
+            parts.append("---")  # Separator
 
+        component_texts = [part.content for part in self.components if part.content]
+        if component_texts:
+             parts.extend(component_texts)
+             
         return "\n".join(all_text)
 
     @computed_field

@@ -11,7 +11,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     FlowMessage,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
@@ -129,7 +129,7 @@ class Selector(AutogenOrchestrator):
         # Collect data from groupchat messages
         async def collect_result(
             _agent: ClosureContext,
-            message: GroupchatMessages,
+            message: GroupchatMessageTypes,
             ctx: MessageContext,
         ) -> None:
             # Process and collect responses

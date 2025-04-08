@@ -3,6 +3,7 @@ import json
 from typing import Any, AsyncGenerator, Self
 
 from autogen_core.models._types import UserMessage
+from numpy import isin
 import pydantic
 import regex as re
 from autogen_core import CancellationToken, FunctionCall, MessageContext
@@ -22,15 +23,15 @@ from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
     FlowMessage,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ToolOutput,
     UserInstructions,
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.runner_types import Record
 from buttermilk.bm import bm, logger
-from buttermilk.runner.helpers import create_tool_functions
-from buttermilk.tools.json_parser import ChatParser
+from buttermilk.utils._tools import create_tool_functions
+from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.templating import (
     _parse_prompty,
     load_template,
@@ -50,11 +51,12 @@ class LLMAgent(Agent):
     def custom_agent_id(self) -> Self:
         # Set a custom name based on our major parameters
         components = self.id.split("-")
+            
         components.extend([
             v
             for k, v in self.parameters.items()
             if k not in ["formatting", "description", "template"]
-            and not re.search(r"\s", v)
+            and v and not re.search(r"\s", v)
         ])
         components = [c[:12] for c in components if c]
         self.id = "_".join(components)[:63]
@@ -72,6 +74,12 @@ class LLMAgent(Agent):
 
         return self
 
+    @pydantic.model_validator(mode="after")
+    def _load_tools(self) -> Self:
+        self._tools_list = create_tool_functions(self.tools)
+
+        return self
+    
     async def fill_template(
         self,
         inputs: AgentInput | None = None,
@@ -266,7 +274,7 @@ class LLMAgent(Agent):
             error=error_msg,
         )
 
-    async def listen(self, message: GroupchatMessages, 
+    async def listen(self, message: GroupchatMessageTypes, 
         ctx: MessageContext = None,
         **kwargs):
         """Save incoming messages for later use."""
@@ -289,7 +297,7 @@ class LLMAgent(Agent):
         
         if isinstance(message, AgentInput):
             logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Handling as standard input.")
-        elif isinstance(message, GroupchatMessages):
+        elif isinstance(message, GroupchatMessageTypes):
             logger.debug(f"Agent {self.id} received {type(message)} directly in _process. Ignoring.")
             return
         else:
@@ -349,7 +357,7 @@ class LLMAgent(Agent):
             # --- Reflection Phase (after tool execution) ---
             reflection_tasks = []
             for tool_result in tool_outputs:
-                if tool_result.is_error:
+                if isinstance(tool_result, AgentOutput) and tool_result.is_error:
                     # Optionally yield an error output for failed tool calls
                     error_msg = f"Tool call '{tool_result.name}' failed: {tool_result.content}"
                     logger.warning(error_msg)
@@ -360,7 +368,6 @@ class LLMAgent(Agent):
                         # Consider adding tool call info to metadata here
                     )
                     continue # Skip reflection for failed tools? Or reflect on the error?
-
 
                 try:
                     reflection_messages = messages.copy()

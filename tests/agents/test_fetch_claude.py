@@ -5,7 +5,7 @@ import pytest
 
 from buttermilk._core.contract import AgentInput, AgentOutput, UserInstructions
 from buttermilk._core.runner_types import Record
-from buttermilk.tools.fetch import Fetch
+from buttermilk.tools.fetch import FetchRecord
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def mock_record():
 def fetch_agent():
     """Create a fetch agent for testing."""
     with patch("asyncio.create_task"):
-        agent = Fetch(
+        agent = FetchRecord(
             id="test_fetch",
             role="Test Fetch",
             description="Test fetch agent",

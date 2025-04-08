@@ -16,7 +16,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
-    GroupchatMessages,
+    GroupchatMessageTypes,
     ManagerMessage,
     FlowMessage,
     ManagerRequest,
@@ -86,11 +86,15 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> AllMessages | None: 
         """Handle incoming messages by delegating to the wrapped agent."""
-        # Pass messages along to the agent, which then responds if required.
-        # The agent's internal logic or orchestrator-provided context handles history.
+        # Pass messages along to the agent in two stages.
+        # - First, pass to the listen function, which just extracts data
+        #   that the agent is configured to listen for.
+        # - Second, call _process, and the agent may choose to respond.
+        #   Agent input variables can be supplied either from its own
+        #   internal state or by the orchestrator in the _process() call.
         
         # First, divide into control and in-band messages
-        if isinstance(message, GroupchatMessages):
+        if isinstance(message, GroupchatMessageTypes):
             # For normal messages, extract and record data from the message.
             await self.agent.listen(message=message, ctx=ctx)
         elif isinstance(message, OOBMessages):
@@ -105,17 +109,24 @@ class AutogenAgentAdapter(RoutedAgent):
         # Process using the wrapped agent's _process method, which may yield outputs
         try:
             agent_output = None
+            # Don't allow an agent to react to its own results.
+            if isinstance(message, FlowMessage) and message.source == self.agent.id:
+                return None
+            elif ctx.sender and ctx.sender.type == self.agent.id:
+                return None
+            
+            # Now start agent processing
             async for agent_output in self.agent._process(message, cancellation_token=ctx.cancellation_token):
-                if self.id.type.startswith(CONDUCTOR):
-                    # If we are the host, our replies are coordination, not content.
-                    # In that case, don't publish them, only return them directly.
-                    pass
-                elif agent_output:
-                    # Otherwise, send it out to all subscribed agents.
+                # Send the message out to other subscribed agents.
+                if agent_output:
                     await self.publish_message(
                         agent_output,
                         topic_id=self.topic_id,
                     )
+                    # if self.id.type.startswith(CONDUCTOR):
+                    #     # If we are the host, our replies are coordination, not content.
+                    #     # In that case, don't publish them, only return them directly.
+                    #     pass
                 
             return agent_output  # returns the last message generated
 

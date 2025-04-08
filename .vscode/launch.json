@@ -51,8 +51,8 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans,hate,ffa,simple]",
-        "+flow=trans",
+        "+flows=[simple]",
+        "+flow=simple",
         "ui=console",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
