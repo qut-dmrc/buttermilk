@@ -90,7 +90,9 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Ask for user input from the UI."""
-        if isinstance(message, (AgentInput, ManagerRequest)):
+        if isinstance(message, ManagerResponse):
+            return
+        elif isinstance(message, (AgentInput, ManagerRequest)):
             extra_blocks = dict_to_blocks(message.inputs)
             if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
@@ -182,8 +184,8 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self._input_callback(ManagerResponse(confirm=False))
-            await self._input_callback(UserInstructions(content=message["text"]))
+            await self._input_callback(ManagerResponse(confirm=False, source="slack-thread", role=self.role))
+            await self._input_callback(UserInstructions(content=message["text"], role=self.role, source="slack-thread"))
 
         # Button action handlers
         async def handle_confirm(ack, body, client):
@@ -219,7 +221,7 @@ class SlackUIAgent(UIAgent):
                 actions=None,
             )
             # Call callback with boolean True
-            await self._input_callback(ManagerResponse(confirm=True))
+            await self._input_callback(ManagerResponse(confirm=True, source="slack-thread", role=self.role))
             self._current_input_message = None
 
         async def handle_cancel(ack, body, client):
@@ -250,7 +252,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean False
-            await self._input_callback(ManagerResponse(confirm=False))
+            await self._input_callback(ManagerResponse(confirm=False, source="slack-thread", role=self.role))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)
