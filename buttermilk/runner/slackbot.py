@@ -276,7 +276,7 @@ async def start_flow_thread(
 
         # Prepend init_text if it's not empty
         if init_text.strip():
-            history.append(UserMessage("content" init_text, "source": "slack-thread"))
+            history.append(UserMessage(content=init_text,source="slack-thread"))
             logger.debug(
                 "Added initial text to history",
                 extra={"text_length": len(init_text)},
