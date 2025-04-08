@@ -18,11 +18,13 @@ You are a careful analyst working collaboratively with your team. You are partic
 <END CRITERIA>
 {% endif %}
 
-# User:
-<CONVERSATION HISTORY>
-{% history %}
-</CONVERSATION HISTORY>
+# Placeholder:
+{{records}}
 
+# Placeholder:
+{{context}}
+
+# User:
 {% if prompt %}
 {{ prompt }}
 {% endif %}

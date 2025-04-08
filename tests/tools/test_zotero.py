@@ -5,7 +5,7 @@ import pytest
 
 from buttermilk.data.vector import InputDocument
 from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
-from buttermilk.tools.zotero import ZotDownloader
+from buttermilk.libs.zotero import ZotDownloader
 
 
 # Mock bm object and credentials if ZotDownloader relies on them during init

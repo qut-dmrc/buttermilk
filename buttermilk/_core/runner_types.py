@@ -16,7 +16,8 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk import logger
+from .log import logger
+from .contract import UserMessage
 
 
 class MediaObj(BaseModel):
@@ -184,6 +185,10 @@ class Record(BaseModel):
 
     components: list[MediaObj] = Field(default=[])
 
+    def __str__(self) -> str:
+        return self.fulltext
+    
+ 
     @computed_field
     @property
     def fulltext(self) -> str:
@@ -192,8 +197,6 @@ class Record(BaseModel):
         Excludes ground truth and component labels.
         """
         parts = []
-
-        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
 
         if self.metadata:
             parts.append("--- Metadata ---")
@@ -205,7 +208,7 @@ class Record(BaseModel):
         if component_texts:
              parts.extend(component_texts)
              
-        return "\n".join(all_text)
+        return "\n".join(parts)
 
     @computed_field
     @property
@@ -305,10 +308,10 @@ class Record(BaseModel):
 
         return self
 
-    def as_openai_message(
+    def as_message(
         self,
         role: Literal["user", "human", "system", "assistant"] = "user",
-    ) -> dict | None:
+    ) -> UserMessage:
         # Prepare input for model consumption
         leading_components = []
         trailing_components = []
@@ -337,9 +340,7 @@ class Record(BaseModel):
                 f"No text or model compatible media provided for {self.record_id}",
             )
             return None
+        
+        message = UserMessage(content=self.fulltext, source=role)
 
-        message = {
-            "role": role,
-            "content": components,
-        }
         return message

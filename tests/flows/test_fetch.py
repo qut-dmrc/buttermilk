@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk.tools.fetch import FetchRecord
+from buttermilk.agents.fetch import FetchRecord
 
 
 @pytest.fixture

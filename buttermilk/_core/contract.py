@@ -2,8 +2,7 @@
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Union
-
-from autogen_core.models._types import UserMessage
+from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
     BaseModel,
@@ -12,8 +11,8 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk._core.config import DataSourceConfig, SaveInfo
-from buttermilk._core.runner_types import Record
+from .config import DataSourceConfig, SaveInfo
+from .runner_types import Record
 from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -23,6 +22,7 @@ MANAGER = "manager"
 CLOSURE = "collector"
 CONFIRM = "confirm"
 
+LLMMessages = Union[SystemMessage | UserMessage | AssistantMessage]
 
 class FlowProtocol(BaseModel):
     flow_name: str  # flow name
@@ -192,6 +192,13 @@ class ToolOutput(FunctionExecutionResult):
     results: Any =  Field(default_factory=dict)
     messages: list[UserMessage] = Field(default_factory=list)
     args: list[str] | list[dict[str,Any]] | dict[str, Any] = Field(default_factory=dict)
+
+    content: str
+    name: str = "unknown"
+    call_id: str = "unknown"
+    is_error: bool |None = False
+
+    send_to_ui: bool = False
 
 #######
 # Unions

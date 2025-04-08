@@ -43,53 +43,51 @@ class Selector(AutogenOrchestrator):
         """
         self._next_step = None
 
-        while True:
-            # store the last message received, so that any changes in instructions
-            # are incorporated before executing the next step
-            _last_message = self._last_message
+        # store the last message received, so that any changes in instructions
+        # are incorporated before executing the next step
+        _last_message = self._last_message
 
-            # Each step, we proceed by asking the CONDUCTOR agent what to do.
-            participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
-            request = AgentInput(
-                source="Selector",
-                role=self.flow_name,
-                inputs={"participants": participants, "description": self.params.get("task")},
+        # Each step, we proceed by asking the CONDUCTOR agent what to do.
+        participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
+        request = AgentInput(
+            source="Selector",
+            role=self.flow_name,
+            inputs={"participants": participants, "task": self.params.get("task")},
+        )
+        responses = await self._ask_agents(
+            CONDUCTOR,
+            message=request,
+        )
+
+        if len(responses) > 1:
+            raise ProcessingError("Conductor returned multiple responses.")
+
+        instructions = responses[0]
+
+        # TODO(NS): Add finish condition
+        # return
+
+        # Determine the next step based on the response
+        if not instructions or not (next_step := instructions.outputs.get("role")):
+            raise ProcessingError("Next step not found from conductor.")
+
+        if next_step not in self._agent_types:
+            raise ProcessingError(
+                f"Step {next_step} not found in registered agents.",
             )
-            responses = await self._ask_agents(
-                CONDUCTOR,
-                message=request,
+
+        if self._last_message == _last_message:
+            # No change to inputs
+            yield StepRequest(
+                role=next_step,
+                source=self.flow_name,
+                prompt=instructions.outputs.pop("prompt", ""),
+                description=instructions.outputs.pop("plan", ""),
+                tool=instructions.outputs.get("tool", None),
+                arguments=instructions.outputs,
             )
-
-            if len(responses) > 1:
-                raise ProcessingError("Conductor returned multiple responses.")
-
-            instructions = responses[0]
-
-            # TODO(NS): Add finish condition
-            # return
-
-            # Determine the next step based on the response
-            if not instructions or not (next_step := instructions.outputs.get("role")):
-                raise ProcessingError("Next step not found from conductor.")
-
-            if next_step not in self._agent_types:
-                raise ProcessingError(
-                    f"Step {next_step} not found in registered agents.",
-                )
-
-            if self._last_message == _last_message:
-                # No change to inputs
-                yield StepRequest(
-                    role=next_step,
-                    source=self.flow_name,
-                    prompt=instructions.outputs.pop("prompt", ""),
-                    description=instructions.outputs.pop("plan", ""),
-                    tool=instructions.outputs.get("tool", None),
-                    arguments=instructions.outputs,
-                )
-            # wait a bit and go around again
-            await asyncio.sleep(10)
-            continue
+        # wait a bit and go around again
+        await asyncio.sleep(10)
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""
@@ -196,14 +194,24 @@ class Selector(AutogenOrchestrator):
                     content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
                 ),
             )
-            if not await self._user_confirmation.get():
-                await self._send_ui_message(
-                    ManagerMessage(source=self.flow_name, role="orchestrator", content="OK, shutting down thread."),
-                )
-                return
+            # Just wait for the first message to come through before doing anything else.
+            await self._user_confirmation.get()
 
             while True:
                 try:
+
+                    await self._send_ui_message(
+                        ManagerRequest(
+                            source=self.flow_name,
+                            role="orchestrator",
+                            content=f"Shall I go ahead and determine the next step?",
+                        ),
+                    )
+                    await asyncio.sleep(5)
+                    # Just wait for the first message to come through before doing anything else.
+                    while not await self._user_confirmation.get():
+                        await asyncio.sleep(1)
+
                     # Get next step in the flow
                     step = await anext(self._get_next_step())
 
@@ -211,7 +219,7 @@ class Selector(AutogenOrchestrator):
                     confirm_step = ManagerRequest(
                         source=self.flow_name,
                         role="orchestrator",
-                        content="Here's my proposed next step. Do you want to proceed?\n" + str(step.description),
+                        content="Here's my proposed next step. Do you want to proceed?\n`" + str(step.description) + "`",
                         arguments=step.arguments,
                         prompt=step.prompt,
                         description=step.description,
@@ -220,6 +228,7 @@ class Selector(AutogenOrchestrator):
                     await self._send_ui_message(confirm_step)
                     if not await self._user_confirmation.get():
                         # User did not confirm plan; go back and get new instructions
+                        await asyncio.sleep(5)
                         continue
                     # Run next step
                     await self._execute_step(step)
@@ -229,6 +238,17 @@ class Selector(AutogenOrchestrator):
                     break
                 except ProcessingError as e:
                     logger.error(f"Error in SelectorOrchestrator.run: {e}")
+                    await self._send_ui_message(
+                        ManagerRequest(
+                            source=self.flow_name,
+                            role="orchestrator",
+                            content=f"Unable to get next step. Confirm to try again or enter another prompt.",
+                        ),
+                    )
+                    await asyncio.sleep(5)
+                    # Just wait for the first message to come through before doing anything else.
+                    while not await self._user_confirmation.get():
+                        await asyncio.sleep(1)
                 except FatalError:
                     raise
                 except Exception as e:  # This is only here for debugging for now.

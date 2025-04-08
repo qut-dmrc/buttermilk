@@ -2,7 +2,6 @@
 prompt_placeholder: true
 inputs:
   - extracts
-  - history
   - prompt
 ---
 
@@ -34,8 +33,8 @@ You should answer only in strictly correct JSON in the following schema:
 Sometimes, search results are garbled. Make sure you filter out illegible results and format all results appropriately in your response.
 </INSTRUCTIONS>
 
-# User:
+# Placeholder:
+{{records}}
 
-<CONVERSATION HISTORY>
-{{history}}
-</CONVERSATION HISTORY>
+# Placeholder:
+{{context}}

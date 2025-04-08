@@ -51,8 +51,8 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[simple]",
-        "+flow=simple",
+        "+flows=[trans]",
+        "+flow=trans",
         "ui=console",
         "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
@@ -73,7 +73,7 @@
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
         "llms=full",
-      ],
+      ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

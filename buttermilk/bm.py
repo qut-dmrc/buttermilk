@@ -42,10 +42,10 @@ try:
 except:
     pass
 
-from buttermilk._core.config import Project
-from buttermilk._core.llms import LLMs
-from buttermilk.utils.keys import SecretsManager
-from buttermilk.utils.utils import load_json_flexi
+from ._core.config import Project
+from ._core.llms import LLMs
+from .utils.keys import SecretsManager
+from .utils.utils import load_json_flexi
 
 from ._core.log import logger
 from .utils import save

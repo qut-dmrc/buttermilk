@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
 
+from autogen_core import CancellationToken, MessageContext
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,

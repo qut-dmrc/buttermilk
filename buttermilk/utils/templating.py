@@ -12,10 +12,10 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.defaults import TEMPLATES_PATH
-from buttermilk._core.exceptions import FatalError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
-
+from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessages, SystemMessage, UserMessage
 class KeyValueCollector(BaseModel):
     """A simple collector for key-value pairs
     to insert into templates.
@@ -150,10 +150,7 @@ def load_template(
             except TemplateNotFound:
                 # Not a template, use as regular string
                 processed_params[k] = v
-        else:
-            # TODO @nicsuzor consider not including if we can tell it's a template var
-            processed_params[k] = v
-
+        
     # Create a combined variables dict with trusted parameters taking precedence
     all_vars = dict(untrusted_inputs)
     all_vars.update(processed_params)  # Trusted params override untrusted ones
@@ -165,32 +162,50 @@ def load_template(
     return rendered, set(undefined_vars)
 
 
-def make_messages(local_template: str) -> list[tuple[str, str]]:
-    lc_messages = []
+def make_messages(local_template: str, placeholders: dict[str, list[LLMMessages]], fail_on_missing_placeholders: bool = False) -> list[LLMMessages]:
+    output:  list[LLMMessages] = []
     try:
         # Parse messages using Prompty format
         # First we strip the header information from the markdown
         prompty = _parse_prompty(local_template)
 
-        # Next we use Prompty's format to set roles within the template
-        from promptflow.core._prompty_utils import parse_chat
-
-        messages = parse_chat(
-            prompty,
-            valid_roles=["system", "user", "human", "placeholder"],
-        )
-
-        # Convert to langchain format
-        # (Later we won't need this, because langchain ends up converting back to our json anyway)
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            if content:
-                # Don't add empty messages
-                lc_messages.append((role, content))
-
     except Exception as e:
         msg = f"Unable to decode template expecting Prompty format: {e}, {e.args=}"
         raise (ValueError(msg)) from e
 
-    return lc_messages
+    # Next we use Prompty's format to set roles within the template
+    from promptflow.core._prompty_utils import parse_chat
+
+    messages = parse_chat(
+        prompty,
+        valid_roles=["system", "user", "assistant", "placeholder",
+                "developer",
+                "human"]
+    )
+
+    # Convert to LLMMessages
+    for message in messages:
+        var_name = re.sub(r"[^\w\d_]+", "", message["content"]).lower()
+        if not var_name:
+            # don't add empty messages
+            continue 
+        match message['role'].lower():
+            case "developer" | "system":
+                output.append(SystemMessage(content=message["content"]))
+            case "user" | "human":            
+                output.append(UserMessage(content=message["content"], source="template"))                      
+            case "assistant":
+                output.append(AssistantMessage(content=message["content"], source="template"))
+            case "placeholder":
+                # Remove everything except word chars to get the variable name
+                if data := placeholders.get(var_name):
+                    output.extend(data)
+            case _:
+                err = (
+                        f"Missing {var_name} in placeholder vars.",
+                    )
+                if fail_on_missing_placeholders:
+                    raise ProcessingError(err)
+                logger.warning(err)
+    
+    return output

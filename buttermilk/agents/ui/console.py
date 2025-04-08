@@ -26,26 +26,27 @@ class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
 
-    def _fmt_msg(self, msg: FlowMessage) -> Markdown:
+    def _fmt_msg(self, message: FlowMessage) -> Markdown:
         """Format a message for display in the console."""
-        output = ""
-        output = f"### {msg.source} ({msg.role})\n"
-        if msg.outputs:
-            output += pretty_repr(msg.outputs, max_string=8000)
-        elif msg.content:
-            output += msg.content
-        return Markdown(output)
+        output = []
+        output.append(f"### {message.source} ({message.role})")
+
+        if message.outputs:
+            output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
+        else:
+             output.append(message.content)
+        output = [o for o in output if o]
+        return Markdown("\n".join(output))
 
     async def listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs):
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
 
-        # self._console.print(self._fmt_msg(message))
-        self._console.print(pretty_repr(message.outputs).replace("\\n", ""))
+        self._console.print(self._fmt_msg(message))
 
         if isinstance(message, ManagerRequest):
-            self._console.print(message.description)
+            # self._console.print(message.description)
             self._console.print(Markdown("Input requested:\n"))
 
     async def _process(

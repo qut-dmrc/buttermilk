@@ -14,22 +14,13 @@ def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall | Too
     _fns = []
     for cfg in tool_cfg:
         try:
-            fn = create_tool_function(cfg)
-            _fns.append(fn)
+            from buttermilk.tools import AVAILABLE_TOOLS
+
+            obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
+            tool = obj(**cfg.model_dump())
+            fn_list = tool.get_functions()
+            _fns.extend(fn_list)
         except Exception as e:
             raise ValueError(f"Unable to instantiate tool: {cfg}: {e}") from e
     return _fns
 
-def create_tool_function(cfg: ToolConfig) -> FunctionCall | Tool | ToolSchema | FunctionTool:
-    """Create function for a single tool."""
-    
-    from buttermilk.tools import AVAILABLE_TOOLS
-
-    obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
-    tool = obj(**cfg.model_dump())
-    fn = FunctionTool(
-        tool._run,
-        description=cfg.description, 
-        name=cfg.name,strict=False,
-    )
-    return fn

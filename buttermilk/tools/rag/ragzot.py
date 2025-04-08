@@ -1,7 +1,7 @@
 # Add this to the first cell or a new cell before getting the collection
 
 import asyncio
-from typing import Self
+from typing import Any, Self
 
 from autogen_core import FunctionCall
 from autogen_core.models._types import UserMessage
@@ -10,6 +10,7 @@ from chromadb import Collection
 
 from buttermilk import logger
 from buttermilk._core.agent import ToolConfig
+from buttermilk._core.contract import ToolOutput
 from buttermilk.agents.llm import LLMAgent, Tool, ToolSchema
 from buttermilk.data.vector import ChromaDBEmbeddings
 
@@ -60,15 +61,6 @@ class RefResult(pydantic.BaseModel):
         )
 
 
-class QueryResults(pydantic.BaseModel):
-    results: list[RefResult]
-    args: dict[str, str]
-
-    @pydantic.computed_field
-    @property
-    def messages(self) -> list[UserMessage]:
-        return [result.as_message() for result in self.results]
-
 
 class RagZot(LLMAgent, ToolConfig):
     """Retrieval Augmented Generation Agent that queries a vector store
@@ -95,7 +87,7 @@ class RagZot(LLMAgent, ToolConfig):
         search_tool = FunctionTool(
             name="search",
             description=self.description,
-            func=self.search,
+            func=self._run,
         )
 
         # Add tools to the agent
@@ -103,11 +95,14 @@ class RagZot(LLMAgent, ToolConfig):
 
         return self
 
+    def get_functions(self) -> list[Any]:
+        return self._tools_list
+
     @property
     def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
         return self._tools_list
-
-    async def search(self, queries: list[str]) -> list[QueryResults]:
+    
+    async def _run(self, queries: list[str]) -> list[ToolOutput]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
             raise ValueError("No queries provided or vector store not initialized.")
@@ -130,7 +125,7 @@ class RagZot(LLMAgent, ToolConfig):
 
         return results
 
-    async def _query_db(self, query: str) -> QueryResults:
+    async def _query_db(self, query: str) -> ToolOutput:
         results = self._vectorstore.query(
             query_texts=[query],
             n_results=self.n_results * 4 if self.no_duplicates else self.n_results,
@@ -170,5 +165,11 @@ class RagZot(LLMAgent, ToolConfig):
                 logger.debug(f"Tried to calculate token usage but couldn't: {self._model_client.model_info}")
 
         records = records[: self.n_results]
-
-        return QueryResults(results=records, args=dict(query=query))
+        return ToolOutput(call_id="",
+                content="\n\n".join([str(r) for r in records]),
+                results=records,
+                args=dict(query=query),
+                messages=[r.as_message() for r in records],
+                is_error=False,
+                name="search"
+            )

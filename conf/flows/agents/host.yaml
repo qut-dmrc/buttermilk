@@ -7,10 +7,12 @@ host:
   parameters:
     template: panel_host
     model: ${llms.host}
-  tools:
-    - name: fetch_record 
-      tool_obj: fetch_record
-      description: Fetch a record from the database by ID or URL
-      data: 
-        - ${datasets.tja_train}
+    task: 
+    participants:
+  # tools:
+  #   - name: fetch_record 
+  #     tool_obj: fetch_record
+  #     description: Fetch a record from the database by ID or URL
+  #     data: 
+  #       - ${datasets.tja_train}
 

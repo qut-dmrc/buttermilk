@@ -12,6 +12,7 @@ from pydantic import (
     PrivateAttr,
 )
 
+from autogen_core.tools import BaseTool, FunctionTool
 from buttermilk import logger
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.contract import (
@@ -21,6 +22,7 @@ from buttermilk._core.contract import (
     FlowMessage,
     GroupchatMessageTypes,
     OOBMessages,
+    ToolOutput,
     UserInstructions,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
@@ -51,18 +53,28 @@ from buttermilk._core.runner_types import Record
 
 
 class ToolConfig(BaseModel):
-    name: str
-    description: str
-    tool_obj: str
+    role: str= Field(
+        default="")
+    description: str= Field(
+        default="")
+    tool_obj: str = Field(
+        default="")
+
 
     data: list[DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
 
-    def _run(self, *args, **kwargs):
-        raise NotImplementedError
+    def get_functions(self) -> list[Any]:
+        """Create function definitions for this tool."""
+        raise NotImplementedError()
 
+
+    async def _run(
+        self, **kwargs
+    ) -> list[ToolOutput] | None:
+        raise NotImplementedError()
 
 #########
 # Agent

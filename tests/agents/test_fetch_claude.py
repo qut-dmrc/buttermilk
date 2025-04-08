@@ -5,7 +5,7 @@ import pytest
 
 from buttermilk._core.contract import AgentInput, AgentOutput, UserInstructions
 from buttermilk._core.runner_types import Record
-from buttermilk.tools.fetch import FetchRecord
+from buttermilk.agents.fetch import FetchRecord
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscri
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.runner_types import Record
-from buttermilk.tools.fetch import FetchRecord
+from buttermilk.agents.fetch import FetchRecord
 
 
 class TestFetch:

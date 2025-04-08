@@ -76,11 +76,9 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if content %}
-<BEGIN CONTENT>
-{{ content }}
-<END CONTENT>
-{% endif %}
+
+# Placeholder:
+{{records}}
 
 # User:
 Analyse the underlying reasons behind differences among the answers below.
@@ -92,5 +90,8 @@ Analyse the underlying reasons behind differences among the answers below.
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}
-  {{ history }}
+
+# Placeholder:
+{{context}}
+
 {% endif %}

@@ -28,22 +28,8 @@ STEP 3: Finally, you should provide an overall and decisive conclusion that appl
 {{ criteria }}
 <END CRITERIA>
 
-{% if records %}
 # Placeholder:
 {{records}}
 
-# User:
-{% else %}
-# User:
-<CONTENT>
-{{content}}
-</CONTENT>
-{% endif %}
-
-{% if prompt %}
-{{prompt}}
-{% else %}
-<CONVERSATION SO FAR>
-{{history}}
-</CONVERSATION>
-{% endif %}
+# Placeholder:
+{{context}}

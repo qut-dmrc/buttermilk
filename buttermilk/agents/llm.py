@@ -35,6 +35,7 @@ from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.templating import (
     _parse_prompty,
     load_template,
+    make_messages,
 )
 
 
@@ -85,95 +86,40 @@ class LLMAgent(Agent):
         inputs: AgentInput | None = None,
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
-        untrusted_inputs = {}
-        if inputs:
-            untrusted_inputs.update(dict(inputs.inputs))
-
-            # Special handling for named placeholder keywords
-            untrusted_inputs['context'] = await self._model_context.get_messages()
-            untrusted_inputs["history"] = "\n\n".join([
-                f"**{msg.source}**: {msg.content}" for msg in untrusted_inputs['context']
-            ])
-            untrusted_inputs['records'] = self._records
-            untrusted_inputs["content"] = [
-                f"{rec.record_id}: {rec.fulltext}" for rec in self._records
-            ]
+        
+        # 1. Prepare Jinja variables based on self.parameters mapping
+        jinja_vars = {}
+        for param_key in self.parameters.keys():
+            # Check if the parameter value looks like a key for inputs.inputs
+            if inputs and param_key in inputs.inputs and isinstance(inputs.inputs[param_key], str):
+                jinja_vars[param_key] = inputs.inputs[param_key]
+        
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(
             parameters=self.parameters,
-            untrusted_inputs=untrusted_inputs,
+            untrusted_inputs=jinja_vars,
         )
-
+            
+        # Prepare placeholder data separately
+        record_messages = []
+        context_messages = await self._model_context.get_messages()
+        if inputs:
+            record_messages = [rec.as_message() for rec in inputs.records if inputs]
+        placeholders = {
+                "records": record_messages,"context": context_messages,
+            }
+        
         # Interpret the template as a Prompty; split it into separate messages with
         # role and content keys. First we strip the header information from the markdown
         prompty = _parse_prompty(rendered_template)
 
         # Next we use Prompty's format to divide into messages and set roles
-        messages = []
-        for message in parse_chat(
-            prompty,
-            valid_roles=[
-                "system",
-                "user",
-                "developer",
-                "human",
-                "placeholder",
-                "assistant",
-            ],
-        ):
-            # For placeholder messages, we are subbing in one or more
-            # entire Message objects
-            if message["role"] == "placeholder":
-                # Remove everything except word chars to get the variable name
-                if (
-                    var_name := re.sub(r"[^\w\d_]+", "", message["content"]).lower()
-                ) in ["records", "context"]:
-                    if var_name == "records":
-                        for rec in inputs.records:
-                            # TODO make this multimodal later
-                            messages.append(
-                                UserMessage(content=rec.fulltext, source="record"),
-                            )
-                    elif var_name == "context":
-                        messages.extend(inputs.context)
-                    # Remove the placeholder from the list of unfilled variables
-                    if var_name in unfilled_vars:
-                        unfilled_vars.remove(var_name)
-                else:
-                    err = (
-                        f"Missing {var_name} in template or placeholder vars for agent {self.id}.",
-                    )
-                    if self.fail_on_unfilled_parameters:
-                        raise ValueError(err)
-                    logger.warning(err)
-
-                continue
-
-            # Remove unfilled variables now
-            content_without_vars = re.sub(r"\{\{.*?\}\}", "", message["content"])
-
-            # And check if there's content in the message still
-            if re.sub(r"\s+", "", content_without_vars):
-                if message["role"] in ("system", "developer"):
-                    messages.append(SystemMessage(content=content_without_vars))
-                elif message["role"] in ("assistant"):
-                    messages.append(
-                        AssistantMessage(
-                            content=content_without_vars,
-                            source=self.id,
-                        ),
-                    )
-                else:
-                    messages.append(
-                        UserMessage(content=content_without_vars, source=self.id),
-                    )
-
-        if unfilled_vars:
+        messages = make_messages(local_template=prompty, placeholders=placeholders)
+              
+        if (unfilled_vars := (set(unfilled_vars) - set(placeholders.keys()))):
             err = f"Template for agent {self.id} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ProcessingError(err)
-            logger.warning(err)
-
         return messages
 
     async def _execute_tools(
@@ -214,20 +160,13 @@ class LLMAgent(Agent):
                 is_error=True,
                 name=tool.name,
             )]
+        if not isinstance(results, list):
+            results = [results]
         outputs = []
-        if isinstance(results, list):
-            for call_result in results:
-                outputs.append(ToolOutput(
-                    call_id=call.id,
-                    content=f"{tool.name} ({str(arguments)})",
-                    results=call_result.results,
-                    args=call_result.args,
-                    messages=call_result.messages,
-                    is_error=False,
-                    name=tool.name,
-                ))
-        else:
-            outputs = [results]
+        for result in results:
+            result.call_id = call.id
+            result.name = tool.name
+            outputs.append(result)
         return outputs
 
 
@@ -320,7 +259,7 @@ class LLMAgent(Agent):
 
         except Exception as e:
             error_msg = f"Error during initial LLM call: {e}"
-            logger.warning(error_msg, exc_info=True)
+            logger.warning(error_msg)
             yield await self._create_agent_output(
                 raw_content=error_msg,
                 error_msg=error_msg,
@@ -349,7 +288,7 @@ class LLMAgent(Agent):
                 yield await self._create_agent_output(
                     raw_content=error_msg,
                     error_msg=error_msg,
-                    records=records,
+                    records=None,
                     llm_metadata=llm_metadata, # Include metadata from initial call
                 )
                 return
@@ -357,18 +296,28 @@ class LLMAgent(Agent):
             # --- Reflection Phase (after tool execution) ---
             reflection_tasks = []
             for tool_result in tool_outputs:
-                if isinstance(tool_result, AgentOutput) and tool_result.is_error:
+                if tool_result.is_error:
                     # Optionally yield an error output for failed tool calls
                     error_msg = f"Tool call '{tool_result.name}' failed: {tool_result.content}"
                     logger.warning(error_msg)
                     yield await self._create_agent_output(
                         raw_content=error_msg,
                         error_msg=error_msg,
-                        records=records,
+                        records=None,
                         # Consider adding tool call info to metadata here
                     )
                     continue # Skip reflection for failed tools? Or reflect on the error?
-
+                
+                if tool_result.send_to_ui:
+                    # Ready to output as is
+                    yield AgentOutput(
+                        source=self.id,
+                        role=self.role,
+                        content=tool_result.content,
+                        records=tool_result.results,
+                    )
+                    await asyncio.sleep(1) # let the message be absorbed
+                
                 try:
                     reflection_messages = messages.copy()
                     # Add the tool result message to the history for the reflection call
@@ -385,10 +334,8 @@ class LLMAgent(Agent):
                     error_msg = f"Error preparing reflection for tool '{tool_result.name}': {e}"
                     logger.warning(error_msg, exc_info=True)
                     yield await self._create_agent_output(
-                        raw_content=error_msg, error_msg=error_msg, records=records
+                        raw_content=error_msg, error_msg=error_msg, records=None
                     )
-
-
             # Process completed reflection tasks
             for task in asyncio.as_completed(reflection_tasks):
                 try:
@@ -399,14 +346,14 @@ class LLMAgent(Agent):
                     yield await self._create_agent_output(
                         raw_content=reflection_result.content,
                         llm_metadata=reflection_metadata,
-                        records=records, # Carry over original records
+                        records=None,
                     )
                 except Exception as e:
                     error_msg = f"Error during reflection LLM call: {e}"
                     logger.warning(error_msg, exc_info=False)
                     yield await self._create_agent_output(
-                        raw_content=error_msg, error_msg=error_msg, records=records
-                    )
+                        raw_content=error_msg, error_msg=error_msg, records=None
+                )
         else:
              # Handle unexpected content type from LLM
              error_msg = f"Unexpected content type from LLM: {type(create_result.content)}"

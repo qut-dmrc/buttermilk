@@ -172,8 +172,5 @@ class AutogenAgentAdapter(RoutedAgent):
                 user_message,
                 topic_id=self.topic_id,
             )
-
-        # Check against the generic UIAgent base class
-        if isinstance(self.agent, UIAgent):
-            return input_callback
-        return None
+        
+        return input_callback

@@ -79,7 +79,7 @@ class AutogenOrchestrator(Orchestrator):
                 await self._runtime.publish_message(request, topic_id=self._topic)
             while True:
                 await asyncio.sleep(0.1)
-        except StopAsyncIteration:
+        except (StopAsyncIteration, KeyboardInterrupt):
             logger.info("AutogenOrchestrator.run: Flow completed.")
         finally:
             # Clean up resources

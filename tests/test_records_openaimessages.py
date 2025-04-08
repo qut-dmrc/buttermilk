@@ -132,7 +132,7 @@ async def test_record_update():
 
 def test_as_openai_message_with_media(image_bytes: bytes):
     message = Record(data=[MediaObj(mime="image/png", content=image_bytes), "test"])
-    openai_message = message.as_openai_message()
+    openai_message = message.as_message()
     assert openai_message["role"] == "user"
     assert len(openai_message["content"]) == 2
     assert openai_message["content"][0]["type"] == "image_url"
@@ -141,7 +141,7 @@ def test_as_openai_message_with_media(image_bytes: bytes):
 
 def test_as_openai_message_with_media_and_role(image_bytes: bytes):
     message = Record(data=[MediaObj(mime="image/png", content=image_bytes)])
-    openai_message = message.as_openai_message(role="system")
+    openai_message = message.as_message(role="system")
     assert openai_message["role"] == "system"
     assert openai_message["content"][0]["type"] == "image_url"
     assert len(openai_message["content"]) == 1
@@ -149,7 +149,7 @@ def test_as_openai_message_with_media_and_role(image_bytes: bytes):
 
 def test_as_openai_message_with_text():
     message = Record(text="test")
-    openai_message = message.as_openai_message(role="system")
+    openai_message = message.as_message(role="system")
     assert openai_message["role"] == "system"
     assert openai_message["content"] == [{"type": "text", "text": "test"}]
     assert len(openai_message["content"]) == 1
@@ -158,5 +158,5 @@ def test_as_openai_message_with_text():
 def test_as_openai_message_no_media_no_text():
     with pytest.raises(OSError):
         message = Record()
-    openai_message = message.as_openai_message()
+    openai_message = message.as_message()
     assert len(openai_message["content"]) == 0
