@@ -115,6 +115,10 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
+    tasks: list[dict[str, Any]] = Field(
+        default_factory=lambda: [{}], # Default to one task with empty parameters
+        description="List of parameter sets, each defining a distinct task variation for this agent instance.",
+    )
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="A mapping of data to agent inputs",

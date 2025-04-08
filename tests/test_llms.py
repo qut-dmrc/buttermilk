@@ -39,8 +39,7 @@ class TestPromptStyles:
             UserMessage(
                 content="Hi, can you please summarise this content for me?",
                 source="user",
-            ),
-            UserMessage(content=text_record.fulltext, source="user"),
+            ), text_record.as_message(role="user"),
         ]
 
         response = await llm.create(messages=messages)
@@ -50,9 +49,8 @@ class TestPromptStyles:
     @pytest.mark.anyio
     async def test_words_in_mouth(self, llm):
         messages = [
-            UserMessage("hi! I'm Siobhan. What's your name?", source="test"),
-            AssistantMessage(
-                "Hi Siobhan! I'm a chatbot, my developers call me",
+            UserMessage(content="hi! I'm Siobhan. What's your name?", source="test"),
+            AssistantMessage(content= "Hi Siobhan! I'm a chatbot, my developers call me",
                 source="assistant",
             ),
         ]

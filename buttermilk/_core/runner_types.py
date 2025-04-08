@@ -15,9 +15,10 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from slack_bolt import Assistant
 
 from .log import logger
-from .contract import UserMessage
+from .contract import AssistantMessage, UserMessage
 
 
 class MediaObj(BaseModel):
@@ -311,7 +312,8 @@ class Record(BaseModel):
     def as_message(
         self,
         role: Literal["user", "human", "system", "assistant"] = "user",
-    ) -> UserMessage:
+        source: str = "record"
+    ) -> UserMessage|AssistantMessage:
         # Prepare input for model consumption
         leading_components = []
         trailing_components = []
@@ -341,6 +343,8 @@ class Record(BaseModel):
             )
             return None
         
-        message = UserMessage(content=self.fulltext, source=role)
-
+        if role == "user":
+            message = UserMessage(content=self.fulltext, source=source)
+        else:
+            message = AssistantMessage(content=self.fulltext, source=source)
         return message
