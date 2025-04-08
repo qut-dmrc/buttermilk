@@ -72,7 +72,7 @@
         "hydra.verbose=false",
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
-        "llms=full",
+        "llms=lite",
       ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

@@ -192,7 +192,6 @@ class LLMs(BaseModel):
             }
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
-            # client = OpenAIChatCompletionClient(**client_params)
             client = AnthropicChatCompletionClient(**client_params)
             client._client = _vertex_client  # type: ignore # replace client with vertexai version
         else:

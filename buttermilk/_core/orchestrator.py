@@ -14,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from buttermilk._core.agent import ChatCompletionContext
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import FlowVariableRouter
@@ -25,7 +26,7 @@ from buttermilk.bm import BM
 BASE_DIR = Path(__file__).absolute().parent
 
 
-PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "records"]
+PLACEHOLDER_VARIABLES = ["participants", "context", "records"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -42,7 +43,6 @@ class Orchestrator(BaseModel, ABC):
         data (Sequence[DataSource]): Data sources available to the flow
         agents (Mapping[str, AgentVariants]): Agent variants available to run in the flow
         params (dict): Flow-level parameters that can be used by agents
-        history (list[str]): List of messages previously exchanged between agents
 
     """
 
@@ -66,7 +66,10 @@ class Orchestrator(BaseModel, ABC):
         description="Flow-level parameters available for use by agents.",
         exclude=True,
     )
+    history: list = Field(default=[])
+
     _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
+    _model_context: ChatCompletionContext
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
@@ -110,6 +113,10 @@ class Orchestrator(BaseModel, ABC):
 
         # initialise the data cache
         self._flow_data.init(self.agents.keys())
+
+        
+        self._model_context = UnboundedChatCompletionContext(initial_messages=self.history)
+        
         return self
 
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
@@ -186,9 +193,7 @@ class Orchestrator(BaseModel, ABC):
 
         Special keywords include:
             - "participants": list of agents in the flow
-            - "content": list of string, fulltext from all records
-            - "history": list of history messages in string format
-            - "context": list of history messages in message format
+            - "context": list of history messages 
             - "records": list of InputRecords
             - "prompt": question from the user
 

@@ -10,7 +10,7 @@ from omegaconf import OmegaConf
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
-from buttermilk._core.contract import MANAGER, FlowProtocol
+from buttermilk._core.contract import MANAGER, AssistantMessage, FlowProtocol, UserMessage
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
@@ -215,12 +215,16 @@ async def read_thread_history(
     history = []
     if replies and "messages" in replies:
         for message in replies["messages"]:
-            if message.get("text", "").startswith("<@"):
+            if message.get("text", "").startswith("<@") or message.get("text", "").startswith("!"):
                 # ignore directed messages
                 continue
             user = message.get("user", "Unknown")
             text = message.get("text", "")
-            history.append({"type": user, "content": text})
+            if message.get("subtype") == "bot_message":
+                history.append(AssistantMessage(content=text, source="slack-thread"))
+            else:
+                history.append(UserMessage(content=text, source="slack-thread"))
+
     return history
 
 
@@ -272,7 +276,7 @@ async def start_flow_thread(
 
         # Prepend init_text if it's not empty
         if init_text.strip():
-            history.append({"user": MANAGER, "text": init_text})
+            history.append(UserMessage("content" init_text, "source": "slack-thread"))
             logger.debug(
                 "Added initial text to history",
                 extra={"text_length": len(init_text)},
