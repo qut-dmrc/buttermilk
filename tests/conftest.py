@@ -40,6 +40,7 @@ def llms(bm: BM) -> LLMs:
     return bm.llms
 
 
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
 def model_name(request) -> str:
     return request.param
 

@@ -158,11 +158,9 @@ def vector_store(
     persist_dir = tmp_path / "chroma_test"
     persist_dir.mkdir()
     # Initialization triggers mocked load_models and splitter creation
-    store = ChromaDBEmbeddings(
+    store = ChromaDBEmbeddings(name="test", type="chromadb",
         collection_name="test_collection",
         persist_directory=str(persist_dir),
-        chunk_size=100,  # Example values, will be used by mock splitter if needed
-        chunk_overlap=10,
         concurrency=5,  # Example concurrency
         upsert_batch_size=50,  # Example upsert batch size
         embedding_batch_size=5,  # Example embedding batch size
@@ -170,7 +168,6 @@ def vector_store(
     # Re-assign mocks as PrivateAttr might not be accessible otherwise post-init
     store._embedding_model = mock_text_embedding_model
     store._collection = mock_chroma_collection
-    store._text_splitter = mock_text_splitter  # Ensure the instance uses our mock
     # Ensure the client mock is also available if needed directly
     store._client = chromadb.PersistentClient(
         path=str(persist_dir),

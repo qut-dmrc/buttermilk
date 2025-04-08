@@ -5,7 +5,7 @@ from buttermilk.agents.fetch import FetchRecord
 
 @pytest.fixture
 def ingester():
-    return FetchRecord()
+    return FetchRecord(description="test ingester")
 
 
 NEWS_RECORDS = [

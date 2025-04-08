@@ -127,7 +127,7 @@ class AgentConfig(BaseModel):
     }
 
 
-class Agent(AgentConfig, ABC):
+class Agent(AgentConfig):
     """Base Agent interface for all processing units.
 
     Agents are stateful. Context is stored internally by the agent
@@ -165,8 +165,6 @@ class Agent(AgentConfig, ABC):
         # Not implemented generically. Discard input.
         pass
 
-
-    @abstractmethod
     async def _process(
         self,
         message: GroupchatMessageTypes,
