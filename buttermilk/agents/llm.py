@@ -183,7 +183,7 @@ class LLMAgent(Agent):
     async def _create_agent_output(
         self,
         raw_content: str | list[Any],
-        task_params: dict[str, Any],
+        task_params: dict[str, Any] = {},
         llm_metadata: dict | None = None,
         records: list[Record] | None = None,
         error_msg: str | None = None,
@@ -277,10 +277,10 @@ class LLMAgent(Agent):
                 error_msg = f"Error during initial LLM call: {e}"
                 logger.warning(error_msg)
                 yield await self._create_agent_output(
-                    raw_content=error_msg,
-                    error_msg=error_msg,
-                    records=records,
-                )
+                        raw_content=error_msg,
+                        error_msg=error_msg,
+                        records=records,
+                    )
                 continue # Move to the next task parameter set
                 
             # --- Handle direct LLM Response ---
@@ -376,15 +376,15 @@ class LLMAgent(Agent):
                             raw_content=error_msg, task_params=task_params, error_msg=error_msg, records=None
                         )
         else:
-             # Handle unexpected content type from LLM
-             error_msg = f"Unexpected content type from LLM (task params: {task_params}): {type(create_result.content)}"
-                 logger.error(error_msg)
-                 yield await self._create_agent_output(
-                     raw_content=str(create_result.content),
-                     task_params=task_params,
-                     error_msg=error_msg,
-                     records=records,
-                     llm_metadata=llm_metadata,
-                 )
+            # Handle unexpected content type from LLM
+            error_msg = f"Unexpected content type from LLM (task params: {task_params}): {type(create_result.content)}"
+            logger.error(error_msg)
+                    yield await self._create_agent_output(
+                        raw_content=str(create_result.content),
+                        task_params=task_params,
+                        error_msg=error_msg,
+                        records=records,
+                        llm_metadata=llm_metadata,
+                    )
             # --- End of loop for one task parameter set ---
         # --- End of outer loop for all task parameter sets ---
