@@ -37,9 +37,9 @@ class HostAgent(LLMAgent):
     ) -> OOBMessages | ProceedToNextTaskSignal | None: # Adjusted return type hint
         # --- Handle Conductor Request (existing logic) ---
         if isinstance(message, ConductorRequest):
-            async for next_step_output in self._process(message, cancellation_token=ctx.cancellation_token):
-                return next_step_output 
-            return None
+            async for next_step_output in self.__call__(message, cancellation_token=ctx.cancellation_token):
+                pass
+            return
 
         # --- Handle Task Completion from Worker Agents ---
         elif isinstance(message, TaskProcessingComplete):

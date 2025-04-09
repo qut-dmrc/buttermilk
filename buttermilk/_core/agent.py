@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import Any, AsyncGenerator, Self
+from typing import Any, AsyncGenerator, Self, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
 import pydantic
@@ -167,6 +167,8 @@ class Agent(AgentConfig):
     _model_context: ChatCompletionContext = PrivateAttr(
         default_factory=UnboundedChatCompletionContext,
     )
+    _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
+
     @pydantic.model_validator(mode="after")
     def _get_process_func(self) -> Self:
         """Returns the appropriate processing function based on tracing setting."""
@@ -198,7 +200,7 @@ class Agent(AgentConfig):
 
     async def _process(
         self,
-        message: GroupchatMessageTypes,
+        message: AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
@@ -231,6 +233,11 @@ class Agent(AgentConfig):
         **kwargs,
     ) -> AsyncGenerator[AgentOutput  | UserInstructions | TaskProcessingComplete | None, None]:
         """Allow agents to be called directly as functions by the orchestrator."""
+        # Check if we need to exit out before invoking the decorated tracing function self._run_fn
+        if not isinstance(input_data, self._message_types_handled):
+            logger.debug(f"Agent {self.id} received non-AgentInput message type {type(input_data)} in _process. Ignoring.")
+            return
+        
         try:
             async for output in self._run_fn(input_data, cancellation_token=cancellation_token, **kwargs):
                 yield output

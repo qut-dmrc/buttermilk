@@ -176,8 +176,6 @@ class LLMs(BaseModel):
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
-            # I'm pretty sure this will get replaced by default credentials anyway.
-            client_params["api_key"] = bm._gcp_credentials.token            
             client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(
                 **client_params,
             )

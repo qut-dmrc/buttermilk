@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any, Self
+from typing import Any, Self, Union
 
 import pydantic
 import regex as re
@@ -10,6 +10,7 @@ from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolC
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
+    FlowMessage,
     GroupchatMessageTypes,
     ToolOutput,
     UserInstructions,
@@ -30,6 +31,7 @@ class FetchRecord(Agent, ToolConfig):
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
 
+    _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions|AgentInput])
     @pydantic.model_validator(mode="after")
     def load_data_task(self) -> Self:
         self._data_task = asyncio.create_task(self.load_data())

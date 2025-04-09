@@ -117,7 +117,7 @@ class AutogenAgentAdapter(RoutedAgent):
         # Process 
         try:
             # Use agent's main processing method
-            async for output in self.agent(message, cancellation_token=ctx.cancellation_token):
+            async for output in self.agent.__call__(input_data=message, cancellation_token=ctx.cancellation_token):
                  if output:
                      # Publish yielded messages
                      await self.publish_message(output, topic_id=self.topic_id)

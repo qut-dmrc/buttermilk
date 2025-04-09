@@ -250,19 +250,18 @@ class LLMAgent(Agent):
             else:
                 # don't log other types of messages
                 pass
-
+    
+    # async def __call__(self, input_data: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AsyncGenerator[AgentOutput | UserInstructions | TaskProcessingComplete | None, None]:
+    #     return super().__call__(input_data, cancellation_token, **kwargs)
+    
     async def _process(
         self,
-        message: AgentOutput | ToolOutput | UserInstructions | AgentInput,
+        message: AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
         """Runs a single task or series of tasks."""
-        if not isinstance(message, AgentInput):
-            logger.debug(f"Agent {self.id} received non-AgentInput message type {type(message)} in _process. Ignoring.")
-            return
 
-        input_data = message.inputs
         records = message.records
         num_tasks = len(self.sequential_tasks)
 
@@ -276,7 +275,7 @@ class LLMAgent(Agent):
             current_task_full_params = {**self.parameters, **task_params}
 
             try:
-                messages = await self.fill_template(task_params=task_params, inputs=input_data)
+                messages = await self.fill_template(task_params=task_params, inputs=message)
 
                 create_result = await self._model_client.create(
                     messages=messages,
