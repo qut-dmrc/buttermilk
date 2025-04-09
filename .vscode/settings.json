@@ -1,7 +1,7 @@
 {
   "[python]": {
     // "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
@@ -14,16 +14,22 @@
   "python.terminal.activateEnvironment": true,
   "ruff.interpreter": [".venv/bin/python"],
   "editor.defaultFormatter": "charliermarsh.ruff",
-  "ruff.interpreter": [
-      ".venv/bin/python"
-    ],
   "ruff.lineLength": 120,
   "python.analysis.typeCheckingMode": "standard",
-  // "python.analysis.include": ["buttermilk"],
-  // "python.analysis.exclude": ["**/node_modules", "**/__pycache__", ".git"],
-  // "python.analysis.extraPaths": [".venv/**/*"],
+  "python.analysis.include": [
+    "buttermilk"
+  ],
+  "python.analysis.exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    ".venv"
+  ],
+  "python.analysis.extraPaths": [
+    // ".venv/**/*"
+  ],
   "python.analysis.diagnosticMode": "workspace",
-  "python.analysis.autoSearchPaths": true,
+  "python.analysis.autoSearchPaths": false,
   "python.analysis.useLibraryCodeForTypes": true,
   "python.analysis.indexing": true,
   "python.analysis.autoImportCompletions": true,
@@ -53,4 +59,7 @@
       "depth": 2
     }
   ],
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
 }

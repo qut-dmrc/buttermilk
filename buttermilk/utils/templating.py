@@ -86,7 +86,7 @@ def _parse_prompty(string_template) -> str:
     return result.group(2)
 
 
-def load_template(
+def load_template(template: str,
     parameters: dict,
     untrusted_inputs: dict = {},
 ) -> tuple[str, set[str]]:
@@ -100,7 +100,7 @@ def load_template(
         Tuple: Fully rendered template; set of unfilled variables.
 
     """
-    template = parameters["template"]
+    
 
     recursive_paths = [TEMPLATES_PATH] + [
         p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()

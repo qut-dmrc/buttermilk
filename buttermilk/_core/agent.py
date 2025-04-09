@@ -58,7 +58,6 @@ from buttermilk._core.runner_types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 
-
 class ToolConfig(BaseModel):
     role: str= Field(
         default="")
@@ -196,11 +195,9 @@ class Agent(AgentConfig):
                         inputs = AgentInput(**message.model_dump())
                         # add data from our local state
                         inputs.records.extend(self._records)
+                        inputs.params.update(task_params)
                         inputs.context.extend(await self._model_context.get_messages())
-                        inputs.inputs.update(task_params)
-                        
-                        # Other parameters are passed in through AgentInput messages
-                        params = {**task_params, **message.inputs}
+                        inputs.cancellation_token = msg_context.cancellation_token
 
                         # And are supplemented by placeholders for records and contextual history
                         async for result in self._process(inputs):
@@ -233,7 +230,7 @@ class Agent(AgentConfig):
                                 raise e
                 finally:
                     yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False)
-            
+
             if self._trace_this:
                 return weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
             return traced_process
@@ -244,17 +241,15 @@ class Agent(AgentConfig):
     async def _ready_to_execute(self) -> bool:
         """Check if the agent is ready to execute."""
         return True
-    
+
     async def _listen(self, message: GroupchatMessageTypes, 
         ctx: MessageContext = None,
         **kwargs):
         """Save incoming messages for later use."""
         # Not implemented generically. Discard input.
         pass
-    
-    async def _process(self, 
-        inputs: AgentInput, **kwargs
-    ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
+
+    async def _process(self, inputs: AgentInput, **kwargs) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Process input data yield any output(s).
 
         Outputs:
@@ -282,7 +277,7 @@ class Agent(AgentConfig):
         """Allow agents to be called directly as functions by the orchestrator."""
         async for result in self._run_fn(message=message, cancellation_token=ctx, **kwargs):
             yield result
-              
+
     async def invoke_privately(
         self,
         message: ConductorRequest,
@@ -301,9 +296,9 @@ class Agent(AgentConfig):
             outputs = ConductorResponse(**response[-1].model_dump())
             if len(response)>1:
                 outputs.internal_messages = response[:-1]
-    
+
         return outputs
-    
+
     async def invoke(
         self,
         message: AgentInput,
@@ -315,7 +310,7 @@ class Agent(AgentConfig):
         if not isinstance(message, self._message_types_handled):
             logger.debug(f"Agent {self.id} received non-supported message type {type(message)} in _process. Ignoring.")
             return None
-        
+
         response = []
         outputs = None
         async for output in self._run_fn(message, cancellation_token=ctx, **kwargs):
@@ -328,9 +323,9 @@ class Agent(AgentConfig):
             # And stash others within it.
             if len(response)>1:
                 outputs.internal_messages = response[:-1]
-    
+
         return outputs
-    
+
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""
         pass # Default implementation

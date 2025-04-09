@@ -82,35 +82,6 @@ class FlowMessage(BaseModel):
         ...,
         description="The role of the agent that generated this output.",
     )
-    content: str | None = Field(
-        default=None,
-        description="The human-readable digest representation of the message.",
-    )
-
-    context: list[Any] = Field(
-        default=[],
-        description="Context or history this agent knows or needs.",
-    )
-    
-    records: list[Record] = Field(
-        default=[],
-        description="Records relevant to this message",
-    )
-
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors that occurred during the agent's execution",
-    )
-
-    inputs: dict[str, Any] = Field(
-        default={},
-        description="The data to provide the agent",
-    )
-
-    outputs: dict[str, Any] = Field(
-        default={},
-        description="The data returned from the agent",
-    )
 
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
@@ -127,6 +98,26 @@ class FlowMessage(BaseModel):
 
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
+
+    inputs: dict[str, Any] = Field(
+        default={},
+        description="The data to provide the agent",
+    )
+
+    params: dict[str, Any] = Field(
+        default={},
+        description="Task-specific settings to provide the agent",
+    )
+
+    context: list[Any] = Field(
+        default=[],
+        description="Context or history this agent knows or needs.",
+    )
+
+    records: list[Record] = Field(
+        default=[],
+        description="Records relevant to this message",
+    )
 
     _type = "InputRequest"
     cancellation_token: CancellationToken|None = Field(default=None, exclude=True)
@@ -146,15 +137,29 @@ class UserInstructions(FlowMessage):
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
-class AgentOutput(FlowMessage):
+class AgentOutput(AgentInput):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Agent"
-    
+
+    content: str | None = Field(
+        default=None,
+        description="The human-readable digest representation of the message.",
+    )
+    outputs: dict[str, Any] = Field(
+        default={},
+        description="The data returned from the agent",
+    )
+
+    error: list[str] = Field(
+        default_factory=list,
+        description="A list of errors that occurred during the agent's execution",
+    )
     internal_messages: list[FlowMessage] = Field(
         default_factory=list,
         description="Messages generated along the way to the final response",
     )
+    metadata: dict[str, Any] = Field(default={})
 
 
 ######
@@ -185,7 +190,6 @@ class ConductorResponse(ManagerMessage, AgentOutput):
     """Request for input from the conductor."""
 
     _type = "ConductorResponse"
-
 
 
 class ManagerRequest(ManagerMessage, StepRequest):
