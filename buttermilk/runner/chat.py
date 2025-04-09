@@ -209,9 +209,9 @@ class Selector(AutogenOrchestrator):
                         ),
                     )
                     await asyncio.sleep(5)
-                    # Just wait for the first message to come through before doing anything else.
-                    while not await self._user_confirmation.get():
-                        await asyncio.sleep(1)
+                    if not await self._user_confirmation.get():
+                        await asyncio.sleep(10)
+                        continue
 
                     # Get next step in the flow
                     step = await anext(self._get_next_step())
@@ -247,14 +247,12 @@ class Selector(AutogenOrchestrator):
                         ),
                     )
                     await asyncio.sleep(5)
-                    # Just wait for the first message to come through before doing anything else.
                     while not await self._user_confirmation.get():
                         await asyncio.sleep(1)
                 except FatalError:
                     raise
                 except Exception as e:  # This is only here for debugging for now.
                     logger.exception(f"Error in SelectorOrchestrator.run: {e}")
-                    e.with_traceback()
                 await asyncio.sleep(0.1)
 
         except FatalError as e:

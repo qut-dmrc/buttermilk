@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 from rich.pretty import pretty_repr
 
 from buttermilk import logger
+from buttermilk._core.agent import OOBMessages
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
@@ -43,25 +44,20 @@ class CLIUserAgent(UIAgent):
             logger.error(f"Unable to format message of type {type(message)}: {e}")
             return message.model_dump_json(indent=2)
 
-    async def listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs):
+    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
 
         self._console.print(self._fmt_msg(message))
 
+    async def handle_control_message(self, message: OOBMessages, ctx: MessageContext = None, **kwargs) -> OOBMessages | None:
+        """Handle non-standard messages if needed (e.g., from orchestrator)."""
+        self._console.print(self._fmt_msg(message))
+
         if isinstance(message, ManagerRequest):
             # self._console.print(message.description)
             self._console.print(Markdown("Input requested:\n"))
-
-    async def _process(
-        self,
-        message: FlowMessage,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs,
-    ) -> AsyncGenerator[AgentOutput | None, None]:
-        """Do nothing at this stage."""
-        yield  # Required for async generator typing
 
     async def _poll_input(
         self,
@@ -72,7 +68,7 @@ class CLIUserAgent(UIAgent):
                 user_input = await ainput()
                 if user_input == "exit":
                     raise KeyboardInterrupt
-                
+
                 if re.sub(r"\W", "", user_input).lower() in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q"     ]:
                     # confirm negative
                     await self._input_callback(
@@ -84,7 +80,7 @@ class CLIUserAgent(UIAgent):
                     )
 
                 elif not re.sub(r"\W", "", user_input):
-                # treat empty string as confirmation
+                    # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
                             role=self.role,

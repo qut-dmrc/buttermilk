@@ -184,57 +184,55 @@ class Agent(AgentConfig):
     def _get_process_func(self) -> Self:
         """Returns the appropriate processing function based on tracing setting."""
 
-        def _process_fn():
-            # Ensure weave.op wraps the async generator correctly
-            # This might require adjustments depending on weave's async support
-            async def traced_process(message: AgentInput|ConductorRequest, msg_context: MessageContext, **kwargs):
-                # Agents come in variants, and each variant has a list of tasks that it iterates through.
-                try:
-                    n = 0
-                    for task_params in self.sequential_tasks: 
-                        inputs = AgentInput(**message.model_dump())
-                        # add data from our local state
-                        inputs.records.extend(self._records)
-                        inputs.params.update(task_params)
-                        inputs.context.extend(await self._model_context.get_messages())
+        async def traced_process(
+            *, message: AgentInput | ConductorRequest, message_context: MessageContext, **kwargs
+        ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
+            # Agents come in variants, and each variant has a list of tasks that it iterates through.
+            try:
+                n = 0
+                for task_params in self.sequential_tasks:
+                    inputs = AgentInput(**message.model_dump())
+                    # add data from our local state
+                    inputs.records.extend(self._records)
+                    inputs.params.update(task_params)
+                    inputs.context.extend(await self._model_context.get_messages())
 
-                        # And are supplemented by placeholders for records and contextual history
-                        async for result in self._process(inputs, cancellation_token=msg_context.cancellation_token):
-                            try:
-                                n=n+1
-                                yield result
-                                yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
-                                if not await self._check_heartbeat():
-                                    logger.info(
-                                        f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
-                                    )
-                                    raise StopAsyncIteration
-                            except ProcessingError as e:
-                                logger.error(
-                                    f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
-                                )      
-                                # yield ErrorEvent(
-                                #     source=self.id,
-                                #     role=self.role,
-                                #     content=f"Processing Error: {e}",
-                                #     error=[str(e)],
-                                #     records=input_data.records,
-                                # )
-                                continue
-                            except FatalError as e:
-                                logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
-                                raise e
-                            except Exception as e:
-                                logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
-                                raise e
-                finally:
-                    yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False)
+                    # And are supplemented by placeholders for records and contextual history
+                    async for result in self._process(inputs, cancellation_token=message_context.cancellation_token):
+                        try:
+                            n = n + 1
+                            yield result
+                            yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
+                            if not await self._check_heartbeat():
+                                logger.info(
+                                    f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
+                                )
+                                raise StopAsyncIteration
+                        except ProcessingError as e:
+                            logger.error(
+                                f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
+                            )
+                            # yield ErrorEvent(
+                            #     source=self.id,
+                            #     role=self.role,
+                            #     content=f"Processing Error: {e}",
+                            #     error=[str(e)],
+                            #     records=input_data.records,
+                            # )
+                            continue
+                        except FatalError as e:
+                            logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
+                            raise e
+                        except Exception as e:
+                            logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
+                            raise e
+            finally:
+                yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False)
 
-            if self._trace_this:
-                return weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
-            return traced_process
+        if self._trace_this:
+            self._run_fn = weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
+        self._run_fn = traced_process
 
-        self._run_fn = _process_fn()
         return self
 
     async def _ready_to_execute(self) -> bool:
@@ -274,7 +272,7 @@ class Agent(AgentConfig):
         **kwargs,
     ) -> AsyncGenerator[AgentOutput  | UserInstructions | TaskProcessingComplete | None, None]:
         """Allow agents to be called directly as functions by the orchestrator."""
-        async for result in self._run_fn(message=message, cancellation_token=ctx, **kwargs):
+        async for result in self._run_fn(message=message, message_context=ctx, **kwargs):
             yield result
 
     async def invoke_privately(
@@ -286,8 +284,8 @@ class Agent(AgentConfig):
         """Respond directly to the orchestrator"""
         response = []
         outputs = None
-        async for output in self._run_fn(message, cancellation_token=ctx, **kwargs):
-            if isinstance(response, AgentOutput):
+        async for output in self._run_fn(message=message, message_context=ctx, **kwargs):
+            if isinstance(output, AgentOutput):
                 response.append(output)
 
         if response:
@@ -312,7 +310,7 @@ class Agent(AgentConfig):
 
         response = []
         outputs = None
-        async for output in self._run_fn(message, cancellation_token=ctx, **kwargs):
+        async for output in self._run_fn(message=message, message_context=ctx, **kwargs):
             if isinstance(response, AgentOutput):
                 response.append(output)
 

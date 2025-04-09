@@ -29,26 +29,26 @@ class UIAgent(Agent):
         raise NotImplementedError
         yield # Required for async generator typing
 
-    async def handle_control_message(
-        self,
-        message: OOBMessages, **kwargs):
-        """Process control messages for agent coordination.
+    # async def handle_control_message(
+    #     self,
+    #     message: OOBMessages, **kwargs):
+    #     """Process control messages for agent coordination.
 
-        Args:
-            message: The control message to process
+    #     Args:
+    #         message: The control message to process
 
-        Returns:
-            Optional response to the control message
+    #     Returns:
+    #         Optional response to the control message
 
-        Agents generally do not listen in to control messages,
-        but user interfaces do.
+    #     Agents generally do not listen in to control messages,
+    #     but user interfaces do.
 
-        """
-        # Ask the user for confirmation
-        await self.listen(message, **kwargs)
-        async for _ in self._process(message):
-            pass
-        return
+    #     """
+    #     # Ask the user for confirmation
+    #     await self.listen(message, **kwargs)
+    #     async for _ in self._process(message):
+    #         pass
+    #     return
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface"""

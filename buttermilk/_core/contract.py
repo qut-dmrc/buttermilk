@@ -122,7 +122,7 @@ class UserInstructions(FlowMessage):
 
     _type = "UserInput"
     content: str = Field(default="")
-    
+
     confirm: bool = Field(
         default=False,
         description="Response from user: confirm y/n",
@@ -174,6 +174,14 @@ class ManagerMessage(FlowMessage):
 
     _type = "ManagerMessage"
 
+    content: str | None = Field(
+        default=None,
+        description="The human-readable digest representation of the message.",
+    )
+    outputs: dict[str, Any] = Field(
+        default={},
+        description="Payload data",
+    )
     agent_id: str = Field(default=CONDUCTOR, description="The ID of the agent that generated this output.",
     )
     role: str = Field(
