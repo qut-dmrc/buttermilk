@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from textwrap import indent
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import regex as re
 from aioconsole import ainput
@@ -45,20 +45,27 @@ class CLIUserAgent(UIAgent):
             logger.error(f"Unable to format message of type {type(message)}: {e}")
             return message.model_dump_json(indent=2)
 
-    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
+    async def _listen(
+        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
 
         self._console.print(self._fmt_msg(message))
+        yield None
 
-    async def handle_control_message(self, message: OOBMessages, ctx: MessageContext = None, **kwargs) -> OOBMessages | None:
+    async def _handle_control_message(
+        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[OOBMessages | None, None]:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         self._console.print(self._fmt_msg(message))
 
         if isinstance(message, ManagerRequest):
             # self._console.print(message.description)
             self._console.print(Markdown("Input requested:\n"))
+        yield None
+        return
 
     async def _poll_input(
         self,
@@ -99,7 +106,7 @@ class CLIUserAgent(UIAgent):
                 logger.error(f"Unable to poll input: {e}")
                 raise
 
-    async def initialize(self, input_callback, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface and start input polling"""
         self._input_callback = input_callback
 

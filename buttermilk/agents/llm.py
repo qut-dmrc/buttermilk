@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, AsyncGenerator, Self
+from typing import Any, AsyncGenerator, Callable, Self
 
 from autogen_core.models._types import UserMessage
 import pydantic
@@ -84,9 +84,9 @@ class LLMAgent(Agent):
 
         return self
 
-    async def fill_template(
+    async def _fill_template(
         self,
-        task_params: dict[str, Any], # Accepts task-specific parameters
+        task_params: dict[str, Any],  # Accepts task-specific parameters
         inputs: dict[str, Any],
         placeholders: dict[str, Any] = {},
     ) -> list[Any]:
@@ -184,9 +184,9 @@ class LLMAgent(Agent):
         response.metadata = llm_metadata
         return response
 
-    async def listen(self, message: GroupchatMessageTypes, 
-        ctx: MessageContext = None,
-        **kwargs):
+    async def _listen(
+        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Save incoming messages for later use."""
         if message.content:
             # Map Buttermilk message types to LLM input types
@@ -199,16 +199,17 @@ class LLMAgent(Agent):
             else:
                 # don't log other types of messages
                 pass
+        yield None
 
     async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
+        self, inputs: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
     ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Runs a single task or series of tasks."""
         placeholders = {
             "records": [rec.as_message() for rec in inputs.records if rec],
             "context": inputs.context,
         }
-        messages = await self.fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
+        messages = await self._fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
 
         create_result = await self._model_client.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
         llm_metadata = create_result.model_dump(exclude_unset=True, exclude_none=True)

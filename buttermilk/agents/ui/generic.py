@@ -1,5 +1,6 @@
 import asyncio
-from typing import Any, AsyncGenerator
+from collections.abc import Awaitable
+from typing import Any, AsyncGenerator, Callable, Coroutine
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
@@ -29,28 +30,29 @@ class UIAgent(Agent):
         raise NotImplementedError
         yield # Required for async generator typing
 
-    # async def handle_control_message(
-    #     self,
-    #     message: OOBMessages, **kwargs):
-    #     """Process control messages for agent coordination.
+    async def _handle_control_message(
+        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[OOBMessages | None, None]:
+        """Process control messages for agent coordination.
 
-    #     Args:
-    #         message: The control message to process
+        Args:
+            message: The control message to process
 
-    #     Returns:
-    #         Optional response to the control message
+        Returns:
+            Optional response to the control message
 
-    #     Agents generally do not listen in to control messages,
-    #     but user interfaces do.
+        Agents generally do not listen in to control messages,
+        but user interfaces do.
 
-    #     """
-    #     # Ask the user for confirmation
-    #     await self.listen(message, **kwargs)
-    #     async for _ in self._process(message):
-    #         pass
-    #     return
+        """
+        #     # Ask the user for confirmation
+        #     await self.listen(message, **kwargs)
+        #     async for _ in self._process(message):
+        #         pass
+        #     return
+        yield None
 
-    async def initialize(self, input_callback, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback
 

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
 import time
-from typing import Any, AsyncGenerator, Self, Union
+from typing import Any, AsyncGenerator, Callable, Self, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
 import pydantic
@@ -189,7 +189,7 @@ class Agent(AgentConfig):
         """Returns the appropriate processing function based on tracing setting."""
 
         async def traced_process(
-            *, message: AgentInput | ConductorRequest, message_context: MessageContext, **kwargs
+            *, message: AgentInput | ConductorRequest, cancellation_token=None, **kwargs
         ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
             # Agents come in variants, and each variant has a list of tasks that it iterates through.
             try:
@@ -240,15 +240,19 @@ class Agent(AgentConfig):
 
         return self
 
-    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
+    async def _listen(
+        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Save incoming messages for later use."""
         # Not implemented generically. Discard input.
-        pass
+        yield None
 
     async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
+        self, inputs: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
     ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
-        """Process input data yield any output(s).
+        """Internal process function. Replace this in subclasses.
+
+        Process input data and yield any output(s).
 
         Outputs:
             Yields AgentOutput messages.
@@ -256,38 +260,34 @@ class Agent(AgentConfig):
         raise NotImplementedError
         yield # Required for async generator typing
 
-    async def handle_control_message(
-        self,
-        message: OOBMessages,
-        ctx: MessageContext = None,
-        **kwargs
-    ) -> OOBMessages | None:
+    async def _handle_control_message(
+        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[OOBMessages | None, None]:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
-        return None
+        yield None
 
     async def __call__(
-        self,
-        message: AgentInput,
-        ctx: MessageContext | None = None,
-        **kwargs,
-    ) -> AsyncGenerator[AgentOutput  | UserInstructions | TaskProcessingComplete | None, None]:
+        self, message: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | TaskProcessingComplete | None, None]:
         """Allow agents to be called directly as functions by the orchestrator."""
-        async for result in self._run_fn(message=message, message_context=ctx, **kwargs):
+        async for result in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
             yield result
 
     async def invoke_privately(
         self,
         message: ConductorRequest,
-        ctx: MessageContext | None = None,
+        cancellation_token: Any,
+        publish_callback: Callable,
         **kwargs,
-    ) -> ConductorResponse|None:
+    ) -> AsyncGenerator[FlowMessage, None]:
         """Respond directly to the orchestrator"""
         response = []
         outputs = None
-        async for output in self._run_fn(message=message, message_context=ctx, **kwargs):
-            if isinstance(output, AgentOutput):
+        async for output in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
+            if isinstance(response, (AgentOutput, ToolOutput)):
                 response.append(output)
+            yield output
 
         if response:
             # convert to ConductorResponse
@@ -295,34 +295,34 @@ class Agent(AgentConfig):
             if len(response)>1:
                 outputs.internal_messages = response[:-1]
 
-        return outputs
+            yield outputs
 
     async def invoke(
         self,
         message: AgentInput,
-        ctx: MessageContext | None = None,
+        cancellation_token: Any,
+        publish_callback: Callable,
         **kwargs,
-    ) -> AgentOutput | None:
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | TaskProcessingComplete | None, None]:
         """Allow agents to be called directly as functions by the orchestrator."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):
             logger.debug(f"Agent {self.id} received non-supported message type {type(message)} in _process. Ignoring.")
-            return None
+            return
 
         response = []
-        outputs = None
-        async for output in self._run_fn(message=message, message_context=ctx, **kwargs):
-            if isinstance(response, AgentOutput):
+        async for output in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
+            if isinstance(response, (AgentOutput, ToolOutput)):
                 response.append(output)
 
         if response:
-            # Return only the last result
+            # take only the last result
             outputs = response[-1]
             # And stash others within it.
-            if len(response)>1:
+            if len(response) > 1:
                 outputs.internal_messages = response[:-1]
 
-        return outputs
+            yield outputs
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""

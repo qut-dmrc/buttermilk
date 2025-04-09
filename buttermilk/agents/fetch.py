@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any, Self, Union
+from typing import Any, Callable, Coroutine, Self, Union
 
 from autogen_core import MessageContext
 import pydantic
@@ -26,7 +26,7 @@ MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 class FetchRecord(Agent, ToolConfig):
     id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}" )
-    role: str = pydantic.Field(default="") 
+    role: str
     _data: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
@@ -53,16 +53,18 @@ class FetchRecord(Agent, ToolConfig):
             )]
         return self._fns
 
-    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
+    async def _listen(
+        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Entry point when running this as an agent.
 
         If running as an agent, watch for URLs or record ids and inject them
         into the chat."""
 
         if not isinstance(message, UserInstructions):
-            return None
+            yield None
         if not (match := re.match(self._pat, message.content)):
-            return None
+            yield None
 
         record = None
         if uri := match[2]:
@@ -70,7 +72,7 @@ class FetchRecord(Agent, ToolConfig):
         else:
             # Try to get by record_id (remove bang! first)
             record_id = match[1].strip("!")
-            record = await self.get_record_dataset(record_id=record_id)
+            record = await self._get_record_dataset(record_id=record_id)
 
         if record:
             output = AgentOutput(
@@ -79,7 +81,9 @@ class FetchRecord(Agent, ToolConfig):
                 content=record.fulltext,
                 records=[record],
             )
-            return output
+
+            yield output
+        yield None
 
     async def _run( # type: ignore
         self,
@@ -97,17 +101,27 @@ class FetchRecord(Agent, ToolConfig):
         )
         result = None
         if record_id:
-            record = await self.get_record_dataset(record_id)
-            result = ToolOutput(results=[record],content=record.fulltext, messages=[record.as_message()], args=dict(record_id=record_id), send_to_ui=True)
+            record = await self._get_record_dataset(record_id)
+            if record:
+                result = ToolOutput(
+                    name=self.id,
+                    results=[record],
+                    content=record.fulltext,
+                    messages=[record.as_message()],
+                    args=dict(record_id=record_id),
+                    send_to_ui=True,
+                )
         else:
             record =await download_and_convert(uri)
-            result = ToolOutput(results=[record],content=record.fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True)
+            result = ToolOutput(
+                name=self.id, results=[record], content=record.fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True
+            )
 
         if result:
             return  result
         return None
 
-    async def get_record_dataset(self, record_id: str) -> Record | None:
+    async def _get_record_dataset(self, record_id: str) -> Record | None:
         while not self._data_task.done():
             await asyncio.sleep(1)
 

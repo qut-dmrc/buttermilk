@@ -1,9 +1,10 @@
+from collections.abc import Awaitable
 from huggingface_hub import User
 from pydantic import PrivateAttr
 from buttermilk._core.contract import ConductorRequest, ManagerMessage, ManagerRequest, ManagerResponse, OOBMessages
 from buttermilk.agents.llm import LLMAgent
 
-from typing import Any, AsyncGenerator, Self, Union
+from typing import Any, AsyncGenerator, Callable, Self, Union
 from autogen_core import CancellationToken, MessageContext
 
 from buttermilk import logger
@@ -28,27 +29,26 @@ class HostAgent(LLMAgent):
 
     _message_types_handled: type[Any] = PrivateAttr(default=Union[ConductorRequest])
 
-    async def initialize(self, input_callback, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback
         await super().initialize(**kwargs) # Call parent initialize if needed
 
-    async def handle_control_message( # type: ignore
-        self,
-        message: OOBMessages, ctx: MessageContext, **kwargs
-    ) -> OOBMessages | ProceedToNextTaskSignal | None: 
+    async def _handle_control_message(
+        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+    ) -> AsyncGenerator[OOBMessages | None, None]:
         # --- Handle Conductor Request (existing logic) ---
         if isinstance(message, ConductorRequest):
             next_step_output = None
             async for next_step_output in self.__call__(message, ctx=ctx.cancellation_token):
                 pass
-            return next_step_output
+            yield next_step_output
 
         # --- Handle Task Completion from Worker Agents ---
         elif isinstance(message, TaskProcessingComplete):
             logger.info(f"Host received TaskComplete from {message.source} (Task {message.task_index}, More: {message.more_tasks_remain})")
-            return None
+            yield None
 
         else:
             logger.debug(f"Host received unhandled OOB message type: {type(message)}")
-            return None
+            yield None

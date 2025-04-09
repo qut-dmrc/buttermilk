@@ -70,7 +70,7 @@ class SlackUIAgent(UIAgent):
             **kwargs,
         )
 
-    async def listen(
+    async def _listen(
         self,
         message: GroupchatMessageTypes,
         ctx: MessageContext = None,
@@ -144,7 +144,6 @@ class SlackUIAgent(UIAgent):
                 ts=self._current_input_message.data["ts"],
             )
             self._current_input_message = None
-
 
     async def _process(
         self,

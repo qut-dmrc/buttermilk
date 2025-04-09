@@ -78,7 +78,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         # Take care of any initialization the agent needs to do in this event loop
         if self.is_manager:
-            asyncio.create_task(self.agent.initialize(input_callback=self.handle_input()))
+            asyncio.create_task(self.agent.initialize(input_callback=self._make_publish_callback()))
         else:
             asyncio.create_task(self.agent.initialize())
 
@@ -88,7 +88,7 @@ class AutogenAgentAdapter(RoutedAgent):
         try:
             self.agent._heartbeat.put_nowait(message.go_next)
         except asyncio.QueueFull:
-            logger.warning(f"Heartbeat failed, agent {self.id} is running behind.")
+            logger.debug(f"Heartbeat failed, agent {self.id} is idle or running behind.")
 
     @message_handler
     async def handle_groupchat_message(
@@ -97,9 +97,12 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> None: 
         """Handle incoming group messages by delegating to the wrapped agent."""
-        response = await self.agent._listen(message=message, ctx=ctx)
-        if response:
-            await self.publish_message(response, topic_id=self.topic_id)
+        async for response in self.agent._listen(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        ):
+            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
 
     @message_handler
     async def handle_invocation(
@@ -109,7 +112,14 @@ class AutogenAgentAdapter(RoutedAgent):
     ) -> AgentOutput | None: 
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
-        return await self.agent.invoke(message=message, ctx=ctx)
+        response = None
+        async for response in self.agent.invoke(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        ):
+            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+        return response  # only the last message
 
     @message_handler
     async def handle_conductor_request(
@@ -118,7 +128,15 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> ConductorResponse | None:
         """Handle conductor requests privately."""
-        return await self.agent.invoke_privately(message=message, ctx=ctx)
+        response = None
+        async for response in self.agent.invoke_privately(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        ):
+            pass
+            # await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+        return response  # only the last message
 
     @message_handler
     async def handle_control_message(
@@ -127,22 +145,31 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> OOBMessages | None: 
         """Handle control messages sent OOB. Any response must also be OOB."""
-        return await self.agent.handle_control_message(message=message, ctx=ctx)
+        response = None
+        async for response in self.agent._handle_control_message(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        ):
+            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+        return response  # only the last message
 
-    def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
-        """Create a callback for handling user input if needed.
+    def _make_publish_callback(self, topic_id=None) -> Callable[[UserInstructions], Awaitable[None]] | None:
+        """Create a callback for handling publishing from client if required.
 
         Returns:
-            Optional callback function for user input handling
+            Optional callback function.
 
         """
         """Messages come in from the UI and get sent back out through Autogen."""
+        if not topic_id:
+            topic_id = self.topic_id
 
-        async def input_callback(user_message: UserInstructions) -> None:
+        async def input_callback(message: FlowMessage) -> None:
             """Callback function to handle user input"""
             await self.publish_message(
-                user_message,
-                topic_id=self.topic_id,
+                message,
+                topic_id=topic_id,
             )
 
         return input_callback
