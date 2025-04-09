@@ -177,7 +177,8 @@ class LLMAgent(Agent):
         else:
             outputs = raw_content
             content = str(raw_content)
-        response = AgentOutput(**inputs.model_dump())
+        dump = {k: v for k, v in inputs.__dict__.items() if k in inputs.model_fields_set}
+        response = AgentOutput(**dump)
         response.content = content
         response.outputs = outputs
         response.error = error_msg
@@ -185,7 +186,7 @@ class LLMAgent(Agent):
         return response
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Save incoming messages for later use."""
         if message.content:
@@ -202,7 +203,7 @@ class LLMAgent(Agent):
         yield None
 
     async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
+        self, inputs: AgentInput, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Runs a single task or series of tasks."""
         placeholders = {

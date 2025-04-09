@@ -189,7 +189,7 @@ class Agent(AgentConfig):
         """Returns the appropriate processing function based on tracing setting."""
 
         async def traced_process(
-            *, message: AgentInput | ConductorRequest, cancellation_token=None, **kwargs
+            *, message: AgentInput | ConductorRequest, cancellation_token=None, publish_callback=None, **kwargs
         ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
             # Agents come in variants, and each variant has a list of tasks that it iterates through.
             try:
@@ -203,7 +203,7 @@ class Agent(AgentConfig):
                     inputs.context.extend(await self._model_context.get_messages())
 
                     # And are supplemented by placeholders for records and contextual history
-                    async for result in self._process(inputs, cancellation_token=cancellation_token):
+                    async for result in self._process(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
                         try:
                             n = n + 1
                             yield result
@@ -241,14 +241,14 @@ class Agent(AgentConfig):
         return self
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Save incoming messages for later use."""
         # Not implemented generically. Discard input.
         yield None
 
     async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
+        self, inputs: AgentInput, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Internal process function. Replace this in subclasses.
 
@@ -261,7 +261,7 @@ class Agent(AgentConfig):
         yield # Required for async generator typing
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[OOBMessages | None, None]:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")

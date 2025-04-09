@@ -24,7 +24,9 @@ from buttermilk._core.contract import (
     FlowMessage,
     ManagerRequest,
     OOBMessages,
-    UserInstructions,AllMessages,
+    TaskProcessingComplete,
+    UserInstructions,
+    AllMessages,
 )
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.ui.generic import UIAgent 
@@ -109,7 +111,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: AgentInput,
         ctx: MessageContext,
-    ) -> AgentOutput | None: 
+    ) -> AgentOutput | TaskProcessingComplete | None:
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
@@ -143,7 +145,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: OOBMessages,
         ctx: MessageContext,
-    ) -> OOBMessages | None: 
+    ) -> OOBMessages | TaskProcessingComplete | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
         async for response in self.agent._handle_control_message(

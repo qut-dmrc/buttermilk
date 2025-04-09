@@ -35,7 +35,7 @@ class HostAgent(LLMAgent):
         await super().initialize(**kwargs) # Call parent initialize if needed
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[OOBMessages | None, None]:
         # --- Handle Conductor Request (existing logic) ---
         if isinstance(message, ConductorRequest):

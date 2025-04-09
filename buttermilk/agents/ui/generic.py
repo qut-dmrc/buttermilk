@@ -31,7 +31,7 @@ class UIAgent(Agent):
         yield # Required for async generator typing
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[OOBMessages | None, None]:
         """Process control messages for agent coordination.
 

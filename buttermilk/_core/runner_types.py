@@ -161,11 +161,6 @@ class Record(BaseModel):
         default=None,
         validation_alias=AliasChoices(
             "arg0",
-            # for backwards compatibility
-            "content",
-            "image",
-            "video",
-            "media",
         ),
     )
 
@@ -187,12 +182,11 @@ class Record(BaseModel):
     components: list[MediaObj] = Field(default=[])
 
     def __str__(self) -> str:
-        return self.fulltext
-    
- 
+        return self._fulltext
+
     @computed_field
     @property
-    def fulltext(self) -> str:
+    def _fulltext(self) -> str:
         """Combines metadata and text content into a single string.
 
         Excludes ground truth and component labels.
@@ -207,19 +201,19 @@ class Record(BaseModel):
 
         component_texts = [part.content for part in self.components if part.content]
         if component_texts:
-             parts.extend(component_texts)
-             
+            parts.extend(component_texts)
+
         return "\n".join(parts)
 
     @computed_field
     @property
-    def text(self) -> str:
+    def _text(self) -> str:
         # Only text. Metadata and Ground truth not included
-        return "\n".join(self.paragraphs)
+        return "\n".join(self._paragraphs)
 
     @computed_field
     @property
-    def paragraphs(self) -> list[str]:
+    def _paragraphs(self) -> list[str]:
         # Only text. Metadata and Ground truth not included
         all_text = []
         for part in self.components:
@@ -234,7 +228,7 @@ class Record(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["components", "fulltext"],
+        exclude=["_fulltext", "_text", "_paragraphs"],
         positional_args=True,
     )  # type: ignore
 
@@ -269,7 +263,7 @@ class Record(BaseModel):
                     self.metadata[key] = value
                 else:
                     raise ValueError(
-                        f"Received multiple values for {key} in RecordInfo",
+                        f"Received multiple values for {key} in Record",
                     )
         self.data = None
         return self
@@ -342,9 +336,9 @@ class Record(BaseModel):
                 f"No text or model compatible media provided for {self.record_id}",
             )
             return None
-        
+
         if role == "user":
-            message = UserMessage(content=self.fulltext, source=source)
+            message = UserMessage(content=self._fulltext, source=source)
         else:
-            message = AssistantMessage(content=self.fulltext, source=source)
+            message = AssistantMessage(content=self._fulltext, source=source)
         return message

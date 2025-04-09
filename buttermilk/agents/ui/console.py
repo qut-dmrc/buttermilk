@@ -46,7 +46,7 @@ class CLIUserAgent(UIAgent):
             return message.model_dump_json(indent=2)
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
@@ -56,7 +56,7 @@ class CLIUserAgent(UIAgent):
         yield None
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[OOBMessages | None, None]:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         self._console.print(self._fmt_msg(message))

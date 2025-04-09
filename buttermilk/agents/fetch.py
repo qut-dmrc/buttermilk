@@ -54,7 +54,7 @@ class FetchRecord(Agent, ToolConfig):
         return self._fns
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: Any, publish_callback: Callable, **kwargs
+        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
         """Entry point when running this as an agent.
 
@@ -78,7 +78,7 @@ class FetchRecord(Agent, ToolConfig):
             output = AgentOutput(
                 source=self.id,
                 role=self.role,
-                content=record.fulltext,
+                content=record._fulltext,
                 records=[record],
             )
 
@@ -106,7 +106,7 @@ class FetchRecord(Agent, ToolConfig):
                 result = ToolOutput(
                     name=self.id,
                     results=[record],
-                    content=record.fulltext,
+                    content=record._fulltext,
                     messages=[record.as_message()],
                     args=dict(record_id=record_id),
                     send_to_ui=True,
@@ -114,7 +114,7 @@ class FetchRecord(Agent, ToolConfig):
         else:
             record =await download_and_convert(uri)
             result = ToolOutput(
-                name=self.id, results=[record], content=record.fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True
+                name=self.id, results=[record], content=record._fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True
             )
 
         if result:

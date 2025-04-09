@@ -28,5 +28,5 @@ class RecordMakerCloudStorageFiles(RecordMaker, LoaderGCS):
     async def record_generator(self) -> AsyncGenerator[Record, None]:
         # Generator to yield records from the dataset
         async for uri, content in self.read_files():
-            yield Record(uri=uri, text=content.decode())
+            yield Record(uri=uri, _text=content.decode())
             await asyncio.sleep(0)

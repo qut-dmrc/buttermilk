@@ -264,6 +264,7 @@ class Selector(AutogenOrchestrator):
                     raise
                 except Exception as e:  # This is only here for debugging for now.
                     logger.exception(f"Error in SelectorOrchestrator.run: {e}")
+                    raise FatalError from e
                 await asyncio.sleep(0.1)
 
         except FatalError as e:

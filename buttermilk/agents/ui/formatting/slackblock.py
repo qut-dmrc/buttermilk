@@ -229,7 +229,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     blocks.append(icontext)
 
                 elements = []
-                for para in record.paragraphs:
+                for para in record._paragraphs:
                     # Split text into chunks of ~3000 chars
                     chunk_size = 2950
                     for i in range(0, len(para), chunk_size):
