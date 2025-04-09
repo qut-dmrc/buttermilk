@@ -192,6 +192,8 @@ class LLMAgent(Agent):
             # Map Buttermilk message types to LLM input types
             if isinstance(message, AgentOutput):
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+                if message.records:
+                    self._records.extend(message.records)
             elif isinstance(message, (ToolOutput, UserInstructions)):
                 await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
             else:

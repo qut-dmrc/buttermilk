@@ -21,6 +21,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk.bm import logger
 from buttermilk.runner.groupchat import AutogenOrchestrator
+import time
 
 
 class Selector(AutogenOrchestrator):
@@ -87,8 +88,6 @@ class Selector(AutogenOrchestrator):
                 tool=instructions.outputs.get("tool", None),
                 arguments=instructions.outputs,
             )
-        # wait a bit and go around again
-        await asyncio.sleep(10)
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""
@@ -173,6 +172,20 @@ class Selector(AutogenOrchestrator):
             unknown_type_policy="ignore",  # only react to appropriate messages
         )
 
+    async def _wait_for_human(self, timeout=60) -> bool:
+        """Wait for human confirmation"""
+        t0 = time.time()
+        while True:
+            try:
+                if self._user_confirmation.get_nowait():
+                    return True
+                else:
+                    return False
+            except asyncio.QueueEmpty:
+                if time.time() - t0 > timeout:
+                    return False
+                await asyncio.sleep(1)
+
     async def run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow"""
         try:
@@ -195,8 +208,6 @@ class Selector(AutogenOrchestrator):
                     content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
                 ),
             )
-            # Just wait for the first message to come through before doing anything else.
-            await self._user_confirmation.get()
 
             while True:
                 try:
@@ -209,7 +220,7 @@ class Selector(AutogenOrchestrator):
                         ),
                     )
                     await asyncio.sleep(5)
-                    if not await self._user_confirmation.get():
+                    if not await self._wait_for_human():
                         await asyncio.sleep(10)
                         continue
 
@@ -227,7 +238,7 @@ class Selector(AutogenOrchestrator):
                     )
 
                     await self._send_ui_message(confirm_step)
-                    if not await self._user_confirmation.get():
+                    if not await self._wait_for_human():
                         # User did not confirm plan; go back and get new instructions
                         await asyncio.sleep(5)
                         continue
@@ -247,8 +258,8 @@ class Selector(AutogenOrchestrator):
                         ),
                     )
                     await asyncio.sleep(5)
-                    while not await self._user_confirmation.get():
-                        await asyncio.sleep(1)
+                    if not await self._wait_for_human():
+                        await asyncio.sleep(5)
                 except FatalError:
                     raise
                 except Exception as e:  # This is only here for debugging for now.
@@ -260,3 +271,4 @@ class Selector(AutogenOrchestrator):
         finally:
             # Clean up resources
             await self._cleanup()
+            raise StopAsyncIteration()

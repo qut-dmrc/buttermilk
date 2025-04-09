@@ -17,6 +17,7 @@ from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
     GroupchatMessageTypes,
+    HeartBeat,
     ManagerRequest,
     ManagerResponse,
     UserInstructions,
@@ -90,6 +91,8 @@ class CLIUserAgent(UIAgent):
                     )
                 else:
                     await self._input_callback(UserInstructions(source=self.id, role=self.role, content=user_input))
+                await self._input_callback(HeartBeat(go_next=True))
+                await asyncio.sleep(0.5)
             except asyncio.CancelledError:
                 break
             except Exception as e:

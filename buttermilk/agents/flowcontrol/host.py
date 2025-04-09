@@ -27,11 +27,7 @@ class HostAgent(LLMAgent):
     _pending_agent_id: str | None = PrivateAttr(default=None) # Track agent waiting for signal
 
     _message_types_handled: type[Any] = PrivateAttr(default=Union[ConductorRequest])
-    
-    async def _ready_to_execute(self) -> bool:
-        """Check if the agent is ready to execute."""
-        return True
-    
+
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback

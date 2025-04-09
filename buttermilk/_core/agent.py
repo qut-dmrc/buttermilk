@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
+import time
 from typing import Any, AsyncGenerator, Self, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
@@ -172,13 +173,16 @@ class Agent(AgentConfig):
     _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
 
-    async def _check_heartbeat(self) -> bool:
+    async def _check_heartbeat(self, timeout=60) -> bool:
         """Check if the heartbeat queue is empty."""
-        try:
-            go_next = await self._heartbeat.get()
-            return go_next 
-        except asyncio.TimeoutError:
-            return False
+        t0 = time.time()
+        while True:
+            try:
+                return self._heartbeat.get_nowait()
+            except asyncio.QueueEmpty:
+                if time.time() - t0 > timeout:
+                    return False
+                await asyncio.sleep(1)
 
     @pydantic.model_validator(mode="after")
     def _get_process_func(self) -> Self:
@@ -195,6 +199,7 @@ class Agent(AgentConfig):
                     # add data from our local state
                     inputs.records.extend(self._records)
                     inputs.params.update(task_params)
+                    inputs.params.update(self.parameters)
                     inputs.context.extend(await self._model_context.get_messages())
 
                     # And are supplemented by placeholders for records and contextual history
@@ -234,10 +239,6 @@ class Agent(AgentConfig):
         self._run_fn = traced_process
 
         return self
-
-    async def _ready_to_execute(self) -> bool:
-        """Check if the agent is ready to execute."""
-        return True
 
     async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
         """Save incoming messages for later use."""
