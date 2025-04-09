@@ -30,6 +30,7 @@ class FetchRecord(Agent, ToolConfig):
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
+    _trace_this = True
 
     _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions|AgentInput])
     @pydantic.model_validator(mode="after")
@@ -53,8 +54,7 @@ class FetchRecord(Agent, ToolConfig):
     
     async def _process(
         self,
-        message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken | None = None,
+        inputs: AgentInput
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | None, None]:
         """Entry point when running this as an agent.

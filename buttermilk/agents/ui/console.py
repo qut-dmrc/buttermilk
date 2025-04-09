@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
+from textwrap import indent
 from typing import Any
 
 import regex as re
@@ -29,14 +30,18 @@ class CLIUserAgent(UIAgent):
     def _fmt_msg(self, message: FlowMessage) -> Markdown:
         """Format a message for display in the console."""
         output = []
-        output.append(f"### {message.source} ({message.role})")
+        try:
+            output.append(f"### {message.source} ({message.role})")
 
-        if message.outputs:
-            output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
-        else:
-             output.append(message.content)
-        output = [o for o in output if o]
-        return Markdown("\n".join(output))
+            if message.outputs:
+                output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
+            else:
+                output.append(message.content)
+            output = [o for o in output if o]
+            return Markdown("\n".join(output))
+        except Exception as e:
+            logger.error(f"Unable to format message of type {type(message)}: {e}")
+            return message.model_dump_json(indent=2)
 
     async def listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs):
         """Send output to the user interface."""

@@ -171,5 +171,5 @@ class RagZot(LLMAgent, ToolConfig):
                 args=dict(query=query),
                 messages=[r.as_message() for r in records],
                 is_error=False,
-                name="search"
+                source="search"
             )

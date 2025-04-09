@@ -16,8 +16,10 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
+    ConductorResponse,
     ErrorEvent,
     GroupchatMessageTypes,
+    HeartBeat,
     ManagerMessage,
     FlowMessage,
     ManagerRequest,
@@ -80,58 +82,43 @@ class AutogenAgentAdapter(RoutedAgent):
         else:
             asyncio.create_task(self.agent.initialize())
 
+    @message_handler
+    async def _heartbeat(self, message: HeartBeat, ctx:MessageContext) -> None:
+        """Handle heartbeat messages by adding to the wrapped agent's queue."""
+        try:
+            self.agent._heartbeat.put_nowait(message.go_next)
+        except asyncio.QueueFull:
+            logger.warning(f"Heartbeat failed, agent {self.id} is running behind.")
 
     @message_handler
     async def handle_groupchat_message(
         self,
         message: GroupchatMessageTypes,
         ctx: MessageContext,
-    ) -> AllMessages | None: 
-        """Handle incoming messages by delegating to the wrapped agent."""
-        # Pass messages along to the agent in two stages.
-        # - First, pass to the listen function, which just extracts data
-        #   that the agent is configured to listen for.
-        # - Second, call _process, and the agent may choose to respond.
-        #   Agent input variables can be supplied either from its own
-        #   internal state or by the orchestrator in the _process() call.
-
-        # First, enforce division into control and in-band messages
-        if not isinstance(message, GroupchatMessageTypes):
-            logger.warning(f"{self.id} received unexpected message type: {type(message)}")
-            return None
-        # Don't allow an agent to react to its own results.
-        if isinstance(message, FlowMessage) and message.source == self.agent.id:
-            return None
-        # Autogen adds sender info, check that too
-        if ctx.sender and ctx.sender.type == self.type:
-             logger.debug(f"Agent {self.id} ignoring message from self ({ctx.sender.type})")
-             return None
+    ) -> None: 
+        """Handle incoming group messages by delegating to the wrapped agent.
         
-        # Listen first. For normal messages, extract and record data from the message.
-        try:
-            await self.agent.listen(message=message, ctx=ctx)
-        except Exception as e:
-            logger.error(f"Error during listen in agent {self.agent.id}: {e}", exc_info=True)
-            return
-               
-        # Process 
-        try:
-            # Use agent's main processing method
-            async for output in self.agent.__call__(input_data=message, cancellation_token=ctx.cancellation_token):
-                 if output:
-                     # Publish yielded messages
-                     await self.publish_message(output, topic_id=self.topic_id)
+        Listen only; no return type from this."""
+        await self.agent._listen(message=message, ctx=ctx)
 
-            return None
-        except Exception as e:
-            logger.error(f"Error processing message in agent {self.agent.id}: {e}", exc_info=False)
-            error_output = ErrorEvent(
-                source=self.agent.id, role=self.agent.role, content=f"Error: {e} {e.args=}",                
-            )
-            await self.publish_message(error_output, topic_id=self.topic_id)
-            return None
-            
-
+    @message_handler
+    async def handle_invocation(
+        self,
+        message: AgentInput,
+        ctx: MessageContext,
+    ) -> AgentOutput | None: 
+        """Handle public request for agent to act. It's possible to return a value
+        to the caller, but usually any result would be published back to the group."""
+        return await self.agent.invoke(message=message, ctx=ctx)
+    
+    @message_handler
+    async def handle_conductor_request(
+        self,
+        message: ConductorRequest,
+        ctx: MessageContext,
+    ) -> ConductorResponse | None:
+        """Handle conductor requests privately."""
+        return await self.agent.invoke_privately(message=message, ctx=ctx)
 
     @message_handler
     async def handle_control_message(
@@ -139,11 +126,8 @@ class AutogenAgentAdapter(RoutedAgent):
         message: OOBMessages,
         ctx: MessageContext,
     ) -> OOBMessages | None: 
-        """Handle separately isolated out-of-band control messages"""
-        if self.is_manager:
-            return await self.agent.handle_control_message(message=message, ctx=ctx)
-        return None
-
+        """Handle control messages sent OOB. Any response must also be OOB."""
+        return await self.agent.handle_control_message(message=message, ctx=ctx)
 
     def handle_input(self) -> Callable[[UserInstructions], Awaitable[None]] | None:
         """Create a callback for handling user input if needed.

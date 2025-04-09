@@ -145,16 +145,15 @@ class AgentVariants(AgentConfig):
                 id_parts = [self.id]
                 # Add parallel variant info to ID if there are multiple combinations
                 if len(parallel_variant_combinations) > 1:
-                    param_str = "_".join(f"{k}-{v}" for k, v in sorted(parallel_params.items()))
+                    param_str = "_".join(f"{v}" for k, v in sorted(parallel_params.items()))
                     # Basic sanitization and shortening for ID
                     param_str = ''.join(c if c.isalnum() or c in ['-','_'] else '' for c in param_str)[:20]
                     if param_str: # Avoid adding empty strings
                          id_parts.append(param_str)
                 if self.num_runs > 1:
                     id_parts.append(f"run{i}")
-                # Add hash only if needed for uniqueness (multiple runs or variants)
-                if self.num_runs > 1 or len(parallel_variant_combinations) > 1:
-                    id_parts.append(shortuuid.uuid()[:4])
+                # Add random id to facilitate tracing
+                id_parts.append(shortuuid.uuid()[:4])
 
                 cfg_dict["id"] = "-".join(id_parts)[:63] # Ensure reasonable length
 
@@ -171,13 +170,13 @@ class AgentVariants(AgentConfig):
         if not self.variants and not self.tasks and self.num_runs == 1:
              if len(generated_configs) == 1:
                  # Ensure the single generated config has the original ID if possible
-                 generated_configs[0][1].id = self.id
+                 generated_configs[0][1].id = f"{self.id}_{shortuuid.uuid()[:4]}"
                  return generated_configs
              else: # Should not happen with the logic above, but as a fallback:
                  cfg_dict = static_config.copy()
                  cfg_dict["parameters"] = base_parameters
                  cfg_dict["tasks"] = [{}]
-                 cfg_dict["id"] = self.id
+                 cfg_dict["id"] = f"{self.id}_{shortuuid.uuid()[:4]}"
                  return [(agent_class, AgentConfig(**cfg_dict))]
 
 

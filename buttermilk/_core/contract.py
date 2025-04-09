@@ -1,6 +1,8 @@
 from collections.abc import Mapping
+from math import e
 from pathlib import Path
 from typing import Any, Union
+from autogen_core import CancellationToken
 from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
@@ -127,6 +129,7 @@ class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
     _type = "InputRequest"
+    cancellation_token: CancellationToken|None = Field(default=None, exclude=True)
     _ensure_record_context_list = field_validator("records", "context", mode="before")(
         make_list_validator(),
     )
@@ -147,7 +150,11 @@ class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Agent"
-
+    
+    internal_messages: list[FlowMessage] = Field(
+        default_factory=list,
+        description="Messages generated along the way to the final response",
+    )
 
 
 ######
@@ -173,6 +180,12 @@ class ConductorRequest(ManagerMessage, AgentInput):
     """Request for input from the conductor."""
 
     _type = "ConductorRequest"
+
+class ConductorResponse(ManagerMessage, AgentOutput):
+    """Request for input from the conductor."""
+
+    _type = "ConductorResponse"
+
 
 
 class ManagerRequest(ManagerMessage, StepRequest):
@@ -202,7 +215,7 @@ class ToolOutput(FunctionExecutionResult):
     args: list[str] | list[dict[str,Any]] | dict[str, Any] = Field(default_factory=dict)
 
     content: str
-    name: str = "unknown"
+    source: str = "unknown"
     call_id: str = "unknown"
     is_error: bool |None = False
 
@@ -223,6 +236,9 @@ class ProceedToNextTaskSignal(BaseModel):
     target_agent_id: str = Field(..., description="ID of the agent that should proceed")
     model_config = {"extra": "allow"}
 
+class HeartBeat(BaseModel):
+    go_next: bool = Field(..., description="True if the agent should proceed to the next task")
+
 #######
 # Unions
 
@@ -230,20 +246,20 @@ OOBMessages = Union[
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
-    ConductorRequest,
-    TaskProcessingComplete, # Added
-    ProceedToNextTaskSignal # Added
+    TaskProcessingComplete,
+    
 ]
 
 GroupchatMessageTypes = Union[
     AgentOutput,
     ToolOutput,
     UserInstructions,
-    AgentInput,
     
 ]
 
 AllMessages = Union[
     GroupchatMessageTypes,
     OOBMessages,
+    AgentInput,ProceedToNextTaskSignal,
+    ConductorRequest,ConductorResponse,HeartBeat
 ]

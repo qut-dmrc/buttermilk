@@ -104,15 +104,15 @@ class LLMAgent(Agent):
         
         # Combine base parameters with task-specific parameters
         # Task parameters take precedence
-        current_params = {**self.parameters, **task_params}
+        current_params = {**self.parameters, **self.inputs, **task_params}
 
         # 1. Prepare Jinja variables based on self.parameters mapping
         jinja_vars = {}
         for param_key, param_value in current_params.items():
              # Check if the parameter value looks like a key for inputs.inputs
              # Prioritize direct values from parameters over input lookups if keys clash
-             if inputs and param_value in inputs.inputs and isinstance(inputs.inputs[param_value], str):
-                 jinja_vars[param_key] = inputs.inputs[param_value]
+             if inputs and param_key in inputs.inputs and isinstance(inputs.inputs[param_key], str):
+                 jinja_vars[param_key] = inputs.inputs[param_key]
              else:
                  # Use the value directly from parameters if it's not an input key
                  # or if inputs is None
@@ -182,7 +182,7 @@ class LLMAgent(Agent):
                 call_id=call.id,
                 content=str(e),
                 is_error=True,
-                name=tool.name,
+                source=tool.name,
             )]
         if not isinstance(results, list):
             results = [results]
@@ -245,19 +245,15 @@ class LLMAgent(Agent):
             # Map Buttermilk message types to LLM input types
             if isinstance(message, AgentOutput):
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
-            elif isinstance(message, UserInstructions):
+            elif isinstance(message, (ToolOutput, UserInstructions)):
                 await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
             else:
                 # don't log other types of messages
                 pass
     
-    # async def __call__(self, input_data: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AsyncGenerator[AgentOutput | UserInstructions | TaskProcessingComplete | None, None]:
-    #     return super().__call__(input_data, cancellation_token, **kwargs)
-    
     async def _process(
         self,
-        message: AgentInput,
-        cancellation_token: CancellationToken | None = None,
+        inputs: AgentInput
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
         """Runs a single task or series of tasks."""
@@ -266,7 +262,7 @@ class LLMAgent(Agent):
         num_tasks = len(self.sequential_tasks)
 
         for task_index, task_params in enumerate(self.sequential_tasks):
-            while not self._ready_to_execute():
+            while not await self._ready_to_execute():
                 await asyncio.sleep(1)
 
             logger.debug(f"Agent {self.id} executing task #{task_index} of {num_tasks} with params: {task_params}")
@@ -301,7 +297,7 @@ class LLMAgent(Agent):
                     reflection_tasks = []
                     for tool_result in tool_outputs:
                         if tool_result.is_error:
-                            error_msg = f"Tool call '{tool_result.name}' failed (task {task_index}): {tool_result.content}"
+                            error_msg = f"Tool call '{tool_result.source}' failed (task {task_index}): {tool_result.content}"
                             logger.warning(error_msg)
                             continue
 
@@ -319,7 +315,7 @@ class LLMAgent(Agent):
                             )
                             reflection_tasks.append(task)
                         except Exception as e:
-                            error_msg = f"Error preparing reflection for tool '{tool_result.name}' (task {task_index}): {e}"
+                            error_msg = f"Error preparing reflection for tool '{tool_result.source}' (task {task_index}): {e}"
                             logger.warning(error_msg, exc_info=True)
 
                     for task in asyncio.as_completed(reflection_tasks):
@@ -343,11 +339,12 @@ class LLMAgent(Agent):
                 logger.exception(f"Agent {self.id} failed task {task_index}")
             finally:
                 more_tasks = (task_index + 1) < len(self.sequential_tasks)
-                yield TaskProcessingComplete(
-                    source=self.id,
-                    task_index=task_index,
-                    more_tasks_remain=more_tasks
-                )
+                # TODO @nicsuzor: change this to an event
+                # yield TaskProcessingComplete(
+                #     source=self.id,
+                #     task_index=task_index,
+                #     more_tasks_remain=more_tasks
+                # )
         return
 
 

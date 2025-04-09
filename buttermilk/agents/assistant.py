@@ -93,8 +93,7 @@ class AssistantAgentWrapper(Agent):
 
     async def _process(
         self,
-        message: FlowMessage, # Updated signature to match base Agent
-        cancellation_token: CancellationToken | None = None,
+        inputs: AgentInput,cancellation_token: CancellationToken,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | None, None]:
         """Processes input using the wrapped AssistantAgent."""
@@ -102,7 +101,7 @@ class AssistantAgentWrapper(Agent):
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
         # Don't respond to own messages or irrelevant types.
-        if message.source == self.id:
+        if inputs.source == self.id:
             yield None
             return
 

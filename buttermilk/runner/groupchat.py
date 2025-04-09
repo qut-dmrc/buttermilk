@@ -102,12 +102,10 @@ class AutogenOrchestrator(Orchestrator):
         for step_name, step in self.agents.items():
             step_agent_type = []
             for agent_cls, variant in step.get_configs():
-                agent_cfg = variant.model_dump()
-                agent_cfg["id"] = f"{step_name}-{shortuuid.uuid()[:6]}"
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    agent_cfg["id"],
+                    variant.id,
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,
@@ -130,7 +128,7 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                 )
                 logger.debug(
-                    f"Registered agent {agent_type} with id {agent_cfg['id']}, subscribed to {self._topic.type} and {step_name}.",
+                    f"Registered agent {agent_type} with id {variant.id}, subscribed to {self._topic.type} and {step_name}.",
                 )
 
                 step_agent_type.append((agent_type, variant))
@@ -157,7 +155,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Wait for all agents to respond
         responses = await asyncio.gather(*tasks)
-        return responses
+        return [r for r in responses if r]
 
     async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
         """Send a message to the UI agent"""
