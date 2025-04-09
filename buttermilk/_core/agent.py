@@ -203,7 +203,7 @@ class Agent(AgentConfig):
                     inputs.context.extend(await self._model_context.get_messages())
 
                     # And are supplemented by placeholders for records and contextual history
-                    async for result in self._process(inputs, cancellation_token=message_context.cancellation_token):
+                    async for result in self._process(inputs, cancellation_token=cancellation_token):
                         try:
                             n = n + 1
                             yield result
