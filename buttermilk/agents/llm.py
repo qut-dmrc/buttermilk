@@ -141,16 +141,9 @@ class LLMAgent(Agent):
         assert tool is not None
 
         # Run the tool and capture the result.
-        try:
-            arguments = json.loads(call.arguments)
-            results = await tool.run_json(arguments, cancellation_token)
-        except Exception as e:
-            return [ToolOutput(
-                call_id=call.id,
-                content=str(e),
-                is_error=True,
-                source=tool.name,
-            )]
+        arguments = json.loads(call.arguments)
+        results = await tool.run_json(arguments, cancellation_token)
+            
         if not isinstance(results, list):
             results = [results]
         outputs = []
@@ -184,7 +177,6 @@ class LLMAgent(Agent):
             outputs = raw_content
             content = str(raw_content)
 
-
         return AgentOutput(**inputs.model_dump(), content=content, outputs=outputs, error=error_msg, metadata=llm_metadata)
 
     async def listen(self, message: GroupchatMessageTypes, 
@@ -202,10 +194,8 @@ class LLMAgent(Agent):
                 pass
     
     async def _process(
-        self,
-        inputs: AgentInput,
-        **kwargs,
-    ) -> AsyncGenerator[AgentOutput | ToolOutput| None, None]:
+        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Runs a single task or series of tasks."""
             try:
                 placeholders = {
@@ -217,7 +207,7 @@ class LLMAgent(Agent):
                 create_result = await self._model_client.create(
                     messages=messages,
                     tools=self._tools_list,
-                    cancellation_token=inputs.cancellation_token
+                    cancellation_token=cancellation_token
                 )
                 llm_metadata = create_result.model_dump(exclude_unset=True, exclude_none=True)
 
@@ -230,7 +220,7 @@ class LLMAgent(Agent):
                 elif isinstance(create_result.content, list) and all(isinstance(item, FunctionCall) for item in create_result.content):
                     tool_outputs = await self._execute_tools(
                         calls=create_result.content,
-                        cancellation_token=inputs.cancellation_token,
+                        cancellation_token=cancellation_token,
                     )
                     reflection_tasks = []
                     for tool_result in tool_outputs:
@@ -248,7 +238,7 @@ class LLMAgent(Agent):
                             reflection_messages.extend(tool_result.messages)
                             task = self._model_client.create(
                                 messages=reflection_messages,
-                                cancellation_token=inputs.cancellation_token,
+                                cancellation_token=cancellation_token,
                             )
                             reflection_tasks.append(task)
                         except Exception as e:

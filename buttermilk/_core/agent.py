@@ -197,10 +197,9 @@ class Agent(AgentConfig):
                         inputs.records.extend(self._records)
                         inputs.params.update(task_params)
                         inputs.context.extend(await self._model_context.get_messages())
-                        inputs.cancellation_token = msg_context.cancellation_token
 
                         # And are supplemented by placeholders for records and contextual history
-                        async for result in self._process(inputs):
+                        async for result in self._process(inputs, cancellation_token=msg_context.cancellation_token):
                             try:
                                 n=n+1
                                 yield result
@@ -242,14 +241,14 @@ class Agent(AgentConfig):
         """Check if the agent is ready to execute."""
         return True
 
-    async def _listen(self, message: GroupchatMessageTypes, 
-        ctx: MessageContext = None,
-        **kwargs):
+    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
         """Save incoming messages for later use."""
         # Not implemented generically. Discard input.
         pass
 
-    async def _process(self, inputs: AgentInput, **kwargs) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
+    async def _process(
+        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Process input data yield any output(s).
 
         Outputs:

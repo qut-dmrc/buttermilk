@@ -20,7 +20,7 @@ from autogen_core.models import ChatCompletionClient
 from autogen_core.tools import BaseTool, FunctionTool
 from pydantic import PrivateAttr
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ToolOutput
 from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
@@ -92,10 +92,8 @@ class AssistantAgentWrapper(Agent):
         return self
 
     async def _process(
-        self,
-        inputs: AgentInput,cancellation_token: CancellationToken,
-        **kwargs,
-    ) -> AsyncGenerator[AgentOutput | None, None]:
+        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
         """Processes input using the wrapped AssistantAgent."""
 
         # --- Agent Decision Logic ---
@@ -108,16 +106,16 @@ class AssistantAgentWrapper(Agent):
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
         if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
-             logger.debug(f"AssistantWrapper {self.id} ignoring message type {type(message)} from {message.source}")
-             yield None
-             return
+            logger.debug(f"AssistantWrapper {self.id} ignoring message type {type(message)} from {message.source}")
+            yield None
+            return
 
         # Handle ConductorRequest specifically if needed
         if isinstance(message, ConductorRequest):
-             logger.warning(f"Agent {self.id} received ConductorRequest, not fully implemented.")
-             # Potentially extract relevant info or yield specific output
-             yield None
-             return
+            logger.warning(f"Agent {self.id} received ConductorRequest, not fully implemented.")
+            # Potentially extract relevant info or yield specific output
+            yield None
+            return
 
         if cancellation_token is None:
             cancellation_token = CancellationToken()
@@ -129,24 +127,24 @@ class AssistantAgentWrapper(Agent):
 
         context_messages = message.context
         for ctx_msg in context_messages:
-             # Map Buttermilk message types to Autogen message types
-             if isinstance(ctx_msg, AgentOutput) and ctx_msg.source == self.id:
-                 messages_to_send.append(AssistantMessage(content=str(ctx_msg.content), source=ctx_msg.source))
-             elif isinstance(ctx_msg, (UserInstructions, AgentInput, AgentOutput)):
-                 messages_to_send.append(UserMessage(content=str(ctx_msg.content), source=getattr(ctx_msg, 'agent_id', 'unknown')))
-             # Add mappings for other types if necessary
+            # Map Buttermilk message types to Autogen message types
+            if isinstance(ctx_msg, AgentOutput) and ctx_msg.source == self.id:
+                messages_to_send.append(AssistantMessage(content=str(ctx_msg.content), source=ctx_msg.source))
+            elif isinstance(ctx_msg, (UserInstructions, AgentInput, AgentOutput)):
+                messages_to_send.append(UserMessage(content=str(ctx_msg.content), source=getattr(ctx_msg, "agent_id", "unknown")))
+            # Add mappings for other types if necessary
 
         # Add the current incoming message content as the latest UserMessage
         if message.content:
             messages_to_send.append(UserMessage(content=message.content, source=message.source))
         elif message.inputs:
-             # Fallback: serialize inputs dict if no direct content
-             messages_to_send.append(UserMessage(content=json.dumps(message.inputs), source=message.source))
+            # Fallback: serialize inputs dict if no direct content
+            messages_to_send.append(UserMessage(content=json.dumps(message.inputs), source=message.source))
         else:
-             # If the message has no content or inputs, maybe don't process?
-             logger.debug(f"AssistantWrapper {self.id} received message with no content/inputs from {message.source}. Skipping.")
-             yield None
-             return
+            # If the message has no content or inputs, maybe don't process?
+            logger.debug(f"AssistantWrapper {self.id} received message with no content/inputs from {message.source}. Skipping.")
+            yield None
+            return
 
         # --- Call AssistantAgent ---
         try:
@@ -174,27 +172,26 @@ class AssistantAgentWrapper(Agent):
             chat_msg = response.chat_message
             # Handle various content types (str, list, BaseModel)
             if isinstance(chat_msg.content, str):
-                 output_content = chat_msg.content
-                 # Try parsing string content as JSON
-                 try:
-                     parsed_json = json.loads(chat_msg.content)
-                     if isinstance(parsed_json, dict):
-                         output_data = parsed_json
-                 except json.JSONDecodeError:
-                     output_data = {"response_text": chat_msg.content}
+                output_content = chat_msg.content
+                # Try parsing string content as JSON
+                try:
+                    parsed_json = json.loads(chat_msg.content)
+                    if isinstance(parsed_json, dict):
+                        output_data = parsed_json
+                except json.JSONDecodeError:
+                    output_data = {"response_text": chat_msg.content}
             elif isinstance(chat_msg.content, list): # Often tool calls or structured output list
-                 output_content = json.dumps([item.model_dump() if hasattr(item, 'model_dump') else item for item in chat_msg.content], indent=2)
-                 output_data = {"structured_list": chat_msg.content} # Or process list items further
+                output_content = json.dumps([item.model_dump() if hasattr(item, "model_dump") else item for item in chat_msg.content], indent=2)
+                output_data = {"structured_list": chat_msg.content}  # Or process list items further
             elif hasattr(chat_msg.content, 'model_dump'): # Pydantic model
-                 output_data = chat_msg.content.model_dump()
-                 output_content = json.dumps(output_data, indent=2)
+                output_data = chat_msg.content.model_dump()
+                output_content = json.dumps(output_data, indent=2)
             else: # Fallback
-                 output_content = str(chat_msg.content)
-                 output_data = {"raw_content": output_content}
-
+                output_content = str(chat_msg.content)
+                output_data = {"raw_content": output_content}
 
             if hasattr(chat_msg, 'models_usage') and chat_msg.models_usage:
-                 llm_metadata = chat_msg.models_usage.model_dump(exclude_unset=True)
+                llm_metadata = chat_msg.models_usage.model_dump(exclude_unset=True)
 
         else:
             error_msg = "AssistantAgent returned no response or chat_message."

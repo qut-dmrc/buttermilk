@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any, Self, Union
 
+from autogen_core import MessageContext
 import pydantic
 import regex as re
 from shortuuid import uuid
@@ -51,22 +52,18 @@ class FetchRecord(Agent, ToolConfig):
                 strict=False,
             )]
         return self._fns
-    
-    async def _process(
-        self,
-        inputs: AgentInput
-        **kwargs,
-    ) -> AsyncGenerator[AgentOutput | None, None]:
+
+    async def _listen(self, message: GroupchatMessageTypes, ctx: MessageContext = None, **kwargs) -> GroupchatMessageTypes | None:
         """Entry point when running this as an agent.
-        
-        If running as an agent, watch for URLs or record ids and inject them 
+
+        If running as an agent, watch for URLs or record ids and inject them
         into the chat."""
 
         if not isinstance(message, UserInstructions):
-            return
+            return None
         if not (match := re.match(self._pat, message.content)):
-            return
-        
+            return None
+
         record = None
         if uri := match[2]:
             record = await download_and_convert(uri=uri)
@@ -76,14 +73,13 @@ class FetchRecord(Agent, ToolConfig):
             record = await self.get_record_dataset(record_id=record_id)
 
         if record:
-            yield AgentOutput(
+            output = AgentOutput(
                 source=self.id,
                 role=self.role,
                 content=record.fulltext,
                 records=[record],
             )
-        return
-
+            return output
 
     async def _run( # type: ignore
         self,
@@ -106,7 +102,7 @@ class FetchRecord(Agent, ToolConfig):
         else:
             record =await download_and_convert(uri)
             result = ToolOutput(results=[record],content=record.fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True)
-        
+
         if result:
             return  result
         return None

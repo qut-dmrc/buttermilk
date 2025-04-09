@@ -96,10 +96,10 @@ class AutogenAgentAdapter(RoutedAgent):
         message: GroupchatMessageTypes,
         ctx: MessageContext,
     ) -> None: 
-        """Handle incoming group messages by delegating to the wrapped agent.
-        
-        Listen only; no return type from this."""
-        await self.agent._listen(message=message, ctx=ctx)
+        """Handle incoming group messages by delegating to the wrapped agent."""
+        response = await self.agent._listen(message=message, ctx=ctx)
+        if response:
+            await self.publish_message(response, topic_id=self.topic_id)
 
     @message_handler
     async def handle_invocation(
@@ -110,7 +110,7 @@ class AutogenAgentAdapter(RoutedAgent):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         return await self.agent.invoke(message=message, ctx=ctx)
-    
+
     @message_handler
     async def handle_conductor_request(
         self,
@@ -144,5 +144,5 @@ class AutogenAgentAdapter(RoutedAgent):
                 user_message,
                 topic_id=self.topic_id,
             )
-        
+
         return input_callback

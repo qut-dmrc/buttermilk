@@ -86,10 +86,6 @@ class FlowMessage(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
 
-    _ensure_error_list = field_validator("error", mode="before")(
-        make_list_validator(),
-    )
-
     @computed_field
     @property
     def type(self) -> str:
@@ -120,16 +116,13 @@ class AgentInput(FlowMessage):
     )
 
     _type = "InputRequest"
-    cancellation_token: CancellationToken|None = Field(default=None, exclude=True)
-    _ensure_record_context_list = field_validator("records", "context", mode="before")(
-        make_list_validator(),
-    )
 
 class UserInstructions(FlowMessage):
     """Instructions from the user."""
 
     _type = "UserInput"
-
+    content: str = Field(default="")
+    
     confirm: bool = Field(
         default=False,
         description="Response from user: confirm y/n",
@@ -161,7 +154,13 @@ class AgentOutput(AgentInput):
     )
     metadata: dict[str, Any] = Field(default={})
 
+    _ensure_error_list = field_validator("error", mode="before")(
+        make_list_validator(),
+    )
 
+    _ensure_record_context_list = field_validator("records", "context", mode="before")(
+        make_list_validator(),
+    )
 ######
 # Control communications
 #
