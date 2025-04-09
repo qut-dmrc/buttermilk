@@ -81,30 +81,13 @@ class AgentVariants(AgentConfig):
         criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
         temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent 
                                         # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
+      parameters:
+        template: analyst               # parameter sets shared for each task
       inputs:
-        history: history
+        results: othertask.outputs.results  # dynamic inputs mapped from other data
     ```
     """
 
-    num_runs: int = Field(
-        default=1,
-        description="Number of times to replicate each parallel variant agent instance.",
-        exclude=True,
-    )
-    parallel_variants: dict = Field(
-        default={},
-        description="Parameters to create parallel agent instances via cross-multiplication.",
-        exclude=True,
-    )
-    sequential_variants: dict = Field(
-        default={},
-        description="Parameters defining sequential tasks for each agent instance via cross-multiplication.",
-        exclude=True,
-    )
-
-    _validate_variants = field_validator(
-        "parallel_variants", "sequential_variants", mode="before"
-    )(convert_omegaconf_objects())
 
     @model_validator(mode="after")
     def validate_extra_fields(self):

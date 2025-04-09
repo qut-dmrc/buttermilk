@@ -10,6 +10,7 @@ from pydantic import (
     BaseModel,
     Field,
     PrivateAttr,
+    field_validator,
 )
 
 from autogen_core.tools import BaseTool, FunctionTool
@@ -19,9 +20,11 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     AllMessages,
+    ErrorEvent,
     FlowMessage,
     GroupchatMessageTypes,
     OOBMessages,
+    TaskProcessingComplete,
     ToolOutput,
     UserInstructions,
 )
@@ -49,6 +52,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.runner_types import Record
+from buttermilk.utils.validators import convert_omegaconf_objects
 
 
 
@@ -111,6 +115,21 @@ class AgentConfig(BaseModel):
         default=[],
         description="Specifications for data that the Agent should load",
     )
+    num_runs: int = Field(
+        default=1,
+        description="Number of times to replicate each parallel variant agent instance.",
+        exclude=True,
+    )
+    parallel_variants: dict = Field(
+        default={},
+        description="Parameters to create parallel agent instances via cross-multiplication.",
+        exclude=True,
+    )
+    sequential_variants: dict = Field(
+        default={},
+        description="Parameters defining sequential tasks for each agent instance via cross-multiplication.",
+        exclude=True,
+    )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
@@ -129,6 +148,10 @@ class AgentConfig(BaseModel):
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
     }
+    
+    _validate_variants = field_validator(
+        "parallel_variants", "sequential_variants", mode="before"
+    )(convert_omegaconf_objects())
 
 
 class Agent(AgentConfig):
@@ -156,12 +179,16 @@ class Agent(AgentConfig):
                 #      async for item in self._process(*args, **kwargs):
                 #          yield item
                 # return weave.op(traced_process, call_display_name=f"{self.id}")
-                return weave.op(self._process, call_display_name=f"{self.id}")
+                return weave.op(self._process, call_display_name=f"{self.id} ({self.role})")
             return self._process
 
         self._run_fn = _process_fn()
         return self
 
+    async def _ready_to_execute(self) -> bool:
+        """Check if the agent is ready to execute."""
+        return True
+    
     async def listen(self, message: GroupchatMessageTypes, 
         ctx: MessageContext = None,
         **kwargs):
@@ -174,7 +201,7 @@ class Agent(AgentConfig):
         message: GroupchatMessageTypes,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput|None, None]:
+    ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
         """Process input data and (optionally) yield output(s).
 
         Inputs:
@@ -195,13 +222,14 @@ class Agent(AgentConfig):
     ) -> OOBMessages | None:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
+        return None
 
     async def __call__(
         self,
         input_data: AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput | UserInstructions | None, None]:
+    ) -> AsyncGenerator[AgentOutput  | UserInstructions | TaskProcessingComplete | None, None]:
         """Allow agents to be called directly as functions by the orchestrator."""
         try:
             async for output in self._run_fn(input_data, cancellation_token=cancellation_token, **kwargs):
@@ -210,27 +238,27 @@ class Agent(AgentConfig):
             logger.error(
                 f"Agent {self.id} {self.role} hit processing error: {e}. Task content: {input_data.content[:100]}",
             )
-            yield AgentOutput(
-                source=self.id,
-                role=self.role,
-                content=f"Processing Error: {e}",
-                error=[str(e)],
-                records=input_data.records,
-            )
+            # yield ErrorEvent(
+            #     source=self.id,
+            #     role=self.role,
+            #     content=f"Processing Error: {e}",
+            #     error=[str(e)],
+            #     records=input_data.records,
+            # )
         except FatalError as e:
             logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
             raise e
         except Exception as e:
              logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
-             yield AgentOutput(
-                 source=self.id,
-                 role=self.role,
-                 content=f"Unexpected Error: {e}",
-                 error=[str(e)],
-                 records=input_data.records,
-             )
+            #  yield AgentOutput(
+            #      source=self.id,
+            #      role=self.role,
+            #      content=f"Unexpected Error: {e}",
+            #      error=[str(e)],
+            #      records=input_data.records,
+            #  )
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""
         pass # Default implementation
 

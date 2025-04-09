@@ -16,6 +16,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
+    ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
     FlowMessage,
@@ -81,7 +82,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
 
     @message_handler
-    async def receive_message(
+    async def handle_groupchat_message(
         self,
         message: GroupchatMessageTypes,
         ctx: MessageContext,
@@ -93,56 +94,47 @@ class AutogenAgentAdapter(RoutedAgent):
         # - Second, call _process, and the agent may choose to respond.
         #   Agent input variables can be supplied either from its own
         #   internal state or by the orchestrator in the _process() call.
-        
-        # First, divide into control and in-band messages
-        if isinstance(message, GroupchatMessageTypes):
-            # For normal messages, extract and record data from the message.
-            await self.agent.listen(message=message, ctx=ctx)
-        else:
-            logger.warning(f"{self.id} received unexpected message type: {type(message)}")
-            return
-        
-        # Process using the wrapped agent's _process method, which may yield outputs
-        try:
-            agent_output = None
-            # Don't allow an agent to react to its own results.
-            if isinstance(message, FlowMessage) and message.source == self.agent.id:
-                return None
-            elif ctx.sender and ctx.sender.type == self.agent.id:
-                return None
-            
-            # Now start agent processing
-            async for agent_output in self.agent._process(message, cancellation_token=ctx.cancellation_token):
-                # Send the message out to other subscribed agents.
-                if agent_output:
-                    await self.publish_message(
-                        agent_output,
-                        topic_id=self.topic_id,
-                    )
-                    # if self.id.type.startswith(CONDUCTOR):
-                    #     # If we are the host, our replies are coordination, not content.
-                    #     # In that case, don't publish them, only return them directly.
-                    #     pass
-                
-            return agent_output  # returns the last message generated
 
+        # First, enforce division into control and in-band messages
+        if not isinstance(message, GroupchatMessageTypes):
+            logger.warning(f"{self.id} received unexpected message type: {type(message)}")
+            return None
+        # Don't allow an agent to react to its own results.
+        if isinstance(message, FlowMessage) and message.source == self.agent.id:
+            return None
+        # Autogen adds sender info, check that too
+        if ctx.sender and ctx.sender.type == self.type:
+             logger.debug(f"Agent {self.id} ignoring message from self ({ctx.sender.type})")
+             return None
+        
+        # Listen first. For normal messages, extract and record data from the message.
+        try:
+            await self.agent.listen(message=message, ctx=ctx)
         except Exception as e:
-            logger.error(f"Error processing request in agent {self.agent.id}: {e}", exc_info=True)
-            error_output = AgentOutput(
-                source=self.agent.id,
-                role=self.agent.role,
-                content=f"Error processing request: {e}",
-                error=[str(e)],
-                # Attempt to pass records if available in the input message
-                records=getattr(message, 'records', []),
+            logger.error(f"Error during listen in agent {self.agent.id}: {e}", exc_info=True)
+            return
+               
+        # Process 
+        try:
+            # Use agent's main processing method
+            async for output in self.agent(message, cancellation_token=ctx.cancellation_token):
+                 if output:
+                     # Publish yielded messages
+                     await self.publish_message(output, topic_id=self.topic_id)
+
+            return None
+        except Exception as e:
+            logger.error(f"Error processing message in agent {self.agent.id}: {e}", exc_info=False)
+            error_output = ErrorEvent(
+                source=self.agent.id, role=self.agent.role, content=f"Error: {e} {e.args=}",                
             )
-            # Publish the error message 
             await self.publish_message(error_output, topic_id=self.topic_id)
-            return error_output
+            return None
+            
 
 
     @message_handler(match=lambda self,x,y: self.is_manager)
-    async def receive_message(
+    async def handle_control_message(
         self,
         message: OOBMessages,
         ctx: MessageContext,

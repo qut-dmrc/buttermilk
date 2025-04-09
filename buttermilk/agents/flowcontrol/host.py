@@ -16,42 +16,37 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     OOBMessages,
     UserInstructions,
+    TaskProcessingComplete,
+    ProceedToNextTaskSignal,
 )
 
 class HostAgent(LLMAgent):
-    """Coordinators for group chats that use an LLM."""
+    """Coordinators for group chats that use an LLM. Can act as the 'beat' to regulate flow."""
 
     _input_callback: Any = PrivateAttr(...)
-    
+    _pending_agent_id: str | None = PrivateAttr(default=None) # Track agent waiting for signal
+
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback
+        await super().initialize(**kwargs) # Call parent initialize if needed
 
-    async def handle_control_message(
+    async def handle_control_message( # type: ignore
         self,
         message: OOBMessages, ctx: MessageContext, **kwargs
-    ) -> OOBMessages:
-        # Respond to certain control messages addressed to us
+    ) -> OOBMessages | ProceedToNextTaskSignal | None: # Adjusted return type hint
+        # --- Handle Conductor Request (existing logic) ---
         if isinstance(message, ConductorRequest):
-            next_step = await self._process(message, cancellation_token=ctx.cancellation_token)
-            return next_step
-            await self._input_callback(message)
-        
-        return
+            async for next_step_output in self._process(message, cancellation_token=ctx.cancellation_token):
+                return next_step_output 
+            return None
 
-    async def listen(self, message: GroupchatMessageTypes, 
-        ctx: MessageContext = None,
-        **kwargs):
-        """Listen as normal, except we want to cancel the current
-        execution plan when a new user or agent message comes in."""
-        if isinstance(message, (UserInstructions, AgentOutput)):
-            # confirm negative
-            await self._input_callback(
-                ManagerResponse(
-                    role=self.role,
-                    source=self.id,
-                    confirm=False,
-                ),
-            )
-        await super().listen(message=message, ctx=ctx, **kwargs)
+        # --- Handle Task Completion from Worker Agents ---
+        elif isinstance(message, TaskProcessingComplete):
+            logger.info(f"Host received TaskComplete from {message.source} (Task {message.task_index}, More: {message.more_tasks_remain})")
+            return None
+
+        else:
+            logger.debug(f"Host received unhandled OOB message type: {type(message)}")
+            return None
 

@@ -1,4 +1,3 @@
-
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Union
@@ -56,6 +55,14 @@ class StepRequest(BaseModel):
     tool: str | None = Field(default=None)
     arguments: dict[str, Any] = Field(default={})
 
+class FlowEvent(BaseModel):
+    """For communication outside the groupchat."""
+    _type = "FlowEvent"
+    source: str
+    role: str
+    content: str
+class ErrorEvent(FlowEvent):
+    """Communicate errors to host and UI."""
 
 ######
 # Communication between Agents
@@ -146,6 +153,7 @@ class AgentOutput(FlowMessage):
 ######
 # Control communications
 #
+
 class ManagerMessage(FlowMessage):
     """OOB message to manage the flow.
 
@@ -201,9 +209,31 @@ class ToolOutput(FunctionExecutionResult):
     send_to_ui: bool = False
 
 #######
+# Coordination Messages
+
+class TaskProcessingComplete(BaseModel):
+    """Sent by an agent after completing one sequential task."""
+    source: str = Field(..., description="ID of the agent sending the notification")
+    task_index: int = Field(..., description="Index of the task that was just completed")
+    more_tasks_remain: bool = Field(..., description="True if the agent has more sequential tasks to process for the current input")
+    model_config = {"extra": "allow"} # Allow extra fields if needed
+
+class ProceedToNextTaskSignal(BaseModel):
+    """Sent by a controller to signal an agent to process its next sequential task."""
+    target_agent_id: str = Field(..., description="ID of the agent that should proceed")
+    model_config = {"extra": "allow"}
+
+#######
 # Unions
 
-OOBMessages = Union[ManagerMessage, ManagerRequest, ManagerResponse, ConductorRequest]
+OOBMessages = Union[
+    ManagerMessage,
+    ManagerRequest,
+    ManagerResponse,
+    ConductorRequest,
+    TaskProcessingComplete, # Added
+    ProceedToNextTaskSignal # Added
+]
 
 GroupchatMessageTypes = Union[
     AgentOutput,
@@ -213,5 +243,7 @@ GroupchatMessageTypes = Union[
     
 ]
 
-AllMessages = Union[GroupchatMessageTypes, OOBMessages]
-    
+AllMessages = Union[
+    GroupchatMessageTypes,
+    OOBMessages,
+]

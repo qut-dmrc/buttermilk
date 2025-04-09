@@ -26,6 +26,9 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     ToolOutput,
     UserInstructions,
+    TaskProcessingComplete,
+    ProceedToNextTaskSignal,
+    OOBMessages,
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.runner_types import Record
@@ -47,6 +50,8 @@ class LLMAgent(Agent):
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: ChatCompletionClient = PrivateAttr()
+    
+    _pause: bool = PrivateAttr(default=False)
 
     @pydantic.model_validator(mode="after")
     def custom_agent_id(self) -> Self:
@@ -80,6 +85,15 @@ class LLMAgent(Agent):
         self._tools_list = create_tool_functions(self.tools)
 
         return self
+    
+    async def _ready_to_execute(self) -> bool:
+        """Check if the agent is ready to execute."""
+        if self._pause:
+            return False
+        
+        # ready to go, but only once until we hear again
+        self._pause = True
+        return True
     
     async def fill_template(
         self,
@@ -239,152 +253,108 @@ class LLMAgent(Agent):
 
     async def _process(
         self,
-        message: FlowMessage,
+        message: AgentOutput | ToolOutput | UserInstructions | AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput|None, None]:
-        
-        if isinstance(message, AgentInput):
-            # Adjusted check based on previous context
-            logger.warning(f"Agent {self.id} {self.role} received non-AgentInput message type {type(message)} in _process. Ignoring.")
+    ) -> AsyncGenerator[AgentOutput | TaskProcessingComplete | None, None]:
+        """Runs a single task or series of tasks."""
+        if not isinstance(message, AgentInput):
+            logger.debug(f"Agent {self.id} received non-AgentInput message type {type(message)} in _process. Ignoring.")
             return
 
-        messages = await self.fill_template(inputs=message)
+        input_data = message.inputs
         records = message.records
-        
-        # --- Outer loop for task parameter sets  ---
-        for task_params in self.tasks:
-            logger.debug(f"Agent {self.id} starting task with params: {task_params}")
-            
-            # Pass the specific task_params to fill_template
-            messages = await self.fill_template(task_params=task_params, inputs=message)
-            records = message.records # Use original records for each task
+        num_tasks = len(self.tasks)
+
+        for task_index, task_params in enumerate(self.tasks):
+            while not self._ready_to_execute():
+                await asyncio.sleep(1)
+
+            logger.debug(f"Agent {self.id} executing task #{task_index} of {num_tasks} with params: {task_params}")
 
             # Combine base and task parameters for this specific task run
             current_task_full_params = {**self.parameters, **task_params}
+
             try:
-                # Initial LLM call (potentially with tools)
+                messages = await self.fill_template(task_params=task_params, inputs=input_data)
+
                 create_result = await self._model_client.create(
                     messages=messages,
                     tools=self._tools_list,
                     cancellation_token=cancellation_token,
+                    **{k: v for k, v in current_task_full_params.items() if k in ['temperature', 'max_tokens', 'top_p']}
                 )
-                llm_metadata = create_result.model_dump(
-                    exclude_unset=True, exclude_none=True
-                )
+                llm_metadata = create_result.model_dump(exclude_unset=True, exclude_none=True)
 
-            except Exception as e:
-                error_msg = f"Error during initial LLM call: {e}"
-                logger.warning(error_msg)
-                yield await self._create_agent_output(
-                        raw_content=error_msg,
-                        error_msg=error_msg,
-                        records=records,
-                    )
-                continue # Move to the next task parameter set
-                
-            # --- Handle direct LLM Response ---
-            if isinstance(create_result.content, str):
-                if create_result.content.strip() == "":
-                    continue # Skip empty responses, move to next task
-                yield await self._create_agent_output(
-                    raw_content=create_result.content,
-                    task_params=task_params,
-                    llm_metadata=llm_metadata,
-                    records=records,
-                )
-
-            # --- Run tools if necessary ---
-            elif isinstance(create_result.content, list) and all(isinstance(item, FunctionCall) for item in create_result.content):
-                # LLM returned tool calls (ensure it's a list of FunctionCall)
-                try:
+                if isinstance(create_result.content, str):
+                    if create_result.content.strip() != "":
+                        yield await self._create_agent_output(
+                            raw_content=create_result.content,
+                            task_params=task_params,
+                            llm_metadata=llm_metadata,
+                            records=records,
+                        )
+                elif isinstance(create_result.content, list) and all(isinstance(item, FunctionCall) for item in create_result.content):
                     tool_outputs = await self._execute_tools(
                         calls=create_result.content,
                         cancellation_token=cancellation_token,
                     )
-                except Exception as e:
-                    error_msg = f"Error executing tools (task params: {task_params}): {e}"
-                    logger.warning(error_msg, exc_info=True)
-                    yield await self._create_agent_output(
-                        raw_content=error_msg,
-                        task_params=task_params,
-                        error_msg=error_msg,
-                        records=None, # Or pass original records?
-                        llm_metadata=llm_metadata,
-                    )
-                    continue # Move to next task
+                    reflection_tasks = []
+                    for tool_result in tool_outputs:
+                        if tool_result.is_error:
+                            error_msg = f"Tool call '{tool_result.name}' failed (task {task_index}): {tool_result.content}"
+                            logger.warning(error_msg)
+                            continue
 
-                # --- Reflection Phase after tool use (within the task loop) ---
-                reflection_tasks = []
-                for tool_result in tool_outputs:
-                    if tool_result.is_error:
-                        error_msg = f"Tool call '{tool_result.name}' failed (task params: {task_params}): {tool_result.content}"
-                        logger.warning(error_msg)
-                        yield await self._create_agent_output(
-                            raw_content=error_msg,
-                            task_params=task_params,
-                            error_msg=error_msg,
-                            records=None,
-                        )
-                        continue
+                        if tool_result.send_to_ui:
+                            yield AgentOutput(source=self.id, role=self.role, content=tool_result.content, records=tool_result.results, metadata={**self.parameters, **task_params})
+                            await asyncio.sleep(0.1)
 
-                    if tool_result.send_to_ui:
-                        # Yield UI output, associate with current task params via metadata
-                        yield AgentOutput(
-                            source=self.id,
-                            role=self.role,
-                            content=tool_result.content,
-                            records=tool_result.results,
-                            metadata={**self.parameters, **task_params} # Add task context
-                        )
-                        await asyncio.sleep(0.1) # Small delay
+                        try:
+                            reflection_messages = messages.copy()
+                            reflection_messages.extend(tool_result.messages)
+                            task = self._model_client.create(
+                                messages=reflection_messages,
+                                cancellation_token=cancellation_token,
+                                **{k: v for k, v in current_task_full_params.items() if k in ['temperature', 'max_tokens', 'top_p']}
+                            )
+                            reflection_tasks.append(task)
+                        except Exception as e:
+                            error_msg = f"Error preparing reflection for tool '{tool_result.name}' (task {task_index}): {e}"
+                            logger.warning(error_msg, exc_info=True)
 
-                    try:
-                        reflection_messages = messages.copy()
-                        reflection_messages.extend(tool_result.messages)
+                    for task in asyncio.as_completed(reflection_tasks):
+                        try:
+                            reflection_result = await task
+                            reflection_metadata = reflection_result.model_dump(exclude_unset=True, exclude_none=True)
+                            yield await self._create_agent_output(
+                                raw_content=reflection_result.content,
+                                task_params=task_params,
+                                llm_metadata=reflection_metadata,
+                            )
+                        except Exception as e:
+                            error_msg = f"Error during reflection LLM call (task {task_index}): {e}"
+                            logger.warning(error_msg, exc_info=False)
+                else:
+                    error_msg = f"Unexpected content type from LLM (task {task_index}): {type(create_result.content)}"
+                    logger.error(error_msg)
 
-                        task = self._model_client.create(
-                            messages=reflection_messages,
-                            cancellation_token=cancellation_token,
-                             **{k: v for k, v in current_task_full_params.items() if k in ['temperature', 'max_tokens', 'top_p']} # Example
-                        )
-                        reflection_tasks.append(task)
-                    except Exception as e:
-                        error_msg = f"Error preparing reflection for tool '{tool_result.name}' (task params: {task_params}): {e}"
-                        logger.warning(error_msg, exc_info=True)
-                        yield await self._create_agent_output(
-                            raw_content=error_msg, task_params=task_params, error_msg=error_msg, records=None
-                        )
+            except Exception as e:
+                error_msg = f"Error during task {task_index} execution: {e}"
+                logger.exception(f"Agent {self.id} failed task {task_index}")
+            finally:
+                more_tasks = (task_index + 1) < len(self.tasks)
+                yield TaskProcessingComplete(
+                    source=self.id,
+                    task_index=task_index,
+                    more_tasks_remain=more_tasks
+                )
+        return
 
-                # --- Process completed reflection tasks  ---
-                for task in asyncio.as_completed(reflection_tasks):
-                    try:
-                        reflection_result = await task
-                        reflection_metadata = reflection_result.model_dump(
-                            exclude_unset=True, exclude_none=True
-                        )
-                        yield await self._create_agent_output(
-                            raw_content=reflection_result.content,
-                            task_params=task_params,
-                            llm_metadata=reflection_metadata,
-                            records=None, # Or pass original records?
-                        )
-                    except Exception as e:
-                        error_msg = f"Error during reflection LLM call (task params: {task_params}): {e}"
-                        logger.warning(error_msg, exc_info=False)
-                        yield await self._create_agent_output(
-                            raw_content=error_msg, task_params=task_params, error_msg=error_msg, records=None
-                        )
-        else:
-            # Handle unexpected content type from LLM
-            error_msg = f"Unexpected content type from LLM (task params: {task_params}): {type(create_result.content)}"
-            logger.error(error_msg)
-                    yield await self._create_agent_output(
-                        raw_content=str(create_result.content),
-                        task_params=task_params,
-                        error_msg=error_msg,
-                        records=records,
-                        llm_metadata=llm_metadata,
-                    )
-            # --- End of loop for one task parameter set ---
-        # --- End of outer loop for all task parameter sets ---
+
+    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+        """Reset the agent's internal state."""
+        await super().on_reset(cancellation_token)
+        self._current_task_index = 0
+        self._last_input = None
+        logger.debug(f"Agent {self.id} state reset.")
