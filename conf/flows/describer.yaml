@@ -12,8 +12,7 @@ describer:
       parameters: 
         download_if_necessary: true
         template: describe
-        model:
-          - gemini15pro
+        model: gemini15pro
       
     # - name: describe_synth
     #   _target_: buttermilk.agents.lc.LC

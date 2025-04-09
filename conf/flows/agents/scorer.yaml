@@ -5,8 +5,9 @@ scorer:
   num_runs: 1
   description: Checks and scores answers against our expected ground truth.
   variants:
-    template: score
     model: ${llms.general}
+  parameters:
+    template: score
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:

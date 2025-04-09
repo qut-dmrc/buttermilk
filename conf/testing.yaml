@@ -43,6 +43,7 @@ flows:
         agent: LLMAgent
         num_runs: 1
         save: ${save}
-        variants:
+        parameters:
           template: owl
+        variants:
           model: ${llms.general}

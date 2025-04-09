@@ -120,12 +120,12 @@ class AgentConfig(BaseModel):
         description="Number of times to replicate each parallel variant agent instance.",
         exclude=True,
     )
-    parallel_variants: dict = Field(
+    variants: dict = Field(
         default={},
         description="Parameters to create parallel agent instances via cross-multiplication.",
         exclude=True,
     )
-    sequential_variants: dict = Field(
+    tasks: dict = Field(
         default={},
         description="Parameters defining sequential tasks for each agent instance via cross-multiplication.",
         exclude=True,
@@ -134,9 +134,9 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
-    tasks: list[dict[str, Any]] = Field(
+    sequential_tasks: list[dict[str, Any]] = Field(
         default_factory=lambda: [{}], # Default to one task with empty parameters
-        description="List of parameter sets, each defining a distinct task variation for this agent instance.",
+        description="List of tasks for each agent computed from .tasks.",
     )
     inputs: dict[str, Any] = Field(
         default_factory=dict,
@@ -150,7 +150,7 @@ class AgentConfig(BaseModel):
     }
     
     _validate_variants = field_validator(
-        "parallel_variants", "sequential_variants", mode="before"
+        "variants", "tasks", "parameters", mode="before"
     )(convert_omegaconf_objects())
 
 

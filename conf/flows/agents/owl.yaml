@@ -4,8 +4,9 @@ owl:
   description: They will speak up if needed. You don't need to call on them.
   agent_obj: LLMAgent
   num_runs: 1
-  variants:
+  parameters:
     template: owl
+  variants:
     model: ${llms.general}
   inputs:
     history: history

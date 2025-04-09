@@ -58,7 +58,7 @@ def test_no_variants_single_run(base_variant_config):
     assert isinstance(config, AgentConfig)
     assert config.id == "TEST_AGENT" # Should retain original ID
     assert config.parameters == {"base_param": "base_value"}
-    assert config.tasks == [{}] # Default single task
+    assert config.sequential_tasks == [{}] # Default single task
 
 def test_only_parallel_variants(base_variant_config):
     """Test config generation with only parallel variants."""
@@ -74,7 +74,7 @@ def test_only_parallel_variants(base_variant_config):
     for agent_class, config in configs:
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
-        assert config.tasks == [{}] # Default single task
+        assert config.sequential_tasks == [{}] # Default single task
         assert "model" in config.parameters
         ids.add(config.id)
         if config.parameters["model"] == "model_a":
@@ -102,7 +102,7 @@ def test_only_sequential_variants(base_variant_config):
     assert isinstance(config, AgentConfig)
     assert config.id == "TEST_AGENT" # Original ID, no parallel variants
     assert config.parameters == {"base_param": "base_value"} # Base params only
-    assert len(config.tasks) == 4 # 2 criteria * 2 temp
+    assert len(config.sequential_tasks) == 4 # 2 criteria * 2 temp
     expected_tasks = [
         {"criteria": "c1", "temp": 0.5},
         {"criteria": "c1", "temp": 0.8},
@@ -110,7 +110,7 @@ def test_only_sequential_variants(base_variant_config):
         {"criteria": "c2", "temp": 0.8},
     ]
     # Convert to set of tuples for order-independent comparison
-    assert set(tuple(sorted(d.items())) for d in config.tasks) == \
+    assert set(tuple(sorted(d.items())) for d in config.sequential_tasks) == \
            set(tuple(sorted(d.items())) for d in expected_tasks)
 
 def test_both_parallel_and_sequential_variants(base_variant_config):
@@ -132,8 +132,8 @@ def test_both_parallel_and_sequential_variants(base_variant_config):
         assert isinstance(config, AgentConfig)
         assert "model" in config.parameters
         assert config.parameters["base_param"] == "base_value"
-        assert len(config.tasks) == 2
-        assert set(tuple(sorted(d.items())) for d in config.tasks) == task_set_tuples
+        assert len(config.sequential_tasks) == 2
+        assert set(tuple(sorted(d.items())) for d in config.sequential_tasks) == task_set_tuples
         if config.parameters["model"] == "m1":
             assert "m1" in config.id
         else:
@@ -156,7 +156,7 @@ def test_num_runs_greater_than_one(base_variant_config):
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
         assert config.parameters == {"base_param": "base_value", "model": "m_a"}
-        assert config.tasks == [{}]
+        assert config.sequential_tasks == [{}]
         assert f"run{i}" in config.id
         assert "m_a" in config.id # Parallel param should still be in ID
         ids.add(config.id)
@@ -221,16 +221,16 @@ def test_omegaconf_conversion(base_variant_config):
     variant_factory = AgentVariants(**config_data)
 
     # Check internal state after validation (optional, but good for debugging)
-    assert isinstance(variant_factory.parallel_variants, dict)
-    assert not isinstance(variant_factory.parallel_variants, OmegaConf)
-    assert isinstance(variant_factory.sequential_variants, dict)
-    assert not isinstance(variant_factory.sequential_variants, OmegaConf)
+    assert isinstance(variant_factory.variants, dict)
+    assert not isinstance(variant_factory.variants, OmegaConf)
+    assert isinstance(variant_factory.tasks, dict)
+    assert not isinstance(variant_factory.tasks, OmegaConf)
 
     # Check generated configs
     configs = variant_factory.get_configs()
     assert len(configs) == 2
-    assert len(configs[0][1].tasks) == 2
-    assert isinstance(configs[0][1].tasks[0], dict)
+    assert len(configs[0][1].sequential_tasks) == 2
+    assert isinstance(configs[0][1].sequential_tasks[0], dict)
 
 def test_empty_variants(base_variant_config):
     """Test config generation with empty variant dicts."""
@@ -246,7 +246,7 @@ def test_empty_variants(base_variant_config):
     agent_class, config = configs[0]
     assert config.id == "TEST_AGENT"
     assert config.parameters == {"base_param": "base_value"}
-    assert config.tasks == [{}] # Default task
+    assert config.sequential_tasks == [{}] # Default task
 
 def test_agent_not_found(base_variant_config):
     """Test that ValueError is raised if agent_obj is not found."""

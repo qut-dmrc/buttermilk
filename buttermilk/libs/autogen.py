@@ -133,7 +133,7 @@ class AutogenAgentAdapter(RoutedAgent):
             
 
 
-    @message_handler(match=lambda self,x,y: self.is_manager)
+    @message_handler
     async def handle_control_message(
         self,
         message: OOBMessages,

@@ -113,7 +113,24 @@ class Singleton:
 
 class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr()
-    _gcp_credentials: GoogleCredentials = PrivateAttr()
+    _gcp_credentials_cached: GoogleCredentials = PrivateAttr(default=None)
+
+    @property
+    def _gcp_credentials(self) -> GoogleCredentials:
+        from google.auth import default, transport
+        billing_project = os.environ.get("google_billing_project", os.environ["GOOGLE_CLOUD_PROJECT"])
+
+        if not self._gcp_credentials_cached:
+            self._gcp_credentials_cached, self._gcp_project = default(
+                quota_project_id=billing_project,
+            )
+
+        # GCP tokens last 60 minutes and need to be refreshed after that
+        auth_request = transport.requests.Request()
+        self._gcp_credentials_cached.refresh(auth_request)
+        # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
+
+        return self._gcp_credentials_cached
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
@@ -130,23 +147,17 @@ class BM(Singleton, Project):
     def ensure_config(self) -> Self:
         for cloud in self.clouds:
             if cloud.type == "gcp":
-                from google.auth import default, transport
-                # authenticate to GCP
+                # store authentication info
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
                     "GOOGLE_CLOUD_PROJECT",
                     cloud.project,
                 )
                 if "quota_project_id" in cloud.model_fields_set:
-                    billing_project = cloud.quota_project_id
-                else:
-                    billing_project = os.environ["GOOGLE_CLOUD_PROJECT"]
-                self._gcp_credentials, self._gcp_project = default(
-                    quota_project_id=billing_project,
-                )
-                # GCP tokens last 60 minutes and need to be refreshed after that
-                auth_request = transport.requests.Request()
-                self._gcp_credentials.refresh(auth_request)
-                # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
+                    os.environ["google_billing_project"] = cloud.quota_project_id
+                
+                # authenticate here
+                _ = self._gcp_credentials
+
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(

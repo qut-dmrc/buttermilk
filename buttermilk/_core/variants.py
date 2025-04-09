@@ -49,7 +49,7 @@ class AgentRegistry:
         # Use pkgutil.walk_packages for better handling of subpackages
         prefix = package.__name__ + "."
         for importer, modname, ispkg in pkgutil.walk_packages(
-            path=package.__path__, prefix=prefix, onerror=lambda name: print(f"Error importing {name}")
+            path=package.__path__, prefix=prefix, onerror=lambda name: logger.warning(f"AgentRegistry hit error importing {name}")
         ):
             try:
                 # Import the module to trigger registration via decorators or class loading
@@ -58,7 +58,17 @@ class AgentRegistry:
                 # Log error, but continue discovery
                 logger.warning(f"Error importing module {modname}: {e}")
 
+        # Now find all Agent subclasses that have been loaded
+        def get_all_subclasses(cls):
+            all_subclasses = []
+            for subclass in cls.__subclasses__():
+                all_subclasses.append(subclass)
+                all_subclasses.extend(get_all_subclasses(subclass))
+            return all_subclasses
 
+        # Register all found subclasses
+        for subclass in get_all_subclasses(Agent):
+            cls.register(subclass)
 class AgentVariants(AgentConfig):
     """
     A factory for creating Agent instance variants based on parameter combinations.
@@ -75,9 +85,9 @@ class AgentVariants(AgentConfig):
       role: "Analyst"
       agent_obj: LLMAgent
       num_runs: 1
-      parallel_variants:
+      variants:
         model: ["gpt-4", "claude-3"]    # Creates 2 parallel agent instances
-      sequential_variants:
+      tasks:
         criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
         temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent 
                                         # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
@@ -109,12 +119,12 @@ class AgentVariants(AgentConfig):
         agent_class = AgentRegistry.get(self.agent_obj)
 
         # Expand parallel variants
-        parallel_variant_combinations = expand_dict(self.parallel_variants)
+        parallel_variant_combinations = expand_dict(self.variants)
         if not parallel_variant_combinations:
             parallel_variant_combinations = [{}] # Ensure at least one base agent config
 
         # Expand sequential variants
-        sequential_task_sets = expand_dict(self.sequential_variants)
+        sequential_task_sets = expand_dict(self.tasks)
         if not sequential_task_sets:
             sequential_task_sets = [{}] # Default: one task with no specific sequential params
 
@@ -129,7 +139,7 @@ class AgentVariants(AgentConfig):
                 cfg_dict["parameters"] = {**base_parameters, **parallel_params}
 
                 # Assign the sequential task sets
-                cfg_dict["tasks"] = sequential_task_sets
+                cfg_dict["sequential_tasks"] = sequential_task_sets
 
                 # Generate unique ID incorporating parallel variants and run number
                 id_parts = [self.id]
@@ -158,7 +168,7 @@ class AgentVariants(AgentConfig):
                     raise # Re-raise by default
 
         # Handle the edge case: No variants, num_runs=1 (should result in one config)
-        if not self.parallel_variants and not self.sequential_variants and self.num_runs == 1:
+        if not self.variants and not self.tasks and self.num_runs == 1:
              if len(generated_configs) == 1:
                  # Ensure the single generated config has the original ID if possible
                  generated_configs[0][1].id = self.id

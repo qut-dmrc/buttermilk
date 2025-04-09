@@ -55,12 +55,12 @@ class LLMAgent(Agent):
 
     @pydantic.model_validator(mode="after")
     def custom_agent_id(self) -> Self:
-        # Set a custom name based on our major parameters
+        # Set a custom name based on our major variants
         components = self.id.split("-")
             
         components.extend([
             v
-            for k, v in self.parameters.items()
+            for k, v in self.variants.items()
             if k not in ["formatting", "description", "template"]
             and v and not re.search(r"\s", v)
         ])
@@ -264,9 +264,9 @@ class LLMAgent(Agent):
 
         input_data = message.inputs
         records = message.records
-        num_tasks = len(self.tasks)
+        num_tasks = len(self.sequential_tasks)
 
-        for task_index, task_params in enumerate(self.tasks):
+        for task_index, task_params in enumerate(self.sequential_tasks):
             while not self._ready_to_execute():
                 await asyncio.sleep(1)
 
@@ -343,7 +343,7 @@ class LLMAgent(Agent):
                 error_msg = f"Error during task {task_index} execution: {e}"
                 logger.exception(f"Agent {self.id} failed task {task_index}")
             finally:
-                more_tasks = (task_index + 1) < len(self.tasks)
+                more_tasks = (task_index + 1) < len(self.sequential_tasks)
                 yield TaskProcessingComplete(
                     source=self.id,
                     task_index=task_index,

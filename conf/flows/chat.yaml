@@ -25,8 +25,6 @@ chat:
       agent: LLMAgent
       num_runs: 1
       variants:
-        template: groupchat
-        model: ${llms.general}
         criteria:
           - trans_simplified
           - cte
@@ -34,4 +32,7 @@ chat:
           - glaad
           - hrc
           - trans_factored
+      parameters:
+        template: groupchat
+        model: ${llms.general}
         formatting: json_rules
