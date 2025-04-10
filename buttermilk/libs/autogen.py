@@ -102,9 +102,9 @@ class AutogenAgentAdapter(RoutedAgent):
         async for response in self.agent._listen(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            publish_callback=self._make_publish_callback(topic_id=self.topic_id),
         ):
-            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+            await self.publish_message(response, topic_id=self.topic_id)
 
     @message_handler
     async def handle_invocation(
@@ -120,7 +120,7 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
         ):
-            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+            await self.publish_message(response, topic_id=self.topic_id)
         return response  # only the last message
 
     @message_handler
@@ -128,17 +128,18 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: ConductorRequest,
         ctx: MessageContext,
-    ) -> ConductorResponse | None:
+    ) -> ConductorResponse | TaskProcessingComplete | AgentOutput | None:
         """Handle conductor requests privately."""
-        response = None
+        output = None
         async for response in self.agent.invoke_privately(
             message=message,
             cancellation_token=ctx.cancellation_token,
             publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
         ):
-            pass
-            # await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
-        return response  # only the last message
+            if isinstance(response, (AgentOutput, ConductorResponse)):
+                output = response
+                await self.publish_message(response, topic_id=self.topic_id)
+        return output  # only the last matching message
 
     @message_handler
     async def handle_control_message(

@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.pretty import pretty_repr
 
 from buttermilk import logger
-from buttermilk._core.agent import OOBMessages
+from buttermilk._core.agent import ConductorResponse, OOBMessages
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
@@ -34,9 +34,15 @@ class CLIUserAgent(UIAgent):
         output = []
         try:
             output.append(f"### {message.source} ({message.role})")
-
-            if message.outputs:
-                output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
+            if isinstance(message, (AgentOutput, ConductorResponse)):
+                if message.params:
+                    output.append(pretty_repr(message.params, max_string=400).replace("\\n", ""))
+                if message.outputs:
+                    output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
+                else:
+                    output.append(message.content)
+                # for rec in message.records:
+                #     output.append(str(rec).replace("\\n", ""))
             else:
                 output.append(message.content)
             output = [o for o in output if o]

@@ -16,6 +16,7 @@ from autogen_core.models import (
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
+import weave
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput
 from buttermilk._core.contract import (
@@ -177,6 +178,7 @@ class LLMAgent(Agent):
         else:
             outputs = raw_content
             content = str(raw_content)
+        # TODO @nicsuzor: I presume there's a better way to do this:
         dump = {k: v for k, v in inputs.__dict__.items() if k in inputs.model_fields_set}
         response = AgentOutput(**dump)
         response.content = content

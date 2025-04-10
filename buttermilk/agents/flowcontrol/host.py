@@ -37,15 +37,9 @@ class HostAgent(LLMAgent):
     async def _handle_control_message(
         self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
     ) -> AsyncGenerator[OOBMessages | None, None]:
-        # --- Handle Conductor Request (existing logic) ---
-        if isinstance(message, ConductorRequest):
-            next_step_output = None
-            async for next_step_output in self.__call__(message, ctx=ctx.cancellation_token):
-                pass
-            yield next_step_output
 
         # --- Handle Task Completion from Worker Agents ---
-        elif isinstance(message, TaskProcessingComplete):
+        if isinstance(message, TaskProcessingComplete):
             logger.info(f"Host received TaskComplete from {message.source} (Task {message.task_index}, More: {message.more_tasks_remain})")
             yield None
 

@@ -62,9 +62,9 @@ class FetchRecord(Agent, ToolConfig):
         into the chat."""
 
         if not isinstance(message, UserInstructions):
-            yield None
+            return
         if not (match := re.match(self._pat, message.content)):
-            yield None
+            return
 
         record = None
         if uri := match[2]:
@@ -83,7 +83,7 @@ class FetchRecord(Agent, ToolConfig):
             )
 
             yield output
-        yield None
+        return
 
     async def _run( # type: ignore
         self,

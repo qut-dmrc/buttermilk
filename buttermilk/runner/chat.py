@@ -45,10 +45,6 @@ class Selector(AutogenOrchestrator):
         """
         self._next_step = None
 
-        # store the last message received, so that any changes in instructions
-        # are incorporated before executing the next step
-        _last_message = self._last_message
-
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
         request = ConductorRequest(
@@ -73,21 +69,19 @@ class Selector(AutogenOrchestrator):
         if not instructions or not (next_step := instructions.outputs.get("role")):
             raise ProcessingError("Next step not found from conductor.")
 
-        if next_step not in self._agent_types:
+        if next_step.lower() not in self._agent_types:
             raise ProcessingError(
                 f"Step {next_step} not found in registered agents.",
             )
 
-        if self._last_message == _last_message:
-            # No change to inputs
-            yield StepRequest(
-                role=next_step,
-                source=self.flow_name,
-                prompt=instructions.outputs.pop("prompt", ""),
-                description=instructions.outputs.pop("plan", ""),
-                tool=instructions.outputs.get("tool", None),
-                arguments=instructions.outputs,
-            )
+        yield StepRequest(
+            role=next_step,
+            source=self.flow_name,
+            prompt=instructions.outputs.pop("prompt", ""),
+            description=instructions.outputs.pop("plan", ""),
+            tool=instructions.outputs.get("tool", None),
+            arguments=instructions.outputs,
+        )
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""

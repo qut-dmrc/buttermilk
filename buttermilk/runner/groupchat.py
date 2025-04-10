@@ -59,7 +59,6 @@ class AutogenOrchestrator(Orchestrator):
         self._user_confirmation = asyncio.Queue(maxsize=1)
         return self
 
-
     async def run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow.
 
@@ -95,7 +94,6 @@ class AutogenOrchestrator(Orchestrator):
 
         # Start the runtime
         self._runtime.start()
-
 
     async def _register_agents(self) -> None:
         """Register all agent variants for each step"""
@@ -155,7 +153,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Wait for all agents to respond
         responses = await asyncio.gather(*tasks)
-        return [r for r in responses if r]
+        return [r for r in responses if r and isinstance(r, AgentOutput)]
 
     async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
         """Send a message to the UI agent"""

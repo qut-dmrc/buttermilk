@@ -164,7 +164,6 @@ class Agent(AgentConfig):
     or passed via AgentInput. _reset() clears state.
     """
     _trace_this = True
-    _run_fn: AsyncGenerator = PrivateAttr()
 
     _records: list[Record] = PrivateAttr(default_factory=list)
     _model_context: ChatCompletionContext = PrivateAttr(
@@ -184,61 +183,56 @@ class Agent(AgentConfig):
                     return False
                 await asyncio.sleep(1)
 
-    @pydantic.model_validator(mode="after")
-    def _get_process_func(self) -> Self:
-        """Returns the appropriate processing function based on tracing setting."""
-
-        async def traced_process(
-            *, message: AgentInput | ConductorRequest, cancellation_token=None, publish_callback=None, **kwargs
-        ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
-            # Agents come in variants, and each variant has a list of tasks that it iterates through.
+    async def _run_fn(
+        self, *, message: AgentInput | ConductorRequest, cancellation_token=None, publish_callback=None, **kwargs
+    ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
+        # Agents come in variants, and each variant has a list of tasks that it iterates through.
+        # And are supplemented by placeholders for records and contextual history
+        n = 0
+        for task_params in self.sequential_tasks:
             try:
-                n = 0
-                for task_params in self.sequential_tasks:
-                    inputs = AgentInput(**message.model_dump())
-                    # add data from our local state
-                    inputs.records.extend(self._records)
-                    inputs.params.update(task_params)
-                    inputs.params.update(self.parameters)
-                    inputs.context.extend(await self._model_context.get_messages())
+                inputs = AgentInput(**message.model_dump())
+                # add data from our local state
+                inputs.records.extend(self._records)
+                inputs.params.update(task_params)
+                inputs.params.update(self.parameters)
+                inputs.context.extend(await self._model_context.get_messages())
 
-                    # And are supplemented by placeholders for records and contextual history
-                    async for result in self._process(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
-                        try:
-                            n = n + 1
-                            yield result
-                            yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
-                            if not await self._check_heartbeat():
-                                logger.info(
-                                    f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
-                                )
-                                raise StopAsyncIteration
-                        except ProcessingError as e:
-                            logger.error(
-                                f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
-                            )
-                            # yield ErrorEvent(
-                            #     source=self.id,
-                            #     role=self.role,
-                            #     content=f"Processing Error: {e}",
-                            #     error=[str(e)],
-                            #     records=input_data.records,
-                            # )
-                            continue
-                        except FatalError as e:
-                            logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
-                            raise e
-                        except Exception as e:
-                            logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
-                            raise e
+                async for result in self._process(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
+                    await asyncio.sleep(0.1)
+                    yield result
+                    yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
+                    if not await self._check_heartbeat():
+                        logger.info(
+                            f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
+                        )
+                        raise StopAsyncIteration
+            except ProcessingError as e:
+                logger.error(
+                    f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
+                )
+                # yield ErrorEvent(
+                #     source=self.id,
+                #     role=self.role,
+                #     content=f"Processing Error: {e}",
+                #     error=[str(e)],
+                #     records=input_data.records,
+                # )
+                continue
+            except FatalError as e:
+                logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
+                raise e
+            except Exception as e:
+                logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
+                raise e
             finally:
                 yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False)
 
-        if self._trace_this:
-            self._run_fn = weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
-        self._run_fn = traced_process
+        # if self._trace_this:
+        #     self._run_fn = weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
+        # self._run_fn = traced_process
 
-        return self
+        # return self
 
     async def _listen(
         self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
@@ -297,6 +291,7 @@ class Agent(AgentConfig):
 
             yield outputs
 
+    @weave.op
     async def invoke(
         self,
         message: AgentInput,
@@ -304,25 +299,15 @@ class Agent(AgentConfig):
         publish_callback: Callable,
         **kwargs,
     ) -> AsyncGenerator[AgentOutput | ToolOutput | TaskProcessingComplete | None, None]:
-        """Allow agents to be called directly as functions by the orchestrator."""
+        """Run the main function."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):
             logger.debug(f"Agent {self.id} received non-supported message type {type(message)} in _process. Ignoring.")
             return
 
-        response = []
         async for output in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
-            if isinstance(response, (AgentOutput, ToolOutput)):
-                response.append(output)
-
-        if response:
-            # take only the last result
-            outputs = response[-1]
-            # And stash others within it.
-            if len(response) > 1:
-                outputs.internal_messages = response[:-1]
-
-            yield outputs
+            if isinstance(output, (AgentOutput, ToolOutput)):
+                yield output
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""

@@ -152,6 +152,10 @@ class AgentOutput(AgentInput):
         default_factory=list,
         description="Messages generated along the way to the final response",
     )
+    params: dict[str, Any] = Field(
+        default={},
+        description="Task-specific settings to provide the agent",
+    )
     metadata: dict[str, Any] = Field(default={})
 
     _ensure_error_list = field_validator("error", mode="before")(
