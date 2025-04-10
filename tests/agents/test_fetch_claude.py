@@ -26,7 +26,7 @@ def fetch_agent():
     with patch("asyncio.create_task"):
         agent = FetchRecord(
             id="test_fetch",
-            role="Test Fetch",
+            role="fetch",
             description="Test fetch agent",
         )
         # Mock the data task to avoid actual loading
@@ -39,7 +39,7 @@ def fetch_agent():
 async def test_fetch_process(fetch_agent, mock_record):
     """Test the process method of the fetch agent."""
     input_data = AgentInput(
-        role="test",
+        role="fetch",
         content="fetch this",
         inputs={"record_id": "test_id"},
     )

@@ -234,7 +234,7 @@ class ManagerResponse(ManagerRequest):
 #########
 # Function messages
 class ToolOutput(FunctionExecutionResult):
-    role: str = Field(..., description="The name of the tool")
+    role: str = Field(..., description="The role the tool provides")
 
     results: Any =  Field(default_factory=dict)
     messages: list[UserMessage] = Field(default_factory=list)

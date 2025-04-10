@@ -34,8 +34,8 @@ class LLMScorer(LLMAgent):
             # Handle conductor requests if needed, e.g., for final summary.
             logger.warning(f"{self.role} received ConductorRequest. Summarization logic TBD.")
             return AgentOutput(
-                source=self.role,
-                role=self.name,
+                source=self.name,
+                role=self.role,
                 content=f"Scoring summary for {len(self._scores)} responses",
                 outputs={"scores": self._scores},
             )
@@ -52,7 +52,7 @@ class LLMScorer(LLMAgent):
         # Collect records fields with ground truth components
         if isinstance(message, AgentOutput):
 
-            if message.role == self.name:
+            if message.role == self.role:
                 # Ignore messages from our own kind
                 return
 
@@ -63,8 +63,8 @@ class LLMScorer(LLMAgent):
 
                 # Score immediately if we have ground truth
                 input_data = AgentInput(
-                    role=self.name,
-                    source=self.role,
+                    source=self.name,
+                    role=self.role,
                     inputs={"answer": message, "expected": self._ground_truth},
                 )
                 async for _ in self._process():

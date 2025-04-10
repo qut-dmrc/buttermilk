@@ -93,8 +93,8 @@ class CLIUserAgent(UIAgent):
                     # confirm negative
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.name,
-                            source=self.role,
+                            source=self.name,
+                            role=self.role,
                             confirm=False,
                         ),
                     )
@@ -103,13 +103,13 @@ class CLIUserAgent(UIAgent):
                     # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.name,
-                            source=self.role,
+                            source=self.name,
+                            role=self.role,
                             confirm=True,
                         ),
                     )
                 else:
-                    await self._input_callback(UserInstructions(source=self.role, role=self.name, content=user_input))
+                    await self._input_callback(UserInstructions(source=self.id, role=self.role, content=user_input))
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:

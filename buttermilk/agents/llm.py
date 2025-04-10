@@ -52,18 +52,18 @@ class LLMAgent(Agent):
 
     _pause: bool = PrivateAttr(default=False)
 
-    @pydantic.model_validator(mode="after")
-    def custom_agent_id(self) -> Self:
-        # Set a custom name based on our major variants
-        components = self.role.split("-")
+    # @pydantic.model_validator(mode="after")
+    # def custom_agent_id(self) -> Self:
+    #     # Set a custom name based on our major variants
+    #     components = self.role.split("-")
 
-        components.extend(
-            [v for k, v in self.variants.items() if k not in ["formatting", "description", "template"] and v and not re.search(r"\s", v)]
-        )
-        components = [c[:12] for c in components if c]
-        self.role = "_".join(components)[:63]
+    #     components.extend(
+    #         [v for k, v in self.variants.items() if k not in ["formatting", "description", "template"] and v and not re.search(r"\s", v)]
+    #     )
+    #     components = [c[:12] for c in components if c]
+    #     self.role = "_".join(components)[:63]
 
-        return self
+    #     return self
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:

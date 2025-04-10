@@ -103,7 +103,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    variant.role,
+                    variant.id,
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,

@@ -148,8 +148,8 @@ class AssistantAgentWrapper(Agent):
         except Exception as e:
             logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
             return AgentOutput(
-                source=self.role,
-                role=self.name,
+                source=self.id,
+                role=self.role,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
             )
