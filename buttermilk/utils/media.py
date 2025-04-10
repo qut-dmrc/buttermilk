@@ -5,7 +5,7 @@ import regex as re
 from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
-from buttermilk._core.runner_types import MediaObj, Record
+from buttermilk._core.types import MediaObj, Record
 from buttermilk.utils.utils import (
     download_limited_async,
     is_filepath,
@@ -77,7 +77,7 @@ async def download_and_convert(
         obj_list = [
             MediaObj(
                 label=label,
-                base_64=b64,
+                _base_64=b64,
                 mime=mime,
             ),
         ]
@@ -102,7 +102,7 @@ async def download_and_convert(
         ]
 
     record = Record(
-        data=obj_list,
+        components=obj_list,
         **kwargs,
     )
     return record

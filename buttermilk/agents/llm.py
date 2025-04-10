@@ -31,7 +31,7 @@ from buttermilk._core.contract import (
     OOBMessages,
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.json_parser import ChatParser
@@ -213,8 +213,13 @@ class LLMAgent(Agent):
             "context": inputs.context,
         }
         messages = await self._fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
+        try:
+            create_result = await self._model_client.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
+        except Exception as e:
+            error_msg = f"Error during LLM call: {e}"
+            logger.warning(error_msg, exc_info=False)
+            raise ProcessingError(error_msg)
 
-        create_result = await self._model_client.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
         llm_metadata = create_result.model_dump(exclude_unset=True, exclude_none=True)
 
         if isinstance(create_result.content, str):

@@ -5,6 +5,7 @@ import time
 from typing import Any, AsyncGenerator, Callable, Self, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
+import jmespath
 import pydantic
 import weave
 from autogen_core import CancellationToken, MessageContext
@@ -55,7 +56,8 @@ from buttermilk._core.contract import (
     UserInstructions,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.runner_types import Record
+from buttermilk._core.flow import KeyValueCollector
+from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 
@@ -171,6 +173,7 @@ class Agent(AgentConfig):
     )
     _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
+    _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
 
     async def _check_heartbeat(self, timeout=60) -> bool:
         """Check if the heartbeat queue is empty."""
@@ -189,29 +192,33 @@ class Agent(AgentConfig):
         # Agents come in variants, and each variant has a list of tasks that it iterates through.
         # And are supplemented by placeholders for records and contextual history
         n = 0
+        tasks = []
         for task_params in self.sequential_tasks:
+            inputs = AgentInput(**message.model_dump())
+            # add data from our local state
+            inputs.inputs.update(self._data.get_dict())
+            inputs.params.update(task_params)
+            inputs.params.update(self.parameters)
+            inputs.context.extend(await self._model_context.get_messages())
+
+            _traced = weave.op(
+                self._process,
+                call_display_name=self.role,
+            )
+            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback))
+            tasks.append(t)
+
+        for t in asyncio.as_completed(tasks):
+            n += 1
             try:
-                inputs = AgentInput(**message.model_dump())
-                # add data from our local state
-                inputs.records.extend(self._records)
-                inputs.params.update(task_params)
-                inputs.params.update(self.parameters)
-                inputs.context.extend(await self._model_context.get_messages())
-
-                _traced = weave.op(
-                    self._process,
-                    call_display_name=f"{self.id} ({self.role})",
-                )
-
-                async for result in _traced(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
-                    await asyncio.sleep(0.1)
-                    yield result
-                    yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
-                    # if not await self._check_heartbeat():
-                    #     logger.info(
-                    #         f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
-                    #     )
-                    #     raise StopAsyncIteration
+                result = await t
+                yield result
+                yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
+                # if not await self._check_heartbeat():
+                #     logger.info(
+                #         f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
+                #     )
+                #     raise StopAsyncIteration
             except ProcessingError as e:
                 logger.error(
                     f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
@@ -241,10 +248,15 @@ class Agent(AgentConfig):
 
     async def _listen(
         self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
+    ) -> None:
         """Save incoming messages for later use."""
-        # Not implemented generically. Discard input.
-        yield None
+        if message.role in self.inputs:
+            # Possible match, let's extract data
+            result_dict = message.model_dump()
+            for var_name, field_path in self.inputs.items():
+                value = jmespath.search(field_path, result_dict)
+                if value:
+                    self._data.add(var_name, value)
 
     async def _process(
         self, inputs: AgentInput, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
@@ -296,7 +308,12 @@ class Agent(AgentConfig):
 
             yield outputs
 
-    @weave.op
+    # def custom_attribute_name(call):
+    #     model = call.attributes["model"]
+    #     return f"{model}"
+
+    #     @weave.op(call_display_name=custom_attribute_name)
+
     async def invoke(
         self,
         message: AgentInput,

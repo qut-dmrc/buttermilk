@@ -4,7 +4,7 @@ from typing import Any, AsyncGenerator
 
 from pydantic import BaseModel
 
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 
 from .loaders import LoaderGCS
 

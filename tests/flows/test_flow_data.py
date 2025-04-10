@@ -1,4 +1,4 @@
-from buttermilk._core.runner_types import  Record
+from buttermilk._core.types import Record
 from buttermilk.runner.helpers import parse_flow_vars
 from buttermilk.utils.utils import read_json
 

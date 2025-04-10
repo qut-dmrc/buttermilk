@@ -13,7 +13,7 @@ from pydantic import (
 )
 
 from .config import DataSourceConfig, SaveInfo
-from .runner_types import Record
+from .types import Record
 from buttermilk.utils.validators import make_list_validator
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -234,6 +234,8 @@ class ManagerResponse(ManagerRequest):
 #########
 # Function messages
 class ToolOutput(FunctionExecutionResult):
+    role: str = Field(..., description="The name of the tool")
+
     results: Any =  Field(default_factory=dict)
     messages: list[UserMessage] = Field(default_factory=list)
     args: list[str] | list[dict[str,Any]] | dict[str, Any] = Field(default_factory=dict)

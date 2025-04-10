@@ -24,7 +24,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk.agents.ui.generic import UIAgent
 
-
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))

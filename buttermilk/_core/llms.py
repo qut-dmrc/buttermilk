@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
-
+import weave
 from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
@@ -105,6 +105,7 @@ class AutoGenWrapper(RetryWrapper):
 
     client: ChatCompletionClient
     model_info: ModelInfo
+
     async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Rate-limited version of the underlying client's create method with retries"""
         # Use the retry logic

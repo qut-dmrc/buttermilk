@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.agents.describer import Describer
 from buttermilk._core.llms import MULTIMODAL_MODELS
 from buttermilk.runner.flow import Flow

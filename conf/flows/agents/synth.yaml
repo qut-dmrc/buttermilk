@@ -1,4 +1,4 @@
-synth:
+synthesisers:
   id: SYNTHESISERS
   role: "🎨 Synthesiser"
   agent_obj: LLMAgent

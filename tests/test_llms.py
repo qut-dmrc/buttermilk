@@ -1,7 +1,7 @@
 import pytest
 from autogen_core.models import AssistantMessage, UserMessage
 
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 
 
 @pytest.mark.anyio

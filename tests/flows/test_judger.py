@@ -2,7 +2,7 @@ import pytest
 
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.llms import CHATMODELS
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.runner.flow import Flow
 

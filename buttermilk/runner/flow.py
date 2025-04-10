@@ -16,7 +16,7 @@ from pydantic import (
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import DataSourceConfig
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk._core.exceptions import FatalError
 from buttermilk.runner.helpers import (
     combine_datasets,

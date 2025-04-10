@@ -76,7 +76,6 @@ def is_b64(value: Any) -> bool:
         return base64.b64encode(base64.b64decode(value)) == value.encode("utf-8")
     except:
         return False
-    return True
 
 
 async def run_async_newthread(func, *args, **kwargs):

@@ -54,7 +54,7 @@
         "+flows=[trans]",
         "+flow=trans",
         "ui=console",
-        "llms=lite"
+        "llms=full"
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -72,7 +72,7 @@
         "hydra.verbose=false",
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
-        "llms=lite",
+        "llms=full",
       ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

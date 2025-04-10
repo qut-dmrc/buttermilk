@@ -131,7 +131,7 @@ class AutogenOrchestrator(Orchestrator):
 
                 step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
-            self._agent_types[step_name] = step_agent_type
+            self._agent_types[step_name.lower()] = step_agent_type
 
     async def _ask_agents(
         self,
@@ -142,7 +142,7 @@ class AutogenOrchestrator(Orchestrator):
         tasks = []
         input_message = message.model_copy()
 
-        for agent_type, _ in self._agent_types[step_name]:
+        for agent_type, _ in self._agent_types[step_name.lower()]:
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
                 message=input_message,

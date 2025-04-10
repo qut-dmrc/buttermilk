@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from buttermilk._core.contract import AgentInput, AgentOutput, UserInstructions
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
 

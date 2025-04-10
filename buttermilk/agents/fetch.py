@@ -16,7 +16,7 @@ from buttermilk._core.contract import (
     ToolOutput,
     UserInstructions,
 )
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
@@ -104,6 +104,7 @@ class FetchRecord(Agent, ToolConfig):
             record = await self._get_record_dataset(record_id)
             if record:
                 result = ToolOutput(
+                    role=self.role,
                     name=self.id,
                     results=[record],
                     content=record._fulltext,
@@ -114,7 +115,13 @@ class FetchRecord(Agent, ToolConfig):
         else:
             record =await download_and_convert(uri)
             result = ToolOutput(
-                name=self.id, results=[record], content=record._fulltext, messages=[record.as_message()], args=dict(uri=uri), send_to_ui=True
+                role=self.role,
+                name=self.id,
+                results=[record],
+                content=record._fulltext,
+                messages=[record.as_message()],
+                args=dict(uri=uri),
+                send_to_ui=True,
             )
 
         if result:

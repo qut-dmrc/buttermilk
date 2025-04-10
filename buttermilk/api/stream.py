@@ -14,7 +14,7 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
 from buttermilk._core.llms import CHATMODELS
 from buttermilk.runner.flow import Flow

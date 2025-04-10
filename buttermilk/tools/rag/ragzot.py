@@ -61,7 +61,6 @@ class RefResult(pydantic.BaseModel):
         )
 
 
-
 class RagZot(LLMAgent, ToolConfig):
     """Retrieval Augmented Generation Agent that queries a vector store
     and fills a template with the results.
@@ -101,7 +100,7 @@ class RagZot(LLMAgent, ToolConfig):
     @property
     def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
         return self._tools_list
-    
+
     async def _run(self, queries: list[str]) -> list[ToolOutput]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
@@ -165,11 +164,14 @@ class RagZot(LLMAgent, ToolConfig):
                 logger.debug(f"Tried to calculate token usage but couldn't: {self._model_client.model_info}")
 
         records = records[: self.n_results]
-        return ToolOutput(call_id="",
-                content="\n\n".join([str(r) for r in records]),
-                results=records,
-                args=dict(query=query),
-                messages=[r.as_message() for r in records],
-                is_error=False,
-                source="search"
-            )
+        return ToolOutput(
+            role=self.role,
+            name=self.id,
+            call_id="",
+            content="\n\n".join([str(r) for r in records]),
+            results=records,
+            args=dict(query=query),
+            messages=[r.as_message() for r in records],
+            is_error=False,
+            source="search",
+        )

@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from buttermilk._core.runner_types import MediaObj, Record
+from buttermilk._core.types import MediaObj, Record
 from buttermilk.utils.media import download_and_convert
 
 pytestmark = pytest.mark.anyio

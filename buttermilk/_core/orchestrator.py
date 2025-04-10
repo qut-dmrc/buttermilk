@@ -19,7 +19,7 @@ from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import FlowVariableRouter
 from buttermilk._core.job import Job
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
 from buttermilk.bm import BM
 
@@ -208,7 +208,7 @@ class Orchestrator(BaseModel, ABC):
         input_dict = dict(config.inputs)
 
         # Overwrite any of the input dict values that are mappings to other data
-        input_dict.update(self._flow_data._resolve_mappings(input_dict))
+        # input_dict.update(self._flow_data._resolve_mappings(input_dict))
 
         # Add any arguments from the step request
         input_dict.update(step.arguments)

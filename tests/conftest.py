@@ -3,7 +3,7 @@ import pytest
 from pytest import MarkDecorator
 
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.bm import BM
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file

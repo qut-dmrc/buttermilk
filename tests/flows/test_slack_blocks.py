@@ -1,7 +1,7 @@
 import pytest
 
 from buttermilk._core.contract import AgentOutput
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.agents.ui.formatting.slackblock import (
     format_response,
 )

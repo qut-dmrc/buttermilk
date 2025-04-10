@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip("buttermilk.toxicity")
 torch = pytest.importorskip("torch")
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.toxicity import TOXCLIENTS
 from buttermilk.toxicity.llamaguard import (
     LlamaGuard1Together,
