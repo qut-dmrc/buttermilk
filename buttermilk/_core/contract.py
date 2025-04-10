@@ -50,12 +50,21 @@ class StepRequest(BaseModel):
 
     """
 
-    source: str 
+    source: str = Field()
     role: str
     prompt: str | None = Field(default=None)
     description: str | None = Field(default=None)
     tool: str | None = Field(default=None)
     arguments: dict[str, Any] = Field(default={})
+
+    @field_validator("source", "role")
+    @classmethod
+    def lowercase_fields(cls, v: str) -> str:
+        """Ensure source and role are lowercase."""
+        if v:
+            return v.lower()
+        return v
+
 
 class FlowEvent(BaseModel):
     """For communication outside the groupchat."""

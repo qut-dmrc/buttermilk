@@ -105,18 +105,17 @@ class Orchestrator(BaseModel, ABC):
         agent_dict = {}
         for step_name, defn in self.agents.items():
             if isinstance(defn, (AgentVariants)):
-                agent_dict[step_name] = defn
+                agent_dict[step_name.lower()] = defn
             else:
-                agent_dict[step_name] = AgentVariants(**defn)
+                agent_dict[step_name.lower()] = AgentVariants(**defn)
 
         self.agents = agent_dict
 
         # initialise the data cache
         self._flow_data.init(self.agents.keys())
 
-        
         self._model_context = UnboundedChatCompletionContext(initial_messages=self.history)
-        
+
         return self
 
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
@@ -167,7 +166,7 @@ class Orchestrator(BaseModel, ABC):
         step: StepRequest,
     ) -> None:
         raise NotImplementedError()
-    
+
     async def __call__(self, request=None) -> Job:
         """Makes the orchestrator callable, allowing it to be used as a function.
 

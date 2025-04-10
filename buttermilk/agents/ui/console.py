@@ -33,12 +33,16 @@ class CLIUserAgent(UIAgent):
         """Format a message for display in the console."""
         output = []
         try:
-            output.append(f"### {message.source} ({message.role})")
+            output.append(f"## {message.source} ({message.role})")
             if isinstance(message, (AgentOutput, ConductorResponse)):
                 if message.params:
-                    output.append(pretty_repr(message.params, max_string=400))
+                    output.append("### Parameters: " + pretty_repr(message.params, max_string=400))
                 if message.outputs:
-                    output.append(pretty_repr(message.outputs, max_string=8000))
+                    if reasons := message.outputs.get("reasons"):
+                        output.append("### Reasons:")
+                        output.extend([f"- {reason}" for reason in reasons])
+                    else:
+                        output.append(pretty_repr(message.outputs, max_string=8000))
                 else:
                     output.append(message.content)
                 # for rec in message.records:
@@ -58,8 +62,8 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, UserInstructions):
             return
 
-        # self._console.print(self._fmt_msg(message))
-        self._console.print(message.model_dump_json(indent=8))
+        self._console.print(self._fmt_msg(message))
+
         yield None
 
     async def _handle_control_message(

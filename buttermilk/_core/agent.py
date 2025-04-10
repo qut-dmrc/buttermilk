@@ -198,7 +198,12 @@ class Agent(AgentConfig):
                 inputs.params.update(self.parameters)
                 inputs.context.extend(await self._model_context.get_messages())
 
-                async for result in self._process(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
+                _traced = weave.op(
+                    self._process,
+                    call_display_name=f"{self.id} ({self.role})",
+                )
+
+                async for result in _traced(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback):
                     await asyncio.sleep(0.1)
                     yield result
                     yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)

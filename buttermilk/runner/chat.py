@@ -213,9 +213,8 @@ class Selector(AutogenOrchestrator):
                             content=f"Shall I go ahead and determine the next step?",
                         ),
                     )
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(1)
                     if not await self._wait_for_human():
-                        await asyncio.sleep(10)
                         continue
 
                     # Get next step in the flow
@@ -234,7 +233,6 @@ class Selector(AutogenOrchestrator):
                     await self._send_ui_message(confirm_step)
                     if not await self._wait_for_human():
                         # User did not confirm plan; go back and get new instructions
-                        await asyncio.sleep(5)
                         continue
                     # Run next step
                     await self._execute_step(step)
@@ -251,9 +249,8 @@ class Selector(AutogenOrchestrator):
                             content=f"Unable to get next step. Confirm to try again or enter another prompt.",
                         ),
                     )
-                    await asyncio.sleep(5)
                     if not await self._wait_for_human():
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(1)
                 except FatalError:
                     raise
                 except Exception as e:  # This is only here for debugging for now.
