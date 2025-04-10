@@ -173,7 +173,7 @@ class Flow(BaseModel):
             tasks.append(task)
 
         logger.info(
-            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.id}",
+            f"Starting {len(tasks)} async tasks for {self.__repr_name__()} step {agent.role}",
         )
 
         # Process and yield the results as they finish
@@ -184,7 +184,7 @@ class Flow(BaseModel):
                 if result.error:
                     # Log errors and yield result without further processing
                     logger.error(
-                        f"Agent {agent.id} failed with error: {result.error}",
+                        f"Agent {agent.role} failed with error: {result.error}",
                     )
                 else:
                     try:
@@ -197,12 +197,12 @@ class Flow(BaseModel):
                             )
                         # incorporate successful runs into data store for future use
                         self.incorporate_outputs(
-                            step_name=agent.id,
+                            step_name=agent.role,
                             outputs=result.outputs,
                         )
                     except Exception as e:
                         # log the error but do not abort.
-                        error_msg = f"Agent {agent.id} response data not formatted as expected: {e}"
+                        error_msg = f"Agent {agent.role} response data not formatted as expected: {e}"
                         logger.error(error_msg)
                         result.error = dict(
                             message=error_msg,
@@ -222,7 +222,7 @@ class Flow(BaseModel):
                 yield result  # Yield result within the loop
 
             except FatalError as e:  # Handle FatalError to abort the flow
-                message = f"Aborting flow -- critical error running task from agent {agent.id}: {e}"
+                message = f"Aborting flow -- critical error running task from agent {agent.role}: {e}"
                 logger.error(message)
                 # Cancel remaining tasks (important for proper cleanup)
                 for t in tasks:
@@ -231,7 +231,7 @@ class Flow(BaseModel):
                 raise FatalError(message) from e  # Re-raise to stop the outer loop
 
             except Exception as e:  # Handle other exceptions
-                msg = f"Agent {agent.id} hit unknown error in run_flows: {e}, {e.args=}"
+                msg = f"Agent {agent.role} hit unknown error in run_flows: {e}, {e.args=}"
                 logger.exception(msg)
                 # Continue processing for now
         return

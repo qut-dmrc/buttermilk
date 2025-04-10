@@ -165,8 +165,8 @@ class RagZot(LLMAgent, ToolConfig):
 
         records = records[: self.n_results]
         return ToolOutput(
-            role=self.role,
-            name=self.id,
+            role=self.name,
+            name=self.role,
             call_id="",
             content="\n\n".join([str(r) for r in records]),
             results=records,

@@ -65,7 +65,7 @@ class AssistantAgentWrapper(Agent):
         # 1. Initialize Model Client
         model_name = self.parameters.get("model")
         if not model_name:
-            raise ValueError(f"Agent {self.id}: 'model' parameter is required.")
+            raise ValueError(f"Agent {self.role}: 'model' parameter is required.")
         self._model_client = bm.llms.get_autogen_chat_client(model_name)
 
         # 2. Initialize Tools
@@ -77,7 +77,7 @@ class AssistantAgentWrapper(Agent):
         # 4. Instantiate AssistantAgent
         try:
             self._assistant_agent = AssistantAgent(
-                name=self.id,
+                name=self.role,
                 model_client=self._model_client,
                 tools=self._tools_list,
                 model_context=self._model_context,
@@ -86,8 +86,8 @@ class AssistantAgentWrapper(Agent):
                 reflect_on_tool_use=self.parameters.get("reflect_on_tool_use", True),
             )
         except Exception as e:
-            logger.error(f"Failed to initialize AssistantAgent {self.id}: {e}", exc_info=True)
-            raise ValueError(f"AssistantAgent initialization failed for {self.id}") from e
+            logger.error(f"Failed to initialize AssistantAgent {self.role}: {e}", exc_info=True)
+            raise ValueError(f"AssistantAgent initialization failed for {self.role}") from e
 
         return self
 
@@ -97,18 +97,18 @@ class AssistantAgentWrapper(Agent):
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
         # Don't respond to own messages or irrelevant types.
-        if inputs.source == self.id:
+        if inputs.source == self.role:
             return None
 
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
         if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
-            logger.debug(f"AssistantWrapper {self.id} ignoring message type {type(message)} from {message.source}")
+            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(message)} from {message.source}")
             return None
 
         # Handle ConductorRequest specifically if needed
         if isinstance(message, ConductorRequest):
-            logger.warning(f"Agent {self.id} received ConductorRequest, not fully implemented.")
+            logger.warning(f"Agent {self.role} received ConductorRequest, not fully implemented.")
             # Potentially extract relevant info or yield specific output
             return None
 
@@ -123,7 +123,7 @@ class AssistantAgentWrapper(Agent):
         context_messages = message.context
         for ctx_msg in context_messages:
             # Map Buttermilk message types to Autogen message types
-            if isinstance(ctx_msg, AgentOutput) and ctx_msg.source == self.id:
+            if isinstance(ctx_msg, AgentOutput) and ctx_msg.source == self.role:
                 messages_to_send.append(AssistantMessage(content=str(ctx_msg.content), source=ctx_msg.source))
             elif isinstance(ctx_msg, (UserInstructions, AgentInput, AgentOutput)):
                 messages_to_send.append(UserMessage(content=str(ctx_msg.content), source=getattr(ctx_msg, "agent_id", "unknown")))
@@ -137,7 +137,7 @@ class AssistantAgentWrapper(Agent):
             messages_to_send.append(UserMessage(content=json.dumps(message.inputs), source=message.source))
         else:
             # If the message has no content or inputs, maybe don't process?
-            logger.debug(f"AssistantWrapper {self.id} received message with no content/inputs from {message.source}. Skipping.")
+            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs from {message.source}. Skipping.")
             return None
 
         # --- Call AssistantAgent ---
@@ -146,10 +146,10 @@ class AssistantAgentWrapper(Agent):
                 messages=messages_to_send, cancellation_token=cancellation_token
             )
         except Exception as e:
-            logger.error(f"Agent {self.id} error during AssistantAgent.on_messages: {e}", exc_info=True)
+            logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
             return AgentOutput(
-                source=self.id,
-                role=self.role,
+                source=self.role,
+                role=self.name,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
             )
@@ -187,7 +187,7 @@ class AssistantAgentWrapper(Agent):
 
         else:
             error_msg = "AssistantAgent returned no response or chat_message."
-            logger.warning(f"Agent {self.id}: {error_msg}")
+            logger.warning(f"Agent {self.role}: {error_msg}")
             output_content = error_msg
 
         # --- Combine Metadata & Yield Output ---
@@ -197,8 +197,8 @@ class AssistantAgentWrapper(Agent):
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
         return AgentOutput(
-            source=self.id,
-            role=self.role,
+            source=self.role,
+            role=self.name,
             content=output_content,
             outputs=output_data,
             metadata=final_metadata,
@@ -208,10 +208,10 @@ class AssistantAgentWrapper(Agent):
     async def initialize(self, **kwargs) -> None:
         """Initialize the agent (called by AutogenAgentAdapter)."""
         # Initialization logic is handled in the pydantic validator `init_assistant_agent`
-        logger.debug(f"Agent {self.id} initialized.")
+        logger.debug(f"Agent {self.role} initialized.")
         pass
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None: # Added optional token
         """Reset the agent's state."""
         await self._assistant_agent.on_reset(cancellation_token)
-        logger.debug(f"Agent {self.id} reset.")
+        logger.debug(f"Agent {self.role} reset.")

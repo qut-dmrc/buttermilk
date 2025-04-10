@@ -1,6 +1,6 @@
 fetch:
-  id: FETCH
-  role: "🔍 fetch record"
+  role: FETCH
+  name: "🔍 fetch record"
   agent_obj: FetchRecord
   description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
   data:

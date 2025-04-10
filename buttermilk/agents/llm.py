@@ -55,13 +55,13 @@ class LLMAgent(Agent):
     @pydantic.model_validator(mode="after")
     def custom_agent_id(self) -> Self:
         # Set a custom name based on our major variants
-        components = self.id.split("-")
+        components = self.role.split("-")
 
         components.extend(
             [v for k, v in self.variants.items() if k not in ["formatting", "description", "template"] and v and not re.search(r"\s", v)]
         )
         components = [c[:12] for c in components if c]
-        self.id = "_".join(components)[:63]
+        self.role = "_".join(components)[:63]
 
         return self
 
@@ -108,7 +108,7 @@ class LLMAgent(Agent):
         messages = make_messages(local_template=prompty, placeholders=placeholders)
 
         if unfilled_vars := (set(unfilled_vars) - set(placeholders.keys())):
-            err = f"Template for agent {self.id} has unfilled parameters: {', '.join(unfilled_vars)}"
+            err = f"Template for agent {self.role} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ProcessingError(err)
         return messages
@@ -189,19 +189,18 @@ class LLMAgent(Agent):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> GroupchatMessageTypes | None:
+    ) -> None:
         """Save incoming messages for later use."""
-        if message.content:
-            # Map Buttermilk message types to LLM input types
-            if isinstance(message, AgentOutput):
-                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
-                if message.records:
-                    self._records.extend(message.records)
-            elif isinstance(message, (ToolOutput, UserInstructions)):
-                await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
-            else:
-                # don't log other types of messages
-                pass
+        # Map Buttermilk message types to LLM input types
+        if isinstance(message, AgentOutput):
+            await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+            if message.records:
+                self._records.extend(message.records)
+        elif isinstance(message, (ToolOutput, UserInstructions)):
+            await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
+        else:
+            # don't log other types of messages
+            pass
         return None
 
     async def _process(
@@ -288,4 +287,4 @@ class LLMAgent(Agent):
         await super().on_reset(cancellation_token)
         self._current_task_index = 0
         self._last_input = None
-        logger.debug(f"Agent {self.id} state reset.")
+        logger.debug(f"Agent {self.role} state reset.")

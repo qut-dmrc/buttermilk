@@ -114,7 +114,7 @@ class AutogenAgentAdapter(RoutedAgent):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
-        await response = self.agent.invoke(
+        response = await self.agent.invoke(
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
@@ -129,7 +129,7 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> ConductorResponse | TaskProcessingComplete | AgentOutput | None:
         """Handle conductor requests privately."""
-        
+
         output = await self.agent.invoke_privately(
             message=message,
             cancellation_token=ctx.cancellation_token,

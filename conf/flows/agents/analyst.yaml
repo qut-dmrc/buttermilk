@@ -1,6 +1,6 @@
 analyst:
-  id: ANALYSTS
-  role: "🧑‍💻 Analyst"
+  role: analyst
+  name: "🧑‍💻 Analyst"
   description: General purpose analysts. This is the group you want to talk to by default or if you have specific questions.
   agent_obj: LLMAgent
   num_runs: 1

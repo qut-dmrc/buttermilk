@@ -103,7 +103,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Register the agent with the runtime
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
-                    variant.id,
+                    variant.role,
                     lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
                         agent_cfg=v,
                         agent_cls=cls,
@@ -126,7 +126,7 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                 )
                 logger.debug(
-                    f"Registered agent {agent_type} with id {variant.id}, subscribed to {self._topic.type} and {step_name}.",
+                    f"Registered agent {agent_type} with id {variant.role}, subscribed to {self._topic.type} and {step_name}.",
                 )
 
                 step_agent_type.append((agent_type, variant))

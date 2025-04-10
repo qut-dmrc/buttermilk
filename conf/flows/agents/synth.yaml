@@ -1,6 +1,6 @@
 synthesisers:
-  id: SYNTHESISERS
-  role: "🎨 Synthesiser"
+  role: SYNTHESISERS
+  name: "🎨 Synthesiser"
   agent_obj: LLMAgent
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
   num_runs: 1

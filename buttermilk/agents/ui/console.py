@@ -68,7 +68,6 @@ class CLIUserAgent(UIAgent):
 
         self._console.print(self._fmt_msg(message))
 
-
     async def _handle_control_message(
         self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable = None, **kwargs
     ) -> OOBMessages:
@@ -94,8 +93,8 @@ class CLIUserAgent(UIAgent):
                     # confirm negative
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.role,
-                            source=self.id,
+                            role=self.name,
+                            source=self.role,
                             confirm=False,
                         ),
                     )
@@ -104,13 +103,13 @@ class CLIUserAgent(UIAgent):
                     # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.role,
-                            source=self.id,
+                            role=self.name,
+                            source=self.role,
                             confirm=True,
                         ),
                     )
                 else:
-                    await self._input_callback(UserInstructions(source=self.id, role=self.role, content=user_input))
+                    await self._input_callback(UserInstructions(source=self.role, role=self.name, content=user_input))
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:

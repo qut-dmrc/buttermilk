@@ -61,7 +61,7 @@ async def test_agent_adapter_init_with_config():
     mock_agent_instance.initialize = AsyncMock()
     mock_agent_cls.return_value = mock_agent_instance
 
-    agent_cfg = AgentConfig(id="test_id")
+    agent_cfg = AgentConfig(name="test_id", role="test")
 
     with patch("asyncio.create_task"):
         adapter = AutogenAgentAdapter(

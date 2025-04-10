@@ -2,14 +2,16 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
 import time
-from typing import Any, AsyncGenerator, Callable, Self, Union
+from typing import Annotated, Any, AsyncGenerator, Callable, Self, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
 import jmespath
 import pydantic
+from shortuuid import ShortUUID, uuid
 import weave
 from autogen_core import CancellationToken, MessageContext
 from pydantic import (
+    AfterValidator,
     BaseModel,
     Field,
     PrivateAttr,
@@ -58,7 +60,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.types import Record
-from buttermilk.utils.validators import convert_omegaconf_objects
+from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
 
 
 class ToolConfig(BaseModel):
@@ -69,7 +71,6 @@ class ToolConfig(BaseModel):
     tool_obj: str = Field(
         default="")
 
-
     data: list[DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
@@ -78,7 +79,6 @@ class ToolConfig(BaseModel):
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
         raise NotImplementedError()
-
 
     async def _run(
         self, **kwargs
@@ -95,19 +95,22 @@ class ToolConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
+    id: str = Field(
+        default_factory=uuid,
+        description="A unique identifier for this agent.",
+    )
     agent_obj: str = Field(
         default="",
         description="The object name to instantiate",
         exclude=True,
     )
-    id: str = Field(
+    role: Annotated[str, AfterValidator(lowercase_validator)] = Field(
         ...,
-        description="The unique name of this agent.",
+        description="The role type that this agent fulfils.",
     )
-    role: str = Field(
-        ...,
-        description="The role that this agent fulfils.",
-    )
+
+    name: str = Field(description="The human friendly name of this agent type.")
+
     description: str = Field(
         ...,
         description="Short explanation of what this agent type does",
@@ -153,7 +156,7 @@ class AgentConfig(BaseModel):
         "arbitrary_types_allowed": False,
         "populate_by_name": True,
     }
-    
+
     _validate_variants = field_validator(
         "variants", "tasks", "parameters", mode="before"
     )(convert_omegaconf_objects())
@@ -165,6 +168,7 @@ class Agent(AgentConfig):
     Agents are stateful. Context is stored internally by the agent
     or passed via AgentInput. _reset() clears state.
     """
+
     _trace_this = True
 
     _records: list[Record] = PrivateAttr(default_factory=list)
@@ -203,7 +207,7 @@ class Agent(AgentConfig):
 
             _traced = weave.op(
                 self._process,
-                call_display_name=self.role,
+                call_display_name=self.name,
             )
             t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback))
             tasks.append(t)
@@ -212,22 +216,21 @@ class Agent(AgentConfig):
             n += 1
             try:
                 result = await t
-                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True, task_error=result.error))
+                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=True, task_error=result.error))
             except ProcessingError as e:
                 logger.error(
-                    f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
+                    f"Agent {self.role} {self.name} hit processing error: {e} {e.args=}.",
                 )
-                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True, task_error=True))
+                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=True, task_error=True))
                 continue
             except FatalError as e:
-                logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
+                logger.error(f"Agent {self.role} {self.name} hit fatal error: {e}", exc_info=True)
                 raise e
             except Exception as e:
-                logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
+                logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
                 raise e
             finally:
-                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False, task_error=False)) 
-
+                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=False, task_error=False))
 
     async def _listen(
         self,
@@ -262,7 +265,7 @@ class Agent(AgentConfig):
         self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,   **kwargs
     ) -> OOBMessages | None:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-        logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
+        logger.debug(f"Agent {self.role} {self.name} dropping control message: {message}")
         return None
 
     async def __call__(
@@ -285,7 +288,7 @@ class Agent(AgentConfig):
         """Respond directly to the orchestrator"""
         outputs = None
         response = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs)
-        
+
         if response:
             # convert to ConductorResponse
             outputs = ConductorResponse(**response[-1].model_dump())
@@ -311,10 +314,12 @@ class Agent(AgentConfig):
         """Run the main function."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):
-            logger.debug(f"Agent {self.id} received non-supported message type {type(message)} in _process. Ignoring.")
+            logger.debug(f"Agent {self.role} received non-supported message type {type(message)} in _process. Ignoring.")
             return
 
-        outputs = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback: Callable = None, message_callback: Callable,  **kwargs)
+        outputs = await self._run_fn(
+            message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
+        )
         await public_callback(outputs)
         return outputs
 

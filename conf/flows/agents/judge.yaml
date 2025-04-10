@@ -1,6 +1,6 @@
 judge:
-  id: JUDGES
-  role: "⚖️ Judge"
+  role: judge
+  name: "⚖️ Judge"
   description: Expert analysts, particularly suited to assess content with subject matter expertise. They will bring their own criteria and assess a record in its entirety. They are expensive, and they will not respond to directions -- they know their job and they do it well. So you should only ask them to judge a piece of content once, and don't ask follow up questions of them.
   agent_obj: LLMAgent
   num_runs: 1
@@ -13,6 +13,6 @@ judge:
     criteria: ${....params.criteria}
   inputs:
     records: records
-    #criteria: ${flows[${....flow_name}].criteria}
+    # criteria: ${flows[${....flow_name}].criteria}
     # criteria: ${flow_criteria:${oc.select:....flow_name}}
     # criteria: ${flow_criteria:${oc.select:_global_.current_flow}}

@@ -6,7 +6,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from buttermilk._core.log import logger
-from buttermilk._core.agent import Agent, AgentConfig
+from buttermilk._core.agent import Agent, AgentConfig, FatalError
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 
@@ -98,7 +98,6 @@ class AgentVariants(AgentConfig):
     ```
     """
 
-
     @model_validator(mode="after")
     def validate_extra_fields(self):
         """Convert any omegaconf objects in extra fields to plain Python objects."""
@@ -106,7 +105,7 @@ class AgentVariants(AgentConfig):
             if isinstance(value, (DictConfig, ListConfig)):
                 self.model_extra[key] = OmegaConf.to_container(value, resolve=True)
         return self 
-    
+
     def get_configs(self) -> list[tuple[type, AgentConfig]]:
         """
         Generates agent configurations based on parallel and sequential variants.
@@ -141,21 +140,8 @@ class AgentVariants(AgentConfig):
                 # Assign the sequential task sets
                 cfg_dict["sequential_tasks"] = sequential_task_sets
 
-                # Generate unique ID incorporating parallel variants and run number
-                id_parts = [self.id]
-                # Add parallel variant info to ID if there are multiple combinations
-                if len(parallel_variant_combinations) > 1:
-                    param_str = "_".join(f"{v}" for k, v in sorted(parallel_params.items()))
-                    # Basic sanitization and shortening for ID
-                    param_str = ''.join(c if c.isalnum() or c in ['-','_'] else '' for c in param_str)[:20]
-                    if param_str: # Avoid adding empty strings
-                         id_parts.append(param_str)
-                if self.num_runs > 1:
-                    id_parts.append(f"run{i}")
-                # Add random id to facilitate tracing
-                id_parts.append(shortuuid.uuid()[:4])
-
-                cfg_dict["id"] = "-".join(id_parts)[:63] # Ensure reasonable length
+                # Generate unique ID
+                cfg_dict["id"] = f"{cfg_dict['role'].upper()}-{shortuuid.uuid()[:4]}"
 
                 # Create and add the AgentConfig instance
                 try:
@@ -166,19 +152,8 @@ class AgentVariants(AgentConfig):
                     # Decide whether to raise, log, or skip this config
                     raise # Re-raise by default
 
-        # Handle the edge case: No variants, num_runs=1 (should result in one config)
-        if not self.variants and not self.tasks and self.num_runs == 1:
-             if len(generated_configs) == 1:
-                 # Ensure the single generated config has the original ID if possible
-                 generated_configs[0][1].id = f"{self.id}_{shortuuid.uuid()[:4]}"
-                 return generated_configs
-             else: # Should not happen with the logic above, but as a fallback:
-                 cfg_dict = static_config.copy()
-                 cfg_dict["parameters"] = base_parameters
-                 cfg_dict["tasks"] = [{}]
-                 cfg_dict["id"] = f"{self.id}_{shortuuid.uuid()[:4]}"
-                 return [(agent_class, AgentConfig(**cfg_dict))]
-
+        if len(generated_configs) == 0:
+            raise FatalError(f"Could not create agent variant configs for {self.role} {self.name}")
 
         return generated_configs
 

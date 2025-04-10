@@ -13,6 +13,18 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 T = TypeVar("T")
 
 
+def lowercase_validator(v: Any) -> str:
+    if isinstance(v, str):
+        return v.lower()
+    else:
+        return str(v).lower()
+
+
+def make_lowercase_validator() -> Callable[[Any], str]:
+    """Convert input to lowercase string if possible"""
+    return lowercase_validator
+
+
 def make_list_validator() -> Callable[[Any], list]:
     """Convert single items to list if not already a list"""
 
