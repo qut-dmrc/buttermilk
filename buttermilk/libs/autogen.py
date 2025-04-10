@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import AsyncGenerator
 
 from autogen_core import (
     DefaultTopicId,CancellationToken,
@@ -99,12 +98,12 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> None: 
         """Handle incoming group messages by delegating to the wrapped agent."""
-        async for response in self.agent._listen(
+        await self.agent._listen(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            publish_callback=self._make_publish_callback(topic_id=self.topic_id),
-        ):
-            await self.publish_message(response, topic_id=self.topic_id)
+            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        )
 
     @message_handler
     async def handle_invocation(
@@ -115,13 +114,13 @@ class AutogenAgentAdapter(RoutedAgent):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
-        async for response in self.agent.invoke(
+        await response = self.agent.invoke(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-        ):
-            await self.publish_message(response, topic_id=self.topic_id)
-        return response  # only the last message
+            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        )
+        return response 
 
     @message_handler
     async def handle_conductor_request(
@@ -130,15 +129,13 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> ConductorResponse | TaskProcessingComplete | AgentOutput | None:
         """Handle conductor requests privately."""
-        output = None
-        async for response in self.agent.invoke_privately(
+        
+        output = await self.agent.invoke_privately(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-        ):
-            if isinstance(response, (AgentOutput, ConductorResponse)):
-                output = response
-                await self.publish_message(response, topic_id=self.topic_id)
+            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        )
         return output  # only the last matching message
 
     @message_handler
@@ -149,12 +146,12 @@ class AutogenAgentAdapter(RoutedAgent):
     ) -> OOBMessages | TaskProcessingComplete | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
-        async for response in self.agent._handle_control_message(
+        response = await self.agent._handle_control_message(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            publish_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-        ):
-            await self.publish_message(response, topic_id=ctx.topic_id or self.topic_id)
+            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+        )
         return response  # only the last message
 
     def _make_publish_callback(self, topic_id=None) -> Callable[[UserInstructions], Awaitable[None]] | None:

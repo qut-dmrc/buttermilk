@@ -25,7 +25,7 @@ MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
 class FetchRecord(Agent, ToolConfig):
-    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}" )
+    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
     role: str
     _data: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
@@ -33,7 +33,8 @@ class FetchRecord(Agent, ToolConfig):
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
     _trace_this = True
 
-    _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions|AgentInput])
+    _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions | AgentInput])
+
     @pydantic.model_validator(mode="after")
     def load_data_task(self) -> Self:
         self._data_task = asyncio.create_task(self.load_data())
@@ -45,17 +46,24 @@ class FetchRecord(Agent, ToolConfig):
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
         if not self._fns:
-            self._fns = [FunctionTool(
-                self._run,
-                description=self.description, 
-                name=self.role,
-                strict=False,
-            )]
+            self._fns = [
+                FunctionTool(
+                    self._run,
+                    description=self.description,
+                    name=self.role,
+                    strict=False,
+                )
+            ]
         return self._fns
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
+        self,
+        message: GroupchatMessageTypes,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> GroupchatMessageTypes | None:
         """Entry point when running this as an agent.
 
         If running as an agent, watch for URLs or record ids and inject them
@@ -81,24 +89,17 @@ class FetchRecord(Agent, ToolConfig):
                 content=record._fulltext,
                 records=[record],
             )
-
-            yield output
+            await public_callback(output)
+            return output
         return
 
-    async def _run( # type: ignore
-        self,
-        record_id: str | None = None,
-        uri: str | None = None,
-        prompt: str | None = None
-    ) -> ToolOutput | None:
+    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
         """Entry point when running as a tool."""
-        record  = None
+        record = None
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
                 record_id = prompt.strip().strip("!")
-        assert (record_id or uri) and not (record_id and uri), (
-            "You must provide EITHER record_id OR uri."
-        )
+        assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
         result = None
         if record_id:
             record = await self._get_record_dataset(record_id)
@@ -113,7 +114,7 @@ class FetchRecord(Agent, ToolConfig):
                     send_to_ui=True,
                 )
         else:
-            record =await download_and_convert(uri)
+            record = await download_and_convert(uri)
             result = ToolOutput(
                 role=self.role,
                 name=self.id,
@@ -125,7 +126,7 @@ class FetchRecord(Agent, ToolConfig):
             )
 
         if result:
-            return  result
+            return result
         return None
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:

@@ -91,31 +91,26 @@ class AssistantAgentWrapper(Agent):
 
         return self
 
-    async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs
-    ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
+    async def _process(self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs) -> AgentOutput | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
 
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
         # Don't respond to own messages or irrelevant types.
         if inputs.source == self.id:
-            yield None
-            return
+            return None
 
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
         if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
             logger.debug(f"AssistantWrapper {self.id} ignoring message type {type(message)} from {message.source}")
-            yield None
-            return
+            return None
 
         # Handle ConductorRequest specifically if needed
         if isinstance(message, ConductorRequest):
             logger.warning(f"Agent {self.id} received ConductorRequest, not fully implemented.")
             # Potentially extract relevant info or yield specific output
-            yield None
-            return
+            return None
 
         if cancellation_token is None:
             cancellation_token = CancellationToken()
@@ -143,8 +138,7 @@ class AssistantAgentWrapper(Agent):
         else:
             # If the message has no content or inputs, maybe don't process?
             logger.debug(f"AssistantWrapper {self.id} received message with no content/inputs from {message.source}. Skipping.")
-            yield None
-            return
+            return None
 
         # --- Call AssistantAgent ---
         try:
@@ -153,14 +147,12 @@ class AssistantAgentWrapper(Agent):
             )
         except Exception as e:
             logger.error(f"Agent {self.id} error during AssistantAgent.on_messages: {e}", exc_info=True)
-            yield AgentOutput(
+            return AgentOutput(
                 source=self.id,
                 role=self.role,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
-                records=message.records, # Pass through records from input
             )
-            return
 
         # --- Translate Response ---
         output_content = ""
@@ -204,13 +196,12 @@ class AssistantAgentWrapper(Agent):
         # Add inner messages for debugging if needed
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
-        yield AgentOutput(
+        return AgentOutput(
             source=self.id,
             role=self.role,
             content=output_content,
             outputs=output_data,
             metadata=final_metadata,
-            records=message.records, # Pass through records from input
             error=[error_msg] if error_msg else [],
         )
 

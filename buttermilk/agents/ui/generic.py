@@ -25,14 +25,18 @@ class UIAgent(Agent):
         message: FlowMessage,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput|None, None]:
+    ) -> AgentOutput | None:
         """Send or receive input from the UI."""
         raise NotImplementedError
-        yield # Required for async generator typing
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[OOBMessages | None, None]:
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> OOBMessages | None:
         """Process control messages for agent coordination.
 
         Args:
@@ -50,7 +54,7 @@ class UIAgent(Agent):
         #     async for _ in self._process(message):
         #         pass
         #     return
-        yield None
+        return None
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""

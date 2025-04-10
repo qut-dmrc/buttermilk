@@ -187,8 +187,8 @@ class Agent(AgentConfig):
                 await asyncio.sleep(1)
 
     async def _run_fn(
-        self, *, message: AgentInput | ConductorRequest, cancellation_token=None, publish_callback=None, **kwargs
-    ) -> AsyncGenerator[AgentOutput | ToolOutput | None | TaskProcessingComplete, None]:
+        self, *, message: AgentInput | ConductorRequest, cancellation_token=None, public_callback: Callable = None, message_callback: Callable = None,  **kwargs
+    ) -> AgentOutput | ToolOutput | None | TaskProcessingComplete:
         # Agents come in variants, and each variant has a list of tasks that it iterates through.
         # And are supplemented by placeholders for records and contextual history
         n = 0
@@ -205,31 +205,19 @@ class Agent(AgentConfig):
                 self._process,
                 call_display_name=self.role,
             )
-            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token, publish_callback=publish_callback))
+            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback))
             tasks.append(t)
 
         for t in asyncio.as_completed(tasks):
             n += 1
             try:
                 result = await t
-                yield result
-                yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
-                # if not await self._check_heartbeat():
-                #     logger.info(
-                #         f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
-                #     )
-                #     raise StopAsyncIteration
+                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True, task_error=result.error))
             except ProcessingError as e:
                 logger.error(
                     f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
                 )
-                # yield ErrorEvent(
-                #     source=self.id,
-                #     role=self.role,
-                #     content=f"Processing Error: {e}",
-                #     error=[str(e)],
-                #     records=input_data.records,
-                # )
+                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True, task_error=True))
                 continue
             except FatalError as e:
                 logger.error(f"Agent {self.id} {self.role} hit fatal error: {e}", exc_info=True)
@@ -238,16 +226,16 @@ class Agent(AgentConfig):
                 logger.error(f"Agent {self.id} {self.role} hit unexpected error: {e}", exc_info=True)
                 raise e
             finally:
-                yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False)
+                await public_callback(TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=False, task_error=False)) 
 
-        # if self._trace_this:
-        #     self._run_fn = weave.op(traced_process, call_display_name=f"{self.id} ({self.role})")
-        # self._run_fn = traced_process
-
-        # return self
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
+        self,
+        message: GroupchatMessageTypes,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
     ) -> None:
         """Save incoming messages for later use."""
         if message.role in self.inputs:
@@ -259,54 +247,52 @@ class Agent(AgentConfig):
                     self._data.add(var_name, value)
 
     async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[AgentOutput | ToolOutput | None, None]:
+        self, inputs: AgentInput, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,  **kwargs
+    ) -> AgentOutput | ToolOutput | None:
         """Internal process function. Replace this in subclasses.
 
-        Process input data and yield any output(s).
+        Process input data and publish any output(s).
 
         Outputs:
-            Yields AgentOutput messages.
+            None
         """
         raise NotImplementedError
-        yield # Required for async generator typing
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[OOBMessages | None, None]:
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,   **kwargs
+    ) -> OOBMessages | None:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         logger.debug(f"Agent {self.id} {self.role} dropping control message: {message}")
-        yield None
+        return None
 
     async def __call__(
-        self, message: AgentInput, cancellation_token: CancellationToken, publish_callback: Callable, **kwargs
-    ) -> AsyncGenerator[AgentOutput | ToolOutput | TaskProcessingComplete | None, None]:
+        self, message: AgentInput, cancellation_token: CancellationToken, public_callback: Callable= None,  message_callback: Callable= None, **kwargs
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Allow agents to be called directly as functions by the orchestrator."""
-        async for result in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
-            yield result
+        output = await self._run_fn(
+            message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
+        )
+        return output
 
     async def invoke_privately(
         self,
         message: ConductorRequest,
         cancellation_token: Any,
-        publish_callback: Callable,
+        public_callback: Callable= None, 
+        message_callback: Callable= None, 
         **kwargs,
-    ) -> AsyncGenerator[FlowMessage, None]:
+    ) -> FlowMessage|None:
         """Respond directly to the orchestrator"""
-        response = []
         outputs = None
-        async for output in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
-            if isinstance(response, (AgentOutput, ToolOutput)):
-                response.append(output)
-            yield output
-
+        response = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs)
+        
         if response:
             # convert to ConductorResponse
             outputs = ConductorResponse(**response[-1].model_dump())
             if len(response)>1:
                 outputs.internal_messages = response[:-1]
-
-            yield outputs
+            await message_callback(outputs)
+            return outputs
 
     # def custom_attribute_name(call):
     #     model = call.attributes["model"]
@@ -318,18 +304,19 @@ class Agent(AgentConfig):
         self,
         message: AgentInput,
         cancellation_token: Any,
-        publish_callback: Callable,
+        public_callback: Callable = None, 
+        message_callback: Callable= None, 
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput | ToolOutput | TaskProcessingComplete | None, None]:
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Run the main function."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):
             logger.debug(f"Agent {self.id} received non-supported message type {type(message)} in _process. Ignoring.")
             return
 
-        async for output in self._run_fn(message=message, cancellation_token=cancellation_token, publish_callback=publish_callback, **kwargs):
-            if isinstance(output, (AgentOutput, ToolOutput)):
-                yield output
+        outputs = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback: Callable = None, message_callback: Callable,  **kwargs)
+        await public_callback(outputs)
+        return outputs
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""

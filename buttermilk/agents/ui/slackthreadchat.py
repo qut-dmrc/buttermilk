@@ -150,11 +150,10 @@ class SlackUIAgent(UIAgent):
         message: FlowMessage,
         cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput | None, None]:
+    ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(message, (AgentInput, ManagerRequest)):
             await self._request_input(message)
-        yield # Required for async generator typing
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""

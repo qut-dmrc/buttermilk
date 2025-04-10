@@ -297,7 +297,7 @@ class Record(BaseModel):
                 parts.append(f"**{k}**: {v}")
             parts.append("### Content")  # Separator
 
-        component_texts = [part.content for part in self.components if part.content]
+        component_texts = [part._text for part in self.components if part._text]
         if component_texts:
             parts.extend(component_texts)
 
@@ -315,8 +315,8 @@ class Record(BaseModel):
         # Only text. Metadata and Ground truth not included
         all_text = []
         for part in self.components:
-            if part.content:
-                all_text.append(part.content)
+            if part._text:
+                all_text.append(part._text)
 
         return all_text
 
@@ -365,11 +365,11 @@ class Record(BaseModel):
         # Also with paragraph labels etc.
         all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
         for part in self.components:
-            if part.content:
+            if part._text:
                 if part.label:
-                    all_text.append(f"{part.label}: {part.content}")
+                    all_text.append(f"{part.label}: {part._text}")
                 else:
-                    all_text.append(part.content)
+                    all_text.append(part._text)
         return "\n".join(all_text)
 
     def update_from(self, update_dict) -> Self:

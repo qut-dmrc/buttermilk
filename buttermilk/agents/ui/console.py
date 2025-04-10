@@ -55,27 +55,30 @@ class CLIUserAgent(UIAgent):
             return message.model_dump_json(indent=2)
 
     async def _listen(
-        self, message: GroupchatMessageTypes, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[GroupchatMessageTypes | None, None]:
+        self,
+        message: GroupchatMessageTypes,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> GroupchatMessageTypes | None:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
 
         self._console.print(self._fmt_msg(message))
 
-        yield None
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[OOBMessages | None, None]:
+        self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable = None, **kwargs
+    ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         self._console.print(self._fmt_msg(message))
 
         if isinstance(message, ManagerRequest):
             # self._console.print(message.description)
             self._console.print(Markdown("Input requested:\n"))
-        yield None
-        return
+        return None
 
     async def _poll_input(
         self,

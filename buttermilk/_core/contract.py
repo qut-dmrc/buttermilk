@@ -255,7 +255,7 @@ class TaskProcessingComplete(BaseModel):
     source: str = Field(..., description="ID of the agent sending the notification")
     task_index: int = Field(..., description="Index of the task that was just completed")
     more_tasks_remain: bool = Field(..., description="True if the agent has more sequential tasks to process for the current input")
-    model_config = {"extra": "allow"} # Allow extra fields if needed
+    task_error: bool = Field(default=False, description="True if the task resulted in an error")
 
 class ProceedToNextTaskSignal(BaseModel):
     """Sent by a controller to signal an agent to process its next sequential task."""

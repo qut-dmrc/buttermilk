@@ -35,14 +35,17 @@ class HostAgent(LLMAgent):
         await super().initialize(**kwargs) # Call parent initialize if needed
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, publish_callback: Callable = None, **kwargs
-    ) -> AsyncGenerator[OOBMessages | None, None]:
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> OOBMessages | None:
 
         # --- Handle Task Completion from Worker Agents ---
         if isinstance(message, TaskProcessingComplete):
             logger.info(f"Host received TaskComplete from {message.source} (Task {message.task_index}, More: {message.more_tasks_remain})")
-            yield None
 
         else:
             logger.debug(f"Host received unhandled OOB message type: {type(message)}")
-            yield None

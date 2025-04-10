@@ -1,4 +1,4 @@
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
@@ -24,22 +24,22 @@ class LLMScorer(LLMAgent):
         self,
         input_data: AgentInput | ConductorRequest,
         cancellation_token: CancellationToken | None = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
         **kwargs,
-    ) -> AsyncGenerator[AgentOutput | None, None]: # Changed return type
+    ) -> AgentOutput | None:  # Changed return type
         """Scores JUDGE agent results against ground truth."""
 
         if isinstance(input_data, ConductorRequest):
             # Handle conductor requests if needed, e.g., for final summary.
             logger.warning(f"{self.id} received ConductorRequest. Summarization logic TBD.")
-            yield AgentOutput(
+            return AgentOutput(
                 source=self.id,
                 role=self.role,
                 content=f"Scoring summary for {len(self._scores)} responses",
                 outputs={"scores": self._scores},
             )
-            yield None # Placeholder
-            return
-        
+
         # not implemented yet
         return 
         # Store ground truth from records
@@ -47,7 +47,7 @@ class LLMScorer(LLMAgent):
             if record.ground_truth:
                 self._ground_truth = dict(record.ground_truth)
                 logger.debug(f"Scorer found ground truth: {self._ground_truth}")
-    
+
         # --- Scoring Logic ---
         # Collect records fields with ground truth components
         if isinstance(message, AgentOutput):
