@@ -36,9 +36,9 @@ class CLIUserAgent(UIAgent):
             output.append(f"### {message.source} ({message.role})")
             if isinstance(message, (AgentOutput, ConductorResponse)):
                 if message.params:
-                    output.append(pretty_repr(message.params, max_string=400).replace("\\n", ""))
+                    output.append(pretty_repr(message.params, max_string=400))
                 if message.outputs:
-                    output.append(pretty_repr(message.outputs, max_string=8000).replace("\\n", ""))
+                    output.append(pretty_repr(message.outputs, max_string=8000))
                 else:
                     output.append(message.content)
                 # for rec in message.records:
@@ -58,7 +58,8 @@ class CLIUserAgent(UIAgent):
         if isinstance(message, UserInstructions):
             return
 
-        self._console.print(self._fmt_msg(message))
+        # self._console.print(self._fmt_msg(message))
+        self._console.print(message.model_dump_json(indent=8))
         yield None
 
     async def _handle_control_message(

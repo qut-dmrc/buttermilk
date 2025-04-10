@@ -202,11 +202,11 @@ class Agent(AgentConfig):
                     await asyncio.sleep(0.1)
                     yield result
                     yield TaskProcessingComplete(source=self.id, task_index=n, more_tasks_remain=True)
-                    if not await self._check_heartbeat():
-                        logger.info(
-                            f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
-                        )
-                        raise StopAsyncIteration
+                    # if not await self._check_heartbeat():
+                    #     logger.info(
+                    #         f"Agent {self.id} {self.role} did not receive heartbeat; canceling.",
+                    #     )
+                    #     raise StopAsyncIteration
             except ProcessingError as e:
                 logger.error(
                     f"Agent {self.id} {self.role} hit processing error: {e} {e.args=}.",
