@@ -32,10 +32,13 @@ class KeyValueCollector(BaseModel):
         key: str,
         value: Any,
     ) -> None:
+        if isinstance(value, str):
+            value = [value]
+
         if key in self._data:
-            self._data[key].append(value)
+            self._data[key].extend(value)
         else:
-            self._data[key] = [value]
+            self._data[key] = value
 
     def set(self, key: str, value: Any) -> None:
         self._data[key] = value

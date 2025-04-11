@@ -148,12 +148,13 @@ class LLMAgent(Agent):
     ) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
         placeholders = {
-            "records": [rec.as_message() for rec in inputs.records if rec],
+            "records": [rec.as_message() for rec in inputs.records],
             "context": inputs.context,
         }
+
         messages = await self._fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
         chat_result = await self._model_client.call_chat(
-            messages=messages, tools=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
+            messages=messages, tools_list=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
         )
         result = await self._create_agent_output(chat_result, inputs=inputs)
         return result

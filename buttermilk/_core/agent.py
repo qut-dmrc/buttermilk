@@ -208,18 +208,27 @@ class Agent(AgentConfig):
         tasks = []
         outputs = []
         for task_params in self.sequential_tasks:
-            inputs = AgentInput(**message.model_dump())
+            inputs = message.model_copy(deep=True)
             # add data from our local state
-            inputs.inputs.update(self._data.get_dict())
+
+            inputs.context.extend(await self._model_context.get_messages())
+
+            _local_state = self._data.get_dict()
+
+            inputs.records.extend(self._records)
+            inputs.inputs.update(_local_state)
             inputs.params.update(task_params)
             inputs.params.update(self.parameters)
-            inputs.context.extend(await self._model_context.get_messages())
+
+            # make sure data does not have records or context placeholders in inputs fields
+            inputs.inputs.pop("records", None)
+            inputs.inputs.pop("context", None)
 
             _traced = weave.op(
                 self._process,
                 call_display_name=self.name,
             )
-            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback))
+            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token))
             tasks.append(t)
 
         for t in asyncio.as_completed(tasks):
@@ -263,7 +272,10 @@ class Agent(AgentConfig):
             for var_name, field_path in self.inputs.items():
                 value = jmespath.search(field_path, result_dict)
                 if value:
-                    self._data.add(var_name, value)
+                    if var_name == "records":
+                        self._records.extend(message.records)
+                    else:
+                        self._data.add(var_name, value)
         else:
             if isinstance(message, (AgentOutput, ConductorResponse)):
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
@@ -274,9 +286,7 @@ class Agent(AgentConfig):
                 # don't log other types of messages
                 pass
 
-    async def _process(
-        self, inputs: AgentInput, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,  **kwargs
-    ) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Internal process function. Replace this in subclasses.
 
         Process input data and publish any output(s).

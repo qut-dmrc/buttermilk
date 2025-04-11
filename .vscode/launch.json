@@ -54,7 +54,7 @@
         "+flows=[trans]",
         "+flow=trans",
         "ui=console",
-        "llms=full"
+        "llms=lite"
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",

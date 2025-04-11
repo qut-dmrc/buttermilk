@@ -134,8 +134,8 @@ class AutoGenWrapper(RetryWrapper):
             logger.warning(error_msg, exc_info=False)
             raise ProcessingError(error_msg)
 
-    async def call_chat(self, messages, tools, cancellation_token, reflect_on_tool_use: bool = True) -> CreateResult | list[ToolOutput] | None:
-        create_result = await self.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
+    async def call_chat(self, messages, tools_list, cancellation_token, reflect_on_tool_use: bool = True) -> CreateResult | list[ToolOutput] | None:
+        create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token)
 
         if isinstance(create_result.content, str):
             return create_result
@@ -157,11 +157,9 @@ class AutoGenWrapper(RetryWrapper):
     async def _call_tool(
         self,
         call: FunctionCall,
+        tool,
         cancellation_token: CancellationToken | None,
     ) -> list[ToolOutput]:
-        # Find the tool by name.
-        tool = next((tool for tool in self._tools_list if tool.name == call.name), None)
-        assert tool is not None
 
         # Run the tool and capture the result.
         arguments = json.loads(call.arguments)
@@ -179,14 +177,21 @@ class AutoGenWrapper(RetryWrapper):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
+        tools_list: list,
         cancellation_token: CancellationToken | None,
     ) -> list[ToolOutput]:
         """Execute the tools and return the results."""
+        tasks = []
+        for call in calls:
+            # Find the tool by name.
+            tool = next((tool for tool in tools_list if tool.name == call.name), None)
+            assert tool is not None
+            tasks.append(self._call_tool(call, tool, cancellation_token))
 
         # Execute the tool calls.
-        results = await asyncio.gather(
-            *[self._call_tool(call, cancellation_token) for call in calls],
-        )
+        results = await asyncio.gather(*tasks)
+
+        # flatten results
         results = [record for result in results for record in result if record is not None]
 
         return results

@@ -20,6 +20,7 @@ from buttermilk._core.contract import (
     HeartBeat,
     ManagerRequest,
     ManagerResponse,
+    TaskProcessingComplete,
     UserInstructions,
 )
 from buttermilk.agents.ui.generic import UIAgent
@@ -46,6 +47,8 @@ class CLIUserAgent(UIAgent):
                     output.append(message.content)
                 # for rec in message.records:
                 #     output.append(str(rec).replace("\\n", ""))
+            elif isinstance(message, TaskProcessingComplete):
+                output.append(f"Task {message.role} #{message.task_index} completed {'successfully' if message.is_error else 'with ERROR'}.")
             else:
                 output.append(message.content)
             output = [o for o in output if o]

@@ -164,7 +164,7 @@ class MediaObj(BaseModel):
     )
 
     def __str__(self):
-        return f"{self.label or 'unknown'} object ({self.mime}) {self.content[:30]} {self._base_64[:30]}..."
+        return f"{self.label or 'unknown'} object ({self.mime}) {self._text[:50]}..."
 
     @model_validator(mode="after")
     def interpret_data(self) -> Self:
@@ -197,7 +197,7 @@ class MediaObj(BaseModel):
                 self._text = str(self.content)
             self.content = None
 
-        del self.content
+        # del self.content
 
         return self
 
@@ -210,8 +210,8 @@ class MediaObj(BaseModel):
             "image_url": {"url": self.uri},
         }
 
-    def as_text(self) -> dict:
-        return {"type": "text", "text": self.content}
+    def as_text(self) -> str:
+        return self._text
 
     def as_content_part(self, model_type="openai") -> dict:
         part = {}
@@ -232,10 +232,10 @@ class MediaObj(BaseModel):
                         "data": self._base_64,
                     },
                 }
-        elif self.content:
-            part = self.as_text()
         elif self.uri:
             part = self.as_image_url_message()
+        else:
+            part = self.as_text()
 
         return part
 
@@ -363,7 +363,7 @@ class Record(BaseModel):
     @property
     def all_text(self) -> str:
         # Also with paragraph labels etc.
-        all_text = [f"{k}: {v}" for k, v in self.metadata.items()]
+        all_text = [f"**{k}**: {v}" for k, v in self.metadata.items()]
         for part in self.components:
             if part._text:
                 if part.label:
