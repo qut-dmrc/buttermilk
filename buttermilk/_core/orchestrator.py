@@ -212,7 +212,7 @@ class Orchestrator(BaseModel, ABC):
         # add reserved keyword inputs
         inputs.update(
             dict(
-                participants=list(self.agents.keys()),
+                participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
                 prompt=step.prompt,
             )
         )
