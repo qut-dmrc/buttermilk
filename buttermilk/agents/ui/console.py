@@ -48,7 +48,8 @@ class CLIUserAgent(UIAgent):
                 # for rec in message.records:
                 #     output.append(str(rec).replace("\\n", ""))
             elif isinstance(message, TaskProcessingComplete):
-                output.append(f"Task {message.role} #{message.task_index} completed {'successfully' if message.is_error else 'with ERROR'}.")
+                if message.is_error:
+                    output.append(f"Task {message.role} #{message.task_index} failed...")
             else:
                 output.append(message.content)
             output = [o for o in output if o]

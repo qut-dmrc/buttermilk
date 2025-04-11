@@ -151,7 +151,6 @@ class AutoGenWrapper(RetryWrapper):
         for tool_result in tool_outputs:
             reflection_messages.extend(tool_result.messages)
         reflection_result = await self.create(messages=reflection_messages, cancellation_token=cancellation_token)
-
         return reflection_result
 
     async def _call_tool(

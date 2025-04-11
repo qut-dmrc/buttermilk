@@ -1,4 +1,5 @@
 import asyncio
+from curses import meta
 import json
 from typing import Any, AsyncGenerator, Callable, Self
 
@@ -129,14 +130,19 @@ class LLMAgent(Agent):
             if not error_msg:
                 error_msg = f"JSON parsing error: {parse_error}"
 
-        # TODO @nicsuzor: I presume there's a better way to do this:
-        dump = {k: v for k, v in inputs.__dict__.items() if k in inputs.model_fields_set}
-        dump["metadata"] = outputs.pop("metadata", {})
-        dump["outputs"] = outputs
-        dump["content"] = json.dumps(outputs, indent=2, sort_keys=True)
-        dump["error"] = error_msg
+        metadata = outputs.pop("metadata", {})
+        content = json.dumps(outputs, indent=2, sort_keys=True)
+        output = AgentOutput(role=self.role, source=self.id)
 
-        output = AgentOutput(**dump)
+        output.inputs = inputs.inputs
+        output.params = inputs.params
+        output.context = inputs.context
+        output.records = inputs.records
+        output.outputs = outputs
+        if error_msg:
+            output.error = error_msg
+        output.metadata = metadata
+        output.content = content
 
         return output
 

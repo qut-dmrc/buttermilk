@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
 import time
-from typing import Annotated, Any, AsyncGenerator, Callable, Self, Union
+from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
 import jmespath
@@ -201,7 +201,7 @@ class Agent(AgentConfig):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         # Agents come in variants, and each variant has a list of tasks that it iterates through.
         # And are supplemented by placeholders for records and contextual history
         n = 0
@@ -254,7 +254,19 @@ class Agent(AgentConfig):
                 raise e
             finally:
                 await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False, is_error=False, source=self.id))
-        return outputs
+
+        output = None
+        if outputs:
+            outputs.reverse()
+            for msg in outputs:
+                if isinstance(msg, AgentOutput):
+                    if output:
+                        output.internal_messages.append(msg)
+                    else:
+                        output = msg
+            if output:
+                output.internal_messages.reverse()
+        return output
 
     async def _listen(
         self,
@@ -310,7 +322,7 @@ class Agent(AgentConfig):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Allow agents to be called directly as functions by the orchestrator."""
         output = await self._run_fn(
             message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
@@ -321,21 +333,15 @@ class Agent(AgentConfig):
         self,
         message: ConductorRequest,
         cancellation_token: Any,
-        public_callback: Callable= None, 
-        message_callback: Callable= None, 
+        public_callback: Callable = None,
+        message_callback: Callable = None,
         **kwargs,
-    ) -> FlowMessage|None:
+    ) -> FlowMessage | AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Respond directly to the orchestrator"""
         outputs = None
         response = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs)
 
-        if response:
-            # convert to ConductorResponse
-            outputs = ConductorResponse(**response[-1].model_dump())
-            if len(response)>1:
-                outputs.internal_messages = response[:-1]
-            await message_callback(outputs)
-            return outputs
+        return response
 
     # def custom_attribute_name(call):
     #     model = call.attributes["model"]
@@ -350,7 +356,7 @@ class Agent(AgentConfig):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Run the main function."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):

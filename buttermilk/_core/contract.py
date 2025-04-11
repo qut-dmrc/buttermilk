@@ -182,7 +182,7 @@ class AgentOutput(AgentInput):
         make_list_validator(),
     )
 
-    _ensure_record_context_list = field_validator("records", "context", mode="before")(
+    _ensure_record_context_list = field_validator("records", "context", "internal_messages", mode="before")(
         make_list_validator(),
     )
 ######

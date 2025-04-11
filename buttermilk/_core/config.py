@@ -51,7 +51,6 @@ class SaveInfo(CloudProviderCfg):
     destination: str | cloudpathlib.AnyPath | None = None
     db_schema: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("db_schema", "schema"),
     )
     dataset: str | None = Field(default=None)
 
@@ -103,7 +102,6 @@ class DataSourceConfig(BaseModel):
     ]
     path: str = Field(
         default="",
-        validation_alias=AliasChoices("path", "dataset", "uri", "func"),
     )
     glob: str = Field(default="**/*")
     filter: Mapping[str, str | Sequence[str] | None] | None = Field(

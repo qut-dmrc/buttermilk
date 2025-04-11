@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
+from typing import Sequence
 
 from autogen_core import (
     DefaultTopicId,CancellationToken,
@@ -9,7 +10,7 @@ from autogen_core import (
     message_handler,
 )
 
-from buttermilk._core.agent import Agent, AgentConfig
+from buttermilk._core.agent import Agent, AgentConfig, ToolOutput
 from buttermilk._core.contract import (
     CONDUCTOR,
     AgentInput,
@@ -110,7 +111,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: AgentInput,
         ctx: MessageContext,
-    ) -> AgentOutput | TaskProcessingComplete | None:
+    ) -> Sequence[AgentOutput | ToolOutput | TaskProcessingComplete] | AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
@@ -127,7 +128,14 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: ConductorRequest,
         ctx: MessageContext,
-    ) -> ConductorResponse | TaskProcessingComplete | AgentOutput | None:
+    ) -> (
+        ConductorResponse
+        | Sequence[ConductorResponse | AgentOutput | ToolOutput | TaskProcessingComplete]
+        | AgentOutput
+        | ToolOutput
+        | TaskProcessingComplete
+        | None
+    ):
         """Handle conductor requests privately."""
 
         output = await self.agent.invoke_privately(
@@ -143,7 +151,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: OOBMessages,
         ctx: MessageContext,
-    ) -> OOBMessages | TaskProcessingComplete | None:
+    ) -> OOBMessages | TaskProcessingComplete | Sequence[OOBMessages | TaskProcessingComplete] | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
         response = await self.agent._handle_control_message(

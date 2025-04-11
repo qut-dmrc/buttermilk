@@ -41,17 +41,14 @@ class FlowRequest(BaseModel):
 
     q: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
     record: Record | None = None
     uri: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("uri", "url", "link"),
     )
     data: bytes | None = Field(
         default=None,
-        validation_alias=AliasChoices("data", "text", "body", "content", "video", "image"),
     )
     mime_type: str | None = None
     source: str | Sequence[str] = []

@@ -127,7 +127,6 @@ class MediaObj(BaseModel):
     label: str | None = Field(
         default=None,
         description="Section or type of content part (e.g. heading, body paragraph, caption, image, etc)",
-        validation_alias=AliasChoices("arg0"),
     )
 
     metadata: dict = {}
@@ -139,7 +138,6 @@ class MediaObj(BaseModel):
 
     mime: str | None = Field(
         default="text/plain",
-        validation_alias=AliasChoices("mime", "mimetype", "type", "mime_type"),
     )
 
     content: str | bytes | None = Field(default=None, description="Temporary field used in loading data only.")
@@ -270,7 +268,6 @@ class Record(BaseModel):
     )
     ground_truth: dict | None = Field(
         default=None,
-        validation_alias=AliasChoices("ground_truth", "golden"),
     )
 
     uri: str | None = Field(
@@ -321,7 +318,7 @@ class Record(BaseModel):
         return all_text
 
     model_config = ConfigDict(
-        extra="allow",
+        extra="forbid",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -330,20 +327,20 @@ class Record(BaseModel):
         positional_args=True,
     )  # type: ignore
 
-    @model_validator(mode="after")
-    def vld_input(self) -> Self:
-        # Place extra arguments in the metadata field
-        if self.model_extra:
-            while len(self.model_extra.keys()) > 0:
-                key, value = self.model_extra.popitem()
-                if key not in self.metadata and key not in self.model_computed_fields:
-                    self.metadata[key] = value
-                else:
-                    raise ValueError(
-                        f"Received multiple values for {key} in Record",
-                    )
-        self.data = None
-        return self
+    # @model_validator(mode="after")
+    # def vld_input(self) -> Self:
+    #     # Place extra arguments in the metadata field
+    #     if self.model_extra:
+    #         while len(self.model_extra.keys()) > 0:
+    #             key, value = self.model_extra.popitem()
+    #             if value and key not in self.metadata and key not in self.model_computed_fields:
+    #                 self.metadata[key] = value
+    #             else:
+    #                 raise ValueError(
+    #                     f"Received multiple values for {key} in Record",
+    #                 )
+    #     self.data = None
+    #     return self
 
     @field_validator("uri")
     @classmethod
