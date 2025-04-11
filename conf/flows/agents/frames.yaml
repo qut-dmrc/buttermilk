@@ -8,3 +8,5 @@ frames:
     template: frames
   variants:
     model: ${llms.general}
+  inputs:
+    records: fetch.records

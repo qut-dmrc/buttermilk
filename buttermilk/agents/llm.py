@@ -18,7 +18,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import Field, PrivateAttr
 import weave
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse
 from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
@@ -181,27 +181,6 @@ class LLMAgent(Agent):
         response.error = error_msg
         response.metadata = llm_metadata
         return response
-
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        **kwargs,
-    ) -> None:
-        """Save incoming messages for later use."""
-        # Map Buttermilk message types to LLM input types
-        if isinstance(message, AgentOutput):
-            await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
-            if message.records:
-                self._records.extend(message.records)
-        elif isinstance(message, (ToolOutput, UserInstructions)):
-            await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
-        else:
-            # don't log other types of messages
-            pass
-        return None
 
     async def _process(
         self,

@@ -9,6 +9,7 @@ from shortuuid import uuid
 
 from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig
 from buttermilk._core.contract import (
+    COMMAND_SYMBOL,
     AgentInput,
     AgentOutput,
     FlowMessage,
@@ -79,7 +80,7 @@ class FetchRecord(Agent, ToolConfig):
             record = await download_and_convert(uri=uri)
         else:
             # Try to get by record_id (remove bang! first)
-            record_id = match[1].strip("!")
+            record_id = match[1].strip(COMMAND_SYMBOL)
             record = await self._get_record_dataset(record_id=record_id)
 
         if record:
@@ -98,7 +99,7 @@ class FetchRecord(Agent, ToolConfig):
         record = None
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
-                record_id = prompt.strip().strip("!")
+                record_id = prompt.strip().strip(COMMAND_SYMBOL)
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
         result = None
         if record_id:

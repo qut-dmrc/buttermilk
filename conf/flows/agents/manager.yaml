@@ -4,5 +4,3 @@ manager:
   agent_obj: CLIUserAgent
   num_runs: 1
   description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
-  inputs:
-    prompt: prompt

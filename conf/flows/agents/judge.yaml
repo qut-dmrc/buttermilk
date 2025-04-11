@@ -12,7 +12,7 @@ judge:
   tasks:
     criteria: ${....params.criteria}
   inputs:
-    records: records
+    records: fetch.records
     # criteria: ${flows[${....flow_name}].criteria}
     # criteria: ${flow_criteria:${oc.select:....flow_name}}
     # criteria: ${flow_criteria:${oc.select:_global_.current_flow}}

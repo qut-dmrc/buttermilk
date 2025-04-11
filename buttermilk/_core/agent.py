@@ -22,9 +22,11 @@ from autogen_core.tools import BaseTool, FunctionTool
 from buttermilk import logger
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.contract import (
+    COMMAND_SYMBOL,
     AgentInput,
     AgentOutput,
     AllMessages,
+    AssistantMessage,
     ConductorRequest,
     ConductorResponse,
     ErrorEvent,
@@ -34,6 +36,7 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     ToolOutput,
     UserInstructions,
+    UserMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from abc import ABC, abstractmethod
@@ -241,13 +244,23 @@ class Agent(AgentConfig):
         **kwargs,
     ) -> None:
         """Save incoming messages for later use."""
-        if message.role in self.inputs:
+        # Look for matching roles in our inputs mapping
+        if message.role in [x.split(".")[0] for x in self.inputs.values() if x and isinstance(x, str)]:
             # Possible match, let's extract data
-            result_dict = message.model_dump()
+            result_dict = {message.role: message.model_dump()}
             for var_name, field_path in self.inputs.items():
                 value = jmespath.search(field_path, result_dict)
                 if value:
                     self._data.add(var_name, value)
+        else:
+            if isinstance(message, (AgentOutput, ConductorResponse)):
+                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+            elif isinstance(message, (ToolOutput, UserInstructions)):
+                if not message.content.startswith(COMMAND_SYMBOL):
+                    await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
+            else:
+                # don't log other types of messages
+                pass
 
     async def _process(
         self, inputs: AgentInput, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,  **kwargs

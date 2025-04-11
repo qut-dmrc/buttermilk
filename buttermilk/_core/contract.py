@@ -22,6 +22,7 @@ CONDUCTOR = "host"
 MANAGER = "manager"
 CLOSURE = "collector"
 CONFIRM = "confirm"
+COMMAND_SYMBOL = "!"
 
 LLMMessages = Union[SystemMessage | UserMessage | AssistantMessage]
 
@@ -207,7 +208,7 @@ class ConductorRequest(ManagerMessage, AgentInput):
     _type = "ConductorRequest"
 
 class ConductorResponse(ManagerMessage, AgentOutput):
-    """Request for input from the conductor."""
+    """Response to the conductor."""
 
     _type = "ConductorResponse"
 
