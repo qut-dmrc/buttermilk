@@ -9,5 +9,5 @@ analyst:
   variants:
     model: ${llms.general}
   inputs:
-    history: *[].outputs
+    history: "*[].outputs"
     prompt: user.content

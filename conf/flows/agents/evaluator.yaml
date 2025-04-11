@@ -11,4 +11,4 @@ evaluator:
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
-    answers: [judge,synth][].outputs
+    answers: "[judge,synth][].outputs"
