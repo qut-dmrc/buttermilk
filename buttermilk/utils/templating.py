@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import regex as re
 from jinja2 import (
@@ -15,7 +15,8 @@ from buttermilk._core.defaults import TEMPLATES_PATH
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
-from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessages, SystemMessage, UserMessage
+from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessages, PlaceholderInputs, SystemMessage, UserMessage
+
 class KeyValueCollector(BaseModel):
     """A simple collector for key-value pairs
     to insert into templates.
@@ -55,6 +56,92 @@ class KeyValueCollector(BaseModel):
     def init(self, keys: list[str]) -> None:
         for key in keys:
             self._data[key] = []
+    """Routes variables between workflow steps using mappings
+
+    Data is essentially a dict of lists, where each key is the name of a step and
+    each list is the output of an agent in a step.
+    """
+
+    _data: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    def _resolve_mappings(self, mappings: dict[Any, Any]) -> dict[str, Any]:
+        """Resolve all variable mappings to their values"""
+        resolved = {}
+
+        if isinstance(mappings, str):
+            # We have reached the end of the recursive road
+            return self._resolve_simple_path(mappings)
+
+        for target, source_spec in mappings.items():
+            if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
+                # Handle aggregation case
+                results = []
+                for src in source_spec:
+                    result = self._resolve_mappings(src)
+                    if result:
+                        if isinstance(result, list):
+                            results.extend(result)
+                        else:
+                            results.append(result)
+                resolved[target] = results
+            elif isinstance(source_spec, Mapping | dict):
+                # Handle nested mappings
+                resolved[target] = self._resolve_mappings(source_spec)
+            else:
+                resolved[target] = self._resolve_simple_path(source_spec)
+
+        # remove empty values, but keep in empty lists etc where we found the
+        # variable to substitute but it was empty.
+        resolved = {k: v for k, v in resolved.items() if v is not None}
+
+        return resolved
+
+    def _resolve_simple_path(self, path: str) -> Any:
+        """Resolve a simple dot-notation path
+
+        When a step has multiple outputs, returns a list with all matching results.
+        For JMESPath expressions that return lists, flattens the results.
+        """
+        if not path:
+            return None
+        if "." not in path:
+            # Direct reference to a step's complete output list
+            return self._data.get(path, None)
+
+        # Handle dot notation for nested fields
+        step_name, field_path = path.split(".", 1)
+
+        if step_name not in self._data:
+            return None
+
+        # Get all outputs for this step
+        step_results = self._data[step_name]
+        if not step_results:
+            return None
+
+        # Collect all matching results from all outputs
+        all_matches = []
+
+        for result in step_results:
+            # Convert Pydantic models to dictionaries for JMESPath
+            if hasattr(result, "model_dump"):
+                result_dict = result.model_dump()
+            else:
+                result_dict = result
+
+            value = jmespath.search(field_path, result_dict)
+            if value is not None:
+                # If the value is already a list, extend our results
+                if isinstance(value, list):
+                    all_matches.extend(value)
+                else:
+                    all_matches.append(value)
+
+        # If no match was found, return None
+        if not all_matches:
+            return None
+
+        return all_matches
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
@@ -103,7 +190,6 @@ def load_template(template: str,
         Tuple: Fully rendered template; set of unfilled variables.
 
     """
-    
 
     recursive_paths = [TEMPLATES_PATH] + [
         p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()
@@ -153,7 +239,7 @@ def load_template(template: str,
             except TemplateNotFound:
                 # Not a template, use as regular string
                 processed_params[k] = v
-        
+
     # Create a combined variables dict with trusted parameters taking precedence
     all_vars = dict(untrusted_inputs)
     all_vars.update(processed_params)  # Trusted params override untrusted ones
@@ -165,7 +251,7 @@ def load_template(template: str,
     return rendered, set(undefined_vars)
 
 
-def make_messages(local_template: str, placeholders: dict[str, list[LLMMessages]], fail_on_missing_placeholders: bool = False) -> list[LLMMessages]:
+def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_missing_placeholders: bool = False) -> list[LLMMessages]:
     output:  list[LLMMessages] = []
     try:
         # Parse messages using Prompty format
@@ -201,7 +287,9 @@ def make_messages(local_template: str, placeholders: dict[str, list[LLMMessages]
                 output.append(AssistantMessage(content=message["content"], source="template"))
             case "placeholder":
                 # Remove everything except word chars to get the variable name
-                if data := placeholders.get(var_name):
+                if data := getattr(placeholders, var_name, None):
+                    if not isinstance(data, list):
+                        data = [data]
                     output.extend(data)
             case _:
                 err = (
@@ -210,5 +298,5 @@ def make_messages(local_template: str, placeholders: dict[str, list[LLMMessages]
                 if fail_on_missing_placeholders:
                     raise ProcessingError(err)
                 logger.warning(err)
-    
+
     return output

@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowMessage,
     GroupchatMessageTypes,
+    PlaceholderInputs,
     ToolOutput,
     UserInstructions,
     TaskProcessingComplete,
@@ -88,7 +89,7 @@ class LLMAgent(Agent):
         self,
         task_params: dict[str, Any],  # Accepts task-specific parameters
         inputs: dict[str, Any],
-        placeholders: dict[str, Any] = {},
+        placeholders: PlaceholderInputs,
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
         template = self.parameters.get("template", task_params.get("template", inputs.get("template")))
@@ -109,7 +110,7 @@ class LLMAgent(Agent):
         # Next we use Prompty's format to divide into messages and set roles
         messages = make_messages(local_template=prompty, placeholders=placeholders)
 
-        if unfilled_vars := (set(unfilled_vars) - set(placeholders.keys())):
+        if unfilled_vars := (set(unfilled_vars) - set(placeholders.model_fields)):
             err = f"Template for agent {self.role} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ProcessingError(err)
@@ -134,10 +135,8 @@ class LLMAgent(Agent):
         content = json.dumps(outputs, indent=2, sort_keys=True)
         output = AgentOutput(role=self.role, source=self.id)
 
-        output.inputs = inputs.inputs
-        output.params = inputs.params
-        output.context = inputs.context
-        output.records = inputs.records
+        output.inputs = inputs.model_copy(deep=True)
+
         output.outputs = outputs
         if error_msg:
             output.error = error_msg
@@ -153,12 +152,8 @@ class LLMAgent(Agent):
         **kwargs,
     ) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
-        placeholders = {
-            "records": [rec.as_message() for rec in inputs.records],
-            "context": inputs.context,
-        }
 
-        messages = await self._fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
+        messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, placeholders=inputs.placeholders)
         chat_result = await self._model_client.call_chat(
             messages=messages, tools_list=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
         )

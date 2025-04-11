@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+from ast import arguments
 from collections.abc import Mapping, Sequence
+from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal, Self
 
@@ -17,16 +19,13 @@ from pydantic import (
 from buttermilk._core.agent import ChatCompletionContext
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
-from buttermilk._core.flow import FlowVariableRouter
+from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.job import Job
 from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
 from buttermilk.bm import BM
 
 BASE_DIR = Path(__file__).absolute().parent
-
-
-PLACEHOLDER_VARIABLES = ["participants", "context", "records"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -68,7 +67,7 @@ class Orchestrator(BaseModel, ABC):
     )
     history: list = Field(default=[])
 
-    _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
+    _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _model_context: ChatCompletionContext
     _records: list[Record] = PrivateAttr(default_factory=list)
 
@@ -205,22 +204,28 @@ class Orchestrator(BaseModel, ABC):
         """
         config = self.agents[step.role]
 
-        input_dict = dict(config.inputs)
+        input_map = dict(config.inputs)
 
-        # Overwrite any of the input dict values that are mappings to other data
-        # input_dict.update(self._flow_data._resolve_mappings(input_dict))
+        # Fill inputs based on input map
+        inputs = self._flow_data._resolve_mappings(input_map)
 
-        # Add any arguments from the step request
-        input_dict.update(step.arguments)
+        # add reserved keyword inputs
+        inputs.update(
+            dict(
+                participants=list(self.agents.keys()),
+                prompt=step.prompt,
+            )
+        )
 
-        input_dict["prompt"] = step.prompt
+        # add placeholder variables as llm messages
+        placeholders = dict(records=[r.as_message() for r in self._records], context=await self._model_context.get_messages())
 
         return AgentInput(
             role=step.role,
             source=self.flow_name,
-            content=step.prompt,
-            inputs=input_dict,
-            records=self._records,
+            inputs=inputs,
+            placeholders=placeholders,
+            parameters=step.arguments,
         )
 
 

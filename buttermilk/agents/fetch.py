@@ -88,7 +88,7 @@ class FetchRecord(Agent, ToolConfig):
                 source=self.id,
                 role=self.role,
                 content=record._fulltext,
-                records=[record],
+                outputs={"records": [record]},
             )
             await public_callback(output)
             return output

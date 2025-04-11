@@ -19,7 +19,7 @@ from pydantic import (
 )
 
 from autogen_core.tools import BaseTool, FunctionTool
-from buttermilk import logger
+from buttermilk._core.log import logger
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
@@ -32,6 +32,7 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowMessage,
     GroupchatMessageTypes,
+    ManagerResponse,
     OOBMessages,
     TaskProcessingComplete,
     ToolOutput,
@@ -208,27 +209,22 @@ class Agent(AgentConfig):
         tasks = []
         outputs = []
         for task_params in self.sequential_tasks:
-            inputs = message.model_copy(deep=True)
-            # add data from our local state
+            task_inputs = message.model_copy(deep=True)
+            task_inputs.parameters = dict(task_params)
+            task_inputs.parameters.update(self.parameters)
 
-            inputs.context.extend(await self._model_context.get_messages())
+            # Fill inputs based on input map
+            task_inputs.inputs.update(self._data._resolve_mappings(self.inputs))
 
-            _local_state = self._data.get_dict()
-
-            inputs.records.extend(self._records)
-            inputs.inputs.update(_local_state)
-            inputs.params.update(task_params)
-            inputs.params.update(self.parameters)
-
-            # make sure data does not have records or context placeholders in inputs fields
-            inputs.inputs.pop("records", None)
-            inputs.inputs.pop("context", None)
+            # add additional placeholders
+            task_inputs.placeholders.context.extend(await self._model_context.get_messages())
+            task_inputs.placeholders.records.extend([r.as_message() for r in self._records])
 
             _traced = weave.op(
                 self._process,
-                call_display_name=self.name,
+                call_display_name=f"{self.name} {self.id}",
             )
-            t = asyncio.create_task(_traced(inputs=inputs, cancellation_token=cancellation_token))
+            t = asyncio.create_task(_traced(inputs=task_inputs, cancellation_token=cancellation_token))
             tasks.append(t)
 
         for t in asyncio.as_completed(tasks):
@@ -278,16 +274,17 @@ class Agent(AgentConfig):
     ) -> None:
         """Save incoming messages for later use."""
         # Look for matching roles in our inputs mapping
-        if message.role in [x.split(".")[0] for x in self.inputs.values() if x and isinstance(x, str)]:
-            # Possible match, let's extract data
-            result_dict = {message.role: message.model_dump()}
-            for var_name, field_path in self.inputs.items():
-                value = jmespath.search(field_path, result_dict)
-                if value:
-                    if var_name == "records":
-                        self._records.extend(message.records)
-                    else:
-                        self._data.add(var_name, value)
+        if isinstance(message, (AgentOutput, ConductorResponse)):
+            if message.role in [x.split(".")[0] for x in self.inputs.values() if x and isinstance(x, str)]:
+                # Possible match, let's extract data
+                result_dict = {message.role: dict(message.outputs)}
+                for var_name, field_path in self.inputs.items():
+                    value = jmespath.search(field_path, result_dict)
+                    if value:
+                        if var_name == "records":
+                            self._records.extend(value)
+                        else:
+                            self._data.add(var_name, value)
         else:
             if isinstance(message, (AgentOutput, ConductorResponse)):
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))

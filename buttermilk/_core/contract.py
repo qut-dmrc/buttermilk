@@ -1,7 +1,9 @@
+from asyncio import streams
 from collections.abc import Mapping
+from enum import Enum
 from math import e
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Literal, Union
 from autogen_core import CancellationToken
 from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
@@ -11,6 +13,7 @@ from pydantic import (
     computed_field,
     field_validator,
 )
+
 
 from .config import DataSourceConfig, SaveInfo
 from .types import Record
@@ -112,6 +115,34 @@ class FlowMessage(BaseModel):
         return False
 
 
+class PlaceholderInputs(BaseModel):
+    participants: list[str] = Field(
+        default=[],
+        description="A list of participants to include in the prompt",
+    )
+    context: list[LLMMessages] = Field(
+        default=[],
+        description="A list of messages to include in the prompt",
+    )
+    records: list[Record] = Field(
+        default=[],
+        description="A list of records to include in the prompt",
+    )
+    prompt: str = Field(
+        default="",
+        description="A prompt to include in the prompt",
+    )
+
+    _ensure_error_list = field_validator("participants", "context", "records", "prompt", mode="before")(
+        make_list_validator(),
+    )
+
+    @field_validator("participants")
+    @classmethod
+    def _str_items(cls, value) -> list[str]:
+        return [str(item) for item in value]
+
+
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
@@ -120,22 +151,17 @@ class AgentInput(FlowMessage):
         description="The data to provide the agent",
     )
 
-    params: dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default={},
         description="Task-specific settings to provide the agent",
     )
-
-    context: list[Any] = Field(
-        default=[],
-        description="Context or history this agent knows or needs.",
-    )
-
-    records: list[Record] = Field(
-        default=[],
-        description="Records relevant to this message",
+    placeholders: PlaceholderInputs = Field(
+        default=PlaceholderInputs(),
+        description="Placeholders to provide to the agent",
     )
 
     _type = "InputRequest"
+
 
 class UserInstructions(FlowMessage):
     """Instructions from the user."""
@@ -150,10 +176,12 @@ class UserInstructions(FlowMessage):
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
-class AgentOutput(AgentInput):
+class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Agent"
+
+    inputs: AgentInput | None = Field(default=None)
 
     content: str | None = Field(
         default=None,
@@ -172,19 +200,17 @@ class AgentOutput(AgentInput):
         default_factory=list,
         description="Messages generated along the way to the final response",
     )
-    params: dict[str, Any] = Field(
-        default={},
-        description="Task-specific settings to provide the agent",
-    )
     metadata: dict[str, Any] = Field(default={})
 
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),
     )
 
-    _ensure_record_context_list = field_validator("records", "context", "internal_messages", mode="before")(
+    _ensure_record_context_list = field_validator("internal_messages", mode="before")(
         make_list_validator(),
     )
+
+
 ######
 # Control communications
 #

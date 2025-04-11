@@ -1,6 +1,5 @@
 import pytest
 
-from buttermilk._core.flow import FlowVariableRouter
 from buttermilk.utils.templating import KeyValueCollector
 
 
@@ -9,13 +8,13 @@ class TestFlowVariableRouter:
     def sample_data(self):
         """Sample data for testing variable routing with multiple outputs per step"""
         # Create a router with pre-populated data
-        router = FlowVariableRouter()
+        router = KeyValueCollector()
 
     @pytest.fixture
     def sample_data(self):
         """Sample data for testing variable routing with multiple outputs per step"""
         # Create a router with pre-populated data
-        router = FlowVariableRouter()
+        router = KeyValueCollector()
 
         # Add judge step data (multiple outputs)
         router._data["judge"] = [
@@ -313,7 +312,7 @@ class TestFlowVariableRouterSpecialCases:
     @pytest.fixture
     def router_with_records(self):
         """Router with record and placeholder data"""
-        router = FlowVariableRouter()
+        router = KeyValueCollector()
 
         router._data = {
             "context": "This is context data",
@@ -428,7 +427,7 @@ class TestFlowVariableRouterSpecialCases:
 
 def test_placeholder_integration():
     """Test how placeholders would be incorporated with routing"""
-    router = FlowVariableRouter()
+    router = KeyValueCollector()
 
     # Set up data in router
     router._data["step1"] = [{"value": "step1 data"}]

@@ -35,8 +35,8 @@ class CLIUserAgent(UIAgent):
         try:
             output.append(f"## {message.source} ({message.role})")
             if isinstance(message, (AgentOutput, ConductorResponse)):
-                if message.params:
-                    output.append("### Parameters: " + pretty_repr(message.params, max_string=400))
+                if message.inputs and message.inputs.parameters:
+                    output.append("### Parameters: " + pretty_repr(message.inputs.parameters, max_string=400))
                 if message.outputs:
                     if reasons := message.outputs.get("reasons"):
                         output.append("### Reasons:")
@@ -76,7 +76,9 @@ class CLIUserAgent(UIAgent):
         self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable = None, **kwargs
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-        self._console.print(self._fmt_msg(message))
+        out = self._fmt_msg(message)
+        if out:
+            self._console.print(out)
 
         if isinstance(message, ManagerRequest):
             # self._console.print(message.description)
