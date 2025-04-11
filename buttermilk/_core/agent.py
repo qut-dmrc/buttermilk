@@ -194,12 +194,19 @@ class Agent(AgentConfig):
                 await asyncio.sleep(1)
 
     async def _run_fn(
-        self, *, message: AgentInput | ConductorRequest, cancellation_token=None, public_callback: Callable = None, message_callback: Callable = None,  **kwargs
-    ) -> AgentOutput | ToolOutput | None | TaskProcessingComplete:
+        self,
+        *,
+        message: AgentInput | ConductorRequest,
+        cancellation_token=None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
         # Agents come in variants, and each variant has a list of tasks that it iterates through.
         # And are supplemented by placeholders for records and contextual history
         n = 0
         tasks = []
+        outputs = []
         for task_params in self.sequential_tasks:
             inputs = AgentInput(**message.model_dump())
             # add data from our local state
@@ -219,12 +226,16 @@ class Agent(AgentConfig):
             n += 1
             try:
                 result = await t
-                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=True, task_error=result.error))
+                if result:
+                    outputs.append(result)
+                    await public_callback(
+                        TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=True, is_error=result.is_error, source=self.id)
+                    )
             except ProcessingError as e:
                 logger.error(
                     f"Agent {self.role} {self.name} hit processing error: {e} {e.args=}.",
                 )
-                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=True, task_error=True))
+                await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=True, is_error=True, source=self.id))
                 continue
             except FatalError as e:
                 logger.error(f"Agent {self.role} {self.name} hit fatal error: {e}", exc_info=True)
@@ -233,7 +244,8 @@ class Agent(AgentConfig):
                 logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
                 raise e
             finally:
-                await public_callback(TaskProcessingComplete(source=self.role, task_index=n, more_tasks_remain=False, task_error=False))
+                await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False, is_error=False, source=self.id))
+        return outputs
 
     async def _listen(
         self,
@@ -282,8 +294,13 @@ class Agent(AgentConfig):
         return None
 
     async def __call__(
-        self, message: AgentInput, cancellation_token: CancellationToken, public_callback: Callable= None,  message_callback: Callable= None, **kwargs
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
+        self,
+        message: AgentInput,
+        cancellation_token: CancellationToken,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
         """Allow agents to be called directly as functions by the orchestrator."""
         output = await self._run_fn(
             message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
@@ -320,10 +337,10 @@ class Agent(AgentConfig):
         self,
         message: AgentInput,
         cancellation_token: Any,
-        public_callback: Callable = None, 
-        message_callback: Callable= None, 
+        public_callback: Callable = None,
+        message_callback: Callable = None,
         **kwargs,
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
+    ) -> list[AgentOutput | ToolOutput | TaskProcessingComplete] | None:
         """Run the main function."""
         # Check if we need to exit out before invoking the decorated tracing function self._run_fn
         if not isinstance(message, self._message_types_handled):

@@ -92,7 +92,10 @@ class FlowMessage(BaseModel):
         ...,
         description="The role of the agent that generated this output.",
     )
-
+    error: list[str] = Field(
+        default_factory=list,
+        description="A list of errors that occurred during the agent's execution",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
     """Metadata about the message."""
 
@@ -100,6 +103,13 @@ class FlowMessage(BaseModel):
     @property
     def type(self) -> str:
         return self._type
+
+    @computed_field
+    @property
+    def is_error(self) -> bool:
+        if self.error:
+            return True
+        return False
 
 
 class AgentInput(FlowMessage):
@@ -253,10 +263,11 @@ class ToolOutput(FunctionExecutionResult):
 
 class TaskProcessingComplete(BaseModel):
     """Sent by an agent after completing one sequential task."""
-    source: str = Field(..., description="ID of the agent sending the notification")
+    role: str = Field(..., description="ID of the agent sending the notification")
     task_index: int = Field(..., description="Index of the task that was just completed")
     more_tasks_remain: bool = Field(..., description="True if the agent has more sequential tasks to process for the current input")
-    task_error: bool = Field(default=False, description="True if the task resulted in an error")
+    source: str = Field()
+    is_error: bool = Field(default=False, description="True if the task resulted in an error")
 
 class ProceedToNextTaskSignal(BaseModel):
     """Sent by a controller to signal an agent to process its next sequential task."""

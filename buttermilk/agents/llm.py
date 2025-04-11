@@ -31,6 +31,7 @@ from buttermilk._core.contract import (
     OOBMessages,
 )
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import AutoGenWrapper, CreateResult
 from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
 from buttermilk.utils._tools import create_tool_functions
@@ -48,7 +49,7 @@ class LLMAgent(Agent):
         default_factory=list,
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
-    _model_client: ChatCompletionClient = PrivateAttr()
+    _model_client: AutoGenWrapper = PrivateAttr()
 
     _pause: bool = PrivateAttr(default=False)
 
@@ -113,81 +114,36 @@ class LLMAgent(Agent):
                 raise ProcessingError(err)
         return messages
 
-    async def _execute_tools(
-        self,
-        calls: list[FunctionCall],
-        cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        """Execute the tools and return the results."""
-        assert isinstance(calls, list) and all(isinstance(call, FunctionCall) for call in calls)
-
-        # Execute the tool calls.
-        results = await asyncio.gather(
-            *[self._call_tool(call, cancellation_token) for call in calls],
-        )
-        results = [record for result in results for record in result if record is not None]
-
-        return results
-
-    async def _call_tool(
-        self,
-        call: FunctionCall,
-        cancellation_token: CancellationToken | None,
-    ) -> list[ToolOutput]:
-        # Find the tool by name.
-        tool = next((tool for tool in self._tools_list if tool.name == call.name), None)
-        assert tool is not None
-
-        # Run the tool and capture the result.
-        arguments = json.loads(call.arguments)
-        results = await tool.run_json(arguments, cancellation_token)
-
-        if not isinstance(results, list):
-            results = [results]
-        outputs = []
-        for result in results:
-            result.call_id = call.id
-            result.name = tool.name
-            outputs.append(result)
-        return outputs
-
     async def _create_agent_output(
         self,
-        raw_content: str | list[Any],
+        chat_result: CreateResult,
         inputs: AgentInput,
-        llm_metadata: dict = {},
         error_msg: str | None = None,
     ) -> AgentOutput:
         """Helper method to create AgentOutput instances."""
-        outputs = {}
-        content = ""
-        if isinstance(raw_content, str):
-            try:
-                outputs = self._json_parser.parse(raw_content)
-                content = json.dumps(outputs, indent=2, sort_keys=True)
-            except Exception as parse_error:
-                logger.warning(f"Failed to parse LLM response as JSON: {parse_error}")
-                content = raw_content
-                if not error_msg:
-                    error_msg = f"JSON parsing error: {parse_error}"
-        else:
-            outputs = raw_content
-            content = str(raw_content)
+        try:
+            outputs = self._json_parser.parse(chat_result.content)
+        except Exception as parse_error:
+            logger.warning(f"Failed to parse LLM response as JSON: {parse_error}")
+            outputs = dict(response=chat_result.content)
+            if not error_msg:
+                error_msg = f"JSON parsing error: {parse_error}"
+
         # TODO @nicsuzor: I presume there's a better way to do this:
         dump = {k: v for k, v in inputs.__dict__.items() if k in inputs.model_fields_set}
-        response = AgentOutput(**dump)
-        response.content = content
-        response.outputs = outputs
-        response.error = error_msg
-        response.metadata = llm_metadata
-        return response
+        dump["metadata"] = outputs.pop("metadata", {})
+        dump["outputs"] = outputs
+        dump["content"] = json.dumps(outputs, indent=2, sort_keys=True)
+        dump["error"] = error_msg
+
+        output = AgentOutput(**dump)
+
+        return output
 
     async def _process(
         self,
         inputs: AgentInput,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         **kwargs,
     ) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
@@ -196,70 +152,11 @@ class LLMAgent(Agent):
             "context": inputs.context,
         }
         messages = await self._fill_template(task_params=inputs.params, inputs=inputs.inputs, placeholders=placeholders)
-        try:
-            create_result = await self._model_client.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
-        except Exception as e:
-            error_msg = f"Error during LLM call: {e}"
-            logger.warning(error_msg, exc_info=False)
-            raise ProcessingError(error_msg)
-
-        llm_metadata = create_result.model_dump(exclude_unset=True, exclude_none=True)
-
-        if isinstance(create_result.content, str):
-            if create_result.content.strip() != "":
-                result = await self._create_agent_output(
-                    raw_content=create_result.content,
-                    inputs=inputs,
-                    llm_metadata=llm_metadata,
-                )
-        elif isinstance(create_result.content, list) and all(isinstance(item, FunctionCall) for item in create_result.content):
-            tool_outputs = await self._execute_tools(
-                calls=create_result.content,
-                cancellation_token=cancellation_token,
-            )
-            reflection_tasks = []
-            for tool_result in tool_outputs:
-                if tool_result.is_error:
-                    error_msg = f"Tool call '{tool_result.source}' failed: {tool_result.content}"
-                    logger.warning(error_msg)
-                    continue
-
-                await message_callback(tool_result)
-
-                await asyncio.sleep(0.1)
-
-                try:
-                    reflection_messages = messages.copy()
-                    reflection_messages.extend(tool_result.messages)
-                    task = self._model_client.create(
-                        messages=reflection_messages,
-                        cancellation_token=cancellation_token,
-                    )
-                    reflection_tasks.append(task)
-                except Exception as e:
-                    error_msg = f"Error preparing reflection for tool '{tool_result.source}': {e}"
-                    logger.warning(error_msg, exc_info=True)
-                    raise ProcessingError(error_msg)
-
-            for task in asyncio.as_completed(reflection_tasks):
-                try:
-                    reflection_result = await task
-                    reflection_metadata = reflection_result.model_dump(exclude_unset=True, exclude_none=True)
-                    result = await self._create_agent_output(
-                        raw_content=reflection_result.content,
-                        inputs=inputs,
-                        llm_metadata=reflection_metadata,
-                    )
-                    public_callback(result)
-                except Exception as e:
-                    error_msg = f"Error during reflection LLM call: {e}"
-                    logger.warning(error_msg, exc_info=False)
-                    raise ProcessingError(error_msg)
-        else:
-            error_msg = f"Unexpected content type from LLM (task): {type(create_result.content)}"
-            logger.error(error_msg)
-            raise ProcessingError(error_msg)
-        return
+        chat_result = await self._model_client.call_chat(
+            messages=messages, tools=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
+        )
+        result = await self._create_agent_output(chat_result, inputs=inputs)
+        return result
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

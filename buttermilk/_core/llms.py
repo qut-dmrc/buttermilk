@@ -1,5 +1,8 @@
+import asyncio
 from enum import Enum
+import json
 from typing import TYPE_CHECKING, Any, TypeVar
+from autogen_core import CancellationToken, FunctionCall
 import weave
 from anthropic import (
     AnthropicVertex,
@@ -16,8 +19,12 @@ from autogen_ext.models.openai._transformation.registry import (
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
-
+from buttermilk import logger
+from buttermilk._core.agent import ToolOutput
+from buttermilk._core.exceptions import ProcessingError
 from .retry import RetryWrapper
+
+from autogen_core.models import CreateResult, LLMMessage, RequestUsage
 
 _ = "ChatCompletionClient"
 
@@ -106,35 +113,83 @@ class AutoGenWrapper(RetryWrapper):
     client: ChatCompletionClient
     model_info: ModelInfo
 
-    async def create(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    async def create(self, *args: Any, **kwargs: Any) -> CreateResult:
         """Rate-limited version of the underlying client's create method with retries"""
-        # Use the retry logic
-        result = await self._execute_with_retry(
-            self.client.create,
-            *args,
-            **kwargs,
-        )
-
-        return result
-
-    async def agenerate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        """Rate-limited version of the underlying client's agenerate method with retries"""
-        if hasattr(self.client, "agenerate"):
-            # Use the retry logic with agenerate
-            result = await self._execute_with_retry(
-                self.client.agenerate,
-                *args,
-                **kwargs,
-            )
-        else:
-            # Fallback to create with retry
-            result = await self._execute_with_retry(
+        try:
+            # Use the retry logic
+            create_result = await self._execute_with_retry(
                 self.client.create,
                 *args,
                 **kwargs,
             )
+            if not create_result.content:
+                raise ProcessingError("Empty response from LLM")
+            if isinstance(create_result.content, str) and not create_result.content.strip():
+                raise ProcessingError("Empty response from LLM")
+            if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
+                raise ProcessingError("Unexpected tool response from LLM", create_result.content)
+            return create_result
+        except Exception as e:
+            error_msg = f"Error during LLM call: {e}"
+            logger.warning(error_msg, exc_info=False)
+            raise ProcessingError(error_msg)
 
-        return result
+    async def call_chat(self, messages, tools, cancellation_token, reflect_on_tool_use: bool = True) -> CreateResult | list[ToolOutput] | None:
+        create_result = await self.create(messages=messages, tools=self._tools_list, cancellation_token=cancellation_token)
+
+        if isinstance(create_result.content, str):
+            return create_result
+
+        tool_outputs = await self._execute_tools(
+            calls=create_result.content,
+            cancellation_token=cancellation_token,
+        )
+        if not reflect_on_tool_use:
+            return tool_outputs
+
+        reflection_messages = messages.copy()
+        for tool_result in tool_outputs:
+            reflection_messages.extend(tool_result.messages)
+        reflection_result = await self.create(messages=reflection_messages, cancellation_token=cancellation_token)
+
+        return reflection_result
+
+    async def _call_tool(
+        self,
+        call: FunctionCall,
+        cancellation_token: CancellationToken | None,
+    ) -> list[ToolOutput]:
+        # Find the tool by name.
+        tool = next((tool for tool in self._tools_list if tool.name == call.name), None)
+        assert tool is not None
+
+        # Run the tool and capture the result.
+        arguments = json.loads(call.arguments)
+        results = await tool.run_json(arguments, cancellation_token)
+
+        if not isinstance(results, list):
+            results = [results]
+        outputs = []
+        for result in results:
+            result.call_id = call.id
+            result.name = tool.name
+            outputs.append(result)
+        return outputs
+
+    async def _execute_tools(
+        self,
+        calls: list[FunctionCall],
+        cancellation_token: CancellationToken | None,
+    ) -> list[ToolOutput]:
+        """Execute the tools and return the results."""
+
+        # Execute the tool calls.
+        results = await asyncio.gather(
+            *[self._call_tool(call, cancellation_token) for call in calls],
+        )
+        results = [record for result in results for record in result if record is not None]
+
+        return results
 
 
 class LLMs(BaseModel):

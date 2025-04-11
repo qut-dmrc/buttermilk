@@ -45,7 +45,7 @@ class HostAgent(LLMAgent):
 
         # --- Handle Task Completion from Worker Agents ---
         if isinstance(message, TaskProcessingComplete):
-            logger.info(f"Host received TaskComplete from {message.source} (Task {message.task_index}, More: {message.more_tasks_remain})")
+            logger.info(f"Host received TaskComplete from {message.role} (Task {message.task_index}, More: {message.more_tasks_remain})")
 
         else:
             logger.debug(f"Host received unhandled OOB message type: {type(message)}")
