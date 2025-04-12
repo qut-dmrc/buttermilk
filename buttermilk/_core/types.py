@@ -267,14 +267,14 @@ class Record(BaseModel):
         default=None,
     )
 
-    components: list[MediaObj] = Field(default=[])
+    content: str | Image
 
     def __str__(self) -> str:
-        return self._fulltext
+        return self.text
 
     @computed_field
     @property
-    def _fulltext(self) -> str:
+    def text(self) -> str:
         """Combines metadata and text content into a single string.
 
         Excludes ground truth and component labels.
@@ -282,33 +282,18 @@ class Record(BaseModel):
         parts = []
 
         if self.metadata:
-            parts.append("### Metadata")
+            if self.title:
+                parts.append("## {self.title}")
             for k, v in self.metadata.items():
                 parts.append(f"**{k}**: {v}")
-            parts.append("### Content")  # Separator
+            parts.append("")  # Separator
 
-        component_texts = [part._text for part in self.components if part._text]
-        if component_texts:
-            parts.extend(component_texts)
+        if isinstance(self.content, str):
+            parts.append(self.content)
+        else:
+            parts.append(self.alt_text)
 
         return "\n".join(parts)
-
-    @computed_field
-    @property
-    def _text(self) -> str:
-        # Only text. Metadata and Ground truth not included
-        return "\n".join(self._paragraphs)
-
-    @computed_field
-    @property
-    def _paragraphs(self) -> list[str]:
-        # Only text. Metadata and Ground truth not included
-        all_text = []
-        for part in self.components:
-            if part._text:
-                all_text.append(part._text)
-
-        return all_text
 
     model_config = ConfigDict(
         extra="ignore",
@@ -316,7 +301,7 @@ class Record(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["_fulltext", "_text", "_paragraphs"],
+        exclude=["title"],
         positional_args=True,
     )  # type: ignore
 
@@ -326,8 +311,8 @@ class Record(BaseModel):
         if self.model_extra:
             while len(self.model_extra.keys()) > 0:
                 key, value = self.model_extra.popitem()
-                if key == "content":
-                    self.components.append(MediaObj(content=value))
+                if key == "components":
+                    pass
 
                 if value and key not in self.metadata and key not in self.model_computed_fields:
                     self.metadata[key] = value
@@ -352,55 +337,3 @@ class Record(BaseModel):
     @property
     def title(self) -> str | None:
         return self.metadata.get("title")
-
-    @property
-    def all_text(self) -> str:
-        # Also with paragraph labels etc.
-        all_text = [f"**{k}**: {v}" for k, v in self.metadata.items()]
-        for part in self.components:
-            if part._text:
-                if part.label:
-                    all_text.append(f"{part.label}: {part._text}")
-                else:
-                    all_text.append(part._text)
-        return "\n".join(all_text)
-
-    def update_from(self, update_dict) -> Self:
-        # exclude null values
-        update_dict = {k: v for k, v in update_dict.items() if v}
-
-        self.metadata.update(**update_dict)
-
-        return self
-
-    def as_message(self, role: Literal["user", "human", "system", "assistant"] = "user", source: str = "record") -> UserMessage | AssistantMessage:
-        # Prepare input for model consumption
-        leading_components = []
-        trailing_components = []
-
-        for obj in self.components:
-            # attach media objects if the model supports them
-            if obj.mime.startswith("image") or obj.mime.startswith("video") or obj.mime.startswith("audio"):
-                leading_components.append(obj.as_content_part())
-            elif obj.mime.startswith("text"):
-                trailing_components.append(obj.as_content_part())
-            elif "uri" in obj.model_fields_set:
-                trailing_components.append(obj.as_image_url_message())
-
-        for k, v in self.metadata.items():
-            # add in metadata (title, byline, date, exif, etc.)
-            # llama3.2 at least expects images first
-            trailing_components.append({"type": "text", "text": f"{k}: {v}"})
-
-        components = leading_components + trailing_components
-        if not components:
-            logger.warning(
-                f"No text or model compatible media provided for {self.record_id}",
-            )
-            return None
-
-        if role == "user":
-            message = UserMessage(content=self._fulltext, source=source)
-        else:
-            message = AssistantMessage(content=self._fulltext, source=source)
-        return message

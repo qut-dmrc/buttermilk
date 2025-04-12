@@ -6,6 +6,7 @@ from cloudpathlib import AnyPath, CloudPath
 from PIL import Image
 from pydantic import BaseModel, model_validator
 
+from buttermilk._core.types import Record
 from buttermilk.utils.utils import read_file
 
 
@@ -84,7 +85,7 @@ def read_image(
     shortest_edge=768,
     longest_edge=None,
     token=None,
-) -> ImageRecord:
+) -> Record:
     """Get image data from either a URI or a file upload."""
     if path:
         data = read_file(path, auth_token=token)
@@ -103,20 +104,10 @@ def read_image(
 
     # reopen
     img = Image.open(data)
-    image_b64 = image_to_b64(
-        img,
-        longest_edge=longest_edge,
-        shortest_edge=shortest_edge,
-    )
     data.seek(0)  # go to the start of the image again
-    img = ImageRecord(
-        image=img,
-        uri=path,
-        image_b64=image_b64,
-        _image_bytes=data.read(),
-    )
+    rec = Record(content=img, uri=path)
 
-    return img
+    return rec
 
 
 def image_to_b64(img: Image, longest_edge=-1, shortest_edge=-1) -> str:

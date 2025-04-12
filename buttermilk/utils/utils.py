@@ -528,3 +528,19 @@ def get_pdf_text(file: str | IOBase) -> str | None:
             f"Error extracting text from PDF {file}: {e} {e.args=}",
         )
         return None
+
+
+def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dict[Any, Any...:#
+    """Recursively converts Pydantic models within a structure to dictionaries."""
+    if isinstance(obj, pydantic.BaseModel):
+        # Convert Pydantic model to dict, handles nested models automatically
+        return obj.model_dump()
+    elif isinstance(obj, dict):
+        # Recursively process dictionary values
+        return {k: pydantic_to_dict(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        # Recursively process list/tuple elements
+        return [pydantic_to_dict(item) for item in obj]
+    else:
+        # Return other types as is
+        return obj
