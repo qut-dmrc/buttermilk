@@ -335,7 +335,7 @@ class Record(BaseModel):
                     raise ValueError(
                         f"Received multiple values for {key} in Record",
                     )
-        self.data = None
+
         return self
 
     @field_validator("uri")

@@ -11,5 +11,5 @@ scorer:
     criteria: |
       Evaluate how well the provided content aligns with the rules.
   inputs:
-    answers:
     expected: record.ground_truth
+    answers: "[judge,synth][].outputs"

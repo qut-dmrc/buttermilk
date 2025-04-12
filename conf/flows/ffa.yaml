@@ -5,7 +5,7 @@ defaults:
       - host
       - fetch
       - synth
-      - evaluator
+      - differences
       - analyst
       - owl
       - frames

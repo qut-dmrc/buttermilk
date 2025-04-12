@@ -270,15 +270,15 @@ class Agent(AgentConfig):
                             self._records.extend(value)
                         else:
                             self._data.add(var_name, value)
+
+        if isinstance(message, (AgentOutput, ConductorResponse)):
+            await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+        elif isinstance(message, (ToolOutput, UserInstructions)):
+            if not message.content.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
         else:
-            if isinstance(message, (AgentOutput, ConductorResponse)):
-                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
-            elif isinstance(message, (ToolOutput, UserInstructions)):
-                if not message.content.startswith(COMMAND_SYMBOL):
-                    await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
-            else:
-                # don't log other types of messages
-                pass
+            # don't log other types of messages
+            pass
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Internal process function. Replace this in subclasses.

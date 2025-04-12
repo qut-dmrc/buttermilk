@@ -1,13 +1,19 @@
 host: gemini2flash
 
+cheap:
+  - gemini2flashlite
+  - gemini2flash
+
 general:
   - gemini2flashlite
-  - o3-mini-high
+  - gemini2flash
 
 judgers:
   - gemini2flashlite
-  - o3-mini-high
+  - gemini2flash
+  
 
 synthesisers:
   - gemini2flashlite
-  - o3-mini-high
+  - gemini2flash
+

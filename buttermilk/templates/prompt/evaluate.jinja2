@@ -80,10 +80,10 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 # Placeholder:
 {{records}}
 
+{% if answers %}
 # User:
 Analyse the underlying reasons behind differences among the answers below.
 
-{% if answers %}
   {% for answer in answers %}
   <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
   {{ answer.content }}
