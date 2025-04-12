@@ -4,7 +4,6 @@ from enum import Enum
 from math import e
 from pathlib import Path
 from typing import Any, Literal, Union
-from autogen_core import CancellationToken
 from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
@@ -19,6 +18,8 @@ from .config import DataSourceConfig, SaveInfo
 from .types import Record
 from buttermilk.utils.validators import make_list_validator
 
+from autogen_core.models import LLMMessage
+
 BASE_DIR = Path(__file__).absolute().parent
 
 CONDUCTOR = "host"
@@ -26,8 +27,6 @@ MANAGER = "manager"
 CLOSURE = "collector"
 CONFIRM = "confirm"
 COMMAND_SYMBOL = "!"
-
-LLMMessages = Union[SystemMessage | UserMessage | AssistantMessage]
 
 class FlowProtocol(BaseModel):
     flow_name: str  # flow name
@@ -116,31 +115,18 @@ class FlowMessage(BaseModel):
 
 
 class PlaceholderInputs(BaseModel):
-    participants: list[str] = Field(
-        default=[],
-        description="A list of participants to include in the prompt",
-    )
-    context: list[LLMMessages] = Field(
+    context: list[LLMMessage] = Field(
         default=[],
         description="A list of messages to include in the prompt",
     )
-    records: list[Record] = Field(
+    records: list[LLMMessage] = Field(
         default=[],
         description="A list of records to include in the prompt",
     )
-    prompt: str = Field(
-        default="",
-        description="A prompt to include in the prompt",
-    )
 
-    _ensure_error_list = field_validator("participants", "context", "records", "prompt", mode="before")(
+    _ensure_error_list = field_validator("context", "records", mode="before")(
         make_list_validator(),
     )
-
-    @field_validator("participants")
-    @classmethod
-    def _str_items(cls, value) -> list[str]:
-        return [str(item) for item in value]
 
 
 class AgentInput(FlowMessage):
@@ -150,7 +136,6 @@ class AgentInput(FlowMessage):
         default={},
         description="The data to provide the agent",
     )
-
     parameters: dict[str, Any] = Field(
         default={},
         description="Task-specific settings to provide the agent",
@@ -158,6 +143,10 @@ class AgentInput(FlowMessage):
     placeholders: PlaceholderInputs = Field(
         default=PlaceholderInputs(),
         description="Placeholders to provide to the agent",
+    )
+    prompt: str = Field(
+        default="",
+        description="A prompt to include",
     )
 
     _type = "InputRequest"

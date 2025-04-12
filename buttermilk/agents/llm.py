@@ -131,17 +131,15 @@ class LLMAgent(Agent):
             if not error_msg:
                 error_msg = f"JSON parsing error: {parse_error}"
 
-        metadata = outputs.pop("metadata", {})
-        content = json.dumps(outputs, indent=2, sort_keys=True)
         output = AgentOutput(role=self.role, source=self.id)
 
+        output.metadata = outputs.pop("metadata", {})
+        output.outputs = outputs
+        output.content = json.dumps(outputs, indent=2, sort_keys=True)
         output.inputs = inputs.model_copy(deep=True)
 
-        output.outputs = outputs
         if error_msg:
             output.error = error_msg
-        output.metadata = metadata
-        output.content = content
 
         return output
 

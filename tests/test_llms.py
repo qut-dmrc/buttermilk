@@ -4,6 +4,7 @@ from autogen_core.models import AssistantMessage, UserMessage
 from buttermilk._core.types import Record
 
 
+@pytest.mark.integration
 @pytest.mark.anyio
 async def test_all_llm(llm_expensive):
     assert llm_expensive

@@ -64,7 +64,7 @@ class FetchRecord(Agent, ToolConfig):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> GroupchatMessageTypes | None:
+    ) -> None:
         """Entry point when running this as an agent.
 
         If running as an agent, watch for URLs or record ids and inject them
@@ -91,7 +91,7 @@ class FetchRecord(Agent, ToolConfig):
                 outputs={"records": [record]},
             )
             await public_callback(output)
-            return output
+
         return
 
     async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore

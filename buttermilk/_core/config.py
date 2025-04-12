@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import (
+    Any,
     Literal,
 )
 
@@ -14,8 +15,8 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.types import SessionInfo
-from buttermilk._core.defaults import BQ_SCHEMA_DIR
+from .types import SessionInfo
+from .defaults import BQ_SCHEMA_DIR
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -129,6 +130,25 @@ class DataSourceConfig(BaseModel):
 
 class DataSouce(DataSourceConfig):
     pass
+
+
+class ToolConfig(BaseModel):
+    role: str = Field(default="")
+    description: str = Field(default="")
+    tool_obj: str = Field(default="")
+
+    data: list[DataSourceConfig] = Field(
+        default=[],
+        description="Specifications for data that the Agent should load",
+    )
+
+    def get_functions(self) -> list[Any]:
+        """Create function definitions for this tool."""
+        raise NotImplementedError()
+
+    async def _run(self, **kwargs) -> list[Any] | None:
+        raise NotImplementedError()
+
 
 class Tracing(BaseModel):
     enabled: bool = False

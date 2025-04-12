@@ -113,6 +113,7 @@ class AutoGenWrapper(RetryWrapper):
     client: ChatCompletionClient
     model_info: ModelInfo
 
+    @weave.op
     async def create(self, *args: Any, **kwargs: Any) -> CreateResult:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
@@ -134,6 +135,7 @@ class AutoGenWrapper(RetryWrapper):
             logger.warning(error_msg, exc_info=False)
             raise ProcessingError(error_msg)
 
+    @weave.op
     async def call_chat(self, messages, tools_list, cancellation_token, reflect_on_tool_use: bool = True) -> CreateResult | list[ToolOutput] | None:
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token)
 
@@ -173,6 +175,7 @@ class AutoGenWrapper(RetryWrapper):
             outputs.append(result)
         return outputs
 
+    @weave.op
     async def _execute_tools(
         self,
         calls: list[FunctionCall],

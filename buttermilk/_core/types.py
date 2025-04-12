@@ -140,8 +140,6 @@ class MediaObj(BaseModel):
         default="text/plain",
     )
 
-    content: str | bytes | None = Field(default=None, description="Temporary field used in loading data only.")
-
     _text: str | None = PrivateAttr(
         default=None,
     )
@@ -153,7 +151,7 @@ class MediaObj(BaseModel):
     )
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="ignore",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -161,41 +159,36 @@ class MediaObj(BaseModel):
         exclude=["data", "base_64"],
     )
 
-    def __str__(self):
-        return f"{self.label or 'unknown'} object ({self.mime}) {self._text[:50]}..."
+    def __str__(self) -> str:
+        return f"{self.label or 'unknown'} object ({self.mime}) {self.as_text()[:50]}..."
 
     @model_validator(mode="after")
     def interpret_data(self) -> Self:
-        if isinstance(self.content, str):
-            if self._base_64:
-                raise ValueError("MediaObj received two string fields.")
+        if self.model_extra and (content := self.model_extra.get("content")):
+            if isinstance(content, str):
+                if self._base_64:
+                    raise ValueError("MediaObj received two string fields.")
 
-            if not self.mime:
-                self.mime = "text/plain"
+                if not self.mime:
+                    self.mime = "text/plain"
 
-        if isinstance(self.content, bytes):
-            if self._base_64:
-                raise ValueError(
-                    "MediaObj can have either bytes or base64 data, but not both.",
-                )
-            self._base_64 = base64.b64encode(self.content).decode("utf-8")
-            if not self.mime:
-                self.mime = "application/octet-stream"
+                # String content, move
+                if is_b64(content):
+                    self._base_64 = str(content)
+                else:
+                    self._text = str(content)
 
-            # Strip binary data away once it's converted to b64
-            self.content = None
-        elif isinstance(self.content, Image):
-            self._image = self.content
-            self.content = None
-        else:
-            # String content, move
-            if is_b64(self.content):
-                self._base_64 = str(self.content)
-            else:
-                self._text = str(self.content)
-            self.content = None
+            if isinstance(content, bytes):
+                if self._base_64:
+                    raise ValueError(
+                        "MediaObj can have either bytes or base64 data, but not both.",
+                    )
+                self._base_64 = base64.b64encode(content).decode("utf-8")
+                if not self.mime:
+                    self.mime = "application/octet-stream"
 
-        # del self.content
+            elif isinstance(content, Image):
+                self._image = content
 
         return self
 
@@ -209,7 +202,7 @@ class MediaObj(BaseModel):
         }
 
     def as_text(self) -> str:
-        return self._text
+        return str(self._text)
 
     def as_content_part(self, model_type="openai") -> dict:
         part = {}
@@ -318,7 +311,7 @@ class Record(BaseModel):
         return all_text
 
     model_config = ConfigDict(
-        extra="forbid",
+        extra="ignore",
         arbitrary_types_allowed=True,
         populate_by_name=True,
         exclude_unset=True,
@@ -327,20 +320,23 @@ class Record(BaseModel):
         positional_args=True,
     )  # type: ignore
 
-    # @model_validator(mode="after")
-    # def vld_input(self) -> Self:
-    #     # Place extra arguments in the metadata field
-    #     if self.model_extra:
-    #         while len(self.model_extra.keys()) > 0:
-    #             key, value = self.model_extra.popitem()
-    #             if value and key not in self.metadata and key not in self.model_computed_fields:
-    #                 self.metadata[key] = value
-    #             else:
-    #                 raise ValueError(
-    #                     f"Received multiple values for {key} in Record",
-    #                 )
-    #     self.data = None
-    #     return self
+    @model_validator(mode="after")
+    def vld_input(self) -> Self:
+        # Retrieve content if passed and place extra arguments in the metadata field
+        if self.model_extra:
+            while len(self.model_extra.keys()) > 0:
+                key, value = self.model_extra.popitem()
+                if key == "content":
+                    self.components.append(MediaObj(content=value))
+
+                if value and key not in self.metadata and key not in self.model_computed_fields:
+                    self.metadata[key] = value
+                else:
+                    raise ValueError(
+                        f"Received multiple values for {key} in Record",
+                    )
+        self.data = None
+        return self
 
     @field_validator("uri")
     @classmethod

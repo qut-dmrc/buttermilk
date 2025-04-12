@@ -15,7 +15,7 @@ from buttermilk._core.defaults import TEMPLATES_PATH
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
-from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessages, PlaceholderInputs, SystemMessage, UserMessage
+from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessage, PlaceholderInputs, SystemMessage, UserMessage
 
 class KeyValueCollector(BaseModel):
     """A simple collector for key-value pairs
@@ -251,8 +251,8 @@ def load_template(template: str,
     return rendered, set(undefined_vars)
 
 
-def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_missing_placeholders: bool = False) -> list[LLMMessages]:
-    output:  list[LLMMessages] = []
+def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_missing_placeholders: bool = False) -> list[LLMMessage]:
+    output: list[LLMMessage] = []
     try:
         # Parse messages using Prompty format
         # First we strip the header information from the markdown
@@ -272,7 +272,7 @@ def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_
                 "human"]
     )
 
-    # Convert to LLMMessages
+    # Convert to LLMMessage
     for message in messages:
         var_name = re.sub(r"[^\w\d_]+", "", message["content"]).lower()
         if not var_name:

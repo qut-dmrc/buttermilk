@@ -54,7 +54,7 @@ from pydantic import (
 )
 
 from buttermilk import logger
-from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.config import DataSourceConfig, ToolConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
@@ -66,28 +66,6 @@ from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
 
-
-class ToolConfig(BaseModel):
-    role: str= Field(
-        default="")
-    description: str= Field(
-        default="")
-    tool_obj: str = Field(
-        default="")
-
-    data: list[DataSourceConfig] = Field(
-        default=[],
-        description="Specifications for data that the Agent should load",
-    )
-
-    def get_functions(self) -> list[Any]:
-        """Create function definitions for this tool."""
-        raise NotImplementedError()
-
-    async def _run(
-        self, **kwargs
-    ) -> list[ToolOutput] | None:
-        raise NotImplementedError()
 
 #########
 # Agent
@@ -194,6 +172,18 @@ class Agent(AgentConfig):
                     return False
                 await asyncio.sleep(1)
 
+    async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
+        """Add local agent state to inputs"""
+
+        # Fill inputs based on input map
+        inputs.inputs.update(self._data._resolve_mappings(self.inputs))
+
+        # add additional placeholders
+        inputs.placeholders.context.extend(await self._model_context.get_messages())
+        inputs.placeholders.records.extend([r.as_message() for r in self._records])
+
+        return inputs
+
     async def _run_fn(
         self,
         *,
@@ -212,18 +202,13 @@ class Agent(AgentConfig):
             task_inputs = message.model_copy(deep=True)
             task_inputs.parameters = dict(task_params)
             task_inputs.parameters.update(self.parameters)
-
-            # Fill inputs based on input map
-            task_inputs.inputs.update(self._data._resolve_mappings(self.inputs))
-
-            # add additional placeholders
-            task_inputs.placeholders.context.extend(await self._model_context.get_messages())
-            task_inputs.placeholders.records.extend([r.as_message() for r in self._records])
+            task_inputs = await self._add_state_to_input(task_inputs)
 
             _traced = weave.op(
                 self._process,
                 call_display_name=f"{self.name} {self.id}",
             )
+
             t = asyncio.create_task(_traced(inputs=task_inputs, cancellation_token=cancellation_token))
             tasks.append(t)
 
@@ -339,12 +324,6 @@ class Agent(AgentConfig):
         response = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs)
 
         return response
-
-    # def custom_attribute_name(call):
-    #     model = call.attributes["model"]
-    #     return f"{model}"
-
-    #     @weave.op(call_display_name=custom_attribute_name)
 
     async def invoke(
         self,

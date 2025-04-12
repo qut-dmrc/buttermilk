@@ -142,12 +142,12 @@ def get_news_record_from_uri(uri: str) -> Record:
     return record
 
 
-def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:
+def extract_main_content(html: str, **kwargs) -> tuple[list[MediaObj], dict]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
     paragraphs = []
     chunks = []
-    for span in doc.pop("plain_text"):
+    for span in doc.pop("plain_text", []):
         if chunk := span.get("text").strip():
             # Text exists, add it to current chunk
             chunks.append(chunk)
