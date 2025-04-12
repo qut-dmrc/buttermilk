@@ -137,6 +137,10 @@ class BM(Singleton, Project):
         extra="allow",  # Allow extra fields
     )
 
+    @property
+    def logger(self) -> logging.Logger:
+        return logger
+
     @model_validator(mode="before")
     @classmethod
     def get_vars(cls, vars) -> dict:
@@ -229,9 +233,7 @@ class BM(Singleton, Project):
         verbose=False,
     ) -> None:
 
-        # Quieten other loggers down a bit (particularly requests and google api client)
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.WARNING)
 
         # Remove existing handlers from the root logger to avoid duplicates
         # or conflicts if setup_logging is called multiple times or by other libraries.
@@ -241,20 +243,9 @@ class BM(Singleton, Project):
         # for clarity
         from ._core.log import logger as bm_logger
 
-        for logger_str in list(logging.Logger.manager.loggerDict.keys()):
-            try:
-                logging.getLogger(logger_str).setLevel(logging.WARNING)
-            except:
-                pass
-
-        if verbose:
-            root_logger.setLevel(logging.DEBUG)
-        else:
-            root_logger.setLevel(logging.INFO)
-
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
         coloredlogs.install(
-            logger=root_logger,
+            logger=bm_logger,
             fmt=console_format,
             isatty=True,
             stream=sys.stderr,
@@ -274,11 +265,8 @@ class BM(Singleton, Project):
                 },
             )
 
-            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
-                project=self.logger_cfg.project,
-            )
             cloudHandler = CloudLoggingHandler(
-                client=_REGISTRY["gcslogging"],
+                client=self.gcs_log_client,
                 resource=resource,
                 name=self.run_info.name,
                 labels=self.run_info.model_dump(
@@ -288,10 +276,23 @@ class BM(Singleton, Project):
             cloudHandler.setLevel(
                 logging.INFO,
             )  # Cloud logging never uses the DEBUG level, there's just too much data. Print debug to console only.
-            root_logger.addHandler(cloudHandler)
+            bm_logger.addHandler(cloudHandler)
 
-        # --- Quieten overly verbose libraries (Optional but recommended) ---
-        # Set higher levels for noisy libraries AFTER setting the root level
+        # --- Set logging level: warning for others, either debug or info for us ---
+        root_logger.setLevel(logging.WARNING)
+        for logger_str in list(logging.Logger.manager.loggerDict.keys()):
+            try:
+                logging.getLogger(logger_str).setLevel(logging.WARNING)
+            except:
+                pass
+
+        if verbose:
+            bm_logger.setLevel(logging.DEBUG)
+        else:
+            bm_logger.setLevel(logging.INFO)
+
+        # --- Quieten overly verbose libraries directly ---
+
         logging.getLogger("googleapiclient").setLevel(logging.WARNING)
         logging.getLogger("google.auth").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -367,6 +368,14 @@ class BM(Singleton, Project):
             bm_logger.debug(f"Buttermilk version is: {version('buttermilk')}")
         except:
             pass
+
+    @property
+    def gcs_log_client(self) -> google.cloud.logging.Client:
+        if _REGISTRY.get("gcslogging") is None:
+            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
+                project=self.logger_cfg.project,
+            )
+        return _REGISTRY["gcslogging"]
 
     @property
     def gcs(self) -> storage.Client:

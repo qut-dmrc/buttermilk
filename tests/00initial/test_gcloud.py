@@ -21,12 +21,12 @@ def test_save(bm):
     uploaded = AnyPath(uri)
     assert uploaded.exists()
     read_text = uploaded.read_text()
-    assert read_text == "test data"
+    assert read_text == '"test data"'
     uploaded.unlink(missing_ok=False)
 
 
 def test_upload_text(bm):
-    uri = f"gs://{bm.cfg.clouds[0].bucket}/test_data/{uuid}.txt"
+    uri = f"gs://{bm.clouds[0].bucket}/test_data/{uuid}.txt"
     return_uri = upload_text(data="test data", uri=uri)
     assert return_uri == uri
     uploaded = CloudPath(uri)
@@ -37,7 +37,7 @@ def test_upload_text(bm):
 
 
 def test_save_binary(bm):
-    uri = f"gs://{bm.cfg.clouds[0].bucket}/test_data/{uuid}.txt"
+    uri = f"gs://{bm.clouds[0].bucket}/test_data/{uuid}.txt"
     try:
         with open("tests/data/Rijksmuseum_(25621972346).jpg", "rb") as img:
             return_uri = upload_binary(img, uri=uri)

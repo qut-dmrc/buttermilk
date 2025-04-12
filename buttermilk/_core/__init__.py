@@ -1,5 +1,5 @@
 from .contract import (
-    LLMMessages,
+    LLMMessage,
     SystemMessage,
     UserMessage,
     AssistantMessage,
@@ -30,7 +30,7 @@ from .contract import (
 )
 
 ALL = [
-    "LLMMessages",
+    "LLMMessage",
     "SystemMessage",
     "UserMessage",
     "AssistantMessage",
