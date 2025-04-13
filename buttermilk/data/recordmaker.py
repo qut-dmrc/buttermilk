@@ -4,7 +4,7 @@ from typing import Any, AsyncGenerator
 
 from pydantic import BaseModel
 
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 
 from .loaders import LoaderGCS
 
@@ -28,5 +28,5 @@ class RecordMakerCloudStorageFiles(RecordMaker, LoaderGCS):
     async def record_generator(self) -> AsyncGenerator[Record, None]:
         # Generator to yield records from the dataset
         async for uri, content in self.read_files():
-            yield Record(uri=uri, text=content.decode())
+            yield Record(uri=uri, _text=content.decode())
             await asyncio.sleep(0)

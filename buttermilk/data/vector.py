@@ -20,8 +20,8 @@ from vertexai.language_models import (
     TextEmbeddingInput,
     TextEmbeddingModel,
 )
-
 from buttermilk import logger
+from buttermilk._core.config import DataSouce
 from buttermilk.bm import BM, bm
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
@@ -202,7 +202,6 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
     ):
         self.dimensionality = dimensionality
         self._embedding_model = TextEmbeddingModel.from_pretrained(embedding_model)
-        super().__init__()
 
     def __call__(self, input) -> Embeddings:
         kwargs = dict(
@@ -216,22 +215,22 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
         # convert from numpy
         return [cast("list[float]", r.values) for r in results]
 
-
 # --- Core Embedding and DB Interaction Class ---
-class ChromaDBEmbeddings(BaseModel):
+class ChromaDBEmbeddings(DataSouce):
     """Handles configuration, embedding model interaction, and ChromaDB connection."""
 
     model_config = pydantic.ConfigDict(extra="ignore")
 
     embedding_model: str = Field(default=MODEL_NAME)
     task: str = "RETRIEVAL_DOCUMENT"
-    collection_name: str
+    collection_name: str = Field(default=...)
     dimensionality: int = Field(default=3072)
-    persist_directory: str
+    persist_directory: str= Field(default=...)
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
     arrow_save_dir: str = Field(default="")
+    embedding_model: str = Field(default="text-embedding-large-exp-03-07")
 
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
     _collection: Collection = PrivateAttr()
@@ -541,7 +540,8 @@ class ChromaDBEmbeddings(BaseModel):
                 )
                 try:
                     failed_doc_filename = (
-                        Path(FAILED_BATCH_DIR)
+                        bm.save_dir
+                        / Path(FAILED_BATCH_DIR)
                         / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     )
                     logger.info(
@@ -619,7 +619,8 @@ class ChromaDBEmbeddings(BaseModel):
             # Save the failed document for retry
             try:
                 failed_doc_filename = (
-                    Path(FAILED_BATCH_DIR)
+                    bm.save_dir
+                    / Path(FAILED_BATCH_DIR)
                     / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 )
                 logger.info(

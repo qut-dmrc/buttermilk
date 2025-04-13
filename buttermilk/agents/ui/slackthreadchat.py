@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import pydantic
 from pydantic import BaseModel, PrivateAttr
@@ -6,11 +6,13 @@ from rich.console import Console
 from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
 
+from autogen_core import CancellationToken, MessageContext
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    GroupchatMessages,
+    FlowMessage,
+    GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
@@ -68,9 +70,10 @@ class SlackUIAgent(UIAgent):
             **kwargs,
         )
 
-    async def receive_output(
+    async def _listen(
         self,
-        message: GroupchatMessages,
+        message: GroupchatMessageTypes,
+        ctx: MessageContext = None,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -82,13 +85,15 @@ class SlackUIAgent(UIAgent):
                 _fn_debug_blocks(message)
                 await self.send_to_thread(text=message.content)
 
-    async def _request_user_input(
+    async def _request_input(
         self,
         message: AgentInput | ManagerRequest | ManagerMessage,
         **kwargs,
     ) -> None:
         """Ask for user input from the UI."""
-        if isinstance(message, (AgentInput, ManagerRequest)):
+        if isinstance(message, ManagerResponse):
+            return
+        elif isinstance(message, (AgentInput, ManagerRequest)):
             extra_blocks = dict_to_blocks(message.inputs)
             if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
@@ -131,27 +136,24 @@ class SlackUIAgent(UIAgent):
                 text=confirm_blocks["text"],
                 blocks=confirm_blocks["blocks"],
             )
-        else:
-            raise ValueError("Invalid message type")
 
     async def _cancel_input_request(self):
         if self._current_input_message is not None:
-            fn = self.app.client.chat_delete(
+            await self.app.client.chat_delete(
                 channel=self.context.channel_id,
                 ts=self._current_input_message.data["ts"],
             )
-            await request_with_retry(fn)
             self._current_input_message = None
 
     async def _process(
         self,
-        input_data: AgentInput,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
     ) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        await self._request_user_input(input_data)
-
-        return None  # We'll handle responses via the callback system
+        if isinstance(message, (AgentInput, ManagerRequest)):
+            await self._request_input(message)
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""
@@ -181,8 +183,8 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self._input_callback(ManagerResponse(confirm=False))
-            await self._input_callback(UserInstructions(content=message["text"]))
+            await self._input_callback(ManagerResponse(confirm=False, source="slack-thread", role=self.name))
+            await self._input_callback(UserInstructions(content=message["text"], role=self.name, source="slack-thread"))
 
         # Button action handlers
         async def handle_confirm(ack, body, client):
@@ -218,7 +220,7 @@ class SlackUIAgent(UIAgent):
                 actions=None,
             )
             # Call callback with boolean True
-            await self._input_callback(ManagerResponse(confirm=True))
+            await self._input_callback(ManagerResponse(confirm=True, source="slack-thread", role=self.name))
             self._current_input_message = None
 
         async def handle_cancel(ack, body, client):
@@ -249,7 +251,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean False
-            await self._input_callback(ManagerResponse(confirm=False))
+            await self._input_callback(ManagerResponse(confirm=False, source="slack-thread", role=self.name))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)

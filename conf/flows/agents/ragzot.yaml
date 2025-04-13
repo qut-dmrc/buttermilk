@@ -1,10 +1,9 @@
 ragzot:
-  id: RESEARCHER
+  role: RESEARCHER
   name: "🧑‍💻 Researcher"
   agent_obj: RagZot
-  description: a careful research assistant that provides relevant information from an academic knowledge base.
+  description: A research assistant that provides relevant information from an academic knowledge base. Should be called upon frequently during a conversation and before analysis to help provide information for other agents.
   variants:
     template: rag_academic
+  parameters:
     model: ${llms.general}
-  persist_directory: "/home/nic/data/prosocial_zot/files"
-  collection_name: "prosocial_zot"

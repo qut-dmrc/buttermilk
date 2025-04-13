@@ -34,27 +34,18 @@ You may be provided with additional feedback to consider. You should incorporate
 <END CRITERIA>
 {% endif %}
 
-{% if records %}
+
+{% if answers is defined %}
 # Placeholder:
 {{records}}
-
 # User:
-{% else %}
-# User:
-<CONTENT>
-{{content}}
-</CONTENT>
-{% endif %}
-
-{% if answers %}
   {% for answer in answers %}
   <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.outputs.reasons }}
+  {{ answer.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}
-
-<CONVERSATION SO FAR>
-  {{ history }}
-</CONVERSATION>
+# Placeholder:
+{{ context }}
 {% endif %}
+

@@ -122,7 +122,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     # Add header with model identifier
     header_text = (
-        f":robot_face: {result_copy.agent_name} {result_copy.metadata.get('model')}"
+        f":robot_face: {result_copy.role} {result_copy.metadata.get('model')}"
     )
     blocks.append({
         "type": "header",
@@ -229,7 +229,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     blocks.append(icontext)
 
                 elements = []
-                for para in record.paragraphs:
+                for para in record._paragraphs:
                     # Split text into chunks of ~3000 chars
                     chunk_size = 2950
                     for i in range(0, len(para), chunk_size):

@@ -3,16 +3,12 @@ from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
-from autogen_core import FunctionCall
-from autogen_core.tools import FunctionTool
-
-from buttermilk._core.agent import ToolConfig
-from buttermilk._core.config import DataSource
+from buttermilk._core.config import DataSourceConfig
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
 
 
-def load_data(data_cfg: DataSource) -> pd.DataFrame:
+def load_data(data_cfg: DataSourceConfig) -> pd.DataFrame:
     from buttermilk import logger
 
     if data_cfg.type == "outputs":
@@ -45,7 +41,7 @@ def load_data(data_cfg: DataSource) -> pd.DataFrame:
 
 def combine_datasets(
     existing_df: pd.DataFrame,
-    datasources: list[DataSource] = [],
+    datasources: list[DataSourceConfig] = [],
     results_df: pd.DataFrame = None,
 ) -> pd.DataFrame:
     if datasources:
@@ -68,7 +64,7 @@ def combine_datasets(
     return existing_df
 
 
-def load_bq(data_cfg: DataSource) -> pd.DataFrame:
+def load_bq(data_cfg: DataSourceConfig) -> pd.DataFrame:
     from buttermilk.bm import bm
 
     sql = f"SELECT * FROM `{data_cfg.path}`"
@@ -79,7 +75,7 @@ def load_bq(data_cfg: DataSource) -> pd.DataFrame:
     return df
 
 
-def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
+def load_jobs(data_cfg: DataSourceConfig) -> pd.DataFrame:
     from buttermilk.bm import bm
 
     last_n_days = data_cfg.last_n_days
@@ -143,7 +139,7 @@ def load_jobs(data_cfg: DataSource) -> pd.DataFrame:
 def group_and_filter_jobs(
     *,
     data: pd.DataFrame,
-    data_cfg: DataSource,
+    data_cfg: DataSourceConfig,
     existing_dfs: pd.DataFrame | None = None,
     raise_on_error=True,
 ) -> pd.DataFrame:
@@ -257,26 +253,8 @@ def cache_data(uri: str) -> str:
     return dataset
 
 
-def create_tool_functions(tool_cfg: list[ToolConfig]) -> list[FunctionCall]:
-    """Instantiate tools and return their wrapped entry functions."""
-    _fns = []
-    for cfg in tool_cfg:
-        from buttermilk.tools import AVAILABLE_TOOLS
 
-        try:
-            obj = AVAILABLE_TOOLS[str(cfg.tool_obj).lower()]
-            tool = obj(**cfg.model_dump())
-            fn = FunctionTool(
-                tool._run,
-                description="Look up an article by its RECORD_ID or URI.",
-            )
-            _fns.append(fn)
-        except Exception as e:
-            raise ValueError(f"Unable to instantiate tool: {cfg}: {e}") from e
-    return _fns
-
-
-async def prepare_step_df(data_configs: list[DataSource]) -> dict[str, pd.DataFrame]:
+async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.DataFrame]:
     # This works for small datasets that we can easily read and load.
     datasets = {}
     source_list = []

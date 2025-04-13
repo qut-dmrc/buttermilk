@@ -48,7 +48,7 @@ class RetryWrapper(BaseModel):
     """
 
     client: Any
-    concurrency: int = 2
+    concurrency: int = 15
     cooldown_seconds: float = 0.1
     max_retries: int = 6
     min_wait_seconds: float = 5.0
@@ -122,11 +122,6 @@ class RetryWrapper(BaseModel):
             logger.error(f"All retry attempts failed: {e!s}")
             # Re-raise the last exception
             raise e.last_attempt.exception()
-        except Exception as e:
-            logger.error(
-                f"{type(self.client).__qualname__} client hit unexpected exception: {e!s}",
-            )
-            raise e
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attributes to the wrapped client only if they don't exist on self.

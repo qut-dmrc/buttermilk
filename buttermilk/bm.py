@@ -42,10 +42,10 @@ try:
 except:
     pass
 
-from buttermilk._core.config import Project
-from buttermilk._core.llms import LLMs
-from buttermilk.utils.keys import SecretsManager
-from buttermilk.utils.utils import load_json_flexi
+from ._core.config import Project
+from ._core.llms import LLMs
+from .utils.keys import SecretsManager
+from .utils.utils import load_json_flexi
 
 from ._core.log import logger
 from .utils import save
@@ -113,12 +113,33 @@ class Singleton:
 
 class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr()
-    _gcp_credentials: GoogleCredentials = PrivateAttr()
+    _gcp_credentials_cached: GoogleCredentials = PrivateAttr(default=None)
+
+    @property
+    def _gcp_credentials(self) -> GoogleCredentials:
+        from google.auth import default, transport
+        billing_project = os.environ.get("google_billing_project", os.environ["GOOGLE_CLOUD_PROJECT"])
+
+        if not self._gcp_credentials_cached:
+            self._gcp_credentials_cached, self._gcp_project = default(
+                quota_project_id=billing_project,
+            )
+
+        # GCP tokens last 60 minutes and need to be refreshed after that
+        auth_request = transport.requests.Request()
+        self._gcp_credentials_cached.refresh(auth_request)
+        # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
+
+        return self._gcp_credentials_cached
 
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
         extra="allow",  # Allow extra fields
     )
+
+    @property
+    def logger(self) -> logging.Logger:
+        return logger
 
     @model_validator(mode="before")
     @classmethod
@@ -130,23 +151,17 @@ class BM(Singleton, Project):
     def ensure_config(self) -> Self:
         for cloud in self.clouds:
             if cloud.type == "gcp":
-                from google.auth import default, transport
-                # authenticate to GCP
+                # store authentication info
                 os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
                     "GOOGLE_CLOUD_PROJECT",
                     cloud.project,
                 )
-                if "qutoa_project_id" in cloud.model_fields_set:
-                    billing_project = cloud.quota_project_id
-                else:
-                    billing_project = os.environ["GOOGLE_CLOUD_PROJECT"]
-                self._gcp_credentials, self._gcp_project = default(
-                    quota_project_id=billing_project,
-                )
-                # GCP tokens last 60 minutes and need to be refreshed after that
-                auth_request = transport.requests.Request()
-                self._gcp_credentials.refresh(auth_request)
-                # self._gcp_token = credentials.refresh(google.auth.transport.requests.Request())
+                if "quota_project_id" in cloud.model_fields_set:
+                    os.environ["google_billing_project"] = cloud.quota_project_id
+
+                # authenticate here
+                _ = self._gcp_credentials
+
             if cloud.type == "vertex":
                 # initialize vertexai
                 aiplatform.init(
@@ -171,7 +186,7 @@ class BM(Singleton, Project):
                 )
 
             except Exception as e:
-                self.logger.error(f"Could not save config to default save dir: {e}")
+                logger.error(f"Could not save config to default save dir: {e}")
 
         if self.tracing and self.run_info:
             collection = f"{self.run_info.name}-{self.run_info.job}"
@@ -213,24 +228,76 @@ class BM(Singleton, Project):
         )
         return result
 
-    @property
-    def logger(self) -> logging.Logger:
-        return logger
-
     def setup_logging(
         self,
         verbose=False,
     ) -> None:
 
-        # Quieten other loggers down a bit (particularly requests and google api client)
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.WARNING)
 
+        # Remove existing handlers from the root logger to avoid duplicates
+        # or conflicts if setup_logging is called multiple times or by other libraries.
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+
+        # for clarity
+        from ._core.log import logger as bm_logger
+
+        console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
+        coloredlogs.install(
+            logger=bm_logger,
+            fmt=console_format,
+            isatty=True,
+            stream=sys.stderr,
+        )
+
+        resource = None
+        if self.logger_cfg.type == "gcp":
+            # Labels for cloud logger
+            resource = google.cloud.logging.Resource(
+                type="generic_task",
+                labels={
+                    "project_id": self.logger_cfg.project,
+                    "location": self.logger_cfg.location,
+                    "namespace": self.run_info.name,
+                    "job": self.run_info.job,
+                    "task_id": self.run_info.run_id,
+                },
+            )
+
+            cloudHandler = CloudLoggingHandler(
+                client=self.gcs_log_client,
+                resource=resource,
+                name=self.run_info.name,
+                labels=self.run_info.model_dump(
+                    include={"run_id", "name", "job", "platform", "username"},
+                ),
+            )
+            cloudHandler.setLevel(
+                logging.INFO,
+            )  # Cloud logging never uses the DEBUG level, there's just too much data. Print debug to console only.
+            bm_logger.addHandler(cloudHandler)
+
+        # --- Set logging level: warning for others, either debug or info for us ---
+        root_logger.setLevel(logging.WARNING)
         for logger_str in list(logging.Logger.manager.loggerDict.keys()):
             try:
                 logging.getLogger(logger_str).setLevel(logging.WARNING)
             except:
                 pass
+
+        if verbose:
+            bm_logger.setLevel(logging.DEBUG)
+        else:
+            bm_logger.setLevel(logging.INFO)
+
+        # --- Quieten overly verbose libraries directly ---
+
+        logging.getLogger("googleapiclient").setLevel(logging.WARNING)
+        logging.getLogger("google.auth").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("requests").setLevel(logging.WARNING)
+        # Add any other libraries that are too noisy
 
         # Turn off some particularly annoying (and unresolvable) warnings generated by upstream libraries
         import warnings
@@ -286,59 +353,6 @@ class BM(Singleton, Project):
             message="CropBox missing from",
         )
 
-        console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
-        if not verbose:
-            coloredlogs.install(
-                level="INFO",
-                logger=logger,
-                fmt=console_format,
-                isatty=True,
-                stream=sys.stdout,
-            )
-        else:
-            coloredlogs.install(
-                level="DEBUG",
-                logger=logger,
-                fmt=console_format,
-                isatty=True,
-                stream=sys.stdout,
-            )
-
-        resource = None
-        if self.logger_cfg.type == "gcp":
-            # Labels for cloud logger
-            resource = google.cloud.logging.Resource(
-                type="generic_task",
-                labels={
-                    "project_id": self.logger_cfg.project,
-                    "location": self.logger_cfg.location,
-                    "namespace": self.run_info.name,
-                    "job": self.run_info.job,
-                    "task_id": self.run_info.run_id,
-                },
-            )
-
-            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
-                project=self.logger_cfg.project,
-            )
-            cloudHandler = CloudLoggingHandler(
-                client=_REGISTRY["gcslogging"],
-                resource=resource,
-                name=self.run_info.name,
-                labels=self.run_info.model_dump(
-                    include={"run_id", "name", "job", "platform", "username"},
-                ),
-            )
-            cloudHandler.setLevel(
-                logging.INFO,
-            )  # Cloud logging never uses the DEBUG level, there's just too much data. Print debug to console only.
-            logger.addHandler(cloudHandler)
-
-        if verbose:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
-
         message = (
             f"Logging set up for: {self.run_info.__str__()}. Ready for data collection. Default save directory for data in this run is: {self.save_dir}",
         )
@@ -346,14 +360,22 @@ class BM(Singleton, Project):
         if resource:
             message = f"{message} {resource}"
 
-        logger.info(message, extra=dict(run=self.run_info.model_dump()))
+        bm_logger.info(message, extra=dict(run=self.run_info.model_dump()))
 
         try:
             from importlib.metadata import version
 
-            logger.debug(f"Buttermilk version is: {version('buttermilk')}")
+            bm_logger.debug(f"Buttermilk version is: {version('buttermilk')}")
         except:
             pass
+
+    @property
+    def gcs_log_client(self) -> google.cloud.logging.Client:
+        if _REGISTRY.get("gcslogging") is None:
+            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
+                project=self.logger_cfg.project,
+            )
+        return _REGISTRY["gcslogging"]
 
     @property
     def gcs(self) -> storage.Client:
@@ -429,9 +451,9 @@ class BM(Singleton, Project):
                         format='JSON',
                         overwrite=false) AS """
             sql = export_command + sql
-            self.logger.debug(f"Saving results to {gcs_results_uri}.")
+            logger.debug(f"Saving results to {gcs_results_uri}.")
         elif destination:
-            self.logger.debug(f"Saving results to {destination}.")
+            logger.debug(f"Saving results to {destination}.")
             job_config["destination"] = destination
             job_config["allow_large_results"] = True
 
@@ -453,7 +475,7 @@ class BM(Singleton, Project):
         else:
             approx_cost = "unknown"
         time_taken = datetime.datetime.now() - t0
-        self.logger.info(
+        logger.info(
             f"Query stats: Ran in {time_taken} seconds, cache hit: {cache_hit}, billed {bytes_billed}, approx cost ${approx_cost}.",
         )
 

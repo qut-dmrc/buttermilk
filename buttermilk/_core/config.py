@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import (
+    Any,
     Literal,
 )
 
@@ -14,8 +15,8 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.types import SessionInfo
-from buttermilk._core.defaults import BQ_SCHEMA_DIR
+from .types import SessionInfo
+from .defaults import BQ_SCHEMA_DIR
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -51,7 +52,6 @@ class SaveInfo(CloudProviderCfg):
     destination: str | cloudpathlib.AnyPath | None = None
     db_schema: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("db_schema", "schema"),
     )
     dataset: str | None = Field(default=None)
 
@@ -89,7 +89,7 @@ class SaveInfo(CloudProviderCfg):
         return self
 
 
-class DataSource(BaseModel):
+class DataSourceConfig(BaseModel):
     name: str
     max_records_per_group: int = -1
     type: Literal[
@@ -98,12 +98,11 @@ class DataSource(BaseModel):
         "bq",
         "generator",
         "plaintext",
-        "vectorstore",
+        "chromadb",
         "outputs",
     ]
     path: str = Field(
         default="",
-        validation_alias=AliasChoices("path", "dataset", "uri", "func"),
     )
     glob: str = Field(default="**/*")
     filter: Mapping[str, str | Sequence[str] | None] | None = Field(
@@ -116,7 +115,8 @@ class DataSource(BaseModel):
     columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
     last_n_days: int = Field(default=7)
     db: Mapping[str, str] = Field(default={})
-
+    embedding_model: str = Field(default="")
+    dimensionality: int = Field(default=-1)
     persist_directory: str = Field(default="")
     collection_name: str = Field(default="")
 
@@ -127,6 +127,27 @@ class DataSource(BaseModel):
         exclude_none=True,
         exclude_unset=True,
     )
+
+class DataSouce(DataSourceConfig):
+    pass
+
+
+class ToolConfig(BaseModel):
+    role: str = Field(default="")
+    description: str = Field(default="")
+    tool_obj: str = Field(default="")
+
+    data: list[DataSourceConfig] = Field(
+        default=[],
+        description="Specifications for data that the Agent should load",
+    )
+
+    def get_functions(self) -> list[Any]:
+        """Create function definitions for this tool."""
+        raise NotImplementedError()
+
+    async def _run(self, **kwargs) -> list[Any] | None:
+        raise NotImplementedError()
 
 
 class Tracing(BaseModel):
@@ -148,7 +169,7 @@ class Project(BaseModel):
         default=None,
         description="Information about the context in which this project runs",
     )
-    datasets: dict[str, DataSource] = Field(default_factory=dict)
+    datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
 
     model_config = ConfigDict(
         extra="forbid",

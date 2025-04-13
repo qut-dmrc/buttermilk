@@ -13,9 +13,9 @@ from pydantic import (
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.flow import Flow
 from buttermilk.data.recordmaker import RecordMakerDF
-from buttermilk._core.exceptions import FatalError
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.utils import expand_dict
 
@@ -89,26 +89,28 @@ class MultiFlowOrchestrator(BaseModel):
                     coroutine = self.task_wrapper(
                         task=coroutine,
                         job_id=job.job_id,
-                        agent_name=agent.id,
+                        source=agent.role,
                     )
                     yield coroutine
 
-    async def task_wrapper(self, *, agent_name, job_id, task):
+    async def task_wrapper(self, *, agent_id, job_id, task):
         try:
-            logger.debug(f"Starting task for Agent {agent_name} with job {job_id}.")
+            logger.debug(f"Starting task for Agent {agent_id} with job {job_id}.")
             result = await task
             self._tasks_remaining -= 1
 
             if result.error:
-                logger.warning(f"Agent {agent_name} failed job {job_id} with error: {result.error}")
+                logger.warning(
+                    f"Agent {agent_id} failed job {job_id} with error: {result.error}",
+                )
                 self._tasks_failed += 1
             else:
-                logger.debug(f"Agent {agent_name} completed job {job_id} successfully.")
+                logger.debug(f"Agent {agent_id} completed job {job_id} successfully.")
                 self._tasks_completed += 1
 
             return result
 
         except Exception as e:
             raise FatalError(
-                f"Task {agent_name} job: {job_id} failed with error: {e}, {e.args=}",
+                f"Task {agent_id} job: {job_id} failed with error: {e}, {e.args=}",
             )

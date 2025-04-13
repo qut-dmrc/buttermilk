@@ -1,8 +1,9 @@
-import copy
 from abc import ABC, abstractmethod
+from ast import arguments
 from collections.abc import Mapping, Sequence
+from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, AsyncGenerator, Literal, Self
 
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
@@ -15,18 +16,16 @@ from pydantic import (
     model_validator,
 )
 
-from buttermilk._core.config import DataSource, SaveInfo
+from buttermilk._core.agent import ChatCompletionContext
+from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
-from buttermilk._core.flow import FlowVariableRouter
+from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.job import Job
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
 from buttermilk.bm import BM
 
 BASE_DIR = Path(__file__).absolute().parent
-
-
-PLACEHOLDER_VARIABLES = ["participants", "content", "history", "context", "records"]
 
 
 class Orchestrator(BaseModel, ABC):
@@ -43,7 +42,6 @@ class Orchestrator(BaseModel, ABC):
         data (Sequence[DataSource]): Data sources available to the flow
         agents (Mapping[str, AgentVariants]): Agent variants available to run in the flow
         params (dict): Flow-level parameters that can be used by agents
-        history (list[str]): List of messages previously exchanged between agents
 
     """
 
@@ -57,7 +55,7 @@ class Orchestrator(BaseModel, ABC):
         description="Short description of this flow",
     )
     save: SaveInfo | None = Field(default=None)
-    data: Sequence[DataSource] = Field(default_factory=list)
+    data: Sequence[DataSourceConfig] = Field(default_factory=list)
     agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
         description="Agent factories available to run.",
@@ -67,15 +65,11 @@ class Orchestrator(BaseModel, ABC):
         description="Flow-level parameters available for use by agents.",
         exclude=True,
     )
-    _flow_data: FlowVariableRouter = PrivateAttr(default_factory=FlowVariableRouter)
+    history: list = Field(default=[])
+
+    _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
+    _model_context: ChatCompletionContext
     _records: list[Record] = PrivateAttr(default_factory=list)
-    _context: UnboundedChatCompletionContext = PrivateAttr(
-        default_factory=UnboundedChatCompletionContext,
-    )
-    history: list[str] = Field(
-        default_factory=list,
-        description="List of messages previously exchanged between agents.",
-    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -85,30 +79,9 @@ class Orchestrator(BaseModel, ABC):
         exclude_unset=True,
     )
 
-    @field_validator("history", mode="before")
-    @classmethod
-    def _parse_history(cls, value: Sequence[dict[str, str] | str]) -> list[str]:
-        """Converts different history format types to a consistent string format.
-
-        Args:
-            value: A sequence of history items, either dictionaries or strings
-
-        Returns:
-            list[str]: History items in a consistent string format
-
-        """
-        history = []
-        for item in value:
-            if isinstance(item, str):
-                history.append(item)
-            elif isinstance(item, dict):
-                history.append(f"{item['type']}: {item['content']}")
-
-        return history
-
     @field_validator("data", mode="before")
     @classmethod
-    def validate_data(cls, value: Sequence[DataSource | dict]) -> list[DataSource]:
+    def validate_data(cls, value: Sequence[DataSourceConfig | dict]) -> list[DataSourceConfig]:
         """Ensures all data sources are proper DataSource objects.
 
         Args:
@@ -120,8 +93,8 @@ class Orchestrator(BaseModel, ABC):
         """
         _data = []
         for source in value:
-            if not isinstance(source, DataSource):
-                source = DataSource(**source)
+            if not isinstance(source, DataSourceConfig):
+                source = DataSourceConfig(**source)
                 _data.append(source)
         return _data
 
@@ -131,15 +104,38 @@ class Orchestrator(BaseModel, ABC):
         agent_dict = {}
         for step_name, defn in self.agents.items():
             if isinstance(defn, (AgentVariants)):
-                agent_dict[step_name] = defn
+                agent_dict[step_name.lower()] = defn
             else:
-                agent_dict[step_name] = AgentVariants(**defn)
+                agent_dict[step_name.lower()] = AgentVariants(**defn)
 
         self.agents = agent_dict
 
         # initialise the data cache
         self._flow_data.init(self.agents.keys())
+
+        self._model_context = UnboundedChatCompletionContext(initial_messages=self.history)
+
         return self
+
+    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
+        """Determine the next step based on the current flow data.
+
+        This generator yields a series of steps to be executed in sequence,
+        with each step containing the role and prompt information.
+
+        Yields:
+            StepRequest: An object containing:
+                - 'role' (str): The agent role/step name to execute
+                - 'prompt' (str): The prompt text to send to the agent
+                - Additional key-value pairs that might be needed for agent execution
+
+        Example:
+            >>> async for step in self._get_next_step():
+            >>>     await self._execute_step(**step)
+
+        """
+        for step_name in self.agents.keys():
+            yield StepRequest(role=step_name, source=self.flow_name)
 
     @abstractmethod
     async def run(self, request: Any = None) -> None:
@@ -152,14 +148,27 @@ class Orchestrator(BaseModel, ABC):
             request: Optional input data for starting the flow
 
         """
-        self._flow_data = copy.deepcopy(self.data)  # process if needed
-        # add request data
-        # ...
-        for step_name, step in self.agents.items():
-            self._flow_data[step_name] = await step(self._flow_data)
+        # loop
 
         # save the results
         # flow_data ...
+        while True:
+            try:
+                # Get next step in the flow
+                step = await anext(self._get_next_step())
+            except StopAsyncIteration:
+                # No more steps available, terminate the loop
+                break
+            request = await self._prepare_step(step)
+            await self._execute_step(step)
+            # execute step
+
+    @abstractmethod
+    async def _execute_step(
+        self,
+        step: StepRequest,
+    ) -> None:
+        raise NotImplementedError()
 
     async def __call__(self, request=None) -> Job:
         """Makes the orchestrator callable, allowing it to be used as a function.
@@ -186,10 +195,8 @@ class Orchestrator(BaseModel, ABC):
 
         Special keywords include:
             - "participants": list of agents in the flow
-            - "content": list of string, fulltext from all records
-            - "history": list of history messages in string format
-            - "context": list of history messages in message format
-            - "records": list of InputRecords"
+            - "context": list of history messages 
+            - "records": list of InputRecords
             - "prompt": question from the user
 
         Args:
@@ -201,31 +208,19 @@ class Orchestrator(BaseModel, ABC):
         """
         config = self.agents[step.role]
 
-        input_dict = dict(config.inputs)
+        input_map = dict(config.inputs)
 
-        # Overwrite any of the input dict values that are mappings to other data
-        input_dict.update(self._flow_data._resolve_mappings(input_dict))
-
-        # Add any arguments from the step request
-        input_dict.update(step.arguments)
-
-        # Special handling for named placeholder keywords
-        input_dict["content"] = [
-            f"{rec.record_id}: {rec.fulltext}" for rec in self._records
-        ]
-        input_dict["history"] = "\n".join(self.history)
-        input_dict["participants"] = "\n".join([
-            f"- {id}: {step.description}" for id, step in self.agents.items()
-        ])
-        input_dict["prompt"] = step.prompt
+        # Fill inputs based on input map
+        inputs = self._flow_data._resolve_mappings(input_map)
 
         return AgentInput(
             role=step.role,
             source=self.flow_name,
-            content=step.prompt,
-            context=await self._context.get_messages(),
-            inputs=input_dict,
+            inputs=inputs,
+            context=await self._model_context.get_messages(),
             records=self._records,
+            parameters=step.arguments,
+            prompt=step.prompt,
         )
 
 

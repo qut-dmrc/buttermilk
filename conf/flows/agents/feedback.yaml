@@ -1,11 +1,12 @@
 feedback:
-  id: FEEDBACK
+  role: FEEDBACK
   name: "Feedback"
   agent_obj: LLMAgent
   num_runs: 1
   description: Checks for any concerns with the discussion so far.
   variants:
-    template: feedback
     model: ${llms.general}
+  parameters:
+    template: feedback
   inputs:
-    history: history
+    context: context

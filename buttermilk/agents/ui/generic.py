@@ -1,32 +1,42 @@
 import asyncio
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, AsyncGenerator, Callable, Coroutine
 
+from autogen_core import CancellationToken
 from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     AgentInput,
+    AgentOutput,
+    FlowMessage,
     ManagerMessage,
-    ManagerRequest,
+    ManagerRequest,OOBMessages
 )
 
 
 class UIAgent(Agent):
     _input_task: asyncio.Task
     _input_callback: Any = PrivateAttr(...)
-
     _trace_this = False
 
-    async def _request_user_input(
-        self, message: ManagerRequest, **kwargs
-    ) -> str | None:
-        """Get user input from the UI"""
+    async def _process(
+        self,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AgentOutput | None:
+        """Send or receive input from the UI."""
         raise NotImplementedError
 
-    async def handle_control_message(
+    async def _handle_control_message(
         self,
-        message: ManagerMessage | ManagerRequest,
-    ) -> ManagerMessage | ManagerRequest | None:
+        message: OOBMessages,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> OOBMessages | None:
         """Process control messages for agent coordination.
 
         Args:
@@ -39,17 +49,14 @@ class UIAgent(Agent):
         but user interfaces do.
 
         """
-        # Ask the user for confirmation
-        if isinstance(message, (ManagerRequest, AgentInput)):
-            await self._request_user_input(message)
-            return None
-        if isinstance(message, ManagerMessage):
-            # Just output these messages to the UI
-            await self.receive_output(message)
-            return None
-        raise ValueError(f"Unknown message type: {type(message)}")
+        #     # Ask the user for confirmation
+        #     await self.listen(message, **kwargs)
+        #     async for _ in self._process(message):
+        #         pass
+        #     return
+        return None
 
-    async def initialize(self, input_callback, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback
 

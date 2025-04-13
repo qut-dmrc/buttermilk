@@ -36,13 +36,21 @@ save:
 
 flows:
   test:
+    flow_name: test
+    description: Test flow
     source: hate development
-    steps:
-      - name: context_owl
-        description: Spots little things that are easy to miss.
-        agent: LLMAgent
+    save: ${save}
+    agents:
+      - owl:
+        role: OWLS
+        name: "🦉 Owl"
+        description: They will speak up if needed. You don't need to call on them.
+        agent_obj: LLMAgent
+        save:
         num_runs: 1
-        save: ${save}
-        variants:
+        parameters:
           template: owl
-          model: ${llms.general}
+        variants:
+          model: ${llms.cheap}
+        inputs:
+          history: "*[]"

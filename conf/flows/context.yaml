@@ -17,6 +17,6 @@ context:
       save: ${save}
       parameters: 
         template: context
-        model: ${llm}
+        model: ${llm.host}
       outputs:
         context: description

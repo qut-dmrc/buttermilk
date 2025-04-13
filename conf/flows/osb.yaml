@@ -7,27 +7,29 @@ osb:
   source: api development
   steps:
     - name: search
-      _target_: buttermilk.agents.lc.LC
+      _target_: LLMAgent
       num_runs: 1
       concurrency: 20
       save: ${save}
       parameters: 
         template: osb
         formatting: json
+      variants:
         model: ${llm}
-        dataset: osbcasessummary
+      data: osbcasessummary
 
-    - _target_: buttermilk.agents.lc.LC
-      name: synth
+    - name: synth
+      _target_: LLMAgent
       num_runs: 1
       concurrency: 20
       save: ${save}
       parameters:
         template: synthesise
         formatting: json
+      variants:
         model: ${llm}
       inputs:
-        answers: search.outputs
+        answers: search
         
   data:
     - name: cases

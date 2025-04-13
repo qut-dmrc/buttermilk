@@ -14,7 +14,7 @@ from pydantic import (
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-from buttermilk._core.runner_types import Record
+from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
 from buttermilk._core.llms import CHATMODELS
 from buttermilk.runner.flow import Flow
@@ -41,17 +41,14 @@ class FlowRequest(BaseModel):
 
     q: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("q", "query", "question", "prompt"),
     )
     record_id: str | None = None
     record: Record | None = None
     uri: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("uri", "url", "link"),
     )
     data: bytes | None = Field(
         default=None,
-        validation_alias=AliasChoices("data", "text", "body", "content", "video", "image"),
     )
     mime_type: str | None = None
     source: str | Sequence[str] = []

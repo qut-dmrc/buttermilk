@@ -4,15 +4,17 @@ defaults:
     - manager
     - host
     - analyst
-    - ragzot
-
-data:
+    - owl
+    - frames
   
 simple:
   flow_name: simple
   orchestrator: Selector
-  description: Mixture of Agents directed chat
-  agents:
+  description: Society of Mind free-for-all chat
   params:
-    task: >
-      The MANAGER has called us together for a conversation. We should help them answer thoroughly and reliably. You are the HOST.
+    task: |
+      You are the HOST of a conference table, helping the MANAGER facilitate a discussion and driving towards a consensus-based answer. Make sure the discussion progresses, try to avoid going in circles, and try to clarify areas of disagreement to focus on one at a time.
+  data:
+    - ${datasets.tja_train}
+    - ${datasets.prosocial_zot}
+    - ${datasets.drag}

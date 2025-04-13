@@ -1,7 +1,7 @@
 {
   "[python]": {
     // "editor.defaultFormatter": "ms-python.black-formatter",
-    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
@@ -10,9 +10,56 @@
   },
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.defaultInterpreterPath": ".venv/bin/python",
   "python.terminal.activateEnvironment": true,
-  "ruff.interpreter": ["${workspaceFolder}/.venv/bin/python"],
-  "ruff.lint.enable": true,
-  "python.analysis.typeCheckingMode": "standard"
+  "ruff.interpreter": [".venv/bin/python"],
+  "editor.defaultFormatter": "charliermarsh.ruff",
+  "ruff.lineLength": 120,
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.include": [
+    "buttermilk"
+  ],
+  "python.analysis.exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    ".venv"
+  ],
+  "python.analysis.extraPaths": [
+    // ".venv/**/*"
+  ],
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.autoSearchPaths": false,
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.indexing": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.packageIndexDepths": [
+    {
+      "name": "sklearn",
+      "depth": 2
+    },
+    {
+      "name": "matplotlib",
+      "depth": 2
+    },
+    {
+      "name": "scipy",
+      "depth": 2
+    },
+    {
+      "name": "django",
+      "depth": 2
+    },
+    {
+      "name": "flask",
+      "depth": 2
+    },
+    {
+      "name": "fastapi",
+      "depth": 2
+    }
+  ],
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
 }

@@ -1,11 +1,15 @@
 import contextlib
+from io import BytesIO
 from typing import Any
 
+import PIL
+import PIL.Image
 import regex as re
 from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
-from buttermilk._core.runner_types import MediaObj, Record
+from buttermilk._core.image import read_image
+from buttermilk._core.types import MediaObj, Record, is_b64
 from buttermilk.utils.utils import (
     download_limited_async,
     is_filepath,
@@ -37,7 +41,8 @@ async def download_and_convert(
         # Nothing passed in, return None
         return None
     # clean up kwargs to remove defaults
-    kwargs = {k: v for k, v in kwargs.items() if v}
+    metadata = {k: v for k, v in kwargs.items() if v}
+    mime = mime
 
     with contextlib.suppress(Exception):
         obj = obj.decode("utf-8")
@@ -50,7 +55,6 @@ async def download_and_convert(
             token=token,
             max_size=max_size,
         )
-        kwargs["uri"] = uri
 
         # Replace mimetype if default or none was passed in
         if detected_mimetype and (not mime or mime == "application/octet-stream"):
@@ -59,52 +63,30 @@ async def download_and_convert(
             obj = obj.decode("utf-8")
 
     elif filepath or is_filepath(obj):
-        filepath = filepath or obj
-        obj = read_file(filepath)
-        kwargs["uri"] = filepath
-
-    obj_list = []  # List of component media objects
+        uri = filepath or obj
+        obj = read_file(uri)
 
     if html or mime.startswith("text/html"):
         # try to extract text from web page
-        html = html or obj
-        obj_list, retrieved_metadata = extract_main_content(
-            html=html,
+        doc = extract_main_content(
+            html=html or obj,
         )
         # Add additional metadata to the record
-        kwargs.update(retrieved_metadata)
+        content = metadata.pop("plain_text")
+        metadata.update(doc)
+
     elif b64:
-        obj_list = [
-            MediaObj(
-                label=label,
-                base_64=b64,
-                mime=mime,
-            ),
-        ]
+        rec = read_image(data=b64)
+        content = rec.content
     elif text or isinstance(obj, str):
-        text = text or obj
+        content = text or obj
         if not mime or mime == "application/octet-stream":
             mime = "text/plain"
-        obj_list = [
-            MediaObj(
-                label=label,
-                content=text,
-                mime=mime,
-            ),
-        ]
     else:
-        obj_list = [
-            MediaObj(
-                label=label,
-                content=obj,
-                mime=mime,
-            ),
-        ]
+        rec = read_image(data=obj)
+        content = rec.content
 
-    record = Record(
-        data=obj_list,
-        **kwargs,
-    )
+    record = Record(content=content, metadata=metadata, uri=uri, mime=mime)
     return record
 
 
@@ -142,33 +124,25 @@ def get_news_record_from_uri(uri: str) -> Record:
     return record
 
 
-def extract_main_content(html: str, **kwargs) -> tuple[MediaObj, dict]:
+def extract_main_content(html: str, **kwargs) -> dict[str, Any]:
     doc = simple_json_from_html_string(html, use_readability=True)
 
     paragraphs = []
     chunks = []
-    for span in doc.pop("plain_text"):
+    for span in doc.get("plain_text", []):
         if chunk := span.get("text").strip():
             # Text exists, add it to current chunk
             chunks.append(chunk)
         # New paragraph
         elif chunks:
-            para = "\n".join(chunks)
-            paragraphs.append(
-                MediaObj(content=para, label="paragraph", mime="text/plain"),
-            )
+            paragraphs.append(" ".join(chunks))
             chunks = []
     if chunks:
-        para = "\n".join(chunks)
-        paragraphs.append(MediaObj(content=para, label="paragraph", mime="text/plain"))
-        chunks = []
+        paragraphs.append(" ".join(chunks))
 
-    del doc["plain_content"]
-    del doc["content"]
-    doc.update(kwargs)
-    doc = {k: v for k, v in doc.items() if v}
+    doc["paragraphs"] = paragraphs
 
-    return paragraphs, doc
+    return doc
 
 
 def extract_main_content_bs(html: bytes | str) -> str:

@@ -6,19 +6,11 @@ from omegaconf import OmegaConf
 
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk.bm import BM
-from buttermilk.runner.autogen import AutogenOrchestrator
 from buttermilk.runner.chat import Selector
-from buttermilk.runner.simple import Sequencer
+from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.slackbot import register_handlers
 
-orchestrators = [Sequencer, AutogenOrchestrator, Selector]
-
-# Register a resolver that can determine the criteria based on the current flow
-OmegaConf.register_new_resolver(
-    "flow_criteria",
-    lambda flow_name: f"${{{flow_name}.criteria}}",
-)
-
+orchestrators = [AutogenOrchestrator, Selector]
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: OrchestratorProtocol) -> None:
@@ -33,8 +25,11 @@ def main(cfg: OrchestratorProtocol) -> None:
     match objs.ui:
         case "console":
             flow_name = cfg.flow
-            orchestrator_name = objs.flows[flow_name].pop("orchestrator")
-            orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+            orchestrator_name = objs.flows[flow_name].pop("orchestrator", None)
+            if orchestrator_name:
+                orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+            else:
+                orchestrator = AutogenOrchestrator(**objs.flows[flow_name])
             asyncio.run(orchestrator.run())
         case "slackbot":
             bm.logger.info("Slackbot starting...")

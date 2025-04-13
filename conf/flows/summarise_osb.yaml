@@ -7,13 +7,14 @@ summarise_osb:
   source: osb development
   steps:
     - name: summarise
-      _target_: buttermilk.agents.lc.LC
+      _target_: LLMAgent
       num_runs: 2
       concurrency: 20
       save: ${save}
       parameters: 
         template: summarise
         instructions: summarise_osb
+      variants:
         model:
           - gpt4o
           - sonnet
@@ -21,13 +22,6 @@ summarise_osb:
           - llama32_90b
       inputs:
         content: record.all_text
-      outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            instructions: summarise_osb
-            reasons: outputs
 
     - name: synthesise
       _target_: buttermilk.agents.lc.LC
@@ -37,6 +31,7 @@ summarise_osb:
       parameters: 
         template: synthesise
         instructions: summarise_osb
+      variants:
         model:
           - gpt4o
           - sonnet

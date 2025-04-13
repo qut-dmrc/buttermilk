@@ -7,10 +7,5 @@ trans:
   flow_name: trans
   description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues. 
   save: ${save}
-  data: 
-    - name: tja_train
-      type: file
-      path: gs://prosocial-dev/data/tja_train.jsonl
-      index:
-        - record_id
-
+  data:
+    - ${datasets.tja_train}

@@ -19,12 +19,12 @@ class Score(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     measure: str
-    score: float | None = Field(default=None, validation_alias="scores")
+    score: float | None = Field(default=None)
     confidence: float | str | None = None
     severity: float | None = None
     result: bool | None = None
-    labels: list[str] | None = Field(default=[], validation_alias="label")
-    reasons: list[str] = Field(default=[], validation_alias="reason")
+    labels: list[str] | None = Field(default=[])
+    reasons: list[str] = Field(default=[])
 
     @field_validator("labels")
     @classmethod
@@ -38,7 +38,7 @@ class Reasons(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     heading: str
-    reasoning: str = Field(..., validation_alias=AliasChoices("reason", "reasons"))
+    reasoning: str = Field(...)
     confidence: str | None = None
 
 
@@ -55,10 +55,10 @@ class EvalRecord(BaseModel):
     standard: str | None = None  # The standard used for the evaluation
     source: str | None = None
 
-    reasons: list[Reasons] = Field(default=[], validation_alias="reason")
-    prediction: bool | None = Field(default=None, validation_alias="result")
+    reasons: list[Reasons] = Field(default=[])
+    prediction: bool | None = Field(default=None)
     scores: list[Score] = []
-    labels: list[str] = Field(default=[], validation_alias="label")
+    labels: list[str] = Field(default=[])
 
     error: str | None = None
     response: str | None = (
