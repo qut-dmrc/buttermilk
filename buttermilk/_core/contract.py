@@ -114,21 +114,6 @@ class FlowMessage(BaseModel):
         return False
 
 
-class PlaceholderInputs(BaseModel):
-    context: list[LLMMessage] = Field(
-        default=[],
-        description="A list of messages to include in the prompt",
-    )
-    records: list[LLMMessage] = Field(
-        default=[],
-        description="A list of records to include in the prompt",
-    )
-
-    _ensure_error_list = field_validator("context", "records", mode="before")(
-        make_list_validator(),
-    )
-
-
 class AgentInput(FlowMessage):
     """Base class for agent inputs with built-in validation"""
 
@@ -140,10 +125,16 @@ class AgentInput(FlowMessage):
         default={},
         description="Task-specific settings to provide the agent",
     )
-    placeholders: PlaceholderInputs = Field(
-        default=PlaceholderInputs(),
-        description="Placeholders to provide to the agent",
+
+    context: list[LLMMessage] = Field(
+        default=[],
+        description="A list of messages to include in the prompt",
     )
+    records: list[Record] = Field(
+        default=[],
+        description="A list of records to include in the prompt",
+    )
+
     prompt: str = Field(
         default="",
         description="A prompt to include",
@@ -151,7 +142,9 @@ class AgentInput(FlowMessage):
 
     _type = "InputRequest"
 
-
+    _ensure_input_list = field_validator("context", "records", mode="before")(
+        make_list_validator(),
+    )
 class UserInstructions(FlowMessage):
     """Instructions from the user."""
 

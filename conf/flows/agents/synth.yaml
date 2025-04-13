@@ -16,5 +16,5 @@ synthesiser:
       Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
   inputs:
     records: fetch.records
-    answers: "[judge,synth][].reasons"
+    answers: "[judge,synth][]"
     feedback: feedback

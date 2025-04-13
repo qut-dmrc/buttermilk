@@ -27,13 +27,15 @@ You should not refer to the analyst or their response in your answer; just expla
     {% include "json_reasons.jinja2" %}
 {% endif %}
 
+{% if instructions %}
 <BEGIN ORIGINAL INSTRUCTIONS>
 {{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
+{% endif %}
 
 {% if expected %}
 <BEGIN EXPECTED ANSWER>
-{{ expected.ground_truth }}
+{{ expected.reasons }}
 <END EXPECTED ANSWER>
 {% endif %}
 
@@ -43,8 +45,8 @@ You should not refer to the analyst or their response in your answer; just expla
 {% if answers %}
 # User:
   {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.reasons }}
+  <BEGIN DRAFT ANSWER #{{answer.source}}>
+  {{ answer.outputs.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}

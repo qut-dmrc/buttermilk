@@ -20,7 +20,6 @@ from vertexai.language_models import (
     TextEmbeddingInput,
     TextEmbeddingModel,
 )
-
 from buttermilk import logger
 from buttermilk._core.config import DataSouce
 from buttermilk.bm import BM, bm

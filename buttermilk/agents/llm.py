@@ -25,7 +25,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowMessage,
     GroupchatMessageTypes,
-    PlaceholderInputs,
+    LLMMessage,
     ToolOutput,
     UserInstructions,
     TaskProcessingComplete,
@@ -89,7 +89,8 @@ class LLMAgent(Agent):
         self,
         task_params: dict[str, Any],  # Accepts task-specific parameters
         inputs: dict[str, Any],
-        placeholders: PlaceholderInputs,
+        context: list[LLMMessage] = [],
+        records: list[Record] = [],
     ) -> list[Any]:
         """Fill the template with the given inputs and return a list of messages."""
         template = self.parameters.get("template", task_params.get("template", inputs.get("template")))
@@ -108,9 +109,9 @@ class LLMAgent(Agent):
         prompty = _parse_prompty(rendered_template)
 
         # Next we use Prompty's format to divide into messages and set roles
-        messages = make_messages(local_template=prompty, placeholders=placeholders)
+        messages = make_messages(local_template=prompty, context=context, records=records)
 
-        if unfilled_vars := (set(unfilled_vars) - set(placeholders.model_fields)):
+        if unfilled_vars := (set(unfilled_vars) - set(["records", "context"])):
             err = f"Template for agent {self.role} has unfilled parameters: {', '.join(unfilled_vars)}"
             if self.fail_on_unfilled_parameters:
                 raise ProcessingError(err)
@@ -151,7 +152,7 @@ class LLMAgent(Agent):
     ) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
 
-        messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, placeholders=inputs.placeholders)
+        messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
         chat_result = await self._model_client.call_chat(
             messages=messages, tools_list=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
         )

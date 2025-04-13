@@ -23,7 +23,6 @@ from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.job import Job
 from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
-from buttermilk.agents.llm import PlaceholderInputs
 from buttermilk.bm import BM
 
 BASE_DIR = Path(__file__).absolute().parent
@@ -210,14 +209,12 @@ class Orchestrator(BaseModel, ABC):
         # Fill inputs based on input map
         inputs = self._flow_data._resolve_mappings(input_map)
 
-        # add placeholder variables as llm messages
-        placeholders = PlaceholderInputs(records=[r.as_message() for r in self._records], context=await self._model_context.get_messages())
-
         return AgentInput(
             role=step.role,
             source=self.flow_name,
             inputs=inputs,
-            placeholders=placeholders,
+            context=await self._model_context.get_messages(),
+            records=self._records,
             parameters=step.arguments,
             prompt=step.prompt,
         )

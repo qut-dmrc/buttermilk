@@ -270,6 +270,9 @@ class Record(BaseModel):
 
     content: str | Sequence[Union[str, Image]]
 
+    mime: str | None = Field(
+        default="text/plain",
+    )
     def __str__(self) -> str:
         return self.text
 

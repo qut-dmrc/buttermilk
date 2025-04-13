@@ -13,9 +13,10 @@ from pydantic import BaseModel, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.defaults import TEMPLATES_PATH
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.types import Record
 from buttermilk.utils.utils import list_files, list_files_with_content, read_text
 
-from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessage, PlaceholderInputs, SystemMessage, UserMessage
+from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessage, SystemMessage, UserMessage
 
 class KeyValueCollector(BaseModel):
     """A simple collector for key-value pairs
@@ -251,7 +252,9 @@ def load_template(template: str,
     return rendered, set(undefined_vars)
 
 
-def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_missing_placeholders: bool = False) -> list[LLMMessage]:
+def make_messages(
+    local_template: str, context: list[LLMMessage], records: list[Record], fail_on_missing_placeholders: bool = False
+) -> list[LLMMessage]:
     output: list[LLMMessage] = []
     try:
         # Parse messages using Prompty format
@@ -287,10 +290,14 @@ def make_messages(local_template: str, placeholders: PlaceholderInputs, fail_on_
                 output.append(AssistantMessage(content=message["content"], source="template"))
             case "placeholder":
                 # Remove everything except word chars to get the variable name
-                if data := getattr(placeholders, var_name, None):
-                    if not isinstance(data, list):
-                        data = [data]
-                    output.extend(data)
+                if var_name == "context":
+                    # special case for context
+                    output.extend(context)
+                elif var_name == "records":
+                    output.extend([rec.as_message() for rec in records])
+                else:
+                    err = (f"Missing {var_name} in placeholder vars.",)
+                    raise ProcessingError(err)
             case _:
                 err = (
                         f"Missing {var_name} in placeholder vars.",

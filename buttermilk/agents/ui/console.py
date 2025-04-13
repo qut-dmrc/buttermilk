@@ -27,9 +27,8 @@ from buttermilk._core.types import Record
 from buttermilk.agents.ui.generic import UIAgent
 
 from rich.highlighter import JSONHighlighter
-from rich.terminal_theme import MONOKAI
 
-console = Console(theme=MONOKAI, highlighter=JSONHighlighter())
+console = Console(highlighter=JSONHighlighter())
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))

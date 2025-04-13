@@ -83,7 +83,7 @@ async def download_and_convert(
         if not mime or mime == "application/octet-stream":
             mime = "text/plain"
     else:
-        rec = read_image(obj)
+        rec = read_image(data=obj)
         content = rec.content
 
     record = Record(content=content, metadata=metadata, uri=uri, mime=mime)

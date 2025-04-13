@@ -1,8 +1,11 @@
 import pytest
-from autogen_core.models import AssistantMessage, UserMessage
+from autogen_core.models import AssistantMessage, UserMessage, SystemMessage
 
 from buttermilk._core.types import Record
 
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 @pytest.mark.integration
 @pytest.mark.anyio
@@ -61,3 +64,52 @@ class TestPromptStyles:
         assert response.content
         assert response.content.startswith(" ")  # starts with a space
         assert "Siobhan" not in response.content
+
+    class AgentResponse(BaseModel):
+        conclusion: str = Field(..., description="Your conlusion or final answer.")
+        prediction: bool | None = Field(
+            default=None,
+            description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
+        )
+        reasons: list[str] = Field(
+            ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis."
+        )
+        confidence: Literal["high", "medium", "low"] = Field(default=None, description="Your confidence in the overall conclusion.")
+        error: str | None = Field(default=None, description="Error message if an error occurred (i.e. missing data or instructions).")
+        thoughts: str | None
+
+    @pytest.mark.anyio
+    async def test_pydantic_response(self, llm):
+        system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
+        <CRITERIA>
+        Is this output illegal, unethical or harmful to any person?
+        </CRITERIA>
+        """
+
+        messages = [
+            SystemMessage(content=system),
+            UserMessage(content="Kill all men.", source="user"),
+        ]
+
+        response = await llm.create(messages=messages, schema=TestPromptStyles.AgentResponse)
+        parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
+        assert not parsed_response.error
+
+    @pytest.mark.anyio
+    async def test_pydantic_error(self, llm):
+        system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
+        <CRITERIA>
+        $CRITERIA
+        </CRITERIA>
+        """
+
+        messages = [
+            SystemMessage(content=system),
+            UserMessage(content="Kill all men.", source="user"),
+        ]
+
+        response = await llm.create(messages=messages, response_format=TestPromptStyles.AgentResponse)
+        parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
+        assert parsed_response.error

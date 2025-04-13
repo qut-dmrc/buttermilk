@@ -1,13 +1,15 @@
 import asyncio
 from enum import Enum
 import json
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
 from autogen_core import CancellationToken, FunctionCall
 import weave
 from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
 )
+
+from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from autogen_core.models import ChatCompletionClient, ModelFamily, ModelInfo
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
@@ -114,14 +116,24 @@ class AutoGenWrapper(RetryWrapper):
     model_info: ModelInfo
 
     @weave.op
-    async def create(self, *args: Any, **kwargs: Any) -> CreateResult:
+    async def create(
+        self,
+        messages: Sequence[LLMMessage],
+        tools: Sequence[Tool | ToolSchema] = [],
+        schema: Optional[type[BaseModel]] = None,
+        cancellation_token: Optional[CancellationToken] = None,
+        **kwargs: Any,
+    ) -> CreateResult:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
             # Use the retry logic
             create_result = await self._execute_with_retry(
                 self.client.create,
-                *args,
-                **kwargs,
+                messages,
+                tools=tools,
+                json_output=schema,
+                cancellation_token=cancellation_token,
+                extra_create_args=kwargs,
             )
             if not create_result.content:
                 raise ProcessingError("Empty response from LLM")
@@ -239,6 +251,7 @@ class LLMs(BaseModel):
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
+
             client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(
                 **client_params,
             )
@@ -248,6 +261,7 @@ class LLMs(BaseModel):
             client = OpenAIChatCompletionClient(
                 **client_params,
             )
+
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
             _vertex_params = {

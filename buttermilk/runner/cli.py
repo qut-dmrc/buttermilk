@@ -12,13 +12,6 @@ from buttermilk.runner.slackbot import register_handlers
 
 orchestrators = [AutogenOrchestrator, Selector]
 
-# Register a resolver that can determine the criteria based on the current flow
-OmegaConf.register_new_resolver(
-    "flow_criteria",
-    lambda flow_name: f"${{{flow_name}.criteria}}",
-)
-
-
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: OrchestratorProtocol) -> None:
     # Hydra will automatically instantiate the objects

@@ -13,6 +13,5 @@ judge:
     criteria: ${....params.criteria}
   inputs:
     records: fetch.records
+    record_id: fetch.records.record_id
     # criteria: ${flows[${....flow_name}].criteria}
-    # criteria: ${flow_criteria:${oc.select:....flow_name}}
-    # criteria: ${flow_criteria:${oc.select:_global_.current_flow}}

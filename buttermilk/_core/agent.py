@@ -179,8 +179,8 @@ class Agent(AgentConfig):
         inputs.inputs.update(self._data._resolve_mappings(self.inputs))
 
         # add additional placeholders
-        inputs.placeholders.context.extend(await self._model_context.get_messages())
-        inputs.placeholders.records.extend([r.as_message() for r in self._records])
+        inputs.context.extend(await self._model_context.get_messages())
+        inputs.records.extend(self._records)
 
         return inputs
 

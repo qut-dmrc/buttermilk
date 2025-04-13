@@ -79,6 +79,7 @@ class ImageRecord(BaseModel):
 
 
 def read_image(
+    *,
     path=None,
     data=None,
     image_b64=None,
@@ -105,7 +106,7 @@ def read_image(
     # reopen
     img = Image.open(data)
     data.seek(0)  # go to the start of the image again
-    rec = Record(content=img, uri=path)
+    rec = Record(content=[img], uri=path)
 
     return rec
 
