@@ -162,15 +162,12 @@ class Agent(AgentConfig):
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
 
     async def _check_heartbeat(self, timeout=60) -> bool:
-        """Check if the heartbeat queue is empty."""
-        t0 = time.time()
-        while True:
-            try:
-                return self._heartbeat.get_nowait()
-            except asyncio.QueueEmpty:
-                if time.time() - t0 > timeout:
-                    return False
-                await asyncio.sleep(1)
+        """Check if the heartbeat queue is empty using asyncio.wait_for."""
+        try:
+            await asyncio.wait_for(self._heartbeat.get(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Add local agent state to inputs"""
