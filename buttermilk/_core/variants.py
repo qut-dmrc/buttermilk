@@ -148,8 +148,7 @@ class AgentVariants(AgentConfig):
                     agent_config_instance = AgentConfig(**cfg_dict)
                     generated_configs.append((agent_class, agent_config_instance))
                 except Exception as e:
-                    print(f"Error creating AgentConfig for {cfg_dict.get('id', 'unknown')}: {e}")
-                    # Decide whether to raise, log, or skip this config
+                    logger.error(f"Error creating AgentConfig for {cfg_dict.get('id', 'unknown')}: {e}", exc_info=True)
                     raise # Re-raise by default
 
         if len(generated_configs) == 0:
