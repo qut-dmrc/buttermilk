@@ -147,8 +147,8 @@ class AgentConfig(BaseModel):
 class Agent(AgentConfig):
     """Base Agent interface for all processing units.
 
-    Agents are stateful. Context is stored internally by the agent
-    or passed via AgentInput. _reset() clears state.
+    Agents are stateful. Context is stored internally by the agent and merged
+    with data passed via AgentInput. _reset() clears state.
     """
 
     _trace_this = True
@@ -162,7 +162,7 @@ class Agent(AgentConfig):
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
 
     async def _check_heartbeat(self, timeout=60) -> bool:
-        """Check if the heartbeat queue is empty using asyncio.wait_for."""
+        """Check if the heartbeat queue is empty."""
         try:
             await asyncio.wait_for(self._heartbeat.get(), timeout=timeout)
             return True
@@ -191,7 +191,6 @@ class Agent(AgentConfig):
         **kwargs,
     ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         # Agents come in variants, and each variant has a list of tasks that it iterates through.
-        # And are supplemented by placeholders for records and contextual history
         n = 0
         tasks = []
         outputs = []
@@ -233,6 +232,7 @@ class Agent(AgentConfig):
             finally:
                 await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False, is_error=False, source=self.id))
 
+        # Stack previous output steps into the final output for this agent
         output = None
         if outputs:
             outputs.reverse()
@@ -316,40 +316,6 @@ class Agent(AgentConfig):
             message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
         )
         return output
-
-    async def invoke_privately(
-        self,
-        message: ConductorRequest,
-        cancellation_token: Any,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        **kwargs,
-    ) -> FlowMessage | AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        """Respond directly to the orchestrator"""
-        outputs = None
-        response = await self._run_fn(message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs)
-
-        return response
-
-    async def invoke(
-        self,
-        message: AgentInput,
-        cancellation_token: Any,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        **kwargs,
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        """Run the main function."""
-        # Check if we need to exit out before invoking the decorated tracing function self._run_fn
-        if not isinstance(message, self._message_types_handled):
-            logger.debug(f"Agent {self.role} received non-supported message type {type(message)} in _process. Ignoring.")
-            return
-
-        outputs = await self._run_fn(
-            message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
-        )
-        await public_callback(outputs)
-        return outputs
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent (e.g., load resources)."""
