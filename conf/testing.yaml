@@ -53,4 +53,4 @@ flows:
         variants:
           model: ${llms.cheap}
         inputs:
-          history: "*[].outputs"
+          history: "*[]"

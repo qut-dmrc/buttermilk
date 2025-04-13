@@ -1,4 +1,4 @@
-differences:
+differentiator:
   role: DIFFERENTIATOR
   name: "📊 Differentiator"
   agent_obj: LLMAgent
@@ -6,9 +6,9 @@ differences:
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
     model: ${llms.general}
+  tasks:
+    criteria: Evaluate how well the provided content aligns with the rules.
   parameters:
     template: evaluate
-    criteria: |
-      Evaluate how well the provided content aligns with the rules.
   inputs:
-    answers: "[judge,synth][].outputs"
+    answers: "[judge,synth][]"

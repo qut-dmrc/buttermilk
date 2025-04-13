@@ -260,16 +260,25 @@ class Agent(AgentConfig):
         """Save incoming messages for later use."""
         # Look for matching roles in our inputs mapping
         if isinstance(message, (AgentOutput, ConductorResponse)):
-            if message.role in [x.split(".")[0] for x in self.inputs.values() if x and isinstance(x, str)]:
-                # Possible match, let's extract data
-                result_dict = {message.role: dict(message.outputs)}
-                for var_name, field_path in self.inputs.items():
-                    value = jmespath.search(field_path, result_dict)
-                    if value:
-                        if var_name == "records":
-                            self._records.extend(value)
-                        else:
-                            self._data.add(var_name, value)
+            for key, mapping in self.inputs.items():
+                if mapping and isinstance(mapping, str) and mapping.startswith(message.role):
+                    # Possible direct match, let's try to extract data
+                    if key == "records":
+                        # records are stored separately in our memory cache and we know where to find them
+                        # this helps us avoid turning the record into a dict below.
+                        self._records.extend(message.outputs.get("records", []))
+                        continue
+
+                    if mapping == message.role:
+                        # no dot delineated field path
+                        # so add the whole outputs dict
+                        self._data.add(key, message.outputs)
+                        continue
+
+                # otherwise, try to find the value in the outputs dict
+                search_dict = {message.role: message.model_dump().get("outputs", {})}
+                if mapping and (value := jmespath.search(mapping, search_dict)):
+                    self._data.add(key, value)
 
         if isinstance(message, (AgentOutput, ConductorResponse)):
             await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))

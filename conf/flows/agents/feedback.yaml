@@ -9,4 +9,4 @@ feedback:
   parameters:
     template: feedback
   inputs:
-    history: "*[].outputs"
+    context: context

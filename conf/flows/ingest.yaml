@@ -26,6 +26,6 @@ ingest:
     #       - sonnet
     #   inputs:
     #     record: record
-    #     answers: describe.outputs
+    #     answers: describe
     #   outputs:
     #     record: outputs

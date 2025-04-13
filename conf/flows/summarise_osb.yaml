@@ -22,13 +22,6 @@ summarise_osb:
           - llama32_90b
       inputs:
         content: record.all_text
-      outputs:
-        answers:
-          - job_id: job_id
-            flow_id: flow_id
-            model: parameters.model
-            instructions: summarise_osb
-            reasons: outputs
 
     - name: synthesise
       _target_: buttermilk.agents.lc.LC

@@ -9,6 +9,7 @@ from buttermilk._core.contract import (
     AgentOutput,
     AllMessages,
     ConductorRequest,
+    GroupchatMessageTypes,
 )
 from buttermilk.agents.llm import LLMAgent
 
@@ -19,6 +20,32 @@ class LLMScorer(LLMAgent):
     _ground_truth: dict = PrivateAttr(default={})
     _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
     _scores: list[dict[str, Any]] = PrivateAttr(default_factory=list)
+
+    async def _listen(
+        self,
+        message: GroupchatMessageTypes,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> None:
+        if isinstance(message, AgentOutput):
+            # Ignore messages from our own kind
+            if message.role == self.role:
+                return
+
+            # Identify and store results with qualitative reasons fields
+            if "reasons" in message.outputs:
+                logger.debug(f"Scorer tracking result: {message.source}")
+
+                # Score immediately
+                input_data = AgentInput(
+                    source=self.name,
+                    role=self.role,
+                    inputs={"answer": message.outputs, "expected": message.inputs._ground_truth},
+                )
+                async for _ in self._process(input_data):
+                    pass
 
     async def _process(
         self,

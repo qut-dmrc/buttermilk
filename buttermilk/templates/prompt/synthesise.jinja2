@@ -41,7 +41,7 @@ You may be provided with additional feedback to consider. You should incorporate
 # User:
   {% for answer in answers %}
   <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.outputs.reasons }}
+  {{ answer.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}

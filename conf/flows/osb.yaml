@@ -29,7 +29,7 @@ osb:
       variants:
         model: ${llm}
       inputs:
-        answers: search.outputs
+        answers: search
         
   data:
     - name: cases

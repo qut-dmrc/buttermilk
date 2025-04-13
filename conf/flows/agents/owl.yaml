@@ -9,4 +9,4 @@ owl:
   variants:
     model: ${llms.general}
   inputs:
-    history: "*[].outputs"
+    context: context

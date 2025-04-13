@@ -3,7 +3,7 @@ import datetime
 import platform
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Self
+from typing import Self, Sequence, Union
 
 import psutil
 import pydantic
@@ -13,6 +13,7 @@ from pydantic import (
     ConfigDict,
     Field,
 )
+from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 
 import base64
 from collections.abc import Mapping
@@ -267,7 +268,7 @@ class Record(BaseModel):
         default=None,
     )
 
-    content: str | Image
+    content: str | Sequence[Union[str, Image]]
 
     def __str__(self) -> str:
         return self.text
@@ -283,7 +284,7 @@ class Record(BaseModel):
 
         if self.metadata:
             if self.title:
-                parts.append("## {self.title}")
+                parts.append(f"## {self.title}")
             for k, v in self.metadata.items():
                 parts.append(f"**{k}**: {v}")
             parts.append("")  # Separator
@@ -337,3 +338,7 @@ class Record(BaseModel):
     @property
     def title(self) -> str | None:
         return self.metadata.get("title")
+
+    def as_message(self) -> UserMessage:
+        msg = UserMessage(content=self.content, source=self.record_id)
+        return msg

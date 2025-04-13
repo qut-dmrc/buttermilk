@@ -87,7 +87,7 @@ class FetchRecord(Agent, ToolConfig):
             output = AgentOutput(
                 source=self.id,
                 role=self.role,
-                content=record._fulltext,
+                content=record.text,
                 outputs={"records": [record]},
             )
             await public_callback(output)
@@ -109,7 +109,7 @@ class FetchRecord(Agent, ToolConfig):
                     role=self.role,
                     name=self.id,
                     results=[record],
-                    content=record._fulltext,
+                    content=record.text,
                     messages=[record.as_message()],
                     args=dict(record_id=record_id),
                     send_to_ui=True,
@@ -120,7 +120,7 @@ class FetchRecord(Agent, ToolConfig):
                 role=self.role,
                 name=self.id,
                 results=[record],
-                content=record._fulltext,
+                content=record.text,
                 messages=[record.as_message()],
                 args=dict(uri=uri),
                 send_to_ui=True,

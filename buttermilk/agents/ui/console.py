@@ -23,20 +23,32 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     UserInstructions,
 )
+from buttermilk._core.types import Record
 from buttermilk.agents.ui.generic import UIAgent
 
+from rich.highlighter import JSONHighlighter
+from rich.terminal_theme import MONOKAI
+
+console = Console(theme=MONOKAI, highlighter=JSONHighlighter())
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
 
-    def _fmt_msg(self, message: FlowMessage) -> Markdown:
+    def _fmt_msg(self, message: FlowMessage) -> Markdown | None:
         """Format a message for display in the console."""
-        output = []
+        output = [f"## {message.source} ({message.role})"]
         try:
-            output.append(f"## {message.source} ({message.role})")
             if isinstance(message, (AgentOutput, ConductorResponse)):
+                # Is it a Record object?
+                if records := message.outputs.get("records"):
+                    for rec in records:
+                        if isinstance(rec, Record):
+                            output.append(f"### Record: {rec.record_id}")
+                            output.append(rec.text)
+                            return Markdown("\n".join(output))
                 if message.inputs and message.inputs.parameters:
-                    output.append("### Parameters: " + pretty_repr(message.inputs.parameters, max_string=400))
+                    output.append("### Parameters: ")
+                    output.append(pretty_repr(message.inputs.parameters, max_string=400))
                 if message.outputs:
                     if reasons := message.outputs.get("reasons"):
                         output.append("### Reasons:")
@@ -53,10 +65,12 @@ class CLIUserAgent(UIAgent):
             else:
                 output.append(message.content)
             output = [o for o in output if o]
-            return Markdown("\n".join(output))
+            if len(output) > 1:
+                return Markdown("\n".join(output))
         except Exception as e:
             logger.error(f"Unable to format message of type {type(message)}: {e}")
             return message.model_dump_json(indent=2)
+        return None
 
     async def _listen(
         self,
@@ -65,19 +79,19 @@ class CLIUserAgent(UIAgent):
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
-    ) -> GroupchatMessageTypes | None:
+    ) -> None:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
-
-        self._console.print(self._fmt_msg(message))
+        if msg := self._fmt_msg(message):
+            self._console.print(msg)
+        return None
 
     async def _handle_control_message(
         self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable = None, **kwargs
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-        out = self._fmt_msg(message)
-        if out:
+        if out := self._fmt_msg(message):
             self._console.print(out)
 
         if isinstance(message, ManagerRequest):

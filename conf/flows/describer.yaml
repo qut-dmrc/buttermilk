@@ -25,6 +25,6 @@ describer:
     #       - gemini15pro
     #       - sonnet
     #   inputs:
-    #     answers: describe.outputs
+    #     answers: describe
     #   outputs:
     #     record: outputs
