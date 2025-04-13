@@ -153,8 +153,12 @@ class Orchestrator(BaseModel, ABC):
         # save the results
         # flow_data ...
         while True:
-            # Get next step in the flow
-            step = await anext(self._get_next_step())
+            try:
+                # Get next step in the flow
+                step = await anext(self._get_next_step())
+            except StopAsyncIteration:
+                # No more steps available, terminate the loop
+                break
             request = await self._prepare_step(step)
             await self._execute_step(step)
             # execute step
