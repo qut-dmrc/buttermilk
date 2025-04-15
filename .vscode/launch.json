@@ -54,7 +54,9 @@
         "+flows=[trans]",
         "+flow=trans",
         "ui=console",
-        "llms=lite"
+        "llms=lite",
+        "++name=automod",
+        "++job=debugging"
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -73,6 +75,8 @@
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
         "llms=full",
+        "++name=automod",
+        "++job=development"
       ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

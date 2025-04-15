@@ -12,6 +12,7 @@ from pydantic import (
     computed_field,
     field_validator,
 )
+import shortuuid
 
 
 from .config import DataSourceConfig, SaveInfo
@@ -49,18 +50,16 @@ class StepRequest(BaseModel):
         description (str): Optional description of the step's purpose
         tool (str): A tool request to make
         arguments (dict): Additional key-value pairs needed for step execution
-        source (str): Caller name
 
     """
 
-    source: str = Field()
     role: str
     prompt: str | None = Field(default=None)
     description: str | None = Field(default=None)
     tool: str | None = Field(default=None)
     arguments: dict[str, Any] = Field(default={})
 
-    @field_validator("source", "role")
+    @field_validator("role")
     @classmethod
     def lowercase_fields(cls, v: str) -> str:
         """Ensure source and role are lowercase."""
@@ -75,6 +74,7 @@ class FlowEvent(BaseModel):
     source: str
     role: str
     content: str
+
 class ErrorEvent(FlowEvent):
     """Communicate errors to host and UI."""
 
@@ -86,10 +86,6 @@ class FlowMessage(BaseModel):
 
     _type = "FlowMessage"
 
-    source: str = Field(
-        ...,
-        description="The ID of the agent that generated this output.",
-    )
     role: str = Field(
         ...,
         description="The role of the agent that generated this output.",
@@ -162,33 +158,37 @@ class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
     _type = "Agent"
-
+    call_id: str = Field(
+        default_factory=lambda: shortuuid.uuid()[:8],
+        description="A unique ID for this response.",
+    )
     inputs: AgentInput | None = Field(default=None)
-
+    params: dict[str, Any] = Field(
+        default={},
+        description="Invocation settings provided to the agent",
+    )
     content: str | None = Field(
         default=None,
         description="The human-readable digest representation of the message.",
     )
-    outputs: dict[str, Any] = Field(
+    outputs: type[BaseModel] | dict[str, Any] = Field(
         default={},
         description="The data returned from the agent",
     )
-
-    error: list[str] = Field(
-        default_factory=list,
-        description="A list of errors that occurred during the agent's execution",
+    records: list[Record] = Field(
+        default=[],
+        description="A list of records to include in the prompt",
     )
     internal_messages: list[FlowMessage] = Field(
         default_factory=list,
         description="Messages generated along the way to the final response",
     )
-    metadata: dict[str, Any] = Field(default={})
 
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),
     )
 
-    _ensure_record_context_list = field_validator("internal_messages", mode="before")(
+    _ensure_record_context_list = field_validator("internal_messages", "records", mode="before")(
         make_list_validator(),
     )
 
@@ -233,7 +233,7 @@ class ConductorResponse(ManagerMessage, AgentOutput):
 
 class ManagerRequest(ManagerMessage, StepRequest):
     """Request for input from the user"""
-   
+
     _type = "RequestForManagerInput"
     options: bool | list[str] | None = Field(
         default=None,
@@ -243,6 +243,7 @@ class ManagerRequest(ManagerMessage, StepRequest):
         default=None,
         description="Response from user: confirm y/n",
     )
+    halt: bool = Field(default=False, description="Whether to stop the flow")
 
 
 class ManagerResponse(ManagerRequest):
@@ -260,7 +261,6 @@ class ToolOutput(FunctionExecutionResult):
     args: list[str] | list[dict[str,Any]] | dict[str, Any] = Field(default_factory=dict)
 
     content: str
-    source: str = "unknown"
     call_id: str = "unknown"
     is_error: bool |None = False
 
@@ -274,7 +274,6 @@ class TaskProcessingComplete(BaseModel):
     role: str = Field(..., description="ID of the agent sending the notification")
     task_index: int = Field(..., description="Index of the task that was just completed")
     more_tasks_remain: bool = Field(..., description="True if the agent has more sequential tasks to process for the current input")
-    source: str = Field()
     is_error: bool = Field(default=False, description="True if the task resulted in an error")
 
 class ProceedToNextTaskSignal(BaseModel):

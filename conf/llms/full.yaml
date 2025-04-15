@@ -3,10 +3,11 @@ host: gemini25pro
 general:
   - gemini25pro
   - gpt4o
-  - llama33_70b
+  - gemini2flash
 
 judgers:
   - gemini2flash
+  - gemini2flashlite
   - sonnet
   - o3-mini-high
   - gemini25pro
@@ -14,6 +15,6 @@ judgers:
 
 synthesisers:
   - gemini25pro
+  - gemini2flash
   - gpt4o
   - sonnet
-  - llama33_70b

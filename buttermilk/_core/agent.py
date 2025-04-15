@@ -198,15 +198,16 @@ class Agent(AgentConfig):
             task_inputs = message.model_copy(deep=True)
             task_inputs.parameters = dict(task_params)
             task_inputs.parameters.update(self.parameters)
+
             task_inputs = await self._add_state_to_input(task_inputs)
 
-            _traced = weave.op(
-                self._process,
-                call_display_name=f"{self.name} {self.id}",
-            )
-
-            t = asyncio.create_task(_traced(inputs=task_inputs, cancellation_token=cancellation_token))
-            tasks.append(t)
+            with weave.attributes(dict(task_inputs.parameters)):
+                _traced = weave.op(
+                    self._process,
+                    call_display_name=f"{self.name} {self.id}",
+                )
+                t = asyncio.create_task(_traced(inputs=task_inputs, cancellation_token=cancellation_token))
+                tasks.append(t)
 
         for t in asyncio.as_completed(tasks):
             n += 1
@@ -214,14 +215,10 @@ class Agent(AgentConfig):
                 result = await t
                 if result:
                     outputs.append(result)
-                    await public_callback(
-                        TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=True, is_error=result.is_error, source=self.id)
-                    )
             except ProcessingError as e:
                 logger.error(
                     f"Agent {self.role} {self.name} hit processing error: {e} {e.args=}.",
                 )
-                await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=True, is_error=True, source=self.id))
                 continue
             except FatalError as e:
                 logger.error(f"Agent {self.role} {self.name} hit fatal error: {e}", exc_info=True)
@@ -229,8 +226,6 @@ class Agent(AgentConfig):
             except Exception as e:
                 logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
                 raise e
-            finally:
-                await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False, is_error=False, source=self.id))
 
         # Stack previous output steps into the final output for this agent
         output = None
@@ -252,6 +247,7 @@ class Agent(AgentConfig):
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
         message_callback: Callable = None,
+        source: str = "unknown",
         **kwargs,
     ) -> None:
         """Save incoming messages for later use."""
@@ -263,25 +259,27 @@ class Agent(AgentConfig):
                     if key == "records":
                         # records are stored separately in our memory cache and we know where to find them
                         # this helps us avoid turning the record into a dict below.
-                        self._records.extend(message.outputs.get("records", []))
-                        continue
+                        if message.records:
+                            self._records.extend(message.records)
+                            continue
 
                     if mapping == message.role:
                         # no dot delineated field path
-                        # so add the whole outputs dict
-                        self._data.add(key, message.outputs)
+                        # so add the whole object
+                        self._data.add(key, message.model_dump())
                         continue
 
                 # otherwise, try to find the value in the outputs dict
-                search_dict = {message.role: message.model_dump().get("outputs", {})}
+                search_dict = {message.role: message.model_dump()}
                 if mapping and (value := jmespath.search(mapping, search_dict)):
                     self._data.add(key, value)
 
         if isinstance(message, (AgentOutput, ConductorResponse)):
-            await self._model_context.add_message(AssistantMessage(content=str(message.content), source=message.source))
+            if message.content:
+                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=source))
         elif isinstance(message, (ToolOutput, UserInstructions)):
             if not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content), source=message.source))
+                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
         else:
             # don't log other types of messages
             pass

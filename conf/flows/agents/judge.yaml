@@ -13,5 +13,4 @@ judge:
     criteria: ${....params.criteria}
   inputs:
     records: fetch.records
-    record_id: fetch.records.record_id
     # criteria: ${flows[${....flow_name}].criteria}

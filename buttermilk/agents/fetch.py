@@ -84,12 +84,7 @@ class FetchRecord(Agent, ToolConfig):
             record = await self._get_record_dataset(record_id=record_id)
 
         if record:
-            output = AgentOutput(
-                source=self.id,
-                role=self.role,
-                content=record.text,
-                outputs={"records": [record]},
-            )
+            output = AgentOutput(role=self.role, content=record.text, records=[record])
             await public_callback(output)
 
         return

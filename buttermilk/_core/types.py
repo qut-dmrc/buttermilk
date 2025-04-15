@@ -305,7 +305,7 @@ class Record(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["title"],
+        exclude=["title", "text"],
         positional_args=True,
     )  # type: ignore
 
@@ -342,6 +342,7 @@ class Record(BaseModel):
     def title(self) -> str | None:
         return self.metadata.get("title")
 
-    def as_message(self) -> UserMessage:
-        msg = UserMessage(content=self.content, source=self.record_id)
-        return msg
+    def as_message(self, role: Literal["user", "assistant"] = "user") -> UserMessage | AssistantMessage:
+        if role == "assistant":
+            return AssistantMessage(content=self.content, source=self.record_id)
+        return UserMessage(content=self.content, source=self.record_id)

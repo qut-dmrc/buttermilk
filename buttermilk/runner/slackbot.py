@@ -12,7 +12,7 @@ from slack_bolt.async_app import AsyncApp
 
 from buttermilk._core.contract import MANAGER, AssistantMessage, FlowProtocol, UserMessage
 from buttermilk._core.variants import AgentRegistry
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
@@ -27,6 +27,7 @@ RESUME = "resume"
 
 ALLPATTERNS = re.compile(r"mod(.*)")
 
+bm = BM()
 
 def initialize_slack_bot(
     *,
@@ -162,12 +163,18 @@ async def register_handlers(
             )
             t = asyncio.create_task(
                 start_flow_thread(
+                    bm=bm,
                     context=context,
                     slack_app=slack_app,
                     flow_cfg=flows[flow_id],
                     orchestrator_tasks=orchestrator_tasks,
                     init_text=init_text,
                 ),
+            )
+            await say.client.reactions_remove(
+                channel=say.channel,
+                name="eyes",
+                timestamp=body["event"]["ts"],
             )
         except Exception as e:
             logger.exception(
@@ -229,6 +236,7 @@ async def read_thread_history(
 
 
 async def start_flow_thread(
+    bm: BM,
     context: SlackContext,
     slack_app: AsyncApp,
     flow_cfg: FlowProtocol,
@@ -290,7 +298,8 @@ async def start_flow_thread(
                 "history_length": len(history),
             },
         )
-        thread_orchestrator = globals()[orchestrator_name](**_config, history=history)
+        thread_orchestrator = globals()[orchestrator_name](bm=bm, **_config, history=history)
+
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)
         logger.debug(

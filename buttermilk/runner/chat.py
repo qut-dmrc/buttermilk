@@ -76,7 +76,6 @@ class Selector(AutogenOrchestrator):
 
         yield StepRequest(
             role=next_step,
-            source=self.flow_name,
             prompt=instructions.outputs.pop("prompt", ""),
             description=instructions.outputs.pop("plan", ""),
             tool=instructions.outputs.get("tool", None),
@@ -95,10 +94,10 @@ class Selector(AutogenOrchestrator):
             # Add confirmation signal to queue
             if isinstance(message, ManagerResponse):
                 try:
-                    self._user_confirmation.put_nowait(message.confirm)
+                    self._user_confirmation.put_nowait(message)
                 except asyncio.QueueFull:
                     logger.debug(
-                        f"User confirmation queue is full. Discarding confirmation: {message.confirm}",
+                        f"User confirmation queue is full. Discarding confirmation: {message}",
                     )
             # Ignore other messages right now.
 
@@ -166,49 +165,40 @@ class Selector(AutogenOrchestrator):
             unknown_type_policy="ignore",  # only react to appropriate messages
         )
 
-    async def _wait_for_human(self, timeout=60) -> bool:
+    async def _wait_for_human(self, timeout=240) -> bool:
         """Wait for human confirmation"""
         t0 = time.time()
         while True:
             try:
-                if self._user_confirmation.get_nowait():
-                    return True
-                else:
-                    return False
+                msg = self._user_confirmation.get_nowait()
+                if msg.halt:
+                    raise StopAsyncIteration("User requested halt.")
+                return msg.confirm
             except asyncio.QueueEmpty:
                 if time.time() - t0 > timeout:
                     return False
                 await asyncio.sleep(1)
 
-    async def run(self, request: Any = None) -> None:
+    async def _run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow"""
         try:
             # Setup autogen runtime environment
             await self._setup_runtime()
             await self._register_human_in_the_loop()
 
-            # start the agents
-            await self._runtime.publish_message(
-                FlowMessage(source=self.flow_name, role="orchestrator"),
-                topic_id=self._topic,
-            )
-            await asyncio.sleep(1)
-
             # First, introduce ourselves, and prompt the user for input
-            await self._send_ui_message(
-                ManagerRequest(
-                    source=self.flow_name,
-                    role="orchestrator",
-                    content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
-                ),
+            msg = ManagerMessage(
+                role="orchestrator",
+                content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
             )
+            await self._runtime.publish_message(msg, topic_id=self._topic)
 
+            await asyncio.sleep(1)
             while True:
                 try:
 
                     await self._send_ui_message(
                         ManagerRequest(
-                            source=self.flow_name,
                             role="orchestrator",
                             content=f"Shall I go ahead and determine the next step?",
                         ),
@@ -222,7 +212,6 @@ class Selector(AutogenOrchestrator):
 
                     # For now, ALWAYS get confirmation from the user (MANAGER) role
                     confirm_step = ManagerRequest(
-                        source=self.flow_name,
                         role="orchestrator",
                         content="Here's my proposed next step. Do you want to proceed?\n`" + str(step.description) + "`",
                         arguments=step.arguments,

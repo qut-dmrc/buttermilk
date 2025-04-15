@@ -92,7 +92,6 @@ class TestFetch:
         agent_input = AgentInput(
             role="test_agent",
             inputs={"step": "testing", "prompt": "Check out https://example.com"},
-            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -125,7 +124,6 @@ class TestFetch:
         agent_input = AgentInput(
             role="test_agent",
             inputs={"prompt": "Get `#record123`", "step": "testing"},
-            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -162,7 +160,6 @@ class TestFetch:
         agent_input = AgentInput(
             role="test_agent",
             inputs={"prompt": "Just a regular message", "step": "testing"},
-            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = None  # No URL
@@ -191,7 +188,6 @@ class TestFetch:
             inputs=dict(
                 content="Check out https://example.com",
             ),
-            source="test",
         )
         ctx = MagicMock()
         mock_extract_url.return_value = "https://example.com"
@@ -236,25 +232,22 @@ messages = [
         AgentInput(
             role="test_agent",
             inputs={"step": "testing", "content": "Just a regular message"},
-            source="test",
         ),
     ),
     (
         "error",
         AgentInput(
             role="test_agent",
-            content="Check out https://example.com",
+            prompt="Check out https://example.com",
             inputs={},
-            source="test",
         ),
     ),
     (
         "missing",
         AgentInput(
             role="test_agent",
-            content="Get `#record123`",
+            prompt="Get `#record123`",
             inputs={"step": "testing"},
-            source="test",
         ),
     ),
 ]

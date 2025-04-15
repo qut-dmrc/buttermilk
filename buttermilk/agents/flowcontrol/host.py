@@ -49,3 +49,4 @@ class HostAgent(LLMAgent):
 
         else:
             logger.debug(f"Host received unhandled OOB message type: {type(message)}")
+        return

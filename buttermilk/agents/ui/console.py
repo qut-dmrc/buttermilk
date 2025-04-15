@@ -24,6 +24,7 @@ from buttermilk._core.contract import (
     UserInstructions,
 )
 from buttermilk._core.types import Record
+from buttermilk.agents.evaluators.scorer import QualScore
 from buttermilk.agents.ui.generic import UIAgent
 
 from rich.highlighter import JSONHighlighter
@@ -33,14 +34,22 @@ class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
 
-    def _fmt_msg(self, message: FlowMessage) -> Markdown | None:
+    def _fmt_msg(self, message: FlowMessage, source: str) -> Markdown | None:
         """Format a message for display in the console."""
-        output = [f"## {message.source} ({message.role})"]
+        output = [f"## {source} "]
         try:
             if isinstance(message, (AgentOutput, ConductorResponse)):
-                # Is it a Record object?
-                if records := message.outputs.get("records"):
-                    for rec in records:
+                # add call_id if we can
+                if call_id := getattr(message.outputs, "call_id", None):
+                    output[0] = output[0] + f" (#{call_id})"
+                # Is there a score object?
+                if isinstance(message.outputs, QualScore):
+                    output.append(str(message.outputs))
+                    return Markdown("\n".join(output))
+
+                # Is there a Record object?
+                if message.records:
+                    for rec in message.records:
                         if isinstance(rec, Record):
                             output.append(f"### Record: {rec.record_id}")
                             output.append(rec.text)
@@ -48,6 +57,7 @@ class CLIUserAgent(UIAgent):
                 if message.inputs and message.inputs.parameters:
                     output.append("### Parameters: ")
                     output.append(pretty_repr(message.inputs.parameters, max_string=400))
+
                 if message.outputs:
                     if reasons := message.outputs.get("reasons"):
                         output.append("### Reasons:")
@@ -77,20 +87,26 @@ class CLIUserAgent(UIAgent):
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
         message_callback: Callable = None,
+        source: str = "unknown",
         **kwargs,
     ) -> None:
         """Send output to the user interface."""
         if isinstance(message, UserInstructions):
             return
-        if msg := self._fmt_msg(message):
+        if msg := self._fmt_msg(message, source=source):
             self._console.print(msg)
-        return None
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable = None, **kwargs
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        source: str = "unknown",
+        **kwargs,
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-        if out := self._fmt_msg(message):
+        if out := self._fmt_msg(message, source=source):
             self._console.print(out)
 
         if isinstance(message, ManagerRequest):
@@ -112,7 +128,6 @@ class CLIUserAgent(UIAgent):
                     # confirm negative
                     await self._input_callback(
                         ManagerResponse(
-                            source=self.name,
                             role=self.role,
                             confirm=False,
                         ),
@@ -122,13 +137,12 @@ class CLIUserAgent(UIAgent):
                     # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
-                            source=self.name,
                             role=self.role,
                             confirm=True,
                         ),
                     )
                 else:
-                    await self._input_callback(UserInstructions(source=self.id, role=self.role, content=user_input))
+                    await self._input_callback(UserInstructions(role=self.role, content=user_input))
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:

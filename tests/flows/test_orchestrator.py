@@ -73,15 +73,13 @@ async def test_prepare_step_message(simple_orchestrator):
     step = StepRequest(
         role="step1",
         prompt="Test prompt",
-        source="test_source",
         arguments={"extra_input": "extra_value"},
     )
     message = await simple_orchestrator._prepare_step(step)
 
     assert isinstance(message, AgentInput)
     assert message.role == "test_flow"
-    assert message.source == "test_source"
-    assert message.content == "Test prompt"
+    assert message.prompt == "Test prompt"
     assert "key1" in message.inputs
     assert message.inputs["key1"] == "value1"
     assert "extra_input" in message.inputs

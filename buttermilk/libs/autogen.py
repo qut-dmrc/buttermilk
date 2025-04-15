@@ -104,6 +104,7 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
 
     @message_handler
@@ -145,6 +146,7 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
         return output  # only the last matching message
 
@@ -161,6 +163,7 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
         return response  # only the last message
 

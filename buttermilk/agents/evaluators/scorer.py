@@ -1,7 +1,7 @@
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from autogen_core import CancellationToken
-from pydantic import PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import (
@@ -14,12 +14,37 @@ from buttermilk._core.contract import (
 from buttermilk.agents.llm import LLMAgent
 
 
+class QualScoreCRA(BaseModel):
+    """A single criterion-referenced asssessment."""
+
+    criterion: str = Field(..., description="The short name of the criterion being assessed.")
+    correct: bool = Field(..., description="Does the content meet the criterion?")
+    feedback: str = Field(..., description="One sentence explanation of your assessment.")
+
+
+class QualScore(BaseModel):
+    """Qualitative score of an LLM result against provided ground truth."""
+
+    assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
+
+    @computed_field
+    @property
+    def score(self) -> float | None:
+        """The overall score of the assessment (not weighted by default!)"""
+        return sum([cra.correct for cra in self.assessments]) / len(self.assessments)
+
+    def __str__(self) -> str:
+        """Markdown representation of the score"""
+        return f"**Score**: {self.score}\n\n" + "\n".join([f"**{cra.criterion}**: {cra.feedback}" for cra in self.assessments])
+
+
 class LLMScorer(LLMAgent):
     """Qualitatively scores an LLM result against provided ground truth."""
 
     _ground_truth: dict = PrivateAttr(default={})
     _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
     _scores: list[dict[str, Any]] = PrivateAttr(default_factory=list)
+    _output_model: Optional[type[BaseModel]] = QualScore
 
     async def _listen(
         self,
@@ -27,6 +52,7 @@ class LLMScorer(LLMAgent):
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
         message_callback: Callable = None,
+        source: str = "unknown",
         **kwargs,
     ) -> None:
         if isinstance(message, AgentOutput):
@@ -36,13 +62,11 @@ class LLMScorer(LLMAgent):
 
             # Identify and store results with qualitative reasons fields
             if "reasons" in message.outputs and message.inputs and message.inputs.records:
-                logger.debug(f"Scorer tracking result: {message.source}")
                 # Score immediately
                 input_data = AgentInput(
-                    source=self.name,
                     role=self.role,
-                    inputs={"answer": message.outputs, "expected": message.inputs.records[-1].ground_truth},
-                    records=message.inputs.records,
+                    inputs={"answers": [message], "expected": message.inputs.records[-1].ground_truth},
+                    records=message.inputs.records[-1:],
                 )
                 response = await self._run_fn(
                     message=input_data,

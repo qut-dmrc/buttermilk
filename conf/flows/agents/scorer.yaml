@@ -8,9 +8,8 @@ scorer:
     model: ${llms.general}
   parameters:
     template: score
-    criteria: |
-      Evaluate how well the provided content aligns with the rules.
   inputs:
+    criteria: Evaluate how well the provided content aligns with the rules.
     records: fetch.records
     expected: "fetch.records[].ground_truth"
     answers: "[judge,synth][]"

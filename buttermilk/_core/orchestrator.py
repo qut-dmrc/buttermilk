@@ -4,7 +4,6 @@ from collections.abc import Mapping, Sequence
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal, Self
-
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
 from pydantic import (
@@ -15,6 +14,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+import weave
 
 from buttermilk._core.agent import ChatCompletionContext
 from buttermilk._core.config import DataSourceConfig, SaveInfo
@@ -23,7 +23,7 @@ from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.job import Job
 from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
-from buttermilk.bm import BM
+from buttermilk.bm import BM, logger
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -44,9 +44,9 @@ class Orchestrator(BaseModel, ABC):
         params (dict): Flow-level parameters that can be used by agents
 
     """
-
+    bm: BM = Field(...)
     session_id: str = Field(
-        default_factory=shortuuid.uuid,
+        default_factory=lambda: shortuuid.uuid()[:8],
         description="A unique session id for this set of flow runs.",
     )
     flow_name: str
@@ -135,10 +135,24 @@ class Orchestrator(BaseModel, ABC):
 
         """
         for step_name in self.agents.keys():
-            yield StepRequest(role=step_name, source=self.flow_name)
+            yield StepRequest(role=step_name)
+
+    async def run(self, request: Any = None) -> None:
+        """Starts a flow, given an incoming request."""
+
+        client = self.bm.weave
+
+        _traced = weave.op(
+            self._run,
+            call_display_name=f"{self.flow_name} {self.session_id}",
+        )
+        output, call = await _traced.call(request=request)
+        client.finish_call(call)
+        logger.info(f"Finished...")
+        return
 
     @abstractmethod
-    async def run(self, request: Any = None) -> None:
+    async def _run(self, request: Any = None) -> None:
         """Starts a flow, given an incoming request.
 
         This is the main entry point for flow execution that must be implemented
@@ -170,7 +184,7 @@ class Orchestrator(BaseModel, ABC):
     ) -> None:
         raise NotImplementedError()
 
-    async def __call__(self, request=None) -> Job:
+    async def __call__(self, request=None) -> None:
         """Makes the orchestrator callable, allowing it to be used as a function.
 
         Args:
@@ -180,7 +194,8 @@ class Orchestrator(BaseModel, ABC):
             Job: A job representing the flow execution
 
         """
-        return await self.run(request=request)
+        await self.run(request=request)
+        return
 
     async def _prepare_step(
         self,
@@ -215,7 +230,6 @@ class Orchestrator(BaseModel, ABC):
 
         return AgentInput(
             role=step.role,
-            source=self.flow_name,
             inputs=inputs,
             context=await self._model_context.get_messages(),
             records=self._records,

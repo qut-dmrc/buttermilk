@@ -14,6 +14,7 @@ from autogen_core import (
     TypeSubscription,
 )
 from pydantic import Field, PrivateAttr
+import weave
 
 from buttermilk._core.contract import (
     CLOSURE,
@@ -59,7 +60,7 @@ class AutogenOrchestrator(Orchestrator):
         self._user_confirmation = asyncio.Queue(maxsize=1)
         return self
 
-    async def run(self, request: Any = None) -> None:
+    async def _run(self, request: Any = None) -> None:
         """Main execution method that sets up agents and manages the flow.
 
         By default, this just sends an initial message to spawn the agents
@@ -71,7 +72,7 @@ class AutogenOrchestrator(Orchestrator):
 
             # start the agents
             await self._runtime.publish_message(
-                FlowMessage(source=self.flow_name, role="orchestrator"),
+                FlowMessage(role="orchestrator"),
                 topic_id=self._topic,
             )
             if request:
@@ -160,6 +161,7 @@ class AutogenOrchestrator(Orchestrator):
         topic_id = DefaultTopicId(type=MANAGER)
         await self._runtime.publish_message(message, topic_id=topic_id)
 
+    @weave.op
     async def _execute_step(
         self,
         step: StepRequest,
