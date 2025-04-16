@@ -239,9 +239,9 @@ async def start_flow_thread(
     init_text: str,
 ) -> None:
     logger.info(
-        f"Starting flow {flow_cfg.flow_name} in Slack thread {context.thread_ts}...",
+        f"Starting flow {flow_cfg.name} in Slack thread {context.thread_ts}...",
         extra={
-            "flow_name": flow_cfg.flow_name,
+            "name": flow_cfg.name,
             "channel_id": context.channel_id,
             "thread_ts": context.thread_ts,
             "user_id": context.user_id,
@@ -289,7 +289,7 @@ async def start_flow_thread(
             f"Creating {orchestrator_name} orchestrator",
             extra={
                 "orchestrator": orchestrator_name,
-                "flow_name": _config.get("flow_name", "unknown"),
+                "name": _config.get("name", "unknown"),
                 "history_length": len(history),
             },
         )
@@ -300,7 +300,7 @@ async def start_flow_thread(
         logger.debug(
             "Flow task created and queued",
             extra={
-                "flow_name": _config.get("flow_name", "unknown"),
+                "name": _config.get("name", "unknown"),
                 "thread_ts": context.thread_ts,
             },
         )
@@ -310,7 +310,7 @@ async def start_flow_thread(
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
-                "flow_name": flow_cfg.flow_name,
+                "name": flow_cfg.name,
                 "thread_ts": context.thread_ts,
                 "traceback": traceback.format_exc(),
             },

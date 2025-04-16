@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Awaitable
+from math import ceil
 from huggingface_hub import User
 from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.contract import (
@@ -103,19 +104,23 @@ class HostAgent(LLMAgent):
             if message.role == self._current_step_name:
                 self._expected_agents_current_step.add(message.agent_id)
 
-        required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
+        required_completions = ceil(int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
+        logger.info(
+            f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
+        )
         if len(self._completed_agents_current_step) >= required_completions:
             logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
             self._step_completion_event.set()
         return
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
-
         try:
             # Wait for enough completions, with a timeout
-            logger.info(f"Waiting for previous step to complete.")
+            logger.info(
+                f"Waiting for previous step to complete: {self._current_step_name}. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'."
+            )
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
-            logger.info("Previous step cleared, moving on.")
+            logger.info(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
             logger.warning(
                 f"Timeout waiting for step completion. "
@@ -140,6 +145,7 @@ class HostAgent(LLMAgent):
 
         response = AgentOutput(role=self.role)
         response.outputs = step
+        logger.info(f"Next step: {self._current_step_name}.")
 
         return response
 

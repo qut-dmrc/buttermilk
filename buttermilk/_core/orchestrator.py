@@ -38,7 +38,6 @@ class Orchestrator(BaseModel, ABC):
 
     Attributes:
         session_id (str): A unique identifier for this flow execution session
-        flow_name (str): The name of the flow being executed
         description (str): Short description of the flow's purpose
         save (SaveInfo | None): Configuration for saving flow results
         data (Sequence[DataSource]): Data sources available to the flow
@@ -51,7 +50,10 @@ class Orchestrator(BaseModel, ABC):
         default_factory=lambda: shortuuid.uuid()[:8],
         description="A unique session id for this set of flow runs.",
     )
-    flow_name: str
+    name: str = Field(
+        ...,
+        description="Friendly name of this flow",
+    )
     description: str = Field(
         default_factory=shortuuid.uuid,
         description="Short description of this flow",
@@ -127,11 +129,12 @@ class Orchestrator(BaseModel, ABC):
         """Starts a flow, given an incoming request."""
 
         client = self.bm.weave
-
-        _traced = weave.op(
-            self._run,
-            call_display_name=f"{self.flow_name} {self.session_id}",
-        )
+        tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__}
+        with weave.attributes(tracing_attributes):
+            _traced = weave.op(
+                self._run,
+                call_display_name=f"{tracing_attributes['name']} {tracing_attributes['orchestrator']}",
+            )
         output, call = await _traced.call(request=request)
         client.finish_call(call)
         logger.info(f"Finished...")
@@ -208,7 +211,7 @@ class Orchestrator(BaseModel, ABC):
 
         """
         step = self._prepare_step(request)
-        with weave.attributes(dict(session_id=self.session_id, flow_name=self.flow_name, params=self.params)):
+        with weave.attributes(dict(step=request.role, session_id=self.session_id)):
             _traced = weave.op(
                 self._execute_step,
                 call_display_name=f"{request.role} {self.session_id}",

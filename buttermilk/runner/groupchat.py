@@ -149,7 +149,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         request = ConductorRequest(
-            role=self.flow_name,
+            role=self.name,
             inputs={"participants": dict(self._agent_types.items()), "task": self.params.get("task")},
         )
         responses = await self._ask_agents(

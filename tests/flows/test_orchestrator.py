@@ -20,7 +20,7 @@ class SimpleOrchestrator(Orchestrator):
 def simple_orchestrator():
     """Create a simple orchestrator for testing."""
     return SimpleOrchestrator(
-        flow_name="test_flow",
+        name="test_flow",
         description="Test flow",
         agents={
             "step1": AgentVariants(

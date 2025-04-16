@@ -41,7 +41,7 @@ class Selector(AutogenOrchestrator):
         # await self._register_collectors()
         msg = ManagerMessage(
             role="orchestrator",
-            content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
+            content=f"Started {self.name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
         )
         await self._runtime.publish_message(msg, topic_id=self._topic)
 

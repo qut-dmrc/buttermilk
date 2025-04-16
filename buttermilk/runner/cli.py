@@ -4,7 +4,7 @@ import threading
 
 import hydra
 from omegaconf import OmegaConf
-
+from rich import print
 from buttermilk._core import StepRequest
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk.bm import BM
@@ -21,17 +21,17 @@ def main(cfg: OrchestratorProtocol) -> None:
     objs = hydra.utils.instantiate(cfg)
     bm: BM = objs.bm
 
+    print(OmegaConf.to_container(cfg))
     # give our flows a little longer to set up
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
-
     match objs.ui:
         case "console":
             flow_name = cfg.flow
             orchestrator = ORCHESTRATOR_CLASSES[cfg.orchestrator](bm=bm, **objs.flows[flow_name])
 
             if record_id_or_url := cfg.record:
-                request = StepRequest(role="fetch", prompt=record_id_or_url, description="Start the flow")
+                request = StepRequest(role="fetch", prompt=record_id_or_url, description="")
                 asyncio.run(orchestrator.run(request=request))
             else:
                 asyncio.run(orchestrator.run())

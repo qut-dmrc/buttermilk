@@ -26,7 +26,7 @@ def mock_console_app():
     mock_objs.flows = {
         "test_flow": {
             "orchestrator": "Selector",
-            "flow_name": "test_flow",
+            "name": "test_flow",
             "description": "Test flow",
         },
     }
@@ -52,7 +52,7 @@ def mock_slack_app():
     mock_objs.flows = {
         "test_flow": {
             "orchestrator": "AutogenOrchestrator",
-            "flow_name": "test_flow",
+            "name": "test_flow",
         },
     }
 
