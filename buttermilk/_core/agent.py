@@ -35,6 +35,7 @@ from buttermilk._core.contract import (
     ManagerResponse,
     OOBMessages,
     TaskProcessingComplete,
+    TaskProcessingStarted,
     ToolOutput,
     UserInstructions,
     UserMessage,
@@ -201,6 +202,7 @@ class Agent(AgentConfig):
 
             task_inputs = await self._add_state_to_input(task_inputs)
 
+            await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=n))
             with weave.attributes(dict(task_inputs.parameters)):
                 _traced = weave.op(
                     self._process,
@@ -239,7 +241,7 @@ class Agent(AgentConfig):
             if output:
                 output.internal_messages.reverse()
 
-        await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False))
+        await public_callback(TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=n, more_tasks_remain=False))
         return output
 
     async def _listen(

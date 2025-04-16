@@ -34,11 +34,10 @@ class Selector(AutogenOrchestrator):
         self._user_confirmation = asyncio.Queue(maxsize=1)
         return self
 
-
     async def _setup(self) -> None:
         await super()._setup()
         await self._register_human_in_the_loop()  # First, introduce ourselves, and prompt the user for input
-       
+
         # await self._register_collectors()
         msg = ManagerMessage(
             role="orchestrator",

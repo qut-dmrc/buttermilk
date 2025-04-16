@@ -51,7 +51,7 @@ class HostAgent(LLMAgent):
         default=300,
         description="Maximum time to wait for agent responses in seconds",
     )
-    _completion_threshold_ratio: float = Field(
+    completion_threshold_ratio: float = Field(
         default=0.8,
         description="Ratio of agents that must complete a step before proceeding (0.0 to 1.0)",
     )
@@ -102,7 +102,7 @@ class HostAgent(LLMAgent):
                 self._completed_agents_current_step.add(message.agent_id)
                 logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")"
 
-            required_completions = max(1, int(len(self._expected_agents_current_step) * self._completion_threshold_ratio))
+            required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
             if len(self._completed_agents_current_step) >= required_completions:
                 logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
                 self._step_completion_event.set()  # Signal that enough agents are done

@@ -55,7 +55,7 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup(self):
         """Initialize the autogen runtime and register agents"""
-        # loop = asyncio.get_running_loop()
+        await super()._setup()
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register agents for each step
@@ -137,6 +137,14 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
+    async def _execute_step(
+        self,
+        step: AgentInput,
+    ) -> AgentOutput | None:
+        topic_id = DefaultTopicId(type=step.role)
+        await self._runtime.publish_message(step, topic_id=topic_id)
+        return None
+
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
         """Determine the next step based on the current flow data.
 
@@ -159,7 +167,7 @@ class AutogenOrchestrator(Orchestrator):
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         request = ConductorRequest(
             role=self.flow_name,
-            inputs={"participants": self.agents.items(), "task": self.params.get("task")},
+            inputs={"participants": dict(self._agent_types.items()), "task": self.params.get("task")},
         )
         responses = await self._ask_agents(
             CONDUCTOR,
@@ -180,11 +188,3 @@ class AutogenOrchestrator(Orchestrator):
             )
 
         yield instructions
-
-    async def _execute_step(
-        self,
-        step: AgentInput,
-    ) -> AgentOutput | None:
-        topic_id = DefaultTopicId(type=step.role)
-        await self._runtime.publish_message(step, topic_id=topic_id)
-        return None

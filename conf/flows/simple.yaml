@@ -3,6 +3,7 @@
 defaults:
   - /flows: trans
   - override /flows/agents@flows.trans.agents: 
+    - host
     - fetch
     - judge
     - synth

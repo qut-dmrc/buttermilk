@@ -69,6 +69,7 @@ class Orchestrator(BaseModel, ABC):
     )
     history: list = Field(default=[])
 
+    _step_generator: Any = PrivateAttr(default=None)
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _model_context: ChatCompletionContext
     _records: list[Record] = PrivateAttr(default_factory=list)
@@ -137,6 +138,7 @@ class Orchestrator(BaseModel, ABC):
 
         """
         raise NotImplementedError()
+        yield StepRequest()
 
     async def run(self, request: StepRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
@@ -159,16 +161,17 @@ class Orchestrator(BaseModel, ABC):
         """
         try:
             await self._setup()
-            step_generator = self._get_next_step()
             while True:
                 try:
                     if request:
                         step = await self._prepare_step(request)
                         await self._execute_step(step)
-                    await asyncio.sleep(0.1)
 
-                    # Get next step in the flow
-                    request = await anext(step_generator)
+                    # Loop until we receive an error
+                    await asyncio.sleep(1)
+
+                    # # Get next step in the flow
+                    request = await anext(self._step_generator)
 
                     if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions
@@ -194,9 +197,8 @@ class Orchestrator(BaseModel, ABC):
             # Clean up resources
             await self._cleanup()
 
-    @abstractmethod
     async def _setup(self):
-        raise NotImplementedError
+        self._step_generator = self._get_next_step()
 
     @abstractmethod
     async def _cleanup(self):
