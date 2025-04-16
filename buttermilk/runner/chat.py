@@ -1,8 +1,9 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Self
 
 from autogen_core import ClosureAgent, ClosureContext, MessageContext, TypeSubscription
+from pydantic import model_validator
 
 from buttermilk._core.contract import (
     CLOSURE,
@@ -26,6 +27,12 @@ import time
 
 
 class Selector(AutogenOrchestrator):
+    _user_confirmation: asyncio.Queue
+
+    @model_validator(mode="after")
+    def open_queue(self) -> Self:
+        self._user_confirmation = asyncio.Queue(maxsize=1)
+        return self
 
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
         """Determine the next step based on the current flow data.
@@ -73,6 +80,16 @@ class Selector(AutogenOrchestrator):
             )
 
         yield instructions
+
+    async def _setup(self) -> None:
+        await super()._setup()
+        await self._register_collectors()
+        await self._register_human_in_the_loop()  # First, introduce ourselves, and prompt the user for input
+        msg = ManagerMessage(
+            role="orchestrator",
+            content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
+        )
+        await self._runtime.publish_message(msg, topic_id=self._topic)
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""
@@ -171,68 +188,19 @@ class Selector(AutogenOrchestrator):
                     return False
                 await asyncio.sleep(1)
 
-    async def _run(self, request: Any = None) -> None:
-        """Main execution method that sets up agents and manages the flow"""
-        try:
-            # Setup autogen runtime environment
-            await self._setup_runtime()
-            await self._register_human_in_the_loop()
+    async def _in_the_loop(self, step: StepRequest) -> bool:
+        """Send a message to the UI agent to confirm permission to run."""
 
-            # First, introduce ourselves, and prompt the user for input
-            msg = ManagerMessage(
-                role="orchestrator",
-                content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",
-            )
-            await self._runtime.publish_message(msg, topic_id=self._topic)
+        # For now, ALWAYS get confirmation from the user (MANAGER) role
+        confirm_step = ManagerRequest(
+            role="orchestrator",
+            content=f"Here's my proposed next step:\n\n{str(step.description)}\n\n```{step.role}: {step.prompt}```\n\nDo you want to proceed?",
+            prompt=step.prompt,
+            description=step.description,
+        )
 
-            await asyncio.sleep(1)
-            while True:
-                try:
-                    await self._send_ui_message(
-                        ManagerRequest(role="orchestrator", content=f"Shall I go ahead and determine the next step?"),
-                    )
-                    await asyncio.sleep(1)
-                    if not await self._wait_for_human():
-                        continue
-
-                    # Get next step in the flow
-                    step = await anext(self._get_next_step())
-
-                    # For now, ALWAYS get confirmation from the user (MANAGER) role
-                    confirm_step = ManagerRequest(
-                        role="orchestrator",
-                        content=f"Here's my proposed next step:\n\n{str(step.description)}\n\n```{step.role}: {step.prompt}```\n\nDo you want to proceed?",
-                        prompt=step.prompt,
-                        description=step.description,
-                    )
-
-                    await self._send_ui_message(confirm_step)
-                    if not await self._wait_for_human():
-                        # User did not confirm plan; go back and get new instructions
-                        continue
-                    # Run next step
-                    await self._execute_step(step)
-
-                except StopAsyncIteration:
-                    logger.info("SelectorOrchestrator.run: Flow completed.")
-                    break
-                except ProcessingError as e:
-                    logger.error(f"Error in SelectorOrchestrator.run: {e}")
-                    await self._send_ui_message(
-                        ManagerRequest(role="orchestrator", content=f"Unable to get next step. Confirm to try again or enter another prompt."),
-                    )
-                    if not await self._wait_for_human():
-                        await asyncio.sleep(1)
-                except FatalError:
-                    raise
-                except Exception as e:  # This is only here for debugging for now.
-                    logger.exception(f"Error in SelectorOrchestrator.run: {e}")
-                    raise FatalError from e
-                await asyncio.sleep(0.1)
-
-        except FatalError as e:
-            logger.exception(f"Error in AutogenOrchestrator.run: {e}")
-        finally:
-            # Clean up resources
-            await self._cleanup()
-            raise StopAsyncIteration()
+        await self._send_ui_message(confirm_step)
+        response = await self._wait_for_human()
+        if not response:
+            return False
+        return True

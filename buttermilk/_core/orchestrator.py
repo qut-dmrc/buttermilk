@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from ast import arguments
+import asyncio
 from collections.abc import Mapping, Sequence
 from enum import Enum
 from pathlib import Path
@@ -16,7 +17,8 @@ from pydantic import (
 )
 import weave
 
-from buttermilk._core.agent import ChatCompletionContext
+from buttermilk._core import AgentOutput
+from buttermilk._core.agent import ChatCompletionContext, FatalError, ProcessingError
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import KeyValueCollector
@@ -151,38 +153,81 @@ class Orchestrator(BaseModel, ABC):
         logger.info(f"Finished...")
         return
 
-    @abstractmethod
-    async def _run(self, request: Any = None) -> None:
-        """Starts a flow, given an incoming request.
+    async def _run(self, request: StepRequest | None = None) -> None:
+        """Main execution method that sets up agents and manages the flow.
 
-        This is the main entry point for flow execution that must be implemented
-        by subclasses with their specific orchestration logic.
+        By default, this runs through a sequence of pre-defined steps.
+        """
+        try:
+            await self._setup()
+
+            while True:
+                try:
+                    if request:
+                        step = await self._prepare_step(request)
+                        await self._execute_step(step)
+                    await asyncio.sleep(0.1)
+
+                    # Get next step in the flow
+                    request = await anext(self._get_next_step())
+
+                    if not self._in_the_loop(request):
+                        # User did not confirm plan; go back and get new instructions
+                        continue
+
+                except ProcessingError as e:
+                    # non-fatal error
+                    logger.error(f"Error in Orchestrator run: {e}")
+                    continue
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:  # This is only here for debugging for now.
+                    logger.exception(f"Error in Orchestrator.run: {e}")
+                    raise FatalError from e
+
+        except (StopAsyncIteration, KeyboardInterrupt):
+            logger.info("Orchestrator.run: Flow completed.")
+        except FatalError as e:
+            logger.exception(f"Error in Orchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()
+
+    @abstractmethod
+    async def _setup(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def _cleanup(self):
+        raise NotImplementedError
+
+    async def _in_the_loop(self, step: StepRequest) -> bool:
+        """Just run."""
+        return True
+
+    @weave.op
+    async def execute(self, request: StepRequest) -> AgentOutput:
+        """Execute a single step in the flow.
 
         Args:
-            request: Optional input data for starting the flow
+            request: The step to execute
+
+        Returns:
+            Step outputs
 
         """
-        # loop
-
-        # save the results
-        # flow_data ...
-        while True:
-            try:
-                # Get next step in the flow
-                step = await anext(self._get_next_step())
-            except StopAsyncIteration:
-                # No more steps available, terminate the loop
-                break
-            request = await self._prepare_step(step)
-            await self._execute_step(step)
-            # execute step
+        step = self._prepare_step(request)
+        return await self._execute_step(step)
 
     @abstractmethod
     async def _execute_step(
         self,
-        step: StepRequest,
-    ) -> None:
-        raise NotImplementedError()
+        step: AgentInput,
+    ) -> AgentOutput:
+        # Run step
+        raise NotImplementedError
 
     async def __call__(self, request=None) -> None:
         """Makes the orchestrator callable, allowing it to be used as a function.

@@ -171,11 +171,6 @@ async def register_handlers(
                     init_text=init_text,
                 ),
             )
-            await say.client.reactions_remove(
-                channel=say.channel,
-                name="eyes",
-                timestamp=body["event"]["ts"],
-            )
         except Exception as e:
             logger.exception(
                 "Error handling mention",

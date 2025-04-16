@@ -1,5 +1,6 @@
 import asyncio
 import os
+import threading
 
 import hydra
 from omegaconf import OmegaConf
@@ -9,8 +10,9 @@ from buttermilk.bm import BM
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.slackbot import register_handlers
+import uvicorn
 
-orchestrators = [AutogenOrchestrator, Selector]
+ORCHESTRATOR_CLASSES = {"simple": AutogenOrchestrator, "selector": Selector}
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: OrchestratorProtocol) -> None:
@@ -25,12 +27,27 @@ def main(cfg: OrchestratorProtocol) -> None:
     match objs.ui:
         case "console":
             flow_name = cfg.flow
-            orchestrator_name = objs.flows[flow_name].pop("orchestrator", None)
-            if orchestrator_name:
-                orchestrator = globals()[orchestrator_name](bm=bm, **objs.flows[flow_name])
-            else:
-                orchestrator = AutogenOrchestrator(bm=bm, **objs.flows[flow_name])
+            orchestrator_name = objs.flows[flow_name].get("orchestrator")
+            orchestrator = ORCHESTRATOR_CLASSES[orchestrator_name](bm=bm, **objs.flows[flow_name])
             asyncio.run(orchestrator.run())
+
+        case "api":
+            from buttermilk.api.flow import app
+
+            # Store the necessary state in the app instance
+            app.state.flows = objs.flows
+            app.state.bm = bm
+            app.state.orchestrators = ORCHESTRATOR_CLASSES
+
+            bm.logger.info("API starting...")
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+
+        case "pub/sub":
+            from buttermilk.api.pubsub import start_pubsub_listener
+
+            listener_thread = threading.Thread(target=start_pubsub_listener)
+            listener_thread.start()
+
         case "slackbot":
             bm.logger.info("Slackbot starting...")
             bot_token = bm.credentials["MODBOT_TOKEN"]

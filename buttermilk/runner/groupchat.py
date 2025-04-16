@@ -40,7 +40,6 @@ class AutogenOrchestrator(Orchestrator):
 
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _user_confirmation: asyncio.Queue
     _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
     # Additional configuration
     max_wait_time: int = Field(
@@ -53,39 +52,8 @@ class AutogenOrchestrator(Orchestrator):
             type=f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}",
         ),
     )
-    _last_message: AgentOutput | None = PrivateAttr(default=None)
 
-    @pydantic.model_validator(mode="after")
-    def open_queue(self) -> Self:
-        self._user_confirmation = asyncio.Queue(maxsize=1)
-        return self
-
-    async def _run(self, request: Any = None) -> None:
-        """Main execution method that sets up agents and manages the flow.
-
-        By default, this just sends an initial message to spawn the agents
-        and then loops until cancelled.
-        """
-        try:
-            # Setup autogen runtime environment
-            await self._setup_runtime()
-
-            # start the agents
-            await self._runtime.publish_message(
-                FlowMessage(role="orchestrator"),
-                topic_id=self._topic,
-            )
-            if request:
-                await self._runtime.publish_message(request, topic_id=self._topic)
-            while True:
-                await asyncio.sleep(0.1)
-        except (StopAsyncIteration, KeyboardInterrupt):
-            logger.info("AutogenOrchestrator.run: Flow completed.")
-        finally:
-            # Clean up resources
-            await self._cleanup()
-
-    async def _setup_runtime(self):
+    async def _setup(self):
         """Initialize the autogen runtime and register agents"""
         # loop = asyncio.get_running_loop()
         self._runtime = SingleThreadedAgentRuntime()
@@ -95,6 +63,12 @@ class AutogenOrchestrator(Orchestrator):
 
         # Start the runtime
         self._runtime.start()
+
+        # start the agents
+        await self._runtime.publish_message(
+            FlowMessage(role="orchestrator"),
+            topic_id=self._topic,
+        )
 
     async def _register_agents(self) -> None:
         """Register all agent variants for each step"""
@@ -161,14 +135,13 @@ class AutogenOrchestrator(Orchestrator):
         topic_id = DefaultTopicId(type=MANAGER)
         await self._runtime.publish_message(message, topic_id=topic_id)
 
-    @weave.op
     async def _execute_step(
         self,
-        step: StepRequest,
-    ) -> None:
-        message = await self._prepare_step(step=step)
+        step: AgentInput,
+    ) -> AgentOutput | None:
         topic_id = DefaultTopicId(type=step.role)
-        await self._runtime.publish_message(message, topic_id=topic_id)
+        await self._runtime.publish_message(step, topic_id=topic_id)
+        return None
 
     async def _cleanup(self):
         """Clean up resources when flow is complete"""
