@@ -55,7 +55,6 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup(self):
         """Initialize the autogen runtime and register agents"""
-        await super()._setup()
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register agents for each step
@@ -145,24 +144,8 @@ class AutogenOrchestrator(Orchestrator):
         await self._runtime.publish_message(step, topic_id=topic_id)
         return None
 
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data.
-
-        This generator yields a series of steps to be executed in sequence,
-        with each step containing the role and prompt information.
-
-        Yields:
-            StepRequest: An object containing:
-                - 'role' (str): The agent role/step name to execute
-                - 'prompt' (str): The prompt text to send to the agent
-                - Additional key-value pairs that might be needed for agent execution
-
-        Example:
-            >>> async for step in self._get_next_step():
-            >>>     await self._execute_step(**step)
-
-        """
-        self._next_step = None
+    async def _get_next_step(self) -> StepRequest | None:
+        """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         request = ConductorRequest(
@@ -187,4 +170,6 @@ class AutogenOrchestrator(Orchestrator):
                 f"Step {next_step} not found in registered agents.",
             )
 
-        yield instructions
+        # We're going to wait at least 10 seconds between steps.
+        await asyncio.sleep(10)
+        return instructions

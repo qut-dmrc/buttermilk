@@ -69,7 +69,6 @@ class Orchestrator(BaseModel, ABC):
     )
     history: list = Field(default=[])
 
-    _step_generator: Any = PrivateAttr(default=None)
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _model_context: ChatCompletionContext
     _records: list[Record] = PrivateAttr(default_factory=list)
@@ -120,25 +119,9 @@ class Orchestrator(BaseModel, ABC):
 
         return self
 
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data.
-
-        This generator yields a series of steps to be executed in sequence,
-        with each step containing the role and prompt information.
-
-        Yields:
-            StepRequest: An object containing:
-                - 'role' (str): The agent role/step name to execute
-                - 'prompt' (str): The prompt text to send to the agent
-                - Additional key-value pairs that might be needed for agent execution
-
-        Example:
-            >>> async for step in self._get_next_step():
-            >>>     await self._execute_step(**step)
-
-        """
+    async def _get_next_step(self) -> StepRequest:
+        """Determine the next step based on the current flow data."""
         raise NotImplementedError()
-        yield StepRequest()
 
     async def run(self, request: StepRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
@@ -171,7 +154,7 @@ class Orchestrator(BaseModel, ABC):
                     await asyncio.sleep(1)
 
                     # # Get next step in the flow
-                    request = await anext(self._step_generator)
+                    request = await self._get_next_step()
 
                     if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions
@@ -196,9 +179,6 @@ class Orchestrator(BaseModel, ABC):
         finally:
             # Clean up resources
             await self._cleanup()
-
-    async def _setup(self):
-        self._step_generator = self._get_next_step()
 
     @abstractmethod
     async def _cleanup(self):

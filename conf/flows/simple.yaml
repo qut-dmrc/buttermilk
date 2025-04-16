@@ -3,13 +3,13 @@
 defaults:
   - /flows: trans
   - override /flows/agents@flows.trans.agents: 
-    - host
     - fetch
+    - host
+    - owl
     - judge
     - synth
     - differences
     - scorer
-    - owl
   - _self_
 
 # Task specific parameters

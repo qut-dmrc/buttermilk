@@ -95,13 +95,13 @@ class HostAgent(LLMAgent):
     ) -> OOBMessages | None:
 
         # --- Handle Task Completion from Worker Agents ---
-        if isinstance(message, TaskProcessingStarted):
-            if message.role == self._expected_agents_current_step:
-                self._expected_agents_current_step.add(message.agent_id)
-        elif isinstance(message, TaskProcessingComplete):
-            if message.role == self._expected_agents_current_step:
+        if isinstance(message, TaskProcessingComplete):
+            if message.role == self._current_step_name:
                 self._completed_agents_current_step.add(message.agent_id)
                 logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
+        elif isinstance(message, TaskProcessingStarted):
+            if message.role == self._current_step_name:
+                self._expected_agents_current_step.add(message.agent_id)
 
         required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
         if len(self._completed_agents_current_step) >= required_completions:
@@ -125,21 +125,26 @@ class HostAgent(LLMAgent):
             self._participants = inputs.inputs['participants']
 
         step = await anext(self._step_generator)
+        if step == self.role:
+            # don't call ourselves please
+            self._step_completion_event.clear()
+            return None
 
         # Reset completion tracking
         self._current_step_name = step.role
         self._expected_agents_current_step.clear()
         self._completed_agents_current_step.clear()
+        self._step_completion_event.clear()
 
-        return AgentOutput(role=self.role, outputs=step)
-        return
+        response = AgentOutput(role=self.role)
+        response.outputs = step
+
+        return response
 
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
         """Determine the next step based on the current flow data."""
         while self._participants is None:
-            yield None
-
+            await asyncio.sleep(0.1)
         for step_name, cfg in self._participants.items():
             yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
-            await asyncio.sleep(10)
         yield StepRequest(role=END, description=f"Sequence wrapping up.")

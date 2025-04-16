@@ -52,10 +52,10 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[simple]",
-        "criteria=tja",
+        "criteria=[tja,cte,glaad]",
         "record='!babylon_bee_trans_basketball'",
         "ui=console",
-        "llms=lite",
+        "llms=full",
         "++name=automod",
         "++job=debugging"
         //"+record_id=${input:query}" // Will prompt for query
