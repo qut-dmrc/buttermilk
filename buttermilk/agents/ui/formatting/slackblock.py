@@ -153,17 +153,15 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     else:
         if isinstance(result_copy.outputs, QualScore):
-            for assessment in result_copy.outputs.assessments:
-                icon = ":white_check_mark:" if assessment.correct else ":x:"
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"{icon} **{assessment.criterion}**: {assessment.feedback}",
-                        },
-                    }
-                )
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": str(result_copy.outputs),
+                    },
+                }
+            )
         else:
             icontext = blocks_with_icon(
                 result_copy.params,

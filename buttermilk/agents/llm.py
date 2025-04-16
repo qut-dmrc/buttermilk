@@ -1,6 +1,7 @@
 import asyncio
 from curses import meta
 import json
+import pprint
 from types import NoneType
 from typing import Any, AsyncGenerator, Callable, Optional, Self
 
@@ -143,6 +144,8 @@ class LLMAgent(Agent):
                 error = f"Failed to parse LLM response as JSON: {parse_error}"
                 logger.warning(error, exc_info=False)
                 output.outputs = dict(response=chat_result.content)
+
+        output.content = pprint.pformat(output.outputs)
         return output
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:

@@ -28,6 +28,7 @@ MANAGER = "manager"
 CLOSURE = "collector"
 CONFIRM = "confirm"
 COMMAND_SYMBOL = "!"
+END = "end"
 
 class FlowProtocol(BaseModel):
     flow_name: str  # flow name
@@ -48,21 +49,19 @@ class StepRequest(BaseModel):
         role (str): The agent role identifier to execute this step
         prompt (str): The prompt text to send to the agent
         description (str): Optional description of the step's purpose
-        tool (str): A tool request to make
-        arguments (dict): Additional key-value pairs needed for step execution
 
     """
 
-    role: str
-    prompt: str | None = Field(default=None)
-    description: str | None = Field(default=None)
-    tool: str | None = Field(default=None)
-    arguments: dict[str, Any] = Field(default={})
+    role: str = Field(..., description="the ROLE name (not the description) of the next expert to respond.")
+    prompt: str = Field(default="", description="The prompt text to send to the agent.")
+    description: str = Field(description="Brief explanation of the next step.")
+    # tool: str = Field(default="", description="The tool to invoke, if any.")
+    # arguments: dict[str, Any] = Field(description="Arguments to provide to the tool, if any.")
 
     @field_validator("role")
     @classmethod
     def lowercase_fields(cls, v: str) -> str:
-        """Ensure source and role are lowercase."""
+        """Ensure role is lowercase."""
         if v:
             return v.lower()
         return v
@@ -235,6 +234,8 @@ class ManagerRequest(ManagerMessage, StepRequest):
     """Request for input from the user"""
 
     _type = "RequestForManagerInput"
+    description: str = Field(default="Request input from user.")
+
     options: bool | list[str] | None = Field(
         default=None,
         description="Require answer from a set of options",
@@ -287,13 +288,7 @@ class HeartBeat(BaseModel):
 #######
 # Unions
 
-OOBMessages = Union[
-    ManagerMessage,
-    ManagerRequest,
-    ManagerResponse,
-    TaskProcessingComplete,
-    
-]
+OOBMessages = Union[ManagerMessage, ManagerRequest, ManagerResponse, TaskProcessingComplete, ConductorResponse, ConductorRequest]
 
 GroupchatMessageTypes = Union[
     AgentOutput,
@@ -302,9 +297,4 @@ GroupchatMessageTypes = Union[
     
 ]
 
-AllMessages = Union[
-    GroupchatMessageTypes,
-    OOBMessages,
-    AgentInput,ProceedToNextTaskSignal,
-    ConductorRequest,ConductorResponse,HeartBeat
-]
+AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ProceedToNextTaskSignal, HeartBeat]

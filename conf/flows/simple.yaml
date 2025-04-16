@@ -1,20 +1,19 @@
 defaults:
-  - _self_
-  - agents@simple.agents: 
+  - trans
+  - agents@trans.agents: 
     - manager
     - host
-    - analyst
+    - judge
+    - synth
+    - differences
+    - scorer
     - owl
-    - frames
-  
-simple:
-  flow_name: simple
+  - _self_
+
+trans:
   orchestrator: Selector
-  description: Society of Mind free-for-all chat
+  description: Trans criteria quick chat
   params:
     task: |
-      You are the HOST of a conference table, helping the MANAGER facilitate a discussion and driving towards a consensus-based answer. Make sure the discussion progresses, try to avoid going in circles, and try to clarify areas of disagreement to focus on one at a time.
-  data:
-    - ${datasets.tja_train}
-    - ${datasets.prosocial_zot}
-    - ${datasets.drag}
+      A simple assessment process: get several JUDGEs to assess the content, ask the SYNTHESISERs to create consensus, report on the DIFFERENCES of opinion, and then SCORE the results.
+# You are the HOST of a conference table, helping the MANAGER facilitate a discussion and driving towards a consensus-based answer. Make sure the discussion progresses, try to avoid going in circles, and try to clarify areas of disagreement to focus on one at a time.

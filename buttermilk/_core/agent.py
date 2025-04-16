@@ -219,7 +219,6 @@ class Agent(AgentConfig):
                 logger.error(
                     f"Agent {self.role} {self.name} hit processing error: {e} {e.args=}.",
                 )
-                continue
             except FatalError as e:
                 logger.error(f"Agent {self.role} {self.name} hit fatal error: {e}", exc_info=True)
                 raise e

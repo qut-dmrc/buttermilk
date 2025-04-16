@@ -63,6 +63,7 @@ class FetchRecord(Agent, ToolConfig):
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
         message_callback: Callable = None,
+        source: str = None,
         **kwargs,
     ) -> None:
         """Entry point when running this as an agent.

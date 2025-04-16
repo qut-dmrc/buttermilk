@@ -51,7 +51,7 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans]",
+        "+flows=[simple]",
         "+flow=trans",
         "ui=console",
         "llms=lite",

@@ -9,7 +9,9 @@ from buttermilk._core.contract import (
     AgentOutput,
     AllMessages,
     ConductorRequest,
+    ConductorResponse,
     GroupchatMessageTypes,
+    OOBMessages,
 )
 from buttermilk.agents.llm import LLMAgent
 
@@ -17,7 +19,6 @@ from buttermilk.agents.llm import LLMAgent
 class QualScoreCRA(BaseModel):
     """A single criterion-referenced asssessment."""
 
-    criterion: str = Field(..., description="The short name of the criterion being assessed.")
     correct: bool = Field(..., description="Does the content meet the criterion?")
     feedback: str = Field(..., description="One sentence explanation of your assessment.")
 
@@ -25,6 +26,7 @@ class QualScoreCRA(BaseModel):
 class QualScore(BaseModel):
     """Qualitative score of an LLM result against provided ground truth."""
 
+    answer_id: str = Field(..., description="The ID of the answer being assessed.")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
 
     @computed_field
@@ -35,15 +37,25 @@ class QualScore(BaseModel):
 
     def __str__(self) -> str:
         """Markdown representation of the score"""
-        return f"**Score**: {self.score}\n\n" + "\n".join([f"**{cra.criterion}**: {cra.feedback}" for cra in self.assessments])
+        return f"**Answer**: {self.answer_id}\t\t**Score**: {self.score}\n" + "\n\t-".join(
+            [f"**{ '✔️' if cra.correct else '✘' }**: {cra.feedback}" for cra in self.assessments]
+        )
+
+
+class AggResults(QualScore):
+    """Aggregated results of qualitative assessments."""
+
+    agent: str = Field(..., description="The name of the agent who answered.")
+    answer_id: str = Field(..., description="The ID of the answer being assessed.")
+    assessments: list[QualScoreCRA] = Field(..., description="A list of qualitative scores.")
+    assessor: str = Field(..., description="The name of the assessor.")
 
 
 class LLMScorer(LLMAgent):
     """Qualitatively scores an LLM result against provided ground truth."""
 
     _ground_truth: dict = PrivateAttr(default={})
-    _judge_results: list[AgentOutput] = PrivateAttr(default_factory=list)
-    _scores: list[dict[str, Any]] = PrivateAttr(default_factory=list)
+    _scores: list[AggResults] = PrivateAttr(default_factory=list)
     _output_model: Optional[type[BaseModel]] = QualScore
 
     async def _listen(
@@ -75,27 +87,30 @@ class LLMScorer(LLMAgent):
                     message_callback=message_callback,
                     **kwargs,
                 )
-                await public_callback(response)
+                if response:
+                    await public_callback(response)
+                    self._scores.append(
+                        AggResults(agent=source, answer_id=message.call_id, assessments=response.outputs.assessments, assessor=self.name)
+                    )
 
-    # async def _process(
-    #     self,
-    #     input_data: AgentInput | ConductorRequest,
-    #     cancellation_token: CancellationToken | None = None,
-    #     public_callback: Callable = None,
-    #     message_callback: Callable = None,
-    #     **kwargs,
-    # ) -> AgentOutput | None:  # Changed return type
-    #     """Scores JUDGE agent results against ground truth."""
+    async def _handle_control_message(
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken = None,
+        public_callback: Callable = None,
+        message_callback: Callable = None,
+        **kwargs,
+    ) -> OOBMessages | None:
+        """Returns aggregate results calculated from reasoned decisions."""
 
-    #     if isinstance(input_data, ConductorRequest):
-    #         # Handle conductor requests if needed, e.g., for final summary.
-    #         logger.warning(f"{self.role} received ConductorRequest. Summarization logic TBD.")
-    #         return AgentOutput(
-    #             source=self.name,
-    #             role=self.role,
-    #             content=f"Scoring summary for {len(self._scores)} responses",
-    #             outputs={"scores": self._scores},
-    #         )
+        if isinstance(message, (AgentInput, ConductorRequest)):
+            # Handle conductor requests if needed, e.g., for final summary.
+            response = ConductorResponse(
+                role=self.role, content=f"Scoring summary for {len(self._scores)} responses", outputs={self.role: self._scores}
+            )
+            await public_callback(response)
+            return response
+        return None
 
     #     # not implemented yet
     #     return

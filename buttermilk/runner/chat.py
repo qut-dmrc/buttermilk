@@ -8,6 +8,7 @@ from buttermilk._core.contract import (
     CLOSURE,
     CONDUCTOR,
     CONFIRM,
+    END,
     AgentInput,
     AgentOutput,
     ConductorRequest,
@@ -47,8 +48,9 @@ class Selector(AutogenOrchestrator):
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
         participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
+        participants += f"\n - {END}: Conclude the conversation."
+
         request = ConductorRequest(
-            source="Selector",
             role=self.flow_name,
             inputs={"participants": participants, "task": self.params.get("task")},
         )
@@ -57,30 +59,20 @@ class Selector(AutogenOrchestrator):
             message=request,
         )
 
-        if len(responses) > 1:
-            raise ProcessingError("Conductor returned multiple responses.")
-
-        instructions = responses[0]
-
-        # TODO(NS): Add finish condition
-        # return
-
         # Determine the next step based on the response
-        if not instructions or not (next_step := instructions.outputs.get("role")):
-            raise ProcessingError("Next step not found from conductor.")
+        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
+            raise ProcessingError("Conductor could not get next step.")
+
+        next_step = instructions.role
+        if next_step == END:
+            raise StopAsyncIteration("Host signaled that flow has been completed.")
 
         if next_step.lower() not in self._agent_types:
             raise ProcessingError(
                 f"Step {next_step} not found in registered agents.",
             )
 
-        yield StepRequest(
-            role=next_step,
-            prompt=instructions.outputs.pop("prompt", ""),
-            description=instructions.outputs.pop("plan", ""),
-            tool=instructions.outputs.get("tool", None),
-            arguments=instructions.outputs,
-        )
+        yield instructions
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""
@@ -196,12 +188,8 @@ class Selector(AutogenOrchestrator):
             await asyncio.sleep(1)
             while True:
                 try:
-
                     await self._send_ui_message(
-                        ManagerRequest(
-                            role="orchestrator",
-                            content=f"Shall I go ahead and determine the next step?",
-                        ),
+                        ManagerRequest(role="orchestrator", content=f"Shall I go ahead and determine the next step?"),
                     )
                     await asyncio.sleep(1)
                     if not await self._wait_for_human():
@@ -213,8 +201,7 @@ class Selector(AutogenOrchestrator):
                     # For now, ALWAYS get confirmation from the user (MANAGER) role
                     confirm_step = ManagerRequest(
                         role="orchestrator",
-                        content="Here's my proposed next step. Do you want to proceed?\n`" + str(step.description) + "`",
-                        arguments=step.arguments,
+                        content=f"Here's my proposed next step:\n\n{str(step.description)}\n\n```{step.role}: {step.prompt}```\n\nDo you want to proceed?",
                         prompt=step.prompt,
                         description=step.description,
                     )
@@ -232,11 +219,7 @@ class Selector(AutogenOrchestrator):
                 except ProcessingError as e:
                     logger.error(f"Error in SelectorOrchestrator.run: {e}")
                     await self._send_ui_message(
-                        ManagerRequest(
-                            source=self.flow_name,
-                            role="orchestrator",
-                            content=f"Unable to get next step. Confirm to try again or enter another prompt.",
-                        ),
+                        ManagerRequest(role="orchestrator", content=f"Unable to get next step. Confirm to try again or enter another prompt."),
                     )
                     if not await self._wait_for_human():
                         await asyncio.sleep(1)

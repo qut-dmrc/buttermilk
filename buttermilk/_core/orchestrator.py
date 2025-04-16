@@ -135,7 +135,7 @@ class Orchestrator(BaseModel, ABC):
 
         """
         for step_name in self.agents.keys():
-            yield StepRequest(role=step_name)
+            yield StepRequest(role=step_name, description=f"Call {step_name}.")
 
     async def run(self, request: Any = None) -> None:
         """Starts a flow, given an incoming request."""
@@ -233,7 +233,6 @@ class Orchestrator(BaseModel, ABC):
             inputs=inputs,
             context=await self._model_context.get_messages(),
             records=self._records,
-            parameters=step.arguments,
             prompt=step.prompt,
         )
 
