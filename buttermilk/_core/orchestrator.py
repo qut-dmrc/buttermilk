@@ -207,8 +207,7 @@ class Orchestrator(BaseModel, ABC):
         """Just run."""
         return True
 
-    @weave.op
-    async def execute(self, request: StepRequest) -> AgentOutput:
+    async def execute(self, request: StepRequest) -> AgentOutput | None:
         """Execute a single step in the flow.
 
         Args:
@@ -219,15 +218,12 @@ class Orchestrator(BaseModel, ABC):
 
         """
         step = self._prepare_step(request)
-        return await self._execute_step(step)
-
-    @abstractmethod
-    async def _execute_step(
-        self,
-        step: AgentInput,
-    ) -> AgentOutput:
-        # Run step
-        raise NotImplementedError
+        with weave.attributes(dict(session_id=self.session_id, flow_name=self.flow_name, params=self.params)):
+            _traced = weave.op(
+                self._execute_step,
+                call_display_name=f"{request.role} {self.session_id}",
+            )
+        return await _traced(step)
 
     async def __call__(self, request=None) -> None:
         """Makes the orchestrator callable, allowing it to be used as a function.
@@ -244,7 +240,7 @@ class Orchestrator(BaseModel, ABC):
 
     async def _prepare_step(
         self,
-        step: StepRequest,
+        request: StepRequest,
     ) -> AgentInput:
         """Create an AgentInput message for sending to an agent.
 
@@ -266,7 +262,7 @@ class Orchestrator(BaseModel, ABC):
             AgentInput: A prepared message that can be sent to an agent
 
         """
-        config = self.agents[step.role]
+        config = self.agents[request.role]
 
         input_map = dict(config.inputs)
 
@@ -274,12 +270,20 @@ class Orchestrator(BaseModel, ABC):
         inputs = self._flow_data._resolve_mappings(input_map)
 
         return AgentInput(
-            role=step.role,
+            role=request.role,
             inputs=inputs,
             context=await self._model_context.get_messages(),
             records=self._records,
-            prompt=step.prompt,
+            prompt=request.prompt,
         )
+
+    @abstractmethod
+    async def _execute_step(
+        self,
+        step: AgentInput,
+    ) -> AgentOutput | None:
+        # Run step
+        raise NotImplementedError
 
 
 class OrchestratorProtocol(BaseModel):
