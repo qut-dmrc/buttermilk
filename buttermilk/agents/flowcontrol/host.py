@@ -113,7 +113,9 @@ class HostAgent(LLMAgent):
 
         try:
             # Wait for enough completions, with a timeout
+            logger.info(f"Waiting for previous step to complete.")
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
+            logger.info("Previous step cleared, moving on.")
         except asyncio.TimeoutError:
             logger.warning(
                 f"Timeout waiting for step completion. "

@@ -17,7 +17,7 @@ from pydantic import (
 )
 import weave
 
-from buttermilk._core import AgentOutput
+from buttermilk._core import AgentOutput, TaskProcessingComplete
 from buttermilk._core.agent import ChatCompletionContext, FatalError, ProcessingError
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
@@ -144,12 +144,17 @@ class Orchestrator(BaseModel, ABC):
         """
         try:
             await self._setup()
+            if request:
+                step = await self._prepare_step(request)
+                await self._execute_step(request)
+                # we haven't started yet, so we're going to send a completion through manually
+                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
+                await asyncio.sleep(5)
+                await self._runtime.publish_message(
+                    (TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=-1, more_tasks_remain=False)), topic_id=self.topic_id
+                )
             while True:
                 try:
-                    if request:
-                        step = await self._prepare_step(request)
-                        await self._execute_step(step)
-
                     # Loop until we receive an error
                     await asyncio.sleep(1)
 
@@ -159,6 +164,10 @@ class Orchestrator(BaseModel, ABC):
                     if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions
                         continue
+
+                    if request:
+                        step = await self._prepare_step(request)
+                        await self._execute_step(step)
 
                 except ProcessingError as e:
                     # non-fatal error

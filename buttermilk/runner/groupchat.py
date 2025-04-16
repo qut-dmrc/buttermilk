@@ -18,7 +18,7 @@ from pydantic import Field, PrivateAttr
 import weave
 
 from buttermilk._core import TaskProcessingComplete
-from buttermilk._core.agent import ConductorRequest, ProcessingError
+from buttermilk._core.agent import ConductorRequest, FatalError, ProcessingError
 from buttermilk._core.contract import (
     CLOSURE,
     CONDUCTOR,
@@ -173,3 +173,55 @@ class AutogenOrchestrator(Orchestrator):
         # We're going to wait at least 10 seconds between steps.
         await asyncio.sleep(10)
         return instructions
+
+    async def _run(self, request: StepRequest | None = None) -> None:
+        """Main execution method that sets up agents and manages the flow.
+
+        By default, this runs through a sequence of pre-defined steps.
+        """
+        try:
+            await self._setup()
+            if request:
+                step = await self._prepare_step(request)
+                await self._execute_step(step)
+                # we haven't started yet, so we're going to send a completion through manually
+                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
+                await asyncio.sleep(5)
+                await self._runtime.publish_message(
+                    (TaskProcessingComplete(agent_id=step.role, role=step.role, task_index=-1, more_tasks_remain=False)), topic_id=self._topic
+                )
+            while True:
+                try:
+                    # Loop until we receive an error
+                    await asyncio.sleep(1)
+
+                    # # Get next step in the flow
+                    request = await self._get_next_step()
+
+                    if not await self._in_the_loop(request):
+                        # User did not confirm plan; go back and get new instructions
+                        continue
+
+                    if request:
+                        step = await self._prepare_step(request)
+                        await self._execute_step(step)
+
+                except ProcessingError as e:
+                    # non-fatal error
+                    logger.error(f"Error in Orchestrator run: {e}")
+                    continue
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:  # This is only here for debugging for now.
+                    logger.exception(f"Error in Orchestrator.run: {e}")
+                    raise FatalError from e
+
+        except (StopAsyncIteration, KeyboardInterrupt):
+            logger.info("Orchestrator.run: Flow completed.")
+        except FatalError as e:
+            logger.exception(f"Error in Orchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()
