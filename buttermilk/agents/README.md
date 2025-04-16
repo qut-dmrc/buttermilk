@@ -111,12 +111,10 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 # Access config via self.parameters, self.tools, etc.
                 pass
 
-            async def _process(
-                self,
-                input_data: AgentInput,
-                cancellation_token: CancellationToken | None = None,
-                **kwargs
-            ) -> AsyncGenerator[AgentOutput | None, None]:
+
+        async def _process(self, *, inputs: AgentInput, 
+                cancellation_token: CancellationToken = None, **kwargs
+                ) -> AgentOutput | ToolOutput | None:
                 logger.info(f"{self.id} received content: {input_data.content}")
                 # Access context: input_data.context
                 # Access specific inputs: input_data.inputs.get("my_param")

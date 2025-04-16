@@ -155,7 +155,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: OOBMessages,
         ctx: MessageContext,
-    ) -> OOBMessages | TaskProcessingComplete | Sequence[OOBMessages | TaskProcessingComplete] | None:
+    ) -> OOBMessages | Sequence[OOBMessages] | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
         response = await self.agent._handle_control_message(

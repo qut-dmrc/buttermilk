@@ -91,7 +91,7 @@ class AssistantAgentWrapper(Agent):
 
         return self
 
-    async def _process(self, inputs: AgentInput, cancellation_token: CancellationToken, source: str, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
 
         # --- Agent Decision Logic ---

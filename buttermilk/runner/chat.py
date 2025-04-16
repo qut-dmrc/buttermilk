@@ -83,7 +83,6 @@ class Selector(AutogenOrchestrator):
 
     async def _setup(self) -> None:
         await super()._setup()
-        await self._register_collectors()
         await self._register_human_in_the_loop()  # First, introduce ourselves, and prompt the user for input
         msg = ManagerMessage(
             role="orchestrator",
@@ -118,55 +117,6 @@ class Selector(AutogenOrchestrator):
                 TypeSubscription(
                     topic_type=topic_type,
                     agent_type=CONFIRM,
-                )
-                # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + list(self.agents.keys())
-            ],
-            unknown_type_policy="ignore",  # only react to appropriate messages
-        )
-
-    async def _register_collectors(self) -> None:
-        # Collect data from groupchat messages
-        async def collect_result(
-            _agent: ClosureContext,
-            message: GroupchatMessageTypes,
-            ctx: MessageContext,
-        ) -> None:
-            # Process and collect responses
-            if not message.error:
-                if isinstance(message, AgentOutput):
-                    source = None
-                    if ctx and ctx.sender:
-                        try:
-                            # get the step name from the list of agents if we can
-                            source = [
-                                k
-                                for k, v in self._agent_types.items()
-                                if any([a[0].type == ctx.sender.type for a in v])
-                            ][0]
-                        except Exception as e:  # noqa
-                            logger.warning(
-                                f"{self.flow_name} collector is relying on agent naming conventions to find source keys. Please look into this and try to fix.",
-                            )
-                    if not source:
-                        source = str(ctx.sender.type) if ctx and ctx.sender else message.source
-
-                        source = source.split(
-                            "-",
-                            1,
-                        )[0]
-
-                    if message.outputs:
-                        self._flow_data.add(key=source, value=message)
-
-        await ClosureAgent.register_closure(
-            self._runtime,
-            CLOSURE,
-            collect_result,
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=topic_type,
-                    agent_type=CLOSURE,
                 )
                 # Subscribe to the general topic and all step topics.
                 for topic_type in [self._topic.type] + list(self.agents.keys())

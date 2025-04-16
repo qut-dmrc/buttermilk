@@ -6,6 +6,7 @@ defaults:
 name: default_project
 job: development
 ui: console
+
 bm:
   _target_: buttermilk.bm.BM
 

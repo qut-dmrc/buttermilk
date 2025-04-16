@@ -238,6 +238,8 @@ class Agent(AgentConfig):
                         output = msg
             if output:
                 output.internal_messages.reverse()
+
+        await public_callback(TaskProcessingComplete(role=self.role, task_index=n, more_tasks_remain=False))
         return output
 
     async def _listen(

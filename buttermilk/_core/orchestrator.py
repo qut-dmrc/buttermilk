@@ -139,7 +139,7 @@ class Orchestrator(BaseModel, ABC):
         for step_name in self.agents.keys():
             yield StepRequest(role=step_name, description=f"Call {step_name}.")
 
-    async def run(self, request: Any = None) -> None:
+    async def run(self, request: StepRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
 
         client = self.bm.weave
@@ -160,7 +160,7 @@ class Orchestrator(BaseModel, ABC):
         """
         try:
             await self._setup()
-
+            step_generator = self._get_next_step()
             while True:
                 try:
                     if request:
@@ -169,9 +169,9 @@ class Orchestrator(BaseModel, ABC):
                     await asyncio.sleep(0.1)
 
                     # Get next step in the flow
-                    request = await anext(self._get_next_step())
+                    request = await anext(step_generator)
 
-                    if not self._in_the_loop(request):
+                    if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions
                         continue
 
@@ -290,3 +290,7 @@ class OrchestratorProtocol(BaseModel):
     bm: BM
     flows: Mapping[str, Orchestrator]
     ui: Literal["console", "slackbot"]
+    orchestrator: str | None = None
+    flow: str | None = None
+    criteria: str | None = None
+    record: str | None = None

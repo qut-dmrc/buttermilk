@@ -52,7 +52,8 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[simple]",
-        "+flow=trans",
+        "criteria=tja",
+        "record='!babylon_bee_trans_basketball'",
         "ui=console",
         "llms=lite",
         "++name=automod",

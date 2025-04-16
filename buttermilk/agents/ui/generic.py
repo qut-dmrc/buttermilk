@@ -20,12 +20,7 @@ class UIAgent(Agent):
     _input_callback: Any = PrivateAttr(...)
     _trace_this = False
 
-    async def _process(
-        self,
-        message: FlowMessage,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs,
-    ) -> AgentOutput | None:
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Send or receive input from the UI."""
         raise NotImplementedError
 
