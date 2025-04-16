@@ -14,6 +14,7 @@ from buttermilk._core.contract import (
     OOBMessages,
     StepRequest,
     TaskProcessingStarted,
+    ToolOutput,
     UserMessage,
 )
 from buttermilk.agents.llm import LLMAgent
@@ -54,17 +55,16 @@ class HostAgent(LLMAgent):
         default=0.8,
         description="Ratio of agents that must complete a step before proceeding (0.0 to 1.0)",
     )
-    _step_generator: Any = PrivateAttr(default=None)
     _current_step_name: str | None = PrivateAttr(default=None)
     _completed_agents_current_step: set[str] = PrivateAttr(default_factory=set)
     _expected_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-
+    _participants: dict = PrivateAttr(default={})
     _step_completion_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent"""
         self._input_callback = input_callback
-        self._step_generator = self._get_next_step()
+        self._step_completion_event.set()  # Ready to process
         await super().initialize(**kwargs) # Call parent initialize if needed
 
     async def _listen(
@@ -106,47 +106,25 @@ class HostAgent(LLMAgent):
             if len(self._completed_agents_current_step) >= required_completions:
                 logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
                 self._step_completion_event.set()  # Signal that enough agents are done
- 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput:
-        if self._participants is None:
-            # initialise
-            self._participants = inputs.inputs['participants']
 
-        request = await anext(self._step_generator)
-        return AgentOutput(role=self.role, outputs=request)
-
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data.
-
-        This generator yields a series of steps to be executed in sequence,
-        with each step containing the role and prompt information.
-
-        Yields:
-            StepRequest: An object containing:
-                - 'role' (str): The agent role/step name to execute
-                - 'prompt' (str): The prompt text to send to the agent
-                - Additional key-value pairs that might be needed for agent execution
-        """
- 
-        for step_name in aiter(self._step_generator):
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+        try:
+            # Wait for enough completions, with a timeout
+            await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Timeout waiting for step completion. "
+                f"Proceeding with {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed agents."
+            )
+        finally:
             # Reset completion tracking
-            self._current_step_name = step_name
+            self._current_step_name = None
             self._expected_agents_current_step.clear()
             self._completed_agents_current_step.clear()
             self._step_completion_event.clear()
 
-            yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
+        result = await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
 
-            try:
-                # Wait for enough completions, with a timeout
-                await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"Timeout waiting for step completion. "
-                    f"Proceeding with {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed agents."
-                )
-            finally:
-                self._step_completion_event.clear()  # Ensure event is clear for next wait
-                self._current_step_name = None  # Clear current step after flow finishes
-
-        yield StepRequest(role=END, description=f"Sequence wrapping up.")
+        self._current_step_name = result.outputs.role 
+        
+        return result

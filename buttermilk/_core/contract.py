@@ -267,15 +267,26 @@ class ToolOutput(FunctionExecutionResult):
 
     send_to_ui: bool = False
 
+
 #######
 # Coordination Messages
-
-class TaskProcessingComplete(BaseModel):
+class TaskProcessingStarted(BaseModel):
     """Sent by an agent after completing one sequential task."""
-    role: str = Field(..., description="ID of the agent sending the notification")
+
+    agent_id: str = Field(..., description="ID of the agent sending the notification")
+    role: str = Field(..., description="Task role name")
+    task_index: int = Field(..., description="Index of the task that was just completed")
+
+
+class TaskProcessingComplete(TaskProcessingStarted):
+    """Sent by an agent after completing one sequential task."""
+
+    agent_id: str = Field(..., description="ID of the agent sending the notification")
+    role: str = Field(..., description="Task role name")
     task_index: int = Field(..., description="Index of the task that was just completed")
     more_tasks_remain: bool = Field(..., description="True if the agent has more sequential tasks to process for the current input")
     is_error: bool = Field(default=False, description="True if the task resulted in an error")
+
 
 class ProceedToNextTaskSignal(BaseModel):
     """Sent by a controller to signal an agent to process its next sequential task."""
@@ -288,7 +299,9 @@ class HeartBeat(BaseModel):
 #######
 # Unions
 
-OOBMessages = Union[ManagerMessage, ManagerRequest, ManagerResponse, TaskProcessingComplete, ConductorResponse, ConductorRequest]
+OOBMessages = Union[
+    ManagerMessage, ManagerRequest, ManagerResponse, TaskProcessingComplete, TaskProcessingStarted, ConductorResponse, ConductorRequest
+]
 
 GroupchatMessageTypes = Union[
     AgentOutput,

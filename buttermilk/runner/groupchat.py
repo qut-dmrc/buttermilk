@@ -18,9 +18,12 @@ from pydantic import Field, PrivateAttr
 import weave
 
 from buttermilk._core import TaskProcessingComplete
+from buttermilk._core.agent import ConductorRequest, ProcessingError
 from buttermilk._core.contract import (
     CLOSURE,
+    CONDUCTOR,
     CONFIRM,
+    END,
     MANAGER,
     AgentInput,
     AgentOutput,
@@ -43,20 +46,6 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
-    # Additional configuration
-    max_wait_time: int = Field(
-        default=300,
-        description="Maximum time to wait for agent responses in seconds",
-    )
-    completion_threshold_ratio: float = Field(
-        default=0.8,
-        description="Ratio of agents that must complete a step before proceeding (0.0 to 1.0)",
-    )
-    _current_step_name: str | None = PrivateAttr(default=None)
-    _completed_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-    _expected_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-
-    _step_completion_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
 
     _topic: TopicId = PrivateAttr(
         default_factory=lambda: DefaultTopicId(
@@ -71,7 +60,6 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register agents for each step
         await self._register_agents()
-        await self._register_collectors()
         # Start the runtime
         self._runtime.start()
 
@@ -149,22 +137,6 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
-    @message_handler
-    async def _handle_completion_message(self, message: TaskProcessingComplete, context: MessageContext) -> None:
-        """Handles messages indicating an agent has finished its task."""
-        # Ensure message is relevant to the step we are waiting for
-        if context.sender.type in self._expected_agents_current_step:
-            self._completed_agents_current_step.add(context.sender.type)
-            logger.debug(
-                f"Agent {context.sender.type} completed step {self._current_step_name}. "
-                f"Completed: {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)}"
-            )
-
-            required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
-            if len(self._completed_agents_current_step) >= required_completions:
-                logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
-                self._step_completion_event.set()  # Signal that enough agents are done
-
     async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
         """Determine the next step based on the current flow data.
 
@@ -182,27 +154,32 @@ class AutogenOrchestrator(Orchestrator):
             >>>     await self._execute_step(**step)
 
         """
-        for step_name in self.agents.keys():
-            # Reset completion tracking
-            self._current_step_name = step_name
-            self._completed_agents_current_step.clear()
-            self._step_completion_event.clear()
-            # Determine agents expected for *this* step based on its role/name
-            self._expected_agents_current_step = {variant.id for agent_type, variant in self._agent_types.get(step_name, [])}
+        self._next_step = None
 
-            yield StepRequest(role=step_name, description=f"Call {step_name}.")
+        # Each step, we proceed by asking the CONDUCTOR agent what to do.
+        request = ConductorRequest(
+            role=self.flow_name,
+            inputs={"participants": self.agents.items(), "task": self.params.get("task")},
+        )
+        responses = await self._ask_agents(
+            CONDUCTOR,
+            message=request,
+        )
 
-            try:
-                # Wait for enough completions, with a timeout
-                await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"Timeout waiting for step completion. "
-                    f"Proceeding with {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed agents."
-                )
-            finally:
-                self._step_completion_event.clear()  # Ensure event is clear for next wait
-                self._current_step_name = None  # Clear current step after flow finishes
+        # Determine the next step based on the response
+        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
+            raise ProcessingError("Conductor could not get next step.")
+
+        next_step = instructions.role
+        if next_step == END:
+            raise StopAsyncIteration("Host signaled that flow has been completed.")
+
+        if next_step.lower() not in self._agent_types:
+            raise ProcessingError(
+                f"Step {next_step} not found in registered agents.",
+            )
+
+        yield instructions
 
     async def _execute_step(
         self,
@@ -211,34 +188,3 @@ class AutogenOrchestrator(Orchestrator):
         topic_id = DefaultTopicId(type=step.role)
         await self._runtime.publish_message(step, topic_id=topic_id)
         return None
-
-    async def _register_collectors(self) -> None:
-        async def _handle_completion_message(self, message: TaskProcessingComplete, context: MessageContext) -> None:
-            """Handles messages indicating an agent has finished its task."""
-            # Ensure message is relevant to the step we are waiting for
-            if context.sender.type in self._expected_agents_current_step:
-                self._completed_agents_current_step.add(context.sender.type)
-                logger.debug(
-                    f"Agent {context.sender.type} completed step {self._current_step_name}. "
-                    f"Completed: {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)}"
-                )
-
-                required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
-                if len(self._completed_agents_current_step) >= required_completions:
-                    logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
-                    self._step_completion_event.set()  # Signal that enough agents are done
-
-        await ClosureAgent.register_closure(
-            self._runtime,
-            CLOSURE,
-            _handle_completion_message,
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=topic_type,
-                    agent_type=CLOSURE,
-                )
-                # Subscribe to the general topic and all step topics.
-                for topic_type in [self._topic.type] + list(self.agents.keys())
-            ],
-            unknown_type_policy="ignore",  # only react to appropriate messages
-        )

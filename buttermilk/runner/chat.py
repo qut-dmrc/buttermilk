@@ -34,56 +34,12 @@ class Selector(AutogenOrchestrator):
         self._user_confirmation = asyncio.Queue(maxsize=1)
         return self
 
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data.
-
-        This generator yields a series of steps to be executed in sequence,
-        with each step containing the role and prompt information.
-
-        Yields:
-            StepRequest: An object containing:
-                - 'role' (str): The agent role/step name to execute
-                - 'prompt' (str): The prompt text to send to the agent
-                - Additional key-value pairs that might be needed for agent execution
-
-        Example:
-            >>> async for step in self._get_next_step():
-            >>>     await self._execute_step(**step)
-
-        """
-        self._next_step = None
-
-        # Each step, we proceed by asking the CONDUCTOR agent what to do.
-        participants = "\n".join([f"- {id}: {step.description}" for id, step in self.agents.items()])
-        participants += f"\n - {END}: Conclude the conversation."
-
-        request = ConductorRequest(
-            role=self.flow_name,
-            inputs={"participants": participants, "task": self.params.get("task")},
-        )
-        responses = await self._ask_agents(
-            CONDUCTOR,
-            message=request,
-        )
-
-        # Determine the next step based on the response
-        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
-            raise ProcessingError("Conductor could not get next step.")
-
-        next_step = instructions.role
-        if next_step == END:
-            raise StopAsyncIteration("Host signaled that flow has been completed.")
-
-        if next_step.lower() not in self._agent_types:
-            raise ProcessingError(
-                f"Step {next_step} not found in registered agents.",
-            )
-
-        yield instructions
 
     async def _setup(self) -> None:
         await super()._setup()
         await self._register_human_in_the_loop()  # First, introduce ourselves, and prompt the user for input
+       
+        # await self._register_collectors()
         msg = ManagerMessage(
             role="orchestrator",
             content=f"Started {self.flow_name}: {self.description}. Please enter your question or prompt and let me know when you're ready to go.",

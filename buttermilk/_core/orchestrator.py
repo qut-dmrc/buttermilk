@@ -136,8 +136,7 @@ class Orchestrator(BaseModel, ABC):
             >>>     await self._execute_step(**step)
 
         """
-        for step_name in self.agents.keys():
-            yield StepRequest(role=step_name, description=f"Call {step_name}.")
+        raise NotImplementedError()
 
     async def run(self, request: StepRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
