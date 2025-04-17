@@ -4,6 +4,7 @@ from autogen_core import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
+from buttermilk._core import ToolOutput
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
@@ -93,61 +94,12 @@ class LLMScorer(LLMAgent):
                         AggResults(agent=source, answer_id=message.call_id, assessments=response.outputs.assessments, assessor=self.name)
                     )
 
-    async def _handle_control_message(
-        self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        **kwargs,
-    ) -> OOBMessages | None:
-        """Returns aggregate results calculated from reasoned decisions."""
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+        """Return score or summary."""
+        if inputs.inputs.get("answers"):
+            # Score the result
+            return await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
 
-        if isinstance(message, (AgentInput, ConductorRequest)):
-            # Handle conductor requests if needed, e.g., for final summary.
-            response = ConductorResponse(
-                role=self.role, content=f"Scoring summary for {len(self._scores)} responses", outputs={self.role: self._scores}
-            )
-            await public_callback(response)
-            return response
-        return None
-
-    #     # not implemented yet
-    #     return
-    #     # Store ground truth from records
-    #     for record in message.records:
-    #         if record.ground_truth:
-    #             self._ground_truth = dict(record.ground_truth)
-    #             logger.debug(f"Scorer found ground truth: {self._ground_truth}")
-
-    #     # --- Scoring Logic ---
-    #     # Collect records fields with ground truth components
-    #     if isinstance(message, AgentOutput):
-
-    #         if message.role == self.role:
-    #             # Ignore messages from our own kind
-    #             return
-
-    #         # Identify and store results with qualitative reasons fields
-    #         if self._ground_truth and "reasons" in message.outputs:
-    #             logger.debug(f"Scorer tracking result: {message.agent_id}")
-    #             self._judge_results.append(message)
-
-    #             # Score immediately if we have ground truth
-    #             input_data = AgentInput(
-    #                 source=self.name,
-    #                 role=self.role,
-    #                 inputs={"answer": message, "expected": self._ground_truth},
-    #             )
-    #             async for _ in self._process():
-    #                 pass
-
-    #             if score_output and score_output.outputs:
-    #                 # Store scores for later reporting
-    #                 self._scores.append({
-    #                     "judge_id": message.agent_id,
-    #                     "score": score_output.outputs.get("score"),
-    #                     "explanation": score_output.outputs.get("explanation"),
-    #                 })
-
-    #     return
+        # Return summary only
+        response = AgentOutput(role=self.role, content=f"Scoring summary for {len(self._scores)} responses", outputs={self.role: self._scores})
+        return response

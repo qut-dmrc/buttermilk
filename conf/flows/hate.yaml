@@ -4,7 +4,7 @@ defaults:
   - criteria@hate.params.criteria: hate
 
 hate:
-  flow_name: hate
+  name: hate
   description: Hate speech analysis using existing, simplified, and theory-driven critiera
   save: ${save}
   data:

@@ -52,8 +52,8 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[simple]",
-        "criteria=[tja,cte,glaad]",
-        "record='!babylon_bee_trans_basketball'",
+        "criteria=trans_factored",  //"criteria=tja,cte,glaad,hrc,trans_simplified,trans_factored",
+        "record='!NCAA_transgender_athletes'",
         "ui=console",
         "llms=full",
         "++name=automod",

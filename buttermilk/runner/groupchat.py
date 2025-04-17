@@ -159,7 +159,8 @@ class AutogenOrchestrator(Orchestrator):
 
         # Determine the next step based on the response
         if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
-            raise ProcessingError("Conductor could not get next step.")
+            logger.warning("Conductor could not get next step.")
+            return None
 
         next_step = instructions.role
         if next_step == END:
@@ -170,8 +171,8 @@ class AutogenOrchestrator(Orchestrator):
                 f"Step {next_step} not found in registered agents.",
             )
 
-        # We're going to wait at least 10 seconds between steps.
-        await asyncio.sleep(10)
+        # We're going to wait a bit between steps.
+        await asyncio.sleep(5)
         return instructions
 
     async def _run(self, request: StepRequest | None = None) -> None:
@@ -196,7 +197,10 @@ class AutogenOrchestrator(Orchestrator):
                     await asyncio.sleep(1)
 
                     # # Get next step in the flow
-                    request = await self._get_next_step()
+                    if not (request := await self._get_next_step()):
+                        # No next step at the moment; wait and try a bit
+                        await asyncio.sleep(10)
+                        continue
 
                     if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions

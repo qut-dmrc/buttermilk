@@ -21,7 +21,6 @@ def main(cfg: OrchestratorProtocol) -> None:
     objs = hydra.utils.instantiate(cfg)
     bm: BM = objs.bm
 
-    print(OmegaConf.to_container(cfg))
     # give our flows a little longer to set up
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1

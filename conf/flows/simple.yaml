@@ -3,11 +3,9 @@
 defaults:
   - /flows: trans
   - override /flows/agents@flows.trans.agents: 
-    - fetch
     - host
-    - owl
+    - fetch
     - judge
-    - synth
     - differences
     - scorer
   - _self_

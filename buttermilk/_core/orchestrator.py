@@ -129,11 +129,11 @@ class Orchestrator(BaseModel, ABC):
         """Starts a flow, given an incoming request."""
 
         client = self.bm.weave
-        tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__}
+        tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__()}
         with weave.attributes(tracing_attributes):
             _traced = weave.op(
                 self._run,
-                call_display_name=f"{tracing_attributes['name']} {tracing_attributes['orchestrator']}",
+                call_display_name=f"{tracing_attributes['flow']} {self.     params.get('criteria','')}",
             )
         output, call = await _traced.call(request=request)
         client.finish_call(call)
@@ -162,7 +162,10 @@ class Orchestrator(BaseModel, ABC):
                     await asyncio.sleep(1)
 
                     # # Get next step in the flow
-                    request = await self._get_next_step()
+                    if not (request := await self._get_next_step()):
+                        # No next step at the moment; wait and try a bit
+                        await asyncio.sleep(10)
+                        continue
 
                     if not await self._in_the_loop(request):
                         # User did not confirm plan; go back and get new instructions

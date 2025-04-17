@@ -39,7 +39,7 @@ def simple_orchestrator():
 @pytest.mark.asyncio
 async def test_orchestrator_initialization(simple_orchestrator):
     """Test that orchestrator initializes correctly."""
-    assert simple_orchestrator.flow_name == "test_flow"
+    assert simple_orchestrator.name == "test_flow"
     assert simple_orchestrator.description == "Test flow"
     assert "step1" in simple_orchestrator.agents
     assert "step2" in simple_orchestrator.agents

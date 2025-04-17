@@ -180,7 +180,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         class MyCustomOrchestrator(Orchestrator): # Or AutogenOrchestrator
 
             async def run(self, request: Any = None) -> None:
-                logger.info(f"Starting custom flow: {self.flow_name}")
+                logger.info(f"Starting custom flow: {self.name}")
 
                 # --- If inheriting from AutogenOrchestrator ---
                 await self._setup_runtime()
@@ -241,7 +241,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
     *   Set the `orchestrator` key in your flow config:
     *   ```yaml
         # filepath: conf/flows/my_flow.yaml
-        flow_name: my_custom_flow
+        name: my_custom_flow
         description: A flow run by a custom orchestrator
         orchestrator: MyCustomOrchestrator # Name of your orchestrator class
         agents:

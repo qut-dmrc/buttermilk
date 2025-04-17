@@ -104,21 +104,23 @@ class HostAgent(LLMAgent):
             if message.role == self._current_step_name:
                 self._expected_agents_current_step.add(message.agent_id)
 
-        required_completions = ceil(int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
+        await self._check_completions()
+
+    async def _check_completions(self) -> None:
+        required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
         logger.info(
             f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
         )
         if len(self._completed_agents_current_step) >= required_completions:
             logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
             self._step_completion_event.set()
-        return
+        else:
+            self._step_completion_event.clear()
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         try:
             # Wait for enough completions, with a timeout
-            logger.info(
-                f"Waiting for previous step to complete: {self._current_step_name}. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'."
-            )
+            await self._check_completions()
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
             logger.info(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
@@ -132,7 +134,7 @@ class HostAgent(LLMAgent):
             self._participants = inputs.inputs['participants']
 
         step = await anext(self._step_generator)
-        if step == self.role:
+        if step.role == self.role:
             # don't call ourselves please
             self._step_completion_event.clear()
             return None
