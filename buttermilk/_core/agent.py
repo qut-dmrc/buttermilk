@@ -186,33 +186,23 @@ class Agent(AgentConfig):
         self,
         *,
         message: AgentInput | ConductorRequest,
-        cancellation_token=None,
+        cancellation_token: CancellationToken|None=None,
         public_callback: Callable = None,
         message_callback: Callable = None,
         **kwargs,
     ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        # Agents come in variants, and each variant has a list of tasks that it iterates through.
-        n = 0
+        """Run all tasks within a variant configuration."""
+        # Agents come in variants, and each variant has a list of tasks that it runs asynchronously.
         tasks = []
-        outputs = []
-        for task_params in self.sequential_tasks:
+        for n, task_params in enumerate(self.sequential_tasks):
             task_inputs = message.model_copy(deep=True)
             task_inputs.parameters = dict(task_params)
             task_inputs.parameters.update(self.parameters)
-
             task_inputs = await self._add_state_to_input(task_inputs)
+            tasks.append(asyncio.create_task(self._run_task(task_index=n, task_inputs=task_inputs, cancellation_token=cancellation_token, public_callback=public_callback)))
 
-            await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=n))
-            with weave.attributes(dict(task_inputs.parameters)):
-                _traced = weave.op(
-                    self._process,
-                    call_display_name=f"{self.name} {self.id}",
-                )
-                t = asyncio.create_task(_traced(inputs=task_inputs, cancellation_token=cancellation_token))
-                tasks.append(t)
 
         for t in asyncio.as_completed(tasks):
-            n += 1
             try:
                 result = await t
                 if result:
@@ -228,18 +218,27 @@ class Agent(AgentConfig):
                 logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
                 raise e
 
-        # Stack previous output steps into the final output for this agent
-        output = None
-        if outputs:
-            outputs.reverse()
-            for msg in outputs:
-                if isinstance(msg, AgentOutput):
-                    if output:
-                        output.internal_messages.append(msg)
-                    else:
-                        output = msg
-            if output:
-                output.internal_messages.reverse()
+
+    async def _run_task(self, *, task_index: int, task_inputs: AgentInput, cancellation_token: CancellationToken, public_callback: Callable
+    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
+        """Run a single task, trace it, and evaluate it."""
+        # Signal that we have started
+        await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=task_index))
+
+            # Start a trace
+            with weave.attributes(dict(task_inputs.parameters)):
+                _traced = weave.op(
+                    self._process,
+                    call_display_name=f"{self.name} {self.id}",
+                )
+                from weave.trace.weave_client import Call
+                # Run task
+                result, call = _traced.call(inputs=task_inputs, cancellation_token=cancellation_token)
+                
+
+                # Score task
+                call.apply_scorer()
+
 
         await public_callback(TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=n, more_tasks_remain=False))
         return output

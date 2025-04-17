@@ -99,3 +99,8 @@ async def test_run_record_agent(
     )
     await runtime.stop_when_idle()
     assert result
+
+
+@pytest.mark.anyio
+async def test_judger(runtime, fight_no_more_forever):
+    pass

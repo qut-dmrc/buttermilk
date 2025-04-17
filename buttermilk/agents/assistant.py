@@ -103,7 +103,7 @@ class AssistantAgentWrapper(Agent):
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
         if not isinstance(inputs, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
-            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(inputs)} from {source}")
+            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(inputs)}")
             return None
 
         # Handle ConductorRequest specifically if needed
