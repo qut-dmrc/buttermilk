@@ -12,7 +12,6 @@ defaults:
     - owl
 
 
-orchestrator: Selector
 description: Mixture of Agents directed chat
 params:
   task: >

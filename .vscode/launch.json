@@ -51,10 +51,13 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans]",
-        "+flow=trans",
+        "+flows=[simple]",
+        "criteria=trans_factored",  //"criteria=tja,cte,glaad,hrc,trans_simplified,trans_factored",
+        "record='!NCAA_transgender_athletes'",
         "ui=console",
-        "llms=lite"
+        "llms=full",
+        "++name=automod",
+        "++job=debugging"
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
@@ -73,6 +76,8 @@
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
         "llms=full",
+        "++name=automod",
+        "++job=development"
       ],  
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

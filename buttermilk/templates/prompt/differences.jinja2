@@ -1,22 +1,5 @@
 ---
 name: Differences in reasoning
-inputs:
-  criteria:
-    type: string
-    optional: true
-  answers:
-    type: list
-    keys:
-      id: string
-      prediction: string
-      labels: list
-      reasons: string
-      model: string
-      template: string
-      criteria: string
-  content:
-    type: string
-    optional: true
 ---
 
 # System: 
@@ -86,7 +69,7 @@ Analyse the underlying reasons behind differences among the answers below.
 
   {% for answer in answers %}
   <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.reasons }}
+  {{ answer.outputs.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}

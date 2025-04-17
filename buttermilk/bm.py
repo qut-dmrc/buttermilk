@@ -21,7 +21,8 @@ from typing import (
     Self,
     TypeVar,
 )
-
+import weave
+from weave.trace.weave_client import WeaveClient
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
@@ -114,6 +115,13 @@ class Singleton:
 class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr()
     _gcp_credentials_cached: GoogleCredentials = PrivateAttr(default=None)
+    _weave: WeaveClient = PrivateAttr()
+
+    @property
+    def weave(self) -> WeaveClient:
+        if not hasattr(self, "_weave"):
+            self._weave = weave.init(f"{self.run_info.name}-{self.run_info.job}")
+        return self._weave
 
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
@@ -191,9 +199,7 @@ class BM(Singleton, Project):
         if self.tracing and self.run_info:
             collection = f"{self.run_info.name}-{self.run_info.job}"
             if self.tracing.provider == "weave":
-                import weave
-
-                weave.init(collection)
+                self._weave = weave.init(collection)
             elif self.tracing.provider == "traceloop":
                 from traceloop.sdk import Traceloop
 

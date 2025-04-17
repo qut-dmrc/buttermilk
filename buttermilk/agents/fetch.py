@@ -63,6 +63,7 @@ class FetchRecord(Agent, ToolConfig):
         cancellation_token: CancellationToken = None,
         public_callback: Callable = None,
         message_callback: Callable = None,
+        source: str = None,
         **kwargs,
     ) -> None:
         """Entry point when running this as an agent.
@@ -74,7 +75,6 @@ class FetchRecord(Agent, ToolConfig):
             return
         if not (match := re.match(self._pat, message.content)):
             return
-
         record = None
         if uri := match[2]:
             record = await download_and_convert(uri=uri)
@@ -84,15 +84,30 @@ class FetchRecord(Agent, ToolConfig):
             record = await self._get_record_dataset(record_id=record_id)
 
         if record:
-            output = AgentOutput(
-                source=self.id,
-                role=self.role,
-                content=record.text,
-                outputs={"records": [record]},
-            )
+            output = AgentOutput(role=self.role, content=record.text, records=[record])
             await public_callback(output)
 
         return
+
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+        if not (match := re.match(self._pat, inputs.prompt)):
+            return
+        record = None
+        if uri := match[2]:
+            record = await download_and_convert(uri=uri)
+        else:
+            # Try to get by record_id (remove bang! first)
+            record_id = match[1].strip(COMMAND_SYMBOL)
+            record = await self._get_record_dataset(record_id=record_id)
+
+        if record:
+            output = AgentOutput(role=self.role, content=record.text, records=[record])
+            return output
+        return None
+
+    async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
+        """Add local agent state to inputs"""
+        return inputs
 
     async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
         """Entry point when running as a tool."""

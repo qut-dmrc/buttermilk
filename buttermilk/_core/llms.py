@@ -78,7 +78,6 @@ CHATMODELS = [
     "gemini2flash",
     "gemini2flashlite",
     "gemini2flashthinking",
-    "gemini2pro",
     "gpt4o",
     "o3-mini-high",
     "llama31_8b",
@@ -115,7 +114,6 @@ class AutoGenWrapper(RetryWrapper):
     client: ChatCompletionClient
     model_info: ModelInfo
 
-    @weave.op
     async def create(
         self,
         messages: Sequence[LLMMessage],
@@ -123,15 +121,22 @@ class AutoGenWrapper(RetryWrapper):
         schema: Optional[type[BaseModel]] = None,
         cancellation_token: Optional[CancellationToken] = None,
         **kwargs: Any,
-    ) -> CreateResult:
+    ) -> CreateResult | list[ToolOutput]:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
+            if schema and self.model_info.get("structured_output", False):
+                json_output = schema
+            else:
+                # By preference, pass a pydantic schema for structured output
+                # Otherwise, set json_output to True if the model supports it
+                json_output = self.model_info.get("json_output", False)
+
             # Use the retry logic
             create_result = await self._execute_with_retry(
                 self.client.create,
                 messages,
                 tools=tools,
-                json_output=schema,
+                json_output=json_output,
                 cancellation_token=cancellation_token,
                 extra_create_args=kwargs,
             )
@@ -141,21 +146,29 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError("Empty response from LLM")
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
                 raise ProcessingError("Unexpected tool response from LLM", create_result.content)
+
             return create_result
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
             logger.warning(error_msg, exc_info=False)
             raise ProcessingError(error_msg)
 
-    @weave.op
-    async def call_chat(self, messages, tools_list, cancellation_token, reflect_on_tool_use: bool = True) -> CreateResult | list[ToolOutput] | None:
-        create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token)
+    async def call_chat(
+        self,
+        messages,
+        cancellation_token,
+        tools_list=[],
+        reflect_on_tool_use: bool = True,
+        schema: Optional[type[BaseModel]] = None,
+    ) -> CreateResult | list[ToolOutput] | None:
+        """Pass messages to the Chat LLM, run tools if required, and reflect."""
+        create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
-        if isinstance(create_result.content, str):
+        if not isinstance(create_result.content, list):
             return create_result
 
         tool_outputs = await self._execute_tools(
-            calls=create_result.content,
+            calls=create_result,
             cancellation_token=cancellation_token,
         )
         if not reflect_on_tool_use:

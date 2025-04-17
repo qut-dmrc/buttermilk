@@ -104,6 +104,7 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
 
     @message_handler
@@ -115,12 +116,14 @@ class AutogenAgentAdapter(RoutedAgent):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
-        response = await self.agent.invoke(
+        public_callback = self._make_publish_callback(topic_id=self.topic_id)
+        response = await self.agent._run_fn(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            public_callback=public_callback,
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
         )
+        await public_callback(response)
         return response 
 
     @message_handler
@@ -138,11 +141,12 @@ class AutogenAgentAdapter(RoutedAgent):
     ):
         """Handle conductor requests privately."""
 
-        output = await self.agent.invoke_privately(
+        output = await self.agent._run_fn(
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
         return output  # only the last matching message
 
@@ -151,7 +155,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: OOBMessages,
         ctx: MessageContext,
-    ) -> OOBMessages | TaskProcessingComplete | Sequence[OOBMessages | TaskProcessingComplete] | None:
+    ) -> OOBMessages | Sequence[OOBMessages] | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
         response = await self.agent._handle_control_message(
@@ -159,10 +163,11 @@ class AutogenAgentAdapter(RoutedAgent):
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
         return response  # only the last message
 
-    def _make_publish_callback(self, topic_id=None) -> Callable[[UserInstructions], Awaitable[None]] | None:
+    def _make_publish_callback(self, topic_id=None) -> Callable[[UserInstructions], Awaitable[None]]:
         """Create a callback for handling publishing from client if required.
 
         Returns:

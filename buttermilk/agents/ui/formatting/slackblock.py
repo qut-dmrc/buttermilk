@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from buttermilk._core.contract import AgentOutput
 from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
+from buttermilk.agents.evaluators.scorer import QualScore
 
 
 def format_response(inputs) -> list[str]:
@@ -94,10 +95,11 @@ def blocks_with_icon(
         special_text = []
         if key in data:
             value = data.pop(key)
-            # check for binary icons
-            if isinstance(icon, tuple):
-                icon = icon[0] if value else icon[1]
-            special_text.append(f"{icon} *{key.capitalize()}:* {value}")
+            if value is not None:
+                # check for binary icons
+                if isinstance(icon, tuple):
+                    icon = icon[0] if value else icon[1]
+                special_text.append(f"{icon} *{key.capitalize()}:* {value}")
         if special_text:
             return {
                 "type": "section",
@@ -116,13 +118,19 @@ def dict_to_blocks(input) -> list[dict]:
 
 
 def format_slack_message(result: AgentOutput) -> dict:
-    result_copy = result.model_copy(deep=True)
     """Format message for Slack API with attractive blocks for structured data"""
+
     blocks = []
+
+    result_copy = result.model_copy(deep=True)
+
+    # fix this later -- handling for dict and result objects:
+    if not isinstance(result_copy.outputs, dict):
+        result_copy.outputs = result_copy.outputs.model_dump()
 
     # Add header with model identifier
     header_text = (
-        f":robot_face: {result_copy.role} {result_copy.metadata.get('model')}"
+        f":robot_face: {result_copy.params.get('name', '')} {result_copy.params.get('agent_id', '')}  {result_copy.params.get('model', '')} ".strip()
     )
     blocks.append({
         "type": "header",
@@ -144,108 +152,133 @@ def format_slack_message(result: AgentOutput) -> dict:
         })
 
     else:
-        icontext = blocks_with_icon(
-            result_copy.metadata,
-            [
-                ("input", ":mag:"),
-                ("criteria", ":clipboard:"),
-            ],
-        )
-        if icontext:
-            blocks.append(icontext)
-
-        icontext = blocks_with_icon(
-            result_copy.outputs,
-            [
-                ("prediction", (":biohazard_sign:", ":ring_buoy:")),
-                ("confidence", ":bar_chart:"),
-                ("severity", ":warning:"),
-            ],
-        )
-        if icontext:
-            blocks.append(icontext)
-
-        # Add labels as chips if present
-        if labels := result.outputs.get("labels"):
-            label_text = "*Labels:* " + " ".join([
-                f"`{label}`" for label in labels if label
-            ])
-            if label_text:
-                blocks.append({
+        if isinstance(result_copy.outputs, QualScore):
+            blocks.append(
+                {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": label_text,
+                        "text": str(result_copy.outputs),
                     },
-                })
+                }
+            )
+        else:
+            icontext = blocks_with_icon(
+                result_copy.params,
+                [
+                    ("input", ":mag:"),
+                    ("criteria", ":clipboard:"),
+                ],
+            )
+            if icontext:
+                blocks.append(icontext)
 
-        # Extract reasons for special handling
-        reasons = (
-            result_copy.outputs.pop("reasons", [])
-            if isinstance(result_copy.outputs, dict)
-            else []
-        )
+            judge_results = dict(
+                prediction=result_copy.outputs.pop("prediction", None),
+                confidence=result_copy.outputs.pop("confidence", None),
+                severity=result_copy.outputs.pop("severity", None),
+            )
+            icontext = blocks_with_icon(
+                judge_results,
+                [
+                    ("prediction", (":biohazard_sign:", ":ring_buoy:")),
+                    ("confidence", ":bar_chart:"),
+                    ("severity", ":warning:"),
+                ],
+            )
+            if icontext:
+                blocks.append(icontext)
 
-        # Handle any remaining fields in outputs
-        blocks.extend(dict_to_blocks(result.outputs))
+            # Add labels as chips if present
 
-        # Add divider before reasons if there are any
-        if reasons:
-            blocks.append({
-                "type": "divider",
-            })
+            if labels := result_copy.outputs.pop("labels", None):
+                label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels if label])
+                if label_text:
+                    blocks.append(
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": label_text,
+                            },
+                        }
+                    )
 
-            # Add each reason as its own contextual block for better readability
+            # Extract reasons for special handling
+            reasons = result_copy.outputs.pop("reasons", []) if isinstance(result_copy.outputs, dict) else []
 
-            # Convert reasons to mrkdwn elements
-            reason_elements = [
-                {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
-                for i, reason in enumerate(reasons)
-            ]
-            # Add chunked context blocks
-            blocks.extend(create_context_blocks(reason_elements))
+            # Handle any remaining fields in outputs
+            blocks.extend(dict_to_blocks(result_copy.outputs))
 
-        # Handle records if present
-        if hasattr(result_copy, "records") and result_copy.records:
-            # Process each record
-            for record in result_copy.records:
-                metadata = dict(record.metadata)
-                metadata["record_id"] = record.record_id
-                metadata["title"] = metadata.get("title") or record.title
-
-                # Extract metadata
-                icontext = blocks_with_icon(
-                    record.metadata,
-                    keys_to_icon_map=[
-                        ("title", ":bookmark:"),
-                        ("outlet", ":newspaper:"),
-                        ("date", ":calendar:"),
-                        ("url", ":link:"),
-                        ("record_id", ":id:"),
-                    ],
+            # Add divider before reasons if there are any
+            if reasons:
+                blocks.append(
+                    {
+                        "type": "divider",
+                    }
                 )
 
-                if icontext:
-                    blocks.append(icontext)
+                # Add each reason as its own contextual block for better readability
 
-                elements = []
-                for para in record._paragraphs:
+                # Convert reasons to mrkdwn elements
+                reason_elements = [{"type": "mrkdwn", "text": f"{i + 1}. {reason}"} for i, reason in enumerate(reasons)]
+                # Add chunked context blocks
+                blocks.extend(create_context_blocks(reason_elements))
+
+            # Handle records if present
+            if hasattr(result_copy, "records") and result_copy.records:
+                # Process each record
+                for record in result_copy.records:
+                    record_metadata = dict(record.metadata)
+                    record_metadata["record_id"] = record.record_id
+                    record_metadata["title"] = record_metadata.get("title") or record.title
+
+                    # Extract metadata
+                    icontext = blocks_with_icon(
+                        record.metadata,
+                        keys_to_icon_map=[
+                            ("title", ":bookmark:"),
+                            ("outlet", ":newspaper:"),
+                            ("date", ":calendar:"),
+                            ("url", ":link:"),
+                            ("record_id", ":id:"),
+                        ],
+                    )
+
+                    if icontext:
+                        blocks.append(icontext)
+
+                    elements = []
+
                     # Split text into chunks of ~3000 chars
                     chunk_size = 2950
-                    for i in range(0, len(para), chunk_size):
-                        chunk = para[i : i + chunk_size]
-                        elements.append({
-                            "type": "mrkdwn",
-                            "text": chunk,
-                        })
-                blocks.extend(create_context_blocks(elements))
+                    for i in range(0, len(record.content), chunk_size):
+                        chunk = record.content[i : i + chunk_size]
+                        elements.append(
+                            {
+                                "type": "mrkdwn",
+                                "text": chunk,
+                            }
+                        )
+                    blocks.extend(create_context_blocks(elements))
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
 
+    # If we didn't extract content earlier, do it now:
+    if len(blocks) == 1 and result_copy.content:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": result_copy.content,
+                },
+            }
+        )
     return {
         "blocks": blocks,
-        "text": result.content,
+        "text": result_copy.content,
     }
 
 

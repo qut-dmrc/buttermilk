@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from ast import arguments
+import asyncio
 from collections.abc import Mapping, Sequence
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal, Self
-
 import shortuuid
 from autogen_core.model_context import UnboundedChatCompletionContext
 from pydantic import (
@@ -15,15 +15,17 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+import weave
 
-from buttermilk._core.agent import ChatCompletionContext
+from buttermilk._core import AgentOutput, TaskProcessingComplete
+from buttermilk._core.agent import ChatCompletionContext, FatalError, ProcessingError
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.job import Job
 from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
-from buttermilk.bm import BM
+from buttermilk.bm import BM, logger
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -36,7 +38,6 @@ class Orchestrator(BaseModel, ABC):
 
     Attributes:
         session_id (str): A unique identifier for this flow execution session
-        flow_name (str): The name of the flow being executed
         description (str): Short description of the flow's purpose
         save (SaveInfo | None): Configuration for saving flow results
         data (Sequence[DataSource]): Data sources available to the flow
@@ -44,12 +45,15 @@ class Orchestrator(BaseModel, ABC):
         params (dict): Flow-level parameters that can be used by agents
 
     """
-
+    bm: BM = Field(...)
     session_id: str = Field(
-        default_factory=shortuuid.uuid,
+        default_factory=lambda: shortuuid.uuid()[:8],
         description="A unique session id for this set of flow runs.",
     )
-    flow_name: str
+    name: str = Field(
+        ...,
+        description="Friendly name of this flow",
+    )
     description: str = Field(
         default_factory=shortuuid.uuid,
         description="Short description of this flow",
@@ -117,60 +121,107 @@ class Orchestrator(BaseModel, ABC):
 
         return self
 
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data.
-
-        This generator yields a series of steps to be executed in sequence,
-        with each step containing the role and prompt information.
-
-        Yields:
-            StepRequest: An object containing:
-                - 'role' (str): The agent role/step name to execute
-                - 'prompt' (str): The prompt text to send to the agent
-                - Additional key-value pairs that might be needed for agent execution
-
-        Example:
-            >>> async for step in self._get_next_step():
-            >>>     await self._execute_step(**step)
-
-        """
-        for step_name in self.agents.keys():
-            yield StepRequest(role=step_name, source=self.flow_name)
-
-    @abstractmethod
-    async def run(self, request: Any = None) -> None:
-        """Starts a flow, given an incoming request.
-
-        This is the main entry point for flow execution that must be implemented
-        by subclasses with their specific orchestration logic.
-
-        Args:
-            request: Optional input data for starting the flow
-
-        """
-        # loop
-
-        # save the results
-        # flow_data ...
-        while True:
-            try:
-                # Get next step in the flow
-                step = await anext(self._get_next_step())
-            except StopAsyncIteration:
-                # No more steps available, terminate the loop
-                break
-            request = await self._prepare_step(step)
-            await self._execute_step(step)
-            # execute step
-
-    @abstractmethod
-    async def _execute_step(
-        self,
-        step: StepRequest,
-    ) -> None:
+    async def _get_next_step(self) -> StepRequest:
+        """Determine the next step based on the current flow data."""
         raise NotImplementedError()
 
-    async def __call__(self, request=None) -> Job:
+    async def run(self, request: StepRequest | None = None) -> None:
+        """Starts a flow, given an incoming request."""
+
+        client = self.bm.weave
+        tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__()}
+        with weave.attributes(tracing_attributes):
+            _traced = weave.op(
+                self._run,
+                call_display_name=f"{tracing_attributes['flow']} {self.     params.get('criteria','')}",
+            )
+        output, call = await _traced.call(request=request)
+        client.finish_call(call)
+        logger.info(f"Finished...")
+        return
+
+    async def _run(self, request: StepRequest | None = None) -> None:
+        """Main execution method that sets up agents and manages the flow.
+
+        By default, this runs through a sequence of pre-defined steps.
+        """
+        try:
+            await self._setup()
+            if request:
+                step = await self._prepare_step(request)
+                await self._execute_step(request)
+                # we haven't started yet, so we're going to send a completion through manually
+                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
+                await asyncio.sleep(5)
+                await self._runtime.publish_message(
+                    (TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=-1, more_tasks_remain=False)), topic_id=self.topic_id
+                )
+            while True:
+                try:
+                    # Loop until we receive an error
+                    await asyncio.sleep(1)
+
+                    # # Get next step in the flow
+                    if not (request := await self._get_next_step()):
+                        # No next step at the moment; wait and try a bit
+                        await asyncio.sleep(10)
+                        continue
+
+                    if not await self._in_the_loop(request):
+                        # User did not confirm plan; go back and get new instructions
+                        continue
+
+                    if request:
+                        step = await self._prepare_step(request)
+                        await self._execute_step(step)
+
+                except ProcessingError as e:
+                    # non-fatal error
+                    logger.error(f"Error in Orchestrator run: {e}")
+                    continue
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:  # This is only here for debugging for now.
+                    logger.exception(f"Error in Orchestrator.run: {e}")
+                    raise FatalError from e
+
+        except (StopAsyncIteration, KeyboardInterrupt):
+            logger.info("Orchestrator.run: Flow completed.")
+        except FatalError as e:
+            logger.exception(f"Error in Orchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()
+
+    @abstractmethod
+    async def _cleanup(self):
+        raise NotImplementedError
+
+    async def _in_the_loop(self, step: StepRequest) -> bool:
+        """Just run."""
+        return True
+
+    async def execute(self, request: StepRequest) -> AgentOutput | None:
+        """Execute a single step in the flow.
+
+        Args:
+            request: The step to execute
+
+        Returns:
+            Step outputs
+
+        """
+        step = self._prepare_step(request)
+        with weave.attributes(dict(step=request.role, session_id=self.session_id)):
+            _traced = weave.op(
+                self._execute_step,
+                call_display_name=f"{request.role} {self.session_id}",
+            )
+        return await _traced(step)
+
+    async def __call__(self, request=None) -> None:
         """Makes the orchestrator callable, allowing it to be used as a function.
 
         Args:
@@ -180,11 +231,12 @@ class Orchestrator(BaseModel, ABC):
             Job: A job representing the flow execution
 
         """
-        return await self.run(request=request)
+        await self.run(request=request)
+        return
 
     async def _prepare_step(
         self,
-        step: StepRequest,
+        request: StepRequest,
     ) -> AgentInput:
         """Create an AgentInput message for sending to an agent.
 
@@ -206,7 +258,7 @@ class Orchestrator(BaseModel, ABC):
             AgentInput: A prepared message that can be sent to an agent
 
         """
-        config = self.agents[step.role]
+        config = self.agents[request.role]
 
         input_map = dict(config.inputs)
 
@@ -214,17 +266,27 @@ class Orchestrator(BaseModel, ABC):
         inputs = self._flow_data._resolve_mappings(input_map)
 
         return AgentInput(
-            role=step.role,
-            source=self.flow_name,
+            role=request.role,
             inputs=inputs,
             context=await self._model_context.get_messages(),
             records=self._records,
-            parameters=step.arguments,
-            prompt=step.prompt,
+            prompt=request.prompt,
         )
+
+    @abstractmethod
+    async def _execute_step(
+        self,
+        step: AgentInput,
+    ) -> AgentOutput | None:
+        # Run step
+        raise NotImplementedError
 
 
 class OrchestratorProtocol(BaseModel):
     bm: BM
     flows: Mapping[str, Orchestrator]
     ui: Literal["console", "slackbot"]
+    orchestrator: str | None = None
+    flow: str | None = None
+    criteria: str | None = None
+    record: str | None = None

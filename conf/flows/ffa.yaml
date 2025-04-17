@@ -11,7 +11,7 @@ defaults:
       - frames
 
 ffa:
-  flow_name: ffa
+  name: ffa
   orchestrator: Selector
   description: Society of Mind free-for-all chat
   agents:

@@ -23,15 +23,17 @@ def judger(request):
 
 
 @pytest.mark.anyio
-async def test_run_flow_judge(judger, fight_no_more_forever):
+async def test_run_flow_judge(agent: LLMAgent, fight_no_more_forever):
     agent_input = AgentInput(
+        role="testing",
         role="judge",
         records=[fight_no_more_forever],
     )
-    result = await judger._run_fn(message=agent_input)
+    result = await judger._process(inputs=agent_input)
     assert result
     assert isinstance(result, AgentOutput)
     assert not result.error
+    assert isinstance(result.outputs, Record)
     assert result.outputs and isinstance(result.outputs, dict)
     assert result.outputs["prediction"] is False
     assert len(result.outputs["reasons"]) > 0

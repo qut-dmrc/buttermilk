@@ -91,23 +91,23 @@ class AssistantAgentWrapper(Agent):
 
         return self
 
-    async def _process(self, inputs: AgentInput, cancellation_token: CancellationToken, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
 
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
         # Don't respond to own messages or irrelevant types.
-        if inputs.source == self.role:
+        if inputs.role == self.role:
             return None
 
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
-        if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
-            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(message)} from {message.source}")
+        if not isinstance(inputs, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
+            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(inputs)} from {source}")
             return None
 
         # Handle ConductorRequest specifically if needed
-        if isinstance(message, ConductorRequest):
+        if isinstance(inputs, ConductorRequest):
             logger.warning(f"Agent {self.role} received ConductorRequest, not fully implemented.")
             # Potentially extract relevant info or yield specific output
             return None
@@ -120,24 +120,17 @@ class AssistantAgentWrapper(Agent):
         # into the format expected by AssistantAgent.on_messages.
         messages_to_send: list[BaseChatMessage] = []
 
-        context_messages = message.context
-        for ctx_msg in context_messages:
-            # Map Buttermilk message types to Autogen message types
-            if isinstance(ctx_msg, AgentOutput) and ctx_msg.source == self.role:
-                messages_to_send.append(AssistantMessage(content=str(ctx_msg.content), source=ctx_msg.source))
-            elif isinstance(ctx_msg, (UserInstructions, AgentInput, AgentOutput)):
-                messages_to_send.append(UserMessage(content=str(ctx_msg.content), source=getattr(ctx_msg, "agent_id", "unknown")))
-            # Add mappings for other types if necessary
+        context_messages = inputs.context
 
         # Add the current incoming message content as the latest UserMessage
-        if message.content:
-            messages_to_send.append(UserMessage(content=message.content, source=message.source))
-        elif message.inputs:
+        if inputs.prompt:
+            messages_to_send.append(UserMessage(content=message.content, source=source))
+        elif inputs.inputs:
             # Fallback: serialize inputs dict if no direct content
-            messages_to_send.append(UserMessage(content=json.dumps(message.inputs), source=message.source))
+            messages_to_send.append(UserMessage(content=json.dumps(message.inputs), source=source))
         else:
             # If the message has no content or inputs, maybe don't process?
-            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs from {message.source}. Skipping.")
+            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs from {source}. Skipping.")
             return None
 
         # --- Call AssistantAgent ---
@@ -148,7 +141,6 @@ class AssistantAgentWrapper(Agent):
         except Exception as e:
             logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
             return AgentOutput(
-                source=self.id,
                 role=self.role,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
@@ -197,8 +189,7 @@ class AssistantAgentWrapper(Agent):
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
         return AgentOutput(
-            source=self.role,
-            role=self.name,
+            role=self.role,
             content=output_content,
             outputs=output_data,
             metadata=final_metadata,

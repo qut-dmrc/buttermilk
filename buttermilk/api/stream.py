@@ -26,8 +26,6 @@ from buttermilk.utils.validators import (
     sanitize_html,
 )
 
-bm = None
-
 
 class FlowRequest(BaseModel):
     # The aliases on this object are less strict, so that we can account

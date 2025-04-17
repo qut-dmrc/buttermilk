@@ -48,7 +48,7 @@ class RetryWrapper(BaseModel):
     """
 
     client: Any
-    concurrency: int = 15
+    concurrency: int = 8
     cooldown_seconds: float = 0.1
     max_retries: int = 6
     min_wait_seconds: float = 5.0

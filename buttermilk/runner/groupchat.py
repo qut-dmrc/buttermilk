@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Self
+from typing import Any, AsyncGenerator, Self
 
 import pydantic
 import shortuuid
@@ -12,12 +12,18 @@ from autogen_core import (
     SingleThreadedAgentRuntime,
     TopicId,
     TypeSubscription,
+    message_handler,
 )
 from pydantic import Field, PrivateAttr
+import weave
 
+from buttermilk._core import TaskProcessingComplete
+from buttermilk._core.agent import ConductorRequest, FatalError, ProcessingError
 from buttermilk._core.contract import (
     CLOSURE,
+    CONDUCTOR,
     CONFIRM,
+    END,
     MANAGER,
     AgentInput,
     AgentOutput,
@@ -39,59 +45,20 @@ class AutogenOrchestrator(Orchestrator):
 
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _user_confirmation: asyncio.Queue
     _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
-    # Additional configuration
-    max_wait_time: int = Field(
-        default=300,
-        description="Maximum time to wait for agent responses in seconds",
-    )
 
     _topic: TopicId = PrivateAttr(
         default_factory=lambda: DefaultTopicId(
             type=f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}",
         ),
     )
-    _last_message: AgentOutput | None = PrivateAttr(default=None)
 
-    @pydantic.model_validator(mode="after")
-    def open_queue(self) -> Self:
-        self._user_confirmation = asyncio.Queue(maxsize=1)
-        return self
-
-    async def run(self, request: Any = None) -> None:
-        """Main execution method that sets up agents and manages the flow.
-
-        By default, this just sends an initial message to spawn the agents
-        and then loops until cancelled.
-        """
-        try:
-            # Setup autogen runtime environment
-            await self._setup_runtime()
-
-            # start the agents
-            await self._runtime.publish_message(
-                FlowMessage(source=self.flow_name, role="orchestrator"),
-                topic_id=self._topic,
-            )
-            if request:
-                await self._runtime.publish_message(request, topic_id=self._topic)
-            while True:
-                await asyncio.sleep(0.1)
-        except (StopAsyncIteration, KeyboardInterrupt):
-            logger.info("AutogenOrchestrator.run: Flow completed.")
-        finally:
-            # Clean up resources
-            await self._cleanup()
-
-    async def _setup_runtime(self):
+    async def _setup(self):
         """Initialize the autogen runtime and register agents"""
-        # loop = asyncio.get_running_loop()
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register agents for each step
         await self._register_agents()
-
         # Start the runtime
         self._runtime.start()
 
@@ -160,14 +127,6 @@ class AutogenOrchestrator(Orchestrator):
         topic_id = DefaultTopicId(type=MANAGER)
         await self._runtime.publish_message(message, topic_id=topic_id)
 
-    async def _execute_step(
-        self,
-        step: StepRequest,
-    ) -> None:
-        message = await self._prepare_step(step=step)
-        topic_id = DefaultTopicId(type=step.role)
-        await self._runtime.publish_message(message, topic_id=topic_id)
-
     async def _cleanup(self):
         """Clean up resources when flow is complete"""
         try:
@@ -176,3 +135,97 @@ class AutogenOrchestrator(Orchestrator):
             await asyncio.sleep(2)  # Give it some time to properly shut down
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
+
+    async def _execute_step(
+        self,
+        step: AgentInput,
+    ) -> AgentOutput | None:
+        topic_id = DefaultTopicId(type=step.role)
+        await self._runtime.publish_message(step, topic_id=topic_id)
+        return None
+
+    async def _get_next_step(self) -> StepRequest | None:
+        """Determine the next step based on the current flow data."""
+
+        # Each step, we proceed by asking the CONDUCTOR agent what to do.
+        request = ConductorRequest(
+            role=self.name,
+            inputs={"participants": dict(self._agent_types.items()), "task": self.params.get("task")},
+        )
+        responses = await self._ask_agents(
+            CONDUCTOR,
+            message=request,
+        )
+
+        # Determine the next step based on the response
+        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
+            logger.warning("Conductor could not get next step.")
+            return None
+
+        next_step = instructions.role
+        if next_step == END:
+            raise StopAsyncIteration("Host signaled that flow has been completed.")
+
+        if next_step.lower() not in self._agent_types:
+            raise ProcessingError(
+                f"Step {next_step} not found in registered agents.",
+            )
+
+        # We're going to wait a bit between steps.
+        await asyncio.sleep(5)
+        return instructions
+
+    async def _run(self, request: StepRequest | None = None) -> None:
+        """Main execution method that sets up agents and manages the flow.
+
+        By default, this runs through a sequence of pre-defined steps.
+        """
+        try:
+            await self._setup()
+            if request:
+                step = await self._prepare_step(request)
+                await self._execute_step(step)
+                # we haven't started yet, so we're going to send a completion through manually
+                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
+                await asyncio.sleep(5)
+                await self._runtime.publish_message(
+                    (TaskProcessingComplete(agent_id=step.role, role=step.role, task_index=-1, more_tasks_remain=False)), topic_id=self._topic
+                )
+            while True:
+                try:
+                    # Loop until we receive an error
+                    await asyncio.sleep(1)
+
+                    # # Get next step in the flow
+                    if not (request := await self._get_next_step()):
+                        # No next step at the moment; wait and try a bit
+                        await asyncio.sleep(10)
+                        continue
+
+                    if not await self._in_the_loop(request):
+                        # User did not confirm plan; go back and get new instructions
+                        continue
+
+                    if request:
+                        step = await self._prepare_step(request)
+                        await self._execute_step(step)
+
+                except ProcessingError as e:
+                    # non-fatal error
+                    logger.error(f"Error in Orchestrator run: {e}")
+                    continue
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:  # This is only here for debugging for now.
+                    logger.exception(f"Error in Orchestrator.run: {e}")
+                    raise FatalError from e
+
+        except (StopAsyncIteration, KeyboardInterrupt):
+            logger.info("Orchestrator.run: Flow completed.")
+        except FatalError as e:
+            logger.exception(f"Error in Orchestrator.run: {e}")
+        finally:
+            # Clean up resources
+            await self._cleanup()

@@ -12,7 +12,7 @@ from slack_bolt.async_app import AsyncApp
 
 from buttermilk._core.contract import MANAGER, AssistantMessage, FlowProtocol, UserMessage
 from buttermilk._core.variants import AgentRegistry
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
@@ -27,6 +27,7 @@ RESUME = "resume"
 
 ALLPATTERNS = re.compile(r"mod(.*)")
 
+bm = BM()
 
 def initialize_slack_bot(
     *,
@@ -162,6 +163,7 @@ async def register_handlers(
             )
             t = asyncio.create_task(
                 start_flow_thread(
+                    bm=bm,
                     context=context,
                     slack_app=slack_app,
                     flow_cfg=flows[flow_id],
@@ -229,6 +231,7 @@ async def read_thread_history(
 
 
 async def start_flow_thread(
+    bm: BM,
     context: SlackContext,
     slack_app: AsyncApp,
     flow_cfg: FlowProtocol,
@@ -236,9 +239,9 @@ async def start_flow_thread(
     init_text: str,
 ) -> None:
     logger.info(
-        f"Starting flow {flow_cfg.flow_name} in Slack thread {context.thread_ts}...",
+        f"Starting flow {flow_cfg.name} in Slack thread {context.thread_ts}...",
         extra={
-            "flow_name": flow_cfg.flow_name,
+            "name": flow_cfg.name,
             "channel_id": context.channel_id,
             "thread_ts": context.thread_ts,
             "user_id": context.user_id,
@@ -286,17 +289,18 @@ async def start_flow_thread(
             f"Creating {orchestrator_name} orchestrator",
             extra={
                 "orchestrator": orchestrator_name,
-                "flow_name": _config.get("flow_name", "unknown"),
+                "name": _config.get("name", "unknown"),
                 "history_length": len(history),
             },
         )
-        thread_orchestrator = globals()[orchestrator_name](**_config, history=history)
+        thread_orchestrator = globals()[orchestrator_name](bm=bm, **_config, history=history)
+
         t = asyncio.create_task(thread_orchestrator.run())
         await orchestrator_tasks.put(t)
         logger.debug(
             "Flow task created and queued",
             extra={
-                "flow_name": _config.get("flow_name", "unknown"),
+                "name": _config.get("name", "unknown"),
                 "thread_ts": context.thread_ts,
             },
         )
@@ -306,7 +310,7 @@ async def start_flow_thread(
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
-                "flow_name": flow_cfg.flow_name,
+                "name": flow_cfg.name,
                 "thread_ts": context.thread_ts,
                 "traceback": traceback.format_exc(),
             },

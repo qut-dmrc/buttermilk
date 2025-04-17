@@ -9,6 +9,6 @@ differentiator:
   tasks:
     criteria: Evaluate how well the provided content aligns with the rules.
   parameters:
-    template: evaluate
+    template: differences
   inputs:
     answers: "[judge,synth][]"

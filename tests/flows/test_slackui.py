@@ -91,7 +91,7 @@ async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     """Test handling of AgentOutput messages."""
     message = AgentOutput(
-        source="test",
+        role="test",
         content="Test output",
         outputs={"key": "value"},
     )
@@ -115,7 +115,7 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
     message = AgentOutput(
-        source="test",
+        role="test",
         content="Test output",
         outputs={"key": "value"},
     )
@@ -137,8 +137,9 @@ async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
 @pytest.mark.asyncio
 async def test_request_user_input_boolean(slack_ui_agent):
     """Test requesting user input with boolean options."""
-    message = ManagerRequest(role="tester",
-        source="test",
+    message = ManagerRequest(
+        role="tester",
+        role="test",
         content="Do you want to continue?",
         options=True,
     )
@@ -162,7 +163,7 @@ async def test_request_user_input_boolean(slack_ui_agent):
 async def test_request_user_input_options_list(slack_ui_agent):
     """Test requesting user input with a list of options."""
     message = ManagerRequest(
-        source="test",
+        role="test",
         content="Choose an option:",
         options=["Option 1", "Option 2", "Option 3"],
     )
@@ -189,7 +190,7 @@ async def test_update_existing_input_message(slack_ui_agent):
     slack_ui_agent._current_input_message = MagicMock(data={"ts": "existing_ts"})
 
     message = ManagerRequest(
-        source="test",
+        role="test",
         content="New question?",
         options=True,
     )

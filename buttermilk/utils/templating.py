@@ -34,7 +34,7 @@ class KeyValueCollector(BaseModel):
         key: str,
         value: Any,
     ) -> None:
-        if isinstance(value, str):
+        if not (isinstance(value, list) and not isinstance(value, str)):
             value = [value]
 
         if key in self._data:

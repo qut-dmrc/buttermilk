@@ -18,10 +18,12 @@ def mock_agent():
     agent = MagicMock(spec=Agent)
     agent.id = "test_agent"
     agent.description = "Test agent description"
-    agent.__call__ = AsyncMock(return_value=AgentOutput(
-        source="test_agent",
-        content="Test output",
-    ))
+    agent.__call__ = AsyncMock(
+        return_value=AgentOutput(
+            role="test_agent",
+            content="Test output",
+        )
+    )
     agent.initialize = AsyncMock()
     agent.receive_output = AsyncMock(return_value=None)
     return agent
@@ -95,10 +97,12 @@ async def test_agent_adapter_process_request_conductor():
     agent = MagicMock(spec=Agent)
     agent.id = f"{CONDUCTOR}-test"
     agent.description = "Test conductor"
-    agent.__call__ = AsyncMock(return_value=AgentOutput(
-        source=f"{CONDUCTOR}-test",
-        content="Test output",
-    ))
+    agent.__call__ = AsyncMock(
+        return_value=AgentOutput(
+            role=f"{CONDUCTOR}-test",
+            content="Test output",
+        )
+    )
     agent.initialize = AsyncMock()
 
     with patch("asyncio.create_task"):
@@ -128,7 +132,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = "different_agent"
 
-    message = AgentOutput(source="other_agent", content="test output")
+    message = AgentOutput(role="other_agent", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 
@@ -143,7 +147,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = agent_adapter.id
 
-    message = AgentOutput(source=agent_adapter.agent.id, content="test output")
+    message = AgentOutput(role=agent_adapter.agent.role, content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 

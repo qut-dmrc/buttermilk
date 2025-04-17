@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import Awaitable
-from math import ceil
 from huggingface_hub import User
 from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.contract import (
@@ -15,6 +14,7 @@ from buttermilk._core.contract import (
     OOBMessages,
     StepRequest,
     TaskProcessingStarted,
+    ToolOutput,
     UserMessage,
 )
 from buttermilk.agents.llm import LLMAgent
@@ -55,17 +55,15 @@ class HostAgent(LLMAgent):
         default=0.8,
         description="Ratio of agents that must complete a step before proceeding (0.0 to 1.0)",
     )
-    _step_generator: Any = PrivateAttr(default=None)
     _current_step_name: str | None = PrivateAttr(default=None)
     _completed_agents_current_step: set[str] = PrivateAttr(default_factory=set)
     _expected_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-
     _participants: dict = PrivateAttr(default={})
     _step_completion_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent"""
         self._input_callback = input_callback
-        self._step_generator = self._get_next_step()
         self._step_completion_event.set()  # Ready to process
         await super().initialize(**kwargs) # Call parent initialize if needed
 
@@ -96,65 +94,37 @@ class HostAgent(LLMAgent):
     ) -> OOBMessages | None:
 
         # --- Handle Task Completion from Worker Agents ---
-        if isinstance(message, TaskProcessingComplete):
-            if message.role == self._current_step_name:
-                self._completed_agents_current_step.add(message.agent_id)
-                logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
-        elif isinstance(message, TaskProcessingStarted):
-            if message.role == self._current_step_name:
+        if isinstance(message, TaskProcessingStarted):
+            if message.role == self._expected_agents_current_step:
                 self._expected_agents_current_step.add(message.agent_id)
+        elif isinstance(message, TaskProcessingComplete):
+            if message.role == self._expected_agents_current_step:
+                self._completed_agents_current_step.add(message.agent_id)
+                logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")"
 
-        await self._check_completions()
-
-    async def _check_completions(self) -> None:
-        required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
-        logger.info(
-            f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
-        )
-        if len(self._completed_agents_current_step) >= required_completions:
-            logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
-            self._step_completion_event.set()
-        else:
-            self._step_completion_event.clear()
+            required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
+            if len(self._completed_agents_current_step) >= required_completions:
+                logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
+                self._step_completion_event.set()  # Signal that enough agents are done
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         try:
             # Wait for enough completions, with a timeout
-            await self._check_completions()
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
-            logger.info(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
             logger.warning(
                 f"Timeout waiting for step completion. "
                 f"Proceeding with {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed agents."
             )
-
-        if not self._participants:
-            # initialise
-            self._participants = inputs.inputs['participants']
-
-        step = await anext(self._step_generator)
-        if step.role == self.role:
-            # don't call ourselves please
+        finally:
+            # Reset completion tracking
+            self._current_step_name = None
+            self._expected_agents_current_step.clear()
+            self._completed_agents_current_step.clear()
             self._step_completion_event.clear()
-            return None
 
-        # Reset completion tracking
-        self._current_step_name = step.role
-        self._expected_agents_current_step.clear()
-        self._completed_agents_current_step.clear()
-        self._step_completion_event.clear()
+        result = await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
 
-        response = AgentOutput(role=self.role)
-        response.outputs = step
-        logger.info(f"Next step: {self._current_step_name}.")
-
-        return response
-
-    async def _get_next_step(self) -> AsyncGenerator[StepRequest, None]:
-        """Determine the next step based on the current flow data."""
-        while self._participants is None:
-            await asyncio.sleep(0.1)
-        for step_name, cfg in self._participants.items():
-            yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
-        yield StepRequest(role=END, description=f"Sequence wrapping up.")
+        self._current_step_name = result.outputs.role 
+        
+        return result

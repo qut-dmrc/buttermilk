@@ -23,14 +23,16 @@
     "**/node_modules",
     "**/__pycache__",
     ".git",
-    ".venv"
+    ".venv",
+    ".venv/**/*",
   ],
   "python.analysis.extraPaths": [
+    "tests"
     // ".venv/**/*"
   ],
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.autoSearchPaths": false,
-  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.useLibraryCodeForTypes": false,
   "python.analysis.indexing": true,
   "python.analysis.autoImportCompletions": true,
   "python.analysis.packageIndexDepths": [

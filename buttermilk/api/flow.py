@@ -32,91 +32,6 @@ flows = dict()
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg"}'
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
 # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
-# gcloud pubsub topics publish TOPIC_ID --message='{"task": "summarise_osb", "uri": "gs://dmrc-platforms/data/osb/FB-515JVE4X.md", "record_id": "FB-515JVE4X"}
-
-
-def callback(message):
-    results = None
-    try:
-        data = load_json_flexi(message.data)
-        task = data.pop("task")
-        request = FlowRequest(**data)
-        message.ack()
-    except Exception as e:
-        message.nack()
-        logger.error(f"Error parsing Pub/Sub message: {e}")
-        return
-
-    try:
-        logger.info(f"Calling flow {task} for Pub/Sub job...")
-
-        async def process_generator():
-            results = []
-            async for result in flow_stream(flows[task], request):
-                results.append(result)
-            return results
-
-        results = asyncio.run(
-            process_generator(),
-        )
-        message.ack()
-
-    except Exception as e:
-        logger.error(f"Error processing message: {e}")
-        message.nack()
-
-    logger.info("Completed Pub/Sub job.")
-
-
-def start_pubsub_listener():
-    # publisher = pubsub.PublisherClient()
-    subscriber = pubsub.SubscriberClient()
-    subscription_path = subscriber.subscription_path(
-        bm.cfg.pubsub.project,
-        bm.cfg.pubsub.subscription,
-    )
-    topic_path = subscriber.topic_path(bm.cfg.pubsub.project, bm.cfg.pubsub.topic)
-
-    # if "dead_letter_topic_id" in bm.cfg.pubsub:
-    #     dead_letter_topic_path = publisher.topic_path(
-    #         bm.cfg.pubsub.project,
-    #         bm.cfg.pubsub.dead_letter_topic,
-    #     )
-    #     logger.info(
-    #         "Pub/Sub forwarding failed messages to: {dead_letter_topic_path} after {bm.cfg.pubsub.max_retries} retries.",
-    #     )
-    #     dead_letter_policy = {
-    #         "dead_letter_topic": dead_letter_topic_path,
-    #         "max_delivery_attempts": bm.cfg.pubsub.max_retries,
-    #     }
-    # else:
-    #     dead_letter_policy = None
-
-    # # try to create the subscription if necessary
-    # try:
-    #     with subscriber:
-    #         request = {
-    #             "name": subscription_path,
-    #             "topic": topic_path,
-    #             "dead_letter_policy": dead_letter_policy,
-    #         }
-    #         subscription = subscriber.create_subscription(request)
-    # except Exception as e:
-    #     logger.error(
-    #         f"Unable to create pub/sub subscription {subscription_path}: {e}, {e.args=}",
-    #     )
-
-    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
-    logger.info(f"Listening for messages on {subscription_path} topic {topic_path}...")
-
-    try:
-        streaming_pull_future.result()
-    except KeyboardInterrupt:
-        streaming_pull_future.cancel()
-
-
-bm = None
-templates = Jinja2Templates(directory="buttermilk/api/templates")
 
 
 @app.exception_handler(Exception)
@@ -148,28 +63,42 @@ async def get_runs_html(request: Request) -> HTMLResponse:
     return HTMLResponse(rendered_result.body.decode("utf-8"), status_code=200)
 
 
-@app.api_route("/flow/{flow}", methods=["GET", "POST"])
+@app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
 async def run_flow_json(
-    flow: Literal[
-        "hate",
-        "simple",
-        "trans",
-        "osb",
-        "osbfulltext",
-        "summarise_osb",
-        "test",
-        "describer",
-    ],
+    flow_name: str,
     request: Request,
     flow_request: FlowRequest | None = "",
 ) -> StreamingResponse:
-    if flow not in flows:
-        raise HTTPException(status_code=403, detail="Flow not valid")
+    """Run a flow with provided inputs."""
+
+    # Access state via request.app.state
+    if not hasattr(request.app.state, "flows") or flow_name not in request.app.state.flows:
+        raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
+
+    if not hasattr(request.app.state, "bm"):
+        raise HTTPException(status_code=500, detail="BM instance not found in app state")
+
+    current_bm = request.app.state.bm
+    # Get a copy of the flow config to avoid modifying the state directly
+    flow_config = request.app.state.flows[flow_name].copy()
+    orchestrator_name = flow_config.get("orchestrator", None)
+
+    orchestrator = None
+    if orchestrator_name:
+        orchestrator_cls = request.app.state.orchestrators.get(orchestrator_name)
+        if orchestrator_cls:
+            orchestrator = orchestrator_cls(bm=current_bm, **flow_config)
+        else:
+            logger.error(f"Unknown orchestrator name specified: {orchestrator_name}")
+            raise HTTPException(status_code=500, detail=f"Invalid orchestrator configuration: {orchestrator_name}")
+    else:
+        raise HTTPException(status_code=500, detail="Orchestrator not specified in flow config")
 
     return StreamingResponse(
-        flow_stream(flows[flow], flow_request),
+        flow_stream(orchestrator.run(), flow_request),
         media_type="application/json",
     )
+    raise HTTPException(status_code=403, detail="Flow not valid")
 
 
 @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
@@ -233,32 +162,3 @@ async def log_cors_failures(request: Request, call_next):
 
     response = await call_next(request)
     return response
-
-
-class _CFG(BaseModel):
-    bm: BM
-    save: Mapping
-    flows: dict[str, Flow]
-
-
-@hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def main(cfg: _CFG):
-    global bm, logger, app, flows
-
-    # Hydra will automatically instantiate the objects
-    objs = hydra.utils.instantiate(cfg)
-
-    bm = objs.bm
-    flows = objs.flows
-
-    logger = logger
-
-    listener_thread = threading.Thread(target=start_pubsub_listener)
-    listener_thread.start()
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-    # writer = TableWriter(**cfg.save)
-
-
-if __name__ == "__main__":
-    main()

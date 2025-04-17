@@ -1,7 +1,9 @@
 import asyncio
 from curses import meta
 import json
-from typing import Any, AsyncGenerator, Callable, Self
+import pprint
+from types import NoneType
+from typing import Any, AsyncGenerator, Callable, Optional, Self
 
 from autogen_core.models._types import UserMessage
 import pydantic
@@ -16,7 +18,7 @@ from autogen_core.models import (
 )
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from promptflow.core._prompty_utils import parse_chat
-from pydantic import Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 import weave
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse
@@ -52,7 +54,7 @@ class LLMAgent(Agent):
     )
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: AutoGenWrapper = PrivateAttr()
-
+    _output_model: Optional[type[BaseModel]] = None
     _pause: bool = PrivateAttr(default=False)
 
     # @pydantic.model_validator(mode="after")
@@ -117,46 +119,48 @@ class LLMAgent(Agent):
                 raise ProcessingError(err)
         return messages
 
-    async def _create_agent_output(
-        self,
-        chat_result: CreateResult,
-        inputs: AgentInput,
-        error_msg: str | None = None,
-    ) -> AgentOutput:
-        """Helper method to create AgentOutput instances."""
-        try:
-            outputs = self._json_parser.parse(chat_result.content)
-        except Exception as parse_error:
-            logger.warning(f"Failed to parse LLM response as JSON: {parse_error}")
-            outputs = dict(response=chat_result.content)
-            if not error_msg:
-                error_msg = f"JSON parsing error: {parse_error}"
-
-        output = AgentOutput(role=self.role, source=self.id)
-
-        output.metadata = outputs.pop("metadata", {})
-        output.outputs = outputs
-        output.content = json.dumps(outputs, indent=2, sort_keys=True)
+    def make_output(self, chat_result: CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
+        output = AgentOutput(role=self.role)
         output.inputs = inputs.model_copy(deep=True)
+        output.metadata = chat_result.model_dump(exclude="content")
 
-        if error_msg:
-            output.error = error_msg
+        model_metadata = self.parameters
+        model_metadata.update({"role": self.role, "agent_id": self.id, "name": self.name, "prompt": inputs.prompt})
+        model_metadata.update(inputs.parameters)
+        output.params = model_metadata
 
+        if schema:
+            try:
+                output.outputs = schema.model_validate_json(chat_result.content)
+                return output
+            except Exception as e:
+                error = f"Error parsing response from LLM: {e} into {type(schema)}"
+                logger.warning(error, exc_info=False)
+
+        if isinstance(chat_result.content, str):
+            try:
+                output.outputs = self._json_parser.parse(chat_result.content)
+            except Exception as parse_error:
+                error = f"Failed to parse LLM response as JSON: {parse_error}"
+                logger.warning(error, exc_info=False)
+                output.outputs = dict(response=chat_result.content)
+
+        output.content = pprint.pformat(output.outputs)
         return output
 
-    async def _process(
-        self,
-        inputs: AgentInput,
-        cancellation_token: CancellationToken = None,
-        **kwargs,
-    ) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
 
         messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
-        chat_result = await self._model_client.call_chat(
-            messages=messages, tools_list=self._tools_list, cancellation_token=cancellation_token, reflect_on_tool_use=True
+        result = await self._model_client.call_chat(
+            messages=messages,
+            tools_list=self._tools_list,
+            cancellation_token=cancellation_token,
+            reflect_on_tool_use=True,
+            schema=self._output_model,
         )
-        result = await self._create_agent_output(chat_result, inputs=inputs)
+        result = self.make_output(result, inputs=inputs, schema=self._output_model)
+
         return result
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:

@@ -33,6 +33,7 @@ async def test_cheap_llm(llm):
 
 
 class TestPromptStyles:
+
     @pytest.mark.anyio
     async def test_usertext_and_placeholder(
         self,
@@ -50,8 +51,9 @@ class TestPromptStyles:
 
         assert response.content
 
+    @pytest.mark.integration
     @pytest.mark.anyio
-    async def test_words_in_mouth(self, llm):
+    async def test_words_in_mouth(self, llm_expensive):
         messages = [
             UserMessage(content="hi! I'm Siobhan. What's your name?", source="test"),
             AssistantMessage(content= "Hi Siobhan! I'm a chatbot, my developers call me",
@@ -59,7 +61,7 @@ class TestPromptStyles:
             ),
         ]
 
-        response = await llm.create(messages=messages)
+        response = await llm_expensive.create(messages=messages)
 
         assert response.content
         assert response.content.startswith(" ")  # starts with a space
@@ -67,19 +69,17 @@ class TestPromptStyles:
 
     class AgentResponse(BaseModel):
         conclusion: str = Field(..., description="Your conlusion or final answer.")
-        prediction: bool | None = Field(
-            default=None,
+        prediction: bool = Field(
             description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
         )
         reasons: list[str] = Field(
             ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis."
         )
-        confidence: Literal["high", "medium", "low"] = Field(default=None, description="Your confidence in the overall conclusion.")
-        error: str | None = Field(default=None, description="Error message if an error occurred (i.e. missing data or instructions).")
-        thoughts: str | None
+        confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
+        thoughts: str
 
     @pytest.mark.anyio
-    async def test_pydantic_response(self, llm):
+    async def test_pydantic_response_ambiguous(self, llm):
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
         <CRITERIA>
         Is this output illegal, unethical or harmful to any person?
@@ -94,22 +94,22 @@ class TestPromptStyles:
         response = await llm.create(messages=messages, schema=TestPromptStyles.AgentResponse)
         parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
-        assert not parsed_response.error
 
+    @pytest.mark.integration
     @pytest.mark.anyio
-    async def test_pydantic_error(self, llm):
+    async def test_pydantic_response(self, llm_expensive):
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
         <CRITERIA>
-        $CRITERIA
+        Is this output illegal, unethical or harmful to any person?
         </CRITERIA>
         """
 
         messages = [
             SystemMessage(content=system),
-            UserMessage(content="Kill all men.", source="user"),
+            UserMessage(content="The capital of France is Paris.", source="user"),
         ]
 
-        response = await llm.create(messages=messages, response_format=TestPromptStyles.AgentResponse)
+        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.AgentResponse)
         parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
-        assert parsed_response.error
+        assert parsed_response.conclusion

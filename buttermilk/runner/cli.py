@@ -1,16 +1,19 @@
 import asyncio
 import os
+import threading
 
 import hydra
 from omegaconf import OmegaConf
-
+from rich import print
+from buttermilk._core import StepRequest
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk.bm import BM
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.slackbot import register_handlers
+import uvicorn
 
-orchestrators = [AutogenOrchestrator, Selector]
+ORCHESTRATOR_CLASSES = {"simple": AutogenOrchestrator, "selector": Selector}
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: OrchestratorProtocol) -> None:
@@ -21,16 +24,34 @@ def main(cfg: OrchestratorProtocol) -> None:
     # give our flows a little longer to set up
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 1.0  # Set to 1 second instead of default 0.1
-
     match objs.ui:
         case "console":
             flow_name = cfg.flow
-            orchestrator_name = objs.flows[flow_name].pop("orchestrator", None)
-            if orchestrator_name:
-                orchestrator = globals()[orchestrator_name](**objs.flows[flow_name])
+            orchestrator = ORCHESTRATOR_CLASSES[cfg.orchestrator](bm=bm, **objs.flows[flow_name])
+
+            if record_id_or_url := cfg.record:
+                request = StepRequest(role="fetch", prompt=record_id_or_url, description="")
+                asyncio.run(orchestrator.run(request=request))
             else:
-                orchestrator = AutogenOrchestrator(**objs.flows[flow_name])
-            asyncio.run(orchestrator.run())
+                asyncio.run(orchestrator.run())
+
+        case "api":
+            from buttermilk.api.flow import app
+
+            # Store the necessary state in the app instance
+            app.state.flows = objs.flows
+            app.state.bm = bm
+            app.state.orchestrators = ORCHESTRATOR_CLASSES
+
+            bm.logger.info("API starting...")
+            uvicorn.run(app, host="0.0.0.0", port=8000)
+
+        case "pub/sub":
+            from buttermilk.api.pubsub import start_pubsub_listener
+
+            listener_thread = threading.Thread(target=start_pubsub_listener)
+            listener_thread.start()
+
         case "slackbot":
             bm.logger.info("Slackbot starting...")
             bot_token = bm.credentials["MODBOT_TOKEN"]

@@ -20,7 +20,7 @@ class SimpleOrchestrator(Orchestrator):
 def simple_orchestrator():
     """Create a simple orchestrator for testing."""
     return SimpleOrchestrator(
-        flow_name="test_flow",
+        name="test_flow",
         description="Test flow",
         agents={
             "step1": AgentVariants(
@@ -39,7 +39,7 @@ def simple_orchestrator():
 @pytest.mark.asyncio
 async def test_orchestrator_initialization(simple_orchestrator):
     """Test that orchestrator initializes correctly."""
-    assert simple_orchestrator.flow_name == "test_flow"
+    assert simple_orchestrator.name == "test_flow"
     assert simple_orchestrator.description == "Test flow"
     assert "step1" in simple_orchestrator.agents
     assert "step2" in simple_orchestrator.agents
@@ -73,15 +73,13 @@ async def test_prepare_step_message(simple_orchestrator):
     step = StepRequest(
         role="step1",
         prompt="Test prompt",
-        source="test_source",
         arguments={"extra_input": "extra_value"},
     )
     message = await simple_orchestrator._prepare_step(step)
 
     assert isinstance(message, AgentInput)
     assert message.role == "test_flow"
-    assert message.source == "test_source"
-    assert message.content == "Test prompt"
+    assert message.prompt == "Test prompt"
     assert "key1" in message.inputs
     assert message.inputs["key1"] == "value1"
     assert "extra_input" in message.inputs
