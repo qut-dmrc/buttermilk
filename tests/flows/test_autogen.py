@@ -20,7 +20,6 @@ def mock_agent():
     agent.description = "Test agent description"
     agent.__call__ = AsyncMock(
         return_value=AgentOutput(
-            role="test_agent",
             content="Test output",
         )
     )
@@ -63,7 +62,7 @@ async def test_agent_adapter_init_with_config():
     mock_agent_instance.initialize = AsyncMock()
     mock_agent_cls.return_value = mock_agent_instance
 
-    agent_cfg = AgentConfig(name="test_id", role="test")
+    agent_cfg = AgentConfig(name="test_id")
 
     with patch("asyncio.create_task"):
         adapter = AutogenAgentAdapter(
@@ -79,7 +78,7 @@ async def test_agent_adapter_init_with_config():
 @pytest.mark.asyncio
 async def test_agent_adapter_process_request(agent_adapter):
     """Test process_request method."""
-    message = AgentInput(role="test", content="test input")
+    message = AgentInput(content="test input")
 
     # Non-conductor agent (publishes message)
     with patch.object(agent_adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
@@ -99,7 +98,6 @@ async def test_agent_adapter_process_request_conductor():
     agent.description = "Test conductor"
     agent.__call__ = AsyncMock(
         return_value=AgentOutput(
-            role=f"{CONDUCTOR}-test",
             content="Test output",
         )
     )
@@ -114,7 +112,7 @@ async def test_agent_adapter_process_request_conductor():
     # Set ID to be a conductor
     adapter.id.type = f"{CONDUCTOR}-test"
 
-    message = AgentInput(role="test", content="test input")
+    message = AgentInput(content="test input")
 
     # Conductor agent (doesn't publish message)
     with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
@@ -132,7 +130,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = "different_agent"
 
-    message = AgentOutput(role="other_agent", content="test output")
+    message = AgentOutput(content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 
@@ -147,7 +145,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = agent_adapter.id
 
-    message = AgentOutput(role=agent_adapter.agent.role, content="test output")
+    message = AgentOutput(content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 

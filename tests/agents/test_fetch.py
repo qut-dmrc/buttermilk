@@ -14,7 +14,7 @@ class TestFetch:
 
     @pytest.fixture
     def fetch(self):
-        return FetchRecord(id="test_fetch", name="fetch", role="fetch", description="test only")
+        return FetchRecord(id="test_fetch", name="fetch", description="test only")
 
     @pytest.mark.anyio
     async def test_load_data(self, fetch):
@@ -90,7 +90,6 @@ class TestFetch:
         """Test handle_urls with a URL."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
             inputs={"step": "testing", "prompt": "Check out https://example.com"},
         )
         ctx = MagicMock()
@@ -122,7 +121,6 @@ class TestFetch:
         """Test handle_urls with a record ID."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
             inputs={"prompt": "Get `#record123`", "step": "testing"},
         )
         ctx = MagicMock()
@@ -158,7 +156,6 @@ class TestFetch:
         """Test handle_urls with neither URL nor record ID."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
             inputs={"prompt": "Just a regular message", "step": "testing"},
         )
         ctx = MagicMock()
@@ -184,7 +181,6 @@ class TestFetch:
         """Test handle_urls works with RequestToSpeak messages."""
         # Setup
         agent_input = AgentInput(
-            role="test_agent",
             inputs=dict(
                 content="Check out https://example.com",
             ),
@@ -230,14 +226,12 @@ messages = [
     (
         None,
         AgentInput(
-            role="test_agent",
             inputs={"step": "testing", "content": "Just a regular message"},
         ),
     ),
     (
         "error",
         AgentInput(
-            role="test_agent",
             prompt="Check out https://example.com",
             inputs={},
         ),
@@ -245,7 +239,6 @@ messages = [
     (
         "missing",
         AgentInput(
-            role="test_agent",
             prompt="Get `#record123`",
             inputs={"step": "testing"},
         ),

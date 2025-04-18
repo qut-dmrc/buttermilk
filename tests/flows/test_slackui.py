@@ -45,7 +45,6 @@ def slack_ui_agent(slack_app, slack_context):
     """Create a SlackUIAgent with mocked dependencies."""
     agent = SlackUIAgent(
         id="test_agent",
-        role="Test Agent",
         description="Test agent for Slack",
     )
     agent.app = slack_app
@@ -91,7 +90,6 @@ async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     """Test handling of AgentOutput messages."""
     message = AgentOutput(
-        role="test",
         content="Test output",
         outputs={"key": "value"},
     )
@@ -115,7 +113,6 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
     message = AgentOutput(
-        role="test",
         content="Test output",
         outputs={"key": "value"},
     )
@@ -139,7 +136,6 @@ async def test_request_user_input_boolean(slack_ui_agent):
     """Test requesting user input with boolean options."""
     message = ManagerRequest(
         role="tester",
-        role="test",
         content="Do you want to continue?",
         options=True,
     )
@@ -163,7 +159,6 @@ async def test_request_user_input_boolean(slack_ui_agent):
 async def test_request_user_input_options_list(slack_ui_agent):
     """Test requesting user input with a list of options."""
     message = ManagerRequest(
-        role="test",
         content="Choose an option:",
         options=["Option 1", "Option 2", "Option 3"],
     )
@@ -190,7 +185,6 @@ async def test_update_existing_input_message(slack_ui_agent):
     slack_ui_agent._current_input_message = MagicMock(data={"ts": "existing_ts"})
 
     message = ManagerRequest(
-        role="test",
         content="New question?",
         options=True,
     )
@@ -211,7 +205,6 @@ async def test_update_existing_input_message(slack_ui_agent):
 async def test_process_method(slack_ui_agent):
     """Test the _process method that handles agent input."""
     input_data = AgentInput(
-        role="test",
         content="Test input",
     )
 
