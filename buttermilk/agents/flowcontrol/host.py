@@ -145,7 +145,7 @@ class HostAgent(LLMAgent):
         self._completed_agents_current_step.clear()
         self._step_completion_event.clear()
 
-        response = AgentOutput(role=self.role)
+        response = AgentOutput()
         response.outputs = step
         logger.info(f"Next step: {self._current_step_name}.")
 

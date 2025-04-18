@@ -52,8 +52,6 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
-    # Remove bm field if it was added
-    # bm: BM # Removed
 
     fail_on_unfilled_parameters: bool = Field(default=True)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
@@ -129,7 +127,7 @@ class LLMAgent(Agent):
 
     def make_output(self, chat_result: CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
         """Helper to create AgentOutput from CreateResult."""
-        output = AgentOutput(role=self.role)
+        output = AgentOutput()
         output.inputs = inputs.model_copy(deep=True)
         # Ensure exclude is a set or dict
         output.metadata = chat_result.model_dump(exclude={"content"})
@@ -206,11 +204,11 @@ class LLMAgent(Agent):
             # Handle case where LLM call returns None (e.g., error, cancellation)
             logger.warning("LLM call returned None.")
             # Return an AgentOutput indicating an error or empty response?
-            return AgentOutput(role=self.role, error=["LLM call returned None"], inputs=inputs)
+            return AgentOutput(error=["LLM call returned None"], inputs=inputs)
         else:
             # Should not happen based on AutoGenWrapper signature, but good practice
             logger.error(f"Unexpected return type from call_chat: {type(llm_result)}")
-            return AgentOutput(role=self.role, error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=inputs)
+            return AgentOutput(error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=inputs)
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

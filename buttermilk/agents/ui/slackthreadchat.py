@@ -187,7 +187,7 @@ class SlackUIAgent(UIAgent):
         async def feed_in(message, say):
             await self._cancel_input_request()
             await self._input_callback(ManagerResponse(confirm=False, role=self.name))
-            await self._input_callback(UserInstructions(content=message["text"], role=self.name))
+            await self._input_callback(UserInstructions(content=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):

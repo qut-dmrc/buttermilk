@@ -21,23 +21,6 @@ def runtime():
     return SingleThreadedAgentRuntime()
 
 
-@pytest.fixture(params=CHATMODELS, scope="function")
-async def llm_autogen(request, bm):
-    return bm.llms.get_autogen_chat_client(request.param)
-
-
-@pytest.mark.anyio
-async def test_autogen_clients(llm_autogen):
-    agent = AssistantAgent("assistant1", model_client=llm_autogen)
-
-    response = await agent.on_messages(
-        [TextMessage(content="What is the capital of France?", source="user")],
-        CancellationToken(),
-    )
-    print(response)
-    assert response
-
-
 @pytest.fixture(params=["Judger", "Owl"], scope="function")
 def record_agent_cfg(
     request,

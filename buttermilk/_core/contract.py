@@ -85,11 +85,6 @@ class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
     _type = "FlowMessage"
-
-    role: str = Field(
-        ...,
-        description="The role of the agent that generated this output.",
-    )
     error: list[str] = Field(
         default_factory=list,
         description="A list of errors that occurred during the agent's execution",

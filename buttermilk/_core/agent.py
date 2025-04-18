@@ -157,7 +157,7 @@ class Agent(AgentConfig):
         # Look for matching roles in our inputs mapping
         if isinstance(message, (AgentOutput, ConductorResponse)):
             for key, mapping in self.inputs.items():
-                if mapping and isinstance(mapping, str) and mapping.startswith(message.role):
+                if mapping and isinstance(mapping, str) and mapping.startswith(source):  # check that 'source' is correct here
                     # Possible direct match, let's try to extract data
                     if key == "records":
                         # records are stored separately in our memory cache
@@ -165,13 +165,13 @@ class Agent(AgentConfig):
                             self._records.extend(message.records)
                             continue
 
-                    if mapping == message.role:
+                    if mapping == source:  # message.flowmessage_role:
                         # no dot delineated field path, add the whole object
                         self._data.add(key, message.model_dump())
                         continue
 
                 # otherwise, try to find the value in the outputs dict using JMESPath
-                search_dict = {message.role: message.model_dump()}
+                search_dict = {source: message.model_dump()}
                 if mapping and (value := jmespath.search(mapping, search_dict)):
                     self._data.add(key, value)
 
@@ -259,7 +259,7 @@ class Agent(AgentConfig):
             logger.error(f"Error during agent {self.role} handle_message: {e}", exc_info=True)
             # Create an error output
             error_input = message if isinstance(message, AgentInput) else None
-            result = AgentOutput(role=self.role, error=[str(e)], inputs=error_input)
+            result = AgentOutput(error=[str(e)], inputs=error_input)
             if call:  # Log error to weave call if trace started
                 call.log({"error": str(e)})
 

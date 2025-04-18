@@ -144,7 +144,7 @@ class AutogenOrchestrator(Orchestrator):
         self,
         step: AgentInput,
     ) -> AgentOutput | None:
-        topic_id = DefaultTopicId(type=step.role)
+        topic_id = DefaultTopicId()
         await self._runtime.publish_message(step, topic_id=topic_id)
         return None
 

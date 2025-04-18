@@ -66,7 +66,7 @@ class LLMScorer(LLMAgent):
         # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)
         if "answers" not in inputs.inputs or "expected" not in inputs.inputs:
             logger.error(f"{self.role}: Missing 'answers' or 'expected' in inputs for scoring.")
-            return AgentOutput(role=self.role, error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=inputs)
+            return AgentOutput(error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=inputs)
 
         # Call the base LLMAgent's _process method which handles template filling and LLM call
         # The template for the scorer should be designed to compare answers[0].content/outputs

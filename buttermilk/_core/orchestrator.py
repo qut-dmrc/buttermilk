@@ -289,7 +289,6 @@ class Orchestrator(BaseModel, ABC):
         inputs = self._flow_data._resolve_mappings(input_map)
 
         return AgentInput(
-            role=request.role,
             inputs=inputs,
             context=await self._model_context.get_messages(),
             records=self._records,

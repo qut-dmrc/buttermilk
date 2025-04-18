@@ -107,9 +107,6 @@ class AssistantAgentWrapper(Agent):
 
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
-        # Don't respond to own messages or irrelevant types.
-        if inputs.role == self.role:
-            return None
 
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
@@ -145,9 +142,7 @@ class AssistantAgentWrapper(Agent):
             content_str = json.dumps(inputs.inputs)
             messages_to_send.append(UserMessage(content=content_str))
         else:
-            # If the message has no content or inputs, maybe don't process?
-            sender_role = inputs.role or "unknown"
-            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs from {sender_role}. Skipping.")
+            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs. Skipping.")
             return None
 
         # --- Call AssistantAgent ---
@@ -156,7 +151,6 @@ class AssistantAgentWrapper(Agent):
         except Exception as e:
             logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
             return AgentOutput(
-                role=self.role,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
             )
@@ -208,7 +202,6 @@ class AssistantAgentWrapper(Agent):
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
         return AgentOutput(
-            role=self.role,
             content=output_content,
             outputs=output_data,
             metadata=final_metadata,

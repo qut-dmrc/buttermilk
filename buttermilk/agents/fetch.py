@@ -131,7 +131,7 @@ class FetchAgent(FetchRecord, Agent):
             record = await self._get_record_dataset(record_id=record_id)
 
         if record:
-            output = AgentOutput(role=self.role, content=record.text, records=[record])
+            output = AgentOutput(content=record.text, records=[record])
             await public_callback(output)
 
         return
@@ -148,6 +148,6 @@ class FetchAgent(FetchRecord, Agent):
             record = await self._get_record_dataset(record_id=record_id)
 
         if record:
-            output = AgentOutput(role=self.role, content=record.text, records=[record])
+            output = AgentOutput(content=record.text, records=[record])
             return output
         return None

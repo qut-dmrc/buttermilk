@@ -70,7 +70,7 @@ class CLIUserAgent(UIAgent):
                 #     output.append(str(rec).replace("\\n", ""))
             elif isinstance(message, TaskProcessingComplete):
                 if message.is_error:
-                    output.append(f"Task {message.role} #{message.task_index} failed...")
+                    output.append(f"Task from {source} #{message.task_index} failed...")
             else:
                 output.append(message.content)
             output = [o for o in output if o]
@@ -142,7 +142,7 @@ class CLIUserAgent(UIAgent):
                         ),
                     )
                 else:
-                    await self._input_callback(UserInstructions(role=self.role, content=user_input))
+                    await self._input_callback(UserInstructions(content=user_input))
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:
