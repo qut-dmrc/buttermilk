@@ -22,10 +22,12 @@ from buttermilk._core.agent import ChatCompletionContext, FatalError, Processing
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.flow import KeyValueCollector
-from buttermilk._core.job import Job
-from buttermilk._core.types import Record
+
+# from buttermilk._core.job import Job # Job seems unused here
+from buttermilk._core.types import Record, RunRequest  # Import RunRequest
 from buttermilk._core.variants import AgentVariants
-from buttermilk.bm import BM, logger
+from buttermilk.agents.fetch import FetchRecord
+from buttermilk.bm import BM, bm, logger
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -45,7 +47,7 @@ class Orchestrator(BaseModel, ABC):
         params (dict): Flow-level parameters that can be used by agents
 
     """
-    bm: BM = Field(...)
+
     session_id: str = Field(
         default_factory=lambda: shortuuid.uuid()[:8],
         description="A unique session id for this set of flow runs.",
@@ -115,7 +117,7 @@ class Orchestrator(BaseModel, ABC):
         self.agents = agent_dict
 
         # initialise the data cache
-        self._flow_data.init(self.agents.keys())
+        self._flow_data.init(list(self.agents.keys()))
 
         self._model_context = UnboundedChatCompletionContext(initial_messages=self.history)
 
@@ -125,10 +127,9 @@ class Orchestrator(BaseModel, ABC):
         """Determine the next step based on the current flow data."""
         raise NotImplementedError()
 
-    async def run(self, request: StepRequest | None = None) -> None:
+    async def run(self, request: RunRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
-
-        client = self.bm.weave
+        client = bm.weave
         tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__()}
         with weave.attributes(tracing_attributes):
             _traced = weave.op(
@@ -140,99 +141,121 @@ class Orchestrator(BaseModel, ABC):
         logger.info(f"Finished...")
         return
 
-    async def _run(self, request: StepRequest | None = None) -> None:
-        """Main execution method that sets up agents and manages the flow.
-
-        By default, this runs through a sequence of pre-defined steps.
-        """
+    async def _run(self, request: RunRequest | None = None) -> None:
+        """Main execution method that sets up agents and manages the flow."""
         try:
-            await self._setup()
+            # Abstract setup method for subclasses (e.g., start runtime)
+            await self._setup()  # Ensure _setup is defined or handled
+
+            # Handle initial request if provided
             if request:
-                step = await self._prepare_step(request)
-                await self._execute_step(request)
-                # we haven't started yet, so we're going to send a completion through manually
-                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
-                await asyncio.sleep(5)
-                await self._runtime.publish_message(
-                    (TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=-1, more_tasks_remain=False)), topic_id=self.topic_id
-                )
+                if not request.records:
+                    if request.uri or request.record_id:
+                        fetch = FetchRecord(role="fetch", description="fetch records and urls", data=self.data)
+                        record = await fetch._run(uri=request.uri, record_id=request.record_id)
+                        self._records = [record]
+                else:
+                    # Store records from the request
+                    self._records = request.records
+
+            # Main loop to get and execute subsequent steps
             while True:
                 try:
-                    # Loop until we receive an error
-                    await asyncio.sleep(1)
+                    # Loop until we receive an error or completion
+                    await asyncio.sleep(1)  # Small delay to prevent busy-waiting
 
-                    # # Get next step in the flow
-                    if not (request := await self._get_next_step()):
-                        # No next step at the moment; wait and try a bit
-                        await asyncio.sleep(10)
+                    # Get next step from subclass logic
+                    next_step_request = await self._get_next_step()
+                    if not next_step_request:
+                        # No next step determined, maybe wait or check status?
+                        # Depending on orchestrator logic, this might mean completion or idle state.
+                        logger.debug("No next step determined by _get_next_step.")
+                        await asyncio.sleep(5)  # Wait before checking again
                         continue
 
-                    if not await self._in_the_loop(request):
-                        # User did not confirm plan; go back and get new instructions
+                    # Optional human-in-the-loop confirmation
+                    if not await self._in_the_loop(next_step_request):  # Use correct variable
+                        logger.info("User did not confirm plan. Waiting for new instructions.")
+                        # Logic to handle user rejection/new input needed here
                         continue
 
-                    if request:
-                        step = await self._prepare_step(request)
-                        await self._execute_step(step)
+                    # Prepare and execute the step
+                    step_input = await self._prepare_step(next_step_request)  # Use correct variable
+                    # Pass bm instance to execute_step (signature needs update later)
+                    await self._execute_step(step=step_input, bm=self.bm)  # Pass bm
 
                 except ProcessingError as e:
-                    # non-fatal error
-                    logger.error(f"Error in Orchestrator run: {e}")
+                    # Non-fatal error, log and continue loop
+                    logger.error(f"Processing error in orchestrator run: {e}")
+                    # Optionally, inform user or trigger error handling agent
                     continue
-                except (StopAsyncIteration, KeyboardInterrupt):
-                    raise
-                except FatalError:
-                    raise
-                except Exception as e:  # This is only here for debugging for now.
-                    logger.exception(f"Error in Orchestrator.run: {e}")
-                    raise FatalError from e
+                except StopAsyncIteration:
+                    logger.info("Orchestrator loop stopped by StopAsyncIteration (likely flow completion).")
+                    break  # Exit the main loop
+                except KeyboardInterrupt:
+                    logger.info("Orchestrator run interrupted by user (KeyboardInterrupt).")
+                    raise  # Re-raise to allow clean exit
+                except FatalError as e:
+                    logger.exception(f"Fatal error encountered in orchestrator run: {e}")
+                    raise  # Re-raise fatal errors
+                except Exception as e:
+                    logger.exception(f"Unexpected error in orchestrator run loop: {e}")
+                    raise FatalError from e  # Wrap unexpected errors as Fatal
 
-        except (StopAsyncIteration, KeyboardInterrupt):
-            logger.info("Orchestrator.run: Flow completed.")
         except FatalError as e:
-            logger.exception(f"Error in Orchestrator.run: {e}")
+            # Catch fatal errors originating from setup or initial step
+            logger.exception(f"Fatal error during orchestrator setup/initial step: {e}")
         finally:
-            # Clean up resources
-            await self._cleanup()
+            # Ensure cleanup runs regardless of how the loop exits
+            logger.info("Orchestrator cleaning up resources...")
+            await self._cleanup()  # Ensure _cleanup is defined or handled
+            logger.info("Orchestrator cleanup complete.")
+
+    @abstractmethod
+    async def _setup(self):  # Ensure abstract _setup method is defined
+        """Abstract method for setting up orchestrator resources (e.g., runtime)."""
+        raise NotImplementedError
 
     @abstractmethod
     async def _cleanup(self):
+        """Abstract method for cleaning up resources (e.g., stopping runtimes)."""
         raise NotImplementedError
 
     async def _in_the_loop(self, step: StepRequest) -> bool:
-        """Just run."""
+        """Placeholder for human-in-the-loop confirmation. Default is True."""
+        # Subclasses can override this to interact with a UI agent, etc.
         return True
 
     async def execute(self, request: StepRequest) -> AgentOutput | None:
-        """Execute a single step in the flow.
+        """Execute a single step directly (potentially for testing or specific control flows).
 
         Args:
-            request: The step to execute
+            request: The StepRequest defining the step to execute.
 
         Returns:
-            Step outputs
+            AgentOutput | None: The output from the executed step, if any.
 
         """
-        step = self._prepare_step(request)
-        with weave.attributes(dict(step=request.role, session_id=self.session_id)):
-            _traced = weave.op(
-                self._execute_step,
-                call_display_name=f"{request.role} {self.session_id}",
-            )
-        return await _traced(step)
+        step_input = await self._prepare_step(request)
+        # Assuming direct execution also needs the bm instance
+        # Note: weave tracing might need adjustment if execute is used differently than _run
+        # Weave tracing is now expected within the agent's handle_message or _process
+        output = await self._execute_step(step=step_input, bm=self.bm)  # Fix indentation
+        return output
 
-    async def __call__(self, request=None) -> None:
+    async def __call__(self, request: RunRequest | None = None) -> None:  # Accept RunRequest
         """Makes the orchestrator callable, allowing it to be used as a function.
 
         Args:
-            request: Optional input data for starting the flow
+            request: Optional RunRequest input data for starting the flow
 
         Returns:
-            Job: A job representing the flow execution
+            None: This method typically doesn't return a value directly in this pattern.
 
         """
+        # Pass the RunRequest (or None) to the run method
         await self.run(request=request)
-        return
+        return  # __call__ typically doesn't return a value directly in this pattern
 
     async def _prepare_step(
         self,
@@ -247,7 +270,7 @@ class Orchestrator(BaseModel, ABC):
 
         Special keywords include:
             - "participants": list of agents in the flow
-            - "context": list of history messages 
+            - "context": list of history messages
             - "records": list of InputRecords
             - "prompt": question from the user
 
@@ -274,11 +297,11 @@ class Orchestrator(BaseModel, ABC):
         )
 
     @abstractmethod
-    async def _execute_step(
+    async def _execute_step(  # Add bm parameter to abstract method
         self,
         step: AgentInput,
     ) -> AgentOutput | None:
-        # Run step
+        """Abstract method to execute a single step using an agent."""
         raise NotImplementedError
 
 
@@ -286,7 +309,7 @@ class OrchestratorProtocol(BaseModel):
     bm: BM
     flows: Mapping[str, Orchestrator]
     ui: Literal["console", "slackbot"]
-    orchestrator: str | None = None
-    flow: str | None = None
-    criteria: str | None = None
-    record: str | None = None
+    flow: str
+    record_id: str = ""
+    uri: str = ""
+    prompt: str = ""

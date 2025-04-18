@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
 import time
-from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union
+from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
 
 from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
 import jmespath
@@ -20,7 +20,7 @@ from pydantic import (
 
 from autogen_core.tools import BaseTool, FunctionTool
 from buttermilk._core.log import logger
-from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.config import DataSourceConfig, ToolConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
@@ -34,38 +34,20 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     ManagerResponse,
     OOBMessages,
-    TaskProcessingComplete,
-    TaskProcessingStarted,
+    TaskProcessingComplete,  # Keep for type hints if needed elsewhere
+    TaskProcessingStarted,  # Keep for type hints if needed elsewhere
     ToolOutput,
     UserInstructions,
     UserMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable
-from typing import Any, AsyncGenerator, Self
-
-import pydantic
-import weave
-from autogen_core import CancellationToken
-from pydantic import (
-    BaseModel,
-    Field,
-    PrivateAttr,
-)
-
-from buttermilk import logger
-from buttermilk._core.config import DataSourceConfig, ToolConfig
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    AllMessages, # Keep for type hinting if needed elsewhere, but not used in Agent interface directly
-    UserInstructions,
-)
-from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
+
+# Forward reference for type hint
+if TYPE_CHECKING:
+    from buttermilk.bm import BM
 
 
 #########
@@ -106,29 +88,14 @@ class AgentConfig(BaseModel):
         default=[],
         description="Specifications for data that the Agent should load",
     )
-    num_runs: int = Field(
-        default=1,
-        description="Number of times to replicate each parallel variant agent instance.",
-        exclude=True,
-    )
-    variants: dict = Field(
-        default={},
-        description="Parameters to create parallel agent instances via cross-multiplication.",
-        exclude=True,
-    )
-    tasks: dict = Field(
-        default={},
-        description="Parameters defining sequential tasks for each agent instance via cross-multiplication.",
-        exclude=True,
-    )
+    # num_runs removed - Orchestrator handles replication if needed
+    # variants removed - Orchestrator handles variations if needed
+    # tasks removed - Orchestrator handles variations if needed
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
-    sequential_tasks: list[dict[str, Any]] = Field(
-        default_factory=lambda: [{}], # Default to one task with empty parameters
-        description="List of tasks for each agent computed from .tasks.",
-    )
+    # sequential_tasks removed - Orchestrator now handles sequence if needed
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="A mapping of data to agent inputs",
@@ -140,9 +107,7 @@ class AgentConfig(BaseModel):
         "populate_by_name": True,
     }
 
-    _validate_variants = field_validator(
-        "variants", "tasks", "parameters", mode="before"
-    )(convert_omegaconf_objects())
+    _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects())
 
 
 class Agent(AgentConfig):
@@ -152,14 +117,14 @@ class Agent(AgentConfig):
     with data passed via AgentInput. _reset() clears state.
     """
 
-    _trace_this = True
+    _trace_this = True  # Flag for potential future use, currently weave is explicit
 
     _records: list[Record] = PrivateAttr(default_factory=list)
     _model_context: ChatCompletionContext = PrivateAttr(
         default_factory=UnboundedChatCompletionContext,
     )
-    _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
-    _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
+    _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)  # TODO: Revisit if needed
+    _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))  # Keep for potential Autogen compatibility layer
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
 
     async def _check_heartbeat(self, timeout=60) -> bool:
@@ -171,151 +136,150 @@ class Agent(AgentConfig):
             return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
-        """Add local agent state to inputs"""
-
-        # Fill inputs based on input map
+        """Add local agent state to inputs before processing."""
+        # Fill inputs based on input map defined in config
         inputs.inputs.update(self._data._resolve_mappings(self.inputs))
 
-        # add additional placeholders
+        # Add context and records from agent's memory
         inputs.context.extend(await self._model_context.get_messages())
         inputs.records.extend(self._records)
 
         return inputs
 
-    async def _run_fn(
-        self,
-        *,
-        message: AgentInput | ConductorRequest,
-        cancellation_token: CancellationToken|None=None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        **kwargs,
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        """Run all tasks within a variant configuration."""
-        # Agents come in variants, and each variant has a list of tasks that it runs asynchronously.
-        tasks = []
-        for n, task_params in enumerate(self.sequential_tasks):
-            task_inputs = message.model_copy(deep=True)
-            task_inputs.parameters = dict(task_params)
-            task_inputs.parameters.update(self.parameters)
-            task_inputs = await self._add_state_to_input(task_inputs)
-            tasks.append(asyncio.create_task(self._run_task(task_index=n, task_inputs=task_inputs, cancellation_token=cancellation_token, public_callback=public_callback)))
-
-        for t in asyncio.as_completed(tasks):
-            try:
-                result = await t
-                if result:
-                    outputs.append(result)
-            except ProcessingError as e:
-                logger.error(
-                    f"Agent {self.role} {self.name} hit processing error: {e} {e.args=}.",
-                )
-            except FatalError as e:
-                logger.error(f"Agent {self.role} {self.name} hit fatal error: {e}", exc_info=True)
-                raise e
-            except Exception as e:
-                logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
-                raise e
-
-    async def _run_task(self, *, task_index: int, task_inputs: AgentInput, cancellation_token: CancellationToken, public_callback: Callable
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        """Run a single task, trace it, and evaluate it."""
-        # Signal that we have started
-        await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=task_index))
-
-        # Start a trace
-        with weave.attributes(dict(task_inputs.parameters)):
-            _traced = weave.op(
-                self._process,
-                call_display_name=f"{self.name} {self.id}",
-            )
-            from weave.trace.weave_client import Call
-
-            # Run task
-            result, call = await _traced.call(inputs=task_inputs, cancellation_token=cancellation_token)
-
-            # Score task
-            # call.apply_scorer()
-        return result
-
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
+        cancellation_token: CancellationToken | None = None,
         source: str = "unknown",
         **kwargs,
     ) -> None:
-        """Save incoming messages for later use."""
+        """Save incoming messages from *other* agents to update internal state."""
         # Look for matching roles in our inputs mapping
         if isinstance(message, (AgentOutput, ConductorResponse)):
             for key, mapping in self.inputs.items():
                 if mapping and isinstance(mapping, str) and mapping.startswith(message.role):
                     # Possible direct match, let's try to extract data
                     if key == "records":
-                        # records are stored separately in our memory cache and we know where to find them
-                        # this helps us avoid turning the record into a dict below.
+                        # records are stored separately in our memory cache
                         if message.records:
                             self._records.extend(message.records)
                             continue
 
                     if mapping == message.role:
-                        # no dot delineated field path
-                        # so add the whole object
+                        # no dot delineated field path, add the whole object
                         self._data.add(key, message.model_dump())
                         continue
 
-                # otherwise, try to find the value in the outputs dict
+                # otherwise, try to find the value in the outputs dict using JMESPath
                 search_dict = {message.role: message.model_dump()}
                 if mapping and (value := jmespath.search(mapping, search_dict)):
                     self._data.add(key, value)
 
+        # Add message content to model context if appropriate
         if isinstance(message, (AgentOutput, ConductorResponse)):
             if message.content:
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=source))
         elif isinstance(message, (ToolOutput, UserInstructions)):
-            if not message.content.startswith(COMMAND_SYMBOL):
+            # Don't add commands or empty user instructions to history
+            if message.content and not message.content.startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
         else:
-            # don't log other types of messages
+            # don't log other types of messages to history
             pass
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
-        """Internal process function. Replace this in subclasses.
-
-        Process input data and publish any output(s).
-
-        Outputs:
-            None
-        """
-        raise NotImplementedError
+    @weave.op()
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+        """Internal process function. Implement core agent logic here. Traced by Weave."""
+        # Example:
+        # logger.info(f"Agent {self.role} processing inputs: {inputs.inputs}")
+        # await asyncio.sleep(1) # Simulate work
+        # output_content = f"Processed: {inputs.prompt}"
+        # return AgentOutput(role=self.role, content=output_content, inputs=inputs)
+        raise NotImplementedError("Subclasses must implement the _process method.")
 
     async def _handle_control_message(
-        self, message: OOBMessages, cancellation_token: CancellationToken = None, public_callback: Callable = None, message_callback: Callable= None,   **kwargs
+        self,
+        message: OOBMessages,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
     ) -> OOBMessages | None:
-        """Handle non-standard messages if needed (e.g., from orchestrator)."""
+        """Handle out-of-band control messages if needed."""
         logger.debug(f"Agent {self.role} {self.name} dropping control message: {message}")
         return None
 
     async def __call__(
         self,
-        message: AgentInput,
-        cancellation_token: CancellationToken,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
+        message: FlowMessage,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "unknown",  # Identifier of the sender, if known
         **kwargs,
-    ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
-        """Allow agents to be called directly as functions by the orchestrator."""
-        output = await self._run_fn(
-            message=message, cancellation_token=cancellation_token, public_callback=public_callback, message_callback=message_callback, **kwargs
-        )
-        return output
+    ) -> AgentOutput | ToolOutput | OOBMessages | None:
+        """Primary entry point called by the Orchestrator."""
+        result = None
+        call = None  # For weave logging
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
-        """Initialize the agent (e.g., load resources)."""
-        pass # Default implementation
+        try:
+            if isinstance(message, AgentInput):
+                # Prepare final input by adding agent state
+                final_input = await self._add_state_to_input(message)
+
+                # Execute core logic (traced via @weave.op on _process)
+                _traced_process = weave.op(self._process, call_display_name=f"{self.name} {self.id}")
+                result, call = await _traced_process.call(inputs=final_input, cancellation_token=cancellation_token, **kwargs)
+
+                # --- Evaluation Logic ---
+                if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
+                    # Check for ground truth in records
+                    ground_truth_record = next((r for r in final_input.records if getattr(r, "ground_truth", None) is not None), None)
+                    # if ground_truth_record:
+                    #     evaluation_score = await evaluate(
+                    #         output=result,
+                    #         ground_truth=ground_truth_record.ground_truth,
+                    #         criteria=final_input.parameters.get("criteria"),  # Or get from self.params
+                    #     )
+                    #     if evaluation_score and call:
+                    #         # Log evaluation to Weave trace associated with the agent's call
+                    #         call.log({"evaluation": evaluation_score.model_dump()})
+                # --- End Evaluation Logic ---
+
+            elif isinstance(message, GroupchatMessageTypes):
+                # Listen to messages from other agents to update state
+                await self._listen(message=message, cancellation_token=cancellation_token, source=source, **kwargs)
+                result = None  # Listen does not produce direct output
+
+            elif isinstance(message, OOBMessages):
+                # Handle control messages
+                result = await self._handle_control_message(message=message, cancellation_token=cancellation_token, **kwargs)
+
+            else:
+                logger.warning(f"Agent {self.role} received unhandled message type: {type(message)}")
+                result = None
+
+        except Exception as e:
+            logger.error(f"Error during agent {self.role} handle_message: {e}", exc_info=True)
+            # Create an error output
+            error_input = message if isinstance(message, AgentInput) else None
+            result = AgentOutput(role=self.role, error=[str(e)], inputs=error_input)
+            if call:  # Log error to weave call if trace started
+                call.log({"error": str(e)})
+
+        # Orchestrator is responsible for handling the result (e.g., routing AgentOutput)
+        return result
+
+    async def initialize(self, **kwargs) -> None:
+        """Initialize the agent (e.g., load resources). Called by Orchestrator."""
+        pass  # Default implementation
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """Reset the agent's internal state."""
-        pass # Default implementation
+        """Reset the agent's internal state. Called by Orchestrator."""
+        self._records = []
+        self._model_context = UnboundedChatCompletionContext()
+        self._data = KeyValueCollector()
+        # Clear heartbeat queue if necessary
+        while not self._heartbeat.empty():
+            try:
+                self._heartbeat.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        logger.info(f"Agent {self.role} ({self.id}) reset.")
+        pass  # Allow subclasses to add more reset logic

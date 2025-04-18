@@ -121,6 +121,7 @@ class SessionInfo(pydantic.BaseModel):
     async def get_ip(self):
         if not self.ip:
             from ..utils import get_ip
+
             self.ip = await get_ip()
 
 
@@ -157,7 +158,7 @@ class MediaObj(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["data", "base_64"],
+        exclude={"data", "base_64"},  # Use a set for exclude
     )
 
     def __str__(self) -> str:
@@ -205,8 +206,8 @@ class MediaObj(BaseModel):
     def as_text(self) -> str:
         return str(self._text)
 
-    def as_content_part(self, model_type="openai") -> dict:
-        part = {}
+    def as_content_part(self, model_type="openai") -> dict | str:  # Fix return type hint
+        part: dict | str = {}
         if self._base_64:
             if model_type == "openai":
                 part = {
@@ -273,6 +274,7 @@ class Record(BaseModel):
     mime: str | None = Field(
         default="text/plain",
     )
+
     def __str__(self) -> str:
         return self.text
 
@@ -344,5 +346,28 @@ class Record(BaseModel):
 
     def as_message(self, role: Literal["user", "assistant"] = "user") -> UserMessage | AssistantMessage:
         if role == "assistant":
-            return AssistantMessage(content=self.content, source=self.record_id)
-        return UserMessage(content=self.content, source=self.record_id)
+            # Assistant message content should likely be string representation
+            return AssistantMessage(content=self.text, source=self.record_id)
+
+        # Ensure content matches UserMessage expected type (str | List[str | Image])
+        message_content: str | list[str | Image]
+        if isinstance(self.content, str):
+            message_content = self.content
+        else:
+            # Convert Sequence to List
+            message_content = list(self.content)
+
+        return UserMessage(content=message_content, source=self.record_id)
+
+
+class RunRequest(BaseModel):
+    """Input object to initiate an orchestrator run."""
+
+    prompt: str = Field(default="", description="The main prompt or question for the run.")
+    record_id: str = Field(default="", description="Record to lookup")
+    uri: str = Field(default="", description="URI to fetch")
+    records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
+
+    model_config = ConfigDict(
+        extra="forbid",  # Disallow extra fields for strict input
+    )

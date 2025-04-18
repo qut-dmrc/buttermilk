@@ -36,6 +36,8 @@ from buttermilk._core.contract import (
     UserInstructions,
 )
 from buttermilk._core.orchestrator import Orchestrator
+from buttermilk._core.types import RunRequest
+from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import bm, logger
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
@@ -131,8 +133,10 @@ class AutogenOrchestrator(Orchestrator):
         """Clean up resources when flow is complete"""
         try:
             # Stop the runtime
-            await self._runtime.stop_when_idle()
-            await asyncio.sleep(2)  # Give it some time to properly shut down
+            if self._runtime._run_context:
+                # runtime is started
+                await self._runtime.stop_when_idle()
+                await asyncio.sleep(2)  # Give it some time to properly shut down
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
@@ -144,7 +148,7 @@ class AutogenOrchestrator(Orchestrator):
         await self._runtime.publish_message(step, topic_id=topic_id)
         return None
 
-    async def _get_next_step(self) -> StepRequest | None:
+    async def _get_next_step(self) -> StepRequest:
         """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
@@ -175,7 +179,7 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(5)
         return instructions
 
-    async def _run(self, request: StepRequest | None = None) -> None:
+    async def _run(self, request: RunRequest | None = None) -> None:
         """Main execution method that sets up agents and manages the flow.
 
         By default, this runs through a sequence of pre-defined steps.
@@ -183,14 +187,10 @@ class AutogenOrchestrator(Orchestrator):
         try:
             await self._setup()
             if request:
-                step = await self._prepare_step(request)
-                await self._execute_step(step)
-                # we haven't started yet, so we're going to send a completion through manually
-                # this code shouldn't be here, it's autogen specific -- should be in groupchat.py
-                await asyncio.sleep(5)
-                await self._runtime.publish_message(
-                    (TaskProcessingComplete(agent_id=step.role, role=step.role, task_index=-1, more_tasks_remain=False)), topic_id=self._topic
-                )
+                fetch = FetchRecord(data=self.data)
+                output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
+                if output:
+                    self._records = output.results
             while True:
                 try:
                     # Loop until we receive an error
@@ -225,6 +225,8 @@ class AutogenOrchestrator(Orchestrator):
         except (StopAsyncIteration, KeyboardInterrupt):
             logger.info("Orchestrator.run: Flow completed.")
         except FatalError as e:
+            logger.error(f"Error in Orchestrator.run: {e}")
+        except Exception as e:
             logger.exception(f"Error in Orchestrator.run: {e}")
         finally:
             # Clean up resources

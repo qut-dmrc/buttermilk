@@ -12,7 +12,7 @@ from slack_bolt.async_app import AsyncApp
 
 from buttermilk._core.contract import MANAGER, AssistantMessage, FlowProtocol, UserMessage
 from buttermilk._core.variants import AgentRegistry
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, bm, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.runner.chat import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
@@ -27,7 +27,6 @@ RESUME = "resume"
 
 ALLPATTERNS = re.compile(r"mod(.*)")
 
-bm = BM()
 
 def initialize_slack_bot(
     *,

@@ -15,11 +15,10 @@ from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import (
     AssistantMessage,
     ChatCompletionClient,
-    # Message, # Removed incorrect import
     SystemMessage,
     UserMessage,
 )
-from autogen_core.tools import FunctionTool, Tool, ToolSchema, ToolConfig  # Import ToolConfig if needed later
+from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from promptflow.core._prompty_utils import parse_chat
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import weave
@@ -29,7 +28,6 @@ from buttermilk._core.agent import AgentInput, AgentOutput
 from buttermilk.agents.llm import LLMAgent  # Import LLMAgent directly
 from buttermilk._core.contract import (
     AllMessages,  # Keep relevant contract types if needed
-    LLMMessage,  # Ensure LLMMessage is imported if used for context conversion
     ConductorRequest,
     FlowMessage,
     GroupchatMessageTypes,
@@ -40,14 +38,27 @@ from buttermilk._core.contract import (
     ProceedToNextTaskSignal,  # Keep relevant contract types if needed
     OOBMessages,  # Keep relevant contract types if needed
 )
+from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import AutoGenWrapper, CreateResult
 from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
+
+# Remove unused imports if any, keep necessary ones
+# from buttermilk.utils._tools import create_tool_functions # LLMAgent handles this
+# from buttermilk.utils.json_parser import ChatParser # LLMAgent handles this
+from buttermilk.utils.templating import (
+    _parse_prompty,
+    load_template,
+    make_messages,  # LLMAgent handles this
+)
 
 
 # Keep AgentRequest if it defines the expected input structure for this agent's task
 class AgentRequest(BaseModel):
     prompt: str = Field(..., description="The core question or instruction for the agent.")
-    records: list[Record] = Field(default_factory=list, description="Supporting records for analysis.")
+    # Records might be passed differently in a group chat context, perhaps initially or via context.
+    # Let's assume they are part of the initial setup or context for now.
+    # records: list[Record] = Field(default_factory=list, description="Supporting records for analysis.")
 
 
 class AgentReasons(BaseModel):
@@ -72,24 +83,37 @@ class Judge(LLMAgent, RoutedAgent):
 
     _output_model: Optional[type[BaseModel]] = AgentReasons  # Define the expected structured output
 
+    # Add __init__ to handle arguments for both parent classes
     def __init__(
         self,
-        name: str,  # Required by ConversableAgent (parent of RoutedAgent)
+        name: str,  # Required by RoutedAgent
         parameters: Dict[str, Any],  # Required by LLMAgent logic
-        tools: List[str] = [],  # Optional tools for LLMAgent (list of names)
+        tools: List[str] = [],  # Optional tools for LLMAgent
         fail_on_unfilled_parameters: bool = True,  # LLMAgent config
-        **kwargs,  # Pass other args to RoutedAgent (e.g., description, system_message, llm_config)
+        **kwargs,  # Pass other args to RoutedAgent (e.g., description, system_message)
     ):
-        # Initialize RoutedAgent first (passes name positionally to ConversableAgent)
-        RoutedAgent.__init__(self, name, **kwargs)
-
-        # Set LLMAgent fields. Pydantic should handle validation via model_validator.
-        # We don't assign self.tools here directly to avoid type conflicts if RoutedAgent has a 'tools' attribute.
-        # LLMAgent's validator will handle the 'tools' list provided in parameters if needed, or load from self.tools.
+        # Initialize LLMAgent parts (handled by Pydantic validators via super().__init__)
+        # Initialize RoutedAgent parts
+        RoutedAgent.__init__(self, name=name, **kwargs)
+        # Manually set LLMAgent fields after RoutedAgent init, as LLMAgent doesn't have a standard __init__
         self.parameters = parameters
-        # Store the tool names list separately if needed, or ensure LLMAgent loads it correctly
-        self._llm_agent_tool_names = tools  # Store separately to avoid conflict
+        self.tools = tools
         self.fail_on_unfilled_parameters = fail_on_unfilled_parameters
+        # Trigger LLMAgent's Pydantic validators manually if needed, or rely on them being called implicitly
+        # Note: This assumes LLMAgent's validators run correctly even when it's not the first parent.
+        # If issues arise, might need to call self.model_post_init(None) or similar.
+
+        # Register the message handler
+        self.register_handler(self.handle_groupchat_message)
+
+    # Use model_validator from Pydantic for post-init logic like LLMAgent
+    @model_validator(mode="after")
+    def _init_llmagent_parts(self) -> Self:
+        # Explicitly call LLMAgent's validators if they weren't triggered automatically
+        # This ensures _model_client and _tools_list are initialized
+        super(LLMAgent, self)._init_model()  # Call LLMAgent's model init
+        super(LLMAgent, self)._load_tools()  # Call LLMAgent's tool loading
+        return self
 
     @message_handler
     async def handle_groupchat_message(
@@ -101,13 +125,11 @@ class Judge(LLMAgent, RoutedAgent):
         logger.info(f"Judge '{self.name}' received message from '{sender.name}' in topic '{ctx.topic_id}': {message}")
 
         # Use the _process method inherited from LLMAgent
-        result: AgentReasons = await self._process(inputs=message)
+        result: AgentOutput = await self._process(inputs=message)
+        # Publish the structured output back to the group chat
+        # Autogen expects a dict or string usually. Convert Pydantic model.
+        await self.runtime.publish_message(message=response_data.model_dump(), topic_id=ctx.topic_id, sender=self.id)  # Send as dict
 
-        if result:
-            # Publish the structured output back to the group chat
-            # Autogen expects a dict or string usually. Convert Pydantic model.
-            await self.runtime.publish_message(message=response_data.model_dump(), topic_id=ctx.topic_id, sender=self.id)  # Send as dict
-            return result
         logger.warning(f"Judge '{self.name}' did not produce a publishable output.")
         # Handle cases where no output was generated
         return None  # No reply

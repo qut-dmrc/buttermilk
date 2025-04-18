@@ -3,14 +3,20 @@ defaults:
   - criteria@panel.params.criteria: trans
   - agents@panel.agents:
       - manager
-      - fetch
       - host
       - judge
       - owl
 
 panel:
+  _target_: buttermilk.runner.groupchat.AutogenOrchestrator
   description: Panel of Agents directed chat
   name: trans
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
   params:
     criteria: replace
     task: >

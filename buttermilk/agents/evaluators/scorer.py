@@ -1,5 +1,6 @@
 from typing import Any, AsyncGenerator, Callable, Optional
 
+import weave  # Add weave import
 from autogen_core import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr, computed_field
 
@@ -55,54 +56,35 @@ class AggResults(QualScore):
 class LLMScorer(LLMAgent):
     """Qualitatively scores an LLM result against provided ground truth."""
 
-    _ground_truth: dict = PrivateAttr(default={})
-    _scores: list[AggResults] = PrivateAttr(default_factory=list)
-    _output_model: Optional[type[BaseModel]] = QualScore
+    _output_model: Optional[type[BaseModel]] = QualScore  # Ensure scorer LLM returns this structure
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        source: str = "unknown",
-        **kwargs,
-    ) -> None:
-        if isinstance(message, AgentOutput):
-            # Ignore messages from our own kind
-            if message.role == self.role:
-                return
+    # _listen method removed - evaluation is now triggered proactively
 
-            # Identify and store results with qualitative reasons fields
-            if "reasons" in message.outputs and message.inputs and message.inputs.records:
-                # Score immediately
-                input_data = AgentInput(
-                    role=self.role,
-                    inputs={"answers": [message], "expected": message.inputs.records[-1].ground_truth},
-                    records=message.inputs.records[-1:],
-                )
-                response = await self._run_fn(
-                    message=input_data,
-                    cancellation_token=cancellation_token,
-                    public_callback=public_callback,
-                    message_callback=message_callback,
-                    **kwargs,
-                )
-                if response:
-                    await public_callback(response)
-                    self._scores.append(
-                        AggResults(agent=source, answer_id=message.call_id, assessments=response.outputs.assessments, assessor=self.name)
-                    )
+    @weave.op()  # Ensure _process is traced like the base class
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+        """Perform LLM-based scoring based on inputs."""
+        # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)
+        if "answers" not in inputs.inputs or "expected" not in inputs.inputs:
+            logger.error(f"{self.role}: Missing 'answers' or 'expected' in inputs for scoring.")
+            return AgentOutput(role=self.role, error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=inputs)
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
-        """Return score or summary."""
-        if inputs.inputs.get("answers"):
-            # Score the result
-            return await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
+        # Call the base LLMAgent's _process method which handles template filling and LLM call
+        # The template for the scorer should be designed to compare answers[0].content/outputs
+        # with the 'expected' ground truth based on 'criteria' in parameters.
+        # The base _process will return an AgentOutput. If the LLM call was successful
+        # and returned content parsable into _output_model (QualScore), that QualScore
+        # instance will be in the .outputs field of the returned AgentOutput.
+        logger.debug(f"Scorer agent {self.role} processing evaluation request.")
+        evaluation_result_output = await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
 
-        # Return summary only
-        response = AgentOutput(role=self.role, content=f"Scoring summary for {len(self._scores)} responses", outputs={self.role: self._scores})
-        return response
+        # Ensure the output contains the QualScore if successful
+        if evaluation_result_output and not evaluation_result_output.is_error:
+            if not isinstance(evaluation_result_output.outputs, QualScore):
+                logger.warning(f"Scorer {self.role} LLM output was not parsed into QualScore: {evaluation_result_output.outputs}")
+                # Optionally add error or return the raw output?
+                evaluation_result_output.error.append("LLM output did not conform to QualScore schema.")
+
+        return evaluation_result_output
 
 
 # from weave import Scorer

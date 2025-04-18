@@ -35,8 +35,12 @@ from buttermilk._core.contract import (
     OOBMessages,
 )
 from buttermilk._core.exceptions import ProcessingError
+
+# Import only necessary classes from _core.llms
 from buttermilk._core.llms import AutoGenWrapper, CreateResult
 from buttermilk._core.types import Record
+
+# Restore original bm import
 from buttermilk.bm import bm, logger
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.json_parser import ChatParser
@@ -48,6 +52,9 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
+    # Remove bm field if it was added
+    # bm: BM # Removed
+
     fail_on_unfilled_parameters: bool = Field(default=True)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
         default_factory=list,
@@ -73,6 +80,7 @@ class LLMAgent(Agent):
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
         if self.parameters.get("model"):
+            # Use the global bm instance
             self._model_client = bm.llms.get_autogen_chat_client(
                 self.parameters["model"],
             )
@@ -120,48 +128,89 @@ class LLMAgent(Agent):
         return messages
 
     def make_output(self, chat_result: CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
+        """Helper to create AgentOutput from CreateResult."""
         output = AgentOutput(role=self.role)
         output.inputs = inputs.model_copy(deep=True)
-        output.metadata = chat_result.model_dump(exclude="content")
+        # Ensure exclude is a set or dict
+        output.metadata = chat_result.model_dump(exclude={"content"})
 
         model_metadata = self.parameters
         model_metadata.update({"role": self.role, "agent_id": self.id, "name": self.name, "prompt": inputs.prompt})
         model_metadata.update(inputs.parameters)
         output.params = model_metadata
 
-        if schema:
+        # Handle schema validation first if applicable
+        if schema and isinstance(chat_result.content, str):
             try:
-                output.outputs = schema.model_validate_json(chat_result.content)
+                # model_validate_json returns an instance of the schema model
+                validated_output = schema.model_validate_json(chat_result.content)
+                # Store the dictionary representation in outputs, explicitly casting for Mypy
+                output.outputs = dict(validated_output.model_dump())
+                # Set content to a string representation
+                output.content = pprint.pformat(output.outputs)
                 return output
             except Exception as e:
-                error = f"Error parsing response from LLM: {e} into {type(schema)}"
+                error = f"Error parsing response from LLM: {e} into {schema.__name__}"
                 logger.warning(error, exc_info=False)
+                # Fall through to default JSON parsing or raw content handling
+                # Add error to the output object?
+                output.error.append(error)
 
+        # Default handling: attempt JSON parsing or store raw content
         if isinstance(chat_result.content, str):
             try:
+                # Store parsed dict in outputs
                 output.outputs = self._json_parser.parse(chat_result.content)
+                # Set content to formatted string version
+                output.content = pprint.pformat(output.outputs)
             except Exception as parse_error:
-                error = f"Failed to parse LLM response as JSON: {parse_error}"
-                logger.warning(error, exc_info=False)
-                output.outputs = dict(response=chat_result.content)
+                # If JSON parsing fails, store raw string content
+                error = f"Failed to parse LLM response as JSON: {parse_error}. Storing raw content."
+                logger.debug(error, exc_info=False)
+                output.outputs = {"response": chat_result.content}
+                output.content = chat_result.content
+        elif chat_result.content is not None:  # Handle non-string, non-None content if necessary
+            logger.warning(f"LLM response content is not a string: {type(chat_result.content)}. Storing as is.")
+            output.outputs = {"response": chat_result.content}
+            output.content = str(chat_result.content)
+        # If content was None or parsing failed without fallback, outputs might be empty {}
 
-        output.content = pprint.pformat(output.outputs)
         return output
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    @weave.op()  # Add weave decorator to match base class and enable tracing
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
 
         messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
-        result = await self._model_client.call_chat(
+
+        # call_chat can return CreateResult, list[ToolOutput], or None
+        llm_result: CreateResult | list[ToolOutput] | None = await self._model_client.call_chat(
             messages=messages,
             tools_list=self._tools_list,
             cancellation_token=cancellation_token,
-            reflect_on_tool_use=True,
+            reflect_on_tool_use=True,  # Assuming this handles tool calls internally now
             schema=self._output_model,
         )
-        result = self.make_output(result, inputs=inputs, schema=self._output_model)
 
-        return result
+        # Handle different return types
+        if isinstance(llm_result, CreateResult):
+            # Process normal LLM response
+            agent_output = self.make_output(llm_result, inputs=inputs, schema=self._output_model)
+            return agent_output
+        elif isinstance(llm_result, list):
+            # If call_chat returns ToolOutput directly (needs verification)
+            # This path might not be hit if reflect_on_tool_use handles it
+            logger.warning("call_chat returned list[ToolOutput], returning first element.")
+            return llm_result[0] if llm_result else None  # Return first tool output or None
+        elif llm_result is None:
+            # Handle case where LLM call returns None (e.g., error, cancellation)
+            logger.warning("LLM call returned None.")
+            # Return an AgentOutput indicating an error or empty response?
+            return AgentOutput(role=self.role, error=["LLM call returned None"], inputs=inputs)
+        else:
+            # Should not happen based on AutoGenWrapper signature, but good practice
+            logger.error(f"Unexpected return type from call_chat: {type(llm_result)}")
+            return AgentOutput(role=self.role, error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=inputs)
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

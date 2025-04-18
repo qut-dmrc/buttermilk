@@ -25,21 +25,11 @@ from buttermilk.utils.utils import URL_PATTERN, extract_url
 MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
-class FetchRecord(Agent, ToolConfig):
-    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
-    role: str
+class FetchRecord(ToolConfig):
     _data: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
-    _trace_this = True
-
-    _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions | AgentInput])
-
-    @pydantic.model_validator(mode="after")
-    def load_data_task(self) -> Self:
-        self._data_task = asyncio.create_task(self.load_data())
-        return self
 
     async def load_data(self):
         self._data = await prepare_step_df(self.data)
@@ -56,6 +46,63 @@ class FetchRecord(Agent, ToolConfig):
                 )
             ]
         return self._fns
+
+    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
+        """Entry point when running as a tool."""
+        record = None
+        if prompt and not record_id and not uri:
+            if not (uri := extract_url(prompt)):
+                record_id = prompt.strip().strip(COMMAND_SYMBOL)
+        assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
+        result = None
+        if record_id:
+            record = await self._get_record_dataset(record_id)
+            if record:
+                result = ToolOutput(
+                    role=self.role,
+                    name="fetch",
+                    results=[record],
+                    content=record.text,
+                    messages=[record.as_message(role="user")],
+                    args=dict(record_id=record_id),
+                )
+        else:
+            record = await download_and_convert(uri)
+            result = ToolOutput(
+                role=self.role, name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
+            )
+
+        if result:
+            return result
+        return None
+
+    async def _get_record_dataset(self, record_id: str) -> Record | None:
+        if not self._data:
+            await self.load_data()
+
+        for dataset in self._data.values():
+            rec = dataset.query("record_id==@record_id")
+            if rec.shape[0] == 1:
+                data = rec.iloc[0].to_dict()
+                if "components" in data:
+                    content = "\n".join([d["content"] for d in data["components"]])
+                    return Record(
+                        content=content, metadata=data.get("metadata"), ground_truth=data.get("ground_truth"), uri=data.get("metadata").get("url")
+                    )
+                else:
+                    return Record(**data)
+            if rec.shape[0] > 1:
+                raise ValueError(
+                    f"More than one record found for query record_id == {record_id}",
+                )
+
+        return None
+
+
+class FetchAgent(FetchRecord, Agent):
+    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
+    role: str
+    pass
 
     async def _listen(
         self,
@@ -103,66 +150,4 @@ class FetchRecord(Agent, ToolConfig):
         if record:
             output = AgentOutput(role=self.role, content=record.text, records=[record])
             return output
-        return None
-
-    async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
-        """Add local agent state to inputs"""
-        return inputs
-
-    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
-        """Entry point when running as a tool."""
-        record = None
-        if prompt and not record_id and not uri:
-            if not (uri := extract_url(prompt)):
-                record_id = prompt.strip().strip(COMMAND_SYMBOL)
-        assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
-        result = None
-        if record_id:
-            record = await self._get_record_dataset(record_id)
-            if record:
-                result = ToolOutput(
-                    role=self.role,
-                    name=self.id,
-                    results=[record],
-                    content=record.text,
-                    messages=[record.as_message()],
-                    args=dict(record_id=record_id),
-                    send_to_ui=True,
-                )
-        else:
-            record = await download_and_convert(uri)
-            result = ToolOutput(
-                role=self.role,
-                name=self.id,
-                results=[record],
-                content=record.text,
-                messages=[record.as_message()],
-                args=dict(uri=uri),
-                send_to_ui=True,
-            )
-
-        if result:
-            return result
-        return None
-
-    async def _get_record_dataset(self, record_id: str) -> Record | None:
-        while not self._data_task.done():
-            await asyncio.sleep(1)
-
-        for dataset in self._data.values():
-            rec = dataset.query("record_id==@record_id")
-            if rec.shape[0] == 1:
-                data = rec.iloc[0].to_dict()
-                if "components" in data:
-                    content = "\n".join([d["content"] for d in data["components"]])
-                    return Record(
-                        content=content, metadata=data.get("metadata"), ground_truth=data.get("ground_truth"), uri=data.get("metadata").get("url")
-                    )
-                else:
-                    return Record(**data)
-            if rec.shape[0] > 1:
-                raise ValueError(
-                    f"More than one record found for query record_id == {record_id}",
-                )
-
         return None

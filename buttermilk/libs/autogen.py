@@ -117,7 +117,7 @@ class AutogenAgentAdapter(RoutedAgent):
         to the caller, but usually any result would be published back to the group."""
         response = None
         public_callback = self._make_publish_callback(topic_id=self.topic_id)
-        response = await self.agent._run_fn(
+        response = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=public_callback,
@@ -141,7 +141,7 @@ class AutogenAgentAdapter(RoutedAgent):
     ):
         """Handle conductor requests privately."""
 
-        output = await self.agent._run_fn(
+        output = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
