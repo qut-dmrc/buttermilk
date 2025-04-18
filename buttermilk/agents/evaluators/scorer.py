@@ -105,44 +105,44 @@ class LLMScorer(LLMAgent):
         return response
 
 
-from weave import Scorer
-from weave import WeaveList
+# from weave import Scorer
+# from weave import WeaveList
 
 
-class CorrectnessLLMJudge(Scorer):
-    prompt: str
-    model_name: str
-    device: str
+# class CorrectnessLLMJudge(Scorer):
+#     prompt: str
+#     model_name: str
+#     device: str
 
-    @weave.op()
-    async def score(self, output: Optional[dict], query: str, answer: str) -> Any:
+#     @weave.op()
+#     async def score(self, output: Optional[dict], query: str, answer: str) -> Any:
 
-        return {"correct": evaluation}
+#         return {"correct": evaluation}
 
-    @weave.op()
-    def summarize(self, score_rows: WeaveList) -> Optional[dict]:
-        """Aggregate all the scores that are calculated for each row by the scoring function.
-        Args:
-            - score_rows: a WeaveList object, nested dict of metrics and scores
-        Returns:
-            - nested dict with the same structure as the input"""
+#     @weave.op()
+#     def summarize(self, score_rows: WeaveList) -> Optional[dict]:
+#         """Aggregate all the scores that are calculated for each row by the scoring function.
+#         Args:
+#             - score_rows: a WeaveList object, nested dict of metrics and scores
+#         Returns:
+#             - nested dict with the same structure as the input"""
 
-        # if nothing is provided the weave.flow.scorer.auto_summarize function is used
-        # return auto_summarize(score_rows)
+#         # if nothing is provided the weave.flow.scorer.auto_summarize function is used
+#         # return auto_summarize(score_rows)
 
-        valid_data = [x.get("correct") for x in score_rows if x.get("correct") is not None]
-        count_true = list(valid_data).count(True)
-        int_data = [int(x) for x in valid_data]
+#         valid_data = [x.get("correct") for x in score_rows if x.get("correct") is not None]
+#         count_true = list(valid_data).count(True)
+#         int_data = [int(x) for x in valid_data]
 
-        sample_mean = np.mean(int_data) if int_data else 0
-        sample_variance = np.var(int_data) if int_data else 0
-        sample_error = np.sqrt(sample_variance / len(int_data)) if int_data else 0
+#         sample_mean = np.mean(int_data) if int_data else 0
+#         sample_variance = np.var(int_data) if int_data else 0
+#         sample_error = np.sqrt(sample_variance / len(int_data)) if int_data else 0
 
-        # the extra "correct" layer is not necessary but adds structure in the UI
-        return {
-            "correct": {
-                "true_count": count_true,
-                "true_fraction": sample_mean,
-                "stderr": sample_error,
-            }
-        }
+#         # the extra "correct" layer is not necessary but adds structure in the UI
+#         return {
+#             "correct": {
+#                 "true_count": count_true,
+#                 "true_fraction": sample_mean,
+#                 "stderr": sample_error,
+#             }
+#         }

@@ -133,7 +133,7 @@ class Orchestrator(BaseModel, ABC):
         with weave.attributes(tracing_attributes):
             _traced = weave.op(
                 self._run,
-                call_display_name=f"{tracing_attributes['flow']} {self.     params.get('criteria','')}",
+                call_display_name=f"{self.name} {self.params.get('criteria','')}",
             )
         output, call = await _traced.call(request=request)
         client.finish_call(call)

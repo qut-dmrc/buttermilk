@@ -201,7 +201,6 @@ class Agent(AgentConfig):
             task_inputs = await self._add_state_to_input(task_inputs)
             tasks.append(asyncio.create_task(self._run_task(task_index=n, task_inputs=task_inputs, cancellation_token=cancellation_token, public_callback=public_callback)))
 
-
         for t in asyncio.as_completed(tasks):
             try:
                 result = await t
@@ -218,30 +217,26 @@ class Agent(AgentConfig):
                 logger.error(f"Agent {self.role} {self.name} hit unexpected error: {e}", exc_info=True)
                 raise e
 
-
     async def _run_task(self, *, task_index: int, task_inputs: AgentInput, cancellation_token: CancellationToken, public_callback: Callable
     ) -> AgentOutput | ToolOutput | TaskProcessingComplete | None:
         """Run a single task, trace it, and evaluate it."""
         # Signal that we have started
         await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=task_index))
 
-            # Start a trace
-            with weave.attributes(dict(task_inputs.parameters)):
-                _traced = weave.op(
-                    self._process,
-                    call_display_name=f"{self.name} {self.id}",
-                )
-                from weave.trace.weave_client import Call
-                # Run task
-                result, call = _traced.call(inputs=task_inputs, cancellation_token=cancellation_token)
-                
+        # Start a trace
+        with weave.attributes(dict(task_inputs.parameters)):
+            _traced = weave.op(
+                self._process,
+                call_display_name=f"{self.name} {self.id}",
+            )
+            from weave.trace.weave_client import Call
 
-                # Score task
-                call.apply_scorer()
+            # Run task
+            result, call = await _traced.call(inputs=task_inputs, cancellation_token=cancellation_token)
 
-
-        await public_callback(TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=n, more_tasks_remain=False))
-        return output
+            # Score task
+            # call.apply_scorer()
+        return result
 
     async def _listen(
         self,
