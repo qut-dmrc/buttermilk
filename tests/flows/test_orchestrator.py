@@ -36,7 +36,7 @@ def simple_orchestrator():
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_orchestrator_initialization(simple_orchestrator):
     """Test that orchestrator initializes correctly."""
     assert simple_orchestrator.name == "test_flow"
@@ -46,7 +46,7 @@ async def test_orchestrator_initialization(simple_orchestrator):
     assert simple_orchestrator.params == {"param1": "value1"}
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_prepare_step_basic(simple_orchestrator):
     """Test that _prepare_step returns the expected inputs."""
     inputs = await simple_orchestrator._prepare_step(StepRequest(role="step1"))
@@ -54,7 +54,7 @@ async def test_prepare_step_basic(simple_orchestrator):
     assert inputs["key1"] == "value1"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_prepare_step_with_history(simple_orchestrator):
     """Test that _prepare_step handles special variables correctly."""
     # Add some history
@@ -67,7 +67,7 @@ async def test_prepare_step_with_history(simple_orchestrator):
     assert inputs["history"] == "message1\nmessage2"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_prepare_step_message(simple_orchestrator):
     """Test that _prepare_step creates a proper AgentInput."""
     step = StepRequest(
@@ -88,7 +88,7 @@ async def test_prepare_step_message(simple_orchestrator):
     assert message.inputs["prompt"] == "Test prompt"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_call_method(simple_orchestrator):
     """Test that calling the orchestrator invokes run."""
     simple_orchestrator.run = AsyncMock()
@@ -97,7 +97,7 @@ async def test_call_method(simple_orchestrator):
     simple_orchestrator.run.assert_called_once_with(request="test_request")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_parse_history():
     """Test the _parse_history validator."""
     # Test with list of strings

@@ -52,7 +52,7 @@ def slack_ui_agent(slack_app, slack_context):
     return agent
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_slack_ui_agent_initialization(slack_ui_agent):
     """Test that the SlackUIAgent initializes correctly."""
     input_callback = AsyncMock()
@@ -69,7 +69,7 @@ async def test_slack_ui_agent_initialization(slack_ui_agent):
     assert slack_ui_agent._input_callback == input_callback
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
     """Test sending messages to a Slack thread."""
     with patch(
@@ -86,7 +86,7 @@ async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     """Test handling of AgentOutput messages."""
     message = AgentOutput(
@@ -109,7 +109,7 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     mock_send.assert_called_once_with(text="Formatted text", blocks=[])
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
     message = AgentOutput(
@@ -131,7 +131,7 @@ async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     mock_send.assert_called_once_with(text="Test output")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_request_user_input_boolean(slack_ui_agent):
     """Test requesting user input with boolean options."""
     message = ManagerRequest(
@@ -155,7 +155,7 @@ async def test_request_user_input_boolean(slack_ui_agent):
     assert slack_ui_agent._current_input_message is not None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_request_user_input_options_list(slack_ui_agent):
     """Test requesting user input with a list of options."""
     message = ManagerRequest(
@@ -178,7 +178,7 @@ async def test_request_user_input_options_list(slack_ui_agent):
     assert slack_ui_agent._current_input_message is not None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_update_existing_input_message(slack_ui_agent):
     """Test updating an existing input message instead of creating a new one."""
     # First set an existing input message
@@ -201,7 +201,7 @@ async def test_update_existing_input_message(slack_ui_agent):
     )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_process_method(slack_ui_agent):
     """Test the _process method that handles agent input."""
     input_data = AgentInput(
@@ -235,7 +235,7 @@ def test_register_chat_thread_handler():
     assert agent.app.action.call_count == 2  # confirm and cancel actions
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_handle_confirm_action():
     """Test the confirm action handler function."""
     # This is a complex test as it involves closures

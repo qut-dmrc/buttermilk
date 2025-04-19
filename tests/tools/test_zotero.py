@@ -147,7 +147,7 @@ async def test_download_not_pdf(zot_downloader, mocker):
     assert result is None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_download_missing_data_fields(zot_downloader, tmp_path, mocker):
     """Tests download behavior with potentially missing fields in item data."""
     mocker.patch("pathlib.Path.exists", return_value=True)  # Assume file exists

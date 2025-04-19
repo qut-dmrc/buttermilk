@@ -39,7 +39,7 @@ def agent_adapter(mock_agent):
         return adapter
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_init_with_agent():
     """Test AutogenAgentAdapter initialization with an agent."""
     agent = MagicMock(spec=Agent)
@@ -53,7 +53,7 @@ async def test_agent_adapter_init_with_agent():
     assert adapter.topic_id.type == "test_topic"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_init_with_config():
     """Test AutogenAgentAdapter initialization with config."""
     mock_agent_cls = MagicMock()
@@ -75,7 +75,7 @@ async def test_agent_adapter_init_with_config():
     assert adapter.agent == mock_agent_instance
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_process_request(agent_adapter):
     """Test process_request method."""
     message = AgentInput(content="test input")
@@ -90,7 +90,7 @@ async def test_agent_adapter_process_request(agent_adapter):
     assert result == agent_adapter.agent.__call__.return_value
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_process_request_conductor():
     """Test process_request method for conductor agent."""
     agent = MagicMock(spec=Agent)
@@ -123,7 +123,7 @@ async def test_agent_adapter_process_request_conductor():
     assert result == adapter.agent.__call__.return_value
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_handle_output(agent_adapter):
     """Test handle_output method."""
     # Create a message context with a different sender
@@ -138,7 +138,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     agent_adapter.agent.receive_output.assert_called_once_with(message)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_handle_output_from_self(agent_adapter):
     """Test handle_output method with message from self."""
     # Create a message context with self as sender
@@ -153,7 +153,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     agent_adapter.agent.receive_output.assert_not_called()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_handle_input_ui_agent():
     """Test handle_input method with UI agent."""
     ui_agent = MagicMock(spec=UIAgent)
@@ -177,7 +177,7 @@ async def test_agent_adapter_handle_input_ui_agent():
         mock_publish.assert_called_once_with(message, topic_id=adapter.topic_id)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_agent_adapter_handle_input_normal_agent():
     """Test handle_input method with normal agent."""
     agent = MagicMock(spec=Agent)
