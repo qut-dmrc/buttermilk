@@ -1,33 +1,120 @@
-defaults:
-  - _self_
-  - criteria@panel.params.criteria: trans
-  - agents@panel.agents:
-      - manager
-      - host
-      - judge
-      - owl
+# SelectorOrchestrator Configuration
+# This orchestrator enables interactive exploration of agent variants
+# with direct user involvement and an active host LLM agent.
 
-panel:
-  _target_: buttermilk.runner.selector.SelectorOrchestrator
-  description: Interactive panel with host agent and user guidance
-  name: selector
-  data:
-    - name: tja_train
-      type: file
-      path: gs://prosocial-dev/data/tja_train.jsonl
-      index:
-        - record_id
+orchestrator:
+  type: SelectorOrchestrator
+  name: Interactive Research Explorer
+  description: Research analysis with interactive exploration of different agent approaches
   params:
-    criteria: replace
-    task: >
-      The purpose of this conversation is to assess a single piece of content. You are the HOST.
-      
-      As the HOST agent, guide the conversation to explore different agent variants in a structured way:
-      
-      1. Begin by introducing available agents and requesting initial analysis from a JUDGE.
-      2. Present results to the user and ask what aspect they'd like to explore next.
-      3. For each area of interest, suggest which agent variant might be most helpful.
-      4. After each agent's analysis, synthesize what was learned and identify areas for deeper exploration.
-      5. Throughout the process, maintain a clear record of which variants have been tried and what insights each provided.
-      6. Help the user compare different approaches and understand tradeoffs between variants.
-      7. At appropriate points, ask if the user wants to try a different approach or variant.
+    task: Analyze the provided content with multiple approaches
+    highlight_differences: true
+    interactive_mode: true
+    exploration_depth: 2  # How many steps to explore before comparison
+
+agents:
+  # Host agent (conductor) that manages the conversation and guides exploration
+  conductor:
+    type: LLMAgent
+    variants:
+      - id: gpt4_conductor
+        role: conductor
+        llm:
+          provider: openai
+          model: gpt-4
+          temperature: 0.2
+        system_prompt: |
+          You are the guiding conductor for a research exploration system. Your job is to:
+          1. Analyze the current record and the research task
+          2. Suggest different approaches to analyze the content
+          3. Recommend which analysis agent to run next and how it should approach the analysis
+          4. Interpret results from different analysis approaches
+          5. Present comparisons between different analysis variants
+          6. Integrate user feedback into your exploration plan
+          7. Summarize findings and insights discovered during exploration
+          
+          The user may give feedback or select specific variants to try. Always respond to this feedback 
+          thoughtfully and adapt your exploration plan.
+          
+          When comparing results, highlight key differences in findings, confidence levels, and methodologies.
+
+  # UI agent for user interface representation
+  ui:
+    type: UIAgent
+    variants:
+      - id: console_ui
+        role: ui
+        agent_type: ConsoleUIAgent
+
+  # Analysis agents - these are the variants that will be explored
+  analysis:
+    type: LLMAgent
+    variants:
+      - id: structured_analysis
+        role: analysis
+        llm:
+          provider: openai
+          model: gpt-4
+          temperature: 0.1
+        system_prompt: |
+          You are a structured analysis agent that breaks down content into clear categories.
+          Provide your analysis with formal structure, using headings, lists, and tables.
+          Always focus on factual information and clear categorization.
+          Return your results in markdown format with the following sections:
+          - Key Themes
+          - Primary Entities
+          - Factual Claims
+          - Logical Structure
+          - Confidence Assessment (low/medium/high for each finding)
+
+      - id: critical_analysis
+        role: analysis
+        llm:
+          provider: openai
+          model: gpt-4
+          temperature: 0.2
+        system_prompt: |
+          You are a critical analysis agent that examines content for logical fallacies, 
+          biases, and underlying assumptions. Your approach is skeptical and thorough.
+          Return your results with the following sections:
+          - Identified Biases
+          - Questionable Claims
+          - Unstated Assumptions
+          - Counter-perspectives
+          - Strength of Evidence (rated 1-10)
+
+      - id: creative_analysis
+        role: analysis
+        llm:
+          provider: openai
+          model: gpt-4
+          temperature: 0.7
+        system_prompt: |
+          You are a creative analysis agent that explores unusual perspectives and 
+          unconventional interpretations of the content. Think laterally and make 
+          novel connections.
+          Return your results with the following sections:
+          - Alternative Framings
+          - Unexpected Connections
+          - Metaphorical Interpretations
+          - Creative Insights
+          - "What If" Scenarios
+
+  # Comparison agent to evaluate and contrast results
+  comparison:
+    type: LLMAgent
+    variants:
+      - id: meta_analyzer
+        role: comparison
+        llm:
+          provider: openai
+          model: gpt-4
+          temperature: 0.1
+        system_prompt: |
+          You are a meta-analysis agent that compares the outputs from different analysis approaches.
+          Your job is to:
+          1. Identify key differences between analysis approaches
+          2. Highlight strengths and weaknesses of each approach
+          3. Note where analyses conflict or converge
+          4. Suggest which insights are most valuable for the current task
+          5. Recommend next steps for exploration

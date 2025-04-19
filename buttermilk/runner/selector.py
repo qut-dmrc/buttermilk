@@ -3,11 +3,12 @@ SelectorOrchestrator: an interactive orchestrator with host agent and user guida
 """
 
 import asyncio
+import json
 import time
-from typing import Any, Self, Sequence
+from typing import Any, Dict, List, Optional, Self, Sequence
 
 from autogen_core import ClosureAgent, ClosureContext, MessageContext, TypeSubscription
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import shortuuid
 
 from buttermilk._core.agent import ProcessingError
@@ -20,15 +21,26 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
+    ConductorResponse,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
     StepRequest,
     UserInstructions,
 )
-from buttermilk._core.types import RunRequest
+from buttermilk._core.types import Record, RunRequest
 from buttermilk.bm import logger
 from buttermilk.runner.groupchat import AutogenOrchestrator
+
+
+class SelectorConfirmation(BaseModel):
+    """Enhanced user confirmation with feedback and variant selection capabilities."""
+
+    confirm: bool = True
+    halt: bool = False
+    feedback: Optional[str] = None
+    variant_selection: Optional[str] = None
+    selection: Optional[str] = None  # For multiple choice responses
 
 
 class SelectorOrchestrator(AutogenOrchestrator):
@@ -41,6 +53,7 @@ class SelectorOrchestrator(AutogenOrchestrator):
     2. Rich interactive options with the user
     3. Step-by-step exploration of agent variants
     4. Tracking of exploration paths and results
+    5. Comparison capabilities between different agent variants
     """
 
     # Core attributes for managing state
@@ -48,6 +61,9 @@ class SelectorOrchestrator(AutogenOrchestrator):
     _exploration_path: list[str] = PrivateAttr(default_factory=list)
     _user_confirmation: asyncio.Queue = PrivateAttr()
     _exploration_results: dict[str, dict] = PrivateAttr(default_factory=dict)
+    _user_feedback: list[str] = PrivateAttr(default_factory=list)
+    _last_user_selection: Optional[str] = PrivateAttr(default=None)
+    _variant_mapping: dict[str, int] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="after")
     def open_queue(self) -> Self:
@@ -64,21 +80,44 @@ class SelectorOrchestrator(AutogenOrchestrator):
         for agent_name, agent_variants in self._agent_types.items():
             self._active_variants[agent_name] = agent_variants
 
+            # Build mapping of variant IDs to indices for easy lookup
+            for i, (_, config) in enumerate(agent_variants):
+                self._variant_mapping[config.id] = i
+
         # Send welcome message
         intro_msg = ManagerMessage(
             role="orchestrator",
-            content=f"Started {self.name}: {self.description}. The conductor will guide our exploration step by step. You can provide feedback and guidance at each step.",
+            content=(
+                f"Started {self.name}: {self.description}. "
+                f"The conductor will guide our exploration step by step. "
+                f"You can provide feedback and guidance at each step, "
+                f"including selecting specific variants to try."
+            ),
         )
         await self._runtime.publish_message(intro_msg, topic_id=self._topic)
 
     async def _wait_for_human(self, timeout=240) -> bool:
-        """Wait for human confirmation with timeout."""
+        """
+        Wait for human confirmation with timeout.
+
+        Returns:
+            bool: True if user confirmed, False if rejected or timed out
+        """
         t0 = time.time()
         while True:
             try:
                 msg = self._user_confirmation.get_nowait()
                 if msg.halt:
                     raise StopAsyncIteration("User requested halt.")
+
+                # Store feedback if provided
+                if msg.feedback:
+                    self._user_feedback.append(msg.feedback)
+
+                # Store selected option if provided
+                if msg.selection:
+                    self._last_user_selection = msg.selection
+
                 return msg.confirm
             except asyncio.QueueEmpty:
                 if time.time() - t0 > timeout:
@@ -86,7 +125,15 @@ class SelectorOrchestrator(AutogenOrchestrator):
                 await asyncio.sleep(1)
 
     async def _in_the_loop(self, step: StepRequest) -> bool:
-        """Enhanced interaction with user for guidance, not just confirmation."""
+        """
+        Enhanced interaction with user for guidance, not just confirmation.
+
+        Args:
+            step: The step request to confirm with the user
+
+        Returns:
+            bool: True if the user confirmed, False otherwise
+        """
         # Prepare a richer message with more context about the step
         variant_info = ""
         if step.role in self._active_variants:
@@ -114,14 +161,21 @@ class SelectorOrchestrator(AutogenOrchestrator):
         response = await self._wait_for_human()
         return response
 
-    async def _get_next_step(self) -> StepRequest:
-        """Determine next step based on conductor recommendation and user input."""
-        # Create enhanced context with exploration history
+    async def _get_next_step(self) -> StepRequest | None:
+        """
+        Determine next step based on conductor recommendation and user input.
+
+        Returns:
+            StepRequest: The next step to execute, or None if no step could be determined
+        """
+        # Create enhanced context with exploration history and user feedback
         conductor_context = {
             "exploration_path": self._exploration_path,
             "available_agents": {name: [v[1].id for v in variants] for name, variants in self._active_variants.items()},
             "task": self.params.get("task", "Analyze the content"),
             "results": self._exploration_results,
+            # Include user feedback if available
+            "user_feedback": self._user_feedback if self._user_feedback else [],
             # Include standard context expected by conductor
             "participants": dict(self._agent_types.items()),
         }
@@ -139,22 +193,107 @@ class SelectorOrchestrator(AutogenOrchestrator):
         )
 
         # Determine the next step based on the response
-        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
+        if not responses or len(responses) != 1 or not (instructions := responses[0].outputs):
             logger.warning("Conductor could not get next step.")
             return None
 
-        next_step = instructions
-        if next_step.role == END:
-            raise StopAsyncIteration("Host signaled that flow has been completed.")
+        # Check if response is a ConductorResponse with special instructions
+        if isinstance(instructions, ConductorResponse):
+            # The conductor might be asking a question or providing comparison
+            await self._handle_host_message(instructions)
+            # Then we'll need to get another step after processing this message
+            return await self._get_next_step()
 
-        if next_step.role.lower() not in self._agent_types:
-            raise ProcessingError(
-                f"Step {next_step.role} not found in registered agents.",
+        # Normal step request
+        if isinstance(instructions, StepRequest):
+            next_step = instructions
+
+            if next_step.role == END:
+                raise StopAsyncIteration("Host signaled that flow has been completed.")
+
+            if next_step.role.lower() not in self._agent_types:
+                raise ProcessingError(
+                    f"Step {next_step.role} not found in registered agents.",
+                )
+
+            # We're going to wait a bit between steps.
+            await asyncio.sleep(2)
+            return next_step
+
+        logger.warning(f"Unexpected conductor response type: {type(instructions)}")
+        return None
+
+    async def _handle_host_message(self, message: ConductorResponse) -> None:
+        """
+        Process special messages from the host agent (conductor).
+
+        Args:
+            message: The ConductorResponse from the host agent
+        """
+        outputs = message.outputs
+        if not isinstance(outputs, dict):
+            logger.warning(f"Expected dict outputs, got {type(outputs)}")
+            return
+
+        msg_type = outputs.get("type", "")
+
+        if msg_type == "question":
+            # Host is asking user a question
+            options = outputs.get("options", [])
+            question = ManagerRequest(
+                role="conductor",
+                content=(f"{message.content}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
+            )
+            await self._runtime.publish_message(question, topic_id=self._topic)
+
+            # Wait for user's response
+            await self._wait_for_human()
+
+        elif msg_type == "comparison":
+            # Host is providing a comparison between variants
+            await self._handle_comparison(message)
+
+        else:
+            # Just forward the message to the UI
+            await self._runtime.publish_message(
+                ManagerMessage(
+                    role="conductor",
+                    content=message.content,
+                ),
+                topic_id=self._topic,
             )
 
-        # We're going to wait a bit between steps.
-        await asyncio.sleep(2)
-        return next_step
+    async def _handle_comparison(self, message: ConductorResponse) -> None:
+        """
+        Format and present variant comparisons to the user.
+
+        Args:
+            message: The ConductorResponse containing comparison data
+        """
+        outputs = message.outputs
+        variants = outputs.get("variants", [])
+        results = outputs.get("results", {})
+
+        # Create a nicely formatted comparison
+        comparison_text = message.content + "\n\n"
+        comparison_text += "## Comparison of Results\n\n"
+
+        for variant in variants:
+            variant_results = results.get(variant, {})
+            comparison_text += f"### {variant}\n\n"
+
+            # Format the results as a bullet list
+            for key, value in variant_results.items():
+                comparison_text += f"- **{key}**: {value}\n"
+            comparison_text += "\n"
+
+        # Send the formatted comparison to the UI
+        await self._send_ui_message(
+            ManagerMessage(
+                role="conductor",
+                content=comparison_text,
+            )
+        )
 
     async def _execute_step(
         self,
@@ -243,9 +382,27 @@ class SelectorOrchestrator(AutogenOrchestrator):
                         logger.info("User did not confirm step. Waiting for new instructions.")
                         continue
 
-                    # Prepare and execute the confirmed step
+                    # Prepare the step input
                     step_input = await self._prepare_step(next_step)
-                    await self._execute_step(step=next_step.role, input=step_input)
+
+                    # Check if a specific variant was selected by the user
+                    variant_index = 0  # Default to first variant
+
+                    # Get the most recent confirmation from the queue
+                    try:
+                        confirmation = self._user_confirmation.get_nowait()
+                        if confirmation.variant_selection:
+                            # Look up the variant index from the name
+                            if confirmation.variant_selection in self._variant_mapping:
+                                variant_index = self._variant_mapping[confirmation.variant_selection]
+                                logger.info(f"Using selected variant: {confirmation.variant_selection} (index {variant_index})")
+                            else:
+                                logger.warning(f"Selected variant {confirmation.variant_selection} not found. Using default.")
+                    except asyncio.QueueEmpty:
+                        pass  # No new confirmation, use default variant
+
+                    # Execute the step with the selected variant
+                    await self._execute_step(step=next_step.role, input=step_input, variant_index=variant_index)
 
                 except ProcessingError as e:
                     # Non-fatal error, log and continue
@@ -270,9 +427,9 @@ class SelectorOrchestrator(AutogenOrchestrator):
             from buttermilk.agents.fetch import FetchRecord
 
             # Convert Sequence to list to fix type compatibility
-            fetch = FetchRecord(data=list(self.data))
+            fetch = FetchRecord(role="fetch", description="fetch records and urls", data=list(self.data))
             output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
-            if output:
+            if output and output.results:
                 self._records = output.results
         except Exception as e:
             logger.error(f"Error fetching record: {e}")

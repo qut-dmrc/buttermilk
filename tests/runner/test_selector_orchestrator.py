@@ -20,17 +20,20 @@ from buttermilk.runner.selector import SelectorOrchestrator
 @pytest.fixture
 def selector_config():
     """Basic config for testing the SelectorOrchestrator."""
+    # Create mock AgentVariants objects
+    test_variants = MagicMock()
+    test_variants.get_configs.return_value = [(MagicMock(), MagicMock(id="test_agent", role="test"))]
+
+    conductor_variants = MagicMock()
+    conductor_variants.get_configs.return_value = [(MagicMock(), MagicMock(id="conductor_agent", role="conductor"))]
+
     return {
         "name": "test_selector",
         "description": "Test selector orchestrator",
         "data": [],
         "agents": {
-            "test": [
-                (MagicMock(), MagicMock(id="test_agent", role="test")),
-            ],
-            "conductor": [
-                (MagicMock(), MagicMock(id="conductor_agent", role="conductor")),
-            ],
+            "test": test_variants,
+            "conductor": conductor_variants,
         },
         "params": {"task": "Test task"},
     }
@@ -61,7 +64,7 @@ async def test_setup(selector_config):
     # Mock the runtime for testing
     orchestrator._runtime = AsyncMock()
     orchestrator._user_confirmation = asyncio.Queue()
-    orchestrator._topic = "test_topic"
+    orchestrator._topic = MagicMock()  # Mock TopicId object
 
     await orchestrator._setup()
 
