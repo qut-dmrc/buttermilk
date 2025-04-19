@@ -2,7 +2,7 @@ defaults:
   - _self_
   - agents@selector.agents:
       - conductor
-      - ui
+      - manager
       - judge
       - analyst
 

@@ -253,8 +253,7 @@ class Agent(AgentConfig):
 
             elif isinstance(message, GroupchatMessageTypes):
                 # Listen to messages from other agents to update state
-                await self._listen(message=message, cancellation_token=cancellation_token, source=source, **kwargs)
-                result = None  # Listen does not produce direct output
+                result = await self._listen(message=message, cancellation_token=cancellation_token, source=source, **kwargs)
 
             elif isinstance(message, OOBMessages):
                 # Handle control messages

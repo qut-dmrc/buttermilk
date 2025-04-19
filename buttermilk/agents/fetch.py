@@ -27,13 +27,13 @@ MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
 class FetchRecord(ToolConfig):
-    _data: dict[str, Any] = pydantic.PrivateAttr(default={})
+    _data_sources: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
 
     async def load_data(self):
-        self._data = await prepare_step_df(self.data)
+        self._data_sources = await prepare_step_df(self.data)
 
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
@@ -78,10 +78,10 @@ class FetchRecord(ToolConfig):
         return None
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
-        if not self._data:
+        if not self._data_sources:
             await self.load_data()
 
-        for dataset in self._data.values():
+        for dataset in self._data_sources.values():
             rec = dataset.query("record_id==@record_id")
             if rec.shape[0] == 1:
                 data = rec.iloc[0].to_dict()

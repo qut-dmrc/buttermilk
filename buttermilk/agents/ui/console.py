@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.pretty import pretty_repr
 
 from buttermilk import logger
-from buttermilk._core.agent import ConductorResponse, OOBMessages
+from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
@@ -33,6 +33,10 @@ console = Console(highlighter=JSONHighlighter())
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
+
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+        """Send or receive input from the UI."""
+        self._console.print(Markdown("Input requested:\n"))
 
     def _fmt_msg(self, message: FlowMessage, source: str) -> Markdown | None:
         """Format a message for display in the console."""
@@ -84,7 +88,7 @@ class CLIUserAgent(UIAgent):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
+        cancellation_token: CancellationToken | None = None,
         source: str = "unknown",
         **kwargs,
     ) -> None:
@@ -98,11 +102,10 @@ class CLIUserAgent(UIAgent):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
-        source: str = "unknown",
         **kwargs,
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-        if out := self._fmt_msg(message, source=source):
+        if out := self._fmt_msg(message, source=kwargs.get("source", "unknown")):
             self._console.print(out)
 
         if isinstance(message, ManagerRequest):

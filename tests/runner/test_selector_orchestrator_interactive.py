@@ -18,6 +18,7 @@ from buttermilk._core.contract import (
     UserInstructions,
 )
 from buttermilk._core.types import Record, RunRequest
+from buttermilk._core.variants import AgentVariants
 from buttermilk.runner.selector import SelectorOrchestrator, SelectorConfirmation
 
 
@@ -25,16 +26,16 @@ from buttermilk.runner.selector import SelectorOrchestrator, SelectorConfirmatio
 def selector_config():
     """Basic config for testing the SelectorOrchestrator."""
     # Create mock AgentVariants objects
-    test_variants = MagicMock()
+    test_variants = MagicMock(spec=AgentVariants)
     test_variants.get_configs.return_value = [
         (MagicMock(), MagicMock(id="test_agent1", role="test")),
         (MagicMock(), MagicMock(id="test_agent2", role="test")),
     ]
 
-    conductor_variants = MagicMock()
+    conductor_variants = MagicMock(spec=AgentVariants)
     conductor_variants.get_configs.return_value = [(MagicMock(), MagicMock(id="conductor_agent", role="conductor"))]
 
-    ui_variants = MagicMock()
+    ui_variants = MagicMock(spec=AgentVariants)
     ui_variants.get_configs.return_value = [(MagicMock(), MagicMock(id="ui_agent", role="ui"))]
 
     return {

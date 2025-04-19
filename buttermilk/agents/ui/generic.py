@@ -28,8 +28,6 @@ class UIAgent(Agent):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         **kwargs,
     ) -> OOBMessages | None:
         """Process control messages for agent coordination.

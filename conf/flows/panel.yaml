@@ -3,6 +3,7 @@ defaults:
   - criteria@panel.params.criteria: trans
   - agents@panel.agents:
       - manager
+      - fetch
       - host
       - judge
       - owl

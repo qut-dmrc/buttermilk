@@ -3,6 +3,7 @@ from collections.abc import Awaitable
 from math import ceil
 from huggingface_hub import User
 from pydantic import BaseModel, Field, PrivateAttr
+import weave
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     END,
@@ -73,8 +74,6 @@ class HostAgent(LLMAgent):
         self,
         message: GroupchatMessageTypes,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         source: str = "unknown",
         **kwargs,
     ) -> None:
@@ -90,8 +89,6 @@ class HostAgent(LLMAgent):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         **kwargs,
     ) -> OOBMessages | None:
 
@@ -106,17 +103,21 @@ class HostAgent(LLMAgent):
 
         await self._check_completions()
 
+        return
+
     async def _check_completions(self) -> None:
         required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
-        logger.info(
-            f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
-        )
-        if len(self._completed_agents_current_step) >= required_completions:
-            logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
-            self._step_completion_event.set()
-        else:
-            self._step_completion_event.clear()
+        if required_completions > 0:
+            logger.info(
+                f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
+            )
+            if len(self._completed_agents_current_step) >= required_completions:
+                logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
+                self._step_completion_event.set()
+            else:
+                self._step_completion_event.clear()
 
+    @weave.op
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         try:
             # Wait for enough completions, with a timeout

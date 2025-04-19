@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     ManagerRequest,
     OOBMessages,
     TaskProcessingComplete,
+    TaskProcessingStarted,
     UserInstructions,
     AllMessages,
 )
@@ -97,17 +98,23 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: AgentInput,
         ctx: MessageContext,
-    ) -> Sequence[AgentOutput | ToolOutput | TaskProcessingComplete] | AgentOutput | ToolOutput | TaskProcessingComplete | None:
+    ) -> (
+        Sequence[AgentOutput | ToolOutput | TaskProcessingComplete] | AgentOutput | ToolOutput | TaskProcessingComplete | TaskProcessingStarted | None
+    ):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
         public_callback = self._make_publish_callback(topic_id=self.topic_id)
+
+        # Signal that we have started work
+        await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.type, task_index=0))
         response = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
         )
         if response:
             await public_callback(response)
+        await public_callback(TaskProcessingComplete(agent_id=self.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False))
         return response
 
     @message_handler
@@ -160,11 +167,9 @@ class AutogenAgentAdapter(RoutedAgent):
         response = await self.agent._handle_control_message(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            public_callback=self._make_publish_callback(topic_id=self.topic_id),
-            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
             source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
-        return response  # only the last message
+        return response
 
     def _make_publish_callback(self, topic_id=None) -> Callable[[UserInstructions], Awaitable[None]]:
         """Create a callback for handling publishing from client if required.

@@ -67,7 +67,6 @@ async def test_get_next_step_success(orchestrator):
 
     # Create a conductor response for the first call
     conductor_response = ConductorResponse(
-        role="conductor",
         content="Need more info",
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
@@ -85,7 +84,6 @@ async def test_get_next_step_success(orchestrator):
             # First call - return the conductor response
             [
                 AgentOutput(
-                    role="conductor",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
                 )
@@ -93,7 +91,6 @@ async def test_get_next_step_success(orchestrator):
             # Second call (after handling the message) - return the step
             [
                 AgentOutput(
-                    role="conductor",
                     content="Next step",
                     outputs=mock_step_dict,
                 )
@@ -159,12 +156,10 @@ async def test_get_next_step_conductor_message(orchestrator):
     """Test handling when conductor returns a message instead of a step."""
     # Mock response from _ask_agents with ConductorResponse
     conductor_response = ConductorResponse(
-        role="conductor",
         content="Need more info",
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
     mock_output = AgentOutput(
-        role="conductor",
         content="Need more info",
         outputs=conductor_response.model_dump(),  # Convert to dict
     )
@@ -176,7 +171,6 @@ async def test_get_next_step_conductor_message(orchestrator):
 
     # Make the response more explicit to avoid role "error" issue
     mock_follow_up = AgentOutput(
-        role="conductor",
         content="Next step",
         outputs=mock_step,  # Use the StepRequest object directly
     )
@@ -193,7 +187,6 @@ async def test_get_next_step_conductor_message(orchestrator):
 
     # Directly validate the result instead of checking method calls
     assert result is not None
-    assert result.role == "test_agent"  # Directly test the expected value
     assert result.description == "test step"
     assert result.prompt == "test prompt"
 
