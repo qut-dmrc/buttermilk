@@ -59,7 +59,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         *   `_execute_step()`: Publishes an `AgentInput` message to a specific topic within the Autogen runtime, targeting the agent(s) subscribed to that topic (step role).
         *   `_send_ui_message(...)`: Publishes messages specifically for UI agents.
 
-3.  **`Selector` (`buttermilk.runner.chat.Selector`)**
+3.  **`Selector` (`buttermilk.runner.selector.Selector`)**
     *   These are concrete orchestrators inheriting from `AutogenOrchestrator`.
     *   They implement `_get_next_step()` as an async generator yielding `StepRequest` objects.
     *   Their `run()` methods typically loop through `_get_next_step()`, potentially ask for user confirmation (`_user_confirmation` queue), and then call `_execute_step()` to trigger the next agent via the Autogen runtime.

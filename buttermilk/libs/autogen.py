@@ -114,7 +114,7 @@ class AutogenAgentAdapter(RoutedAgent):
         if response:
             await self.publish_message(response, topic_id=self.topic_id)
         await self.publish_message(
-            TaskProcessingComplete(agent_id=self.agent.id, role=self.autogen_id.type, task_index=0, more_tasks_remain=False, is_error=False),
+            TaskProcessingComplete(agent_id=self.agent.id, role=self.id.type, task_index=0, more_tasks_remain=False, is_error=False),
             topic_id=self.topic_id,
         )
         return response

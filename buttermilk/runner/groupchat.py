@@ -14,7 +14,7 @@ from autogen_core import (
     TypeSubscription,
     message_handler,
 )
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, model_validator
 import weave
 
 from buttermilk._core import TaskProcessingComplete

@@ -116,7 +116,8 @@ class HostAgent(LLMAgent):
                 self._step_completion_event.set()
             else:
                 self._step_completion_event.clear()
-        self._step_completion_event.clear()
+        else:
+            self._step_completion_event.set()
 
     @weave.op
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:

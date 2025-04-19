@@ -33,7 +33,7 @@
       "name": "moa debug",
       "type": "debugpy",
       "request": "launch",
-      "module": "buttermilk.runner.chat",
+      "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
