@@ -59,7 +59,7 @@ def orchestrator():
         return orchestrator
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_get_next_step_success(orchestrator):
     """Test that _get_next_step correctly returns the next step."""
     # Mock response from _ask_agents
@@ -154,7 +154,7 @@ async def test_get_next_step_success(orchestrator):
     assert orchestrator._ask_agents.called
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_get_next_step_conductor_message(orchestrator):
     """Test handling when conductor returns a message instead of a step."""
     # Mock response from _ask_agents with ConductorResponse
@@ -198,7 +198,7 @@ async def test_get_next_step_conductor_message(orchestrator):
     assert result.prompt == "test prompt"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_execute_step(orchestrator):
     """Test the _execute_step method."""
     # Setup
@@ -228,7 +228,7 @@ async def test_execute_step(orchestrator):
     assert orchestrator._exploration_results[list(orchestrator._exploration_results.keys())[0]]["role"] == "test_role"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_wait_for_human_confirmed(orchestrator):
     """Test waiting for human confirmation with positive response."""
     # Setup a confirmation in the queue
@@ -244,7 +244,7 @@ async def test_wait_for_human_confirmed(orchestrator):
     assert "Good idea" in orchestrator._user_feedback
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_handle_host_message_question(orchestrator):
     """Test handling a question from the host agent."""
     # Setup
@@ -272,7 +272,7 @@ async def test_handle_host_message_question(orchestrator):
     assert "Option B" in call_args[0].content
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_handle_comparison(orchestrator):
     """Test handling comparison results from variants."""
     # Setup
@@ -309,7 +309,7 @@ async def test_handle_comparison(orchestrator):
     assert "**speed**: slow" in call_args.content
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_in_the_loop_single_variant(orchestrator):
     """Test in_the_loop with a single variant."""
     # Setup
@@ -334,7 +334,7 @@ async def test_in_the_loop_single_variant(orchestrator):
     assert "variants available" not in message.content.lower()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_in_the_loop_multiple_variants(orchestrator):
     """Test in_the_loop with multiple variants."""
     # Setup
@@ -362,7 +362,7 @@ async def test_in_the_loop_multiple_variants(orchestrator):
     assert "variant2" in message.content
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_run_with_records(orchestrator):
     """Test the main run method with provided records."""
     # Setup

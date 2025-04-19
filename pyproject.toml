@@ -121,7 +121,7 @@ dev = [
     "pandas-stubs>=2.2.3.241126",
     "ipykernel>=6.29.5",
     "buttermilk",
-    "pytest-asyncio>=0.26.0",
+    "pytest-anyio>=0.0.0",
 ]
 
 [tool.mypy]
@@ -177,9 +177,7 @@ line-ending = "auto"
 markers = [
   "integration: integration tests, don't run by default",
   "scheduled: mark tests to run in scheduled testing",
-  "asyncio",
 ]
-asyncio_mode = "auto"
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600

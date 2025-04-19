@@ -171,7 +171,7 @@ class AgentOutput(FlowMessage):
         default=None,
         description="The human-readable digest representation of the message.",
     )
-    outputs: type[BaseModel] | dict[str, Any] = Field(
+    outputs: BaseModel | dict[str, Any] = Field(
         default={},
         description="The data returned from the agent",
     )

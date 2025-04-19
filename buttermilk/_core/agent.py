@@ -234,7 +234,7 @@ class Agent(AgentConfig):
                 result, call = await _traced_process.call(inputs=final_input, cancellation_token=cancellation_token, **kwargs)
                 # Weave swallows errors. They should be reported in code below, so don't raise again.
                 if call.exception:
-                    logger.info(f"Agent {self.id} hit error processing request: {call.exception}")
+                    logger.error(f"Agent {self.id} hit error processing request: {call.exception}")
 
                 # --- Evaluation Logic ---
                 if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
