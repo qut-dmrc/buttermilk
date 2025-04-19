@@ -8,7 +8,7 @@ defaults:
       - owl
 
 panel:
-  _target_: buttermilk.runner.groupchat.AutogenOrchestrator
+  _target_: buttermilk.runner.chat.Selector
   description: Panel of Agents directed chat
   name: trans
   data:

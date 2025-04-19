@@ -10,12 +10,12 @@ from buttermilk._core.types import RunRequest  # Import RunRequest
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import BM  # Original import
-from buttermilk.runner.chat import Selector
+from buttermilk.runner.selector import SelectorOrchestrator
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.slackbot import register_handlers
 import uvicorn
 
-ORCHESTRATOR_CLASSES = {"simple": AutogenOrchestrator, "selector": Selector}
+ORCHESTRATOR_CLASSES = {"simple": AutogenOrchestrator, "selector": SelectorOrchestrator}
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")

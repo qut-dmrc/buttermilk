@@ -1,0 +1,33 @@
+defaults:
+  - _self_
+  - criteria@panel.params.criteria: trans
+  - agents@panel.agents:
+      - manager
+      - host
+      - judge
+      - owl
+
+panel:
+  _target_: buttermilk.runner.selector.SelectorOrchestrator
+  description: Interactive panel with host agent and user guidance
+  name: selector
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
+  params:
+    criteria: replace
+    task: >
+      The purpose of this conversation is to assess a single piece of content. You are the HOST.
+      
+      As the HOST agent, guide the conversation to explore different agent variants in a structured way:
+      
+      1. Begin by introducing available agents and requesting initial analysis from a JUDGE.
+      2. Present results to the user and ask what aspect they'd like to explore next.
+      3. For each area of interest, suggest which agent variant might be most helpful.
+      4. After each agent's analysis, synthesize what was learned and identify areas for deeper exploration.
+      5. Throughout the process, maintain a clear record of which variants have been tried and what insights each provided.
+      6. Help the user compare different approaches and understand tradeoffs between variants.
+      7. At appropriate points, ask if the user wants to try a different approach or variant.
