@@ -220,8 +220,8 @@ class SelectorOrchestrator(AutogenOrchestrator):
             await asyncio.sleep(2)
             return next_step
 
-        logger.warning(f"Unexpected conductor response type: {type(instructions)}")
-        return None
+        logger.warning(f"Unexpected conductor response type: {type(agent_output)}")
+
 
     async def _handle_host_message(self, message: ConductorResponse) -> None:
         """
