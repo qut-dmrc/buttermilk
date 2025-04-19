@@ -104,17 +104,18 @@ class AutogenAgentAdapter(RoutedAgent):
         """Handle public request for agent to act. It's possible to return a value
         to the caller, but usually any result would be published back to the group."""
         response = None
-        public_callback = self._make_publish_callback(topic_id=self.topic_id)
 
         # Signal that we have started work
-        await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.type, task_index=0))
+        await self.publish_message(TaskProcessingStarted(agent_id=self.id, role=self.type, task_index=0), topic_id=self.topic_id)
         response = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
         )
         if response:
-            await public_callback(response)
-        await public_callback(TaskProcessingComplete(agent_id=self.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False))
+            await self.publish_message(response, topic_id=self.topic_id)
+        await self.publish_message(
+            TaskProcessingComplete(agent_id=self.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False), topic_id=self.topic_id
+        )
         return response
 
     @message_handler
