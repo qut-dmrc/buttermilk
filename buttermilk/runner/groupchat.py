@@ -48,6 +48,7 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
+    _user_confirmation: asyncio.Queue = PrivateAttr()
 
     _topic: TopicId = PrivateAttr(
         default_factory=lambda: DefaultTopicId(
@@ -55,12 +56,22 @@ class AutogenOrchestrator(Orchestrator):
         ),
     )
 
+    @model_validator(mode="after")
+    def open_queue(self) -> Self:
+        """Initialize user confirmation queue."""
+        self._user_confirmation = asyncio.Queue(maxsize=1)
+        return self
+
     async def _setup(self):
         """Initialize the autogen runtime and register agents"""
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register agents for each step
         await self._register_agents()
+
+        # Create an agent to interact with the user, if any
+        await self._register_human_in_the_loop()
+
         # Start the runtime
         self._runtime.start()
 
@@ -101,6 +112,40 @@ class AutogenOrchestrator(Orchestrator):
                 step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
             self._agent_types[step_name.lower()] = step_agent_type
+
+    async def _register_human_in_the_loop(self) -> None:
+        """Register a human in the loop agent"""
+
+        # Register a human in the loop agent
+        async def user_confirm(
+            _agent: ClosureContext,
+            message: ManagerResponse,
+            ctx: MessageContext,
+        ) -> None:
+            # Add confirmation signal to queue
+            if isinstance(message, ManagerResponse):
+                try:
+                    self._user_confirmation.put_nowait(message)
+                except asyncio.QueueFull:
+                    logger.debug(
+                        f"User confirmation queue is full. Discarding confirmation: {message}",
+                    )
+            # Ignore other messages right now.
+
+        await ClosureAgent.register_closure(
+            self._runtime,
+            CONFIRM,
+            user_confirm,
+            subscriptions=lambda: [
+                TypeSubscription(
+                    topic_type=topic_type,
+                    agent_type=CONFIRM,
+                )
+                # Subscribe to the general topic and all step topics.
+                for topic_type in [self._topic.type] + list(self.agents.keys())
+            ],
+            unknown_type_policy="ignore",  # only react to appropriate messages
+        )
 
     async def _ask_agents(
         self,

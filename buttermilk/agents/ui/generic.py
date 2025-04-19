@@ -24,7 +24,7 @@ class UIAgent(Agent):
         """Send or receive input from the UI."""
         raise NotImplementedError
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,

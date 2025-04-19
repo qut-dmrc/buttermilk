@@ -85,7 +85,7 @@ class HostAgent(LLMAgent):
             if not message.content.startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
@@ -116,6 +116,7 @@ class HostAgent(LLMAgent):
                 self._step_completion_event.set()
             else:
                 self._step_completion_event.clear()
+        self._step_completion_event.clear()
 
     @weave.op
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:

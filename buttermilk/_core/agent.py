@@ -203,7 +203,7 @@ class Agent(AgentConfig):
         # return AgentOutput(role=self.role, content=output_content, inputs=inputs)
         raise NotImplementedError("Subclasses must implement the _process method.")
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
@@ -257,7 +257,7 @@ class Agent(AgentConfig):
 
             elif isinstance(message, OOBMessages):
                 # Handle control messages
-                result = await self._handle_control_message(message=message, cancellation_token=cancellation_token, **kwargs)
+                result = await self._handle_events(message=message, cancellation_token=cancellation_token, **kwargs)
 
             else:
                 logger.warning(f"Agent {self.role} received unhandled message type: {type(message)}")

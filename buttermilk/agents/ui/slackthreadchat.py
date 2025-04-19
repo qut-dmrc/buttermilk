@@ -292,7 +292,7 @@ class SlackUIAgent(UIAgent):
         self._handlers.decline = self.app.action("decline_action")(handle_decline)
         self._handlers.cancel = self.app.action("cancel_action")(handle_cancel)
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,

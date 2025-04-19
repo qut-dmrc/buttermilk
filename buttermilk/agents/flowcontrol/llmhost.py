@@ -84,7 +84,7 @@ class HostAgent(LLMAgent):
             if not message.content.startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,

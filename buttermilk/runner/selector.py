@@ -37,7 +37,7 @@ class SelectorConfirmation(BaseModel):
     selection: Optional[str] = None  # For multiple choice responses
 
 
-class SelectorOrchestrator(AutogenOrchestrator):
+class Selector(AutogenOrchestrator):
     """
     An orchestrator that enables interactive exploration of agent variants
     with direct user involvement and an active host LLM agent.
@@ -52,17 +52,11 @@ class SelectorOrchestrator(AutogenOrchestrator):
     # Core attributes for managing state
     _active_variants: Dict[str, List[tuple]] = PrivateAttr(default_factory=dict)
     _exploration_path: List[str] = PrivateAttr(default_factory=list)
-    _user_confirmation: asyncio.Queue = PrivateAttr()
     _exploration_results: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
     _user_feedback: List[str] = PrivateAttr(default_factory=list)
     _last_user_selection: Optional[str] = PrivateAttr(default=None)
     _variant_mapping: Dict[str, int] = PrivateAttr(default_factory=dict)
-
-    @model_validator(mode="after")
-    def open_queue(self) -> Self:
-        """Initialize user confirmation queue."""
-        self._user_confirmation = asyncio.Queue(maxsize=1)
-        return self
+    _user_confirmation: asyncio.Queue[SelectorConfirmation] = PrivateAttr()
 
     async def _setup(self) -> None:
         """Initialize runtime, register agents and set up communication channels."""
@@ -79,7 +73,6 @@ class SelectorOrchestrator(AutogenOrchestrator):
 
         # Send welcome message
         intro_msg = ManagerMessage(
-            role="orchestrator",
             content=(
                 f"Started {self.name}: {self.description}. "
                 f"The conductor will guide our exploration step by step. "
@@ -176,7 +169,6 @@ class SelectorOrchestrator(AutogenOrchestrator):
 
         # Create the request for the conductor
         request = ConductorRequest(
-            role=self.name,
             inputs=conductor_context,
         )
 
@@ -256,7 +248,6 @@ class SelectorOrchestrator(AutogenOrchestrator):
             # Just forward the message to the UI
             await self._runtime.publish_message(
                 ManagerMessage(
-                    role="conductor",
                     content=message.content or "",
                 ),
                 topic_id=self._topic,
@@ -290,7 +281,6 @@ class SelectorOrchestrator(AutogenOrchestrator):
         # Send the formatted comparison to the UI
         await self._send_ui_message(
             ManagerMessage(
-                role="conductor",
                 content=comparison_text,
             )
         )
@@ -397,6 +387,8 @@ class SelectorOrchestrator(AutogenOrchestrator):
                     # Get the most recent confirmation from the queue
                     try:
                         confirmation = self._user_confirmation.get_nowait()
+                        if confirmation.halt:
+                            raise StopAsyncIteration("User requested halt.")
                         if confirmation.variant_selection:
                             # Look up the variant index from the name
                             if confirmation.variant_selection in self._variant_mapping:

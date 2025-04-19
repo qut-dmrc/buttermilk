@@ -9,7 +9,7 @@ defaults:
       - owl
 
 panel:
-  _target_: buttermilk.runner.chat.Selector
+  _target_: buttermilk.runner.selector.Selector
   description: Panel of Agents directed chat
   name: trans
   data:

@@ -25,6 +25,8 @@
     ".git",
     ".venv",
     ".venv/**/*",
+    "**/site-packages",
+    "**/__pycache__"
   ],
   "python.analysis.extraPaths": [
     "tests"

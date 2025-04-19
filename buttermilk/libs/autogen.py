@@ -106,7 +106,7 @@ class AutogenAgentAdapter(RoutedAgent):
         response = None
 
         # Signal that we have started work
-        await self.publish_message(TaskProcessingStarted(agent_id=self.id.type, role=self.type, task_index=0), topic_id=self.topic_id)
+        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.autogen_id.type, task_index=0), topic_id=self.topic_id)
         response = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
@@ -114,7 +114,7 @@ class AutogenAgentAdapter(RoutedAgent):
         if response:
             await self.publish_message(response, topic_id=self.topic_id)
         await self.publish_message(
-            TaskProcessingComplete(agent_id=self.id.type, role=self.type, task_index=0, more_tasks_remain=False, is_error=False),
+            TaskProcessingComplete(agent_id=self.agent.id, role=self.autogen_id.type, task_index=0, more_tasks_remain=False, is_error=False),
             topic_id=self.topic_id,
         )
         return response
@@ -166,7 +166,7 @@ class AutogenAgentAdapter(RoutedAgent):
     ) -> OOBMessages | Sequence[OOBMessages] | None:
         """Handle control messages sent OOB. Any response must also be OOB."""
         response = None
-        response = await self.agent._handle_control_message(
+        response = await self.agent._handle_events(
             message=message,
             cancellation_token=ctx.cancellation_token,
             source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",

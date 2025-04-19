@@ -77,12 +77,13 @@ class CLIUserAgent(UIAgent):
                     output.append(f"Task from {source} #{message.task_index} failed...")
             else:
                 output.append(message.content)
-            output = [o for o in output if o]
-            if len(output) > 1:
-                return Markdown("\n".join(output))
         except Exception as e:
             logger.error(f"Unable to format message of type {type(message)}: {e}")
-            return message.model_dump_json(indent=2)
+            output.append(pretty_repr(message.model_dump(), max_string=400))
+
+        output = [o for o in output if o]
+        if len(output) > 1:
+            return Markdown("\n".join(output))
         return None
 
     async def _listen(
@@ -98,7 +99,7 @@ class CLIUserAgent(UIAgent):
         if msg := self._fmt_msg(message, source=source):
             self._console.print(msg)
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
@@ -108,9 +109,6 @@ class CLIUserAgent(UIAgent):
         if out := self._fmt_msg(message, source=kwargs.get("source", "unknown")):
             self._console.print(out)
 
-        if isinstance(message, ManagerRequest):
-            # self._console.print(message.description)
-            self._console.print(Markdown("Input requested:\n"))
         return None
 
     async def _poll_input(
@@ -143,7 +141,7 @@ class CLIUserAgent(UIAgent):
                 else:
                     await self._input_callback(UserInstructions(content=user_input))
                 await self._input_callback(
-                    TaskProcessingComplete(agent_id=self.id.type, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
+                    TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
                 )
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
