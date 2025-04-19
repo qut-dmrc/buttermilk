@@ -142,6 +142,9 @@ class CLIUserAgent(UIAgent):
                     )
                 else:
                     await self._input_callback(UserInstructions(content=user_input))
+                await self._input_callback(
+                    TaskProcessingComplete(agent_id=self.id.type, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
+                )
                 await self._input_callback(HeartBeat(go_next=True))
                 await asyncio.sleep(0.5)
             except asyncio.CancelledError:
