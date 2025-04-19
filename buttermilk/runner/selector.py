@@ -3,32 +3,26 @@ SelectorOrchestrator: an interactive orchestrator with host agent and user guida
 """
 
 import asyncio
-import json
 import time
-from typing import Any, Dict, List, Optional, Self, Sequence
+from typing import Any, Dict, List, Optional, Self, Sequence, Union, cast
 
-from autogen_core import ClosureAgent, ClosureContext, MessageContext, TypeSubscription
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, PrivateAttr, model_validator
 import shortuuid
 
 from buttermilk._core.agent import ProcessingError
 from buttermilk._core.contract import (
-    CLOSURE,
     CONDUCTOR,
     CONFIRM,
     END,
-    MANAGER,
     AgentInput,
     AgentOutput,
     ConductorRequest,
     ConductorResponse,
     ManagerMessage,
     ManagerRequest,
-    ManagerResponse,
     StepRequest,
-    UserInstructions,
 )
-from buttermilk._core.types import Record, RunRequest
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
 from buttermilk.runner.groupchat import AutogenOrchestrator
 
@@ -49,21 +43,20 @@ class SelectorOrchestrator(AutogenOrchestrator):
     with direct user involvement and an active host LLM agent.
 
     This orchestrator extends the AutogenOrchestrator with:
-    1. A dedicated host agent to manage conversations
-    2. Rich interactive options with the user
-    3. Step-by-step exploration of agent variants
-    4. Tracking of exploration paths and results
-    5. Comparison capabilities between different agent variants
+    1. Rich interactive options with the user
+    2. Step-by-step exploration of agent variants
+    3. Tracking of exploration paths and results
+    4. Comparison capabilities between different agent variants
     """
 
     # Core attributes for managing state
-    _active_variants: dict[str, list[tuple]] = PrivateAttr(default_factory=dict)
-    _exploration_path: list[str] = PrivateAttr(default_factory=list)
+    _active_variants: Dict[str, List[tuple]] = PrivateAttr(default_factory=dict)
+    _exploration_path: List[str] = PrivateAttr(default_factory=list)
     _user_confirmation: asyncio.Queue = PrivateAttr()
-    _exploration_results: dict[str, dict] = PrivateAttr(default_factory=dict)
-    _user_feedback: list[str] = PrivateAttr(default_factory=list)
+    _exploration_results: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
+    _user_feedback: List[str] = PrivateAttr(default_factory=list)
     _last_user_selection: Optional[str] = PrivateAttr(default=None)
-    _variant_mapping: dict[str, int] = PrivateAttr(default_factory=dict)
+    _variant_mapping: Dict[str, int] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="after")
     def open_queue(self) -> Self:
@@ -96,9 +89,12 @@ class SelectorOrchestrator(AutogenOrchestrator):
         )
         await self._runtime.publish_message(intro_msg, topic_id=self._topic)
 
-    async def _wait_for_human(self, timeout=240) -> bool:
+    async def _wait_for_human(self, timeout: int = 240) -> bool:
         """
         Wait for human confirmation with timeout.
+
+        Args:
+            timeout: Maximum time to wait in seconds
 
         Returns:
             bool: True if user confirmed, False if rejected or timed out
@@ -161,12 +157,12 @@ class SelectorOrchestrator(AutogenOrchestrator):
         response = await self._wait_for_human()
         return response
 
-    async def _get_next_step(self) -> StepRequest | None:
+    async def _get_next_step(self) -> StepRequest:
         """
         Determine next step based on conductor recommendation and user input.
 
         Returns:
-            StepRequest: The next step to execute, or None if no step could be determined
+            StepRequest: The next step to execute or a wait step if no step can be determined
         """
         # Create enhanced context with exploration history and user feedback
         conductor_context = {
@@ -174,9 +170,7 @@ class SelectorOrchestrator(AutogenOrchestrator):
             "available_agents": {name: [v[1].id for v in variants] for name, variants in self._active_variants.items()},
             "task": self.params.get("task", "Analyze the content"),
             "results": self._exploration_results,
-            # Include user feedback if available
             "user_feedback": self._user_feedback if self._user_feedback else [],
-            # Include standard context expected by conductor
             "participants": dict(self._agent_types.items()),
         }
 
@@ -192,36 +186,41 @@ class SelectorOrchestrator(AutogenOrchestrator):
             message=request,
         )
 
-        # Determine the next step based on the response
-        if not responses or len(responses) != 1 or not (instructions := responses[0].outputs):
-            logger.warning("Conductor could not get next step.")
-            return None
+        # Default response if we can't determine a step
+        wait_step = StepRequest(
+            role="wait",
+            description="Waiting for conductor to provide instructions",
+            prompt="Please wait...",
+        )
 
-        # Check if response is a ConductorResponse with special instructions
-        if isinstance(instructions, ConductorResponse):
-            # The conductor might be asking a question or providing comparison
-            await self._handle_host_message(instructions)
-            # Then we'll need to get another step after processing this message
+        # Check if we have a valid response
+        if not responses or len(responses) != 1:
+            logger.warning("Conductor could not get next step.")
+            return wait_step
+
+        # Get the response - this is an AgentOutput
+        agent_output = responses[0]
+        outputs = agent_output.outputs
+
+        # Case 1: Response is a ConductorResponse with special instructions
+        if isinstance(agent_output, ConductorResponse):
+            await self._handle_host_message(agent_output)
             return await self._get_next_step()
 
-        # Normal step request
-        if isinstance(instructions, StepRequest):
-            next_step = instructions
-
+        # Case 2: Output is a StepRequest object
+        if isinstance(outputs, StepRequest):
+            next_step = outputs
             if next_step.role == END:
                 raise StopAsyncIteration("Host signaled that flow has been completed.")
 
-            if next_step.role.lower() not in self._agent_types:
-                raise ProcessingError(
-                    f"Step {next_step.role} not found in registered agents.",
-                )
+            if next_step.role.lower() not in self._agent_types and next_step.role != END and next_step.role != "wait":
+                raise ProcessingError(f"Step {next_step.role} not found in registered agents.")
 
-            # We're going to wait a bit between steps.
             await asyncio.sleep(2)
             return next_step
 
-        logger.warning(f"Unexpected conductor response type: {type(agent_output)}")
-
+        logger.warning(f"Unexpected conductor response type: {type(agent_output)}, outputs: {type(outputs)}")
+        return wait_step
 
     async def _handle_host_message(self, message: ConductorResponse) -> None:
         """
@@ -242,7 +241,7 @@ class SelectorOrchestrator(AutogenOrchestrator):
             options = outputs.get("options", [])
             question = ManagerRequest(
                 role="conductor",
-                content=(f"{message.content}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
+                content=(f"{message.content or ''}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
             )
             await self._runtime.publish_message(question, topic_id=self._topic)
 
@@ -258,7 +257,7 @@ class SelectorOrchestrator(AutogenOrchestrator):
             await self._runtime.publish_message(
                 ManagerMessage(
                     role="conductor",
-                    content=message.content,
+                    content=message.content or "",
                 ),
                 topic_id=self._topic,
             )
@@ -275,7 +274,8 @@ class SelectorOrchestrator(AutogenOrchestrator):
         results = outputs.get("results", {})
 
         # Create a nicely formatted comparison
-        comparison_text = message.content + "\n\n"
+        content = message.content or ""
+        comparison_text = content + "\n\n"
         comparison_text += "## Comparison of Results\n\n"
 
         for variant in variants:
@@ -297,10 +297,10 @@ class SelectorOrchestrator(AutogenOrchestrator):
 
     async def _execute_step(
         self,
-        step: str,
+        step: Union[str, StepRequest],
         input: AgentInput,
         variant_index: int = 0,
-    ) -> AgentOutput | None:
+    ) -> Optional[AgentOutput]:
         """
         Execute step with selected variant and capture results for exploration.
 
@@ -310,23 +310,25 @@ class SelectorOrchestrator(AutogenOrchestrator):
             variant_index: Which variant of the agent to use (default: 0, first variant)
 
         Returns:
-            AgentOutput: The output from the executed agent
+            AgentOutput: The output from the executed agent, or None if there was an error
         """
-        step_lower = step.lower()
-        if step_lower not in self._agent_types:
-            logger.warning(f"Step {step} not found in registered agents.")
+        # Handle both string and StepRequest inputs
+        step_name = step.role.lower() if isinstance(step, StepRequest) else step.lower()
+
+        if step_name not in self._agent_types:
+            logger.warning(f"Step {step_name} not found in registered agents.")
             return None
 
         # Select the specified variant
-        variants = self._agent_types[step_lower]
+        variants = self._agent_types[step_name]
         if variant_index >= len(variants):
-            logger.warning(f"Variant index {variant_index} out of range for step {step}. Using first variant.")
+            logger.warning(f"Variant index {variant_index} out of range for step {step_name}. Using first variant.")
             variant_index = 0
 
         agent_type, agent_config = variants[variant_index]
 
         # Track this step in our exploration path
-        step_id = f"{step_lower}_{variant_index}_{shortuuid.uuid()[:4]}"
+        step_id = f"{step_name}_{variant_index}_{shortuuid.uuid()[:4]}"
         self._exploration_path.append(step_id)
 
         # Execute the agent
@@ -342,14 +344,17 @@ class SelectorOrchestrator(AutogenOrchestrator):
                 "outputs": response.outputs,
             }
 
-        return response
+        return cast(Optional[AgentOutput], response)
 
-    async def _run(self, request: RunRequest | None = None) -> None:
+    async def _run(self, request: Optional[RunRequest] = None) -> None:
         """
         Main execution method with interactive exploration capabilities.
 
         This extends the base _run method to provide more interactive capabilities
         and step-by-step exploration guided by the host agent and user input.
+
+        Args:
+            request: Optional RunRequest containing record information
         """
         try:
             # Initialize components
@@ -372,8 +377,9 @@ class SelectorOrchestrator(AutogenOrchestrator):
 
                     # Get next recommended step from host agent
                     next_step = await self._get_next_step()
-                    if not next_step:
-                        # If no step recommended, wait before checking again
+                    # Handle the "wait" step specially
+                    if next_step.role == "wait":
+                        # If waiting for next step, pause before checking again
                         await asyncio.sleep(5)
                         continue
 
@@ -402,7 +408,7 @@ class SelectorOrchestrator(AutogenOrchestrator):
                         pass  # No new confirmation, use default variant
 
                     # Execute the step with the selected variant
-                    await self._execute_step(step=next_step.role, input=step_input, variant_index=variant_index)
+                    await self._execute_step(step=next_step, input=step_input, variant_index=variant_index)
 
                 except ProcessingError as e:
                     # Non-fatal error, log and continue
@@ -422,7 +428,12 @@ class SelectorOrchestrator(AutogenOrchestrator):
             await self._cleanup()
 
     async def _fetch_record(self, request: RunRequest) -> None:
-        """Fetch a record based on record_id or URI."""
+        """
+        Fetch a record based on record_id or URI.
+
+        Args:
+            request: The RunRequest containing record_id or URI
+        """
         try:
             from buttermilk.agents.fetch import FetchRecord
 

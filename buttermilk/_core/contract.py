@@ -214,11 +214,9 @@ class ManagerMessage(FlowMessage):
         default={},
         description="Payload data",
     )
-    agent_id: str = Field(default=CONDUCTOR, description="The ID of the agent that generated this output.",
-    )
-    role: str = Field(
+    agent_id: str = Field(
         default=CONDUCTOR,
-        description="The role of the agent that generated this output.",
+        description="The ID of the agent that generated this output.",
     )
 class ConductorRequest(ManagerMessage, AgentInput):
     """Request for input from the conductor."""
