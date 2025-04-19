@@ -9,7 +9,6 @@ judge:
     formatting: json_rules
   variants:
     model: ${llms.judgers}
-  tasks:
     criteria: ${....params.criteria}
   inputs:
     records: fetch.records

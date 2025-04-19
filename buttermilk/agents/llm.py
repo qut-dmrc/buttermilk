@@ -6,6 +6,7 @@ from types import NoneType
 from typing import Any, AsyncGenerator, Callable, Optional, Self
 
 from autogen_core.models._types import UserMessage
+from psutil import Process
 import pydantic
 import regex as re
 from autogen_core import CancellationToken, FunctionCall, MessageContext
@@ -52,7 +53,6 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
-
     fail_on_unfilled_parameters: bool = Field(default=True)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
         default_factory=list,
@@ -78,7 +78,6 @@ class LLMAgent(Agent):
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
         if self.parameters.get("model"):
-            # Use the global bm instance
             self._model_client = bm.llms.get_autogen_chat_client(
                 self.parameters["model"],
             )
@@ -178,9 +177,10 @@ class LLMAgent(Agent):
     @weave.op()  # Add weave decorator to match base class and enable tracing
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
-
-        messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
-
+        try:
+            messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
+        except ProcessingError as e:
+            raise
         # call_chat can return CreateResult, list[ToolOutput], or None
         llm_result: CreateResult | list[ToolOutput] | None = await self._model_client.call_chat(
             messages=messages,

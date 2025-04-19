@@ -4,13 +4,12 @@ import pytest
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.llms import CHATMODELS
 from buttermilk._core.types import Record
-from buttermilk.agents import LLMScorer
 from buttermilk.agents.llm import LLMAgent
 
 
 @pytest.fixture(params=CHATMODELS)
 def scorer(request):
-    return LLMScorer(
+    return LLMAgent(
         role="judge",
         name="judge",
         description="judger test agent",

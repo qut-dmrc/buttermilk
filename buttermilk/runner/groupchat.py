@@ -142,11 +142,17 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _execute_step(
         self,
-        step: AgentInput,
+        step: str,
+        input: AgentInput,
     ) -> AgentOutput | None:
-        topic_id = DefaultTopicId()
-        await self._runtime.publish_message(step, topic_id=topic_id)
-        return None
+
+        responses = await self._ask_agents(
+            step,
+            message=input,
+        )
+        # await self._runtime.publish_message(step, topic_id=topic_id)
+        await asyncio.sleep(0.1)
+        return responses
 
     async def _get_next_step(self) -> StepRequest:
         """Determine the next step based on the current flow data."""
@@ -197,18 +203,18 @@ class AutogenOrchestrator(Orchestrator):
                     await asyncio.sleep(1)
 
                     # # Get next step in the flow
-                    if not (request := await self._get_next_step()):
+                    if not (step := await self._get_next_step()):
                         # No next step at the moment; wait and try a bit
                         await asyncio.sleep(10)
                         continue
 
-                    if not await self._in_the_loop(request):
+                    if not await self._in_the_loop(step):
                         # User did not confirm plan; go back and get new instructions
                         continue
 
-                    if request:
-                        step = await self._prepare_step(request)
-                        await self._execute_step(step)
+                    if step:
+                        step_input = await self._prepare_step(step)
+                        await self._execute_step(step=step.role, input=step_input)
 
                 except ProcessingError as e:
                     # non-fatal error

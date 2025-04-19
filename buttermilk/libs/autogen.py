@@ -93,21 +93,6 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.debug(f"Heartbeat failed, agent {self.id} is idle or running behind.")
 
     @message_handler
-    async def handle_groupchat_message(
-        self,
-        message: GroupchatMessageTypes,
-        ctx: MessageContext,
-    ) -> None: 
-        """Handle incoming group messages by delegating to the wrapped agent."""
-        await self.agent._listen(
-            message=message,
-            cancellation_token=ctx.cancellation_token,
-            public_callback=self._make_publish_callback(topic_id=self.topic_id),
-            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
-        )
-
-    @message_handler
     async def handle_invocation(
         self,
         message: AgentInput,
@@ -120,11 +105,25 @@ class AutogenAgentAdapter(RoutedAgent):
         response = await self.agent(
             message=message,
             cancellation_token=ctx.cancellation_token,
-            public_callback=public_callback,
-            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
         )
-        await public_callback(response)
-        return response 
+        if response:
+            await public_callback(response)
+        return response
+
+    @message_handler
+    async def handle_groupchat_message(
+        self,
+        message: GroupchatMessageTypes,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle incoming group messages by delegating to the wrapped agent."""
+        await self.agent._listen(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            public_callback=self._make_publish_callback(topic_id=self.topic_id),
+            message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
+        )
 
     @message_handler
     async def handle_conductor_request(

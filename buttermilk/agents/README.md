@@ -56,7 +56,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         *   `_register_agents()`: Iterates through the flow's agent configurations, wraps each Buttermilk agent using `AutogenAgentAdapter`, and registers the adapter with the Autogen runtime. Sets up topic subscriptions for message routing.
         *   `_register_collectors()` / `_register_human_in_the_loop()`: Registers special Autogen `ClosureAgent`s to handle message collection (`CLOSURE`) and user confirmation (`CONFIRM`).
         *   `run()`: Starts the Autogen runtime and potentially publishes an initial message. The actual flow logic might be delegated to subclasses or driven by messages within the Autogen runtime.
-        *   `_execute_step(step: StepRequest)`: Publishes an `AgentInput` message to a specific topic within the Autogen runtime, targeting the agent(s) subscribed to that topic (step role).
+        *   `_execute_step()`: Publishes an `AgentInput` message to a specific topic within the Autogen runtime, targeting the agent(s) subscribed to that topic (step role).
         *   `_send_ui_message(...)`: Publishes messages specifically for UI agents.
 
 3.  **`Selector` (`buttermilk.runner.chat.Selector`)**

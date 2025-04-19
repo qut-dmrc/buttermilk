@@ -101,7 +101,7 @@ class AssistantAgentWrapper(Agent):
 
         return self
 
-    # Restore original _process signature
+    @weave.op()  # Add weave decorator to match base class and enable tracing
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
 

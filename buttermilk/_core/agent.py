@@ -88,9 +88,6 @@ class AgentConfig(BaseModel):
         default=[],
         description="Specifications for data that the Agent should load",
     )
-    # num_runs removed - Orchestrator handles replication if needed
-    # variants removed - Orchestrator handles variations if needed
-    # tasks removed - Orchestrator handles variations if needed
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
@@ -157,23 +154,29 @@ class Agent(AgentConfig):
         # Look for matching roles in our inputs mapping
         if isinstance(message, (AgentOutput, ConductorResponse)):
             for key, mapping in self.inputs.items():
-                if mapping and isinstance(mapping, str) and mapping.startswith(source):  # check that 'source' is correct here
-                    # Possible direct match, let's try to extract data
-                    if key == "records":
-                        # records are stored separately in our memory cache
-                        if message.records:
-                            self._records.extend(message.records)
-                            continue
+                if mapping and isinstance(mapping, str):
+                    components = mapping.split(".", maxsplit=1)
+                    if source.startswith(components[0]):
+                        # Direct match
+                        if len(components) == 1:
+                            # No dot delineated field path: add the whole object
+                            self._data.add(key, message.model_dump())
+                        else:
+                            # otherwise, try to find the value in the outputs dict using JMESPath
+                            search_dict = {source: message.model_dump()}
+                            if value := jmespath.search(mapping, search_dict):
+                                self._data.add(key, value)
 
-                    if mapping == source:  # message.flowmessage_role:
-                        # no dot delineated field path, add the whole object
-                        self._data.add(key, message.model_dump())
-                        continue
-
-                # otherwise, try to find the value in the outputs dict using JMESPath
-                search_dict = {source: message.model_dump()}
-                if mapping and (value := jmespath.search(mapping, search_dict)):
-                    self._data.add(key, value)
+                        if key == "records":
+                            # records are stored separately in our memory cache
+                            if message.records:
+                                self._records.extend(message.records)
+                                continue
+                else:
+                    logger.warning(
+                        f"Input mapping for {self.id} is too sophisticated and we haven't written the code to interpret it yet: {key} to {mapping}"
+                    )
+                    continue
 
         # Add message content to model context if appropriate
         if isinstance(message, (AgentOutput, ConductorResponse)):
@@ -226,6 +229,9 @@ class Agent(AgentConfig):
                 # Execute core logic (traced via @weave.op on _process)
                 _traced_process = weave.op(self._process, call_display_name=f"{self.name} {self.id}")
                 result, call = await _traced_process.call(inputs=final_input, cancellation_token=cancellation_token, **kwargs)
+                # Weave swallows errors. Raise here after tracing.
+                if call.exception:
+                    raise ProcessingError(f"Agent {self.id} hit error processing request: {call.exception}")
 
                 # --- Evaluation Logic ---
                 if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
@@ -260,8 +266,6 @@ class Agent(AgentConfig):
             # Create an error output
             error_input = message if isinstance(message, AgentInput) else None
             result = AgentOutput(error=[str(e)], inputs=error_input)
-            if call:  # Log error to weave call if trace started
-                call.log({"error": str(e)})
 
         # Orchestrator is responsible for handling the result (e.g., routing AgentOutput)
         return result

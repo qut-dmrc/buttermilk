@@ -6,6 +6,7 @@ from autogen_core import MessageContext
 import pydantic
 import regex as re
 from shortuuid import uuid
+import weave
 
 from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig
 from buttermilk._core.contract import (
@@ -136,6 +137,7 @@ class FetchAgent(FetchRecord, Agent):
 
         return
 
+    @weave.op()
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
         if not (match := re.match(self._pat, inputs.prompt)):
             return

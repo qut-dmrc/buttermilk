@@ -21,7 +21,6 @@ from buttermilk._core.contract import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS
-from buttermilk.agents.judge import Judge
 
 
 @pytest.fixture
@@ -37,7 +36,7 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 @pytest.mark.anyio
 async def test_autogen_clients(model_name, request_paris):
     """Test direct invocation of LLM Agent."""
-    agent = LLMAgent(name="assistant1", description="test", model=model_name)
+    agent = LLMAgent(role="testing", name="assistant1", description="test", parameters=dict(model=model_name))
 
     response = await agent(message=request_paris)
     print(response)
@@ -47,7 +46,10 @@ async def test_autogen_clients(model_name, request_paris):
 @pytest.mark.anyio
 async def test_autogen_judge(model_name, request_chief):
     """Test direct invocation of LLM Agent with record."""
-    agent = Judge(name="judge", description="test", model=model_name, parameters={})
+
+    from buttermilk.agents.judge import Judge
+
+    agent = Judge(role="testing", name="judge", description="test", parameters=dict(model=model_name))
 
     result = await agent._process(inputs=request_chief)
     assert result

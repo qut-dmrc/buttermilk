@@ -180,9 +180,8 @@ class Orchestrator(BaseModel, ABC):
                         continue
 
                     # Prepare and execute the step
-                    step_input = await self._prepare_step(next_step_request)  # Use correct variable
-                    # Pass bm instance to execute_step (signature needs update later)
-                    await self._execute_step(step=step_input, bm=self.bm)  # Pass bm
+                    step_input = await self._prepare_step(next_step_request)
+                    await self._execute_step(step=next_step_request, input=step_input)
 
                 except ProcessingError as e:
                     # Non-fatal error, log and continue loop
@@ -240,7 +239,7 @@ class Orchestrator(BaseModel, ABC):
         # Assuming direct execution also needs the bm instance
         # Note: weave tracing might need adjustment if execute is used differently than _run
         # Weave tracing is now expected within the agent's handle_message or _process
-        output = await self._execute_step(step=step_input, bm=self.bm)  # Fix indentation
+        output = await self._execute_step(step=request.role, input=step_input)
         return output
 
     async def __call__(self, request: RunRequest | None = None) -> None:  # Accept RunRequest
@@ -296,9 +295,10 @@ class Orchestrator(BaseModel, ABC):
         )
 
     @abstractmethod
-    async def _execute_step(  # Add bm parameter to abstract method
+    async def _execute_step(
         self,
-        step: AgentInput,
+        step: str,
+        input: AgentInput,
     ) -> AgentOutput | None:
         """Abstract method to execute a single step using an agent."""
         raise NotImplementedError

@@ -85,8 +85,6 @@ class CLIUserAgent(UIAgent):
         self,
         message: GroupchatMessageTypes,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         source: str = "unknown",
         **kwargs,
     ) -> None:
@@ -100,8 +98,6 @@ class CLIUserAgent(UIAgent):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
         source: str = "unknown",
         **kwargs,
     ) -> OOBMessages:
