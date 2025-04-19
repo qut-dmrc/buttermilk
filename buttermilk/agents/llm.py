@@ -180,6 +180,8 @@ class LLMAgent(Agent):
         try:
             messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
         except ProcessingError as e:
+            # We log here because weave swallows error results and we might lose it.
+            logger.error(f"Unable to fill template for {self.id}: {e}")
             raise
         # call_chat can return CreateResult, list[ToolOutput], or None
         llm_result: CreateResult | list[ToolOutput] | None = await self._model_client.call_chat(

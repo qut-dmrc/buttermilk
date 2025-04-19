@@ -134,6 +134,9 @@ class Agent(AgentConfig):
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
         """Add local agent state to inputs before processing."""
+        # add parameters
+        inputs.parameters.update(self.parameters)
+
         # Fill inputs based on input map defined in config
         inputs.inputs.update(self._data._resolve_mappings(self.inputs))
 
@@ -156,7 +159,7 @@ class Agent(AgentConfig):
             for key, mapping in self.inputs.items():
                 if mapping and isinstance(mapping, str):
                     components = mapping.split(".", maxsplit=1)
-                    if source.startswith(components[0]):
+                    if source.lower().startswith(components[0].lower()):
                         # Direct match
                         if len(components) == 1:
                             # No dot delineated field path: add the whole object
@@ -229,9 +232,9 @@ class Agent(AgentConfig):
                 # Execute core logic (traced via @weave.op on _process)
                 _traced_process = weave.op(self._process, call_display_name=f"{self.name} {self.id}")
                 result, call = await _traced_process.call(inputs=final_input, cancellation_token=cancellation_token, **kwargs)
-                # Weave swallows errors. Raise here after tracing.
+                # Weave swallows errors. They should be reported in code below, so don't raise again.
                 if call.exception:
-                    raise ProcessingError(f"Agent {self.id} hit error processing request: {call.exception}")
+                    logger.info(f"Agent {self.id} hit error processing request: {call.exception}")
 
                 # --- Evaluation Logic ---
                 if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
