@@ -37,6 +37,7 @@ def base_variant_config():
     return {
         "id": "TEST_AGENT",
         "role": "Tester",
+        "name": "Test Agent Variants", # Add required name field
         "description": "A test agent",
         "agent_obj": "MockAgent", # Use the name of the registered mock agent
         "parameters": {"base_param": "base_value"},

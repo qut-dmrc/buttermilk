@@ -142,7 +142,7 @@ class LLMAgent(Agent):
                 # model_validate_json returns an instance of the schema model
                 output.outputs = schema.model_validate_json(chat_result.content)
                 # Set content to a string representation
-                output.content = output.outputs.model_dump()
+                output.content = output.outputs.model_dump_json()  # Use JSON string for content
                 return output
             except Exception as e:
                 error = f"Error parsing response from LLM: {e} into {schema.__name__}"
@@ -194,21 +194,40 @@ class LLMAgent(Agent):
         if isinstance(llm_result, CreateResult):
             # Process normal LLM response
             agent_output = self.make_output(llm_result, inputs=inputs, schema=self._output_model)
-            return agent_output
-        elif isinstance(llm_result, list):
-            # If call_chat returns ToolOutput directly (needs verification)
-            # This path might not be hit if reflect_on_tool_use handles it
-            logger.warning("call_chat returned list[ToolOutput], returning first element.")
-            return llm_result[0] if llm_result else None  # Return first tool output or None
+            # Publish the result instead of returning
+            if hasattr(self, "runtime") and self.runtime:
+                await self.runtime.publish(agent_output, sender=self)
+            else:
+                logger.error(f"Agent {self.id} has no runtime object to publish result.")
+            return None  # Agents should not return directly in async Autogen flow
+        elif isinstance(llm_result, list) and all(isinstance(item, ToolOutput) for item in llm_result):
+            # If call_chat returns ToolOutput (e.g., for tool calls) publish each
+            if hasattr(self, "runtime") and self.runtime:
+                for tool_output in llm_result:
+                    await self.runtime.publish(tool_output, sender=self)
+            else:
+                logger.error(f"Agent {self.id} has no runtime object to publish tool output.")
+            return None  # Agents should not return directly
         elif llm_result is None:
             # Handle case where LLM call returns None (e.g., error, cancellation)
             logger.warning("LLM call returned None.")
-            # Return an AgentOutput indicating an error or empty response?
-            return AgentOutput(error=["LLM call returned None"], inputs=inputs)
+            # Publish an error AgentOutput
+            error_output = AgentOutput(error=["LLM call returned None"], inputs=inputs)
+            if hasattr(self, "runtime") and self.runtime:
+                await self.runtime.publish(error_output, sender=self)
+            else:
+                logger.error(f"Agent {self.id} has no runtime object to publish error output.")
+            return None
         else:
             # Should not happen based on AutoGenWrapper signature, but good practice
-            logger.error(f"Unexpected return type from call_chat: {type(llm_result)}")
-            return AgentOutput(error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=inputs)
+            error_msg = f"Unexpected return type from call_chat: {type(llm_result)}"
+            logger.error(error_msg)
+            error_output = AgentOutput(error=[error_msg], inputs=inputs)
+            if hasattr(self, "runtime") and self.runtime:
+                await self.runtime.publish(error_output, sender=self)
+            else:
+                logger.error(f"Agent {self.id} has no runtime object to publish unexpected result error.")
+            return None
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""
