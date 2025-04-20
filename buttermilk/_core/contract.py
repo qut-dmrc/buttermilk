@@ -54,8 +54,8 @@ class StepRequest(BaseModel):
     """
 
     role: str = Field(..., description="the ROLE name (not the description) of the next expert to respond.")
-    prompt: str = Field(default="", description="The prompt text to send to the agent.")
-    description: str = Field(description="Brief explanation of the next step.", exclude=True)
+    prompt: str = Field(..., description="The prompt text to send to the agent.")
+    description: str = Field(..., description="Brief explanation of the next step.", exclude=True)
     # tool: str = Field(default="", description="The tool to invoke, if any.")
     # arguments: dict[str, Any] = Field(description="Arguments to provide to the tool, if any.")
 

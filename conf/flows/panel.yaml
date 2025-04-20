@@ -23,6 +23,7 @@ panel:
     task: >
       The purpose of this conversation is to assess a single piece of content. You are the HOST.
       Unless the MANAGER directs you otherwise, the standard approach is for you to:
+        0. Request the content from the manager, if you do not have it yet.
         1. Ask the JUDGEs to provide an initial review of the content.
         2. Identify areas of consensus and disagreement.
         3. FOR EACH area of disagreement, ask the JUDGEs to refine their answer, taking uncertainty and other perspectives into account.

@@ -129,6 +129,8 @@ class AutoGenWrapper(RetryWrapper):
             else:
                 # By preference, pass a pydantic schema for structured output
                 # Otherwise, set json_output to True if the model supports it
+
+                # TODO: check if the word 'json' is in the system message or add a quick direction.
                 json_output = self.model_info.get("json_output", False)
 
             # Use the retry logic

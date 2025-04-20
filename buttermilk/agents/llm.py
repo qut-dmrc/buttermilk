@@ -140,11 +140,9 @@ class LLMAgent(Agent):
         if schema and isinstance(chat_result.content, str):
             try:
                 # model_validate_json returns an instance of the schema model
-                validated_output = schema.model_validate_json(chat_result.content)
-                # Store the dictionary representation in outputs, explicitly casting for Mypy
-                output.outputs = dict(validated_output.model_dump())
+                output.outputs = schema.model_validate_json(chat_result.content)
                 # Set content to a string representation
-                output.content = pprint.pformat(output.outputs)
+                output.content = json.dumps(output.outputs)
                 return output
             except Exception as e:
                 error = f"Error parsing response from LLM: {e} into {schema.__name__}"

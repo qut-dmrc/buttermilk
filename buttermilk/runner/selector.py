@@ -160,11 +160,10 @@ class Selector(AutogenOrchestrator):
         # Create enhanced context with exploration history and user feedback
         conductor_context = {
             "exploration_path": self._exploration_path,
-            "available_agents": {name: [v[1].id for v in variants] for name, variants in self._active_variants.items()},
-            "task": self.params.get("task", "Analyze the content"),
+            "task": self.params.get("task", "Assist the user"),
             "results": self._exploration_results,
             "user_feedback": self._user_feedback if self._user_feedback else [],
-            "participants": dict(self._agent_types.items()),
+            "participants": {name: variants[0][1].description for name, variants in self._agent_types.items()},
         }
 
         # Create the request for the conductor
@@ -190,7 +189,7 @@ class Selector(AutogenOrchestrator):
             logger.warning("Conductor could not get next step.")
             return wait_step
 
-        # Get the response - this is an AgentOutput
+        # Get the response - this is an AgentOutput or a ConductorResponse
         agent_output = responses[0]
         outputs = agent_output.outputs
 
@@ -199,7 +198,12 @@ class Selector(AutogenOrchestrator):
             await self._handle_host_message(agent_output)
             return await self._get_host_suggestion()
 
-        # Case 2: Output is a StepRequest object
+        # Case 2: response.Output is a StepRequest object
+        try:
+            outputs = StepRequest.model_validate(outputs)
+        except Exception as e:
+            raise ProcessingError(f"Received uninterpretable result from Selector host LLM: {e}")
+
         if isinstance(outputs, StepRequest):
             next_step = outputs
             if next_step.role == END:
