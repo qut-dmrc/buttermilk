@@ -20,7 +20,7 @@ import weave
 from buttermilk._core import AgentOutput, TaskProcessingComplete
 from buttermilk._core.agent import ChatCompletionContext, FatalError, ProcessingError
 from buttermilk._core.config import DataSourceConfig, SaveInfo
-from buttermilk._core.contract import AgentInput, StepRequest
+from buttermilk._core.contract import END, AgentInput, StepRequest
 from buttermilk._core.flow import KeyValueCollector
 
 # from buttermilk._core.job import Job # Job seems unused here
@@ -123,10 +123,6 @@ class Orchestrator(BaseModel, ABC):
 
         return self
 
-    async def _get_next_step(self) -> StepRequest:
-        """Determine the next step based on the current flow data."""
-        raise NotImplementedError()
-
     async def run(self, request: RunRequest | None = None) -> None:
         """Starts a flow, given an incoming request."""
         client = bm.weave
@@ -164,8 +160,8 @@ class Orchestrator(BaseModel, ABC):
                     # Loop until we receive an error or completion
                     await asyncio.sleep(1)  # Small delay to prevent busy-waiting
 
-                    # Get next step from subclass logic
-                    next_step_request = await self._get_next_step()
+                    # Get next step from host
+                    next_step_request = await self._get_host_suggestion()
                     if not next_step_request:
                         # No next step determined, maybe wait or check status?
                         # Depending on orchestrator logic, this might mean completion or idle state.
@@ -213,6 +209,7 @@ class Orchestrator(BaseModel, ABC):
     @abstractmethod
     async def _setup(self):  # Ensure abstract _setup method is defined
         """Abstract method for setting up orchestrator resources (e.g., runtime)."""
+
         raise NotImplementedError
 
     @abstractmethod

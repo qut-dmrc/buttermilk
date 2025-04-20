@@ -29,7 +29,7 @@ from buttermilk._core.contract import (
     UserInstructions,
     AllMessages,
 )
-from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.sequencer import HostAgent
 from buttermilk.agents.ui.generic import UIAgent 
 from buttermilk.bm import logger
 

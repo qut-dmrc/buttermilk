@@ -60,8 +60,8 @@ def orchestrator():
 
 
 @pytest.mark.anyio
-async def test_get_next_step_success(orchestrator):
-    """Test that _get_next_step correctly returns the next step."""
+async def test_get_host_action_success(orchestrator):
+    """Test that _get_host_suggestion correctly returns the next step."""
     # Mock response from _ask_agents
     mock_step = StepRequest(role="test_agent", description="test step", prompt="test prompt")
 
@@ -123,7 +123,7 @@ async def test_get_next_step_success(orchestrator):
     orchestrator._handle_host_message = AsyncMock()
 
     # Call the method
-    result = await orchestrator._get_next_step()
+    result = await orchestrator._get_host_suggestion()
 
     # Verify result has the expected values
     assert result is not None
@@ -144,7 +144,7 @@ async def test_get_next_step_success(orchestrator):
     orchestrator._ask_agents = AsyncMock(return_value=[])
 
     # Call the method - this should return a wait step and not raise an exception
-    result = await orchestrator._get_next_step()
+    result = await orchestrator._get_host_suggestion()
 
     # Verify we get a "wait" step
     assert result.role == "wait"
@@ -152,7 +152,7 @@ async def test_get_next_step_success(orchestrator):
 
 
 @pytest.mark.anyio
-async def test_get_next_step_conductor_message(orchestrator):
+async def test_get_host_conductor_message(orchestrator):
     """Test handling when conductor returns a message instead of a step."""
     # Mock response from _ask_agents with ConductorResponse
     conductor_response = ConductorResponse(
@@ -183,7 +183,7 @@ async def test_get_next_step_conductor_message(orchestrator):
     orchestrator._agent_types = {"test_agent": [(None, None)]}
 
     # Call the method and get the result
-    result = await orchestrator._get_next_step()
+    result = await orchestrator._get_host_suggestion()
 
     # Directly validate the result instead of checking method calls
     assert result is not None
@@ -360,7 +360,7 @@ async def test_run_with_records(orchestrator):
     """Test the main run method with provided records."""
     # Setup
     orchestrator._setup = AsyncMock()
-    orchestrator._get_next_step = AsyncMock(
+    orchestrator._get_host_suggestion = AsyncMock(
         side_effect=[
             StepRequest(role="test_agent", description="Step 1", prompt="Prompt 1"),
             StepRequest(role="wait", description="Waiting", prompt="Please wait..."),
@@ -387,7 +387,7 @@ async def test_run_with_records(orchestrator):
 
     # Verify
     assert orchestrator._setup.called
-    assert orchestrator._get_next_step.call_count >= 3
+    assert orchestrator._get_host_suggestion.call_count >= 3
     assert orchestrator._in_the_loop.call_count >= 1
     assert orchestrator._prepare_step.call_count >= 1
     assert orchestrator._execute_step.call_count >= 1

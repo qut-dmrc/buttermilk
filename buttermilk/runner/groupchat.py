@@ -199,7 +199,7 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(0.1)
         return responses
 
-    async def _get_next_step(self) -> StepRequest:
+    async def _get_host_suggestion(self) -> StepRequest:
         """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
@@ -248,7 +248,7 @@ class AutogenOrchestrator(Orchestrator):
                     await asyncio.sleep(1)
 
                     # # Get next step in the flow
-                    if not (step := await self._get_next_step()):
+                    if not (step := await self._get_host_suggestion()):
                         # No next step at the moment; wait and try a bit
                         await asyncio.sleep(10)
                         continue

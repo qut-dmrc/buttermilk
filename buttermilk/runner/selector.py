@@ -150,7 +150,7 @@ class Selector(AutogenOrchestrator):
         response = await self._wait_for_human()
         return response
 
-    async def _get_next_step(self) -> StepRequest:
+    async def _get_host_suggestion(self) -> StepRequest:
         """
         Determine next step based on conductor recommendation and user input.
 
@@ -197,7 +197,7 @@ class Selector(AutogenOrchestrator):
         # Case 1: Response is a ConductorResponse with special instructions
         if isinstance(agent_output, ConductorResponse):
             await self._handle_host_message(agent_output)
-            return await self._get_next_step()
+            return await self._get_host_suggestion()
 
         # Case 2: Output is a StepRequest object
         if isinstance(outputs, StepRequest):
@@ -366,7 +366,7 @@ class Selector(AutogenOrchestrator):
                     await asyncio.sleep(1)
 
                     # Get next recommended step from host agent
-                    next_step = await self._get_next_step()
+                    next_step = await self._get_host_suggestion()
                     # Handle the "wait" step specially
                     if next_step.role == "wait":
                         # If waiting for next step, pause before checking again

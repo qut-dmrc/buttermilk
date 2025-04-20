@@ -76,7 +76,7 @@ async def test_interactive_user_feedback(selector_config):
     )
 
     # First iteration: get step, receive confirmation with feedback
-    next_step = await orchestrator._get_next_step()
+    next_step = await orchestrator._get_host_suggestion()
     assert next_step == step1
     assert orchestrator._ask_agents.call_count == 1
 
@@ -99,7 +99,7 @@ async def test_interactive_user_feedback(selector_config):
     orchestrator._execute_step.assert_called_once_with(step=next_step.role, input=step_input, variant_index=1)
 
     # Next iteration: get step again, should incorporate user feedback
-    next_step = await orchestrator._get_next_step()
+    next_step = await orchestrator._get_host_suggestion()
     assert next_step == step2
     assert orchestrator._ask_agents.call_count == 2
 
