@@ -18,10 +18,11 @@ from pydantic import Field, PrivateAttr, model_validator
 import weave
 
 from buttermilk._core import TaskProcessingComplete
-from buttermilk._core.agent import ConductorRequest, FatalError, ProcessingError
+from buttermilk._core.agent import Agent, ConductorRequest, FatalError, ProcessingError  # Added Agent
 from buttermilk._core.contract import (
     CLOSURE,
     CONDUCTOR,
+    # Added QualScore
     CONFIRM,
     END,
     MANAGER,
@@ -34,9 +35,11 @@ from buttermilk._core.contract import (
     ManagerResponse,
     StepRequest,
     UserInstructions,
+    # Removed QualScore from here
 )
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk._core.types import RunRequest
+from buttermilk._core.types import Record, RunRequest  # Added Record
+from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore  # Added QualScore import here
 from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import bm, logger
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -150,7 +153,7 @@ class AutogenOrchestrator(Orchestrator):
     async def _ask_agents(
         self,
         step_name: str,
-        message: AgentInput|StepRequest,
+        message: AgentInput | StepRequest,
     ) -> list[AgentOutput]:
         """Ask agent directly for input"""
         tasks = []
@@ -185,6 +188,7 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
+    # Removed @weave.op() decorator to fix override issue
     async def _execute_step(
         self,
         step: str,
@@ -197,25 +201,92 @@ class AutogenOrchestrator(Orchestrator):
         )
         # await self._runtime.publish_message(step, topic_id=topic_id)
         await asyncio.sleep(0.1)
-        return responses
+        # Note: We're currently only returning the first response if multiple variants run
+        # Consider how to handle multiple responses if needed later
+        return responses[0] if responses else None
 
-    async def _get_host_suggestion(self) -> StepRequest:
+    async def _evaluate_step(
+        self,
+        output: AgentOutput,
+        ground_truth_record: Record | None,
+        criteria: Any | None,
+        weave_call: Any | None,  # For logging evaluation to the trace
+    ) -> None:
+        """Runs the scorer agent if configured and logs the evaluation."""
+        SCORER_ROLE = "scorer"  # TODO: Make configurable?
+
+        if SCORER_ROLE not in self._agent_types:
+            logger.debug(f"No scorer agent configured with role '{SCORER_ROLE}'. Skipping evaluation.")
+            return
+        if not ground_truth_record or getattr(ground_truth_record, "ground_truth", None) is None:
+            logger.debug("No ground truth found in records. Skipping evaluation.")
+            return
+
+        try:
+            # Assuming only one scorer variant for now
+            scorer_agent_type, _ = self._agent_types[SCORER_ROLE][0]
+            scorer_agent_id = await self._runtime.get(scorer_agent_type)
+            # Note: We don't have the original Agent instance here easily to check type with isinstance(agent, LLMScorer)
+            # We rely on the configuration being correct.
+            # Correct way to get the role of the agent that produced the output
+            log_role = output.inputs.role if output.inputs else "unknown_step_role"
+            logger.info(f"Running evaluation for step {log_role} output.")
+            scorer_input = AgentInput(
+                inputs={"answers": [output], "expected": ground_truth_record.ground_truth},
+                # Pass original records from the step's input
+                records=output.inputs.records if output.inputs else [],
+                parameters={"criteria": criteria} if criteria else {},
+            )
+
+            evaluation_response = await self._runtime.send_message(message=scorer_input, recipient=scorer_agent_id)
+
+            if isinstance(evaluation_response, AgentOutput) and not evaluation_response.is_error:
+                # Add assertion for type checker clarity
+                # Check type before asserting
+                if isinstance(evaluation_response.outputs, QualScore):
+                    score = evaluation_response.outputs  # Now safe to assign
+                    assert score is not None  # Assert for mypy after check
+                    logger.info(f"Evaluation successful for role {log_role}. Score: {getattr(score, 'score', 'N/A')}")  # Use getattr for score
+                    if weave_call:
+                        # Ensure score is not None before dumping (already checked by isinstance)
+                        if score:
+                            weave_call.log({"evaluation": score.model_dump()})  # score is guaranteed QualScore here
+                else:
+                    logger.warning(f"Scorer agent '{SCORER_ROLE}' did not return a QualScore object, got: {type(evaluation_response.outputs)}")
+            elif isinstance(evaluation_response, AgentOutput) and evaluation_response.is_error:
+                logger.warning(f"Scorer agent '{SCORER_ROLE}' returned an error: {evaluation_response.error}")
+            else:
+                logger.warning(f"Received unexpected response type from scorer agent '{SCORER_ROLE}': {type(evaluation_response)}")
+
+        except IndexError:
+            logger.warning(f"Scorer agent '{SCORER_ROLE}' configured but no variants found.")
+        except Exception as e:
+            logger.error(f"Error during evaluation execution: {e}", exc_info=True)
+
+    async def _get_host_suggestion(self) -> StepRequest | None:  # Allow None return
         """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
-        request = ConductorRequest(
-            role=self.name,
-            inputs={"participants": dict(self._agent_types.items()), "task": self.params.get("task")},
-        )
+        # Fixed: Pass inputs dict directly to ConductorRequest
+        conductor_inputs = {"participants": dict(self._agent_types.items()), "task": self.params.get("task")}
+        request = ConductorRequest(inputs=conductor_inputs)
         responses = await self._ask_agents(
             CONDUCTOR,
             message=request,
         )
 
         # Determine the next step based on the response
-        if len(responses) != 1 or not (instructions := responses[0].outputs) or not (isinstance(instructions, StepRequest)):
-            logger.warning("Conductor could not get next step.")
+        # Handle potential list of responses if multiple conductor variants run (though usually 1)
+        valid_responses = [r for r in responses if isinstance(r, AgentOutput) and not r.is_error and isinstance(r.outputs, StepRequest)]
+
+        if not valid_responses:
+            logger.warning("Conductor did not return a valid StepRequest.")
             return None
+
+        # Use the first valid response
+        # Add assertion for type checker clarity
+        assert isinstance(valid_responses[0].outputs, StepRequest), f"Expected StepRequest, got {type(valid_responses[0].outputs)}"
+        instructions = valid_responses[0].outputs
 
         next_step = instructions.role
         if next_step == END:
@@ -238,10 +309,12 @@ class AutogenOrchestrator(Orchestrator):
         try:
             await self._setup()
             if request:
-                fetch = FetchRecord(data=self.data)
-                output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
-                if output:
-                    self._records = output.results
+                # Fixed: Pass list(self.data)
+                fetch = FetchRecord(data=list(self.data))
+                fetch_output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
+                # Fixed: Extract results list
+                if fetch_output and fetch_output.results:
+                    self._records = fetch_output.results
             while True:
                 try:
                     # Loop until we receive an error
@@ -259,7 +332,26 @@ class AutogenOrchestrator(Orchestrator):
 
                     if step:
                         step_input = await self._prepare_step(step)
-                        await self._execute_step(step=step.role, input=step_input)
+                        # Store the weave call context if available
+                        current_call = weave.get_current_call()  # Fixed: Use get_current_call()
+                        output = await self._execute_step(step=step.role, input=step_input)
+
+                        # --- Call evaluation ---
+                        if isinstance(output, AgentOutput) and not output.is_error:
+                            # Find ground truth record from the input used for the step
+                            ground_truth_record = next((r for r in step_input.records if getattr(r, "ground_truth", None) is not None), None)
+                            # Get criteria from flow params or step input params
+                            criteria = step_input.parameters.get("criteria") or self.params.get("criteria")
+                            await self._evaluate_step(
+                                output=output,
+                                ground_truth_record=ground_truth_record,
+                                criteria=criteria,
+                                weave_call=current_call,  # Pass the weave call object
+                            )
+                        elif output is None:
+                            logger.warning(f"Step {step.role} did not return an output.")
+                        # Error case already handled by logger in _evaluate_step if evaluation fails
+                        # --- End evaluation call ---
 
                 except ProcessingError as e:
                     # non-fatal error

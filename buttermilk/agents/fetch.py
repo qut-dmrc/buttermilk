@@ -18,6 +18,7 @@ from buttermilk._core.contract import (
     ToolOutput,
     UserInstructions,
 )
+from datetime import datetime, timezone  # Added for timestamp
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
@@ -60,6 +61,11 @@ class FetchRecord(ToolConfig):
         if record_id:
             record = await self._get_record_dataset(record_id)
             if record:
+                # Ensure metadata exists and add provenance
+                if not record.metadata:
+                    record.metadata = {}
+                record.metadata["fetch_source_id"] = record_id
+                record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
                 result = ToolOutput(
                     role=self.role,
                     name="fetch",
@@ -68,11 +74,18 @@ class FetchRecord(ToolConfig):
                     messages=[record.as_message(role="user")],
                     args=dict(record_id=record_id),
                 )
-        else:
+        else:  # uri case
             record = await download_and_convert(uri)
-            result = ToolOutput(
-                role=self.role, name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
-            )
+            if record:  # Check if download_and_convert succeeded
+                # Ensure metadata exists and add provenance
+                if not record.metadata:
+                    record.metadata = {}
+                record.metadata["fetch_source_uri"] = uri
+                record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
+                result = ToolOutput(
+                    role=self.role, name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
+                )
+            # If record is None, result remains None
 
         if result:
             return result
@@ -122,6 +135,7 @@ class FetchAgent(FetchRecord, Agent):
 
         result = None
         if isinstance(message, AgentInput):
+            assert isinstance(message, AgentInput)  # Add assertion for type checker
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
@@ -131,9 +145,11 @@ class FetchAgent(FetchRecord, Agent):
 
         if result:
             output = UserInstructions(prompt=result.content, records=result.results)
-            await public_callback(output)
+            # Add check before calling callback
+            if public_callback:
+                await public_callback(output)
 
-        return None
+        return None  # _listen itself doesn't return anything meaningful here
 
     @weave.op()
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
@@ -143,8 +159,10 @@ class FetchAgent(FetchRecord, Agent):
             uri = inputs.inputs.get("uri")
             record_id = inputs.inputs.get("record_id")
             if uri or record_id:
+                # Removed cancellation_token from _run call
                 result = await self._run(record_id=record_id, uri=uri, prompt=inputs.prompt)
         if isinstance(inputs, UserInstructions):
+            # Removed cancellation_token from _run call
             result = await self._run(prompt=inputs.prompt)
 
         if result:

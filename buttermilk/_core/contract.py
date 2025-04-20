@@ -30,6 +30,7 @@ CONFIRM = "confirm"
 COMMAND_SYMBOL = "!"
 END = "end"
 
+
 class FlowProtocol(BaseModel):
     name: str  # friendly flow name
     description: str
@@ -70,12 +71,15 @@ class StepRequest(BaseModel):
 
 class FlowEvent(BaseModel):
     """For communication outside the groupchat."""
+
     _type = "FlowEvent"
     source: str
     content: str
 
+
 class ErrorEvent(FlowEvent):
     """Communicate errors to host and UI."""
+
 
 ######
 # Communication between Agents
@@ -135,6 +139,8 @@ class AgentInput(FlowMessage):
     _ensure_input_list = field_validator("context", "records", mode="before")(
         make_list_validator(),
     )
+
+
 class UserInstructions(FlowMessage):
     """Instructions from the user."""
 
@@ -199,6 +205,7 @@ class AgentOutput(FlowMessage):
 # Control communications
 #
 
+
 class ManagerMessage(FlowMessage):
     """OOB message to manage the flow.
 
@@ -212,7 +219,7 @@ class ManagerMessage(FlowMessage):
         default=None,
         description="The human-readable digest representation of the message.",
     )
-    outputs: dict[str, Any] = Field(
+    outputs: BaseModel | dict[str, Any] = Field(  # Changed type to match AgentOutput
         default={},
         description="Payload data",
     )
@@ -220,10 +227,13 @@ class ManagerMessage(FlowMessage):
         default=CONDUCTOR,
         description="The ID of the agent that generated this output.",
     )
+
+
 class ConductorRequest(ManagerMessage, AgentInput):
     """Request for input from the conductor."""
 
     _type = "ConductorRequest"
+
 
 class ConductorResponse(ManagerMessage, AgentOutput):
     """Response to the conductor."""
@@ -247,6 +257,7 @@ class ManagerRequest(ManagerMessage, StepRequest):
     )
     halt: bool = Field(default=False, description="Whether to stop the flow")
 
+
 class ManagerResponse(FlowMessage):
     """Response from the manager with feedback and variant selection capabilities."""
 
@@ -263,13 +274,13 @@ class ManagerResponse(FlowMessage):
 class ToolOutput(FunctionExecutionResult):
     role: str = Field(..., description="The role the tool provides")
 
-    results: Any =  Field(default_factory=dict)
-    messages: list[UserMessage] = Field(default_factory=list)
-    args: list[str] | list[dict[str,Any]] | dict[str, Any] = Field(default_factory=dict)
+    results: Any = Field(default_factory=dict)
+    messages: list[LLMMessage] = Field(default_factory=list)  # Changed UserMessage to LLMMessage
+    args: list[str] | list[dict[str, Any]] | dict[str, Any] = Field(default_factory=dict)
 
     content: str
     call_id: str = "unknown"
-    is_error: bool |None = False
+    is_error: bool | None = False
 
     send_to_ui: bool = False
 
@@ -296,11 +307,14 @@ class TaskProcessingComplete(TaskProcessingStarted):
 
 class ProceedToNextTaskSignal(BaseModel):
     """Sent by a controller to signal an agent to process its next sequential task."""
+
     target_agent_id: str = Field(..., description="ID of the agent that should proceed")
     model_config = {"extra": "allow"}
 
+
 class HeartBeat(BaseModel):
     go_next: bool = Field(..., description="True if the agent should proceed to the next task")
+
 
 #######
 # Unions
@@ -313,7 +327,6 @@ GroupchatMessageTypes = Union[
     AgentOutput,
     ToolOutput,
     UserInstructions,
-    
 ]
 
 AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ProceedToNextTaskSignal, HeartBeat]

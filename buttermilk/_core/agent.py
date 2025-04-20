@@ -40,6 +40,8 @@ from buttermilk._core.contract import (
     UserInstructions,
     UserMessage,
 )
+
+# Removed import: from buttermilk._core.evaluate import evaluate
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.types import Record
@@ -244,14 +246,16 @@ class Agent(AgentConfig):
                     # Check for ground truth in records
                     ground_truth_record = next((r for r in final_input.records if getattr(r, "ground_truth", None) is not None), None)
                     # if ground_truth_record:
-                    #     evaluation_score = await evaluate(
-                    #         output=result,
-                    #         ground_truth=ground_truth_record.ground_truth,
-                    #         criteria=final_input.parameters.get("criteria"),  # Or get from self.params
-                    #     )
-                    #     if evaluation_score and call:
-                    #         # Log evaluation to Weave trace associated with the agent's call
-                    #         call.log({"evaluation": evaluation_score.model_dump()})
+                    #     # Evaluation logic moved to Orchestrator
+                    #     pass
+                    #     # evaluation_score = await evaluate(
+                    #     #     output=result,
+                    #     #     ground_truth=ground_truth_record.ground_truth,
+                    #     #     criteria=final_input.parameters.get("criteria"),  # Or get from self.params
+                    #     # )
+                    #     # if evaluation_score and call:
+                    #     #     # Log evaluation to Weave trace associated with the agent's call
+                    #     #     call.log({"evaluation": evaluation_score.model_dump()})
                 # --- End Evaluation Logic ---
 
             elif isinstance(message, GroupchatMessageTypes):
