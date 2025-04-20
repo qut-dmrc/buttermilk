@@ -15,7 +15,6 @@ from buttermilk._core.contract import (
     ManagerMessage,
 )
 from buttermilk._core.types import RunRequest
-from buttermilk.runner.selector import SelectorOrchestrator, SelectorConfirmation
 
 
 @pytest.fixture
@@ -225,7 +224,7 @@ async def test_execute_step(orchestrator):
 async def test_wait_for_human_confirmed(orchestrator):
     """Test waiting for human confirmation with positive response."""
     # Setup a confirmation in the queue
-    confirmation = SelectorConfirmation(confirm=True, feedback="Good idea")
+    confirmation = ManagerResponse(confirm=True, feedback="Good idea")
     orchestrator._user_confirmation = asyncio.Queue()
     await orchestrator._user_confirmation.put(confirmation)
 

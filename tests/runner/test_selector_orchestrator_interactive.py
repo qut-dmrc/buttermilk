@@ -19,7 +19,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record, RunRequest
 from buttermilk._core.variants import AgentVariants
-from buttermilk.runner.selector import SelectorOrchestrator, SelectorConfirmation
 
 
 @pytest.fixture
@@ -82,7 +81,7 @@ async def test_interactive_user_feedback(selector_config):
 
     # Put confirmation with feedback in queue
     feedback = "Try a different approach with more depth"
-    await orchestrator._user_confirmation.put(SelectorConfirmation(confirm=True, feedback=feedback, variant_selection="test_agent2"))
+    await orchestrator._user_confirmation.put(ManagerResponse(confirm=True, feedback=feedback, selection="test_agent2"))
 
     # Check the in_the_loop method picks up the feedback
     # Make sure next_step is not None before calling _in_the_loop
@@ -158,7 +157,7 @@ async def test_host_interaction_with_ui(selector_config):
     assert args[1] == orchestrator._topic
 
     # User selects "Compare analyses"
-    await orchestrator._user_confirmation.put(SelectorConfirmation(confirm=True, selection="Compare analyses"))
+    await orchestrator._user_confirmation.put(ManagerResponse(confirm=True, selection="Compare analyses"))
 
     # Wait a bit for async processing
     await asyncio.sleep(0.1)

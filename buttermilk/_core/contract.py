@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from enum import Enum
 from math import e
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal, Optional, Union
 from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
@@ -245,11 +245,16 @@ class ManagerRequest(ManagerMessage, StepRequest):
     )
     halt: bool = Field(default=False, description="Whether to stop the flow")
 
-
-class ManagerResponse(ManagerRequest):
-    """Response from the manager."""
+class ManagerResponse(FlowMessage):
+    """Response from the manager with feedback and variant selection capabilities."""
 
     _type = "ManagerResponse"
+
+    confirm: bool = True
+    halt: bool = False
+    prompt: Optional[str] = None
+    selection: Optional[str] = None  # For multiple choice responses
+
 
 #########
 # Function messages

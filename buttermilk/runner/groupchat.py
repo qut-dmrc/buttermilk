@@ -48,7 +48,7 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict = PrivateAttr(default={})  # mapping of agent types
-    _user_confirmation: asyncio.Queue = PrivateAttr()
+    _user_confirmation: asyncio.Queue[ManagerResponse] = PrivateAttr()
 
     _topic: TopicId = PrivateAttr(
         default_factory=lambda: DefaultTopicId(

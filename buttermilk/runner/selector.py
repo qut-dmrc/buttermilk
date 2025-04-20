@@ -20,21 +20,12 @@ from buttermilk._core.contract import (
     ConductorResponse,
     ManagerMessage,
     ManagerRequest,
+    ManagerResponse,
     StepRequest,
 )
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
 from buttermilk.runner.groupchat import AutogenOrchestrator
-
-
-class SelectorConfirmation(BaseModel):
-    """Enhanced user confirmation with feedback and variant selection capabilities."""
-
-    confirm: bool = True
-    halt: bool = False
-    feedback: Optional[str] = None
-    variant_selection: Optional[str] = None
-    selection: Optional[str] = None  # For multiple choice responses
 
 
 class Selector(AutogenOrchestrator):
@@ -56,7 +47,6 @@ class Selector(AutogenOrchestrator):
     _user_feedback: List[str] = PrivateAttr(default_factory=list)
     _last_user_selection: Optional[str] = PrivateAttr(default=None)
     _variant_mapping: Dict[str, int] = PrivateAttr(default_factory=dict)
-    _user_confirmation: asyncio.Queue[SelectorConfirmation] = PrivateAttr()
 
     async def _setup(self) -> None:
         """Initialize runtime, register agents and set up communication channels."""
@@ -100,8 +90,8 @@ class Selector(AutogenOrchestrator):
                     raise StopAsyncIteration("User requested halt.")
 
                 # Store feedback if provided
-                if msg.feedback:
-                    self._user_feedback.append(msg.feedback)
+                if msg.prompt:
+                    self._user_feedback.append(msg.prompt)
 
                 # Store selected option if provided
                 if msg.selection:
@@ -393,13 +383,13 @@ class Selector(AutogenOrchestrator):
                         confirmation = self._user_confirmation.get_nowait()
                         if confirmation.halt:
                             raise StopAsyncIteration("User requested halt.")
-                        if confirmation.variant_selection:
+                        if confirmation.selection:
                             # Look up the variant index from the name
-                            if confirmation.variant_selection in self._variant_mapping:
-                                variant_index = self._variant_mapping[confirmation.variant_selection]
-                                logger.info(f"Using selected variant: {confirmation.variant_selection} (index {variant_index})")
+                            if confirmation.selection in self._variant_mapping:
+                                variant_index = self._variant_mapping[confirmation.selection]
+                                logger.info(f"Using selected variant: {confirmation.selection} (index {variant_index})")
                             else:
-                                logger.warning(f"Selected variant {confirmation.variant_selection} not found. Using default.")
+                                logger.warning(f"Selected variant {confirmation.selection} not found. Using default.")
                     except asyncio.QueueEmpty:
                         pass  # No new confirmation, use default variant
 

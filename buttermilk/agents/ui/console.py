@@ -125,7 +125,6 @@ class CLIUserAgent(UIAgent):
                     # confirm negative
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.role,
                             confirm=False,
                             prompt="",
                         ),
@@ -135,7 +134,6 @@ class CLIUserAgent(UIAgent):
                     # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
-                            role=self.role,
                             confirm=True,
                             prompt="",
                         ),
