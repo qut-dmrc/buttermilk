@@ -162,10 +162,6 @@ class BM(Singleton, Project):
         # Not sure why this does nothing... maybe debugging?
         return vars
 
-    # @model_validator(mode="after") # Remove this validator
-    # def ensure_config(self) -> Self:
-    #     ... # Logic moved to setup_instance
-
     def setup_instance(self) -> None:
         """Performs setup requiring configuration (e.g., run_info, logger_cfg). Call after instantiation."""
         # Ensure run_info is set before proceeding with dependent setups

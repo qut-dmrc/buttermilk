@@ -42,7 +42,6 @@ from buttermilk._core.types import Record, RunRequest  # Added Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore  # Added QualScore import here
 from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import bm, logger
-from buttermilk.libs.autogen import AutogenAgentAdapter
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -84,12 +83,11 @@ class AutogenOrchestrator(Orchestrator):
             step_agent_type = []
             for agent_cls, variant in step.get_configs():
                 # Register the agent with the runtime
-                agent_type: AgentType = await AutogenAgentAdapter.register(
+                agent_type: AgentType = await agent_cls.register(
                     self._runtime,
-                    variant.id,
-                    lambda v=variant, cls=agent_cls: AutogenAgentAdapter(
+                    variant.name,
+                    lambda v=variant: agent_cls(
                         agent_cfg=v,
-                        agent_cls=cls,
                         topic_type=self._topic.type,
                     ),
                 )

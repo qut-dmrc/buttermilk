@@ -16,6 +16,7 @@ from pydantic import (
     Field,
     PrivateAttr,
     field_validator,
+    model_validator,
 )
 
 from autogen_core.tools import BaseTool, FunctionTool
@@ -62,10 +63,6 @@ if TYPE_CHECKING:
 
 
 class AgentConfig(BaseModel):
-    id: str = Field(
-        default_factory=uuid,
-        description="A unique identifier for this agent.",
-    )
     agent_obj: str = Field(
         default="",
         description="The object name to instantiate",
@@ -76,8 +73,9 @@ class AgentConfig(BaseModel):
         description="The role type that this agent fulfils.",
     )
 
-    name: str = Field(description="The human friendly name of this agent type.")
-
+    name: str = Field(
+        description="A unique identifier and human friendly name of this agent.",
+    )
     description: str = Field(
         ...,
         description="Short explanation of what this agent type does",
@@ -107,6 +105,11 @@ class AgentConfig(BaseModel):
     }
 
     _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects())
+
+    @model_validator(mode="after")
+    def _generate_name(self):
+        self.name = f"{self.role}-{uuid()[:6]}"
+        return self
 
 
 class Agent(AgentConfig):

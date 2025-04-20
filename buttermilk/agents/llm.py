@@ -9,7 +9,7 @@ from autogen_core.models._types import UserMessage
 from psutil import Process
 import pydantic
 import regex as re
-from autogen_core import CancellationToken, FunctionCall, MessageContext
+from autogen_core import CancellationToken, DefaultTopicId, FunctionCall, MessageContext, RoutedAgent, TopicId
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import (
     AssistantMessage,
@@ -22,7 +22,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import BaseModel, Field, PrivateAttr
 import weave
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse, ToolConfig
 from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
@@ -43,6 +43,7 @@ from buttermilk._core.types import Record
 
 # Restore original bm import
 from buttermilk.bm import bm, logger
+from buttermilk.libs.autogen import AutogenRoutedMixin
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -52,15 +53,13 @@ from buttermilk.utils.templating import (
 )
 
 
-class LLMAgent(Agent):
-    fail_on_unfilled_parameters: bool = Field(default=True)
-    _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
-        default_factory=list,
-    )
-    _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
-    _model_client: AutoGenWrapper = PrivateAttr()
-    _output_model: Optional[type[BaseModel]] = None
-    _pause: bool = PrivateAttr(default=False)
+class LLMAgent(Agent, AutogenRoutedMixin):
+    """
+    An LLM agent that uses a Buttermilk template/model configuration (via LLMAgent)
+    and participates in an Autogen group chat (via AutogenRoutedMixin).
+    It expects input conforming to AgentInput (handled by LLMAgent/Agent base)
+    and aims to output results conforming to AgentReasons.
+    """
 
     # @pydantic.model_validator(mode="after")
     # def custom_agent_id(self) -> Self:
@@ -92,6 +91,70 @@ class LLMAgent(Agent):
 
         return self
 
+    def __init__(
+        self,
+        # --- Arguments for LLMAgent/AgentConfig (handled by Pydantic) ---
+        role: str,  # Default role for this agent type
+        name: str,  # Friendly name
+        parameters: dict[str, Any] = Field(default_factory=dict),  # Model, template etc.
+        tools: list[ToolConfig] = Field(default_factory=list),  # Buttermilk ToolConfig
+        # --- Arguments specifically for RoutedAgent (required by AutogenRoutedMixin) ---
+        description: str = "Evaluates content based on criteria.",  # Default description
+        # --- Other arguments ---
+        fail_on_unfilled_parameters: bool = Field(default=True),
+        output_model: Optional[type[BaseModel]] = None,
+        # --- Capture remaining kwargs ---
+        **kwargs,  # Captures other AgentConfig fields AND RoutedAgent fields
+    ):
+        """
+        Initializes the Judge agent.
+
+        Args:
+            role: The Buttermilk role.
+            parameters: Configuration for the LLM, template, etc. (for LLMAgent).
+            tools: List of tools the agent can use (Buttermilk format).
+            fail_on_unfilled_parameters: LLMAgent setting.
+            name: The friendly name for the agent.
+            description: Description for the Autogen agent.
+            system_message: System message for the Autogen agent.
+            **kwargs: Additional arguments for AgentConfig (like 'id', 'inputs', 'outputs')
+                      and potentially other RoutedAgent parameters.
+        """
+        # 1. Initialize Pydantic part (LLMAgent -> Agent -> AgentConfig)
+        #    Pydantic handles collecting args matching its fields from kwargs.
+        #    We pass all relevant args explicitly or via kwargs.
+        #    `name` is also an AgentConfig field, so it's handled here too.
+        Agent.__init__(
+            self,
+            role=role,
+            name=name,  # Pass name to AgentConfig as well
+            description=description,  # Pass description to AgentConfig
+            parameters=parameters,
+            tools=tools,
+            **kwargs,  # Pass remaining AgentConfig fields (id, inputs, outputs etc.)
+            # and potentially non-AgentConfig RoutedAgent fields too
+        )
+        self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
+        self._output_model: Optional[type[BaseModel]] = output_model
+        self._tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
+            default_factory=list,
+        )
+        self._json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
+        self._model_client: AutoGenWrapper = PrivateAttr()
+        self._pause: bool = PrivateAttr(default=False)
+        # 2. Initialize Autogen RoutedAgent part via the Mixin
+        #    We need to explicitly call the superclass __init__ of the *mixin's* parent.
+        #    Pass only the arguments relevant to RoutedAgent.
+        #    Pydantic's __init__ already handled shared fields like 'name', 'description'.
+        #    We only need to pass fields *specifically* for RoutedAgent if any beyond 'name'.
+        #    Common RoutedAgent args: name, description, system_message, llm_client, etc.
+        #    The mixin itself doesn't have an __init__, so we call RoutedAgent's directly.
+        RoutedAgent.__init__(
+            self,
+            description=description,
+        )
+        self._topic_id: TopicId = DefaultTopicId(type=self.role)
+
     async def _fill_template(
         self,
         task_params: dict[str, Any],  # Accepts task-specific parameters
@@ -120,7 +183,7 @@ class LLMAgent(Agent):
 
         if unfilled_vars := (set(unfilled_vars) - set(["records", "context"])):
             err = f"Template for agent {self.role} has unfilled parameters: {', '.join(unfilled_vars)}"
-            if self.fail_on_unfilled_parameters:
+            if self._fail_on_unfilled_parameters:
                 raise ProcessingError(err)
         return messages
 
@@ -195,28 +258,19 @@ class LLMAgent(Agent):
             # Process normal LLM response
             agent_output = self.make_output(llm_result, inputs=inputs, schema=self._output_model)
             # Publish the result instead of returning
-            if hasattr(self, "runtime") and self.runtime:
-                await self.runtime.publish(agent_output, sender=self)
-            else:
-                logger.error(f"Agent {self.id} has no runtime object to publish result.")
+            await self.runtime.publish_message(agent_output, sender=self)
             return None  # Agents should not return directly in async Autogen flow
         elif isinstance(llm_result, list) and all(isinstance(item, ToolOutput) for item in llm_result):
             # If call_chat returns ToolOutput (e.g., for tool calls) publish each
-            if hasattr(self, "runtime") and self.runtime:
-                for tool_output in llm_result:
-                    await self.runtime.publish(tool_output, sender=self)
-            else:
-                logger.error(f"Agent {self.id} has no runtime object to publish tool output.")
+            for tool_output in llm_result:
+                await self.runtime.publish_message(tool_output, sender=self, topic_id=self.topic_id)
             return None  # Agents should not return directly
         elif llm_result is None:
             # Handle case where LLM call returns None (e.g., error, cancellation)
             logger.warning("LLM call returned None.")
             # Publish an error AgentOutput
             error_output = AgentOutput(error=["LLM call returned None"], inputs=inputs)
-            if hasattr(self, "runtime") and self.runtime:
-                await self.runtime.publish(error_output, sender=self)
-            else:
-                logger.error(f"Agent {self.id} has no runtime object to publish error output.")
+            await self.runtime.publish_message(error_output, sender=self)
             return None
         else:
             # Should not happen based on AutoGenWrapper signature, but good practice

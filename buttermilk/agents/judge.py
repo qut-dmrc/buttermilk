@@ -82,7 +82,7 @@ class Judge(LLMAgent, AutogenRoutedMixin):
     It expects input conforming to AgentInput (handled by LLMAgent/Agent base)
     and aims to output results conforming to AgentReasons.
     """
-
+    _name: str = "judge"
     # Define the expected structured output model for LLMAgent's processing
     _output_model: Optional[type[BaseModel]] = AgentReasons
 

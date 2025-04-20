@@ -16,30 +16,25 @@ from autogen_core import (
     message_handler,
 )
 
-# Use TYPE_CHECKING to avoid circular imports if Agent needs types from here
-if TYPE_CHECKING:
-    from buttermilk._core.agent import Agent, AgentConfig, ToolOutput
-    from buttermilk._core.contract import (
-        CONDUCTOR,
-        AgentInput,
-        AgentOutput,
-        ConductorRequest,
-        ConductorResponse,
-        ErrorEvent,
-        GroupchatMessageTypes,
-        HeartBeat,
-        ManagerMessage,
-        FlowMessage,
-        ManagerRequest,
-        OOBMessages,
-        TaskProcessingComplete,
-        TaskProcessingStarted,
-        UserInstructions,
-        AllMessages,
-        ToolOutput,  # Added ToolOutput here as well
-    )
-    from buttermilk.agents.flowcontrol.sequencer import HostAgent
-    from buttermilk.agents.ui.generic import UIAgent
+from buttermilk._core.agent import Agent, AgentConfig, ToolOutput
+from buttermilk._core.contract import (
+    CONDUCTOR,
+    AgentInput,
+    AgentOutput,
+    ConductorRequest,
+    ConductorResponse,
+    ErrorEvent,
+    GroupchatMessageTypes,
+    HeartBeat,
+    ManagerMessage,
+    FlowMessage,
+    ManagerRequest,
+    OOBMessages,
+    TaskProcessingComplete,
+    TaskProcessingStarted,
+    ToolOutput,  # Added ToolOutput here as well
+)
+
 
 from buttermilk.bm import logger
 
@@ -60,7 +55,7 @@ class AutogenRoutedMixin(RoutedAgent):
     # --- Expected Attributes from Buttermilk Agent ---
     # These are placeholders for the type checker.
     role: str
-    name: str
+    description: str
 
     # Ensure __call__ is expected (all Agents should be callable)
     def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...
@@ -75,14 +70,12 @@ class AutogenRoutedMixin(RoutedAgent):
     # The actual Buttermilk Agent initialization happens in the inheriting class (e.g., Judge).
     # This mixin relies on the inheriting class to also initialize RoutedAgent correctly.
     # See the Judge agent's __init__ for an example.
-    #
-    # No __init__ needed here, initialization is handled by the inheriting class
     # --- End Initialization ---
 
     # --- Message Handlers ---
 
     @message_handler
-    async def _handle_heartbeat_mixin(self, message: "HeartBeat", ctx: MessageContext) -> None:
+    async def _handle_heartbeat_mixin(self, message: HeartBeat, ctx: MessageContext) -> None:
         """Handle heartbeat messages by adding to the agent's internal queue."""
         # Now self._heartbeat and self.name should be recognized by the type checker
         try:
