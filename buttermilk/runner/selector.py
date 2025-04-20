@@ -62,16 +62,15 @@ class Selector(AutogenOrchestrator):
                 self._variant_mapping[config.id] = i
 
         # Send welcome message
-        intro_msg = ManagerMessage(
-            content=(
+        await self._in_the_loop(
+            prompt=(
                 f"Started {self.name}: {self.description}. "
                 f"The conductor will guide our exploration step by step. "
                 f"You can provide feedback and guidance at each step, "
-                f"including selecting specific variants to try."
+                f"including selecting specific variants to try. "
+                f"Let me know when you're ready to begin, or just enter your prompt."
             ),
         )
-        await self._runtime.publish_message(intro_msg, topic_id=self._topic)
-
     async def _wait_for_human(self, timeout: int = 240) -> bool:
         """
         Wait for human confirmation with timeout.
@@ -103,7 +102,7 @@ class Selector(AutogenOrchestrator):
                     return False
                 await asyncio.sleep(1)
 
-    async def _in_the_loop(self, step: StepRequest) -> bool:
+    async def _in_the_loop(self, step: StepRequest = None, prompt: str = "") -> bool:
         """
         Enhanced interaction with user for guidance, not just confirmation.
 
@@ -113,28 +112,33 @@ class Selector(AutogenOrchestrator):
         Returns:
             bool: True if the user confirmed, False otherwise
         """
-        # Prepare a richer message with more context about the step
-        variant_info = ""
-        if step.role in self._active_variants:
-            variants = self._active_variants[step.role]
-            if len(variants) > 1:
-                variant_info = f"\n\nThis step has {len(variants)} variants available:\n" + "\n".join([f"- {v[1].id}: {v[1].role}" for v in variants])
+        if step:
+            # Prepare a richer message with more context about the step
+            variant_info = ""
+            if step.role in self._active_variants:
+                variants = self._active_variants[step.role]
+                if len(variants) > 1:
+                    variant_info = f"\n\nThis step has {len(variants)} variants available:\n" + "\n".join(
+                        [f"- {v[1].id}: {v[1].role}" for v in variants]
+                    )
 
-        # Create rich message with exploration context
-        confirm_step = ManagerRequest(
-            role="orchestrator",
-            content=(
-                f"Here's the next proposed step:\n\n"
-                f"**Step**: {step.role}\n"
-                f"**Description**: {step.description}\n"
-                f"**Prompt**: {step.prompt}"
-                f"{variant_info}\n\n"
-                f"Do you want to proceed with this exploration step? "
-                f"You can also suggest a different approach or request to try a specific variant."
-            ),
-            prompt=step.prompt,
-            description=step.description,
-        )
+            # Create rich message with exploration context
+            confirm_step = ManagerRequest(
+                role=step.role,
+                content=(
+                    f"Here's the next proposed step:\n\n"
+                    f"**Step**: {step.role}\n"
+                    f"**Description**: {step.description}\n"
+                    f"**Prompt**: {step.prompt}"
+                    f"{variant_info}\n\n"
+                    f"Do you want to proceed with this exploration step? "
+                    f"You can also suggest a different approach or request to try a specific variant."
+                ),
+                prompt=step.prompt,
+                description=step.description,
+            )
+        else:
+            confirm_step = ManagerRequest(prompt=prompt, role="user")
 
         await self._send_ui_message(confirm_step)
         response = await self._wait_for_human()
@@ -226,7 +230,7 @@ class Selector(AutogenOrchestrator):
             # Host is asking user a question
             options = outputs.get("options", [])
             question = ManagerRequest(
-                role="conductor",
+                role="user",
                 content=(f"{message.content or ''}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
             )
             await self._runtime.publish_message(question, topic_id=self._topic)

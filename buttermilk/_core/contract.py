@@ -72,7 +72,6 @@ class FlowEvent(BaseModel):
     """For communication outside the groupchat."""
     _type = "FlowEvent"
     source: str
-    role: str
     content: str
 
 class ErrorEvent(FlowEvent):
