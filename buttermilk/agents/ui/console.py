@@ -127,6 +127,7 @@ class CLIUserAgent(UIAgent):
                         ManagerResponse(
                             role=self.role,
                             confirm=False,
+                            prompt="",
                         ),
                     )
 
@@ -136,6 +137,7 @@ class CLIUserAgent(UIAgent):
                         ManagerResponse(
                             role=self.role,
                             confirm=True,
+                            prompt="",
                         ),
                     )
                 else:

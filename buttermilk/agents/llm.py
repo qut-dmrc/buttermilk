@@ -142,7 +142,7 @@ class LLMAgent(Agent):
                 # model_validate_json returns an instance of the schema model
                 output.outputs = schema.model_validate_json(chat_result.content)
                 # Set content to a string representation
-                output.content = json.dumps(output.outputs)
+                output.content = output.outputs.model_dump()
                 return output
             except Exception as e:
                 error = f"Error parsing response from LLM: {e} into {schema.__name__}"
