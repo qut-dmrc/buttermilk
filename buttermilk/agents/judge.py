@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import weave
 
 # Correct the import from _core.agent
-from buttermilk._core.agent import AgentInput, AgentOutput
+from buttermilk._core.agent import AgentInput, AgentOutput, ToolConfig
 from buttermilk.agents.llm import LLMAgent  # Import LLMAgent directly
 from buttermilk._core.contract import (
     AllMessages,  # Keep relevant contract types if needed

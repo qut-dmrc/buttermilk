@@ -3,9 +3,10 @@ from __future__ import annotations  # Add this import at the very top
 import asyncio
 from collections.abc import Awaitable, Callable
 
-# Ensure all necessary typing imports are at the top level
 from typing import Any, Optional, Union, Sequence, TYPE_CHECKING, List, Dict, Callable, Awaitable
 
+from buttermilk._core.contract import TaskProcessingStarted, TaskProcessingComplete
+from buttermilk._core.contract import ConductorResponse
 from autogen_core import (
     DefaultTopicId,
     CancellationToken,
@@ -57,18 +58,16 @@ class AutogenRoutedMixin(RoutedAgent):
     """
 
     # --- Expected Attributes from Buttermilk Agent ---
-    # Add type hints for attributes expected from the Buttermilk Agent parent
     # These are placeholders for the type checker.
-    # id: str # Removed - conflicts with BaseAgent.id
     role: str
     name: str
-    _heartbeat: asyncio.Queue
-    _listen: Callable[..., Awaitable[None]]  # Keep specific hint
-    _handle_events: Callable[..., Awaitable[Optional[Any]]]  # Simplify using Any
 
     # Ensure __call__ is expected (all Agents should be callable)
-    # Simplify return hint
-    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...  # Add Ellipsis for Mypy
+    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...
+
+    _heartbeat: asyncio.Queue
+    _listen: Callable[..., Awaitable[None]]
+    _handle_events: Callable[..., Awaitable[Optional[Any]]]
 
     # --- End Expected Attributes ---
 
@@ -76,10 +75,9 @@ class AutogenRoutedMixin(RoutedAgent):
     # The actual Buttermilk Agent initialization happens in the inheriting class (e.g., Judge).
     # This mixin relies on the inheriting class to also initialize RoutedAgent correctly.
     # See the Judge agent's __init__ for an example.
-
-    # --- Message Handlers ---
-
+    #
     # No __init__ needed here, initialization is handled by the inheriting class
+    # --- End Initialization ---
 
     # --- Message Handlers ---
 
@@ -88,7 +86,6 @@ class AutogenRoutedMixin(RoutedAgent):
         """Handle heartbeat messages by adding to the agent's internal queue."""
         # Now self._heartbeat and self.name should be recognized by the type checker
         try:
-            # Directly access the attribute, type checker assumes it exists based on hints above
             self._heartbeat.put_nowait(message.go_next)
         except asyncio.QueueFull:
             logger.debug(f"Heartbeat failed, agent {self.name} is idle or running behind.")
@@ -100,7 +97,7 @@ class AutogenRoutedMixin(RoutedAgent):
     @message_handler
     async def handle_invocation_mixin(
         self,
-        message: "AgentInput",  # Use string forward reference
+        message: AgentInput,
         ctx: MessageContext,
     ) -> None:
         """
@@ -114,9 +111,6 @@ class AutogenRoutedMixin(RoutedAgent):
         # Cast self.id to string if it's not already str type (Autogen ID)
         # Buttermilk Agent ID might be different, use Autogen's self.id here
         agent_id_str = str(self.id)
-
-        # Import types needed for runtime object creation
-        from buttermilk._core.contract import TaskProcessingStarted, TaskProcessingComplete
 
         await self.publish_message(TaskProcessingStarted(agent_id=agent_id_str, role=self.role, task_index=0), topic_id=topic_id)
 
@@ -195,12 +189,9 @@ class AutogenRoutedMixin(RoutedAgent):
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=public_topic_id),
-            message_callback=self._make_publish_callback(topic_id=private_topic_id),  # Pass potentially None topic_id
+            message_callback=self._make_publish_callback(topic_id=private_topic_id),
             source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
-
-        # Import type needed for runtime isinstance check
-        from buttermilk._core.contract import ConductorResponse
 
         if isinstance(raw_output, ConductorResponse):
             return raw_output  # Return the ConductorResponse
@@ -212,9 +203,9 @@ class AutogenRoutedMixin(RoutedAgent):
     @message_handler
     async def handle_control_message_mixin(
         self,
-        message: "OOBMessages",  # Use string forward reference
+        message: OOBMessages,  # Use string forward reference
         ctx: MessageContext,
-    ) -> Optional["OOBMessages"]:  # Use string forward reference and Optional
+    ) -> Optional[OOBMessages]:  # Use string forward reference and Optional
         """
         Handle out-of-band control messages by delegating to the Buttermilk agent's _handle_events.
         Returns the response directly.
@@ -232,14 +223,10 @@ class AutogenRoutedMixin(RoutedAgent):
 
     # --- Helper Methods ---
 
-    def _make_publish_callback(self, topic_id: Optional[TopicId]) -> Callable[["FlowMessage"], Awaitable[None]]:
+    def _make_publish_callback(self, topic_id: Optional[TopicId]) -> Callable[[FlowMessage], Awaitable[None]]:
         """Create a callback for publishing messages via Autogen runtime. Handles optional topic_id."""
 
-        # Import type needed for inner function hint
-        if TYPE_CHECKING:
-            from buttermilk._core.contract import FlowMessage
-
-        async def publish_callback(message: "FlowMessage") -> None:
+        async def publish_callback(message: FlowMessage) -> None:
             """Callback function to publish a Buttermilk message via Autogen."""
             # Only publish if topic_id is valid
             if topic_id is not None:
@@ -249,7 +236,3 @@ class AutogenRoutedMixin(RoutedAgent):
                 logger.warning(f"Attempted to publish message via callback with None topic_id for agent {self.name}. Message dropped: {message}")
 
         return publish_callback
-
-
-# Ensure TYPE_CHECKING block is well-defined and near the top if possible
-# (Content from previous state is assumed correct here)
