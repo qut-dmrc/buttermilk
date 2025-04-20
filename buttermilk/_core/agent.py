@@ -149,8 +149,11 @@ class Agent(AgentConfig):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
+        *,
         cancellation_token: CancellationToken | None = None,
-        source: str = "unknown",
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Save incoming messages from *other* agents to update internal state."""

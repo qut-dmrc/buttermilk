@@ -139,13 +139,16 @@ class UserInstructions(FlowMessage):
     """Instructions from the user."""
 
     _type = "UserInput"
-    content: str = Field(default="")
 
     records: list[Record] = Field(
         default=[],
         description="A list of records to include in the prompt",
     )
 
+    prompt: str = Field(
+        default="",
+        description="A prompt to include",
+    )
     confirm: bool = Field(
         default=False,
         description="Response from user: confirm y/n",

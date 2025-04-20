@@ -22,6 +22,7 @@ from buttermilk._core.contract import (
     ManagerRequest,
     ManagerResponse,
     StepRequest,
+    UserInstructions,
 )
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
@@ -71,7 +72,8 @@ class Selector(AutogenOrchestrator):
                 f"Let me know when you're ready to begin, or just enter your prompt."
             ),
         )
-    async def _wait_for_human(self, timeout: int = 240) -> bool:
+
+    async def _wait_for_human(self, timeout: int = 240) -> ManagerResponse:
         """
         Wait for human confirmation with timeout.
 
@@ -96,13 +98,13 @@ class Selector(AutogenOrchestrator):
                 if msg.selection:
                     self._last_user_selection = msg.selection
 
-                return msg.confirm
+                return msg
             except asyncio.QueueEmpty:
                 if time.time() - t0 > timeout:
                     return False
                 await asyncio.sleep(1)
 
-    async def _in_the_loop(self, step: StepRequest = None, prompt: str = "") -> bool:
+    async def _in_the_loop(self, step: StepRequest = None, prompt: str = "") -> ManagerResponse:
         """
         Enhanced interaction with user for guidance, not just confirmation.
 
@@ -110,7 +112,7 @@ class Selector(AutogenOrchestrator):
             step: The step request to confirm with the user
 
         Returns:
-            bool: True if the user confirmed, False otherwise
+            ManagerResponse
         """
         if step:
             # Prepare a richer message with more context about the step
@@ -119,7 +121,7 @@ class Selector(AutogenOrchestrator):
                 variants = self._active_variants[step.role]
                 if len(variants) > 1:
                     variant_info = f"\n\nThis step has {len(variants)} variants available:\n" + "\n".join(
-                        [f"- {v[1].id}: {v[1].role}" for v in variants]
+                        [f"- {v[1].id}: {v[1].role} ({str(v[1].parameters)})" for v in variants]
                     )
 
             # Create rich message with exploration context
@@ -158,6 +160,7 @@ class Selector(AutogenOrchestrator):
             "results": self._exploration_results,
             "user_feedback": self._user_feedback if self._user_feedback else [],
             "participants": {name: variants[0][1].description for name, variants in self._agent_types.items()},
+            "available_variants": {name: [v[1].id for v in variants] for name, variants in self._active_variants.items()},
         }
 
         # Create the request for the conductor
@@ -231,12 +234,12 @@ class Selector(AutogenOrchestrator):
             options = outputs.get("options", [])
             question = ManagerRequest(
                 role="user",
-                content=(f"{message.content or ''}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
+                prompt=(f"{message.content or ''}\n\n" + (f"Options:\n" + "\n".join([f"- {opt}" for opt in options]) if options else "")),
             )
             await self._runtime.publish_message(question, topic_id=self._topic)
 
             # Wait for user's response
-            await self._wait_for_human()
+            response = await self._wait_for_human()
 
         elif msg_type == "comparison":
             # Host is providing a comparison between variants
@@ -352,10 +355,15 @@ class Selector(AutogenOrchestrator):
             if request:
                 # Initialize with records from request if available
                 if request.records:
+                    message = UserInstructions(records=request.records, prompt=request.prompt)
                     self._records = request.records
                 # Otherwise, try to fetch by ID or URI if provided
                 elif request.record_id or request.uri:
-                    await self._fetch_record(request)
+                    message = AgentInput(prompt=request.prompt, inputs={"record_id": request.record_id, "uri": request.uri})
+                else:
+                    message = request
+                response = await self._ask_agents("fetch", message)
+                await self._runtime.publish_message(response, topic_id=self._topic, sender="orchestrator")
 
             # Main interactive loop
             while True:
@@ -372,7 +380,10 @@ class Selector(AutogenOrchestrator):
                         continue
 
                     # Get user confirmation with enhanced context
-                    if not await self._in_the_loop(next_step):
+                    response = await self._in_the_loop(next_step)
+                    if response.halt:
+                        raise StopAsyncIteration("User requested halt.")
+                    if not response.confirm:
                         logger.info("User did not confirm step. Waiting for new instructions.")
                         continue
 
@@ -381,21 +392,13 @@ class Selector(AutogenOrchestrator):
 
                     # Check if a specific variant was selected by the user
                     variant_index = 0  # Default to first variant
-
-                    # Get the most recent confirmation from the queue
-                    try:
-                        confirmation = self._user_confirmation.get_nowait()
-                        if confirmation.halt:
-                            raise StopAsyncIteration("User requested halt.")
-                        if confirmation.selection:
-                            # Look up the variant index from the name
-                            if confirmation.selection in self._variant_mapping:
-                                variant_index = self._variant_mapping[confirmation.selection]
-                                logger.info(f"Using selected variant: {confirmation.selection} (index {variant_index})")
-                            else:
-                                logger.warning(f"Selected variant {confirmation.selection} not found. Using default.")
-                    except asyncio.QueueEmpty:
-                        pass  # No new confirmation, use default variant
+                    if response.selection:
+                        # Look up the variant index from the name
+                        if response.selection in self._variant_mapping:
+                            variant_index = self._variant_mapping[response.selection]
+                            logger.info(f"Using selected variant: {response.selection} (index {variant_index})")
+                        else:
+                            logger.warning(f"Selected variant {response.selection} not found. Using default.")
 
                     # Execute the step with the selected variant
                     await self._execute_step(step=next_step, input=step_input, variant_index=variant_index)
@@ -427,7 +430,6 @@ class Selector(AutogenOrchestrator):
         try:
             from buttermilk.agents.fetch import FetchRecord
 
-            # Convert Sequence to list to fix type compatibility
             fetch = FetchRecord(role="fetch", description="fetch records and urls", data=list(self.data))
             output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
             if output and output.results:

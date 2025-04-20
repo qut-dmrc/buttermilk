@@ -53,6 +53,7 @@ class FetchRecord(ToolConfig):
         record = None
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
+                # Try to get by record_id (remove bang! first)
                 record_id = prompt.strip().strip(COMMAND_SYMBOL)
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
         result = None
@@ -102,16 +103,16 @@ class FetchRecord(ToolConfig):
 
 class FetchAgent(FetchRecord, Agent):
     id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
-    role: str
     pass
 
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        source: str = None,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Entry point when running this as an agent.
@@ -119,37 +120,34 @@ class FetchAgent(FetchRecord, Agent):
         If running as an agent, watch for URLs or record ids and inject them
         into the chat."""
 
-        if not isinstance(message, UserInstructions):
-            return
-        if not (match := re.match(self._pat, message.content)):
-            return
-        record = None
-        if uri := match[2]:
-            record = await download_and_convert(uri=uri)
-        else:
-            # Try to get by record_id (remove bang! first)
-            record_id = match[1].strip(COMMAND_SYMBOL)
-            record = await self._get_record_dataset(record_id=record_id)
+        result = None
+        if isinstance(message, AgentInput):
+            uri = message.inputs.get("uri")
+            record_id = message.inputs.get("record_id")
+            if uri or record_id:
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+        if isinstance(message, UserInstructions):
+            result = await self._run(prompt=message.prompt)
 
-        if record:
-            output = AgentOutput(content=record.text, records=[record])
+        if result:
+            output = UserInstructions(prompt=result.content, records=result.results)
             await public_callback(output)
 
-        return
+        return None
 
     @weave.op()
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
-        if not (match := re.match(self._pat, inputs.prompt)):
-            return
-        record = None
-        if uri := match[2]:
-            record = await download_and_convert(uri=uri)
-        else:
-            # Try to get by record_id (remove bang! first)
-            record_id = match[1].strip(COMMAND_SYMBOL)
-            record = await self._get_record_dataset(record_id=record_id)
 
-        if record:
-            output = AgentOutput(content=record.text, records=[record])
-            return output
+        result = None
+        if isinstance(inputs, AgentInput):
+            uri = inputs.inputs.get("uri")
+            record_id = inputs.inputs.get("record_id")
+            if uri or record_id:
+                result = await self._run(record_id=record_id, uri=uri, prompt=inputs.prompt)
+        if isinstance(inputs, UserInstructions):
+            result = await self._run(prompt=inputs.prompt)
+
+        if result:
+            return result
+
         return None

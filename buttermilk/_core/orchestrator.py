@@ -20,7 +20,7 @@ import weave
 from buttermilk._core import AgentOutput, TaskProcessingComplete
 from buttermilk._core.agent import ChatCompletionContext, FatalError, ProcessingError
 from buttermilk._core.config import DataSourceConfig, SaveInfo
-from buttermilk._core.contract import END, AgentInput, StepRequest
+from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest
 from buttermilk._core.flow import KeyValueCollector
 
 # from buttermilk._core.job import Job # Job seems unused here
@@ -217,10 +217,10 @@ class Orchestrator(BaseModel, ABC):
         """Abstract method for cleaning up resources (e.g., stopping runtimes)."""
         raise NotImplementedError
 
-    async def _in_the_loop(self, step: StepRequest) -> bool:
+    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse:
         """Placeholder for human-in-the-loop confirmation. Default is True."""
         # Subclasses can override this to interact with a UI agent, etc.
-        return True
+        return ManagerResponse(confirm=True)
 
     async def execute(self, request: StepRequest) -> AgentOutput | None:
         """Execute a single step directly (potentially for testing or specific control flows).

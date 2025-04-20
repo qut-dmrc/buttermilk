@@ -36,7 +36,10 @@ class CLIUserAgent(UIAgent):
 
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Send or receive input from the UI."""
-        self._console.print(Markdown("Input requested:\n"))
+        if msg := self._fmt_msg(inputs, source="controller"):
+            self._console.print(msg)
+        else:
+            self._console.print(Markdown("Input requested:\n"))
 
     def _fmt_msg(self, message: FlowMessage, source: str) -> Markdown | None:
         """Format a message for display in the console."""
@@ -75,7 +78,9 @@ class CLIUserAgent(UIAgent):
             elif isinstance(message, TaskProcessingComplete):
                 if message.is_error:
                     output.append(f"Task from {source} #{message.task_index} failed...")
-            else:
+            elif message.prompt:
+                output.append(f"### Prompt: \n{message.prompt}")
+            elif message.content:
                 output.append(message.content)
         except Exception as e:
             logger.error(f"Unable to format message of type {type(message)}: {e}")
@@ -89,13 +94,14 @@ class CLIUserAgent(UIAgent):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
+        *,
         cancellation_token: CancellationToken | None = None,
-        source: str = "unknown",
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Send output to the user interface."""
-        if isinstance(message, UserInstructions):
-            return
         if msg := self._fmt_msg(message, source=source):
             self._console.print(msg)
 
@@ -115,6 +121,7 @@ class CLIUserAgent(UIAgent):
         self,
     ) -> None:
         """Continuously poll for user input in the background"""
+        prompt = []
         while True:
             try:
                 user_input = await ainput()
@@ -126,20 +133,24 @@ class CLIUserAgent(UIAgent):
                     await self._input_callback(
                         ManagerResponse(
                             confirm=False,
-                            prompt="",
+                            prompt="\n".join(prompt),
                         ),
                     )
+                    prompt = []
 
                 elif not re.sub(r"\W", "", user_input):
                     # treat empty string as confirmation
                     await self._input_callback(
                         ManagerResponse(
                             confirm=True,
-                            prompt="",
+                            prompt="\n".join(prompt),
                         ),
                     )
+                    prompt = []
                 else:
-                    await self._input_callback(UserInstructions(content=user_input))
+                    # accept input until we get an empty string
+                    prompt.append(user_input)
+
                 await self._input_callback(
                     TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
                 )

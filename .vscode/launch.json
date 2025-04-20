@@ -55,9 +55,8 @@
         "flow=panel",
         "record_id=NCAA_transgender_athletes",
         "ui=console",
-        "llms=full",
-        "++name=automod",
-        "++job=debugging"
+        "llms=lite",
+        "++name=panel",
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",

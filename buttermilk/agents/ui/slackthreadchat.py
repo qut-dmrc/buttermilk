@@ -84,9 +84,11 @@ class SlackUIAgent(UIAgent):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""

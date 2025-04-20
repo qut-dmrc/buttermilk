@@ -76,8 +76,11 @@ class HostAgent(LLMAgent):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        source: str = "unknown",
+        *,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         # Log messages to our local context cache, but truncate them
