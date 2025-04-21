@@ -7,6 +7,7 @@ from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
 
 from autogen_core import CancellationToken, MessageContext
+import weave
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
@@ -155,6 +156,7 @@ class SlackUIAgent(UIAgent):
             )
             self._current_input_message = None
 
+    @weave.op
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(inputs, (AgentInput, ManagerRequest)):

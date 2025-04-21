@@ -1,231 +1,188 @@
 from __future__ import annotations  # Add this import at the very top
 
 import asyncio
+import inspect  # Import inspect for introspection
+from functools import partial  # Import partial for creating wrapper methods
 from collections.abc import Awaitable, Callable
+from typing import Any, Optional, Union, Sequence, TYPE_CHECKING, List, Dict, Callable, Awaitable, Type  # Added Type
 
-from typing import Any, Optional, Union, Sequence, TYPE_CHECKING, List, Dict, Callable, Awaitable
-
-from buttermilk._core.contract import TaskProcessingStarted, TaskProcessingComplete
-from buttermilk._core.contract import ConductorResponse
 from autogen_core import (
     DefaultTopicId,
     CancellationToken,
     MessageContext,
     RoutedAgent,
     TopicId,
-    message_handler,
+    # message_handler is not used directly here, registration is manual
 )
 
-from buttermilk._core.agent import Agent, AgentConfig, ToolOutput
-from buttermilk._core.contract import (
-    CONDUCTOR,
-    AgentInput,
-    AgentOutput,
-    ConductorRequest,
-    ConductorResponse,
-    ErrorEvent,
-    GroupchatMessageTypes,
-    HeartBeat,
-    ManagerMessage,
-    FlowMessage,
-    ManagerRequest,
-    OOBMessages,
-    TaskProcessingComplete,
-    TaskProcessingStarted,
-    ToolOutput,  # Added ToolOutput here as well
-)
-
+# Use TYPE_CHECKING to avoid circular imports if Agent needs types from here
+if TYPE_CHECKING:
+    from buttermilk._core.agent import Agent, AgentConfig
+    from buttermilk._core.contract import (
+        CONDUCTOR,
+        AgentInput,
+        AgentOutput,
+        ConductorRequest,
+        ConductorResponse,
+        ErrorEvent,
+        GroupchatMessageTypes,
+        HeartBeat,
+        ManagerMessage,
+        FlowMessage,
+        ManagerRequest,
+        ManagerResponse,
+        OOBMessages,
+        TaskProcessingComplete,
+        TaskProcessingStarted,
+        UserInstructions,
+        AllMessages,
+        ToolOutput,
+    )
 
 from buttermilk.bm import logger
-
-# Keep Agent import for type hints if needed, but ToolConfig not used here
-from buttermilk._core.agent import Agent
-import asyncio
+from buttermilk._core.agent import Agent  # Keep Agent import
 
 
-class AutogenRoutedMixin(RoutedAgent):
+# Define the Adapter Class
+class AutogenAgentAdapter(RoutedAgent):
     """
-    Mixin class to integrate Buttermilk agent capabilities with Autogen's RoutedAgent.
+    Adapter to wrap a Buttermilk Agent (like LLMAgent/Judge) for use with Autogen.
 
-    This mixin should be inherited alongside a Buttermilk Agent subclass (e.g., LLMAgent).
-    It provides message handlers that delegate processing to the Buttermilk agent's
-    methods (`__call__`, `_listen`, `_handle_events`).
+    It dynamically discovers methods marked with @buttermilk_handler on the wrapped
+    agent and registers corresponding handlers with the Autogen runtime.
     """
 
-    # --- Expected Attributes from Buttermilk Agent ---
-    # These are placeholders for the type checker.
-    role: str
-    description: str
-
-    # Ensure __call__ is expected (all Agents should be callable)
-    def __call__(self, *args: Any, **kwargs: Any) -> Awaitable[Any]: ...
-
-    _heartbeat: asyncio.Queue
-    _listen: Callable[..., Awaitable[None]]
-    _handle_events: Callable[..., Awaitable[Optional[Any]]]
-
-    # --- End Expected Attributes ---
-
-    # --- Initialization ---
-    # The actual Buttermilk Agent initialization happens in the inheriting class (e.g., Judge).
-    # This mixin relies on the inheriting class to also initialize RoutedAgent correctly.
-    # See the Judge agent's __init__ for an example.
-    # --- End Initialization ---
-
-    # --- Message Handlers ---
-
-    @message_handler
-    async def _handle_heartbeat_mixin(self, message: HeartBeat, ctx: MessageContext) -> None:
-        """Handle heartbeat messages by adding to the agent's internal queue."""
-        # Now self._heartbeat and self.name should be recognized by the type checker
-        try:
-            self._heartbeat.put_nowait(message.go_next)
-        except asyncio.QueueFull:
-            logger.debug(f"Heartbeat failed, agent {self.name} is idle or running behind.")
-        except AttributeError:
-            # This might still happen at runtime if the inheriting class doesn't provide it,
-            # but the static type checker should be happier.
-            logger.error(f"Agent {self.name} missing expected _heartbeat attribute at runtime.")
-
-    @message_handler
-    async def handle_invocation_mixin(
-        self,
-        message: AgentInput,
-        ctx: MessageContext,
-    ) -> None:
+    def __init__(self, agent_cfg: AgentConfig):
         """
-        Handle direct invocation requests (AgentInput).
-        Delegates to the Buttermilk agent's __call__ method.
-        Publishes start/complete signals and the agent's response.
+        Initializes the adapter.
+
+        Args:
+            agent: The Buttermilk Agent instance to wrap.
         """
-        # self is callable and has name/id/role due to placeholder hints
-        topic_id = DefaultTopicId(type=self.role)
+        if not isinstance(agent_cfg, Agent):
+            raise TypeError(f"Expected a Buttermilk Agent instance, but got {type(agent_cfg)}")
 
-        # Cast self.id to string if it's not already str type (Autogen ID)
-        # Buttermilk Agent ID might be different, use Autogen's self.id here
-        agent_id_str = str(self.id)
+        self.wrapped_agent = agent_cfg
 
-        await self.publish_message(TaskProcessingStarted(agent_id=agent_id_str, role=self.role, task_index=0), topic_id=topic_id)
-
-        # Delegate to the Buttermilk Agent's main call logic
-        # Simplify hint within method body for Pylance
-        response: Optional[Any] = await self(
-            message=message,
-            cancellation_token=ctx.cancellation_token,
-            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
+        # Initialize the parent BaseAgent (via RoutedAgent).
+        # BaseAgent.__init__ accepts name and description.
+        super().__init__(
+            name=self.wrapped_agent.name,  # Pass name from wrapped agent
+            description=self.wrapped_agent.description,  # Pass description from wrapped agent
+            # Pass other RoutedAgent args if needed, e.g., system_message
+            # system_message=getattr(self.wrapped_agent, 'system_message', None)
         )
 
-        # Publish the response(s) if any
-        if response:
-            if isinstance(response, Sequence) and not isinstance(response, (str, bytes)):  # More robust check for sequence
-                for res_msg in response:
-                    await self.publish_message(res_msg, topic_id=topic_id)
-            else:  # Handle single message ("AgentOutput", "ToolOutput", "ErrorEvent", etc.)
-                await self.publish_message(response, topic_id=topic_id)
+        # --- Dynamic Handler Registration ---
+        self._register_buttermilk_handlers()
 
-        # Determine if there was an error for the completion message
-        is_error = False
-        # Import types needed for runtime isinstance checks
-        from buttermilk._core.contract import AgentOutput, ErrorEvent
-
-        if isinstance(response, AgentOutput) and response.error:
-            is_error = True
-        elif isinstance(response, ErrorEvent):
-            is_error = True
-        # Add other potential error indicators if necessary
-
-        await self.publish_message(
-            TaskProcessingComplete(agent_id=agent_id_str, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
-            topic_id=topic_id,
-        )
-        # RoutedAgent handlers typically don't return values directly; they publish.
-
-    @message_handler
-    async def handle_groupchat_message_mixin(
-        self,
-        message: "GroupchatMessageTypes",  # Use string forward reference
-        ctx: MessageContext,
-    ) -> None:
+    def _register_buttermilk_handlers(self):
         """
-        Handle incoming group messages by delegating to the Buttermilk agent's _listen method.
+        Inspects the wrapped agent for methods decorated with @buttermilk_handler
+        and registers them with the Autogen runtime.
         """
-        # self._listen and self.name/role are known via placeholders
-        public_topic_id = DefaultTopicId(type=self.role)
-        private_topic_id = ctx.topic_id  # Can be None, handle in callback maker
+        logger.debug(f"Adapter for '{self.name}': Searching for @buttermilk_handlers on {type(self.wrapped_agent).__name__}")
 
-        # Use the placeholder hint for _listen
-        await self._listen(
-            message=message,
-            cancellation_token=ctx.cancellation_token,
-            public_callback=self._make_publish_callback(topic_id=public_topic_id),
-            message_callback=self._make_publish_callback(topic_id=private_topic_id),  # Pass potentially None topic_id
-            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
-        )
-        # Pylance might still warn about await if _listen hint isn't specific enough, but it should work.
+        # Iterate through members of the wrapped agent instance
+        for name, member in inspect.getmembers(self.wrapped_agent):
+            # Check if it's a method marked by our decorator
+            if callable(member) and hasattr(member, "_is_buttermilk_handler") and member._is_buttermilk_handler:
+                target_message_type: Type = getattr(member, "_buttermilk_handler_message_type", None)
 
-    @message_handler
-    async def handle_conductor_request_mixin(
-        self,
-        message: "ConductorRequest",  # Use string forward reference
-        ctx: MessageContext,
-    ) -> Optional["ConductorResponse"]:  # Use string forward reference and Optional
-        """
-        Handle private conductor requests by delegating to the Buttermilk agent's __call__.
-        Returns the response directly to the conductor.
-        """
-        # self is callable and has name/role due to placeholders
-        public_topic_id = DefaultTopicId(type=self.role)
-        private_topic_id = ctx.topic_id  # Can be None
+                if target_message_type is None:
+                    logger.warning(f"Method '{name}' on agent '{self.wrapped_agent.name}' is marked as a handler but missing message type. Skipping.")
+                    continue
 
-        # Simplify hint within method body for Pylance
-        raw_output: Optional[Any] = await self(
-            message=message,
-            cancellation_token=ctx.cancellation_token,
-            public_callback=self._make_publish_callback(topic_id=public_topic_id),
-            message_callback=self._make_publish_callback(topic_id=private_topic_id),
-            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
-        )
+                logger.info(f"Adapter for '{self.name}': Found handler '{name}' for message type '{target_message_type.__name__}'")
 
-        if isinstance(raw_output, ConductorResponse):
-            return raw_output  # Return the ConductorResponse
-        elif raw_output is not None:
-            # Log if the agent returned something, but not the expected type
-            logger.warning(f"Agent {self.name} returned unexpected type {type(raw_output)} for ConductorRequest. Expected ConductorResponse or None.")
-        return None  # Return None otherwise
+                # Create a wrapper function that will be registered with Autogen.
+                # This wrapper calls the original method on the wrapped_agent.
+                async def handler_wrapper(
+                    message: Any,  # Autogen message type determined by registration
+                    ctx: MessageContext,
+                    original_method: Callable = member,  # Capture method in closure
+                    adapter_self=self,  # Capture adapter instance in closure
+                ):
+                    # The 'name' attribute comes from BaseAgent initialization
+                    logger.debug(
+                        f"Adapter '{adapter_self.name}': Routing message type {type(message).__name__} to wrapped agent method '{original_method.__name__}'"
+                    )
+                    # Call the original method on the wrapped Buttermilk agent.
+                    # Pass only the message, as the decorated method might not expect 'ctx'.
+                    # The original method should return values appropriate for its context
+                    # (e.g., AgentOutput for processing, maybe None for listening).
+                    # The adapter doesn't typically modify or publish the return value here,
+                    # unless a specific adaptation is needed. Autogen runtime handles publishing based on registration.
+                    try:
+                        # We assume the decorated method takes 'message' as the primary argument.
+                        # If it needs more adaptation (e.g. extracting from ctx), the wrapper needs modification.
+                        result = await original_method(message=message)  # Pass message directly
+                        return result  # Return the result for Autogen's runtime
+                    except Exception as e:
+                        logger.error(
+                            f"Error executing handler '{original_method.__name__}' on wrapped agent '{adapter_self.wrapped_agent.name}': {e}",
+                            exc_info=True,
+                        )
+                        # Optionally, return an error response or raise? Depends on Autogen's error handling.
+                        return None  # Default to None on error
 
-    @message_handler
-    async def handle_control_message_mixin(
-        self,
-        message: OOBMessages,  # Use string forward reference
-        ctx: MessageContext,
-    ) -> Optional[OOBMessages]:  # Use string forward reference and Optional
-        """
-        Handle out-of-band control messages by delegating to the Buttermilk agent's _handle_events.
-        Returns the response directly.
-        """
-        # Simplify hint within method body for Pylance
-        response: Optional[Any] = await self._handle_events(
-            message=message,
-            cancellation_token=ctx.cancellation_token,
-            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
-        )
-        # Return response directly if it's not None, relying on _handle_events signature
-        if response is not None:
-            return response
-        return None
+                # Register the wrapper function with the specific message type
+                # The type hint on the 'message' parameter of the wrapper doesn't
+                # strictly enforce the type for registration, but Autogen uses the
+                # message_type argument here.
+                if target_message_type:  # Ensure we have a valid type
+                    try:
+                        # register_handler should be inherited from BaseAgent
+                        self.register_handler(target_message_type, handler_wrapper)
+                        logger.info(f"Adapter for '{self.name}': Registered handler '{name}' for type '{target_message_type.__name__}'")
+                    except Exception as e:
+                        logger.error(
+                            f"Adapter for '{self.name}': Failed to register handler '{name}' for type '{target_message_type.__name__}': {e}",
+                            exc_info=True,
+                        )
+                else:
+                    logger.error(f"Adapter for '{self.name}': Could not determine target message type for handler '{name}'. Skipping registration.")
 
-    # --- Helper Methods ---
+    # --- Optional: Delegate other necessary Agent methods? ---
+    # If the Autogen runtime directly calls methods other than registered handlers
+    # (e.g., maybe 'reset' or specific lifecycle methods), you might need to
+    # explicitly delegate them here. Check RoutedAgent/BaseAgent definition if needed.
 
-    def _make_publish_callback(self, topic_id: Optional[TopicId]) -> Callable[[FlowMessage], Awaitable[None]]:
-        """Create a callback for publishing messages via Autogen runtime. Handles optional topic_id."""
+    # Example delegation (uncomment and adapt if needed):
+    # async def reset(self, cancellation_token: CancellationToken | None = None) -> None:
+    #     """Delegates reset to the wrapped agent if it has an on_reset method."""
+    #     logger.debug(f"Adapter for '{self.name}': Delegating reset()")
+    #     if hasattr(self.wrapped_agent, 'on_reset') and callable(self.wrapped_agent.on_reset):
+    #          await self.wrapped_agent.on_reset(cancellation_token=cancellation_token)
+    #     # Call super().reset() if RoutedAgent has its own reset logic to perform
+    #     await super().reset(cancellation_token=cancellation_token)
 
-        async def publish_callback(message: FlowMessage) -> None:
-            """Callback function to publish a Buttermilk message via Autogen."""
-            # Only publish if topic_id is valid
-            if topic_id is not None:
-                await self.publish_message(message, topic_id=topic_id)
-            else:
-                # Decide how to handle missing topic_id - log? Drop? Use default?
-                logger.warning(f"Attempted to publish message via callback with None topic_id for agent {self.name}. Message dropped: {message}")
+    # Ensure the adapter uses the wrapped agent's core processing if needed,
+    # although typically Autogen relies on registered handlers.
+    # The __call__ method might not be directly used by Autogen's runtime
+    # in the same way it is in the Buttermilk orchestrator.
 
-        return publish_callback
+
+# --- Type checking block ---
+if TYPE_CHECKING:
+    from buttermilk._core.agent import Agent, AgentConfig
+    from buttermilk._core.contract import (
+        CONDUCTOR,
+        AgentInput,
+        AgentOutput,
+        ConductorRequest,
+        ConductorResponse,
+        ErrorEvent,
+        GroupchatMessageTypes,
+        HeartBeat,
+        ManagerMessage,
+        FlowMessage,
+        ManagerRequest,
+        ManagerResponse,
+        OOBMessages,
+        TaskProcessingComplete,
+        TaskProcessingStarted,
+        UserInstructions,
+        AllMessages,
+        ToolOutput,
+    )

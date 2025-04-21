@@ -42,6 +42,9 @@ from buttermilk._core.types import Record, RunRequest  # Added Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore  # Added QualScore import here
 from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import bm, logger
+from buttermilk.libs.autogen import AutogenAgentAdapter  # Import the updated adapter
+from buttermilk._core.agent import Agent  # Import base Agent for type hint
+from typing import Type  # Import Type
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -81,17 +84,23 @@ class AutogenOrchestrator(Orchestrator):
         """Register all agent variants for each step"""
         for step_name, step in self.agents.items():
             step_agent_type = []
+            # agent_cls here is the Buttermilk agent class (e.g., Judge)
+            # variant here is the AgentConfig for that specific variant
             for agent_cls, variant in step.get_configs():
-                # Register the agent with the runtime
-                agent_type: AgentType = await agent_cls.register(
-                    self._runtime,
-                    variant.name,
-                    lambda v=variant: agent_cls(
-                        agent_cfg=v,
-                        topic_type=self._topic.type,
+                # We register the *Adapter* class.
+                # The factory lambda captures the specific variant (v) and buttermilk class (cls)
+                # and uses them to instantiate the Adapter when needed by the runtime.
+                agent_type: AgentType = await AutogenAgentAdapter.register(
+                    # No 'cls' parameter needed for register classmethod
+                    runtime=self._runtime,
+                    type=variant.name,  # Use variant.name for the agent type string name
+                    factory=lambda v=variant, cls=agent_cls: AutogenAgentAdapter(  # Factory returns adapter instance
+                        agent_cfg=v,  # Passed to Adapter.__init__
+                        wrapped_agent_cls=cls,  # Passed to Adapter.__init__
+                        # Add other kwargs for AutogenAgentAdapter.__init__ if needed
                     ),
                 )
-                # Add subscription for this agent
+                # Add subscription for the *adapter's* agent type
                 await self._runtime.add_subscription(
                     TypeSubscription(
                         topic_type=self._topic.type,
@@ -226,8 +235,8 @@ class AutogenOrchestrator(Orchestrator):
             scorer_agent_id = await self._runtime.get(scorer_agent_type)
             # Note: We don't have the original Agent instance here easily to check type with isinstance(agent, LLMScorer)
             # We rely on the configuration being correct.
-            # Correct way to get the role of the agent that produced the output
-            log_role = output.inputs.role if output.inputs else "unknown_step_role"
+            # Get role from the output's stored parameters, not the input object
+            log_role = output.params.get("role", "unknown_step_role") if output.params else "unknown_step_role"
             logger.info(f"Running evaluation for step {log_role} output.")
             scorer_input = AgentInput(
                 inputs={"answers": [output], "expected": ground_truth_record.ground_truth},
