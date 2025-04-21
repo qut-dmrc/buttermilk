@@ -3,7 +3,8 @@ from collections.abc import Awaitable, Callable
 from typing import Sequence
 
 from autogen_core import (
-    DefaultTopicId,CancellationToken,
+    DefaultTopicId,
+    CancellationToken,
     MessageContext,
     RoutedAgent,
     TopicId,
@@ -23,6 +24,7 @@ from buttermilk._core.contract import (
     ManagerMessage,
     FlowMessage,
     ManagerRequest,
+    ManagerResponse,
     OOBMessages,
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -30,7 +32,7 @@ from buttermilk._core.contract import (
     AllMessages,
 )
 from buttermilk.agents.flowcontrol.sequencer import HostAgent
-from buttermilk.agents.ui.generic import UIAgent 
+from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.bm import logger
 
 
@@ -86,7 +88,7 @@ class AutogenAgentAdapter(RoutedAgent):
             asyncio.create_task(self.agent.initialize())
 
     @message_handler
-    async def _heartbeat(self, message: HeartBeat, ctx:MessageContext) -> None:
+    async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:
         """Handle heartbeat messages by adding to the wrapped agent's queue."""
         try:
             self.agent._heartbeat.put_nowait(message.go_next)

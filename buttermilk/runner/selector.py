@@ -73,7 +73,7 @@ class Selector(AutogenOrchestrator):
             ),
         )
 
-    async def _wait_for_human(self, timeout: int = 240) -> ManagerResponse:
+    async def _wait_for_human(self, timeout: int = 20) -> ManagerResponse:
         """
         Wait for human confirmation with timeout.
 
@@ -83,10 +83,8 @@ class Selector(AutogenOrchestrator):
         Returns:
             bool: True if user confirmed, False if rejected or timed out
         """
-        t0 = time.time()
-        while True:
             try:
-                msg = self._user_confirmation.get_nowait()
+            msg = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
                 if msg.halt:
                     raise StopAsyncIteration("User requested halt.")
 
@@ -98,11 +96,9 @@ class Selector(AutogenOrchestrator):
                 if msg.selection:
                     self._last_user_selection = msg.selection
 
-                return msg
-            except asyncio.QueueEmpty:
-                if time.time() - t0 > timeout:
-                    return False
-                await asyncio.sleep(1)
+            return True
+        except asyncio.TimeoutError:
+            return ManagerResponse(error=[f"No response from Manager within timeout period ({timeout} seconds)."], confirm=False, halt=False)
 
     async def _in_the_loop(self, step: StepRequest = None, prompt: str = "") -> ManagerResponse:
         """
@@ -206,7 +202,7 @@ class Selector(AutogenOrchestrator):
             if next_step.role == END:
                 raise StopAsyncIteration("Host signaled that flow has been completed.")
 
-            if next_step.role.lower() not in self._agent_types and next_step.role != END and next_step.role != "wait":
+            if next_step.role.upper() not in self._agent_types and next_step.role != END and next_step.role != "wait":
                 raise ProcessingError(f"Step {next_step.role} not found in registered agents.")
 
             await asyncio.sleep(2)
@@ -304,7 +300,7 @@ class Selector(AutogenOrchestrator):
             AgentOutput: The output from the executed agent, or None if there was an error
         """
         # Handle both string and StepRequest inputs
-        step_name = step.role.lower() if isinstance(step, StepRequest) else step.lower()
+        step_name = step.role.upper() if isinstance(step, StepRequest) else step.upper()
 
         if step_name not in self._agent_types:
             logger.warning(f"Step {step_name} not found in registered agents.")

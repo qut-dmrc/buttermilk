@@ -1,5 +1,5 @@
 """
-Tests for the SelectorOrchestrator class.
+Tests for the Selector class.
 """
 
 import asyncio
@@ -15,11 +15,12 @@ from buttermilk._core.contract import (
     ManagerMessage,
 )
 from buttermilk._core.types import RunRequest
+from buttermilk.runner.selector import Selector
 
 
 @pytest.fixture
 def orchestrator():
-    """Create a test instance of SelectorOrchestrator with properly mocked dependencies."""
+    """Create a test instance of Selector with properly mocked dependencies."""
     # Patch the autogen_core imports needed for initialization
     with (
         patch("buttermilk.runner.groupchat.SingleThreadedAgentRuntime", MagicMock()),
@@ -38,7 +39,7 @@ def orchestrator():
         }
 
         # Create the orchestrator
-        orchestrator = SelectorOrchestrator(**config)
+        orchestrator = Selector(**config)
 
         # Mock internal attributes that would normally be set during initialization
         orchestrator._runtime = MagicMock()

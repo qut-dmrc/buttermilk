@@ -84,7 +84,9 @@ class Orchestrator(BaseModel, ABC):
     history: list = Field(default=[])
 
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _model_context: ChatCompletionContext
+    _model_context: ChatCompletionContext = PrivateAttr(
+        default_factory=UnboundedChatCompletionContext,
+    )
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
@@ -119,9 +121,9 @@ class Orchestrator(BaseModel, ABC):
         agent_dict = {}
         for step_name, defn in self.agents.items():
             if isinstance(defn, (AgentVariants)):
-                agent_dict[step_name.lower()] = defn
+                agent_dict[step_name.upper()] = defn
             else:
-                agent_dict[step_name.lower()] = AgentVariants(**defn)
+                agent_dict[step_name.upper()] = AgentVariants(**defn)
 
         self.agents = agent_dict
 
@@ -283,7 +285,7 @@ class Orchestrator(BaseModel, ABC):
             AgentInput: A prepared AgentInput message ready to be sent.
         """
         # Find the AgentVariants config for the requested role
-        variants_config = self.agents.get(request.role.lower())
+        variants_config = self.agents.get(request.role.upper())
         if not variants_config:
             # This should ideally not happen if _get_host_suggestion validates roles
             raise ValueError(f"Agent configuration for role '{request.role}' not found.")

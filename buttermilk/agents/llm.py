@@ -53,6 +53,12 @@ from buttermilk.utils.templating import (
 
 
 class LLMAgent(Agent):
+    """
+    An LLM agent that uses a Buttermilk template/model configuration (via LLMAgent).
+    It expects input conforming to AgentInput (handled by LLMAgent/Agent base)
+    and aims to output results conforming to AgentReasons.
+    """
+
     fail_on_unfilled_parameters: bool = Field(default=True)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
         default_factory=list,
@@ -142,7 +148,7 @@ class LLMAgent(Agent):
                 # model_validate_json returns an instance of the schema model
                 output.outputs = schema.model_validate_json(chat_result.content)
                 # Set content to a string representation
-                output.content = output.outputs.model_dump()
+                output.content = output.outputs.model_dump_json()  # Use JSON string for content
                 return output
             except Exception as e:
                 error = f"Error parsing response from LLM: {e} into {schema.__name__}"

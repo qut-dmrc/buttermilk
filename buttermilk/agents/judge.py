@@ -53,12 +53,7 @@ from buttermilk.utils.templating import (
 )
 
 
-# Keep AgentRequest if it defines the expected input structure for this agent's task
-class AgentRequest(BaseModel):
-    prompt: str = Field(..., description="The core question or instruction for the agent.")
-    # Records might be passed differently in a group chat context, perhaps initially or via context.
-    # Let's assume they are part of the initial setup or context for now.
-    # records: list[Record] = Field(default_factory=list, description="Supporting records for analysis.")
+# --- Pydantic Models ---
 
 
 class AgentReasons(BaseModel):
@@ -72,51 +67,23 @@ class AgentReasons(BaseModel):
     confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
 
 
-# Inherit from LLMAgent (for Buttermilk features) and RoutedAgent (for Autogen group chat)
-class Judge(LLMAgent, RoutedAgent):
+# --- Judge Agent ---
+class Judge(LLMAgent):
     """
-    An LLM agent that uses a Buttermilk template/model configuration
-    and participates in an Autogen group chat as a RoutedAgent.
-    It expects input conforming to AgentRequest (primarily the prompt)
-    and outputs results conforming to AgentReasons.
+    An LLM agent that evaluates content based on criteria using a Buttermilk template/model.
+    It expects input via AgentInput and outputs results conforming to AgentReasons.
+    Handler methods marked with @buttermilk_handler will be registered by AutogenAgentAdapter.
     """
 
-    _output_model: Optional[type[BaseModel]] = AgentReasons  # Define the expected structured output
+    # Define the expected Pydantic model for the structured output ('outputs' field)
+    _output_model: Optional[Type[BaseModel]] = AgentReasons
 
-    # Add __init__ to handle arguments for both parent classes
-    def __init__(
-        self,
-        name: str,  # Required by RoutedAgent
-        parameters: Dict[str, Any],  # Required by LLMAgent logic
-        tools: List[str] = [],  # Optional tools for LLMAgent
-        fail_on_unfilled_parameters: bool = True,  # LLMAgent config
-        **kwargs,  # Pass other args to RoutedAgent (e.g., description, system_message)
-    ):
-        # Initialize LLMAgent parts (handled by Pydantic validators via super().__init__)
-        # Initialize RoutedAgent parts
-        RoutedAgent.__init__(self, name=name, **kwargs)
-        # Manually set LLMAgent fields after RoutedAgent init, as LLMAgent doesn't have a standard __init__
-        self.parameters = parameters
-        self.tools = tools
-        self.fail_on_unfilled_parameters = fail_on_unfilled_parameters
-        # Trigger LLMAgent's Pydantic validators manually if needed, or rely on them being called implicitly
-        # Note: This assumes LLMAgent's validators run correctly even when it's not the first parent.
-        # If issues arise, might need to call self.model_post_init(None) or similar.
+    # Initialization is handled by LLMAgent -> Agent -> AgentConfig
 
-        # Register the message handler
-        self.register_handler(self.handle_groupchat_message)
+    # --- Custom Autogen Handlers ---
 
-    # Use model_validator from Pydantic for post-init logic like LLMAgent
-    @model_validator(mode="after")
-    def _init_llmagent_parts(self) -> Self:
-        # Explicitly call LLMAgent's validators if they weren't triggered automatically
-        # This ensures _model_client and _tools_list are initialized
-        super(LLMAgent, self)._init_model()  # Call LLMAgent's model init
-        super(LLMAgent, self)._load_tools()  # Call LLMAgent's tool loading
-        return self
-
-    @message_handler
-    async def handle_groupchat_message(
+    @buttermilk_handler(AgentInput)  # Mark this method to handle AgentInput messages
+    async def handle_agent_input(
         self,
         message: AgentInput,
         ctx: MessageContext,

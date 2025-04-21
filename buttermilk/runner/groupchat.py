@@ -83,7 +83,16 @@ class AutogenOrchestrator(Orchestrator):
         for step_name, step in self.agents.items():
             step_agent_type = []
             for agent_cls, variant in step.get_configs():
-                # Register the agent with the runtime
+                # We register the *Adapter* class.
+                # Create a proper factory function that returns an adapter instance
+                # with the correct parameters following autogen_core.BaseAgent.register signature
+                def create_adapter_instance(cfg=variant, cls=agent_cls):
+                    return AutogenAgentAdapter(
+                        agent_cfg=cfg,
+                        wrapped_agent_cls=cls,
+                        topic_type=self._topic.type,
+                    )
+
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     self._runtime,
                     variant.id,
@@ -104,7 +113,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Also subscribe to a step-specific topic
                 await self._runtime.add_subscription(
                     TypeSubscription(
-                        topic_type=step_name,
+                        topic_type=step_name.upper(),
                         agent_type=agent_type,
                     ),
                 )
@@ -114,7 +123,7 @@ class AutogenOrchestrator(Orchestrator):
 
                 step_agent_type.append((agent_type, variant))
             # Store the registered agents for this step
-            self._agent_types[step_name.lower()] = step_agent_type
+            self._agent_types[step_name.upper()] = step_agent_type
 
     async def _register_human_in_the_loop(self) -> None:
         """Register a human in the loop agent"""
@@ -159,7 +168,7 @@ class AutogenOrchestrator(Orchestrator):
         tasks = []
         input_message = message.model_copy()
 
-        for agent_type, _ in self._agent_types[step_name.lower()]:
+        for agent_type, _ in self._agent_types[step_name.upper()]:
             agent_id = await self._runtime.get(agent_type)
             task = self._runtime.send_message(
                 message=input_message,
@@ -175,7 +184,12 @@ class AutogenOrchestrator(Orchestrator):
     async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
         """Send a message to the UI agent"""
         topic_id = DefaultTopicId(type=MANAGER)
+        logger.debug(f"Publishing UI message of type {type(message).__name__} to MANAGER topic")
         await self._runtime.publish_message(message, topic_id=topic_id)
+
+        # Also publish to the main topic to ensure visibility
+        logger.debug(f"Publishing UI message of type {type(message).__name__} to main topic {self._topic.type}")
+        await self._runtime.publish_message(message, topic_id=self._topic)
 
     async def _cleanup(self):
         """Clean up resources when flow is complete"""
@@ -292,7 +306,7 @@ class AutogenOrchestrator(Orchestrator):
         if next_step == END:
             raise StopAsyncIteration("Host signaled that flow has been completed.")
 
-        if next_step.lower() not in self._agent_types:
+        if next_step.upper() not in self._agent_types:
             raise ProcessingError(
                 f"Step {next_step} not found in registered agents.",
             )

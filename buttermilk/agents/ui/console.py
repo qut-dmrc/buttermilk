@@ -1,18 +1,18 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from textwrap import indent
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, List, Union, Optional  # Added List, Union, Optional
 
 import regex as re
 from aioconsole import ainput
 from autogen_core import CancellationToken, MessageContext
-from pydantic import PrivateAttr
+from pydantic import PrivateAttr, BaseModel
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.pretty import pretty_repr
 
 from buttermilk import logger
-from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages
+from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages, buttermilk_handler
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
@@ -22,29 +22,40 @@ from buttermilk._core.contract import (
     ManagerResponse,
     TaskProcessingComplete,
     UserInstructions,
+    ToolOutput,
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualScore
 from buttermilk.agents.ui.generic import UIAgent
+import weave  # Import weave
 
 from rich.highlighter import JSONHighlighter
 
 console = Console(highlighter=JSONHighlighter())
+
+
+# Define a Union for types _fmt_msg can handle for better type safety
+FormattableMessages = Union[AgentOutput, ConductorResponse, TaskProcessingComplete, UserInstructions, ManagerRequest, ToolOutput, AgentInput]
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
+    _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)  # Allow None
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    @weave.op()
+    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
         """Send or receive input from the UI."""
         if msg := self._fmt_msg(inputs, source="controller"):
             self._console.print(msg)
         else:
             self._console.print(Markdown("Input requested:\n"))
+        # Return None as _process in UI agents usually doesn't produce direct output for flow
+        return None
 
-    def _fmt_msg(self, message: FlowMessage, source: str) -> Markdown | None:
-        """Format a message for display in the console."""
+    def _fmt_msg(self, message: FormattableMessages, source: str) -> Markdown | None:
+        """Format a known message type for display in the console."""
         output = [f"## {source} "]
         try:
+            # --- Handle AgentOutput / ConductorResponse ---
             if isinstance(message, (AgentOutput, ConductorResponse)):
                 # add call_id if we can
                 if call_id := getattr(message.outputs, "call_id", None):
@@ -83,10 +94,14 @@ class CLIUserAgent(UIAgent):
             elif message.content:
                 output.append(message.content)
         except Exception as e:
-            logger.error(f"Unable to format message of type {type(message)}: {e}")
-            output.append(pretty_repr(message.model_dump(), max_string=400))
+            logger.error(f"Error formatting message of type {type(message)}: {e}", exc_info=True)
+            if hasattr(message, "model_dump"):
+                output.append(f"Error formatting message. Raw data:\n {pretty_repr(message.model_dump(), max_string=400)}")
+            else:
+                output.append(f"Error formatting message: {message}")
 
-        output = [o for o in output if o]
+        # Filter out None/empty strings and join
+        output = [str(o) for o in output if o is not None]  # Check for None explicitly
         if len(output) > 1:
             return Markdown("\n".join(output))
         return None
@@ -107,21 +122,26 @@ class CLIUserAgent(UIAgent):
 
     async def _handle_events(
         self,
-        message: OOBMessages,
-        cancellation_token: CancellationToken = None,
+        message: OOBMessages,  # This is a Union
+        cancellation_token: CancellationToken | None = None,
         **kwargs,
-    ) -> OOBMessages:
+    ) -> OOBMessages | None:  # Return type matches base
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
+        # Check if the specific OOB message type is formattable
+        formatable_types = (AgentOutput, ConductorResponse, TaskProcessingComplete, ManagerRequest)  # AgentOutput isn't OOB, but check anyway
+        if isinstance(message, formatable_types):
         if out := self._fmt_msg(message, source=kwargs.get("source", "unknown")):
             self._console.print(out)
+        else:
+            logger.debug(f"ConsoleAgent received unformatted OOB message: {type(message)}")
 
-        return None
+        return None 
 
     async def _poll_input(
         self,
     ) -> None:
         """Continuously poll for user input in the background"""
-        prompt = []
+        prompt: list[str] = []  # Use lowercase list for hint consistency
         while True:
             try:
                 user_input = await ainput()
@@ -165,5 +185,17 @@ class CLIUserAgent(UIAgent):
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface and start input polling"""
         self._input_callback = input_callback
+        if input_callback:  # Only start polling if a callback is provided
+            self._input_task = asyncio.create_task(self._poll_input())
+        else:
+            logger.warning("ConsoleAgent initialized without input_callback. Input polling disabled.")
+            # self._input_task is already None by default
 
-        self._input_task = asyncio.create_task(self._poll_input())
+    async def cleanup(self) -> None:
+        """Clean up resources"""
+        if hasattr(self, "_input_task") and self._input_task:
+            self._input_task.cancel()
+            try:
+                await self._input_task
+            except asyncio.CancelledError:
+                logger.info("Console input task cancelled.")

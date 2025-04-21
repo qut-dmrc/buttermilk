@@ -16,6 +16,7 @@ from pydantic import (
     Field,
     PrivateAttr,
     field_validator,
+    model_validator,
 )
 
 from autogen_core.tools import BaseTool, FunctionTool
@@ -46,6 +47,8 @@ from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.flow import KeyValueCollector
 from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
+from functools import wraps  # Import wraps for decorator
+
 
 # Forward reference for type hint
 if TYPE_CHECKING:
@@ -61,12 +64,42 @@ if TYPE_CHECKING:
 ##########
 
 
-class AgentConfig(BaseModel):
-    id: str = Field(
-        default_factory=uuid,
-        description="A unique identifier for this agent.",
-    )
-    agent_obj: str = Field(
+# --- Custom Decorator for Autogen Handlers ---
+def buttermilk_handler(message_types: type):
+    """
+    Decorator to mark methods within a Buttermilk Agent as handlers
+    for specific Autogen message types.
+    The AutogenAgentAdapter will look for this marker.
+
+    Args:
+        message_type: The type of message this handler should process.
+    """
+
+    def decorator(func):
+        # Attach the message type information to the function object
+        setattr(func, "_buttermilk_handler_message_type", message_types)
+        setattr(func, "_is_buttermilk_handler", True)  # Marker attribute
+
+        @wraps(func)  # Preserve original function metadata
+        async def wrapper(*args, **kwargs):  # The wrapper itself doesn't need to do much here
+            return await func(*args, **kwargs)
+
+        # Attach marker also to the wrapper if needed, but primarily to original func
+        setattr(wrapper, "_buttermilk_handler_message_type", message_types)
+        setattr(wrapper, "_is_buttermilk_handler", True)  # Marker attribute
+        return wrapper
+
+    return decorator
+
+
+# --- End Custom Decorator ---
+
+
+class AgentConfig(BaseModel):  # Restore class definition
+    """Base configuration for all agents."""
+
+    id: str = Field(...)
+    agent_obj: str = Field(  # Keep this if used for dynamic loading
         default="",
         description="The object name to instantiate",
         exclude=True,
@@ -94,7 +127,6 @@ class AgentConfig(BaseModel):
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
-    # sequential_tasks removed - Orchestrator now handles sequence if needed
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="A mapping of data to agent inputs",
@@ -106,10 +138,33 @@ class AgentConfig(BaseModel):
         "populate_by_name": True,
     }
 
+    _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])
+    base_name: str | None = Field(default=None, description="Base component of friendly name, derived from name field on init.")
+
     _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects())
 
+    # @model_validator(mode="before")
+    # def _generate_name(cls, values):
+    #     # Take name out from the human friendly name passed in by config
+    #     # and replace it with our generated unique
+    #     values["id"] = uuid()[:6]
+    #     values["name"] = f"{values['name']} #{values['id']}"
+    #     values["id"] = f"{values['role']}-{values['id']}"
 
-class Agent(AgentConfig):
+    @model_validator(mode="after")
+    def _generate_name(self):
+        # add a unique ID to a variant's name and role
+        variant_id = uuid()[:6]
+        self.id = f"{self.role}-{variant_id}"
+        if not self.base_name:
+            if not self.name:
+                raise ValueError("You must provide a human friendly 'name' for agents.")
+            self.base_name = self.name
+        self.name = f"{self.base_name} {variant_id}"
+        return self
+
+
+class Agent(AgentConfig):  # Agent inherits the restored fields
     """Base Agent interface for all processing units.
 
     Agents are stateful. Context is stored internally by the agent and merged
@@ -188,12 +243,19 @@ class Agent(AgentConfig):
 
         # Add message content to model context if appropriate
         if isinstance(message, (AgentOutput, ConductorResponse)):
+            # Use content if available
             if message.content:
                 await self._model_context.add_message(AssistantMessage(content=str(message.content), source=source))
-        elif isinstance(message, (ToolOutput, UserInstructions)):
-            # Don't add commands or empty user instructions to history
-            if message.content and not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
+        elif isinstance(message, UserInstructions):
+            # Use prompt for UserInstructions, check if content exists (it's on ToolOutput)
+            prompt_content = getattr(message, "prompt", None)
+            if prompt_content and not str(prompt_content).startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(prompt_content), source=source))
+        elif isinstance(message, ToolOutput):
+            # Use content for ToolOutput
+            tool_content = getattr(message, "content", None)  # Use getattr for safety
+            if tool_content and not str(tool_content).startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(tool_content), source=source))
         else:
             # don't log other types of messages to history
             pass

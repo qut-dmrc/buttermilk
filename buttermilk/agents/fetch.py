@@ -8,7 +8,7 @@ import regex as re
 from shortuuid import uuid
 import weave
 
-from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig
+from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig, buttermilk_handler
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
@@ -120,7 +120,7 @@ class FetchAgent(FetchRecord, Agent):
 
     async def _listen(
         self,
-        message: GroupchatMessageTypes,
+        message: AgentInput | UserInstructions | GroupchatMessageTypes,
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",

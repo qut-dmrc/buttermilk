@@ -110,7 +110,7 @@ class AgentVariants(AgentConfig):
         Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
-        static_config = self.model_dump(exclude={"parallel_variants", "sequential_variants", "num_runs", "parameters", "tasks"})
+        static_config = self.model_dump(exclude={"parallel_variants", "id", "sequential_variants", "num_runs", "parameters", "tasks", "name", "id"})
         base_parameters = self.parameters.copy()  # Base parameters common to all
 
         # Get agent class
@@ -139,11 +139,6 @@ class AgentVariants(AgentConfig):
                     combined_params = {**base_parameters, **parallel_params, **task_params}
                     cfg_dict["parameters"] = combined_params
 
-                    # Generate unique ID incorporating variant info if possible (or keep simple)
-                    # Example: Use role + hash of combined params, or just role + shortuuid
-                    # Using simple uuid for now to avoid complexity with potentially large param dicts
-                    cfg_dict["id"] = f"{cfg_dict['role'].upper()}-{shortuuid.uuid()[:4]}"
-
                     # Create and add the AgentConfig instance
                     try:
                         # Ensure AgentConfig allows extra fields if needed, or filter cfg_dict
@@ -152,7 +147,7 @@ class AgentVariants(AgentConfig):
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
                         logger.error(
-                            f"Error creating AgentConfig for {cfg_dict.get('id', 'unknown')} with params {combined_params}: {e}", exc_info=True
+                            f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with params {combined_params}: {e}", exc_info=True
                         )
                         raise  # Re-raise by default
 
