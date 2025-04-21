@@ -1,13 +1,13 @@
 import pytest
 import asyncio
 from buttermilk._core.contract import AgentInput, StepRequest, ConductorRequest, AgentOutput, END, WAIT
-from buttermilk.agents.flowcontrol.simple_sequencer import SimpleSequencerAgent
+from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 
 @pytest.mark.anyio
-async def test_simple_sequencer_initialization():
-    """Test that SimpleSequencerAgent initializes correctly."""
-    agent = SimpleSequencerAgent(role="sequencer", name="Test Sequencer", description="A test sequencer")
+async def test_sequencer_initialization():
+    """Test that Sequencer initializes correctly."""
+    agent = Sequencer(role="sequencer", name="Test Sequencer", description="A test sequencer")
 
     await agent.initialize()
     assert agent.role == "sequencer"
@@ -17,13 +17,13 @@ async def test_simple_sequencer_initialization():
     result = await agent._process(inputs=AgentInput(prompt="Hello"))
     assert isinstance(result, AgentOutput)
     assert result.content is not None
-    assert "SimpleSequencerAgent received" in str(result.content)
+    assert "Sequencer received" in str(result.content)
 
 
 @pytest.mark.anyio
-async def test_simple_sequencer_round_robin():
-    """Test that SimpleSequencerAgent produces a round-robin sequence of steps."""
-    agent = SimpleSequencerAgent(role="sequencer", name="Test Sequencer", description="A test sequencer")
+async def test_sequencer_round_robin():
+    """Test that Sequencer produces a round-robin sequence of steps."""
+    agent = Sequencer(role="sequencer", name="Test Sequencer", description="A test sequencer")
 
     await agent.initialize()
 

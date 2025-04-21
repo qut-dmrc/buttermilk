@@ -31,7 +31,7 @@ from buttermilk._core.contract import (
     UserInstructions,
     AllMessages,
 )
-from buttermilk.agents.flowcontrol.sequencer import LLMHostAgent
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.bm import logger
 

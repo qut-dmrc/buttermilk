@@ -18,7 +18,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserMessage,
 )
-from buttermilk.agents.flowcontrol.sequencer import LLMHostAgent
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.llm import LLMAgent
 
 from typing import Any, AsyncGenerator, Callable, Optional, Self, Union

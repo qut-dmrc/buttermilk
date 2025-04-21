@@ -1,5 +1,5 @@
-from buttermilk.agents.flowcontrol.sequencer import LLMHostAgent
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from .explorer import ExplorerHost
-from buttermilk.agents.flowcontrol.simple_sequencer import SimpleSequencerAgent
+from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
-__all__ = ["LLMHostAgent", "SimpleSequencerAgent", "ExplorerHost"]
+__all__ = ["LLMHostAgent", "Sequencer", "ExplorerHost"]
