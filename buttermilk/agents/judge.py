@@ -59,12 +59,9 @@ class Judge(LLMAgent):
     # --- Custom Autogen Handlers ---
 
     @buttermilk_handler(AgentInput)  # Mark this method to handle AgentInput messages
-    async def handle_judge_invocation(
+    async def handle_agent_input(
         self,
         message: AgentInput,
-        # Autogen context might not be directly available here unless the adapter passes it.
-        # The core logic should rely on the 'message' (AgentInput).
-        # ctx: MessageContext # Removed for simplicity, adapter handles Autogen context
     ) -> Optional[AgentOutput]:  # Return AgentOutput or None
         """Handles the primary invocation request for the Judge agent."""
         logger.info(f"Judge agent '{self.name}' handling invocation: {message.inputs.get('prompt', 'No prompt')}")

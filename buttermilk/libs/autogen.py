@@ -53,36 +53,40 @@ from buttermilk._core.agent import Agent  # Keep Agent import
 # Define the Adapter Class
 class AutogenAgentAdapter(RoutedAgent):
     """
-    Adapter to wrap a Buttermilk Agent (like LLMAgent/Judge) for use with Autogen.
+    A transparent adapter that connects Buttermilk agents to the Autogen ecosystem.
 
-    It dynamically discovers methods marked with @buttermilk_handler on the wrapped
-    agent and registers corresponding handlers with the Autogen runtime.
+    This adapter discovers methods decorated with @buttermilk_handler on the
+    wrapped agent and registers them directly with Autogen's message routing system.
     """
 
     def __init__(self, agent_cfg: AgentConfig, wrapped_agent_cls: Type[Agent]):
         """
-        Initializes the adapter.
+        Initialize the adapter with a Buttermilk agent.
 
         Args:
-            agent_cfg: The Buttermilk Agent configuration to use.
-            wrapped_agent_cls: The Buttermilk Agent class to instantiate.
+            agent_cfg: Configuration for the Buttermilk agent
+            wrapped_agent_cls: Class of the Buttermilk agent to instantiate
         """
-        # Instantiate the wrapped agent using the provided class and configuration
+        # Initialize the parent RoutedAgent first
+        # RoutedAgent only accepts description, not name
+        super().__init__(description=agent_cfg.description)
+
+        # Create the wrapped Buttermilk agent
         self.wrapped_agent = wrapped_agent_cls(**agent_cfg.model_dump())
 
-        # Initialize the parent RoutedAgent.
-        super().__init__(description=self.wrapped_agent.description)  # Pass description from wrapped agent
+        # Create message_handlers dictionary that will be populated with discovered handlers
+        self.message_handlers: Dict[type, Callable] = {}
 
-        # Create message_handlers dictionary that will be populated on demand
-        self.message_handlers = {}
+        # Flag to track if we've registered handlers
+        self._handlers_initialized = True  # Set to true since we're registering handlers synchronously
 
-        # Flag to track if we've scanned for handlers
-        self._handlers_initialized = False
+        # Register handlers - we do this synchronously during init
+        self._register_buttermilk_handlers()
 
     async def _register_buttermilk_handlers(self) -> None:
         """
         Discovers and registers handlers from the wrapped agent.
-        This is called lazily when the first message is received.
+        This is called during initialization.
         """
         logger.debug(f"Adapter for '{self.wrapped_agent.name}': Registering handlers from buttermilk agent")
 
@@ -133,8 +137,16 @@ class AutogenAgentAdapter(RoutedAgent):
                 # Register the wrapper function with the specific message type
                 if target_message_type:  # Ensure we have a valid type
                     try:
-                        # Use the RoutedAgent's method to register handlers
-                        self.message_handlers[target_message_type] = handler_wrapper
+                        # Use the message_handler decorator to mark the handler
+                        decorated_handler = message_handler(handler_wrapper)
+
+                        # Set it as an attribute on the instance
+                        handler_name = f"handle_{target_message_type.__name__}"
+                        setattr(self, handler_name, decorated_handler)
+
+                        # Store in our message handlers dictionary for direct access
+                        self.message_handlers[target_message_type] = decorated_handler
+
                         logger.info(f"Adapter for '{self.wrapped_agent.name}': Registered handler '{name}' for type '{target_message_type.__name__}'")
                     except Exception as e:
                         logger.error(
@@ -146,49 +158,21 @@ class AutogenAgentAdapter(RoutedAgent):
                         f"Adapter for '{self.wrapped_agent.name}': Could not determine target message type for handler '{name}'. Skipping registration."
                     )
 
-    # Implement message handling method to intercept messages and lazy-register handlers
-    async def handle_message(self, message: Any, ctx: MessageContext) -> Any:
-        """
-        Intercept incoming messages to ensure handlers are registered before processing.
-        This allows handlers to be registered on-demand when the first message arrives.
-        """
-        # If handlers are not initialized yet, register them
-        if not self._handlers_initialized:
-            logger.info(f"Adapter for '{self.wrapped_agent.name}': Lazily registering handlers on first message")
-            await self._register_buttermilk_handlers()
-            self._handlers_initialized = True
+    # Delegate other important methods to the Buttermilk agent
+    async def reset(self, cancellation_token=None):
+        """Reset the agent's state."""
+        if hasattr(self.wrapped_agent, "on_reset"):
+            await self.wrapped_agent.on_reset(cancellation_token)
 
-        # Delegate to parent class handler
-        return await super().handle_message(message, ctx)
-
-    # Delegate necessary Agent lifecycle methods
-    async def reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """Delegates reset to the wrapped agent if it has an on_reset method."""
-        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Delegating reset()")
-        if hasattr(self.wrapped_agent, "on_reset") and callable(self.wrapped_agent.on_reset):
-            await self.wrapped_agent.on_reset(cancellation_token=cancellation_token)
-        # Call super().reset() if RoutedAgent has its own reset logic to perform
-        await super().reset(cancellation_token=cancellation_token)
-
-    async def cleanup(self) -> None:
-        """Delegates cleanup to the wrapped agent if it has a cleanup method."""
-        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Delegating cleanup()")
-        if hasattr(self.wrapped_agent, "cleanup") and callable(self.wrapped_agent.cleanup):
+    async def cleanup(self):
+        """Clean up resources."""
+        if hasattr(self.wrapped_agent, "cleanup"):
             await self.wrapped_agent.cleanup()
-        # Call super().cleanup() if RoutedAgent has its own cleanup logic
-        if hasattr(super(), "cleanup") and callable(super().cleanup):
-            await super().cleanup()
 
-    # Add initialization to ensure the wrapped agent is properly set up
-    async def initialize(self, **kwargs) -> None:
-        """Initialize the wrapped agent if it has an initialize method."""
-        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Initializing wrapped agent")
-        if hasattr(self.wrapped_agent, "initialize") and callable(self.wrapped_agent.initialize):
+    async def initialize(self, **kwargs):
+        """Initialize the agent."""
+        if hasattr(self.wrapped_agent, "initialize"):
             await self.wrapped_agent.initialize(**kwargs)
-
-        # Call super().initialize() if RoutedAgent has initialization logic
-        if hasattr(super(), "initialize") and callable(super().initialize):
-            await super().initialize(**kwargs)
 
     @message_handler
     async def handle_groupchat_message(

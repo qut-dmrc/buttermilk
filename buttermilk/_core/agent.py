@@ -74,11 +74,15 @@ def buttermilk_handler(message_type: type):
     Decorator to mark methods within a Buttermilk Agent as handlers
     for specific Autogen message types.
     The AutogenAgentAdapter will look for this marker.
+
+    Args:
+        message_type: The type of message this handler should process.
     """
 
     def decorator(func):
         # Attach the message type information to the function object
         setattr(func, "_buttermilk_handler_message_type", message_type)
+        setattr(func, "_is_buttermilk_handler", True)  # Marker attribute
 
         @wraps(func)  # Preserve original function metadata
         async def wrapper(*args, **kwargs):  # The wrapper itself doesn't need to do much here
@@ -159,6 +163,7 @@ class AgentConfig(BaseModel):  # Restore class definition
         self.id = f"{self.role}-{variant_id}"
         self.name = f"{self.name} {variant_id}"
         return self
+
 
 class Agent(AgentConfig):  # Agent inherits the restored fields
     """Base Agent interface for all processing units.

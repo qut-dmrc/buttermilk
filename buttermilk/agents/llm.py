@@ -279,7 +279,7 @@ class LLMAgent(Agent):
             return None
 
     @buttermilk_handler(AgentInput)
-    async def handle_agent_input(self, message: AgentInput) -> AgentOutput | None:
+    async def handle_agent_input(self, message: AgentInput) -> Optional[AgentOutput]:
         """
         Handles AgentInput messages from Autogen runtime.
         This is the primary entry point for LLM-based agents in Autogen group chats.
