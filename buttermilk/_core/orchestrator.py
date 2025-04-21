@@ -22,7 +22,6 @@ from buttermilk._core.agent import Agent, ChatCompletionContext, FatalError, Pro
 from buttermilk._core.config import DataSourceConfig, SaveInfo
 from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest, AgentOutput  # Added AgentOutput here
 from buttermilk._core.flow import KeyValueCollector
-from buttermilk.agents.evaluators.scorer import QualScore, LLMScorer  # Added imports for evaluation
 
 # from buttermilk._core.job import Job # Job seems unused here
 from buttermilk._core.types import Record, RunRequest  # Import RunRequest

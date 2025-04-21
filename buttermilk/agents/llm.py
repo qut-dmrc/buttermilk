@@ -72,7 +72,8 @@ class LLMAgent(Agent):
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
-        if (self._model := self.parameters.get("model")):
+        self._model = self.parameters.get("model")
+        if self._model:
             self._model_client = bm.llms.get_autogen_chat_client(
                 self._model,
             )

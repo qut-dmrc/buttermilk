@@ -325,21 +325,24 @@ class AutogenOrchestrator(Orchestrator):
                         await asyncio.sleep(10)
                         continue
 
+                    if step.role == END:
+                        raise StopAsyncIteration("Host signaled that flow has been completed.")
+
                     if not await self._in_the_loop(step):
                         # User did not confirm plan; go back and get new instructions
                         continue
 
                     if step:
                         # Store the weave call context if available
-                        current_call = weave.get_current_call()  # Fixed: Use get_current_call()
+                        current_call = weave.get_current_call()
                         output = await self._execute_step(step=step)
 
                         # --- Call evaluation ---
                         if isinstance(output, AgentOutput) and not output.is_error:
                             # Find ground truth record from the input used for the step
-                            ground_truth_record = next((r for r in step_input.records if getattr(r, "ground_truth", None) is not None), None)
+                            ground_truth_record = next((r for r in output.records if getattr(r, "ground_truth", None) is not None), None)
                             # Get criteria from flow params or step input params
-                            criteria = step_input.parameters.get("criteria") or self.params.get("criteria")
+                            criteria = output.inputs.parameters.get("criteria") or self.params.get("criteria")
                             await self._evaluate_step(
                                 output=output,
                                 ground_truth_record=ground_truth_record,

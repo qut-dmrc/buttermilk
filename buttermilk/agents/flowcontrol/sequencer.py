@@ -130,13 +130,11 @@ class Sequencer(Agent):
         if not roles:
             return
 
-        # Round-robin through all roles
-        while True:
-            for role in roles:
-                yield StepRequest(role=role, prompt="", description=f"Round-robin sequencer calling {role}.")
+        for role in roles:
+            yield StepRequest(role=role, prompt="", description=f"Round-robin sequencer calling {role}.")
 
-            # After one complete cycle, yield an END marker
-            yield StepRequest(role=END, prompt="", description="Sequence complete.")
+        # After one complete cycle, yield an END marker
+        yield StepRequest(role=END, prompt="", description="Sequence complete.")
 
     async def _get_next_step(self, message: ConductorRequest) -> AgentOutput:
         """Determine the next step based on round-robin scheduling"""
@@ -159,11 +157,11 @@ class Sequencer(Agent):
         # Get next step using round-robin
         step = await self._choose(message=message)
         if step and step.role == END:
-            raise StopAsyncIteration("Host signaled that flow has been completed.")
+            return AgentOutput(outputs=step, content="Conductor signaled that flow has been completed.")
 
         # If role doesn't exist in participants, wait a while
         if not step or step.role not in self._participants:
-            logger.warning(f"Host could not find next step. Suggested {step.role}, which doesn't exist.")
+            logger.warning(f"Conductor could not find next step. Suggested {step.role}, which doesn't exist.")
             step.role = WAIT
 
         if step.role == self.role or step.role == MANAGER:
