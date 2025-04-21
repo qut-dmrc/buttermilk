@@ -43,6 +43,7 @@ TRUNCATE_LEN = 1000  # characters per history message
 
 class ExplorerHost(HostAgent):
 
+    _output_model: Optional[type[BaseModel]] = StepRequest
     async def _choose(self, inputs: ConductorRequest) -> StepRequest:
         step = await self._process(inputs=inputs)
         return step

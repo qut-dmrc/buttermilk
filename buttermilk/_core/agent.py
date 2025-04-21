@@ -98,7 +98,7 @@ def buttermilk_handler(message_types: type):
 class AgentConfig(BaseModel):  # Restore class definition
     """Base configuration for all agents."""
 
-    id: str = Field(...)
+    id: str = Field(default="")
     agent_obj: str = Field(  # Keep this if used for dynamic loading
         default="",
         description="The object name to instantiate",
@@ -109,7 +109,7 @@ class AgentConfig(BaseModel):  # Restore class definition
         description="The role type that this agent fulfils.",
     )
 
-    name: str = Field(description="The human friendly name of this agent type.")
+    name: str = Field(default="", description="The human friendly name of this agent type.")
 
     description: str = Field(
         ...,

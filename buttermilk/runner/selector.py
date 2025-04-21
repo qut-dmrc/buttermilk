@@ -83,20 +83,20 @@ class Selector(AutogenOrchestrator):
         Returns:
             bool: True if user confirmed, False if rejected or timed out
         """
-            try:
+        try:
             msg = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
-                if msg.halt:
-                    raise StopAsyncIteration("User requested halt.")
+            if msg.halt:
+                raise StopAsyncIteration("User requested halt.")
 
-                # Store feedback if provided
-                if msg.prompt:
-                    self._user_feedback.append(msg.prompt)
+            # Store feedback if provided
+            if msg.prompt:
+                self._user_feedback.append(msg.prompt)
 
-                # Store selected option if provided
-                if msg.selection:
-                    self._last_user_selection = msg.selection
+            # Store selected option if provided
+            if msg.selection:
+                self._last_user_selection = msg.selection
 
-            return True
+            return msg
         except asyncio.TimeoutError:
             return ManagerResponse(error=[f"No response from Manager within timeout period ({timeout} seconds)."], confirm=False, halt=False)
 
@@ -139,6 +139,7 @@ class Selector(AutogenOrchestrator):
             confirm_step = ManagerRequest(prompt=prompt, role="user")
 
         await self._send_ui_message(confirm_step)
+        await asyncio.sleep(0.1)  # makes debugging easier
         response = await self._wait_for_human()
         return response
 

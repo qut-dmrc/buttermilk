@@ -86,6 +86,8 @@ class CLIUserAgent(UIAgent):
                     output.append(message.content)
                 # for rec in message.records:
                 #     output.append(str(rec).replace("\\n", ""))
+            elif isinstance(message, ManagerRequest):
+                output.append(f"### Request from {message.role} ({message.agent_id})\n{message.content}")
             elif isinstance(message, TaskProcessingComplete):
                 if message.is_error:
                     output.append(f"Task from {source} #{message.task_index} failed...")
@@ -130,8 +132,8 @@ class CLIUserAgent(UIAgent):
         # Check if the specific OOB message type is formattable
         formatable_types = (AgentOutput, ConductorResponse, TaskProcessingComplete, ManagerRequest)  # AgentOutput isn't OOB, but check anyway
         if isinstance(message, formatable_types):
-        if out := self._fmt_msg(message, source=kwargs.get("source", "unknown")):
-            self._console.print(out)
+            if out := self._fmt_msg(message, source=kwargs.get("source", "unknown")):
+                self._console.print(out)
         else:
             logger.debug(f"ConsoleAgent received unformatted OOB message: {type(message)}")
 

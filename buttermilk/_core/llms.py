@@ -3,6 +3,7 @@ from enum import Enum
 import json
 from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
 from autogen_core import CancellationToken, FunctionCall
+from regex import D
 import weave
 from anthropic import (
     AnthropicVertex,
@@ -106,6 +107,10 @@ class LLMClient(BaseModel):
 T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
+class ModelOutput(CreateResult):
+    object: BaseModel | None = Field(default=None, description="The hydrated object from JSON or structured output")
+
+
 class AutoGenWrapper(RetryWrapper):
     """Wraps any ChatCompletionClient and adds rate limiting via a semaphore
     plus robust retry logic for handling API failures.
@@ -148,8 +153,6 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError("Empty response from LLM")
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
                 raise ProcessingError("Unexpected tool response from LLM", create_result.content)
-
-            return create_result
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
             logger.warning(error_msg, exc_info=False)
@@ -160,22 +163,27 @@ class AutoGenWrapper(RetryWrapper):
         messages,
         cancellation_token,
         tools_list=[],
-        reflect_on_tool_use: bool = True,
         schema: Optional[type[BaseModel]] = None,
-    ) -> CreateResult | list[ToolOutput] | None:
+    ) -> ModelOutput | None:
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
         if not isinstance(create_result.content, list):
-            return create_result
+            if schema:
+                try:
+                    # Handle schema validation first if applicable
+                    output = schema.model_validate_json(create_result.content)
+                    response = ModelOutput(output=output, **create_result.model_dump(exclude="content"))
+                    response.content = response.model_dump_json()  # Use JSON string for content
+                    return response
+                except Exception as e:
+                    pass
+            return ModelOutput(**create_result.model_dump())
 
         tool_outputs = await self._execute_tools(
             calls=create_result,
             cancellation_token=cancellation_token,
         )
-        if not reflect_on_tool_use:
-            return tool_outputs
-
         reflection_messages = messages.copy()
         for tool_result in tool_outputs:
             reflection_messages.extend(tool_result.messages)
