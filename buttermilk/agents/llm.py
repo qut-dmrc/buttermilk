@@ -43,7 +43,6 @@ from buttermilk._core.types import Record
 
 # Restore original bm import
 from buttermilk.bm import bm, logger
-from buttermilk.libs.autogen import AutogenRoutedMixin
 from buttermilk.utils._tools import create_tool_functions
 from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.templating import (
@@ -53,10 +52,9 @@ from buttermilk.utils.templating import (
 )
 
 
-class LLMAgent(Agent, AutogenRoutedMixin):
+class LLMAgent(Agent):
     """
-    An LLM agent that uses a Buttermilk template/model configuration (via LLMAgent)
-    and participates in an Autogen group chat (via AutogenRoutedMixin).
+    An LLM agent that uses a Buttermilk template/model configuration (via LLMAgent).
     It expects input conforming to AgentInput (handled by LLMAgent/Agent base)
     and aims to output results conforming to AgentReasons.
     """
@@ -95,16 +93,13 @@ class LLMAgent(Agent, AutogenRoutedMixin):
         self,
         # --- Arguments for LLMAgent/AgentConfig (handled by Pydantic) ---
         role: str,  # Default role for this agent type
-        name: str,  # Friendly name
-        parameters: dict[str, Any] = Field(default_factory=dict),  # Model, template etc.
-        tools: list[ToolConfig] = Field(default_factory=list),  # Buttermilk ToolConfig
-        # --- Arguments specifically for RoutedAgent (required by AutogenRoutedMixin) ---
-        description: str = "Evaluates content based on criteria.",  # Default description
-        # --- Other arguments ---
+        name: str,  # Friendly name (unique)
+        description: str,  # Description for other agents
+        parameters: dict[str, Any] = Field(default_factory=dict),
+        tools: list[ToolConfig] = Field(default_factory=list),
         fail_on_unfilled_parameters: bool = Field(default=True),
         output_model: Optional[type[BaseModel]] = None,
-        # --- Capture remaining kwargs ---
-        **kwargs,  # Captures other AgentConfig fields AND RoutedAgent fields
+        **kwargs,
     ):
         """
         Initializes the Judge agent.
