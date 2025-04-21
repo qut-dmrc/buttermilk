@@ -88,17 +88,15 @@ class AutogenOrchestrator(Orchestrator):
             # variant here is the AgentConfig for that specific variant
             for agent_cls, variant in step.get_configs():
                 # We register the *Adapter* class.
-                # The factory lambda captures the specific variant (v) and buttermilk class (cls)
-                # and uses them to instantiate the Adapter when needed by the runtime.
+                # Create a proper factory function that returns an adapter instance
+                # with the correct parameters following autogen_core.BaseAgent.register signature
+                def create_adapter_instance(cfg=variant, cls=agent_cls):
+                    return AutogenAgentAdapter(agent_cfg=cfg, wrapped_agent_cls=cls)
+                
                 agent_type: AgentType = await AutogenAgentAdapter.register(
-                    # No 'cls' parameter needed for register classmethod
                     runtime=self._runtime,
-                    type=variant.name,  # Use variant.name for the agent type string name
-                    factory=lambda v=variant, cls=agent_cls: AutogenAgentAdapter(  # Factory returns adapter instance
-                        agent_cfg=v,  # Passed to Adapter.__init__
-                        wrapped_agent_cls=cls,  # Passed to Adapter.__init__
-                        # Add other kwargs for AutogenAgentAdapter.__init__ if needed
-                    ),
+                    type=variant.name,  # Use variant name as the unique type string
+                    factory=create_adapter_instance
                 )
                 # Add subscription for the *adapter's* agent type
                 await self._runtime.add_subscription(

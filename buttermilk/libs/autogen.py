@@ -52,27 +52,26 @@ class AutogenAgentAdapter(RoutedAgent):
     agent and registers corresponding handlers with the Autogen runtime.
     """
 
-    def __init__(self, agent_cfg: AgentConfig):
+    def __init__(self, agent_cfg: AgentConfig, wrapped_agent_cls: Type[Agent]):
         """
         Initializes the adapter.
 
         Args:
-            agent: The Buttermilk Agent instance to wrap.
+            agent_cfg: The Buttermilk Agent configuration to use.
+            wrapped_agent_cls: The Buttermilk Agent class to instantiate.
         """
-        if not isinstance(agent_cfg, Agent):
-            raise TypeError(f"Expected a Buttermilk Agent instance, but got {type(agent_cfg)}")
+        # Instantiate the wrapped agent using the provided class and configuration
+        self.wrapped_agent = wrapped_agent_cls(**agent_cfg.model_dump())
 
-        self.wrapped_agent = agent_cfg
-
-        # Initialize the parent BaseAgent (via RoutedAgent).
-        # BaseAgent.__init__ accepts name and description.
-        super().__init__(
-            name=self.wrapped_agent.name,  # Pass name from wrapped agent
-            description=self.wrapped_agent.description,  # Pass description from wrapped agent
-            # Pass other RoutedAgent args if needed, e.g., system_message
-            # system_message=getattr(self.wrapped_agent, 'system_message', None)
-        )
-
+        # Initialize the parent RoutedAgent.
+        # Note: RoutedAgent takes different parameters than we thought
+        # We'll just use the description as the primary identifier
+        super().__init__(description=self.wrapped_agent.description)  # Pass description from wrapped agent
+        
+        # Create message_handlers dictionary if it doesn't exist
+        if not hasattr(self, "message_handlers"):
+            self.message_handlers = {}
+        
         # --- Dynamic Handler Registration ---
         self._register_buttermilk_handlers()
 
@@ -81,19 +80,19 @@ class AutogenAgentAdapter(RoutedAgent):
         Inspects the wrapped agent for methods decorated with @buttermilk_handler
         and registers them with the Autogen runtime.
         """
-        logger.debug(f"Adapter for '{self.name}': Searching for @buttermilk_handlers on {type(self.wrapped_agent).__name__}")
+        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Searching for @buttermilk_handlers on {type(self.wrapped_agent).__name__}")
 
         # Iterate through members of the wrapped agent instance
         for name, member in inspect.getmembers(self.wrapped_agent):
             # Check if it's a method marked by our decorator
-            if callable(member) and hasattr(member, "_is_buttermilk_handler") and member._is_buttermilk_handler:
-                target_message_type: Type = getattr(member, "_buttermilk_handler_message_type", None)
+            if callable(member) and hasattr(member, "_buttermilk_handler_message_type"):
+                target_message_type = getattr(member, "_buttermilk_handler_message_type", None)
 
                 if target_message_type is None:
                     logger.warning(f"Method '{name}' on agent '{self.wrapped_agent.name}' is marked as a handler but missing message type. Skipping.")
                     continue
 
-                logger.info(f"Adapter for '{self.name}': Found handler '{name}' for message type '{target_message_type.__name__}'")
+                logger.info(f"Adapter for '{self.wrapped_agent.name}': Found handler '{name}' for message type '{target_message_type.__name__}'")
 
                 # Create a wrapper function that will be registered with Autogen.
                 # This wrapper calls the original method on the wrapped_agent.
@@ -103,9 +102,8 @@ class AutogenAgentAdapter(RoutedAgent):
                     original_method: Callable = member,  # Capture method in closure
                     adapter_self=self,  # Capture adapter instance in closure
                 ):
-                    # The 'name' attribute comes from BaseAgent initialization
                     logger.debug(
-                        f"Adapter '{adapter_self.name}': Routing message type {type(message).__name__} to wrapped agent method '{original_method.__name__}'"
+                        f"Adapter for '{adapter_self.wrapped_agent.name}': Routing message type {type(message).__name__} to wrapped agent method '{original_method.__name__}'"
                     )
                     # Call the original method on the wrapped Buttermilk agent.
                     # Pass only the message, as the decorated method might not expect 'ctx'.
@@ -132,16 +130,18 @@ class AutogenAgentAdapter(RoutedAgent):
                 # message_type argument here.
                 if target_message_type:  # Ensure we have a valid type
                     try:
-                        # register_handler should be inherited from BaseAgent
-                        self.register_handler(target_message_type, handler_wrapper)
-                        logger.info(f"Adapter for '{self.name}': Registered handler '{name}' for type '{target_message_type.__name__}'")
+                        # Use the RoutedAgent's method to register handlers
+                        self.message_handlers[target_message_type] = handler_wrapper
+                        logger.info(f"Adapter for '{self.wrapped_agent.name}': Registered handler '{name}' for type '{target_message_type.__name__}'")
                     except Exception as e:
                         logger.error(
-                            f"Adapter for '{self.name}': Failed to register handler '{name}' for type '{target_message_type.__name__}': {e}",
+                            f"Adapter for '{self.wrapped_agent.name}': Failed to register handler '{name}' for type '{target_message_type.__name__}': {e}",
                             exc_info=True,
                         )
                 else:
-                    logger.error(f"Adapter for '{self.name}': Could not determine target message type for handler '{name}'. Skipping registration.")
+                    logger.error(
+                        f"Adapter for '{self.wrapped_agent.name}': Could not determine target message type for handler '{name}'. Skipping registration."
+                    )
 
     # --- Optional: Delegate other necessary Agent methods? ---
     # If the Autogen runtime directly calls methods other than registered handlers
