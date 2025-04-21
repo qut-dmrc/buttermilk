@@ -110,7 +110,7 @@ class LLMHostAgent(LLMAgent):
 
         await self._check_completions()
         if isinstance(message, ConductorRequest):
-            next_step = await self._get_next_step(inputs=message)
+            next_step = await self._get_next_step(message=message)
             return cast(ConductorResponse, next_step)
         return None
 
@@ -136,7 +136,7 @@ class LLMHostAgent(LLMAgent):
             yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
         yield StepRequest(role=END, description=f"Sequence wrapping up.")
 
-    async def _get_next_step(self, inputs: ConductorRequest) -> AgentOutput:
+    async def _get_next_step(self, message: ConductorRequest) -> AgentOutput:
         """Determine the next step based on the current flow data."""
         try:
             # Wait for enough completions, with a timeout
@@ -151,9 +151,9 @@ class LLMHostAgent(LLMAgent):
 
         if not self._participants:
             # initialise
-            self._participants = inputs.inputs["participants"]
+            self._participants = message.inputs["participants"]
 
-        step = await self._choose(inputs=inputs)
+        step = await self._choose(message=message)
 
         if step.role == self.role:
             # don't call ourselves please
@@ -175,6 +175,6 @@ class LLMHostAgent(LLMAgent):
 
         return response
 
-    async def _choose(self, inputs: ConductorRequest) -> StepRequest:
+    async def _choose(self, message: ConductorRequest) -> StepRequest:
         step = await anext(self._step_generator)
         return step

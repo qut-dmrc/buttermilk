@@ -151,7 +151,6 @@ class FetchAgent(FetchRecord, Agent):
 
         return None  # _listen itself doesn't return anything meaningful here
 
-    @weave.op()
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
 
         result = None

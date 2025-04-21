@@ -162,7 +162,7 @@ class AutogenOrchestrator(Orchestrator):
     async def _ask_agents(
         self,
         step_name: str,
-        message: AgentInput | StepRequest,
+        message: AgentInput | ConductorRequest | StepRequest,
     ) -> list[AgentOutput]:
         """Ask agent directly for input"""
         tasks = []

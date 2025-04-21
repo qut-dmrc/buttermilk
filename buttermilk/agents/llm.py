@@ -38,7 +38,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError
 
 # Import only necessary classes from _core.llms
-from buttermilk._core.llms import AutoGenWrapper, CreateResult
+from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput
 from buttermilk._core.types import Record
 
 # Restore original bm import
@@ -63,29 +63,18 @@ class LLMAgent(Agent):
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(
         default_factory=list,
     )
+    _model: str = ""
+    _name_components: list[str] = ["base_name", "_id", "_model"]
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: AutoGenWrapper = PrivateAttr()
     _output_model: Optional[type[BaseModel]] = None
     _pause: bool = PrivateAttr(default=False)
 
-    # @pydantic.model_validator(mode="after")
-    # def custom_agent_id(self) -> Self:
-    #     # Set a custom name based on our major variants
-    #     components = self.role.split("-")
-
-    #     components.extend(
-    #         [v for k, v in self.variants.items() if k not in ["formatting", "description", "template"] and v and not re.search(r"\s", v)]
-    #     )
-    #     components = [c[:12] for c in components if c]
-    #     self.role = "_".join(components)[:63]
-
-    #     return self
-
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
-        if self.parameters.get("model"):
+        if (self._model := self.parameters.get("model")):
             self._model_client = bm.llms.get_autogen_chat_client(
-                self.parameters["model"],
+                self._model,
             )
         else:
             raise ValueError("Must provide a model in the parameters.")
@@ -130,12 +119,12 @@ class LLMAgent(Agent):
                 raise ProcessingError(err)
         return messages
 
-    def make_output(self, chat_result: CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
+    def make_output(self, chat_result: ModelOutput | CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
         """Helper to create AgentOutput from CreateResult."""
         output = AgentOutput()
         output.inputs = inputs.model_copy(deep=True)
         # Ensure exclude is a set or dict
-        output.metadata = chat_result.model_dump(exclude={"content"})
+        output.metadata = chat_result.model_dump(exclude={"content", "object"})
 
         model_metadata = self.parameters
         model_metadata.update({"role": self.role, "agent_id": self.id, "name": self.name, "prompt": inputs.prompt})
@@ -143,6 +132,10 @@ class LLMAgent(Agent):
         output.params = model_metadata
 
         # Handle schema validation first if applicable
+        if schema and isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
+            output.outputs = chat_result.object
+            output.content = output.outputs.model_dump_json()
+            return output
         if schema and isinstance(chat_result.content, str):
             try:
                 # model_validate_json returns an instance of the schema model
@@ -178,7 +171,6 @@ class LLMAgent(Agent):
 
         return output
 
-    @weave.op()  # Add weave decorator to match base class and enable tracing
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
     ) -> AgentOutput | ToolOutput | None:
@@ -196,7 +188,6 @@ class LLMAgent(Agent):
             messages=messages,
             tools_list=self._tools_list,
             cancellation_token=cancellation_token,
-            reflect_on_tool_use=True,  # Assuming this handles tool calls internally now
             schema=self._output_model,
         )
 
@@ -207,7 +198,6 @@ class LLMAgent(Agent):
             return agent_output
         elif isinstance(llm_result, list):
             # If call_chat returns ToolOutput directly (needs verification)
-            # This path might not be hit if reflect_on_tool_use handles it
             logger.warning("call_chat returned list[ToolOutput], returning first element.")
             return llm_result[0] if llm_result else None  # Return first tool output or None
         elif llm_result is None:

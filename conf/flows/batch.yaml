@@ -5,6 +5,7 @@ defaults:
       - manager
       - judge
       - synth
+      - differences
 
 batch:
   _target_: buttermilk.runner.groupchat.AutogenOrchestrator

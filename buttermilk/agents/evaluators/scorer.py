@@ -60,7 +60,6 @@ class LLMScorer(LLMAgent):
 
     # _listen method removed - evaluation is now triggered proactively
 
-    @weave.op()  # Ensure _process is traced like the base class
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Perform LLM-based scoring based on inputs."""
         # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)

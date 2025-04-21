@@ -41,7 +41,7 @@ class TestConductorRequestRouting:
                 # Set up mock response
                 mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
-                
+
                 # Call the method under test directly with mocked input and output
                 # Note: we use self=mock_get_next_step as a workaround to test the method directly
                 result = await Sequencer._handle_events(mock_get_next_step, conductor_request)
@@ -61,7 +61,7 @@ class TestConductorRequestRouting:
                 # Set up mock response
                 mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
-                
+
                 # Call the method under test directly with mocked input and output
                 # Note: we use self=mock_get_next_step as a workaround to test the method directly
                 result = await LLMHostAgent._handle_events(mock_get_next_step, conductor_request)
@@ -81,13 +81,13 @@ class TestConductorRequestRouting:
                 # Set up mock response
                 mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
-                
+
                 # Call the method under test directly with mocked input and output
                 # Note: we use self=mock_get_next_step as a workaround to test the method directly
                 result = await ExplorerHost._handle_events(mock_get_next_step, conductor_request)
 
                 # Check if the mock was called properly
-                mock_get_next_step.assert_called_once_with(inputs=conductor_request)
+                mock_get_next_step.assert_called_once_with(message=conductor_request)
 
             # The result should be the mock response
             assert result == mock_response
@@ -100,13 +100,13 @@ class TestConductorRequestRouting:
             # Set up mock response
             step_request = StepRequest(role="AGENT1", prompt="", description="Test step")
             mock_process.return_value = step_request
-            
+
             # Call the method under test directly with mocked input and output
             # Note: we use self=mock_process as a workaround to test the method directly
-            result = await ExplorerHost._choose(mock_process, inputs=conductor_request)
+            result = await ExplorerHost._choose(mock_process, message=conductor_request)
 
             # Check if the mock was called properly
-            mock_process.assert_called_once_with(inputs=conductor_request)
+            mock_process.assert_called_once_with(message=conductor_request)
 
             # The result should be the mock step request
             assert result == step_request

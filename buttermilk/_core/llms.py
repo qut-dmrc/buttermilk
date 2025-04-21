@@ -157,6 +157,7 @@ class AutoGenWrapper(RetryWrapper):
             error_msg = f"Error during LLM call: {e}"
             logger.warning(error_msg, exc_info=False)
             raise ProcessingError(error_msg)
+        return create_result
 
     async def call_chat(
         self,
@@ -168,13 +169,13 @@ class AutoGenWrapper(RetryWrapper):
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
-        if not isinstance(create_result.content, list):
+        if not isinstance(create_result, list):
             if schema:
                 try:
                     # Handle schema validation first if applicable
                     output = schema.model_validate_json(create_result.content)
-                    response = ModelOutput(output=output, **create_result.model_dump(exclude="content"))
-                    response.content = response.model_dump_json()  # Use JSON string for content
+                    response = ModelOutput(object=output, **create_result.model_dump())
+                    response.content = output.model_dump_json()  # Use JSON string for content
                     return response
                 except Exception as e:
                     pass
@@ -210,7 +211,6 @@ class AutoGenWrapper(RetryWrapper):
             outputs.append(result)
         return outputs
 
-    @weave.op
     async def _execute_tools(
         self,
         calls: list[FunctionCall],

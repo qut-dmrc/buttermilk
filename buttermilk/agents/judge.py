@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import weave
 
 # Correct the import from _core.agent
-from buttermilk._core.agent import AgentInput, AgentOutput
+from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler
 from buttermilk.agents.llm import LLMAgent  # Import LLMAgent directly
 from buttermilk._core.contract import (
     AllMessages,  # Keep relevant contract types if needed
@@ -89,13 +89,11 @@ class Judge(LLMAgent):
         ctx: MessageContext,
     ) -> Optional[AgentReasons]:
         """Handles incoming messages in the Autogen group chat."""
-        logger.info(f"Judge '{self.name}' received message from '{sender.name}' in topic '{ctx.topic_id}': {message}")
 
         # Use the _process method inherited from LLMAgent
-        result: AgentOutput = await self._process(inputs=message)
+        result: AgentOutput = await self._process(message=message)
         # Publish the structured output back to the group chat
-        # Autogen expects a dict or string usually. Convert Pydantic model.
-        await self.runtime.publish_message(message=response_data.model_dump(), topic_id=ctx.topic_id, sender=self.id)  # Send as dict
+        await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)  # Send as dict
 
         logger.warning(f"Judge '{self.name}' did not produce a publishable output.")
         # Handle cases where no output was generated

@@ -26,6 +26,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualScore
+from buttermilk.agents.judge import AgentReasons
 from buttermilk.agents.ui.generic import UIAgent
 import weave  # Import weave
 
@@ -41,7 +42,6 @@ class CLIUserAgent(UIAgent):
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)  # Allow None
 
-    @weave.op()
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
         """Send or receive input from the UI."""
         if msg := self._fmt_msg(message, source="controller"):
@@ -75,8 +75,14 @@ class CLIUserAgent(UIAgent):
                 if message.inputs and message.inputs.parameters:
                     output.append("### Parameters: ")
                     output.append(pretty_repr(message.inputs.parameters, max_string=400))
+                if isinstance(message.outputs, AgentReasons):
+                    output.append(f"### Conclusion")
+                    output.append(f"**Prediction**: {message.outputs.prediction}\t\t**Confidence**: {message.outputs.confidence}")
+                    output.append(f"**Conclusion**: {message.outputs.conclusion}")
+                    output.append("### Reasons:")
+                    output.extend([f"- {reason}" for reason in message.outputs.reasons])
 
-                if message.outputs:
+                elif message.outputs:
                     if reasons := message.outputs.get("reasons"):
                         output.append("### Reasons:")
                         output.extend([f"- {reason}" for reason in reasons])
@@ -86,6 +92,9 @@ class CLIUserAgent(UIAgent):
                     output.append(message.content)
                 # for rec in message.records:
                 #     output.append(str(rec).replace("\\n", ""))
+            elif isinstance(message, AgentInput):
+                output.append("### Input request: ")
+                output.append(pretty_repr(message.inputs, max_string=400))
             elif isinstance(message, ManagerRequest):
                 output.append(f"### Request from {message.role} ({message.agent_id})\n{message.content}")
             elif isinstance(message, TaskProcessingComplete):

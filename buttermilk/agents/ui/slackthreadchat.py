@@ -156,7 +156,6 @@ class SlackUIAgent(UIAgent):
             )
             self._current_input_message = None
 
-    @weave.op
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(message, (AgentInput, ManagerRequest)):

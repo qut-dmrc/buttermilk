@@ -140,7 +140,7 @@ class AgentConfig(BaseModel):  # Restore class definition
 
     _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])
     base_name: str | None = Field(default=None, description="Base component of friendly name, derived from name field on init.")
-
+    _name_components: list[str] = ["base_name", "_id"]
     _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects())
 
     # @model_validator(mode="before")
@@ -154,13 +154,13 @@ class AgentConfig(BaseModel):  # Restore class definition
     @model_validator(mode="after")
     def _generate_name(self):
         # add a unique ID to a variant's name and role
-        variant_id = uuid()[:6]
-        self.id = f"{self.role}-{variant_id}"
+        self.id = f"{self.role}-{self._id}"
         if not self.base_name:
             if not self.name:
                 raise ValueError("You must provide a human friendly 'name' for agents.")
             self.base_name = self.name
-        self.name = f"{self.base_name} {variant_id}"
+        components = [getattr(self, x, None) for x in self._name_components]
+        self.name = " ".join([x for x in components if x])
         return self
 
 
@@ -260,7 +260,6 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
             # don't log other types of messages to history
             pass
 
-    @weave.op()
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
     ) -> AgentOutput | ToolOutput | None:
@@ -298,9 +297,9 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
                 # Prepare final input by adding agent state
                 final_input = await self._add_state_to_input(message)
 
-                # Execute core logic (traced via @weave.op on _process)
-                _traced_process = weave.op(self._process, call_display_name=f"{self.name} {self.id}")
-                result, call = await _traced_process.call(inputs=final_input, cancellation_token=cancellation_token, **kwargs)
+                # Execute core logic and trace
+                _traced_process = weave.op(self._process, call_display_name=self.name)
+                result, call = await _traced_process.call(message=final_input, cancellation_token=cancellation_token, **kwargs)
                 # Weave swallows errors. They should be reported in code below, so don't raise again.
                 if call.exception:
                     logger.error(f"Agent {self.id} hit error processing request: {call.exception}")

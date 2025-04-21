@@ -10,6 +10,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     END,
+    MANAGER,
     WAIT,
     AgentInput,
     AgentOutput,
@@ -100,7 +101,7 @@ class Sequencer(Agent):
 
         await self._check_completions()
         if isinstance(message, ConductorRequest):
-            next_step = await self._get_next_step(inputs=message)
+            next_step = await self._get_next_step(message=message)
             return cast(ConductorResponse, next_step)
         return None
 
@@ -137,7 +138,7 @@ class Sequencer(Agent):
             # After one complete cycle, yield an END marker
             yield StepRequest(role=END, prompt="", description="Sequence complete.")
 
-    async def _get_next_step(self, inputs: ConductorRequest) -> AgentOutput:
+    async def _get_next_step(self, message: ConductorRequest) -> AgentOutput:
         """Determine the next step based on round-robin scheduling"""
         try:
             # Wait for enough completions, with a timeout
@@ -152,16 +153,16 @@ class Sequencer(Agent):
 
         if not self._participants:
             # Initialize participants from input
-            self._participants = inputs.inputs.get("participants", {})
+            self._participants = message.inputs.get("participants", {})
             logger.info(f"Initialized with {len(self._participants)} participants: {', '.join(self._participants.keys())}")
 
         # Get next step using round-robin
-        step = await self._choose(inputs=inputs)
+        step = await self._choose(message=message)
 
-        if step.role == self.role:
+        if step.role == self.role or step.role == MANAGER:
             # Don't call ourselves
             logger.warning(f"Avoiding self-call, skipping to next agent")
-            step = await self._choose(inputs=inputs)
+            step = await self._choose(message=message)
 
         # If role doesn't exist in participants, try to use a valid one
         if step.role not in self._participants and step.role != END:
@@ -188,17 +189,16 @@ class Sequencer(Agent):
 
         return response
 
-    async def _choose(self, inputs: ConductorRequest) -> StepRequest:
+    async def _choose(self, message: ConductorRequest) -> StepRequest:
         """Choose the next step using round-robin strategy"""
         step = await anext(self._step_generator)
         return step
 
-    @weave.op()
     async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput | None:
         """Get next step in the sequence"""
         await self._check_completions()
         if isinstance(message, ConductorRequest):
-            next_step = await self._get_next_step(inputs=message)
+            next_step = await self._get_next_step(message=message)
             return cast(ConductorResponse, next_step)
         response = AgentOutput()
 

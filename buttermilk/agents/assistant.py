@@ -93,7 +93,6 @@ class AssistantAgentWrapper(Agent):
                 # model_context=self._model_context, # This wasn't in original, remove if not needed
                 description=self.description,
                 system_message=system_message_content,
-                reflect_on_tool_use=self.parameters.get("reflect_on_tool_use", True),
             )
         except Exception as e:
             logger.error(f"Failed to initialize AssistantAgent {self.role}: {e}", exc_info=True)
@@ -101,7 +100,6 @@ class AssistantAgentWrapper(Agent):
 
         return self
 
-    @weave.op()  # Add weave decorator to match base class and enable tracing
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
     ) -> AgentOutput | ToolOutput | None:

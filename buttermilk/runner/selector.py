@@ -163,6 +163,8 @@ class Selector(AutogenOrchestrator):
         # Create the request for the conductor
         request = ConductorRequest(
             inputs=conductor_context,
+            prompt="",
+            records=self._records,
         )
 
         # Ask the conductor for the next step
