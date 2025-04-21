@@ -8,7 +8,7 @@ import regex as re
 from shortuuid import uuid
 import weave
 
-from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig
+from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig, buttermilk_handler
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
@@ -118,9 +118,10 @@ class FetchAgent(FetchRecord, Agent):
     id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
     pass
 
+    @buttermilk_handler(UserInstructions)
     async def _listen(
         self,
-        message: GroupchatMessageTypes,
+        message: AgentInput | UserInstructions | GroupchatMessageTypes,
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",
@@ -151,6 +152,7 @@ class FetchAgent(FetchRecord, Agent):
 
         return None  # _listen itself doesn't return anything meaningful here
 
+    @buttermilk_handler(AgentInput)
     @weave.op()
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
 

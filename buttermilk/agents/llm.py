@@ -137,17 +137,6 @@ class LLMAgent(Agent):
         self._json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
         self._model_client: AutoGenWrapper = PrivateAttr()
         self._pause: bool = PrivateAttr(default=False)
-        # 2. Initialize Autogen RoutedAgent part via the Mixin
-        #    We need to explicitly call the superclass __init__ of the *mixin's* parent.
-        #    Pass only the arguments relevant to RoutedAgent.
-        #    Pydantic's __init__ already handled shared fields like 'name', 'description'.
-        #    We only need to pass fields *specifically* for RoutedAgent if any beyond 'name'.
-        #    Common RoutedAgent args: name, description, system_message, llm_client, etc.
-        #    The mixin itself doesn't have an __init__, so we call RoutedAgent's directly.
-        RoutedAgent.__init__(
-            self,
-            description=description,
-        )
         self._topic_id: TopicId = DefaultTopicId(type=self.role)
 
     async def _fill_template(

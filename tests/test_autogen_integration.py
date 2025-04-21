@@ -46,6 +46,7 @@ async def test_buttermilk_handler_adapter():
     # Mock message context
     context = MessageContext(
         topic_id=topic_id,
+        sender="",
         message_id="test-message-id",
         cancellation_token=None,
         is_rpc=False,

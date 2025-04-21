@@ -110,7 +110,7 @@ class AgentVariants(AgentConfig):
         Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
-        static_config = self.model_dump(exclude={"parallel_variants", "id", "sequential_variants", "num_runs", "parameters", "tasks"})
+        static_config = self.model_dump(exclude={"parallel_variants", "id", "sequential_variants", "num_runs", "parameters", "tasks", "name", "id"})
         base_parameters = self.parameters.copy()  # Base parameters common to all
 
         # Get agent class

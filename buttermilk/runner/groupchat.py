@@ -42,7 +42,8 @@ from buttermilk._core.types import Record, RunRequest  # Added Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore  # Added QualScore import here
 from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import bm, logger
-from buttermilk.libs.autogen import AutogenAgentAdapter  # Import the updated adapter
+# from buttermilk.libs.autogen import AutogenAgentAdapter  # Import the updated adapter
+from buttermilk.libs.ag import AutogenAgentAdapter
 from buttermilk._core.agent import Agent  # Import base Agent for type hint
 from typing import Type  # Import Type
 
@@ -94,7 +95,10 @@ class AutogenOrchestrator(Orchestrator):
                     return AutogenAgentAdapter(agent_cfg=cfg, wrapped_agent_cls=cls)
 
                 agent_type: AgentType = await AutogenAgentAdapter.register(
-                    runtime=self._runtime, type=variant.name, factory=create_adapter_instance  # Use variant name as the unique type string
+                    runtime=self._runtime,
+                    type=variant.id,
+                    factory=create_adapter_instance,
+                    # factory=lambda cfg=variant, cls=agent_cls: AutogenAgentAdapter(cfg, cls),
                 )
                 # Add subscription for the *adapter's* agent type
                 await self._runtime.add_subscription(

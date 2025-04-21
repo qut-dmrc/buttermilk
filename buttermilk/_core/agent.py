@@ -15,6 +15,7 @@ from pydantic import (
     BaseModel,
     Field,
     PrivateAttr,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -69,7 +70,7 @@ if TYPE_CHECKING:
 
 
 # --- Custom Decorator for Autogen Handlers ---
-def buttermilk_handler(message_type: type):
+def buttermilk_handler(message_types: type):
     """
     Decorator to mark methods within a Buttermilk Agent as handlers
     for specific Autogen message types.
@@ -81,7 +82,7 @@ def buttermilk_handler(message_type: type):
 
     def decorator(func):
         # Attach the message type information to the function object
-        setattr(func, "_buttermilk_handler_message_type", message_type)
+        setattr(func, "_buttermilk_handler_message_type", message_types)
         setattr(func, "_is_buttermilk_handler", True)  # Marker attribute
 
         @wraps(func)  # Preserve original function metadata
@@ -89,7 +90,7 @@ def buttermilk_handler(message_type: type):
             return await func(*args, **kwargs)
 
         # Attach marker also to the wrapper if needed, but primarily to original func
-        setattr(wrapper, "_buttermilk_handler_message_type", message_type)
+        setattr(wrapper, "_buttermilk_handler_message_type", message_types)
         setattr(wrapper, "_is_buttermilk_handler", True)  # Marker attribute
         return wrapper
 
@@ -112,7 +113,7 @@ class AgentConfig(BaseModel):  # Restore class definition
         description="The role type that this agent fulfils.",
     )
     name: str = Field(
-        ...,
+        default="",
         description="A human friendly name of this agent.",
     )
     description: str = Field(  # Restore description
@@ -131,7 +132,6 @@ class AgentConfig(BaseModel):  # Restore class definition
         default_factory=dict,
         description="Initialisation parameters to pass to the agent",
     )
-    # sequential_tasks removed - Orchestrator now handles sequence if needed
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="A mapping of data to agent inputs",
@@ -144,7 +144,7 @@ class AgentConfig(BaseModel):  # Restore class definition
     }
 
     _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])
-    _base_name: str = PrivateAttr()
+    base_name: str | None = Field(default=None, description="Base component of friendly name, derived from name field on init.")
 
     _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects())
 
@@ -161,7 +161,11 @@ class AgentConfig(BaseModel):  # Restore class definition
         # add a unique ID to a variant's name and role
         variant_id = uuid()[:6]
         self.id = f"{self.role}-{variant_id}"
-        self.name = f"{self.name} {variant_id}"
+        if not self.base_name:
+            if not self.name:
+                raise ValueError("You must provide a human friendly 'name' for agents.")
+            self.base_name = self.name
+        self.name = f"{self.base_name} {variant_id}"
         return self
 
 

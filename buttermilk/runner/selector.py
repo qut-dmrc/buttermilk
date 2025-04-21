@@ -73,7 +73,7 @@ class Selector(AutogenOrchestrator):
             ),
         )
 
-    async def _wait_for_human(self, timeout: int = 240) -> ManagerResponse:
+    async def _wait_for_human(self, timeout: int = 20) -> ManagerResponse:
         """
         Wait for human confirmation with timeout.
 
@@ -83,26 +83,22 @@ class Selector(AutogenOrchestrator):
         Returns:
             bool: True if user confirmed, False if rejected or timed out
         """
-        t0 = time.time()
-        while True:
-            try:
-                msg = self._user_confirmation.get_nowait()
-                if msg.halt:
-                    raise StopAsyncIteration("User requested halt.")
+        try:
+            msg = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
+            if msg.halt:
+                raise StopAsyncIteration("User requested halt.")
 
-                # Store feedback if provided
-                if msg.prompt:
-                    self._user_feedback.append(msg.prompt)
+            # Store feedback if provided
+            if msg.prompt:
+                self._user_feedback.append(msg.prompt)
 
-                # Store selected option if provided
-                if msg.selection:
-                    self._last_user_selection = msg.selection
+            # Store selected option if provided
+            if msg.selection:
+                self._last_user_selection = msg.selection
 
-                return msg
-            except asyncio.QueueEmpty:
-                if time.time() - t0 > timeout:
-                    return False
-                await asyncio.sleep(1)
+            return True
+        except asyncio.TimeoutError:
+            return ManagerResponse(error=[f"No response from Manager within timeout period ({timeout} seconds)."], confirm=False, halt=False)
 
     async def _in_the_loop(self, step: StepRequest = None, prompt: str = "") -> ManagerResponse:
         """

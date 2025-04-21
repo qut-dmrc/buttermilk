@@ -151,6 +151,7 @@ class CLIUserAgent(UIAgent):
             return Markdown("\n".join(output))
         return None
 
+    @buttermilk_handler(GroupchatMessageTypes)
     async def _listen(
         self,
         message: GroupchatMessageTypes,  # This is Union[AgentOutput, ToolOutput, UserInstructions]
@@ -175,17 +176,18 @@ class CLIUserAgent(UIAgent):
         # Display the request to the user
         if msg := self._fmt_msg(message, source="Manager"):
             self._console.print(msg)
-        
+
         # Wait for user input (handled by _poll_input in the background)
         # The _poll_input method will call _input_callback with the response
         # This just informs the user a response is needed
         self._console.print("\nPlease respond to this request...\n")
-        
+
         # Return None for now - actual response will come from _poll_input
         # This approach is necessary because Autogen expects synchronous handlers
         # but user input is inherently asynchronous
         return ManagerResponse(confirm=True, prompt="Request acknowledged")
-    
+
+    @buttermilk_handler(OOBMessages)
     async def _handle_events(
         self,
         message: OOBMessages,  # This is a Union

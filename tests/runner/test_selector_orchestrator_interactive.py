@@ -137,7 +137,6 @@ async def test_host_interaction_with_ui(selector_config):
     # Mock host agent asking a question (via conductor response)
     host_question = "Would you like to compare these two analyses or explore a different approach?"
     conductor_message = ConductorResponse(
-        role="conductor",
         content=host_question,
         outputs={"type": "question", "options": ["Compare analyses", "Try different approach", "End exploration"]},
     )
