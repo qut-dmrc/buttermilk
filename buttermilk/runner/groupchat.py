@@ -89,7 +89,7 @@ class AutogenOrchestrator(Orchestrator):
                 def create_adapter_instance(cfg=variant, cls=agent_cls):
                     return AutogenAgentAdapter(
                         agent_cfg=cfg,
-                        wrapped_agent_cls=cls,
+                        agent_cls=cls,
                         topic_type=self._topic.type,
                     )
 
@@ -242,9 +242,6 @@ class AutogenOrchestrator(Orchestrator):
             scorer_agent_id = await self._runtime.get(scorer_agent_type)
             # Note: We don't have the original Agent instance here easily to check type with isinstance(agent, LLMScorer)
             # We rely on the configuration being correct.
-            # Correct way to get the role of the agent that produced the output
-            log_role = output.inputs.role if output.inputs else "unknown_step_role"
-            logger.info(f"Running evaluation for step {log_role} output.")
             scorer_input = AgentInput(
                 inputs={"answers": [output], "expected": ground_truth_record.ground_truth},
                 # Pass original records from the step's input
@@ -260,7 +257,7 @@ class AutogenOrchestrator(Orchestrator):
                 if isinstance(evaluation_response.outputs, QualScore):
                     score = evaluation_response.outputs  # Now safe to assign
                     assert score is not None  # Assert for mypy after check
-                    logger.info(f"Evaluation successful for role {log_role}. Score: {getattr(score, 'score', 'N/A')}")  # Use getattr for score
+                    logger.info(f"Evaluation successful for role (?). Score: {getattr(score, 'score', 'N/A')}")  # Use getattr for score
                     if weave_call:
                         # Ensure score is not None before dumping (already checked by isinstance)
                         if score:
@@ -281,8 +278,8 @@ class AutogenOrchestrator(Orchestrator):
         """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
-        conductor_inputs = {"participants": dict(self._agent_types.items()), "task": self.params.get("task")}
-        request = ConductorRequest(inputs=conductor_inputs)
+        conductor_inputs = {"participants": dict(self._agent_types.items())}
+        request = ConductorRequest(inputs=conductor_inputs, prompt=self.params.get("task", ""), records=self._records)
         responses = await self._ask_agents(
             CONDUCTOR,
             message=request,
@@ -327,6 +324,7 @@ class AutogenOrchestrator(Orchestrator):
                 # Fixed: Extract results list
                 if fetch_output and fetch_output.results:
                     self._records = fetch_output.results
+
             while True:
                 try:
                     # Loop until we receive an error

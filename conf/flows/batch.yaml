@@ -18,6 +18,7 @@ batch:
         - record_id
   params:
     criteria: replace
+    task: Assess this content.
   agents:
     host:
       role: HOST
@@ -25,8 +26,6 @@ batch:
       description: Run through a defined sequence of steps.
       agent_obj: Sequencer
       num_runs: 1
-      parameters:
-        model: ${llms.host}
+      parameters: {}
       inputs:
-        task:
         participants:

@@ -66,4 +66,8 @@
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
+  "editor.codeActionsOnSave": {
+"source.organizeImports": "explicit",
+"source.fixAll.ruff": "explicit"
+  },
 }

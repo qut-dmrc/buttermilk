@@ -198,7 +198,7 @@ class Sequencer(Agent):
         """Process inputs and generate responses"""
         response = AgentOutput()
 
-        if not hasattr(inputs, "prompt") or not inputs.prompt:
+        if not hasattr(inputs, "prompt") or not inputs.prompt and not inputs.inputs.get("task"):
             # No prompt provided, just initialize
             logger.info(f"Sequencer initialized: {self.name}")
             response.content = f"Sequencer initialized: {self.name}"
