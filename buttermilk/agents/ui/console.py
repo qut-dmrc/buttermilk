@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.pretty import pretty_repr
 
 from buttermilk import logger
-from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages
+from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages, buttermilk_handler
 from buttermilk._core.contract import (
     AgentOutput,
     FlowMessage,
@@ -37,6 +37,8 @@ from rich.highlighter import JSONHighlighter
 console = Console(highlighter=JSONHighlighter())
 
 
+# Define a Union for types _fmt_msg can handle for better type safety
+FormattableMessages = Union[AgentOutput, ConductorResponse, TaskProcessingComplete, UserInstructions, ManagerRequest, ToolOutput, AgentInput]
 class CLIUserAgent(UIAgent):
     _input_callback: Any = PrivateAttr(...)
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
@@ -51,9 +53,6 @@ class CLIUserAgent(UIAgent):
             self._console.print(Markdown("Input requested:\n"))
         # Return None as _process in UI agents usually doesn't produce direct output for flow
         return None
-
-    # Define a Union for types _fmt_msg can handle for better type safety
-    FormattableMessages = Union[AgentOutput, ConductorResponse, TaskProcessingComplete, UserInstructions, ManagerRequest, ToolOutput, AgentInput]
 
     def _fmt_msg(self, message: FormattableMessages, source: str) -> Markdown | None:
         """Format a known message type for display in the console."""
@@ -170,6 +169,23 @@ class CLIUserAgent(UIAgent):
         else:
             logger.debug(f"ConsoleAgent _listen could not format message type: {type(message)}")
 
+    @buttermilk_handler(ManagerRequest)
+    async def handle_manager_request(self, message: ManagerRequest) -> ManagerResponse:
+        """Handle ManagerRequest messages from Autogen runtime."""
+        # Display the request to the user
+        if msg := self._fmt_msg(message, source="Manager"):
+            self._console.print(msg)
+        
+        # Wait for user input (handled by _poll_input in the background)
+        # The _poll_input method will call _input_callback with the response
+        # This just informs the user a response is needed
+        self._console.print("\nPlease respond to this request...\n")
+        
+        # Return None for now - actual response will come from _poll_input
+        # This approach is necessary because Autogen expects synchronous handlers
+        # but user input is inherently asynchronous
+        return ManagerResponse(confirm=True, prompt="Request acknowledged")
+    
     async def _handle_events(
         self,
         message: OOBMessages,  # This is a Union

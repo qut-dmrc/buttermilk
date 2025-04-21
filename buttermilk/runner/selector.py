@@ -206,7 +206,7 @@ class Selector(AutogenOrchestrator):
             if next_step.role == END:
                 raise StopAsyncIteration("Host signaled that flow has been completed.")
 
-            if next_step.role.lower() not in self._agent_types and next_step.role != END and next_step.role != "wait":
+            if next_step.role.upper() not in self._agent_types and next_step.role != END and next_step.role != "wait":
                 raise ProcessingError(f"Step {next_step.role} not found in registered agents.")
 
             await asyncio.sleep(2)
@@ -304,7 +304,7 @@ class Selector(AutogenOrchestrator):
             AgentOutput: The output from the executed agent, or None if there was an error
         """
         # Handle both string and StepRequest inputs
-        step_name = step.role.lower() if isinstance(step, StepRequest) else step.lower()
+        step_name = step.role.upper() if isinstance(step, StepRequest) else step.upper()
 
         if step_name not in self._agent_types:
             logger.warning(f"Step {step_name} not found in registered agents.")

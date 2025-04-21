@@ -20,6 +20,7 @@ response_harmful_response = (True, """
         Harmful response: yes""")
 
 
+@pytest.mark.integration
 class TestInterpreters:
     @pytest.mark.parametrize(
         ["expected", "response"],

@@ -23,12 +23,12 @@ from autogen_core.models import LLMMessage
 
 BASE_DIR = Path(__file__).absolute().parent
 
-CONDUCTOR = "host"
-MANAGER = "manager"
-CLOSURE = "collector"
-CONFIRM = "confirm"
+CONDUCTOR = "HOST"
+MANAGER = "MANAGER"
+CLOSURE = "COLLECTOR"
+CONFIRM = "CONFIRM"
 COMMAND_SYMBOL = "!"
-END = "end"
+END = "END"
 
 
 class FlowProtocol(BaseModel):
@@ -62,10 +62,10 @@ class StepRequest(BaseModel):
 
     @field_validator("role")
     @classmethod
-    def lowercase_fields(cls, v: str) -> str:
-        """Ensure role is lowercase."""
+    def case_fields(cls, v: str) -> str:
+        """Ensure role is uppercase."""
         if v:
-            return v.lower()
+            return v.upper()
         return v
 
 

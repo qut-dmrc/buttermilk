@@ -1,5 +1,5 @@
 """
-Tests for the interactive features of SelectorOrchestrator.
+Tests for the interactive features of Selector.
 """
 
 import asyncio
@@ -20,10 +20,11 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import Record, RunRequest
 from buttermilk._core.variants import AgentVariants
 
+from buttermilk.runner.selector import Selector
 
 @pytest.fixture
 def selector_config():
-    """Basic config for testing the SelectorOrchestrator."""
+    """Basic config for testing the Selector."""
     # Create mock AgentVariants objects
     test_variants = MagicMock(spec=AgentVariants)
     test_variants.get_configs.return_value = [
@@ -53,7 +54,7 @@ def selector_config():
 @pytest.mark.anyio
 async def test_interactive_user_feedback(selector_config):
     """Test interactive user feedback influencing next steps."""
-    orchestrator = SelectorOrchestrator(**selector_config)
+    orchestrator = Selector(**selector_config)
 
     # Mock runtime and confirmation queue
     orchestrator._runtime = AsyncMock()
@@ -112,7 +113,7 @@ async def test_interactive_user_feedback(selector_config):
 @pytest.mark.anyio
 async def test_host_interaction_with_ui(selector_config):
     """Test the host agent (conductor) interacting with UI agent."""
-    orchestrator = SelectorOrchestrator(**selector_config)
+    orchestrator = Selector(**selector_config)
 
     # Mock runtime and components
     orchestrator._runtime = AsyncMock()
@@ -169,7 +170,7 @@ async def test_host_interaction_with_ui(selector_config):
 @pytest.mark.anyio
 async def test_variant_comparison(selector_config):
     """Test comparing results from different variants."""
-    orchestrator = SelectorOrchestrator(**selector_config)
+    orchestrator = Selector(**selector_config)
 
     # Create a comparison message that would be sent by the conductor
     comparison_request = ConductorResponse(

@@ -11,7 +11,7 @@ from buttermilk.agents.judge import Judge
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_buttermilk_handler_adapter():
     """Test that the Buttermilk handler adaptation works correctly."""
     # Create an agent configuration
@@ -63,7 +63,7 @@ async def test_buttermilk_handler_adapter():
             break
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_autogen_registration():
     """Test that the Autogen registration process works correctly."""
     # Create a runtime
@@ -78,7 +78,7 @@ async def test_autogen_registration():
                 role="judge",
                 name="test-judge",
                 description="A test judge agent",
-                parameters={"model": "gpt-4"},
+                parameters={"model": "gemini2flashlite"},
             ),
             wrapped_agent_cls=Judge,
         ),

@@ -5,8 +5,8 @@ defaults:
       - manager
       - fetch
       - host
-      - judge
-      - owl
+      # - judge
+      # - owl
 
 panel:
   _target_: buttermilk.runner.selector.Selector

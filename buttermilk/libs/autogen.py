@@ -4,7 +4,9 @@ import asyncio
 import inspect  # Import inspect for introspection
 from functools import partial  # Import partial for creating wrapper methods
 from collections.abc import Awaitable, Callable
-from typing import Any, Optional, Union, Sequence, TYPE_CHECKING, List, Dict, Callable, Awaitable, Type  # Added Type
+from typing import Any, Optional, Union, Sequence, TYPE_CHECKING, List, Dict, Callable, Awaitable, Type, ClassVar  # Added Type, Dict, ClassVar
+from typing_extensions import Self  # Import Self type
+from dataclasses import dataclass
 
 from autogen_core import (
     DefaultTopicId,
@@ -12,8 +14,13 @@ from autogen_core import (
     MessageContext,
     RoutedAgent,
     TopicId,
+    AgentInstantiationContext,
+    AgentRuntime,
+    AgentType,
+    message_handler,
     # message_handler is not used directly here, registration is manual
 )
+from buttermilk._core.contract import GroupchatMessageTypes
 
 # Use TYPE_CHECKING to avoid circular imports if Agent needs types from here
 if TYPE_CHECKING:
@@ -64,29 +71,26 @@ class AutogenAgentAdapter(RoutedAgent):
         self.wrapped_agent = wrapped_agent_cls(**agent_cfg.model_dump())
 
         # Initialize the parent RoutedAgent.
-        # Note: RoutedAgent takes different parameters than we thought
-        # We'll just use the description as the primary identifier
         super().__init__(description=self.wrapped_agent.description)  # Pass description from wrapped agent
-        
-        # Create message_handlers dictionary if it doesn't exist
-        if not hasattr(self, "message_handlers"):
-            self.message_handlers = {}
-        
-        # --- Dynamic Handler Registration ---
-        self._register_buttermilk_handlers()
 
-    def _register_buttermilk_handlers(self):
+        # Create message_handlers dictionary that will be populated on demand
+        self.message_handlers = {}
+
+        # Flag to track if we've scanned for handlers
+        self._handlers_initialized = False
+
+    async def _register_buttermilk_handlers(self) -> None:
         """
-        Inspects the wrapped agent for methods decorated with @buttermilk_handler
-        and registers them with the Autogen runtime.
+        Discovers and registers handlers from the wrapped agent.
+        This is called lazily when the first message is received.
         """
-        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Searching for @buttermilk_handlers on {type(self.wrapped_agent).__name__}")
+        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Registering handlers from buttermilk agent")
 
         # Iterate through members of the wrapped agent instance
-        for name, member in inspect.getmembers(self.wrapped_agent):
+        for name, method in inspect.getmembers(self.wrapped_agent):
             # Check if it's a method marked by our decorator
-            if callable(member) and hasattr(member, "_buttermilk_handler_message_type"):
-                target_message_type = getattr(member, "_buttermilk_handler_message_type", None)
+            if callable(method) and hasattr(method, "_buttermilk_handler_message_type"):
+                target_message_type = getattr(method, "_buttermilk_handler_message_type", None)
 
                 if target_message_type is None:
                     logger.warning(f"Method '{name}' on agent '{self.wrapped_agent.name}' is marked as a handler but missing message type. Skipping.")
@@ -99,35 +103,34 @@ class AutogenAgentAdapter(RoutedAgent):
                 async def handler_wrapper(
                     message: Any,  # Autogen message type determined by registration
                     ctx: MessageContext,
-                    original_method: Callable = member,  # Capture method in closure
+                    original_method: Callable = method,  # Capture method in closure
                     adapter_self=self,  # Capture adapter instance in closure
                 ):
                     logger.debug(
                         f"Adapter for '{adapter_self.wrapped_agent.name}': Routing message type {type(message).__name__} to wrapped agent method '{original_method.__name__}'"
                     )
                     # Call the original method on the wrapped Buttermilk agent.
-                    # Pass only the message, as the decorated method might not expect 'ctx'.
-                    # The original method should return values appropriate for its context
-                    # (e.g., AgentOutput for processing, maybe None for listening).
-                    # The adapter doesn't typically modify or publish the return value here,
-                    # unless a specific adaptation is needed. Autogen runtime handles publishing based on registration.
                     try:
-                        # We assume the decorated method takes 'message' as the primary argument.
-                        # If it needs more adaptation (e.g. extracting from ctx), the wrapper needs modification.
-                        result = await original_method(message=message)  # Pass message directly
+                        # Inspect the method signature to determine how to pass parameters
+                        sig = inspect.signature(original_method)
+                        param_names = list(sig.parameters.keys())
+
+                        if len(param_names) >= 1:
+                            # Pass without naming the parameter (positional)
+                            result = await original_method(message)
+                        else:
+                            # No parameters, just call the method
+                            result = await original_method()
+
                         return result  # Return the result for Autogen's runtime
                     except Exception as e:
                         logger.error(
                             f"Error executing handler '{original_method.__name__}' on wrapped agent '{adapter_self.wrapped_agent.name}': {e}",
                             exc_info=True,
                         )
-                        # Optionally, return an error response or raise? Depends on Autogen's error handling.
                         return None  # Default to None on error
 
                 # Register the wrapper function with the specific message type
-                # The type hint on the 'message' parameter of the wrapper doesn't
-                # strictly enforce the type for registration, but Autogen uses the
-                # message_type argument here.
                 if target_message_type:  # Ensure we have a valid type
                     try:
                         # Use the RoutedAgent's method to register handlers
@@ -143,24 +146,62 @@ class AutogenAgentAdapter(RoutedAgent):
                         f"Adapter for '{self.wrapped_agent.name}': Could not determine target message type for handler '{name}'. Skipping registration."
                     )
 
-    # --- Optional: Delegate other necessary Agent methods? ---
-    # If the Autogen runtime directly calls methods other than registered handlers
-    # (e.g., maybe 'reset' or specific lifecycle methods), you might need to
-    # explicitly delegate them here. Check RoutedAgent/BaseAgent definition if needed.
+    # Implement message handling method to intercept messages and lazy-register handlers
+    async def handle_message(self, message: Any, ctx: MessageContext) -> Any:
+        """
+        Intercept incoming messages to ensure handlers are registered before processing.
+        This allows handlers to be registered on-demand when the first message arrives.
+        """
+        # If handlers are not initialized yet, register them
+        if not self._handlers_initialized:
+            logger.info(f"Adapter for '{self.wrapped_agent.name}': Lazily registering handlers on first message")
+            await self._register_buttermilk_handlers()
+            self._handlers_initialized = True
 
-    # Example delegation (uncomment and adapt if needed):
-    # async def reset(self, cancellation_token: CancellationToken | None = None) -> None:
-    #     """Delegates reset to the wrapped agent if it has an on_reset method."""
-    #     logger.debug(f"Adapter for '{self.name}': Delegating reset()")
-    #     if hasattr(self.wrapped_agent, 'on_reset') and callable(self.wrapped_agent.on_reset):
-    #          await self.wrapped_agent.on_reset(cancellation_token=cancellation_token)
-    #     # Call super().reset() if RoutedAgent has its own reset logic to perform
-    #     await super().reset(cancellation_token=cancellation_token)
+        # Delegate to parent class handler
+        return await super().handle_message(message, ctx)
 
-    # Ensure the adapter uses the wrapped agent's core processing if needed,
-    # although typically Autogen relies on registered handlers.
-    # The __call__ method might not be directly used by Autogen's runtime
-    # in the same way it is in the Buttermilk orchestrator.
+    # Delegate necessary Agent lifecycle methods
+    async def reset(self, cancellation_token: CancellationToken | None = None) -> None:
+        """Delegates reset to the wrapped agent if it has an on_reset method."""
+        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Delegating reset()")
+        if hasattr(self.wrapped_agent, "on_reset") and callable(self.wrapped_agent.on_reset):
+            await self.wrapped_agent.on_reset(cancellation_token=cancellation_token)
+        # Call super().reset() if RoutedAgent has its own reset logic to perform
+        await super().reset(cancellation_token=cancellation_token)
+
+    async def cleanup(self) -> None:
+        """Delegates cleanup to the wrapped agent if it has a cleanup method."""
+        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Delegating cleanup()")
+        if hasattr(self.wrapped_agent, "cleanup") and callable(self.wrapped_agent.cleanup):
+            await self.wrapped_agent.cleanup()
+        # Call super().cleanup() if RoutedAgent has its own cleanup logic
+        if hasattr(super(), "cleanup") and callable(super().cleanup):
+            await super().cleanup()
+
+    # Add initialization to ensure the wrapped agent is properly set up
+    async def initialize(self, **kwargs) -> None:
+        """Initialize the wrapped agent if it has an initialize method."""
+        logger.debug(f"Adapter for '{self.wrapped_agent.name}': Initializing wrapped agent")
+        if hasattr(self.wrapped_agent, "initialize") and callable(self.wrapped_agent.initialize):
+            await self.wrapped_agent.initialize(**kwargs)
+
+        # Call super().initialize() if RoutedAgent has initialization logic
+        if hasattr(super(), "initialize") and callable(super().initialize):
+            await super().initialize(**kwargs)
+
+    @message_handler
+    async def handle_groupchat_message(
+        self,
+        message: GroupchatMessageTypes,
+        ctx: MessageContext,
+    ) -> None:
+        """Handle incoming group messages by delegating to the wrapped agent."""
+        await self.wrapped_agent._listen(
+            message=message,
+            cancellation_token=ctx.cancellation_token,
+            source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
+        )
 
 
 # --- Type checking block ---

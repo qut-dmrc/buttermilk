@@ -22,7 +22,7 @@ from promptflow.core._prompty_utils import parse_chat
 from pydantic import BaseModel, Field, PrivateAttr
 import weave
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse, ToolConfig
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse, ToolConfig, buttermilk_handler
 from buttermilk._core.contract import (
     AllMessages,
     ConductorRequest,
@@ -277,6 +277,31 @@ class LLMAgent(Agent):
             else:
                 logger.error(f"Agent {self.id} has no runtime object to publish unexpected result error.")
             return None
+
+    @buttermilk_handler(AgentInput)
+    async def handle_agent_input(self, message: AgentInput) -> AgentOutput | None:
+        """
+        Handles AgentInput messages from Autogen runtime.
+        This is the primary entry point for LLM-based agents in Autogen group chats.
+        """
+        logger.info(f"LLMAgent '{self.name}' handling AgentInput: {message.inputs.get('prompt', 'No prompt')}")
+
+        try:
+            # Use the existing _process method
+            result = await self._process(inputs=message)
+
+            # _process now publishes the result via runtime.publish_message
+            # but the Autogen handler also expects a return value
+            if isinstance(result, AgentOutput):
+                return result
+            # If _process returned None or ToolOutput, we still need to return None
+            # because the result was already published via runtime
+            return None
+
+        except Exception as e:
+            logger.error(f"Error during LLMAgent handle_agent_input: {e}", exc_info=True)
+            # Create and return an error AgentOutput
+            return AgentOutput(error=[str(e)], inputs=message)
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

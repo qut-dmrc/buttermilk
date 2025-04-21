@@ -9,12 +9,13 @@ from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
 
+@pytest.fixture
+def fetch() -> FetchRecord:
+    return FetchRecord(description="test_fetch", role="fetch")
+
+
 class TestFetch:
     """Tests for Fetch agent methods."""
-
-    @pytest.fixture
-    def fetch(self):
-        return FetchRecord(id="test_fetch", name="fetch", description="test only")
 
     @pytest.mark.anyio
     async def test_load_data(self, fetch):

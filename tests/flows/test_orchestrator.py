@@ -5,29 +5,25 @@ import pytest
 from buttermilk._core.contract import AgentInput, StepRequest
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.variants import AgentVariants
-
-
-class SimpleOrchestrator(Orchestrator):
-    """Simple implementation of Orchestrator for testing."""
-
-    async def run(self, request=None):
-        """Simple implementation that just runs steps in sequence."""
-        self.run_called = True
-        self.request = request
+from buttermilk.runner.batch import BatchOrchestrator
 
 
 @pytest.fixture
 def simple_orchestrator():
     """Create a simple orchestrator for testing."""
-    return SimpleOrchestrator(
+    return BatchOrchestrator(
         name="test_flow",
         description="Test flow",
         agents={
             "step1": AgentVariants(
+                role="step1",
+                name="step1",
                 description="Step 1",
                 inputs={"key1": "value1"},
             ),
             "step2": AgentVariants(
+                role="step2",
+                name="step2",
                 description="Step 2",
                 inputs={"key2": "value2", "history": True},
             ),
@@ -49,7 +45,7 @@ async def test_orchestrator_initialization(simple_orchestrator):
 @pytest.mark.anyio
 async def test_prepare_step_basic(simple_orchestrator):
     """Test that _prepare_step returns the expected inputs."""
-    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step1"))
+    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step1", prompt="", description=""))
     assert "key1" in inputs
     assert inputs["key1"] == "value1"
 
@@ -60,7 +56,7 @@ async def test_prepare_step_with_history(simple_orchestrator):
     # Add some history
     simple_orchestrator.history = ["message1", "message2"]
 
-    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step2"))
+    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step2", prompt="", description=""))
     assert "key2" in inputs
     assert inputs["key2"] == "value2"
     assert "history" in inputs
