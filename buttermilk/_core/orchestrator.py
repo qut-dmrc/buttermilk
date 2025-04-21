@@ -81,12 +81,8 @@ class Orchestrator(BaseModel, ABC):
         description="Flow-level parameters available for use by agents.",
         exclude=True,
     )
-    history: list = Field(default=[])
 
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
-    _model_context: ChatCompletionContext = PrivateAttr(
-        default_factory=UnboundedChatCompletionContext,
-    )
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     model_config = ConfigDict(
@@ -129,8 +125,6 @@ class Orchestrator(BaseModel, ABC):
 
         # initialise the data cache
         self._flow_data.init(list(self.agents.keys()))
-
-        self._model_context = UnboundedChatCompletionContext(initial_messages=self.history)
 
         return self
 
@@ -240,11 +234,9 @@ class Orchestrator(BaseModel, ABC):
             AgentOutput | None: The output from the executed step, if any.
 
         """
-        step_input = await self._prepare_step(request)
-        # Assuming direct execution also needs the bm instance
-        # Note: weave tracing might need adjustment if execute is used differently than _run
-        # Weave tracing is now expected within the agent's handle_message or _process
-        output = await self._execute_step(step=request.role, input=step_input)
+
+        output = await self._execute_step(request)
+
         return output
 
     async def __call__(self, request: RunRequest | None = None) -> None:  # Accept RunRequest
@@ -261,58 +253,10 @@ class Orchestrator(BaseModel, ABC):
         await self.run(request=request)
         return  # __call__ typically doesn't return a value directly in this pattern
 
-    async def _prepare_step(
-        self,
-        request: StepRequest,
-    ) -> AgentInput:
-        """Create an AgentInput message for sending to an agent.
-
-        Prepares a message with the appropriate inputs and context for the target agent.
-
-        Resolves special keywords and mappings to provide the appropriate inputs
-        for the given step.
-
-        Special keywords include:
-            - "participants": list of agents in the flow
-            - "context": list of history messages
-            - "records": list of InputRecords
-            - "prompt": question from the user
-
-        Args:
-            step: Definition of inputs for the step
-
-        Returns:
-            AgentInput: A prepared AgentInput message ready to be sent.
-        """
-        # Find the AgentVariants config for the requested role
-        variants_config = self.agents.get(request.role.upper())
-        if not variants_config:
-            # This should ideally not happen if _get_host_suggestion validates roles
-            raise ValueError(f"Agent configuration for role '{request.role}' not found.")
-
-        # Note: This uses the base config for inputs. If variants override inputs,
-        # that logic would need enhancement here or in the specific agent's _add_state_to_input.
-        config = variants_config  # Use the AgentVariants object
-
-        input_map = dict(config.inputs)
-
-        input_map = dict(config.inputs)
-
-        # Fill inputs based on input map
-        inputs = self._flow_data._resolve_mappings(input_map)
-
-        return AgentInput(
-            inputs=inputs,
-            context=await self._model_context.get_messages(),
-            records=self._records,
-            prompt=request.prompt,
-        )
-
     @abstractmethod
     async def _execute_step(
         self,
-        step: str,
-        input: AgentInput,
+        step: StepRequest,
     ) -> AgentOutput | None:
         """
         Abstract method to execute a single step of the flow using a specific agent.

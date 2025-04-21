@@ -93,10 +93,10 @@ async def test_interactive_user_feedback(selector_config):
     # Now when we execute the step, it should use the selected variant
     orchestrator._execute_step = AsyncMock()
     step_input = MagicMock()
-    await orchestrator._execute_step(step=next_step.role, input=step_input)
+    await orchestrator._execute_step(step=next_step)
 
     # Verify variant selection was used (index 1 for test_agent2)
-    orchestrator._execute_step.assert_called_once_with(step=next_step.role, input=step_input, variant_index=1)
+    orchestrator._execute_step.assert_called_once_with(step=next_step, variant_index=1)
 
     # Next iteration: get step again, should incorporate user feedback
     next_step = await orchestrator._get_host_suggestion()

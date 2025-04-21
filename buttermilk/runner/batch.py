@@ -62,12 +62,9 @@ class BatchOrchestrator(Orchestrator):
         await asyncio.sleep(0.1)  # Simulate cleanup
         logger.info("BatchOrchestrator cleanup complete.")
 
-    # Removed @weave.op() decorator
-    # Signature reverted to match base class
     async def _execute_step(
         self,
-        step: str,  # Corresponds to agent role/name
-        input: AgentInput,
+        step: StepRequest,
     ) -> AgentOutput | None:
         """
         Executes a single step of the flow for the given agent role.
@@ -75,63 +72,63 @@ class BatchOrchestrator(Orchestrator):
         Handles variant selection based on internal logic (currently basic: uses first variant).
 
         Args:
-            step: The role name of the agent to execute.
-            input: The AgentInput message for the step.
+            step: StepRequest with details about the step to run.
 
         Returns:
             The AgentOutput from the agent, or None if execution failed,
             or an AgentOutput with error info if execution raised an exception.
         """
         # --- Variant Selection Logic (Placeholder: Use first variant) ---
-        variants_config = self.agents.get(step.lower())
+        variants_config = self.agents.get(step.role.lower())
         if not variants_config or not variants_config.variants:
-            logger.error(f"No variants found for step '{step}'. Skipping.")
-            return AgentOutput(error=[f"No variants configured for step: {step}"], inputs=input)
+            logger.error(f"No variants found for step '{step.role}'. Skipping.")
+            return AgentOutput(error=[f"No variants configured for step: {step.role}"])
 
         # Get the config for the first variant
         first_variant_config = variants_config.variants[0]
-        logger.info(f"Executing step '{step}' (using variant {first_variant_config.id}) with input: {input.prompt[:50]}...")
+        logger.info(f"Executing step '{step.role}' (using variant {first_variant_config.id})...")
         agent = self._get_agent_instance(first_variant_config.id)
         # --- End Variant Selection ---
 
         if agent:
             try:
+                message = AgentInput(prompt=step.prompt)
                 # Assuming agent is callable via __call__ which calls _process
                 # Agent._process is already traced by weave
-                raw_output = await agent(message=input, **{})  # Pass empty kwargs for now
+                raw_output = await agent(message=message, **{})  # Pass empty kwargs for now
 
                 # Handle different output types
                 if isinstance(raw_output, AgentOutput):
                     output = raw_output  # Assign to output if it's the expected type
-                    if not output.is_error:
-                        # Call evaluation if possible
-                        ground_truth_record = next((r for r in input.records if getattr(r, "ground_truth", None) is not None), None)
-                        criteria = input.parameters.get("criteria") or self.params.get("criteria")
-                        # TODO: Implement _evaluate_step for BatchOrchestrator
-                        # await self._evaluate_step(output, ground_truth_record, criteria, None) # Pass None for weave_call
-                        logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")
-                    logger.info(f"Step '{step}' variant '{first_variant_config.id}' completed.")
+                    # if not output.is_error:
+                    #     # Call evaluation if possible
+                    #     ground_truth_record = next((r for r in input.records if getattr(r, "ground_truth", None) is not None), None)
+                    #     criteria = input.parameters.get("criteria") or self.params.get("criteria")
+                    #     # TODO: Implement _evaluate_step for BatchOrchestrator
+                    #     # await self._evaluate_step(output, ground_truth_record, criteria, None) # Pass None for weave_call
+                    #     logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")
+                    logger.info(f"Step '{step.role}' variant '{first_variant_config.id}' completed.")
                     return output  # Return AgentOutput
                 elif isinstance(raw_output, (ToolOutput, OOBMessages)):
                     logger.warning(
-                        f"Step '{step}' variant '{first_variant_config.id}' returned unexpected type {type(raw_output)} in batch mode. Ignoring."
+                        f"Step '{step.role}' variant '{first_variant_config.id}' returned unexpected type {type(raw_output)} in batch mode. Ignoring."
                     )
                     return None  # Don't propagate ToolOutput/OOB in simple batch mode
                 elif raw_output is None:
-                    logger.warning(f"Step '{step}' variant '{first_variant_config.id}' returned None.")
+                    logger.warning(f"Step '{step.role}' variant '{first_variant_config.id}' returned None.")
                     return None
                 else:
-                    logger.error(f"Step '{step}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}.")
-                    return AgentOutput(error=[f"Unknown return type: {type(raw_output)}"], inputs=input)
+                    logger.error(f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}.")
+                    return AgentOutput(error=[f"Unknown return type: {type(raw_output)}"])
 
             except Exception as e:
-                logger.error(f"Error executing step '{step}' variant '{first_variant_config.id}': {e}", exc_info=True)
+                logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}", exc_info=True)
                 # Ensure 'inputs' attribute exists on output for error cases
-                return AgentOutput(error=[str(e)], inputs=input)
+                return AgentOutput(error=[str(e)])
         else:
             # Error already logged by _get_agent_instance
             # Ensure 'inputs' attribute exists on output for error cases
-            return AgentOutput(error=[f"Agent instance not found: {first_variant_config.id}"], inputs=input)
+            return AgentOutput(error=[f"Agent instance not found: {first_variant_config.id}"])
 
     async def _run(self, request: RunRequest | None = None) -> None:
         """
@@ -146,28 +143,6 @@ class BatchOrchestrator(Orchestrator):
 
             # TODO: Implement step sequencing logic based on flow definition or strategy
             logger.warning("BatchOrchestrator _run logic (step sequencing, variant handling) is not implemented.")
-
-            # Example: Simple linear execution if steps were defined sequentially
-            # steps_to_run = ["step1", "step2", "step3"] # Get from config?
-            # current_input = AgentInput(prompt=request.prompt if request else "") # Initial input
-            # for step_name in steps_to_run:
-            #     # Handle variants based on execution_strategy
-            #     # For simplicity, just run the first variant here
-            #     step_request = StepRequest(role=step_name, prompt=current_input.prompt) # Construct request
-            #     step_input_prepared = await self._prepare_step(step_request) # Prepare full input
-            #
-            #     # Need to get the variant config to pass to _execute_step if modified signature kept
-            #     # output = await self._execute_step(step=step_name, input=step_input_prepared, variant_config=...)
-            #     output = await self._execute_step(step=step_name, input=step_input_prepared) # Call with base signature
-            #
-            #     if not output or output.is_error:
-            #         logger.error(f"Step '{step_name}' failed. Halting batch.")
-            #         # Handle error appropriately (log, save state, etc.)
-            #         break
-            #
-            #     # Prepare input for the next step based on output
-            #     # This logic needs careful design - how does output map to next input?
-            #     current_input = AgentInput(prompt=str(output.content), records=output.records)
 
         except (StopAsyncIteration, KeyboardInterrupt) as e:
             logger.info(f"Batch run interrupted: {type(e).__name__}")

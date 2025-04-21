@@ -42,6 +42,7 @@ async def test_orchestrator_initialization(simple_orchestrator):
     assert simple_orchestrator.params == {"param1": "value1"}
 
 
+### THESE NEED TO BE MOVED TO AGENT TESTS
 @pytest.mark.anyio
 async def test_prepare_step_basic(simple_orchestrator):
     """Test that _prepare_step returns the expected inputs."""
@@ -53,8 +54,6 @@ async def test_prepare_step_basic(simple_orchestrator):
 @pytest.mark.anyio
 async def test_prepare_step_with_history(simple_orchestrator):
     """Test that _prepare_step handles special variables correctly."""
-    # Add some history
-    simple_orchestrator.history = ["message1", "message2"]
 
     inputs = await simple_orchestrator._prepare_step(StepRequest(role="step2", prompt="", description=""))
     assert "key2" in inputs

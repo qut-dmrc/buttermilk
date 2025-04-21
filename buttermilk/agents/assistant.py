@@ -90,7 +90,6 @@ class AssistantAgentWrapper(Agent):
                 name=self.role,
                 model_client=self._model_client,
                 tools=self._tools_list,  # Pass the list directly
-                # model_context=self._model_context, # This wasn't in original, remove if not needed
                 description=self.description,
                 system_message=system_message_content,
             )

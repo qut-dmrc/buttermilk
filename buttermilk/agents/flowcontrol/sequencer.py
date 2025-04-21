@@ -158,22 +158,18 @@ class Sequencer(Agent):
 
         # Get next step using round-robin
         step = await self._choose(message=message)
+        if step and step.role == END:
+            raise StopAsyncIteration("Host signaled that flow has been completed.")
+
+        # If role doesn't exist in participants, wait a while
+        if not step or step.role not in self._participants:
+            logger.warning(f"Host could not find next step. Suggested {step.role}, which doesn't exist.")
+            step.role = WAIT
 
         if step.role == self.role or step.role == MANAGER:
             # Don't call ourselves
             logger.warning(f"Avoiding self-call, skipping to next agent")
             step = await self._choose(message=message)
-
-        # If role doesn't exist in participants, try to use a valid one
-        if step.role not in self._participants and step.role != END:
-            logger.warning(f"Host could not find next step. Suggested {step.role}, which doesn't exist.")
-
-            # Instead of defaulting to WAIT, use the first valid participant if available
-            if self._participants:
-                step.role = next(iter(self._participants.keys()))
-                logger.info(f"Using valid participant {step.role} instead of WAIT")
-            else:
-                step.role = WAIT
 
         # Reset completion tracking
         self._current_step_name = step.role
@@ -204,9 +200,8 @@ class Sequencer(Agent):
 
         if not hasattr(message, "prompt") or not message.prompt and not message.inputs.get("task"):
             # No prompt provided, just initialize
-            logger.info(f"Sequencer initialized: {self.name}")
-            response.content = f"Sequencer initialized: {self.name}"
-            return response
+            logger.warning(f"Sequencer called but no prompt or task provided: {self.name}")
+            return None
 
         try:
             # Process prompt if needed

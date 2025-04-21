@@ -287,10 +287,9 @@ class Selector(AutogenOrchestrator):
 
     async def _execute_step(
         self,
-        step: Union[str, StepRequest],
-        input: AgentInput,
+        step: StepRequest,
         variant_index: int = 0,
-    ) -> Optional[AgentOutput]:
+    ) -> AgentOutput | None:
         """
         Execute step with selected variant and capture results for exploration.
 
@@ -302,23 +301,18 @@ class Selector(AutogenOrchestrator):
         Returns:
             AgentOutput: The output from the executed agent, or None if there was an error
         """
-        # Handle both string and StepRequest inputs
-        step_name = step.role.upper() if isinstance(step, StepRequest) else step.upper()
-
-        if step_name not in self._agent_types:
-            logger.warning(f"Step {step_name} not found in registered agents.")
-            return None
+        message = AgentInput(prompt=step.prompt, records=self._records)
 
         # Select the specified variant
-        variants = self._agent_types[step_name]
+        variants = self._agent_types[step.role]
         if variant_index >= len(variants):
-            logger.warning(f"Variant index {variant_index} out of range for step {step_name}. Using first variant.")
+            logger.warning(f"Variant index {variant_index} out of range for step {step.role}. Using first variant.")
             variant_index = 0
 
         agent_type, agent_config = variants[variant_index]
 
         # Track this step in our exploration path
-        step_id = f"{step_name}_{variant_index}_{shortuuid.uuid()[:4]}"
+        step_id = f"{step.role}_{variant_index}_{shortuuid.uuid()[:4]}"
         self._exploration_path.append(step_id)
 
         # Execute the agent
@@ -386,9 +380,6 @@ class Selector(AutogenOrchestrator):
                         logger.info("User did not confirm step. Waiting for new instructions.")
                         continue
 
-                    # Prepare the step input
-                    step_input = await self._prepare_step(next_step)
-
                     # Check if a specific variant was selected by the user
                     variant_index = 0  # Default to first variant
                     if response.selection:
@@ -400,7 +391,7 @@ class Selector(AutogenOrchestrator):
                             logger.warning(f"Selected variant {response.selection} not found. Using default.")
 
                     # Execute the step with the selected variant
-                    await self._execute_step(step=next_step, input=step_input, variant_index=variant_index)
+                    await self._execute_step(step=next_step, variant_index=variant_index)
 
                 except ProcessingError as e:
                     # Non-fatal error, log and continue

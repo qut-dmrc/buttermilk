@@ -202,16 +202,14 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
-    # Removed @weave.op() decorator to fix override issue
     async def _execute_step(
         self,
-        step: str,
-        input: AgentInput,
+        step: StepRequest,
     ) -> AgentOutput | None:
-
+        message = AgentInput(prompt=step.prompt, records=self._records)
         responses = await self._ask_agents(
-            step,
-            message=input,
+            step.role,
+            message=message,
         )
         # await self._runtime.publish_message(step, topic_id=topic_id)
         await asyncio.sleep(0.1)
@@ -297,15 +295,6 @@ class AutogenOrchestrator(Orchestrator):
         assert isinstance(valid_responses[0].outputs, StepRequest), f"Expected StepRequest, got {type(valid_responses[0].outputs)}"
         instructions = valid_responses[0].outputs
 
-        next_step = instructions.role
-        if next_step == END:
-            raise StopAsyncIteration("Host signaled that flow has been completed.")
-
-        if next_step.upper() not in self._agent_types:
-            raise ProcessingError(
-                f"Step {next_step} not found in registered agents.",
-            )
-
         # We're going to wait a bit between steps.
         await asyncio.sleep(5)
         return instructions
@@ -341,10 +330,9 @@ class AutogenOrchestrator(Orchestrator):
                         continue
 
                     if step:
-                        step_input = await self._prepare_step(step)
                         # Store the weave call context if available
                         current_call = weave.get_current_call()  # Fixed: Use get_current_call()
-                        output = await self._execute_step(step=step.role, input=step_input)
+                        output = await self._execute_step(step=step)
 
                         # --- Call evaluation ---
                         if isinstance(output, AgentOutput) and not output.is_error:
