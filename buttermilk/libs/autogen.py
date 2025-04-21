@@ -31,7 +31,7 @@ from buttermilk._core.contract import (
     UserInstructions,
     AllMessages,
 )
-from buttermilk.agents.flowcontrol.sequencer import HostAgent
+from buttermilk.agents.flowcontrol.sequencer import LLMHostAgent
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.bm import logger
 
@@ -79,7 +79,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self.topic_id: TopicId = DefaultTopicId(type=topic_type)
         super().__init__(description=self.agent.description)
 
-        self.is_manager = isinstance(self.agent, UIAgent) or isinstance(self.agent, HostAgent)
+        self.is_manager = isinstance(self.agent, UIAgent) or isinstance(self.agent, LLMHostAgent)
 
         # Take care of any initialization the agent needs to do in this event loop
         if self.is_manager:

@@ -11,6 +11,7 @@ from autogen_core.models import (
     UserMessage,
 )
 
+from buttermilk._core import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk._core.llms import CHATMODELS
@@ -28,9 +29,9 @@ def record_agent_cfg(
 ) -> Agent:
     match request.param:
         case "Judger":
-            return Agent(
-                agent="LLMClient",
+            return LLMAgent(
                 id=request.param,
+                rowl="judge",
                 description="apply rules",
                 parameters=dict(
                     model=model_name,
@@ -40,9 +41,8 @@ def record_agent_cfg(
                 ),
             )
         case "Owl":
-            return Agent(
-                agent="LLMClient",
-                id=request.param,
+            return LLMAgent(
+                role="owl",
                 description="look for things",
                 parameters=dict(
                     model=model_name,
@@ -65,7 +65,7 @@ async def test_run_record_agent(
         runtime,
         DefaultTopicId().type,
         lambda: LLMAgent(
-            config=record_agent_cfg,
+            **record_agent_cfg,
         ),
     )
     await runtime.add_subscription(
@@ -77,7 +77,7 @@ async def test_run_record_agent(
     runtime.start()
     record = UserMessage(content=fight_no_more_forever.fulltext, source="testing")
     result = await runtime.send_message(
-        FlowRequest(placeholders={"record": [record]}),
+        AgentInput(records=[record]),
         await runtime.get("default"),
     )
     await runtime.stop_when_idle()

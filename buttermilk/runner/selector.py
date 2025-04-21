@@ -5,7 +5,6 @@ SelectorOrchestrator: an interactive orchestrator with host agent and user guida
 import asyncio
 import time
 from typing import Any, Dict, List, Optional, Self, Sequence, Union, cast
-
 from pydantic import BaseModel, PrivateAttr, model_validator
 import shortuuid
 
@@ -14,6 +13,7 @@ from buttermilk._core.contract import (
     CONDUCTOR,
     CONFIRM,
     END,
+    WAIT,
     AgentInput,
     AgentOutput,
     ConductorRequest,
@@ -173,7 +173,7 @@ class Selector(AutogenOrchestrator):
 
         # Default response if we can't determine a step
         wait_step = StepRequest(
-            role="wait",
+            role=WAIT,
             description="Waiting for conductor to provide instructions",
             prompt="Please wait...",
         )
@@ -371,7 +371,7 @@ class Selector(AutogenOrchestrator):
                     # Get next recommended step from host agent
                     next_step = await self._get_host_suggestion()
                     # Handle the "wait" step specially
-                    if next_step.role == "wait":
+                    if next_step.role == WAIT:
                         # If waiting for next step, pause before checking again
                         await asyncio.sleep(5)
                         continue

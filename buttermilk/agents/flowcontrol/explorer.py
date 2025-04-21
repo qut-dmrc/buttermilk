@@ -18,7 +18,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserMessage,
 )
-from buttermilk.agents.flowcontrol.sequencer import HostAgent
+from buttermilk.agents.flowcontrol.sequencer import LLMHostAgent
 from buttermilk.agents.llm import LLMAgent
 
 from typing import Any, AsyncGenerator, Callable, Optional, Self, Union
@@ -41,7 +41,7 @@ from buttermilk._core.contract import (
 TRUNCATE_LEN = 1000  # characters per history message
 
 
-class ExplorerHost(HostAgent):
+class ExplorerHost(LLMHostAgent):
 
     _output_model: Optional[type[BaseModel]] = StepRequest
     async def _choose(self, inputs: ConductorRequest) -> StepRequest:

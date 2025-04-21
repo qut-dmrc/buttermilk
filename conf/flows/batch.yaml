@@ -1,0 +1,32 @@
+defaults:
+  - _self_
+  - criteria@batch.params.criteria: trans
+  - agents@batch.agents:
+      - manager
+      - judge
+      - synth
+
+batch:
+  _target_: buttermilk.runner.groupchat.AutogenOrchestrator
+  description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
+  name: trans
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
+  params:
+    criteria: replace
+  agents:
+    host:
+      role: HOST
+      name: "🎯 Sequence Host"
+      description: Run through a defined sequence of steps.
+      agent_obj: Sequencer
+      num_runs: 1
+      parameters:
+        model: ${llms.host}
+      inputs:
+        task:
+        participants:

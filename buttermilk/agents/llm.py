@@ -108,7 +108,7 @@ class LLMAgent(Agent):
         """Fill the template with the given inputs and return a list of messages."""
         template = self.parameters.get("template", task_params.get("template", inputs.get("template")))
         if not template:
-            raise ProcessingError("No template provided for agent {self.id}")
+            raise ProcessingError(f"No template provided for agent {self.id}")
 
         # Render the template using Jinja2
         rendered_template, unfilled_vars = load_template(

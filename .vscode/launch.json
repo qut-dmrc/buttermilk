@@ -42,6 +42,30 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "cli batch",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": true,
+      "args": [
+        "hydra.verbose=false",
+        "+flows=[batch]",
+        "flow=batch",
+        "record_id=NCAA_transgender_athletes",
+        "ui=console",
+        "llms=lite",
+        "++name=batch",
+        //"+record_id=${input:query}" // Will prompt for query
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "cli debug",
       "type": "debugpy",
       "request": "launch",

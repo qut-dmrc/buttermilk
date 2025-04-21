@@ -281,7 +281,6 @@ class AutogenOrchestrator(Orchestrator):
         """Determine the next step based on the current flow data."""
 
         # Each step, we proceed by asking the CONDUCTOR agent what to do.
-        # Fixed: Pass inputs dict directly to ConductorRequest
         conductor_inputs = {"participants": dict(self._agent_types.items()), "task": self.params.get("task")}
         request = ConductorRequest(inputs=conductor_inputs)
         responses = await self._ask_agents(
@@ -290,7 +289,6 @@ class AutogenOrchestrator(Orchestrator):
         )
 
         # Determine the next step based on the response
-        # Handle potential list of responses if multiple conductor variants run (though usually 1)
         valid_responses = [r for r in responses if isinstance(r, AgentOutput) and not r.is_error and isinstance(r.outputs, StepRequest)]
 
         if not valid_responses:

@@ -6,14 +6,7 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    ConductorRequest,
-    ConductorResponse,
-    StepRequest,
-    ManagerMessage,
-)
+from buttermilk._core.contract import AgentInput, AgentOutput, ConductorRequest, ConductorResponse, StepRequest, ManagerMessage, WAIT
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.selector import Selector
 
@@ -147,7 +140,7 @@ async def test_get_host_action_success(orchestrator):
     result = await orchestrator._get_host_suggestion()
 
     # Verify we get a "wait" step
-    assert result.role == "wait"
+    assert result.role == WAIT
     assert orchestrator._ask_agents.called
 
 
@@ -363,7 +356,7 @@ async def test_run_with_records(orchestrator):
     orchestrator._get_host_suggestion = AsyncMock(
         side_effect=[
             StepRequest(role="test_agent", description="Step 1", prompt="Prompt 1"),
-            StepRequest(role="wait", description="Waiting", prompt="Please wait..."),
+            StepRequest(role=WAIT, description="Waiting", prompt="Please wait..."),
             StepRequest(role="test_agent", description="Step 2", prompt="Prompt 2"),
             Exception("StopAsyncIteration"),  # Simulate end of flow
         ]

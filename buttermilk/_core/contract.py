@@ -29,7 +29,7 @@ CLOSURE = "COLLECTOR"
 CONFIRM = "CONFIRM"
 COMMAND_SYMBOL = "!"
 END = "END"
-
+WAIT = "WAIT"
 
 class FlowProtocol(BaseModel):
     name: str  # friendly flow name

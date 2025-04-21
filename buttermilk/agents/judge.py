@@ -3,7 +3,7 @@ from curses import meta
 import json
 import pprint
 from types import NoneType
-from typing import Any, AsyncGenerator, Callable, Literal, Optional, Self, Dict, List, Union
+from typing import Any, AsyncGenerator, Callable, Literal, Optional, Self, Dict, List, Type, Union
 
 from autogen_core.models._types import UserMessage
 import pydantic
