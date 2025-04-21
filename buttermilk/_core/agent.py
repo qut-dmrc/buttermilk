@@ -261,7 +261,9 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
             pass
 
     @weave.op()
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
+    ) -> AgentOutput | ToolOutput | None:
         """Internal process function. Implement core agent logic here. Traced by Weave."""
         # Example:
         # logger.info(f"Agent {self.role} processing inputs: {inputs.inputs}")

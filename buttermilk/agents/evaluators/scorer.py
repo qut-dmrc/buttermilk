@@ -61,12 +61,12 @@ class LLMScorer(LLMAgent):
     # _listen method removed - evaluation is now triggered proactively
 
     @weave.op()  # Ensure _process is traced like the base class
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
         """Perform LLM-based scoring based on inputs."""
         # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)
-        if "answers" not in inputs.inputs or "expected" not in inputs.inputs:
+        if "answers" not in message.inputs or "expected" not in message.inputs:
             logger.error(f"{self.role}: Missing 'answers' or 'expected' in inputs for scoring.")
-            return AgentOutput(error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=inputs)
+            return AgentOutput(error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=message)
 
         # Call the base LLMAgent's _process method which handles template filling and LLM call
         # The template for the scorer should be designed to compare answers[0].content/outputs
@@ -75,7 +75,7 @@ class LLMScorer(LLMAgent):
         # and returned content parsable into _output_model (QualScore), that QualScore
         # instance will be in the .outputs field of the returned AgentOutput.
         logger.debug(f"Scorer agent {self.role} processing evaluation request.")
-        evaluation_result_output = await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
+        evaluation_result_output = await super()._process(inputs=message, cancellation_token=cancellation_token, **kwargs)
 
         # Ensure the output contains the QualScore if successful
         if evaluation_result_output and not evaluation_result_output.is_error:

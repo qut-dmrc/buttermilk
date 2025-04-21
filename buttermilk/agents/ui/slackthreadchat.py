@@ -157,10 +157,10 @@ class SlackUIAgent(UIAgent):
             self._current_input_message = None
 
     @weave.op
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        if isinstance(inputs, (AgentInput, ManagerRequest)):
-            await self._request_input(inputs)
+        if isinstance(message, (AgentInput, ManagerRequest)):
+            await self._request_input(message)
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""

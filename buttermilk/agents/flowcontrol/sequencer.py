@@ -194,11 +194,15 @@ class Sequencer(Agent):
         return step
 
     @weave.op()
-    async def _process(self, *, inputs: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput | None:
-        """Process inputs and generate responses"""
+    async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput | None:
+        """Get next step in the sequence"""
+        await self._check_completions()
+        if isinstance(message, ConductorRequest):
+            next_step = await self._get_next_step(inputs=message)
+            return cast(ConductorResponse, next_step)
         response = AgentOutput()
 
-        if not hasattr(inputs, "prompt") or not inputs.prompt and not inputs.inputs.get("task"):
+        if not hasattr(message, "prompt") or not message.prompt and not message.inputs.get("task"):
             # No prompt provided, just initialize
             logger.info(f"Sequencer initialized: {self.name}")
             response.content = f"Sequencer initialized: {self.name}"
@@ -206,7 +210,7 @@ class Sequencer(Agent):
 
         try:
             # Process prompt if needed
-            prompt = inputs.prompt.strip()
+            prompt = message.prompt.strip()
             response.content = f"Sequencer received: {prompt}"
             logger.info(f"Sequencer received: {prompt}")
 

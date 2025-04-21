@@ -112,7 +112,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 pass
 
 
-        async def _process(self, *, inputs: AgentInput, 
+        async def _process(self, *, message: AgentInput, 
                 cancellation_token: CancellationToken = None, **kwargs
                 ) -> AgentOutput | ToolOutput | None:
                 logger.info(f"{self.id} received content: {input_data.content}")

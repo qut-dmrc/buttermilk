@@ -179,10 +179,14 @@ class LLMAgent(Agent):
         return output
 
     @weave.op()  # Add weave decorator to match base class and enable tracing
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
+    ) -> AgentOutput | ToolOutput | None:
         """Runs a single task or series of tasks."""
         try:
-            messages = await self._fill_template(task_params=inputs.parameters, inputs=inputs.inputs, context=inputs.context, records=inputs.records)
+            messages = await self._fill_template(
+                task_params=message.parameters, inputs=message.inputs, context=message.context, records=message.records
+            )
         except ProcessingError as e:
             # We log here because weave swallows error results and we might lose it.
             logger.error(f"Unable to fill template for {self.id}: {e}")
@@ -199,7 +203,7 @@ class LLMAgent(Agent):
         # Handle different return types
         if isinstance(llm_result, CreateResult):
             # Process normal LLM response
-            agent_output = self.make_output(llm_result, inputs=inputs, schema=self._output_model)
+            agent_output = self.make_output(llm_result, inputs=message, schema=self._output_model)
             return agent_output
         elif isinstance(llm_result, list):
             # If call_chat returns ToolOutput directly (needs verification)
@@ -210,11 +214,11 @@ class LLMAgent(Agent):
             # Handle case where LLM call returns None (e.g., error, cancellation)
             logger.warning("LLM call returned None.")
             # Return an AgentOutput indicating an error or empty response?
-            return AgentOutput(error=["LLM call returned None"], inputs=inputs)
+            return AgentOutput(error=["LLM call returned None"], inputs=message)
         else:
             # Should not happen based on AutoGenWrapper signature, but good practice
             logger.error(f"Unexpected return type from call_chat: {type(llm_result)}")
-            return AgentOutput(error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=inputs)
+            return AgentOutput(error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=message)
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

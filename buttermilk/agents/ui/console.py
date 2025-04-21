@@ -42,9 +42,9 @@ class CLIUserAgent(UIAgent):
     _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)  # Allow None
 
     @weave.op()
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
         """Send or receive input from the UI."""
-        if msg := self._fmt_msg(inputs, source="controller"):
+        if msg := self._fmt_msg(message, source="controller"):
             self._console.print(msg)
         else:
             self._console.print(Markdown("Input requested:\n"))

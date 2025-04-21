@@ -152,18 +152,18 @@ class FetchAgent(FetchRecord, Agent):
         return None  # _listen itself doesn't return anything meaningful here
 
     @weave.op()
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
 
         result = None
-        if isinstance(inputs, AgentInput):
-            uri = inputs.inputs.get("uri")
-            record_id = inputs.inputs.get("record_id")
+        if isinstance(message, AgentInput):
+            uri = message.inputs.get("uri")
+            record_id = message.inputs.get("record_id")
             if uri or record_id:
                 # Removed cancellation_token from _run call
-                result = await self._run(record_id=record_id, uri=uri, prompt=inputs.prompt)
-        if isinstance(inputs, UserInstructions):
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+        if isinstance(message, UserInstructions):
             # Removed cancellation_token from _run call
-            result = await self._run(prompt=inputs.prompt)
+            result = await self._run(prompt=message.prompt)
 
         if result:
             return result

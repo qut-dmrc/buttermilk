@@ -102,7 +102,9 @@ class AssistantAgentWrapper(Agent):
         return self
 
     @weave.op()  # Add weave decorator to match base class and enable tracing
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
+    ) -> AgentOutput | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
 
         # --- Agent Decision Logic ---
@@ -110,12 +112,12 @@ class AssistantAgentWrapper(Agent):
 
         # Only process specific message types relevant to the assistant
         # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
-        if not isinstance(inputs, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
-            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(inputs)}")
+        if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
+            logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(message)}")
             return None
 
         # Handle ConductorRequest specifically if needed
-        if isinstance(inputs, ConductorRequest):
+        if isinstance(message, ConductorRequest):
             logger.warning(f"Agent {self.role} received ConductorRequest, not fully implemented.")
             # Potentially extract relevant info or yield specific output
             return None
@@ -134,12 +136,12 @@ class AssistantAgentWrapper(Agent):
         # Revert message creation logic (assuming original used UserMessage or similar)
         # This part needs careful checking against the original intent before async changes
         # Let's assume it needed UserMessage based on previous context
-        if inputs.prompt:
+        if message.prompt:
             # Use UserMessage as likely intended originally
-            messages_to_send.append(UserMessage(content=inputs.prompt))
-        elif inputs.inputs:
+            messages_to_send.append(UserMessage(content=message.prompt))
+        elif message.inputs:
             # Fallback: serialize inputs dict if no direct content
-            content_str = json.dumps(inputs.inputs)
+            content_str = json.dumps(message.inputs)
             messages_to_send.append(UserMessage(content=content_str))
         else:
             logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs. Skipping.")
