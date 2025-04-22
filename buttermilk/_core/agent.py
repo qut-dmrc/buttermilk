@@ -216,25 +216,16 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
         """Save incoming messages from *other* agents to update internal state."""
         # Look for matching roles in our inputs mapping
         if isinstance(message, (AgentOutput, ConductorResponse)):
+            datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}
+
             for key, mapping in self.inputs.items():
                 if mapping and isinstance(mapping, str):
-                    components = mapping.split(".", maxsplit=1)
-                    if source.lower().startswith(components[0].lower()):
-                        # Direct match
-                        if len(components) == 1:
-                            # No dot delineated field path: add the whole object
-                            self._data.add(key, message.model_dump())
-                        else:
-                            # otherwise, try to find the value in the outputs dict using JMESPath
-                            search_dict = {source: message.model_dump()}
-                            if value := jmespath.search(mapping, search_dict):
-                                self._data.add(key, value)
-
+                    if value := jmespath.search(mapping, datadict):
                         if key == "records":
                             # records are stored separately in our memory cache
-                            if message.records:
-                                self._records.extend(message.records)
-                                continue
+                            self._records.extend(value)
+                            continue
+                        self._data.add(key, value)
                 else:
                     logger.warning(
                         f"Input mapping for {self.id} is too sophisticated and we haven't written the code to interpret it yet: {key} to {mapping}"
