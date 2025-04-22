@@ -11,5 +11,5 @@ scorer:
   inputs:
     criteria: Evaluate how well the provided content aligns with the rules.
     records: fetch.records
-    expected: "fetch.records[].ground_truth"
+    expected: "fetch.records[0].ground_truth"
     answers: "[judge,synth][]"

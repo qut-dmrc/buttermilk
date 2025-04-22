@@ -143,8 +143,11 @@ class Orchestrator(BaseModel, ABC):
                 self._run,
                 call_display_name=f"{self.name} {self.params.get('criteria','')}",
             )
-        output, call = await _traced.call(request=request)
-        client.finish_call(call)
+        try:
+            output, call = await _traced.call(request=request)
+        finally:
+            client.finish_call(call)  # type: ignore (weave promises never to raise on .call())
+
         logger.info(f"Finished...")
         return
 
