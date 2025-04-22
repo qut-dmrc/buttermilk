@@ -216,7 +216,7 @@ class AutogenOrchestrator(Orchestrator):
             await asyncio.sleep(0.1)
 
         except Exception as e:
-            msg = f"Error during step execution: {e}", exc_info=False
+            msg = f"Error during step execution: {e}"
             raise ProcessingError(msg) from e
 
     async def _get_host_suggestion(self) -> StepRequest | None:  # Allow None return
