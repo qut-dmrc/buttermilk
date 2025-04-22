@@ -203,7 +203,7 @@ class AgentOutput(FlowMessage):
         default={},
         description="The data returned from the agent",
     )
-    tracing: TracingDetails = PrivateAttr(default_factory=TracingDetails)
+    tracing: TracingDetails = Field(default_factory=TracingDetails)
 
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),

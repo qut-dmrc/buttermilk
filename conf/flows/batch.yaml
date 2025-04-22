@@ -20,7 +20,7 @@ batch:
         - record_id
   params:
     criteria:
-      - cte
+      - glaad
     task: Assess this content.
   agents:
     host:
