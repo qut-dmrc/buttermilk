@@ -191,6 +191,7 @@ class AgentOutput(FlowMessage):
         default_factory=list,
         description="Messages generated along the way to the final response",
     )
+    tracing: dict = Field(default={}, validate_default=True, exclude=True)
 
     _ensure_error_list = field_validator("error", mode="before")(
         make_list_validator(),
@@ -208,6 +209,19 @@ class AgentOutput(FlowMessage):
         if isinstance(self.outputs, BaseModel):
             data["outputs"] = self.outputs.model_dump()
         return data
+
+    @field_validator("tracing")
+    @classmethod
+    def _get_tracing_links(cls, value) -> dict[str, Any]:
+        import weave
+        from buttermilk.bm import logger
+
+        try:
+            value = {"weave": weave.get_current_call().ref()}
+        except Exception as e:
+            logger.error(f"Unable to get weave call.")
+            value = {}
+        return value
 
 
 ######

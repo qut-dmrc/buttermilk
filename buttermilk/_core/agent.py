@@ -307,6 +307,10 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
                 if call.exception:
                     logger.error(f"Agent {self.id} hit error processing request: {call.exception}")
 
+                if isinstance(result, AgentOutput):
+                    # add call ref to result object so we can get it back later.
+                    result.tracing["weave"] = call.ref()
+
                 # --- Evaluation Logic ---
                 if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
                     # Check for ground truth in records

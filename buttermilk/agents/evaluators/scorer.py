@@ -142,57 +142,48 @@ class LLMScorer(LLMAgent):
         )
 
         # Get the original weave call to log against
-        weave_call = weave.get_current_call()
+        weave_call = message.tracing.get("weave")
 
-        # set up a temporary scorer class for weave:
-        coro = self._process(message=scorer_input, cancellation_token=cancellation_token)
+        # Run our score function
+        score = await self._process(message=scorer_input, cancellation_token=cancellation_token)
+        await public_callback(score)
 
+        # set up a temporary scorer class just for weave because
+        # its api is shit and doesn't let us just publish a score:
         class ButtermilkScorer(weave.Scorer):
             @weave.op
             async def score(self, output: Any) -> dict[str, Any]:
                 """Return the pre-computed score data."""
-                result = await coro
-                # publish the score
-                await public_callback(result)
-                return {"qual_score": result.outputs.model_dump()}
-
-            @weave.op
-            def summarize(self, score_rows):
-                """Simple summarization of scores."""
-                # This is only called when aggregating multiple scores
-                return dict()
+                return {"qual_score": score.outputs.model_dump()}
 
         # Apply the scorer to the call
         scorer = ButtermilkScorer()
-        score_result, score_call = await weave_call.apply_scorer(scorer)
+        weaveresult = await weave_call.apply_scorer(scorer)
 
-        await public_callback(score_result)
+        pass
 
-    async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
-    ) -> AgentOutput | ToolOutput | None:
-        """Perform LLM-based scoring based on inputs."""
-        # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)
-        if "answers" not in message.inputs or "expected" not in message.inputs:
-            logger.error(f"{self.role}: Missing 'answers' or 'expected' in inputs for scoring.")
-            return AgentOutput(error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=message)
+    # async def _process(
+    #     self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
+    # ) -> AgentOutput | ToolOutput | None:
+    #     """Perform LLM-based scoring based on inputs."""
+    #     # Expects inputs.inputs to contain 'answers': [AgentOutput] and 'expected': Any (ground_truth)
+    #     if "answers" not in message.inputs or "expected" not in message.inputs:
+    #         logger.error(f"{self.role}: Missing 'answers' or 'expected' in inputs for scoring.")
+    #         return AgentOutput(error=[f"Missing 'answers' or 'expected' in inputs for scoring."], inputs=message)
 
-        # Get current weave call context
-        current_call = weave.get_current_call()
+    #     # Call the base LLMAgent's _process method which handles template filling and LLM call
+    #     logger.debug(f"Scorer agent {self.role} processing evaluation request.")
+    #     evaluation_result_output = await super()._process(message=message, cancellation_token=cancellation_token, **kwargs)
 
-        # Call the base LLMAgent's _process method which handles template filling and LLM call
-        logger.debug(f"Scorer agent {self.role} processing evaluation request.")
-        evaluation_result_output = await super()._process(message=message, cancellation_token=cancellation_token, **kwargs)
+    #     # Ensure the output contains the QualScore if successful
+    #     if evaluation_result_output and not evaluation_result_output.is_error:
+    #         if hasattr(evaluation_result_output, "outputs"):
+    #             if not isinstance(evaluation_result_output.outputs, QualScore):
+    #                 logger.warning(f"Scorer {self.role} LLM output was not parsed into QualScore: {evaluation_result_output.outputs}")
+    #                 if hasattr(evaluation_result_output, "error") and isinstance(evaluation_result_output.error, list):
+    #                     evaluation_result_output.error.append("LLM output did not conform to QualScore schema.")
 
-        # Ensure the output contains the QualScore if successful
-        if evaluation_result_output and not evaluation_result_output.is_error:
-            if hasattr(evaluation_result_output, "outputs"):
-                if not isinstance(evaluation_result_output.outputs, QualScore):
-                    logger.warning(f"Scorer {self.role} LLM output was not parsed into QualScore: {evaluation_result_output.outputs}")
-                    if hasattr(evaluation_result_output, "error") and isinstance(evaluation_result_output.error, list):
-                        evaluation_result_output.error.append("LLM output did not conform to QualScore schema.")
-
-        return evaluation_result_output
+    #     return evaluation_result_output
 
 
 # from weave import Scorer
