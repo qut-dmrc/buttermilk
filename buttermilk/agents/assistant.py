@@ -150,6 +150,7 @@ class AssistantAgentWrapper(Agent):
         except Exception as e:
             logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
             return AgentOutput(
+                agent_id=self.id,
                 content=f"Error processing request: {e}",
                 error=[str(e)],
             )
@@ -201,6 +202,7 @@ class AssistantAgentWrapper(Agent):
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
         return AgentOutput(
+            agent_id=self.id,
             content=output_content,
             outputs=output_data,
             metadata=final_metadata,

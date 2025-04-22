@@ -124,11 +124,11 @@ class BatchOrchestrator(Orchestrator):
             except Exception as e:
                 logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}", exc_info=True)
                 # Ensure 'inputs' attribute exists on output for error cases
-                return AgentOutput(error=[str(e)])
+                return AgentOutput(agent_id=self.name, error=[str(e)])
         else:
             # Error already logged by _get_agent_instance
             # Ensure 'inputs' attribute exists on output for error cases
-            return AgentOutput(error=[f"Agent instance not found: {first_variant_config.id}"])
+            return AgentOutput(agent_id=self.name, error=[f"Agent instance not found: {first_variant_config.id}"])
 
     async def _run(self, request: RunRequest | None = None) -> None:
         """

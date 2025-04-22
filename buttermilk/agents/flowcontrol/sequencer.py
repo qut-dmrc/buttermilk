@@ -157,7 +157,7 @@ class Sequencer(Agent):
         # Get next step using round-robin
         step = await self._choose(message=message)
         if step and step.role == END:
-            return AgentOutput(agent_id=self.id, agent_id=self.id, outputs=step)
+            return AgentOutput(agent_id=self.id, outputs=step)
 
         # If role doesn't exist in participants, wait a while
         if not step or step.role not in self._participants:
@@ -179,7 +179,6 @@ class Sequencer(Agent):
             agent_id=self.id,
         )
         # Set response attributes
-        response.content = f"Next step: {self._current_step_name}."
         response.outputs = step
         logger.info(f"Next step: {self._current_step_name}.")
 

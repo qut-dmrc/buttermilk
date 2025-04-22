@@ -242,8 +242,8 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
         # Add message content to model context if appropriate
         if isinstance(message, (AgentOutput, ConductorResponse)):
             # Use content if available
-            if message.content:
-                await self._model_context.add_message(AssistantMessage(content=str(message.content), source=source))
+            if message.contents:
+                await self._model_context.add_message(AssistantMessage(content=str(message.contents), source=source))
         elif isinstance(message, UserInstructions):
             # Use prompt for UserInstructions, check if content exists (it's on ToolOutput)
             prompt_content = getattr(message, "prompt", None)

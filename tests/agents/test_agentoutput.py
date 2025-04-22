@@ -71,7 +71,9 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
 def test_actual_agent_output_full_dump_with_default_outputs():
     """Test dumping the actual AgentOutput when 'outputs' is the default."""
-    output_obj = ActualAgentOutput()  # Instantiate with defaults
+    output_obj = ActualAgentOutput(
+        agent_id="test",
+    )  # Instantiate with defaults
 
     full_dump = output_obj.model_dump()
 

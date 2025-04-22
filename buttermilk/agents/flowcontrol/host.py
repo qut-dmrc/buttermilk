@@ -87,7 +87,7 @@ class LLMHostAgent(LLMAgent):
         # Log messages to our local context cache, but truncate them
 
         if isinstance(message, (AgentOutput, ConductorResponse)):
-            await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+            await self._model_context.add_message(AssistantMessage(content=str(message.contents)[:TRUNCATE_LEN], source=source))
         else:
             if not message.content.startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
@@ -169,7 +169,9 @@ class LLMHostAgent(LLMAgent):
         self._completed_agents_current_step.clear()
         self._step_completion_event.clear()
 
-        response = AgentOutput()
+        response = AgentOutput(
+            agent_id=self.id,
+        )
         response.outputs = step
         logger.info(f"Next step: {self._current_step_name}.")
 

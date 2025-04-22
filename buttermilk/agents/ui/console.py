@@ -89,7 +89,7 @@ class CLIUserAgent(UIAgent):
                     else:
                         output.append(pretty_repr(message.outputs, max_string=8000))
                 else:
-                    output.append(message.content)
+                    output.append(message.contents)
                 # for rec in message.records:
                 #     output.append(str(rec).replace("\\n", ""))
             elif isinstance(message, AgentInput):
