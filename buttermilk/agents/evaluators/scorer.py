@@ -63,25 +63,25 @@ class LLMScorer(LLMAgent):
 
     _output_model: Optional[type[BaseModel]] = QualScore  # Ensure scorer LLM returns this structure
 
-    @buttermilk_handler(AgentInput)
-    async def handle_agent_input(
-        self,
-        message: AgentInput,
-        ctx: MessageContext,
-    ) -> Optional[QualScore]:
-        """Handles direct AgentInput requests to perform scoring."""
+    # @buttermilk_handler(AgentInput)
+    # async def handle_agent_input(
+    #     self,
+    #     message: AgentInput,
+    #     ctx: MessageContext,
+    # ) -> Optional[QualScore]:
+    #     """Handles direct AgentInput requests to perform scoring."""
 
-        # Use the _process method inherited from LLMAgent
-        result: AgentOutput = await self._process(message=message)
+    #     # Use the _process method inherited from LLMAgent
+    #     result: AgentOutput = await self._process(message=message)
 
-        # Publish the structured output back to the group chat
-        if result and not result.is_error:
-            await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
-            logger.info(f"Scorer '{self.name}' published result: {result.outputs.score if hasattr(result, 'outputs') else 'N/A'}")
-            return result.outputs if isinstance(result.outputs, QualScore) else None
-        else:
-            logger.warning(f"Scorer '{self.name}' did not produce a publishable output: {result.error if result else 'None'}")
-            return None
+    #     # Publish the structured output back to the group chat
+    #     if result and not result.is_error:
+    #         await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
+    #         logger.info(f"Scorer '{self.name}' published result: {result.outputs.score if hasattr(result, 'outputs') else 'N/A'}")
+    #         return result.outputs if isinstance(result.outputs, QualScore) else None
+    #     else:
+    #         logger.warning(f"Scorer '{self.name}' did not produce a publishable output: {result.error if result else 'None'}")
+    #         return None
 
     def _extract_original_trace(self, message: GroupchatMessageTypes) -> Any:
         """Extract the original weave trace from AgentOutput if available.
@@ -109,6 +109,8 @@ class LLMScorer(LLMAgent):
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """
@@ -117,10 +119,6 @@ class LLMScorer(LLMAgent):
         The return value is ignored by the agent system, which expects None.
         Any processing results are returned through callbacks or by other methods.
         """
-        """Listen for outputs to analyze."""
-        # First call parent method to handle standard behavior
-        await super()._listen(message, cancellation_token=cancellation_token, source=source, **kwargs)
-
         # Check if this is a Judge output with AgentReasons and has ground truth record
         if not isinstance(message, AgentOutput):
             return None
@@ -128,54 +126,47 @@ class LLMScorer(LLMAgent):
         if not hasattr(message, "outputs") or not isinstance(message.outputs, AgentReasons):
             return None
 
-        if not message.records or len(message.records) != 1 or not hasattr(message.records[0], "ground_truth"):
+        # Scorer is stateless -- we don't want old data hanging around
+        # instead of using our key/value store, we get everything from this message
+        datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}
+        extracted = await self._extract_vars(message=message, datadict=datadict)
+        records = extracted.pop("records")
+
+        if not extracted["expected"] and not records[0].get("ground_truth"):
             return None
-
-        # Get ground truth from the record
-        ground_truth_record = message.records[0]
-
-        # Task processing events are handled at the adapter level in autogen.py
-        # No need to signal events here as the adapter wraps the agent call
 
         # Create an input for scoring
         scorer_input = AgentInput(
-            inputs={"answers": [message], "expected": ground_truth_record.ground_truth},
-            records=message.records,
-            parameters={"criteria": message.inputs.parameters.get("criteria") if message.inputs else None},
+            inputs=extracted,
+            records=records,
         )
 
-        # Process the scoring request
-        evaluation_result = None
-        try:
-            evaluation_result = await self._process(message=scorer_input, cancellation_token=cancellation_token)
+        # Get the original weave call to log against
+        weave_call = weave.get_current_call()
 
-            # Log the evaluation to the weave trace if available
-            weave_call = weave.get_current_call()
-            original_call = self._extract_original_trace(message)
+        # set up a temporary scorer class for weave:
+        coro = self._process(message=scorer_input, cancellation_token=cancellation_token)
 
-            if evaluation_result and not evaluation_result.is_error:
-                if hasattr(evaluation_result, "outputs") and isinstance(evaluation_result.outputs, QualScore):
-                    # Log to current weave call
-                    if weave_call:
-                        weave_call.log({"evaluation": evaluation_result.outputs.model_dump()})
+        class ButtermilkScorer(weave.Scorer):
+            @weave.op
+            async def score(self, output: Any) -> dict[str, Any]:
+                """Return the pre-computed score data."""
+                result = await coro
+                # publish the score
+                await public_callback(result)
+                return {"qual_score": result.outputs.model_dump()}
 
-                    # Also log to original call if available
-                    if original_call and original_call != weave_call:
-                        original_call.log({"qualitative_evaluation": evaluation_result.outputs.model_dump()})
+            @weave.op
+            def summarize(self, score_rows):
+                """Simple summarization of scores."""
+                # This is only called when aggregating multiple scores
+                return dict()
 
-                    logger.info(f"Evaluation: {evaluation_result.outputs.score}")
-        finally:
-            # Task completion is signaled by the adapter
-            pass
+        # Apply the scorer to the call
+        scorer = ButtermilkScorer()
+        score_result, score_call = await weave_call.apply_scorer(scorer)
 
-        # Use the public_callback to publish the result if provided
-        public_callback = kwargs.get("public_callback")
-        if evaluation_result and public_callback:
-            try:
-                await public_callback(evaluation_result)
-                logger.debug(f"Published evaluation via callback: {evaluation_result}")
-            except Exception as e:
-                logger.error(f"Failed to publish evaluation result via callback: {e}")
+        await public_callback(score_result)
 
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
@@ -200,9 +191,6 @@ class LLMScorer(LLMAgent):
                     logger.warning(f"Scorer {self.role} LLM output was not parsed into QualScore: {evaluation_result_output.outputs}")
                     if hasattr(evaluation_result_output, "error") and isinstance(evaluation_result_output.error, list):
                         evaluation_result_output.error.append("LLM output did not conform to QualScore schema.")
-                elif current_call:
-                    # Log to weave if successful
-                    current_call.log({"qualitative_score": evaluation_result_output.outputs.model_dump()})
 
         return evaluation_result_output
 

@@ -35,7 +35,7 @@ Your response should be written for an external audience. Do not mention our int
 {{records}}
 # User:
   {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+  <BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
   {{ answer.outputs.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}

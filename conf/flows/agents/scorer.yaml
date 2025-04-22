@@ -9,7 +9,8 @@ scorer:
   parameters:
     template: score
   inputs:
-    criteria: Evaluate how well the provided content aligns with the rules.
-    records: fetch.records
-    expected: "fetch.records[0].ground_truth"
+    # criteria: Evaluate how well the provided content aligns with the rules.
+    criteria: "*.inputs.parameters.criteria|[0]"
+    records: "*.records[]||*.inputs.records[]"
+    expected: "*.records[0].ground_truth||*.inputs.records[0].ground_truth|[0].reasons"
     answers: "[judge,synth][]"

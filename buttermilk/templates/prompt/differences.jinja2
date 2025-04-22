@@ -66,12 +66,11 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 {% if answers %}
 # User:
 Analyse the underlying reasons behind differences among the answers below.
-
-  {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.outputs.reasons }}
-  <END DRAFT ANSWER>
-  {% endfor %}
+{% for answer in answers %}
+<BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+{{ answer.outputs.reasons }}
+<END DRAFT ANSWER>
+{% endfor %}
 {% else %}
 
 # Placeholder:

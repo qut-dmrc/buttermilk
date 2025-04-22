@@ -16,6 +16,6 @@ synthesiser:
     model: ${llms.synthesisers}
     criteria: ${....params.criteria}
   inputs:
-    records: fetch.records
+    records: "*.records"
     answers: judge
     feedback: feedback

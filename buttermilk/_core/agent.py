@@ -203,6 +203,24 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
 
         return inputs
 
+    async def _extract_vars(self, message: GroupchatMessageTypes, datadict) -> dict[str, Any]:
+        extracted = {}
+        if isinstance(message, (AgentOutput, ConductorResponse)):
+            for key, mapping in self.inputs.items():
+                if mapping and isinstance(mapping, str):
+                    try:
+                        if value := jmespath.search(mapping, datadict):
+                            extracted[key] = value
+                    except jmespath.exceptions.ParseError:
+                        # Disregard text strings that are not JMESPath searches
+                        continue
+                else:
+                    logger.warning(
+                        f"Input mapping for {self.id} is too sophisticated and we haven't written the code to interpret it yet: {key} to {mapping}"
+                    )
+                    continue
+        return extracted
+
     async def _listen(
         self,
         message: GroupchatMessageTypes,
@@ -215,22 +233,16 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
     ) -> None:
         """Save incoming messages from *other* agents to update internal state."""
         # Look for matching roles in our inputs mapping
-        if isinstance(message, (AgentOutput, ConductorResponse)):
-            datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}
+        datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}
+        extracted = await self._extract_vars(message=message, datadict=datadict)
 
-            for key, mapping in self.inputs.items():
-                if mapping and isinstance(mapping, str):
-                    if value := jmespath.search(mapping, datadict):
-                        if key == "records":
-                            # records are stored separately in our memory cache
-                            self._records.extend(value)
-                            continue
-                        self._data.add(key, value)
-                else:
-                    logger.warning(
-                        f"Input mapping for {self.id} is too sophisticated and we haven't written the code to interpret it yet: {key} to {mapping}"
-                    )
-                    continue
+        # add to our state saver
+        for key, value in extracted.items():
+            if key == "records":
+                # records are stored separately in our memory cache
+                self._records.extend(value)
+                continue
+            self._data.add(key, value)
 
         # Add message content to model context if appropriate
         if isinstance(message, (AgentOutput, ConductorResponse)):
