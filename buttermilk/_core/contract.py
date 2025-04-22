@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from enum import Enum
 from math import e
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult
 from pydantic import (
@@ -179,7 +179,7 @@ class AgentOutput(FlowMessage):
         default=None,
         description="The human-readable digest representation of the message.",
     )
-    outputs: BaseModel | dict[str, Any] = Field(
+    outputs: Union[BaseModel, Dict[str, Any]] = Field(
         default={},
         description="The data returned from the agent",
     )
@@ -199,6 +199,15 @@ class AgentOutput(FlowMessage):
     _ensure_record_context_list = field_validator("internal_messages", "records", mode="before")(
         make_list_validator(),
     )
+
+    # This is needed because for some reason pydantic doesn't serialise the AgentReasons
+    # properly in the outputs: Basemodel field.
+    def model_dump(self, **kwargs):
+        data = super().model_dump(**kwargs)
+        # If outputs is a BaseModel, ensure it's properly dumped
+        if isinstance(self.outputs, BaseModel):
+            data["outputs"] = self.outputs.model_dump()
+        return data
 
 
 ######
