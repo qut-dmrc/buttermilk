@@ -77,7 +77,7 @@ class Sequencer(Agent):
     ) -> None:
         # Log messages to local context cache, but truncate them
         if isinstance(message, (AgentOutput, ConductorResponse)):
-            await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+            await self._model_context.add_message(AssistantMessage(content=message.contents[:TRUNCATE_LEN], source=source))
         else:
             # Check if message has content and it's not a command
             content = getattr(message, "content", getattr(message, "prompt", ""))

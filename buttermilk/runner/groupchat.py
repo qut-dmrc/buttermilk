@@ -205,72 +205,19 @@ class AutogenOrchestrator(Orchestrator):
     async def _execute_step(
         self,
         step: StepRequest,
-    ) -> AgentOutput | None:
-        message = AgentInput(prompt=step.prompt, records=self._records)
-        responses = await self._ask_agents(
-            step.role,
-            message=message,
-        )
-        # await self._runtime.publish_message(step, topic_id=topic_id)
-        await asyncio.sleep(0.1)
-        # Note: We're currently only returning the first response if multiple variants run
-        # Consider how to handle multiple responses if needed later
-        return responses[0] if responses else None
-
-    async def _evaluate_step(
-        self,
-        output: AgentOutput,
-        ground_truth_record: Record | None,
-        criteria: Any | None,
-        weave_call: Any | None,  # For logging evaluation to the trace
-    ) -> None:
-        """Runs the scorer agent if configured and logs the evaluation."""
-        SCORER_ROLE = "scorer"  # TODO: Make configurable?
-
-        if SCORER_ROLE not in self._agent_types:
-            logger.debug(f"No scorer agent configured with role '{SCORER_ROLE}'. Skipping evaluation.")
-            return
-        if not ground_truth_record or getattr(ground_truth_record, "ground_truth", None) is None:
-            logger.debug("No ground truth found in records. Skipping evaluation.")
-            return
+    ):
 
         try:
-            # Assuming only one scorer variant for now
-            scorer_agent_type, _ = self._agent_types[SCORER_ROLE][0]
-            scorer_agent_id = await self._runtime.get(scorer_agent_type)
-            # Note: We don't have the original Agent instance here easily to check type with isinstance(agent, LLMScorer)
-            # We rely on the configuration being correct.
-            scorer_input = AgentInput(
-                inputs={"answers": [output], "expected": ground_truth_record.ground_truth},
-                # Pass original records from the step's input
-                records=output.inputs.records if output.inputs else [],
-                parameters={"criteria": criteria} if criteria else {},
+            message = AgentInput(prompt=step.prompt, records=self._records)
+            _ = await self._ask_agents(
+                step.role,
+                message=message,
             )
+            await asyncio.sleep(0.1)
 
-            evaluation_response = await self._runtime.send_message(message=scorer_input, recipient=scorer_agent_id)
-
-            if isinstance(evaluation_response, AgentOutput) and not evaluation_response.is_error:
-                # Add assertion for type checker clarity
-                # Check type before asserting
-                if isinstance(evaluation_response.outputs, QualScore):
-                    score = evaluation_response.outputs  # Now safe to assign
-                    assert score is not None  # Assert for mypy after check
-                    logger.info(f"Evaluation successful for role (?). Score: {getattr(score, 'score', 'N/A')}")  # Use getattr for score
-                    if weave_call:
-                        # Ensure score is not None before dumping (already checked by isinstance)
-                        if score:
-                            weave_call.log({"evaluation": score.model_dump()})  # score is guaranteed QualScore here
-                else:
-                    logger.warning(f"Scorer agent '{SCORER_ROLE}' did not return a QualScore object, got: {type(evaluation_response.outputs)}")
-            elif isinstance(evaluation_response, AgentOutput) and evaluation_response.is_error:
-                logger.warning(f"Scorer agent '{SCORER_ROLE}' returned an error: {evaluation_response.error}")
-            else:
-                logger.warning(f"Received unexpected response type from scorer agent '{SCORER_ROLE}': {type(evaluation_response)}")
-
-        except IndexError:
-            logger.warning(f"Scorer agent '{SCORER_ROLE}' configured but no variants found.")
         except Exception as e:
-            logger.error(f"Error during evaluation execution: {e}", exc_info=True)
+            msg = f"Error during step execution: {e}", exc_info=False
+            raise ProcessingError(msg) from e
 
     async def _get_host_suggestion(self) -> StepRequest | None:  # Allow None return
         """Determine the next step based on the current flow data."""
@@ -332,27 +279,10 @@ class AutogenOrchestrator(Orchestrator):
                         # User did not confirm plan; go back and get new instructions
                         continue
 
-                    if step:
-                        # Store the weave call context if available
-                        current_call = weave.get_current_call()
-                        output = await self._execute_step(step=step)
+                    await self._execute_step(step=step)
 
-                        # --- Call evaluation ---
-                        if isinstance(output, AgentOutput) and not output.is_error:
-                            # Find ground truth record from the input used for the step
-                            ground_truth_record = next((r for r in output.records if getattr(r, "ground_truth", None) is not None), None)
-                            # Get criteria from flow params or step input params
-                            criteria = output.inputs.parameters.get("criteria") or self.params.get("criteria")
-                            await self._evaluate_step(
-                                output=output,
-                                ground_truth_record=ground_truth_record,
-                                criteria=criteria,
-                                weave_call=current_call,  # Pass the weave call object
-                            )
-                        elif output is None:
-                            logger.warning(f"Step {step.role} did not return an output.")
-                        # Error case already handled by logger in _evaluate_step if evaluation fails
-                        # --- End evaluation call ---
+                    # sleep a bit
+                    await asyncio.sleep(5)
 
                 except ProcessingError as e:
                     # non-fatal error

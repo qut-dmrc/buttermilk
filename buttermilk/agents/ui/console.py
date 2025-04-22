@@ -66,7 +66,7 @@ class CLIUserAgent(UIAgent):
                     return Markdown("\n".join(output))
 
                 # Is there a Record object?
-                if message.records:
+                if isinstance(message.outputs, list):
                     for rec in message.records:
                         if isinstance(rec, Record):
                             output.append(f"### Record: {rec.record_id}")
