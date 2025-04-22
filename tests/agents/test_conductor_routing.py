@@ -1,12 +1,20 @@
+"""
+Tests the internal routing logic of conductor agents, ensuring ConductorRequest
+is handled correctly by delegating to step-choosing methods.
+"""
+
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-import inspect
+import inspect  # Keep inspect only if absolutely needed for debugging, remove from final tests
 
+# Buttermilk core types
 from buttermilk._core.contract import (
     ConductorRequest,
     StepRequest,
     AgentOutput,
 )
+
+# Conductor agent classes under test
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
@@ -14,99 +22,82 @@ from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 pytestmark = pytest.mark.anyio
 
 
+@pytest.fixture
+def conductor_request() -> ConductorRequest:
+    """Provides a sample ConductorRequest."""
+    return ConductorRequest(inputs={"test": "data"}, prompt="test prompt")
+
+
 class TestConductorRouting:
-    """Tests focusing specifically on the ConductorRequest routing to _get_next_step."""
+    """Tests focus on routing ConductorRequest within conductor agents."""
 
-    async def test_sequencer_handle_events_routes_conductor_request(self):
-        """Test that Sequencer._handle_events calls _get_next_step when given a ConductorRequest."""
-        # Get the source code for the method
-        code = inspect.getsource(Sequencer._handle_events)
-
-        # Verify the code contains call to _get_next_step when message is ConductorRequest
-        assert "if isinstance(message, ConductorRequest)" in code
-        assert "next_step = await self._get_next_step(inputs=message)" in code
-
-        # Create a test instance that won't throw errors
-        with patch.object(Sequencer, '__init__', return_value=None):
+    async def test_sequencer_handle_events_routes_conductor_request(self, conductor_request: ConductorRequest):
+        """Test Sequencer._handle_events calls _get_next_step for ConductorRequest."""
+        # Arrange: Create a Sequencer instance with mocked dependencies
+        # Patch __init__ to avoid dependencies, then add mocks manually
+        with patch.object(Sequencer, "__init__", return_value=None):
             sequencer = Sequencer()
-            sequencer._get_next_step = AsyncMock()
-            sequencer._check_completions = AsyncMock()
+            # Mock methods called by _handle_events
+            sequencer._get_next_step = AsyncMock(name="_get_next_step")
+            sequencer._check_completions = AsyncMock(name="_check_completions")
+            # Add necessary attributes if _handle_events reads them (e.g., _current_step_name)
+            sequencer._current_step_name = "some_step"
 
-            # Create a test request
-            request = ConductorRequest(inputs={"test": "data"}, prompt="test")
+        # Act: Call the method under test
+        await sequencer._handle_events(conductor_request)
 
-            # Call the method
-            await sequencer._handle_events(request)
+        # Assert: Verify _get_next_step was called correctly
+        sequencer._check_completions.assert_called_once()  # Verify completion check happens
+        sequencer._get_next_step.assert_called_once_with(message=conductor_request)
 
-            # Verify _get_next_step was called with the right arguments
-            sequencer._get_next_step.assert_called_once_with(message=request)
-
-    async def test_host_handle_events_routes_conductor_request(self):
-        """Test that LLMHostAgent._handle_events calls _get_next_step when given a ConductorRequest."""
-        # Get the source code for the method
-        code = inspect.getsource(LLMHostAgent._handle_events)
-
-        # Verify the code contains call to _get_next_step when message is ConductorRequest
-        assert "if isinstance(message, ConductorRequest)" in code
-        assert "next_step = await self._get_next_step(message=message)" in code
-
-        # Create a test instance that won't throw errors
-        with patch.object(LLMHostAgent, '__init__', return_value=None):
+    async def test_host_handle_events_routes_conductor_request(self, conductor_request: ConductorRequest):
+        """Test LLMHostAgent._handle_events calls _get_next_step for ConductorRequest."""
+        # Arrange: Create LLMHostAgent instance with mocks
+        with patch.object(LLMHostAgent, "__init__", return_value=None):
             host = LLMHostAgent()
-            host._get_next_step = AsyncMock()
-            host._check_completions = AsyncMock()
+            host._get_next_step = AsyncMock(name="_get_next_step")
+            host._check_completions = AsyncMock(name="_check_completions")  # If LLMHostAgent uses it
+            host._current_step_name = "some_step"  # Add needed attributes
 
-            # Create a test request
-            request = ConductorRequest(inputs={"test": "data"}, prompt="test")
+        # Act
+        await host._handle_events(conductor_request)
 
-            # Call the method
-            await host._handle_events(request)
+        # Assert
+        # host._check_completions.assert_called_once() # Uncomment if LLMHostAgent uses it
+        host._get_next_step.assert_called_once_with(message=conductor_request)
 
-            # Verify _get_next_step was called with the right arguments
-            host._get_next_step.assert_called_once_with(message=request)
-
-    async def test_explorer_handle_events_routes_conductor_request(self):
-        """Test that ExplorerHost._handle_events calls _get_next_step when given a ConductorRequest."""
-        # ExplorerHost inherits _handle_events from LLMHostAgent, so we check that it's the same
-        explorer_code = ExplorerHost._handle_events
-        host_code = LLMHostAgent._handle_events
-
-        # Verify it's the same method
-        assert explorer_code == host_code, "ExplorerHost._handle_events should be the same as LLMHostAgent._handle_events"
-
-        # Create a test instance that won't throw errors
-        with patch.object(ExplorerHost, '__init__', return_value=None):
+    async def test_explorer_handle_events_routes_conductor_request(self, conductor_request: ConductorRequest):
+        """Test ExplorerHost._handle_events calls _get_next_step (inherited)."""
+        # Arrange: Create ExplorerHost instance with mocks
+        with patch.object(ExplorerHost, "__init__", return_value=None):
             explorer = ExplorerHost()
-            explorer._get_next_step = AsyncMock()
-            explorer._check_completions = AsyncMock()
+            # Explorer inherits from LLMHostAgent, mock same methods
+            explorer._get_next_step = AsyncMock(name="_get_next_step")
+            explorer._check_completions = AsyncMock(name="_check_completions")  # If inherited/used
+            explorer._current_step_name = "some_step"  # Add needed attributes
 
-            # Create a test request
-            request = ConductorRequest(inputs={"test": "data"}, prompt="test")
+        # Act
+        await explorer._handle_events(conductor_request)
 
-            # Call the method
-            await explorer._handle_events(request)
+        # Assert: Behavior should be same as LLMHostAgent
+        # explorer._check_completions.assert_called_once() # Uncomment if applicable
+        explorer._get_next_step.assert_called_once_with(message=conductor_request)
 
-            # Verify _get_next_step was called with the right arguments
-            explorer._get_next_step.assert_called_once_with(message=request)
-
-    async def test_explorer_choose_calls_process(self):
+    async def test_explorer_choose_calls_process(self, conductor_request: ConductorRequest):
         """Test that ExplorerHost._choose calls _process."""
-        # Get the source code for the method
-        code = inspect.getsource(ExplorerHost._choose)
-
-        # Verify the code contains call to _process
-        assert "step = await self._process(message=inputs)" in code
-
-        # Create a test instance that won't throw errors
-        with patch.object(ExplorerHost, '__init__', return_value=None):
+        # Arrange: Create ExplorerHost instance with mocked _process
+        with patch.object(ExplorerHost, "__init__", return_value=None):
             explorer = ExplorerHost()
-            explorer._process = AsyncMock()
+            explorer._process = AsyncMock(
+                name="_process", return_value=AgentOutput(agent_id="test", outputs=StepRequest(role="ANY", prompt="", description=""))
+            )
+            # Add any attributes _choose might need
 
-            # Create a test request
-            request = ConductorRequest(inputs={"test": "data"}, prompt="test")
+        # Act: Call the method under test. Assuming _choose takes 'message' arg.
+        # If it takes 'inputs', adjust the call signature.
+        await explorer._choose(message=conductor_request)
 
-            # Call the method
-            await explorer._choose(inputs=request)
-
-            # Verify _process was called with the right arguments
-            explorer._process.assert_called_once_with(message=request)
+        # Assert: Verify _process was called correctly
+        explorer._process.assert_called_once()
+        call_args, call_kwargs = explorer._process.call_args
+        assert call_kwargs.get("message") == conductor_request  # Check message arg

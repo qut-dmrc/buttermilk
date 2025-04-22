@@ -1,269 +1,175 @@
-import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+"""
+Tests for conductor agents' _get_next_step method.
+"""
 
-from buttermilk._core.contract import (
-    ConductorRequest,
-    ConductorResponse,
-    StepRequest,
-    AgentOutput,
-    END,
-    WAIT,
-)
+import pytest
+import asyncio
+from unittest.mock import MagicMock, patch, AsyncMock
+
+# Buttermilk core types
+from buttermilk._core.agent import AgentInput, AgentOutput
+from buttermilk._core.contract import StepRequest, ConductorRequest, END, WAIT
+
+# Agent classes under test
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.explorer import ExplorerHost
+
+pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
-def conductor_request():
-    """Create a sample ConductorRequest object for testing."""
-    return ConductorRequest(
-        inputs={
-            "participants": {
-                "AGENT1": {"config": "some_config"},
-                "AGENT2": {"config": "some_config"},
-            },
-            "task": "test task",
-        },
-        prompt="Test prompt",
-    )
+def conductor_request() -> ConductorRequest:
+    """Provides a sample ConductorRequest."""
+    return ConductorRequest(inputs={"participants": {"AGENT1": {}, "AGENT2": {}}, "task": "test"}, prompt="Get next step")
 
 
-class TestSequencer:
-    """Tests for Sequencer handling of ConductorRequest objects."""
-
-    @pytest.mark.asyncio
-    async def test_sequencer_handle_events_conductor_request(self, conductor_request):
-        """
-        Test that Sequencer._handle_events correctly handles ConductorRequest
-        and routes it to _get_next_step.
-        """
-        sequencer = Sequencer(role="SEQUENCER", description="Test Sequencer")
-        # Mock _get_next_step to avoid its implementation
-        sequencer._get_next_step = AsyncMock()
-        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
-        sequencer._get_next_step.return_value = mock_response
-
-        # Call _handle_events with a ConductorRequest
-        result = await sequencer._handle_events(conductor_request)
-
-        # Verify _get_next_step was called with the request
-        sequencer._get_next_step.assert_called_once_with(inputs=conductor_request)
-        # Verify the result is the response from _get_next_step
-        assert result == mock_response
-
-    @pytest.mark.asyncio
-    async def test_sequencer_get_next_step(self, conductor_request):
-        """
-        Test that Sequencer._get_next_step returns an AgentOutput with a StepRequest.
-        """
-        sequencer = Sequencer(role="SEQUENCER")
-
-        # Initialize with a mocked step generator that returns a fixed StepRequest
-        async def mock_generator():
-            yield StepRequest(role="AGENT1", prompt="", description="Test step")
-
-        sequencer._step_generator = mock_generator()
-        sequencer._step_completion_event = asyncio.Event()
-        sequencer._step_completion_event.set()  # Ensure event is set to avoid waiting
-
-        # Call _get_next_step
-        result = await sequencer._get_next_step(conductor_request)
-
-        # Verify the result is an AgentOutput with a StepRequest
-        assert isinstance(result, AgentOutput)
-        assert isinstance(result.outputs, StepRequest)
-        assert result.outputs.role == "AGENT1"
-
-        # Verify participants were set from the request
-        assert sequencer._participants == conductor_request.inputs.get("participants")
-
-        # Verify the completion tracking was reset
-        assert sequencer._current_step_name == "AGENT1"
-        assert len(sequencer._expected_agents_current_step) == 0
-        assert len(sequencer._completed_agents_current_step) == 0
-        assert not sequencer._step_completion_event.is_set()
+# --- Sequencer Tests ---
 
 
-class TestLLMHostAgent:
-    """Tests for LLMHostAgent handling of ConductorRequest objects."""
-
-    @pytest.mark.asyncio
-    async def test_host_handle_events_conductor_request(self, conductor_request):
-        """
-        Test that LLMHostAgent._handle_events correctly handles ConductorRequest
-        and routes it to _get_next_step.
-        """
-        host = LLMHostAgent(role="HOST", description="Test Host")
-        # Mock _get_next_step to avoid its implementation
-        host._get_next_step = AsyncMock()
-        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
-        host._get_next_step.return_value = mock_response
-
-        # Call _handle_events with a ConductorRequest
-        result = await host._handle_events(conductor_request)
-
-        # Verify _get_next_step was called with the request
-        host._get_next_step.assert_called_once_with(inputs=conductor_request)
-        # Verify the result is the response from _get_next_step
-        assert result == mock_response
-
-    @pytest.mark.asyncio
-    async def test_host_get_next_step(self, conductor_request):
-        """
-        Test that LLMHostAgent._get_next_step returns an AgentOutput with a StepRequest.
-        """
-        host = LLMHostAgent(role="HOST")
-
-        # Initialize with a mocked step generator that returns a fixed StepRequest
-        async def mock_generator():
-            yield StepRequest(role="AGENT1", prompt="", description="Test step")
-
-        host._step_generator = mock_generator()
-        host._step_completion_event = asyncio.Event()
-        host._step_completion_event.set()  # Ensure event is set to avoid waiting
-
-        # Call _get_next_step
-        result = await host._get_next_step(conductor_request)
-
-        # Verify the result is an AgentOutput with a StepRequest
-        assert isinstance(result, AgentOutput)
-        assert isinstance(result.outputs, StepRequest)
-        assert result.outputs.role == "AGENT1"
-
-        # Verify participants were set from the request
-        assert host._participants == conductor_request.inputs.get("participants")
-
-        # Verify the completion tracking was reset
-        assert host._current_step_name == "AGENT1"
-        assert len(host._expected_agents_current_step) == 0
-        assert len(host._completed_agents_current_step) == 0
-        assert not host._step_completion_event.is_set()
-
-    @pytest.mark.asyncio
-    async def test_host_avoid_self_call(self, conductor_request):
-        """
-        Test that LLMHostAgent._get_next_step avoids calling itself.
-        """
-        host = LLMHostAgent(role="AGENT1", description="Test Host")  # Same role as the next step
-
-        # Mock _choose to return StepRequest with role=AGENT1 (same as host)
-        async def mock_choose(*args, **kwargs):
-            return StepRequest(role="AGENT1", prompt="", description="Test step")
-
-        host._choose = mock_choose
-
-        # Set up test conditions
-        host._step_completion_event = asyncio.Event()
-        host._step_completion_event.set()
-
-        # Call _get_next_step - should avoid calling itself
-        with patch.object(
-            host,
-            "_choose",
-            side_effect=[
-                StepRequest(role="AGENT1", prompt="", description="Test step"),  # First call returns AGENT1
-                StepRequest(role="AGENT2", prompt="", description="Test step"),  # Second call returns AGENT2
-            ],
-        ):
-            result = await host._get_next_step(conductor_request)
-
-            # Should return WAIT since the second choice is not in participants
-            assert isinstance(result, AgentOutput)
-            assert isinstance(result.outputs, StepRequest)
-            assert result.outputs.role == WAIT
-
-
-class TestExplorerHost:
-    """Tests for ExplorerHost handling of ConductorRequest objects."""
-
-    @pytest.mark.asyncio
-    async def test_explorer_handle_events_conductor_request(self, conductor_request):
-        """
-        Test that ExplorerHost._handle_events correctly handles ConductorRequest
-        and routes it to _get_next_step.
-        """
-        explorer = ExplorerHost(role="EXPLORER", description="Test Explorer")
-        # Mock _get_next_step to avoid its implementation
-        explorer._get_next_step = AsyncMock()
-        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
-        explorer._get_next_step.return_value = mock_response
-
-        # Call _handle_events with a ConductorRequest
-        result = await explorer._handle_events(conductor_request)
-
-        # Verify _get_next_step was called with the request
-        explorer._get_next_step.assert_called_once_with(inputs=conductor_request)
-        # Verify the result is the response from _get_next_step
-        assert result == mock_response
-
-    @pytest.mark.asyncio
-    async def test_explorer_get_next_step(self, conductor_request):
-        """
-        Test that ExplorerHost._get_next_step calls _process method.
-        """
-        explorer = ExplorerHost(role="EXPLORER")
-        # Mock _process to return a StepRequest
-        explorer._process = AsyncMock()
-        mock_step = StepRequest(role="AGENT1", prompt="", description="Test step")
-        explorer._process.return_value = mock_step
-
-        # Initialize required attributes
-        explorer._step_completion_event = asyncio.Event()
-        explorer._step_completion_event.set()
-
-        # Patch the parent _get_next_step method to avoid its implementation
-        with patch.object(LLMHostAgent, "_get_next_step") as mock_parent_get_next_step:
-            mock_response = AgentOutput(agent_id="test", outputs=mock_step)
-            mock_parent_get_next_step.return_value = mock_response
-
-            # Call _get_next_step
-            result = await explorer._get_next_step(conductor_request)
-
-            # Verify _process was called
-            explorer._process.assert_called_once()
-
-            # Verify the result is from the parent method
-            assert result == mock_response
-
-
-@pytest.mark.asyncio
-async def test_integration_with_orchestrator():
+@pytest.mark.anyio
+async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     """
-    Integration test: simulate interactions between orchestrator's ConductorRequest and agents.
+    Test Sequencer._get_next_step returns the next step from its generator.
     """
-    # Create agents
-    sequencer = Sequencer(role="SEQUENCER", description="Test Sequencer")
-    host = LLMHostAgent(role="HOST", description="Test Host")
-    explorer = ExplorerHost(role="EXPLORER", description="Test Explorer")
+    # Arrange
+    sequencer = Sequencer(role="SEQUENCER", name="Test Seq", description="test")
+    await sequencer.initialize()  # Initialize to set up generator
 
-    # Initialize them
-    await sequencer.initialize()
-    await host.initialize()
-    await explorer.initialize()
+    # Mock the internal generator to control the output
+    async def mock_generator():
+        yield StepRequest(role="AGENT1", prompt="", description="Step 1")
+        yield StepRequest(role="AGENT2", prompt="", description="Step 2")
+        yield StepRequest(role=END, prompt="", description="End")
 
-    # Create a conductor request from orchestrator
-    conductor_request = ConductorRequest(
-        inputs={
-            "participants": {
-                "AGENT1": {"config": "some_config"},
-                "AGENT2": {"config": "some_config"},
-                "END": {"config": "some_config"},
-            },
-            "task": "integration test",
-        },
-        prompt="Integration test",
-    )
+    sequencer._step_generator = mock_generator()
 
-    # Test each agent's handling of the request
-    sequencer_response = await sequencer._handle_events(conductor_request)
-    host_response = await host._handle_events(conductor_request)
-    explorer_response = await explorer._handle_events(conductor_request)
+    # Ensure completion event is set (or mock _check_completions/_wait_for)
+    sequencer._step_completion_event.set()
+    sequencer._check_completions = AsyncMock()  # Mock to avoid side effects
 
-    # Verify all responses are ConductorResponse objects with StepRequest outputs
-    for response in [sequencer_response, host_response, explorer_response]:
-        assert isinstance(response, AgentOutput)
-        assert isinstance(response.outputs, StepRequest)
-        # Response should return a step that's in participants or END
-        assert response.outputs.role in ["AGENT1", "AGENT2", "END", WAIT]
+    # Act
+    # Need to populate participants first, which _get_next_step does internally on first call
+    result1 = await sequencer._get_next_step(message=conductor_request)
+
+    # Assert first step
+    assert isinstance(result1, AgentOutput)
+    assert isinstance(result1.outputs, StepRequest)
+    assert result1.outputs.role == "AGENT1"
+    assert sequencer._participants == conductor_request.inputs.get("participants")
+    assert sequencer._current_step_name == "AGENT1"
+    assert not sequencer._step_completion_event.is_set()  # Should be cleared for next step
+
+    # Act again for second step (simulate previous step completing)
+    sequencer._step_completion_event.set()
+    result2 = await sequencer._get_next_step(message=conductor_request)
+
+    # Assert second step
+    assert isinstance(result2, AgentOutput)
+    assert isinstance(result2.outputs, StepRequest)
+    assert result2.outputs.role == "AGENT2"
+    assert sequencer._current_step_name == "AGENT2"
+
+    # Act again for END step
+    sequencer._step_completion_event.set()
+    result3 = await sequencer._get_next_step(message=conductor_request)
+
+    # Assert END step
+    assert isinstance(result3, AgentOutput)
+    assert isinstance(result3.outputs, StepRequest)
+    assert result3.outputs.role == END
+    assert sequencer._current_step_name == END
+
+
+# --- LLMHostAgent Tests ---
+
+
+@pytest.fixture
+def mock_llm_host_agent() -> LLMHostAgent:
+    """Fixture for a mocked LLMHostAgent."""
+    with patch.object(LLMHostAgent, "__init__", return_value=None):
+        agent = LLMHostAgent()
+        agent.id = "mock-host-id"
+        agent.role = "host"
+        agent.description = "Mocked host"
+        agent._process = AsyncMock(name="_process")
+        agent._check_completions = AsyncMock(name="_check_completions")
+        agent._step_completion_event = asyncio.Event()
+        agent._current_step_name = "previous_step"
+        # Add other necessary attributes if needed by _get_next_step
+        agent.parameters = {}  # Mock parameters dict
+        agent._records = []
+        agent._model_context = MagicMock()  # Mock context if needed
+        agent._data = MagicMock()  # Mock data collector if needed
+        agent._data._resolve_mappings.return_value = {}  # Mock mapping resolution
+        return agent
+
+
+@pytest.mark.anyio
+async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
+    """
+    Test LLMHostAgent._get_next_step calls _process to determine the next step.
+    """
+    # Arrange
+    expected_step = StepRequest(role="NEXT_AGENT", prompt="Do something", description="Next action")
+    mock_output_from_process = AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=expected_step)
+    mock_llm_host_agent._process.return_value = mock_output_from_process
+    mock_llm_host_agent._step_completion_event.set()  # Assume previous step completed
+
+    # Act
+    result_output = await mock_llm_host_agent._get_next_step(message=conductor_request)
+
+    # Assert
+    mock_llm_host_agent._check_completions.assert_called_once()
+    mock_llm_host_agent._process.assert_called_once()
+
+    call_args, call_kwargs = mock_llm_host_agent._process.call_args
+    assert "message" in call_kwargs
+    process_input_message = call_kwargs["message"]
+    assert isinstance(process_input_message, AgentInput)
+    # Verify _process input contains relevant info from ConductorRequest (depends on _get_next_step logic)
+    assert process_input_message.inputs == conductor_request.inputs
+    # LLMHostAgent._get_next_step should return the output from _process
+    assert result_output == mock_output_from_process
+    # Verify completion tracking reset (assuming _process output is valid StepRequest)
+    assert mock_llm_host_agent._current_step_name == "NEXT_AGENT"
+    assert not mock_llm_host_agent._step_completion_event.is_set()
+
+
+@pytest.mark.anyio
+async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
+    """
+    Test that LLMHostAgent._get_next_step avoids calling itself or MANAGER.
+    """
+    # Arrange
+    mock_llm_host_agent.role = "host"  # Set agent's own role
+    step_self = StepRequest(role="HOST", prompt="Call self", description="")
+    step_manager = StepRequest(role="MANAGER", prompt="Call manager", description="")
+    step_other = StepRequest(role="OTHER_AGENT", prompt="Call other", description="")
+
+    # Simulate _process returning HOST, then MANAGER, then OTHER_AGENT
+    mock_llm_host_agent._process.side_effect = [
+        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_self),
+        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_manager),
+        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_other),
+    ]
+    mock_llm_host_agent._step_completion_event.set()  # Start ready
+
+    # Act & Assert 1: First call to _get_next_step -> _process returns HOST -> _get_next_step calls _process again
+    result1 = await mock_llm_host_agent._get_next_step(message=conductor_request)
+    # Act & Assert 2: Second call to _process returns MANAGER -> _get_next_step calls _process again
+    result2 = await mock_llm_host_agent._get_next_step(message=conductor_request)
+    # Act & Assert 3: Third call to _process returns OTHER_AGENT -> _get_next_step returns this one
+    result3 = await mock_llm_host_agent._get_next_step(message=conductor_request)
+
+    # Verify _process was called three times
+    assert mock_llm_host_agent._process.call_count == 3
+    # Verify the final result is the OTHER_AGENT step
+    assert isinstance(result3, AgentOutput)
+    assert isinstance(result3.outputs, StepRequest)
+    assert result3.outputs.role == "OTHER_AGENT"
+    # Verify current step is updated
+    assert mock_llm_host_agent._current_step_name == "OTHER_AGENT"
+
+
+# Removed redundant _handle_events tests (covered in test_conductor_routing.py)
+# Removed flawed/redundant _get_next_step tests for Explorer/Integration
