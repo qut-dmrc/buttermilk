@@ -53,6 +53,7 @@ def initialize_slack_bot(
         logger.info("Socket Mode client reconnected")
         # Re-register handlers for all active threads
         reregister_all_active_threads()
+
     return slack_app, handler
 
 
@@ -64,11 +65,7 @@ async def register_handlers(
     async def _flow_start_matcher(body):
         logger.debug(f"Received request: {json.dumps(body)}")
         # don't trigger on self-messages or within a thread
-        if (
-            body
-            and body["event"].get("subtype") != "bot_message"
-            and (body["event"].get("event_ts") != body["event"].get("thread_ts"))
-        ):
+        if body and body["event"].get("subtype") != "bot_message" and (body["event"].get("event_ts") != body["event"].get("thread_ts")):
             match = BOTPATTERNS.search(body["event"]["text"])
             if match:
                 return True
@@ -278,7 +275,7 @@ async def start_flow_thread(
 
         # Prepend init_text if it's not empty
         if init_text.strip():
-            history.append(UserMessage(content=init_text,source="slack-thread"))
+            history.append(UserMessage(content=init_text, source="slack-thread"))
             logger.debug(
                 "Added initial text to history",
                 extra={"text_length": len(init_text)},

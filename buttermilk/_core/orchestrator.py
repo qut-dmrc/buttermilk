@@ -1,12 +1,20 @@
+"""
+Defines the abstract base class for Orchestrators in Buttermilk.
+
+Orchestrators are responsible for managing the setup, execution, and cleanup
+of agent-based workflows (flows).
+"""
+
 from abc import ABC, abstractmethod
-from ast import arguments
+from ast import arguments  # TODO: Unused import?
 import asyncio
 from collections.abc import Mapping, Sequence
-from enum import Enum
+from enum import Enum  # TODO: Unused import?
 from pathlib import Path
 from typing import Any, AsyncGenerator, Literal, Self
-import shortuuid
-from autogen_core.model_context import UnboundedChatCompletionContext
+
+import shortuuid  # For generating session IDs
+from autogen_core.model_context import UnboundedChatCompletionContext  # Used in Agent, maybe needed for type hints?
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -15,286 +23,358 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-import weave
+import weave  # For tracing
 
-from buttermilk._core import TaskProcessingComplete  # Removed AgentOutput from here
-from buttermilk._core.agent import Agent, ChatCompletionContext, FatalError, ProcessingError  # Added Agent
-from buttermilk._core.config import DataSourceConfig, SaveInfo
-from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest, AgentOutput  # Added AgentOutput here
-from buttermilk._core.flow import KeyValueCollector
+# Buttermilk core imports
+from buttermilk._core import TaskProcessingComplete  # Status message type
 
-# from buttermilk._core.job import Job # Job seems unused here
-from buttermilk._core.types import Record, RunRequest  # Import RunRequest
-from buttermilk._core.variants import AgentVariants
-from buttermilk.agents.fetch import FetchRecord
-from buttermilk.bm import BM, bm, logger
+# Agent base class and related types
+from buttermilk._core.agent import Agent, ChatCompletionContext, FatalError, ProcessingError
+from buttermilk._core.config import DataSourceConfig, SaveInfo  # Configuration models
+from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest, AgentOutput  # Core message types
+from buttermilk._core.flow import KeyValueCollector  # State management utility
+from buttermilk._core.types import Record, RunRequest  # Data types
+from buttermilk._core.variants import AgentVariants  # Agent variant configuration
+from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
+from buttermilk.bm import BM, bm, logger  # Global instance and logger
 
-BASE_DIR = Path(__file__).absolute().parent
+# TODO: BASE_DIR seems unused. Consider removing.
+# BASE_DIR = Path(__file__).absolute().parent
 
 
 class Orchestrator(BaseModel, ABC):
     """
-    Abstract Base Class for orchestrators that manage the execution of agent-based flows.
+    Abstract Base Class for orchestrators that manage agent-based flows.
 
-    Orchestrators are responsible for setting up the execution environment, loading data,
-    instantiating agents, managing the sequence of steps (either statically or dynamically),
-    handling communication between agents (potentially via a runtime), interacting with
-    a user interface if needed, collecting results, and cleaning up resources.
+    Orchestrators handle:
+    - Loading flow configurations (data sources, agents, parameters).
+    - Setting up the execution environment (e.g., communication runtimes).
+    - Managing the sequence of steps (via internal logic or conductor agents).
+    - Facilitating agent communication and data flow.
+    - Optional user interaction via a MANAGER interface.
+    - Collecting and potentially saving results.
+    - Cleaning up resources post-execution.
 
-    Concrete subclasses must implement `_setup`, `_cleanup`, and `_execute_step`.
-    They typically also override `_run` to define the main control loop logic.
-
-    The Orchestrator is responsible for coordinating the execution of steps in a flow,
-    managing agent interactions, handling data flow between components, and collecting results.
+    Subclasses must implement `_setup`, `_cleanup`, and `_execute_step`.
+    The `_run` method typically contains the main control loop logic.
 
     Attributes:
-        session_id (str): A unique identifier for this flow execution session
-        description (str): Short description of the flow's purpose
-        save (SaveInfo | None): Configuration for saving flow results
-        data (Sequence[DataSource]): Data sources available to the flow
-        agents (Mapping[str, AgentVariants]): Agent variants available to run in the flow
-        params (dict): Flow-level parameters that can be used by agents
-
+        session_id (str): Unique ID for the current flow execution session.
+        name (str): Human-friendly name for the flow.
+        description (str): Description of the flow's purpose.
+        save (SaveInfo | None): Configuration for saving results (optional).
+        data (Sequence[DataSourceConfig]): List of data sources for the flow.
+        agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
+        params (dict): Flow-level parameters accessible by agents.
+        _flow_data (KeyValueCollector): Internal state collector for the flow.
+        _records (list[Record]): List of data records currently loaded/used in the flow.
     """
 
+    # --- Configuration Fields ---
     session_id: str = Field(
         default_factory=lambda: shortuuid.uuid()[:8],
-        description="A unique session id for this set of flow runs.",
+        description="A unique session id for this specific flow execution.",
     )
     name: str = Field(
-        ...,
-        description="Friendly name of this flow",
+        ...,  # Name is required
+        description="Human-friendly name identifying this flow configuration.",
     )
     description: str = Field(
-        default_factory=shortuuid.uuid,
-        description="Short description of this flow",
+        default="",  # Default to empty string
+        description="Short description explaining the purpose of this flow.",
     )
-    save: SaveInfo | None = Field(default=None)
-    data: Sequence[DataSourceConfig] = Field(default_factory=list)
+    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
+    data: Sequence[DataSourceConfig] = Field(
+        default_factory=list,
+        description="Configuration for data sources to be loaded for the flow.",
+    )
     agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
-        description="Agent factories available to run.",
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
     params: dict = Field(
-        default={},
-        description="Flow-level parameters available for use by agents.",
-        exclude=True,
+        default_factory=dict,
+        description="Flow-level parameters accessible by agents via their context.",
+        # exclude=True, # Why exclude? Parameters seem important to serialize/log. Reconsider.
     )
 
+    # --- Internal State ---
+    # Collects data passed between steps or used for templating.
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
+    # Holds the primary data records being processed by the flow.
     _records: list[Record] = PrivateAttr(default_factory=list)
 
+    # Pydantic Model Configuration
     model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        # Removed exclude_none=True, exclude_unset=True
+        extra="forbid",  # Disallow extra fields in config unless explicitly handled by subclasses.
+        arbitrary_types_allowed=False,  # Requires explicit handling for non-standard types.
+        populate_by_name=True,  # Allows using field names in config keys.
     )
+
+    # --- Validators ---
 
     @field_validator("data", mode="before")
     @classmethod
     def validate_data(cls, value: Sequence[DataSourceConfig | dict]) -> list[DataSourceConfig]:
-        """Ensures all data sources are proper DataSource objects.
-
-        Args:
-            value: A sequence of data sources, either DataSource objects or dictionaries
-
-        Returns:
-            list[DataSource]: List of DataSource objects
-
-        """
-        _data = []
-        for source in value:
-            if not isinstance(source, DataSourceConfig):
-                source = DataSourceConfig(**source)
-                _data.append(source)
-        return _data
+        """Ensures all items in the 'data' list are valid DataSourceConfig objects."""
+        validated_data = []
+        for i, source in enumerate(value):
+            if isinstance(source, dict):
+                try:
+                    validated_data.append(DataSourceConfig(**source))
+                except Exception as e:
+                    logger.error(f"Invalid DataSource configuration at index {i}: {source}. Error: {e}")
+                    raise ValueError(f"Invalid DataSource config at index {i}") from e
+            elif isinstance(source, DataSourceConfig):
+                validated_data.append(source)
+            else:
+                raise TypeError(f"Invalid type for data source at index {i}: {type(source)}. Expected dict or DataSourceConfig.")
+        return validated_data
 
     @model_validator(mode="after")
-    def validate_agents(self) -> Self:
-        # Ensure that agents is a dict of AgentVariants specifications
-        agent_dict = {}
+    def validate_and_initialize_agents(self) -> Self:
+        """Validates agent configurations and initializes internal data structures."""
+        logger.debug(f"Validating agents for orchestrator '{self.name}'.")
+        validated_agents = {}
+        agent_roles = []
         for step_name, defn in self.agents.items():
-            if isinstance(defn, (AgentVariants)):
-                agent_dict[step_name.upper()] = defn
+            role_upper = step_name.upper()  # Ensure role keys are uppercase
+            agent_roles.append(role_upper)
+            if isinstance(defn, AgentVariants):
+                validated_agents[role_upper] = defn
+            elif isinstance(defn, dict):
+                try:
+                    # Validate dict against AgentVariants model
+                    validated_agents[role_upper] = AgentVariants(**defn)
+                except Exception as e:
+                    logger.error(f"Invalid AgentVariants configuration for role '{role_upper}': {defn}. Error: {e}")
+                    raise ValueError(f"Invalid AgentVariants config for role '{role_upper}'") from e
             else:
-                agent_dict[step_name.upper()] = AgentVariants(**defn)
+                raise TypeError(f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants.")
+        self.agents = validated_agents
+        logger.debug(f"Agent roles validated: {list(self.agents.keys())}")
 
-        self.agents = agent_dict
-
-        # initialise the data cache
-        self._flow_data.init(list(self.agents.keys()))
-
+        # Initialize the KeyValueCollector with the known agent roles.
+        self._flow_data.init(agent_roles)
         return self
+
+    # --- Public Execution Method ---
 
     async def run(self, request: RunRequest | None = None) -> None:
         """
         Public entry point to start the orchestrator's flow execution.
 
-        Sets up Weave tracing context and calls the internal `_run` method.
+        Sets up Weave tracing context for the run and calls the internal `_run` method.
 
         Args:
-            request: An optional RunRequest containing initial data or parameters for the flow.
+            request: An optional RunRequest containing initial data (records, record_id, uri, prompt)
+                     or parameters for the flow.
         """
-        tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__()}
-        with weave.attributes(tracing_attributes):
-            _traced = weave.op(
-                self._run,
-                call_display_name=f"{self.name} {self.params.get('criteria','')[0]}",
-            )
-            output = await _traced(request=request)
-
-        logger.info(f"Finished...")
-        return
-
-    async def _run(self, request: RunRequest | None = None) -> None:
-        """Main execution method that sets up agents and manages the flow."""
+        logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
+        # Define attributes for Weave tracing.
+        tracing_attributes = {
+            **self.params,
+            "session_id": self.session_id,
+            "orchestrator": self.__class__.__name__,  # Use class name
+            "flow_name": self.name,
+            "flow_description": self.description,
+        }
+        # Use weave.op to trace the internal _run method.
         try:
-            # Abstract setup method for subclasses (e.g., start runtime)
-            await self._setup()  # Ensure _setup is defined or handled
+            # This creates a traced version of the _run method.
+            traced_run_op = weave.op(self._run, call_display_name=f"{self.name}")
+            # Execute the traced operation within a Weave context.
+            with weave.attributes(tracing_attributes):
+                await traced_run_op(request=request)
+            logger.info(f"Orchestrator '{self.name}' run finished successfully.")
+        except Exception as e:
+            # Catch errors originating from _run or its setup/cleanup phases.
+            logger.exception(f"Orchestrator '{self.name}' run failed: {e}")
+            # Optionally re-raise or handle the error further.
 
-            # Handle initial request if provided
+    # --- Abstract & Core Internal Methods ---
+
+    @abstractmethod
+    async def _setup(self) -> None:
+        """
+        Abstract method for orchestrator-specific setup.
+
+        Implementations should initialize resources like communication runtimes
+        (e.g., Autogen runtime), database connections, or pre-load essential components.
+        Called once at the beginning of the `_run` method.
+        """
+        raise NotImplementedError("Orchestrator subclasses must implement _setup.")
+
+    @abstractmethod
+    async def _cleanup(self) -> None:
+        """
+        Abstract method for orchestrator-specific cleanup.
+
+        Implementations should release resources acquired during `_setup` or
+        execution (e.g., stop runtimes, close connections). Called in a `finally`
+        block within `run` to ensure execution even if errors occur.
+        """
+        raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
+
+    @abstractmethod
+    async def _execute_step(self, step: StepRequest) -> AgentOutput | None:
+        """
+        Abstract method to execute a single step defined by a `StepRequest`.
+
+        Implementations handle the mechanism for invoking the correct agent
+        (based on `step.role`) with the appropriate input (`step.prompt`, context, etc.)
+        and returning the agent's `AgentOutput`. This might involve direct calls or
+        messaging via a runtime.
+
+        Args:
+            step: The `StepRequest` detailing the step to execute.
+
+        Returns:
+            The `AgentOutput` from the executed agent, or None if execution failed.
+        """
+        raise NotImplementedError("Orchestrator subclasses must implement _execute_step.")
+
+    @abstractmethod
+    async def _run(self, request: RunRequest | None = None) -> None:
+        """
+        Abstract method containing the main execution logic/control loop for the flow.
+
+        Called by the public `run` method after Weave tracing setup. Subclasses
+        must implement this to define how steps are determined (e.g., fixed sequence,
+        conductor agent, user interaction) and executed via `_execute_step`. It should
+        also handle initial data loading based on the `request` argument.
+
+        Args:
+            request: Optional `RunRequest` containing initial data/parameters.
+        """
+        # Base implementation handles initial setup, data fetching (if needed), and cleanup.
+        # Subclasses MUST override this to provide the actual step execution loop.
+        try:
+            await self._setup()
             if request:
-                if not request.records:
-                    if request.uri or request.record_id:
-                        # Fixed: Pass list(self.data)
-                        fetch = FetchRecord(role="fetch", description="fetch records and urls", data=list(self.data))
-                        fetch_output = await fetch._run(uri=request.uri, record_id=request.record_id)
-                        # Fixed: Assign results list
-                        if fetch_output and fetch_output.results:
-                            self._records = fetch_output.results
-                else:
-                    # Store records from the request
-                    self._records = request.records
+                await self._fetch_initial_records(request)  # Use helper for clarity
 
-            # Removed main loop logic - this should be implemented in subclasses
-            # Subclasses should implement their own _run logic calling _setup,
-            # handling steps, and _cleanup.
+            # --- !!! Subclass implementation needed here !!! ---
+            # Example placeholder - replace with actual loop logic:
+            # while True:
+            #     next_step = await self._determine_next_step(...)
+            #     if next_step.role == END: break
+            #     await self._execute_step(next_step)
+            #     await asyncio.sleep(1) # Example delay
+            logger.warning(f"Orchestrator subclass {self.__class__.__name__} did not override _run method. No steps executed.")
 
-        except Exception as e:  # Catch any exception during setup/initial fetch
-            logger.exception(f"Error during orchestrator initial setup/fetch: {e}")
+        except Exception as e:
+            logger.exception(f"Error during orchestrator _run execution: {e}")
             # Optionally re-raise as FatalError if appropriate
             # raise FatalError from e
-        finally:
-            # Ensure cleanup runs regardless of how the setup/fetch/run exits
-            logger.info("Orchestrator cleaning up resources...")
-            await self._cleanup()  # Ensure _cleanup is defined or handled
-            logger.info("Orchestrator cleanup complete.")
+        # Cleanup is handled by the public `run` method's finally block.
 
-    @abstractmethod
-    async def _setup(self):  # Ensure abstract _setup method is defined
-        """
-        Abstract method for setting up orchestrator-specific resources.
-
-        This could include initializing communication runtimes (like Autogen),
-        connecting to external services, or instantiating agents.
-        Must be implemented by subclasses.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _cleanup(self):
-        """
-        Abstract method for cleaning up any resources allocated during setup or execution.
-
-        Examples include stopping runtimes, closing connections, or releasing locks.
-        Must be implemented by subclasses.
-        """
-        raise NotImplementedError
+    # --- Optional Overridable Methods ---
 
     async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse:
         """
-        Placeholder for human-in-the-loop interaction or confirmation.
+        Placeholder for human-in-the-loop interaction.
 
-        Interactive orchestrators (like Selector) override this to communicate with
-        the user interface agent, presenting proposed steps and receiving confirmation,
-        feedback, or alternative instructions.
-
-        The default implementation automatically confirms progression.
+        Interactive orchestrators (like `Selector`) override this to send `ManagerRequest`
+        messages to the UI/user and wait for a `ManagerResponse`. The base implementation
+        skips interaction and automatically confirms progression.
 
         Args:
-            step: The proposed StepRequest for user confirmation (optional).
-            prompt: An alternative prompt to display if no step is provided (optional).
+            step: The proposed step for confirmation (optional).
+            prompt: A message to display if no step is provided (optional).
 
         Returns:
-            A ManagerResponse indicating confirmation status and any user input.
+            A `ManagerResponse` indicating automatic confirmation.
         """
-        # Subclasses can override this to interact with a UI agent, etc.
-        return ManagerResponse(confirm=True)
+        logger.debug("Base _in_the_loop called: Auto-confirming step.")
+        return ManagerResponse(confirm=True)  # Default: automatically confirm
 
     async def execute(self, request: StepRequest) -> AgentOutput | None:
-        """Execute a single step directly (potentially for testing or specific control flows).
+        """
+        Allows direct execution of a single step (e.g., for testing or specific control flows).
 
         Args:
-            request: The StepRequest defining the step to execute.
+            request: The `StepRequest` defining the step to execute.
 
         Returns:
-            AgentOutput | None: The output from the executed step, if any.
-
+            The `AgentOutput` from the step, or None on failure.
         """
+        logger.info(f"Directly executing step for role: {request.role}")
+        try:
+            output = await self._execute_step(request)
+            return output
+        except Exception as e:
+            logger.error(f"Error during direct execute for step '{request.role}': {e}", exc_info=True)
+            return None
 
-        output = await self._execute_step(request)
-
-        return output
-
-    async def __call__(self, request: RunRequest | None = None) -> None:  # Accept RunRequest
-        """Makes the orchestrator callable, allowing it to be used as a function.
-
-        Args:
-            request: Optional RunRequest input data for starting the flow
-
-        Returns:
-            None: This method typically doesn't return a value directly in this pattern.
-
-        """
-        # Pass the RunRequest (or None) to the run method
+    async def __call__(self, request: RunRequest | None = None) -> None:
+        """Makes the orchestrator instance callable, triggering its `run` method."""
         await self.run(request=request)
-        return  # __call__ typically doesn't return a value directly in this pattern
+        # Typically __call__ in this pattern doesn't return a value. Results are handled internally or via saving.
 
-    @abstractmethod
-    async def _execute_step(
-        self,
-        step: StepRequest,
-    ) -> AgentOutput | None:
-        """
-        Abstract method to execute a single step of the flow using a specific agent.
-
-        Subclasses must implement this to handle the actual execution mechanism,
-        which might involve sending messages via a runtime (Autogen) or directly
-        calling an agent instance (Batch).
-
-        Args:
-            step: The role name of the agent to execute.
-            input: The prepared AgentInput for the step.
-
-        Returns:
-            The AgentOutput from the agent, or None if execution failed to produce output.
-        """
-        raise NotImplementedError
+    async def _fetch_initial_records(self, request: RunRequest) -> None:
+        """Helper method to fetch records based on RunRequest if needed."""
+        if not self._records and not request.records:  # Only fetch if no records exist yet
+            if request.uri or request.record_id:
+                logger.info(f"Fetching initial records for request (ID: {request.record_id}, URI: {request.uri})...")
+                try:
+                    # Use the FetchRecord agent directly (consider if this should be part of the flow instead)
+                    fetch_agent = FetchRecord(role="fetch_init", data=list(self.data))
+                    fetch_output = await fetch_agent._run(uri=request.uri, record_id=request.record_id, prompt=request.prompt)
+                    if fetch_output and fetch_output.results:
+                        self._records = fetch_output.results
+                        logger.info(f"Successfully fetched {len(self._records)} initial record(s).")
+                    else:
+                        logger.warning("Initial fetch did not return any results.")
+                except ImportError:
+                    logger.error("Could not import FetchRecord agent for initial fetch.")
+                except Exception as e:
+                    logger.error(f"Error fetching initial record: {e}", exc_info=True)
+                    # Decide if fetch failure is fatal
+            else:
+                logger.debug("No initial records, record_id, or uri provided in request.")
+        elif request.records:
+            logger.info(f"Using {len(request.records)} records provided directly in RunRequest.")
+            self._records = request.records  # Use records provided in request if available
+        else:
+            logger.debug("Orchestrator already has records, skipping initial fetch.")
 
     async def _evaluate_step(
         self,
         output: AgentOutput,
         ground_truth_record: Record | None,
         criteria: Any | None,
-        weave_call: Any | None,  # For logging evaluation to the trace
+        weave_call: Any | None,  # Weave call object for logging
     ) -> None:
         """
-        Evaluates the output of a step if possible and logs the result.
+        Placeholder for evaluating an agent's output.
 
-        Concrete orchestrators should override this to implement scorer lookup and execution.
+        Subclasses can override this to find and execute appropriate 'scorer' agents,
+        potentially logging results back to the Weave trace associated with `weave_call`.
+
+        Args:
+            output: The AgentOutput to evaluate.
+            ground_truth_record: The ground truth data (if available).
+            criteria: The criteria used for evaluation (if available).
+            weave_call: The Weave call object associated with the `output` generation.
         """
-        # Default implementation does nothing
-        # Make log message more generic as role isn't directly on output
-        logger.debug(f"Base _evaluate_step called for an agent output. No evaluation performed.")
-        pass
+        logger.debug(f"Base _evaluate_step called for output from agent {output.agent_id}. No evaluation performed.")
+        pass  # Default implementation does nothing.
 
 
+# --- Orchestrator Protocol (for Type Hinting/Hydra) ---
+
+
+# Defines the expected structure of the configuration object *after* Hydra instantiation.
+# Used primarily for type hinting in the `cli.py` entry point.
 class OrchestratorProtocol(BaseModel):
-    bm: BM
-    flows: Mapping[str, Orchestrator]
-    ui: Literal["console", "slackbot"]
-    flow: str
+    """Defines the expected structure of the Hydra configuration object after instantiation."""
+
+    bm: BM  # The core Buttermilk instance.
+    flows: Mapping[str, Orchestrator]  # Dictionary of configured flow orchestrators.
+    ui: Literal["console", "api", "pub/sub", "slackbot"]  # The selected UI mode.
+    flow: str  # The name of the specific flow selected to run (e.g., 'batch', 'panel').
+    # Optional command-line overrides for the 'console' UI mode.
     record_id: str = ""
     uri: str = ""
     prompt: str = ""

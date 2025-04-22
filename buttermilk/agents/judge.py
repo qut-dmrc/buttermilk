@@ -1,3 +1,8 @@
+"""
+Defines the Judge agent, an LLM-based agent specialized for evaluating content
+against predefined criteria.
+"""
+
 import asyncio
 from curses import meta
 import json
@@ -5,51 +10,49 @@ import pprint
 from types import NoneType
 from typing import Any, AsyncGenerator, Callable, Literal, Optional, Self, Dict, List, Type, Union
 
-from autogen_core.models._types import UserMessage
-import pydantic
-import regex as re
-
-# Make sure to import necessary Autogen components
+# Import Autogen core components needed for type hints and potential interaction (though handled by adapter)
 from autogen_core import CancellationToken, FunctionCall, MessageContext, RoutedAgent, message_handler, Agent as AutogenAgent
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.models import (
     AssistantMessage,
     ChatCompletionClient,
     SystemMessage,
-    UserMessage,
+    UserMessage,  # Used for type hinting in context
 )
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
-from promptflow.core._prompty_utils import parse_chat
+import pydantic
+from promptflow.core._prompty_utils import parse_chat  # Used in templating utils
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
-import weave
+import regex as re
+import weave  # Likely for logging/tracing
 
-# Correct the import from _core.agent
-from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler
-from buttermilk.agents.llm import LLMAgent  # Import LLMAgent directly
+# Buttermilk core imports
+from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler  # Base types and decorator
 from buttermilk._core.contract import (
-    AllMessages,  # Keep relevant contract types if needed
+    # TODO: Review if all these contract types are strictly necessary for this agent's logic vs. type hinting context.
+    AllMessages,
     ConductorRequest,
     FlowMessage,
     GroupchatMessageTypes,
     LLMMessage,
+    OOBMessages,
+    ProceedToNextTaskSignal,
+    TaskProcessingComplete,
     ToolOutput,
     UserInstructions,
-    TaskProcessingComplete,  # Keep relevant contract types if needed
-    ProceedToNextTaskSignal,  # Keep relevant contract types if needed
-    OOBMessages,  # Keep relevant contract types if needed
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import AutoGenWrapper, CreateResult
-from buttermilk._core.types import Record
-from buttermilk.bm import bm, logger
+from buttermilk._core.llms import AutoGenWrapper, CreateResult  # LLM interaction wrappers
+from buttermilk._core.types import Record  # Data record structure
+from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
+from buttermilk.bm import bm, logger  # Global Buttermilk instance and logger
 
-# Remove unused imports if any, keep necessary ones
-# from buttermilk.utils._tools import create_tool_functions # LLMAgent handles this
-# from buttermilk.utils.json_parser import ChatParser # LLMAgent handles this
+# Utility imports
+# TODO: Confirm these utils are necessary here or only in LLMAgent/templating.py
 from buttermilk.utils.templating import (
-    _parse_prompty,
-    load_template,
-    make_messages,  # LLMAgent handles this
+    _parse_prompty,  # Used if loading Prompty files directly here
+    load_template,  # Used if loading Jinja templates directly here
+    make_messages,  # Handled by LLMAgent
 )
 
 
@@ -57,44 +60,103 @@ from buttermilk.utils.templating import (
 
 
 class AgentReasons(BaseModel):
-    conclusion: str = Field(..., description="Your conlusion or final answer.")
+    """
+    Structured output model for the Judge agent's evaluation.
+
+    Defines the expected JSON structure returned by the LLM after evaluating
+    content against the provided criteria.
+    """
+
+    conclusion: str = Field(..., description="Your conclusion or final answer summarizing the evaluation.")
     prediction: bool = Field(
-        description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
+        ...,  # Make field required
+        description="Boolean flag indicating if the content violates the policy/guidelines. This should be derived logically from the reasoning and criteria application.",
     )
     reasons: list[str] = Field(
-        ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis."
+        ...,
+        description="A list of strings, where each string represents a distinct step in the reasoning process leading to the conclusion and prediction.",
     )
-    confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
+    confidence: Literal["high", "medium", "low"] = Field(
+        ..., description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction."  # Make field required
+    )
 
 
 # --- Judge Agent ---
+
+
 class Judge(LLMAgent):
     """
-    An LLM agent that evaluates content based on criteria using a Buttermilk template/model.
-    It expects input via AgentInput and outputs results conforming to AgentReasons.
-    Handler methods marked with @buttermilk_handler will be registered by AutogenAgentAdapter.
+    An LLM agent specialized in evaluating content based on provided criteria.
+
+    Inherits from `LLMAgent`, leveraging its capabilities for LLM interaction,
+    prompt templating, and structured output parsing. The `Judge` agent is
+    configured with a specific prompt template (likely focused on evaluation)
+    and expects the LLM to return results conforming to the `AgentReasons` model.
+
+    The `buttermilk_handler` decorator registers methods to handle specific message
+    types within the Buttermilk/Autogen ecosystem.
     """
 
-    # Define the expected Pydantic model for the structured output ('outputs' field)
+    # Specifies that the expected structured output from the LLM should conform to AgentReasons.
+    # LLMAgent's _process method will attempt to parse the LLM response into this model.
     _output_model: Optional[Type[BaseModel]] = AgentReasons
 
-    # Initialization is handled by LLMAgent -> Agent -> AgentConfig
+    # Initialization (`__init__`) is handled by the parent LLMAgent, which takes
+    # configuration (like model, template, parameters) via its AgentConfig.
 
-    # --- Custom Autogen Handlers ---
+    # --- Buttermilk/Autogen Message Handler ---
 
-    @buttermilk_handler(AgentInput)  # Mark this method to handle AgentInput messages
-    async def handle_agent_input(
+    # This decorator registers the method with the Buttermilk framework.
+    # When this agent (wrapped by AutogenAgentAdapter) receives an AgentInput message
+    # via Autogen, the adapter will likely route it to this handler.
+    @buttermilk_handler(AgentInput)
+    async def evaluate_content(  # Renamed for clarity from handle_agent_input
         self,
         message: AgentInput,
-        ctx: MessageContext,
-    ) -> Optional[AgentReasons]:
-        """Handles incoming messages in the Autogen group chat."""
+        # ctx: MessageContext, # ctx might not be directly passed by the buttermilk_handler mechanism? LLMAgent._process uses self._runtime?
+    ) -> AgentOutput:  # Should return AgentOutput as per base Agent._process signature.
+        """
+        Handles an AgentInput request to evaluate content based on the agent's configured criteria.
 
-        # Use the _process method inherited from LLMAgent
-        result: AgentOutput = await self._process(message=message)
-        # Publish the structured output back to the group chat
-        await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)  # Send as dict
+        Args:
+            message: The AgentInput message containing the content/prompt to evaluate.
 
-        logger.warning(f"Judge '{self.name}' did not produce a publishable output.")
-        # Handle cases where no output was generated
-        return None  # No reply
+        Returns:
+            An AgentOutput message containing the structured evaluation (AgentReasons)
+            or an error if processing fails.
+        """
+        logger.info(f"Judge agent '{self.id}' received evaluation request.")
+        try:
+            # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
+            # This method handles template rendering, API calls, retries, and parsing into _output_model.
+            result: AgentOutput = await self._process(message=message)
+
+            # LLMAgent._process already creates and returns AgentOutput.
+            # We might want to add specific logging or post-processing here if needed.
+            if not result.is_error and isinstance(result.outputs, AgentReasons):
+                logger.info(f"Judge '{self.id}' completed evaluation successfully.")
+                # Example post-processing: Log the prediction
+                logger.debug(f"Judge '{self.id}' prediction: {result.outputs.prediction}")
+            elif not result.is_error:
+                logger.warning(f"Judge '{self.id}' completed but output type is not AgentReasons: {type(result.outputs)}")
+            else:
+                logger.error(f"Judge '{self.id}' encountered an error during processing: {result.outputs}")
+
+            # LLMAgent._process returns the AgentOutput directly.
+            # The AutogenAgentAdapter is responsible for publishing this if needed.
+            # The commented-out publish line below seems redundant if the adapter handles it.
+            # TODO: Verify if explicit publishing is needed here or handled by the adapter/orchestrator.
+            # await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
+
+            return result
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in Judge.evaluate_content for agent '{self.id}': {e}")
+            # Create an AgentOutput indicating an error.
+            error_output = AgentOutput(agent_id=self.id)
+            error_output.set_error(f"Unexpected error in Judge agent: {e}")
+            return error_output
+
+    # Note: Other handlers (like _listen, _handle_events) can be added here if the Judge
+    # needs to react to other message types or perform background tasks, inheriting or
+    # overriding behavior from Agent/LLMAgent as needed.
