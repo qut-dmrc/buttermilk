@@ -49,8 +49,6 @@ from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
 from functools import wraps  # Import wraps for decorator
 
-from buttermilk.bm import bm
-
 
 #########
 # Agent

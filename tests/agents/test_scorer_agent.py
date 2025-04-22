@@ -26,6 +26,7 @@ class TestScorerAgent:
 
         # Create a judge output with AgentReasons
         judge_output = AgentOutput(
+            agent_id="test",
             role="judge",
             content="Judge evaluation",
             outputs=AgentReasons(conclusion="This is the conclusion", prediction=True, reasons=["Reason 1", "Reason 2"], confidence="high"),
@@ -40,7 +41,7 @@ class TestScorerAgent:
         )
 
         # Set up the _process method to return our mock evaluation
-        process_result = AgentOutput(role="scorer", content="Evaluation complete", outputs=eval_result)
+        process_result = AgentOutput(agent_id="test", agent_id="test", role="scorer", content="Evaluation complete", outputs=eval_result)
         scorer._process.return_value = process_result
 
         # Mock the _extract_original_trace method

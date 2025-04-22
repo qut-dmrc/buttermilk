@@ -22,6 +22,7 @@ from buttermilk._core.variants import AgentVariants
 
 from buttermilk.runner.selector import Selector
 
+
 @pytest.fixture
 def selector_config():
     """Basic config for testing the Selector."""
@@ -70,8 +71,8 @@ async def test_interactive_user_feedback(selector_config):
 
     orchestrator._ask_agents = AsyncMock(
         side_effect=[
-            [AgentOutput(outputs=step1)],  # First call returns step1
-            [AgentOutput(outputs=step2)],  # Second call returns step2
+            [AgentOutput(agent_id="test", outputs=step1)],  # First call returns step1
+            [AgentOutput(agent_id="test", outputs=step2)],  # Second call returns step2
         ]
     )
 

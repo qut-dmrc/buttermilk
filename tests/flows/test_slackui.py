@@ -90,6 +90,7 @@ async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
     """Test handling of AgentOutput messages."""
     message = AgentOutput(
+        agent_id="test",
         content="Test output",
         outputs={"key": "value"},
     )
@@ -113,6 +114,7 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
 async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
     message = AgentOutput(
+        agent_id="test",
         content="Test output",
         outputs={"key": "value"},
     )

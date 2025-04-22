@@ -114,7 +114,7 @@ class TestAutogenAgentAdapter:
             return mock_response
 
         sequencer.__call__.side_effect = mock_call
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         sequencer.__call__.return_value = mock_response
 
         # Create adapter with mocked agent
@@ -150,7 +150,7 @@ class TestAutogenAgentAdapter:
             return mock_response
 
         host.__call__.side_effect = mock_call
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         host.__call__.return_value = mock_response
 
         # Create adapter with mocked agent
@@ -186,7 +186,7 @@ class TestAutogenAgentAdapter:
             return mock_response
 
         explorer.__call__.side_effect = mock_call
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         explorer.__call__.return_value = mock_response
 
         # Create adapter with mocked agent
@@ -223,7 +223,7 @@ class TestAutogenAgentAdapter:
             return mock_response
 
         sequencer.__call__.side_effect = mock_call
-        mock_response = AgentOutput(content="Test response")
+        mock_response = AgentOutput(agent_id="test", content="Test response")
         sequencer.__call__.return_value = mock_response
 
         # Create adapter with mocked agent

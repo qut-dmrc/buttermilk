@@ -158,7 +158,7 @@ class UserInstructions(FlowMessage):
 
 
 class TracingDetails(BaseModel):
-    weave: str = Field(..., validate_default=True, exclude=True)
+    weave: str = Field(default="", validate_default=True, exclude=True)
 
     @field_validator("weave")
     @classmethod

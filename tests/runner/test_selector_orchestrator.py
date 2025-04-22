@@ -77,6 +77,7 @@ async def test_get_host_action_success(orchestrator):
             # First call - return the conductor response
             [
                 AgentOutput(
+                    agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
                 )
@@ -84,6 +85,7 @@ async def test_get_host_action_success(orchestrator):
             # Second call (after handling the message) - return the step
             [
                 AgentOutput(
+                    agent_id="test",
                     content="Next step",
                     outputs=mock_step_dict,
                 )
@@ -95,7 +97,7 @@ async def test_get_host_action_success(orchestrator):
 
     # Fix the mock response - use a proper StepRequest object directly
     step_request = StepRequest(role="test_agent", description="test step", prompt="test prompt")
-    mock_step_response = AgentOutput(content="Next step", outputs=step_request)
+    mock_step_response = AgentOutput(agent_id="test", content="Next step", outputs=step_request)
 
     # Reset the mock with proper responses
     orchestrator._ask_agents = AsyncMock(
@@ -103,6 +105,7 @@ async def test_get_host_action_success(orchestrator):
             # First call returns conductor response
             [
                 AgentOutput(
+                    agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
                 )
@@ -153,6 +156,7 @@ async def test_get_host_conductor_message(orchestrator):
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
     mock_output = AgentOutput(
+        agent_id="test",
         content="Need more info",
         outputs=conductor_response.model_dump(),  # Convert to dict
     )
@@ -164,6 +168,7 @@ async def test_get_host_conductor_message(orchestrator):
 
     # Make the response more explicit to avoid role "error" issue
     mock_follow_up = AgentOutput(
+        agent_id="test",
         content="Next step",
         outputs=mock_step,  # Use the StepRequest object directly
     )
@@ -196,7 +201,7 @@ async def test_execute_step(orchestrator):
     orchestrator._agent_types = {"test_agent": [(mock_agent_type, mock_agent_config)]}
 
     mock_input = AgentInput(role="user", content="test input")
-    mock_response = AgentOutput(role="assistant", content="test output", outputs={"key": "value"})
+    mock_response = AgentOutput(agent_id="test", role="assistant", content="test output", outputs={"key": "value"})
 
     # Mock runtime and get_agent
     orchestrator._runtime = AsyncMock()

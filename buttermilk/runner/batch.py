@@ -82,7 +82,7 @@ class BatchOrchestrator(Orchestrator):
         variants_config = self.agents.get(step.role.lower())
         if not variants_config or not variants_config.variants:
             logger.error(f"No variants found for step '{step.role}'. Skipping.")
-            return AgentOutput(error=[f"No variants configured for step: {step.role}"])
+            return AgentOutput(agent_id=self.name, error=[f"No variants configured for step: {step.role}"])
 
         # Get the config for the first variant
         first_variant_config = variants_config.variants[0]
@@ -119,7 +119,7 @@ class BatchOrchestrator(Orchestrator):
                     return None
                 else:
                     logger.error(f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}.")
-                    return AgentOutput(error=[f"Unknown return type: {type(raw_output)}"])
+                    return AgentOutput(agent_id=self.name, error=[f"Unknown return type: {type(raw_output)}"])
 
             except Exception as e:
                 logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}", exc_info=True)

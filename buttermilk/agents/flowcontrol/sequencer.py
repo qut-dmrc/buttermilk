@@ -157,7 +157,7 @@ class Sequencer(Agent):
         # Get next step using round-robin
         step = await self._choose(message=message)
         if step and step.role == END:
-            return AgentOutput(outputs=step, content="Conductor signaled that flow has been completed.")
+            return AgentOutput(agent_id=self.id, agent_id=self.id, outputs=step)
 
         # If role doesn't exist in participants, wait a while
         if not step or step.role not in self._participants:
@@ -175,7 +175,9 @@ class Sequencer(Agent):
         self._completed_agents_current_step.clear()
         self._step_completion_event.clear()
 
-        response = AgentOutput()
+        response = AgentOutput(
+            agent_id=self.id,
+        )
         # Set response attributes
         response.content = f"Next step: {self._current_step_name}."
         response.outputs = step
@@ -194,7 +196,9 @@ class Sequencer(Agent):
         if isinstance(message, ConductorRequest):
             next_step = await self._get_next_step(message=message)
             return cast(ConductorResponse, next_step)
-        response = AgentOutput()
+        response = AgentOutput(
+            agent_id=self.id,
+        )
 
         if not hasattr(message, "prompt") or not message.prompt and not message.inputs.get("task"):
             # No prompt provided, just initialize

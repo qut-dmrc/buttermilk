@@ -42,7 +42,7 @@ class TestSequencer:
         sequencer = Sequencer(role="SEQUENCER", description="Test Sequencer")
         # Mock _get_next_step to avoid its implementation
         sequencer._get_next_step = AsyncMock()
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         sequencer._get_next_step.return_value = mock_response
 
         # Call _handle_events with a ConductorRequest
@@ -98,7 +98,7 @@ class TestLLMHostAgent:
         host = LLMHostAgent(role="HOST", description="Test Host")
         # Mock _get_next_step to avoid its implementation
         host._get_next_step = AsyncMock()
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         host._get_next_step.return_value = mock_response
 
         # Call _handle_events with a ConductorRequest
@@ -187,7 +187,7 @@ class TestExplorerHost:
         explorer = ExplorerHost(role="EXPLORER", description="Test Explorer")
         # Mock _get_next_step to avoid its implementation
         explorer._get_next_step = AsyncMock()
-        mock_response = AgentOutput(outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+        mock_response = AgentOutput(agent_id="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
         explorer._get_next_step.return_value = mock_response
 
         # Call _handle_events with a ConductorRequest
@@ -215,7 +215,7 @@ class TestExplorerHost:
 
         # Patch the parent _get_next_step method to avoid its implementation
         with patch.object(LLMHostAgent, "_get_next_step") as mock_parent_get_next_step:
-            mock_response = AgentOutput(outputs=mock_step)
+            mock_response = AgentOutput(agent_id="test", outputs=mock_step)
             mock_parent_get_next_step.return_value = mock_response
 
             # Call _get_next_step
