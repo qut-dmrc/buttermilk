@@ -1,8 +1,10 @@
 from typing import Any, AsyncGenerator, Callable, Optional, Type, List, ClassVar
 
 import weave  # Add weave import
-from autogen_core import CancellationToken, DefaultTopicId
+from autogen_core import CancellationToken, DefaultTopicId, MessageContext
 from pydantic import BaseModel, Field, PrivateAttr, computed_field
+
+from buttermilk._core.agent import buttermilk_handler
 
 from buttermilk import logger
 from buttermilk._core import ToolOutput
@@ -61,6 +63,26 @@ class LLMScorer(LLMAgent):
 
     _output_model: Optional[type[BaseModel]] = QualScore  # Ensure scorer LLM returns this structure
 
+    @buttermilk_handler(AgentInput)
+    async def handle_agent_input(
+        self,
+        message: AgentInput,
+        ctx: MessageContext,
+    ) -> Optional[QualScore]:
+        """Handles direct AgentInput requests to perform scoring."""
+
+        # Use the _process method inherited from LLMAgent
+        result: AgentOutput = await self._process(message=message)
+
+        # Publish the structured output back to the group chat
+        if result and not result.is_error:
+            await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
+            logger.info(f"Scorer '{self.name}' published result: {result.outputs.score if hasattr(result, 'outputs') else 'N/A'}")
+            return result.outputs if isinstance(result.outputs, QualScore) else None
+        else:
+            logger.warning(f"Scorer '{self.name}' did not produce a publishable output: {result.error if result else 'None'}")
+            return None
+
     def _extract_original_trace(self, message: GroupchatMessageTypes) -> Any:
         """Extract the original weave trace from AgentOutput if available.
 
@@ -89,19 +111,25 @@ class LLMScorer(LLMAgent):
         source: str = "",
         **kwargs,
     ) -> None:
+        """
+        Listen for outputs to analyze.
+
+        The return value is ignored by the agent system, which expects None.
+        Any processing results are returned through callbacks or by other methods.
+        """
         """Listen for outputs to analyze."""
         # First call parent method to handle standard behavior
         await super()._listen(message, cancellation_token=cancellation_token, source=source, **kwargs)
 
         # Check if this is a Judge output with AgentReasons and has ground truth record
         if not isinstance(message, AgentOutput):
-            return
+            return None
 
         if not hasattr(message, "outputs") or not isinstance(message.outputs, AgentReasons):
-            return
+            return None
 
         if not message.records or len(message.records) != 1 or not hasattr(message.records[0], "ground_truth"):
-            return
+            return None
 
         # Get ground truth from the record
         ground_truth_record = message.records[0]
@@ -139,7 +167,15 @@ class LLMScorer(LLMAgent):
         finally:
             # Task completion is signaled by the adapter
             pass
-        # We should not return anything from _listen
+
+        # Use the public_callback to publish the result if provided
+        public_callback = kwargs.get("public_callback")
+        if evaluation_result and public_callback:
+            try:
+                await public_callback(evaluation_result)
+                logger.debug(f"Published evaluation via callback: {evaluation_result}")
+            except Exception as e:
+                logger.error(f"Failed to publish evaluation result via callback: {e}")
 
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs

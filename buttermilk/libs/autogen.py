@@ -130,13 +130,16 @@ class AutogenAgentAdapter(RoutedAgent):
         ctx: MessageContext,
     ) -> None:
         """Handle incoming group messages by delegating to the wrapped agent."""
-        await self.agent._listen(
+        response = await self.agent._listen(
             message=message,
             cancellation_token=ctx.cancellation_token,
             public_callback=self._make_publish_callback(topic_id=self.topic_id),
             message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
             source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",
         )
+        # Publish any response from _listen if it returns one
+        if response:
+            await self.publish_message(response, topic_id=self.topic_id)
 
     @message_handler
     async def handle_conductor_request(
