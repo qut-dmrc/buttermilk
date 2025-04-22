@@ -156,8 +156,7 @@ class AgentConfig(BaseModel):
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
-    _validate_parameters = field_validator("parameters", mode="before")(convert_omegaconf_objects(allow_numbers=True))
-    # TODO: Add similar validators for 'inputs', 'outputs' if they can come from OmegaConf.
+    _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
 
     @model_validator(mode="after")
     def _generate_name_and_id(self) -> Self:

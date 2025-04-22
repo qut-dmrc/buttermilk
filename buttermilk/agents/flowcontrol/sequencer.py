@@ -117,8 +117,6 @@ class Sequencer(Agent):
         *,
         cancellation_token: Optional[Any] = None,  # Autogen cancellation token.
         source: str = "",
-        public_callback: Callable | None = None,
-        message_callback: Callable | None = None,
         public_callback: Callable | None = None,  # Callback to publish to default topic (unused here).
         message_callback: Callable | None = None,  # Callback to publish to incoming message topic (unused here).
         **kwargs,
