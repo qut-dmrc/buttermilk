@@ -6,7 +6,6 @@ judge:
   num_runs: 1
   parameters:
     template: judge
-    formatting: json_rules
   variants:
     model: ${llms.judgers}
     criteria: ${....params.criteria}

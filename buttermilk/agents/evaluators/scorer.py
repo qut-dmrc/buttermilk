@@ -21,7 +21,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk.agents.judge import AgentReasons
 from buttermilk.agents.llm import LLMAgent
-
+from buttermilk.bm import bm
 
 class QualScoreCRA(BaseModel):
     """A single criterion-referenced asssessment."""
@@ -138,11 +138,11 @@ class LLMScorer(LLMAgent):
         # Create an input for scoring
         scorer_input = AgentInput(
             inputs=extracted,
-            records=records,
+            records=[records],
         )
 
         # Get the original weave call to log against
-        weave_call = message.tracing.get("weave")
+        weave_call = bm.weave.get_call(message.tracing.get("weave").id)
 
         # Run our score function
         score = await self._process(message=scorer_input, cancellation_token=cancellation_token)
@@ -154,7 +154,7 @@ class LLMScorer(LLMAgent):
             @weave.op
             async def score(self, output: Any) -> dict[str, Any]:
                 """Return the pre-computed score data."""
-                return {"qual_score": score.outputs.model_dump()}
+                return score.outputs.model_dump()
 
         # Apply the scorer to the call
         scorer = ButtermilkScorer()

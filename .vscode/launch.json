@@ -58,7 +58,7 @@
         "flow=batch",
         "record_id=NCAA_transgender_athletes",
         "ui=console",
-        "llms=lite",
+        "llms=full",
         "++name=batch",
         //"+record_id=${input:query}" // Will prompt for query
       ],

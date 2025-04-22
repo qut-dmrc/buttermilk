@@ -217,9 +217,9 @@ class AgentOutput(FlowMessage):
         from buttermilk.bm import logger
 
         try:
-            value = {"weave": weave.get_current_call().ref()}
+            value = {"weave": weave.get_current_call().ref}
         except Exception as e:
-            logger.error(f"Unable to get weave call.")
+            logger.error(f"Unable to get weave call: {e}")
             value = {}
         return value
 

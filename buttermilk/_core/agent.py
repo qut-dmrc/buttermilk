@@ -309,7 +309,7 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
 
                 if isinstance(result, AgentOutput):
                     # add call ref to result object so we can get it back later.
-                    result.tracing["weave"] = call.ref()
+                    result.tracing["weave"] = call.ref
 
                 # --- Evaluation Logic ---
                 if isinstance(result, AgentOutput) and not result.is_error and final_input.records:

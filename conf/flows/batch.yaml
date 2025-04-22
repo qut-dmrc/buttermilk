@@ -20,7 +20,7 @@ batch:
         - record_id
   params:
     criteria:
-      - hrc
+      - cte
     task: Assess this content.
   agents:
     host:
