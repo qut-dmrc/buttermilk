@@ -120,61 +120,60 @@ class LLMAgent(Agent):
                 raise ProcessingError(err)
         return messages
 
-    def make_output(self, chat_result: ModelOutput | CreateResult, inputs: AgentInput, schema: Optional[type[BaseModel]] = None) -> AgentOutput:
+    def make_output(
+        self,
+        chat_result: CreateResult,
+        inputs: AgentInput | None = None,
+        messages: list[LLMMessage] = [],
+        parameters: dict = {},
+        prompt: str = "",
+        schema: Optional[type[BaseModel]] = None,
+    ) -> AgentOutput:
         """Helper to create AgentOutput from CreateResult."""
-        output = AgentOutput()
-        output.inputs = inputs.model_copy(deep=True)
-        # Ensure exclude is a set or dict
-        output.metadata = chat_result.model_dump(exclude={"content", "object"})
-
-        model_metadata = self.parameters
-        model_metadata.update({"role": self.role, "agent_id": self.id, "name": self.name, "prompt": inputs.prompt})
-        model_metadata.update(inputs.parameters)
-        output.params = model_metadata
+        output = AgentOutput(
+            agent_id=self.id,
+            inputs=inputs,
+            messages=messages,
+            params=parameters,
+            prompt=prompt,
+            metadata=chat_result.model_dump(exclude={"content", "object"}),
+        )
 
         # Handle schema validation first if applicable
         if schema and isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
             output.outputs = chat_result.object
-            output.content = output.outputs.model_dump_json()
             return output
-        if schema and isinstance(chat_result.content, str):
+
+        elif schema and isinstance(chat_result.content, str):
             try:
                 # model_validate_json returns an instance of the schema model
                 output.outputs = schema.model_validate_json(chat_result.content)
-                # Set content to a string representation
-                output.content = output.outputs.model_dump_json()  # Use JSON string for content
                 return output
             except Exception as e:
                 error = f"Error parsing response from LLM: {e} into {schema.__name__}"
                 logger.warning(error, exc_info=False)
-                # Fall through to default JSON parsing or raw content handling
-                # Add error to the output object?
                 output.error.append(error)
+                # Fall through to default JSON parsing or raw content handling
 
         # Default handling: attempt JSON parsing or store raw content
         if isinstance(chat_result.content, str):
             try:
                 # Store parsed dict in outputs
                 output.outputs = self._json_parser.parse(chat_result.content)
-                # Set content to formatted string version
-                output.content = pprint.pformat(output.outputs)
             except Exception as parse_error:
                 # If JSON parsing fails, store raw string content
                 error = f"Failed to parse LLM response as JSON: {parse_error}. Storing raw content."
-                logger.debug(error, exc_info=False)
-                output.outputs = {"response": chat_result.content}
-                output.content = chat_result.content
+                logger.warning(error, exc_info=False)
+                output.error.append(error)
+                output.outputs = chat_result.content
+
         elif chat_result.content is not None:  # Handle non-string, non-None content if necessary
             logger.warning(f"LLM response content is not a string: {type(chat_result.content)}. Storing as is.")
-            output.outputs = {"response": chat_result.content}
-            output.content = str(chat_result.content)
-        # If content was None or parsing failed without fallback, outputs might be empty {}
+            output.outputs = chat_result.content
 
         return output
 
-    async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
-    ) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Runs a single task or series of tasks."""
         try:
             messages = await self._fill_template(
@@ -184,32 +183,19 @@ class LLMAgent(Agent):
             # We log here because weave swallows error results and we might lose it.
             logger.error(f"Unable to fill template for {self.id}: {e}")
             raise
-        # call_chat can return CreateResult, list[ToolOutput], or None
-        llm_result: CreateResult | list[ToolOutput] | None = await self._model_client.call_chat(
+
+        llm_result: CreateResult = await self._model_client.call_chat(
             messages=messages,
             tools_list=self._tools_list,
             cancellation_token=cancellation_token,
             schema=self._output_model,
         )
 
-        # Handle different return types
-        if isinstance(llm_result, CreateResult):
-            # Process normal LLM response
-            agent_output = self.make_output(llm_result, inputs=message, schema=self._output_model)
-            return agent_output
-        elif isinstance(llm_result, list):
-            # If call_chat returns ToolOutput directly (needs verification)
-            logger.warning("call_chat returned list[ToolOutput], returning first element.")
-            return llm_result[0] if llm_result else None  # Return first tool output or None
-        elif llm_result is None:
-            # Handle case where LLM call returns None (e.g., error, cancellation)
-            logger.warning("LLM call returned None.")
-            # Return an AgentOutput indicating an error or empty response?
-            return AgentOutput(error=["LLM call returned None"], inputs=message)
-        else:
-            # Should not happen based on AutoGenWrapper signature, but good practice
-            logger.error(f"Unexpected return type from call_chat: {type(llm_result)}")
-            return AgentOutput(error=[f"Unexpected LLM result type: {type(llm_result)}"], inputs=message)
+        output = self.make_output(llm_result, inputs=message.inputs, messages=messages, parameters=message.parameters, schema=self._output_model)
+        output.metadata.update({"role": self.role, "name": self.name})
+        output.prompt = message.prompt
+
+        return output
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state."""

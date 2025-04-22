@@ -23,6 +23,7 @@ from autogen_ext.models.openai._transformation.registry import (
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
 from buttermilk import logger
+from buttermilk._core import AgentOutput
 from buttermilk._core.agent import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from .retry import RetryWrapper
@@ -165,31 +166,23 @@ class AutoGenWrapper(RetryWrapper):
         cancellation_token,
         tools_list=[],
         schema: Optional[type[BaseModel]] = None,
-    ) -> ModelOutput | None:
+    ) -> CreateResult:
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
-        if not isinstance(create_result, list):
-            if schema:
-                try:
-                    # Handle schema validation first if applicable
-                    output = schema.model_validate_json(create_result.content)
-                    response = ModelOutput(object=output, **create_result.model_dump())
-                    response.content = output.model_dump_json()  # Use JSON string for content
-                    return response
-                except Exception as e:
-                    pass
-            return ModelOutput(**create_result.model_dump())
+        if isinstance(create_result, list):
+            # Tool choices
 
-        tool_outputs = await self._execute_tools(
-            calls=create_result,
-            cancellation_token=cancellation_token,
-        )
-        reflection_messages = messages.copy()
-        for tool_result in tool_outputs:
-            reflection_messages.extend(tool_result.messages)
-        reflection_result = await self.create(messages=reflection_messages, cancellation_token=cancellation_token)
-        return reflection_result
+            tool_outputs = await self._execute_tools(
+                calls=create_result,
+                tools_list=tools_list,
+                cancellation_token=cancellation_token,
+            )
+            for tool_result in tool_outputs:
+                messages.extend(tool_result.messages)
+            create_result = await self.create(messages=messages, cancellation_token=cancellation_token)
+
+        return create_result
 
     async def _call_tool(
         self,

@@ -49,10 +49,7 @@ from buttermilk._core.types import Record
 from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator
 from functools import wraps  # Import wraps for decorator
 
-
-# Forward reference for type hint
-if TYPE_CHECKING:
-    from buttermilk.bm import BM
+from buttermilk.bm import bm
 
 
 #########
@@ -263,9 +260,7 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
             # don't log other types of messages to history
             pass
 
-    async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
-    ) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Internal process function. Implement core agent logic here. Traced by Weave."""
         # Example:
         # logger.info(f"Agent {self.role} processing inputs: {inputs.inputs}")
@@ -284,69 +279,33 @@ class Agent(AgentConfig):  # Agent inherits the restored fields
         logger.debug(f"Agent {self.role} {self.name} dropping control message: {message}")
         return None
 
+    @weave.op
     async def __call__(
         self,
-        message: FlowMessage,
+        message: AgentInput,
         cancellation_token: CancellationToken | None = None,
-        source: str = "unknown",  # Identifier of the sender, if known
         **kwargs,
-    ) -> AgentOutput | ToolOutput | OOBMessages | None:
+    ) -> AgentOutput:
         """Primary entry point called by the Orchestrator."""
         result = None
-        call = None  # For weave logging
 
+        # Prepare final input by adding agent state
+        final_input = await self._add_state_to_input(message)
+
+        call = weave.get_current_call()
+        assert call
+        call.display_name = self.name
+
+        # Execute core logic and trace
         try:
-            if isinstance(message, AgentInput):
-                # Prepare final input by adding agent state
-                final_input = await self._add_state_to_input(message)
-
-                # Execute core logic and trace
-                _traced_process = weave.op(self._process, call_display_name=self.name)
-                result, call = await _traced_process.call(message=final_input, cancellation_token=cancellation_token, **kwargs)
-                # Weave swallows errors. They should be reported in code below, so don't raise again.
-                if call.exception:
-                    logger.error(f"Agent {self.id} hit error processing request: {call.exception}")
-
-                if isinstance(result, AgentOutput):
-                    # add call ref to result object so we can get it back later.
-                    result.tracing["weave"] = call.ref
-
-                # --- Evaluation Logic ---
-                if isinstance(result, AgentOutput) and not result.is_error and final_input.records:
-                    # Check for ground truth in records
-                    ground_truth_record = next((r for r in final_input.records if getattr(r, "ground_truth", None) is not None), None)
-                    # if ground_truth_record:
-                    #     # Evaluation logic moved to Orchestrator
-                    #     pass
-                    #     # evaluation_score = await evaluate(
-                    #     #     output=result,
-                    #     #     ground_truth=ground_truth_record.ground_truth,
-                    #     #     criteria=final_input.parameters.get("criteria"),  # Or get from self.params
-                    #     # )
-                    #     # if evaluation_score and call:
-                    #     #     # Log evaluation to Weave trace associated with the agent's call
-                    #     #     call.log({"evaluation": evaluation_score.model_dump()})
-                # --- End Evaluation Logic ---
-
-            elif isinstance(message, GroupchatMessageTypes):
-                # Listen to messages from other agents to update state
-                result = await self._listen(message=message, cancellation_token=cancellation_token, source=source, **kwargs)
-
-            elif isinstance(message, OOBMessages):
-                # Handle control messages
-                result = await self._handle_events(message=message, cancellation_token=cancellation_token, **kwargs)
-
-            else:
-                logger.warning(f"Agent {self.role} received unhandled message type: {type(message)}")
-                result = None
-
+            result = await self._process(message=final_input, cancellation_token=cancellation_token, **kwargs)
+            # result.tracing.weave = call.ref.id
         except Exception as e:
-            logger.error(f"Error during agent {self.role} handle_message: {e}", exc_info=True)
-            # Create an error output
-            error_input = message if isinstance(message, AgentInput) else None
-            result = AgentOutput(error=[str(e)], inputs=error_input)
+            msg = f"Agent {self.id} in {self.role} hit error processing request: {e}"
+            logger.error(msg)
+            return AgentOutput(agent_id=self.id, error=[msg])
 
-        # Orchestrator is responsible for handling the result (e.g., routing AgentOutput)
+        # Wrapper/Orchestrator is responsible for handling the result (e.g., routing AgentOutput)
         return result
 
     async def initialize(self, **kwargs) -> None:

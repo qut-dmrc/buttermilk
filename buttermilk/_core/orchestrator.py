@@ -136,15 +136,13 @@ class Orchestrator(BaseModel, ABC):
         Args:
             request: An optional RunRequest containing initial data or parameters for the flow.
         """
-        client = bm.weave
         tracing_attributes = {**self.params, "session_id": self.session_id, "orchestrator": self.__repr_name__()}
         with weave.attributes(tracing_attributes):
             _traced = weave.op(
                 self._run,
-                call_display_name=f"{self.name} {self.params.get('criteria','')}",
+                call_display_name=f"{self.name} {self.params.get('criteria','')[0]}",
             )
-        output, call = await _traced.call(request=request)
-        client.finish_call(call)  # type: ignore (weave promises never to raise on .call())
+            output = await _traced(request=request)
 
         logger.info(f"Finished...")
         return

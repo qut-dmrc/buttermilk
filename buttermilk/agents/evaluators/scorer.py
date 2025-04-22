@@ -33,18 +33,17 @@ class QualScoreCRA(BaseModel):
 class QualScore(BaseModel):
     """Qualitative score of an LLM result against provided ground truth."""
 
-    answer_id: str = Field(..., description="The ID of the answer being assessed.")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
 
     @computed_field
     @property
-    def score(self) -> float | None:
+    def correctness(self) -> float | None:
         """The overall score of the assessment (not weighted by default!)"""
         return sum([cra.correct for cra in self.assessments]) / len(self.assessments)
 
     def __str__(self) -> str:
         """Markdown representation of the score"""
-        return f"**Answer**: {self.answer_id}\t\t**Score**: {self.score}\n" + "\n\t-".join(
+        return f"**Score**: {self.correctness}\n\n" + "\n\n\t-".join(
             [f"**{ '✔️' if cra.correct else '✘' }**: {cra.feedback}" for cra in self.assessments]
         )
 
@@ -105,7 +104,7 @@ class LLMScorer(LLMAgent):
 
     async def _listen(
         self,
-        message: GroupchatMessageTypes,
+        message: AgentOutput,
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",
@@ -135,26 +134,27 @@ class LLMScorer(LLMAgent):
         if not extracted["expected"] and not records[0].get("ground_truth"):
             return None
 
+        # Get the original weave call to log against
+        weave_call = bm.weave.get_call(message.tracing.weave)
+
         # Create an input for scoring
         scorer_input = AgentInput(
             inputs=extracted,
             records=[records],
         )
 
-        # Get the original weave call to log against
-        weave_call = bm.weave.get_call(message.tracing.get("weave").id)
+        # Configure our score function
+        score_fn = self._process
 
-        # Run our score function
-        score = await self._process(message=scorer_input, cancellation_token=cancellation_token)
-        await public_callback(score)
-
-        # set up a temporary scorer class just for weave because
-        # its api is shit and doesn't let us just publish a score:
+        # set up a scorer class just for weave
         class ButtermilkScorer(weave.Scorer):
             @weave.op
             async def score(self, output: Any) -> dict[str, Any]:
                 """Return the pre-computed score data."""
-                return score.outputs.model_dump()
+                score = await score_fn(message=scorer_input)
+                await public_callback(score)
+                score = score.outputs.model_dump()
+                return score
 
         # Apply the scorer to the call
         scorer = ButtermilkScorer()

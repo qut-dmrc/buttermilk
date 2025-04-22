@@ -1,5 +1,6 @@
 from asyncio import streams
 from collections.abc import Mapping
+from email.policy import strict
 from enum import Enum
 from math import e
 from pathlib import Path
@@ -9,14 +10,17 @@ from autogen_core.models import FunctionExecutionResult
 from pydantic import (
     BaseModel,
     Field,
+    PrivateAttr,
     computed_field,
     field_validator,
 )
 import shortuuid
 
+from buttermilk._core.exceptions import ProcessingError
 
-from .config import DataSourceConfig, SaveInfo
-from .types import Record
+
+from .config import DataSourceConfig, SaveInfo, Tracing
+from .types import Record, _global_run_id
 from buttermilk.utils.validators import make_list_validator
 
 from autogen_core.models import LLMMessage
@@ -71,8 +75,6 @@ class StepRequest(BaseModel):
 
 class FlowEvent(BaseModel):
     """For communication outside the groupchat."""
-
-    _type = "FlowEvent"
     source: str
     content: str
 
@@ -87,18 +89,15 @@ class ErrorEvent(FlowEvent):
 class FlowMessage(BaseModel):
     """A base class for all conversation messages."""
 
-    _type = "FlowMessage"
     error: list[str] = Field(
         default_factory=list,
         description="A list of errors that occurred during the agent's execution",
     )
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    """Metadata about the message."""
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata about the message.")
 
-    @computed_field
-    @property
-    def type(self) -> str:
-        return self._type
+    _ensure_error_list = field_validator("error", mode="before")(
+        make_list_validator(),
+    )
 
     @computed_field
     @property
@@ -134,8 +133,6 @@ class AgentInput(FlowMessage):
         description="A prompt to include",
     )
 
-    _type = "InputRequest"
-
     _ensure_input_list = field_validator("context", "records", mode="before")(
         make_list_validator(),
     )
@@ -143,8 +140,6 @@ class AgentInput(FlowMessage):
 
 class UserInstructions(FlowMessage):
     """Instructions from the user."""
-
-    _type = "UserInput"
 
     records: list[Record] = Field(
         default=[],
@@ -162,42 +157,55 @@ class UserInstructions(FlowMessage):
     stop: bool = Field(default=False, description="Whether to stop the flow")
 
 
+class TracingDetails(BaseModel):
+    weave: str = Field(..., validate_default=True, exclude=True)
+
+    @field_validator("weave")
+    @classmethod
+    def _get_tracing_links(cls, value) -> str:
+        import weave
+        from buttermilk.bm import logger
+
+        try:
+            return weave.get_current_call().ref.id
+        except Exception as e:
+            msg = f"Unable to get weave call: {e}"
+            logger.error(msg)
+            raise ProcessingError(msg)
+
+
 class AgentOutput(FlowMessage):
     """Base class for agent outputs with built-in validation"""
 
-    _type = "Agent"
+    agent_id: str = Field(..., description="The agent that generated this output.")
+    run_id: str = Field(default=_global_run_id)
     call_id: str = Field(
-        default_factory=lambda: shortuuid.uuid()[:8],
+        default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this response.",
     )
-    inputs: AgentInput | None = Field(default=None)
+
+    inputs: AgentInput | None = Field(
+        default=None,
+        description="Agent inputs",
+    )
+
+    messages: list[LLMMessage] = Field(
+        default=[],
+        description="A list of message inputs",
+    )
+
     params: dict[str, Any] = Field(
         default={},
         description="Invocation settings provided to the agent",
     )
-    content: str | None = Field(
-        default=None,
-        description="The human-readable digest representation of the message.",
-    )
+    prompt: str = Field(default="")
     outputs: Union[BaseModel, Dict[str, Any]] = Field(
         default={},
         description="The data returned from the agent",
     )
-    records: list[Record] = Field(
-        default=[],
-        description="A list of records to include in the prompt",
-    )
-    internal_messages: list[FlowMessage] = Field(
-        default_factory=list,
-        description="Messages generated along the way to the final response",
-    )
-    tracing: dict = Field(default={}, validate_default=True, exclude=True)
+    tracing: TracingDetails = PrivateAttr(default_factory=TracingDetails)
 
     _ensure_error_list = field_validator("error", mode="before")(
-        make_list_validator(),
-    )
-
-    _ensure_record_context_list = field_validator("internal_messages", "records", mode="before")(
         make_list_validator(),
     )
 
@@ -210,18 +218,9 @@ class AgentOutput(FlowMessage):
             data["outputs"] = self.outputs.model_dump()
         return data
 
-    @field_validator("tracing")
-    @classmethod
-    def _get_tracing_links(cls, value) -> dict[str, Any]:
-        import weave
-        from buttermilk.bm import logger
-
-        try:
-            value = {"weave": weave.get_current_call().ref}
-        except Exception as e:
-            logger.error(f"Unable to get weave call: {e}")
-            value = {}
-        return value
+    @property
+    def contents(self) -> str:
+        return str(self.outputs)
 
 
 ######
@@ -235,8 +234,6 @@ class ManagerMessage(FlowMessage):
     Usually involves an automated
     conductor or a human in the loop (or both).
     """
-
-    _type = "ManagerMessage"
 
     content: str | None = Field(
         default=None,
@@ -255,19 +252,14 @@ class ManagerMessage(FlowMessage):
 class ConductorRequest(ManagerMessage, AgentInput):
     """Request for input from the conductor."""
 
-    _type = "ConductorRequest"
-
 
 class ConductorResponse(ManagerMessage, AgentOutput):
     """Response to the conductor."""
-
-    _type = "ConductorResponse"
 
 
 class ManagerRequest(ManagerMessage, StepRequest):
     """Request for input from the user"""
 
-    _type = "RequestForManagerInput"
     description: str = Field(default="Request input from user.")
 
     options: bool | list[str] | None = Field(
@@ -283,8 +275,6 @@ class ManagerRequest(ManagerMessage, StepRequest):
 
 class ManagerResponse(FlowMessage):
     """Response from the manager with feedback and variant selection capabilities."""
-
-    _type = "ManagerResponse"
 
     confirm: bool = True
     halt: bool = False
