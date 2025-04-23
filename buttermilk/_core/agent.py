@@ -351,6 +351,7 @@ class Agent(AgentConfig):
                     self._records.extend(value)
                     logger.debug(f"Agent {self.id} added {len(value)} records from {source}.")
                 else:
+                    self._records.append(value)
                     logger.warning(f"Agent {self.id} received non-list for 'records' input mapping from {source}: {type(value)}")
             else:
                 # Add other extracted data to the KeyValueCollector.
@@ -453,13 +454,9 @@ class Agent(AgentConfig):
 
         Returns:
             A new `AgentInput` instance with state merged into its fields.
-            (Note: Modifies context/records lists in place for efficiency, copies others).
         """
-        # Create a copy to avoid modifying the original message directly,
-        # except for mutable lists (context, records) which are extended.
-        # Using deepcopy might be safer but potentially slower for large states.
-        # Pydantic's copy method is generally preferred for models.
-        updated_inputs = inputs.model_copy(deep=False)  # Shallow copy is usually sufficient
+        # Create a copy to avoid modifying the original message directly.
+        updated_inputs = inputs.model_copy(deep=True)
 
         # Merge agent's default parameters, letting message parameters override.
         # Ensure parameters dict exists.

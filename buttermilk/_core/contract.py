@@ -168,7 +168,7 @@ class AgentInput(FlowMessage):
         default_factory=list,
         description="List of data records relevant to the current task.",
     )
-    prompt: str = Field(
+    prompt: str | None = Field(
         default="",
         description="The primary prompt or instruction for the agent.",
     )

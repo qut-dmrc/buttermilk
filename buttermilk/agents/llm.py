@@ -327,7 +327,9 @@ class LLMAgent(Agent):
         logger.debug(f"Agent {self.id} starting _process.")
         try:
             # 1. Prepare messages for the LLM using the template
-            llm_messages = await self._fill_template(task_params=message.parameters, inputs=message, context=message.context, records=message.records)
+            llm_messages = await self._fill_template(
+                task_params=message.parameters, inputs=message.inputs, context=message.context, records=message.records
+            )
         except ProcessingError as template_error:
             # Log template errors clearly as they prevent LLM call
             logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
