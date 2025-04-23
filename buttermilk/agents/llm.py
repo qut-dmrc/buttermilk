@@ -206,10 +206,10 @@ class LLMAgent(Agent):
     def make_output(
         self,
         chat_result: CreateResult,  # Raw result from the LLM client wrapper.
-        inputs: Optional[AgentInput] = None,  # Original AgentInput message.
+        inputs: dict = {},  # Input variables
         messages: list[LLMMessage] = [],  # Messages sent to the LLM.
         parameters: dict = {},  # Parameters used for the request.
-        prompt: str = "",  # Original triggering prompt text.
+        prompt: Optional[str] = "",  # Original triggering prompt text.
         schema: Optional[Type[BaseModel]] = None,  # Optional Pydantic schema for validation.
     ) -> AgentOutput:
         """
@@ -237,13 +237,8 @@ class LLMAgent(Agent):
             prompt=prompt,  # Original prompt
             # Store LLM usage info (tokens, cost) and other metadata from CreateResult.
             # Exclude raw content and object type which are handled below.
-            metadata=chat_result.model_dump(exclude={"content", "object", "prompt_filter_results", "finish_reason"}),
-            # Add specific metadata fields if they exist
-            finish_reason=chat_result.finish_reason,
+            metadata=chat_result.model_dump(exclude={"content", "object"}),
         )
-        # Add prompt filter results if they exist
-        if hasattr(chat_result, "prompt_filter_results") and chat_result.prompt_filter_results:
-            output.metadata["prompt_filter_results"] = chat_result.prompt_filter_results
 
         parsed_object = None
         parse_error = None
@@ -334,7 +329,7 @@ class LLMAgent(Agent):
             # Log template errors clearly as they prevent LLM call
             logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
             # Create an error output
-            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
+            error_output = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt)
             error_output.set_error(f"Template processing failed: {template_error}")
             return error_output
             # Re-raising might be desired depending on orchestrator's error handling
@@ -349,11 +344,13 @@ class LLMAgent(Agent):
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected schema to client if supported
             )
+            llm_messages = llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.id))
             logger.debug(f"Agent {self.id}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call
-            logger.error(f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}")
-            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt, messages=llm_messages)
+            msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
+            logger.error(msg)
+            error_output = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt, messages=llm_messages, metadata={"role": self.role, "name": self.name}, error=[msg])
             error_output.set_error(f"LLM API call failed: {llm_error}")
             return error_output
             # Depending on severity, might want to raise
@@ -362,7 +359,7 @@ class LLMAgent(Agent):
         # 3. Create the standardized AgentOutput
         output = self.make_output(
             chat_result=llm_result,
-            inputs=message,  # Pass original AgentInput
+            inputs=message.inputs,  # Pass input dict from AgentInput
             messages=llm_messages,  # Pass messages sent
             parameters=message.parameters,  # Pass task parameters
             prompt=message.prompt,  # Pass original prompt

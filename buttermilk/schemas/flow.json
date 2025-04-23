@@ -1,11 +1,16 @@
 [
     {
-        "name": "job_id",
+        "name": "session_id",
         "type": "STRING",
         "mode": "REQUIRED"
     },
     {
-        "name": "flow_id",
+        "name": "agent_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "call_id",
         "type": "STRING",
         "mode": "REQUIRED"
     },
@@ -25,14 +30,14 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "source",
-        "type": "STRING",
+        "name": "records",
+        "type": "JSON",
         "mode": "REPEATED"
     },
     {
-        "name": "record",
+        "name": "messages",
         "type": "JSON",
-        "mode": "NULLABLE"
+        "mode": "REPEATED"
     },
     {
         "name": "prompt",
@@ -46,11 +51,6 @@
     },
     {
         "name": "inputs",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "result",
         "type": "JSON",
         "mode": "NULLABLE"
     },
