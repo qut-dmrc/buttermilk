@@ -299,12 +299,10 @@ class LLMScorer(LLMAgent):
 
         try:
             # Apply the scorer to the original weave call.
-            scorer_instance = ButtermilkWeaveScorer()
-            # Log the 'score' output under the 'weave_call' trace.
-            await weave_call.apply_scorer(weave_call, scorer_instance)  # Use apply_scorer utility
-            logger.debug(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.id}")
+            score_resposne = await weave_call.apply_scorer(ButtermilkWeaveScorer())  # Use apply_scorer utility
+            logger.debug(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.ref}")
         except Exception as e:
-            logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.id if weave_call else 'N/A'}: {e}")
+            logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.ref if weave_call else 'N/A'}: {e}")
 
     # TODO: The base LLMAgent._process should handle the core logic. This override might be redundant
     #       or was intended for specific pre/post processing not done in _listen.
