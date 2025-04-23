@@ -1,4 +1,5 @@
-{# --- Prompty Frontmatter ---
+{#-
+--- Prompty Frontmatter ---
 Defines metadata and expected inputs for this prompt template.
 Inputs:
   - instructions: The original task instructions given to the agents.
@@ -10,20 +11,9 @@ Inputs:
   - criteria: The evaluation criteria to apply during synthesis.
   - records: (Placeholder) Likely contains the original data record(s). Used as placeholder in template.
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
---- #}
----
-description: Synthesise multiple draft answers and feedback into a final answer based on criteria.
-inputs:
-  - instructions
-  - q
-  - content
-  - answers
-  - feedback {# Added feedback as an explicit input based on prompt text #}
-  - criteria {# Added criteria as an explicit input #}
-  - records {# Added records as an explicit input #}
-  - context {# Added context as an explicit input #}
-prompt_placeholder: false
----
+--- 
+-#}
+{% from '_macros.jinja2' import render_or_include with context %}
 
 system:
 {# --- System Prompt ---
@@ -42,14 +32,14 @@ Your response should be written for an external audience. Do not mention our int
 {# Optionally include the original instructions if provided #}
 {% if instructions %}
 <BEGIN ORIGINAL INSTRUCTIONS>
-{{ instructions }}
+{{ render_or_include(instructions) }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
 {# Optionally include the evaluation criteria if provided #}
 {% if criteria %}
 <BEGIN CRITERIA>
-{{ criteria }}
+{{ render_or_include(criteria) }}
 <END CRITERIA>
 {% endif %}
 

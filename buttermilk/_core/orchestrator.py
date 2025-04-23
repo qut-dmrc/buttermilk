@@ -187,6 +187,8 @@ class Orchestrator(BaseModel, ABC):
             with weave.attributes(tracing_attributes):
                 await traced_run_op(request=request)
             logger.info(f"Orchestrator '{self.name}' run finished successfully.")
+            # Print weave link again
+            
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.
             logger.exception(f"Orchestrator '{self.name}' run failed: {e}")

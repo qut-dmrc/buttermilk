@@ -1,0 +1,20 @@
+{# filepath: buttermilk/templates/_macros.jinja2 #}
+{% macro render_or_include(variable_value, template_suffix='.jinja2') %}
+  {#- Check if the variable has a value -#}
+  {% if variable_value %}
+    {#- Attempt to include a template named after the variable's value. Capture output. -#}
+    {% set included_content %}
+      {% include variable_value + template_suffix ignore missing with context %}
+    {% endset %}
+
+    {#- Trim whitespace from captured content -#}
+    {% set included_content = included_content | trim %}
+
+    {#- Output included content if found, otherwise output the original variable value -#}
+    {% if included_content %}
+      {{- included_content -}}
+    {% else %}
+      {{- variable_value -}}
+    {% endif %}
+  {% endif %}
+{% endmacro %}

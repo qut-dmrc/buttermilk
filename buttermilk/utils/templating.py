@@ -170,7 +170,7 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
 
 def _parse_prompty(string_template) -> str:
     # Use Promptflow's format and strip the header out
-    pattern = r"-{3,}\n(.*)-{3,}\n(.*)"
+    pattern = r"-{3,}\n(.*?)-{3,}\n(.*)"
     result = re.search(pattern, string_template, re.DOTALL)
     if not result:
         return string_template
@@ -204,7 +204,7 @@ def load_template(template: str,
             # Keep a list of variables that have not yet been filled.
             undefined_vars.append(self._undefined_name)
 
-            # We leave double braces here, that json instructions and
+            # We leave double braces here, so that json instructions and
             # examples etc are not misinterpreted as variables.
             return "{{" + str(self._undefined_name) + "}}"
 
@@ -218,35 +218,13 @@ def load_template(template: str,
 
     # Load main template
     try:
-        filename = str(sandbox_env.get_template(f"{template}.jinja2").filename)
+        tpl = sandbox_env.get_template(f"{template}.jinja2")
     except Exception as err:
-        raise FatalError(f"Template {template} not found.") from err
-
-    logger.debug(f"Loading template {template} from {filename}.")
-    tpl_text = read_text(filename)
-    tpl_text = _parse_prompty(tpl_text)
-
-    # Process template inclusions in parameters
-    processed_params = {}
-    for k, v in parameters.items():
-        if isinstance(v, str) and v:
-            try:
-                # Try to load this as a template
-                filename = sandbox_env.get_template(f"{v}.jinja2").filename
-                var = read_text(filename)
-                var = _parse_prompty(var)
-                processed_params[k] = var
-                logger.debug(f"Loaded template variable {k} from {filename}.")
-            except TemplateNotFound:
-                # Not a template, use as regular string
-                processed_params[k] = v
+        raise FatalError(f"Template {template} not loaded.") from err
 
     # Create a combined variables dict with trusted parameters taking precedence
-    all_vars = dict(untrusted_inputs)
-    all_vars.update(processed_params)  # Trusted params override untrusted ones
+    all_vars = {**parameters, **untrusted_inputs}
 
-    # Render everything in one pass
-    tpl = sandbox_env.from_string(tpl_text)
     rendered = tpl.render(**all_vars)
 
     return rendered, set(undefined_vars)

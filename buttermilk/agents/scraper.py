@@ -151,7 +151,7 @@ class WebScraperSelenium(WebScraperRequests):
     # The code in this class should be specific to use with the Selenium webdriver.
     ##
     ################################
-    driver: webdriver.WebDriver
+    # driver: webdriver.WebDriver
 
     def __init__(self, name, job, **kwargs) -> None:
         self.driver = None
@@ -216,15 +216,6 @@ class WebScraperSelenium(WebScraperRequests):
         logging.getLogger("seleniumwire.handler").setLevel(logging.WARNING)
         return self.driver
 
-    @retry(
-        retry=retry_if_exception_type(
-            (TimeoutError, googleapiclient.errors.Error),
-        ),
-        # Wait interval:  10 seconds first, increasing exponentially up to a max of two minutes between retries
-        wait=wait_exponential_jitter(initial=1, max=60, jitter=5),
-        # Retry up to five times before giving up
-        stop=stop_after_attempt(5),
-    )
     def save_page(self, **kwargs):
         save_paths = dict()
 

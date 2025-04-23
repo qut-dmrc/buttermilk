@@ -4,6 +4,7 @@ Defines the CLIUserAgent for interacting with the user via the command line cons
 
 import asyncio
 from collections.abc import AsyncGenerator
+import json
 from textwrap import indent
 from typing import Any, Awaitable, Callable, List, Union, Optional  # Added List, Union, Optional
 
@@ -204,7 +205,7 @@ class CLIUserAgent(UIAgent):
                 # else: Don't necessarily need to show successful completion signal
 
             elif isinstance(message, ToolOutput):
-                output_lines.append(f"### Tool Output (for Tool Call {message.tool_call_id}):")
+                output_lines.append(f"### Tool Output (for Tool Call {message.call_id}):")
                 # TODO: Format tool output better based on its content type
                 output_lines.append(f"```\n{pretty_repr(message.content, max_string=1000)}\n```")
 

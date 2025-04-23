@@ -7,10 +7,7 @@ Inputs:
   - records: (Placeholder) Likely contains the original data record(s).
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
 --- #}
----
-name: Differences in reasoning
----
-
+{% from '_macros.jinja2' import render_or_include with context %}
 # System:
 {# --- System Prompt ---
 Sets the persona and task for the LLM: an auditor analyzing differences in reasoning between expert answers.
@@ -77,7 +74,7 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 {# Optionally include the criteria if provided, for context. #}
 {% if criteria %}
 <BEGIN ORIGINAL INSTRUCTIONS>
-{{ criteria }}
+{{ render_or_include(criteria) }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 

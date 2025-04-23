@@ -48,7 +48,7 @@ class SimpleAutogenChatWrapper(RoutedAgent):
         self._model_client: ChatCompletionClient = PrivateAttr()
         self._delegate = AssistantAgent(name, model_client=self._model_client)
 
-    @message_handler
+    # @message_handler
     async def handle_messages(self, messages: Sequence[BaseChatMessage], ctx: MessageContext) -> None:
         async for message in self._delegate.on_messages_stream(messages, ctx.cancellation_token):
             if message:
