@@ -115,11 +115,11 @@ class Orchestrator(BaseModel, ABC):
 
     @field_validator("data", mode="before")
     @classmethod
-    def validate_data(cls, value: Sequence[DataSourceConfig | dict]) -> list[DataSourceConfig]:
+    def validate_data(cls, value: Sequence[DataSourceConfig | Mapping]) -> list[DataSourceConfig]:
         """Ensures all items in the 'data' list are valid DataSourceConfig objects."""
         validated_data = []
         for i, source in enumerate(value):
-            if isinstance(source, dict):
+            if isinstance(source, Mapping):
                 try:
                     validated_data.append(DataSourceConfig(**source))
                 except Exception as e:
@@ -142,7 +142,7 @@ class Orchestrator(BaseModel, ABC):
             agent_roles.append(role_upper)
             if isinstance(defn, AgentVariants):
                 validated_agents[role_upper] = defn
-            elif isinstance(defn, dict):
+            elif isinstance(defn, Mapping):
                 try:
                     # Validate dict against AgentVariants model
                     validated_agents[role_upper] = AgentVariants(**defn)
