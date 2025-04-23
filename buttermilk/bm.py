@@ -108,7 +108,7 @@ class Singleton:
 
 
 class BM(Singleton, Project):
-    _gcp_project: str = PrivateAttr()
+    _gcp_project: str = PrivateAttr(default="")
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(default=None)  # Allow None initially
     _weave: WeaveClient = PrivateAttr()
 
@@ -126,24 +126,24 @@ class BM(Singleton, Project):
         from google.auth import default, transport
         from google.auth.transport.requests import Request  # Correct import needed here too
 
-        billing_project = os.environ.get("google_billing_project", os.environ.get("GOOGLE_CLOUD_PROJECT"))
-        if not billing_project:
-            raise ValueError("GOOGLE_CLOUD_PROJECT or google_billing_project environment variable not set.")
-
-        # Use PrivateAttr default=None and check for None before using
         if self._gcp_credentials_cached is None:
-            self._gcp_credentials_cached, self._gcp_project = default(
-                quota_project_id=billing_project,
-            )
+
+            billing_project = os.environ.get("google_billing_project", os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project))
+            if not billing_project:
+                self._gcp_credentials_cached, self._gcp_project = default()
+                billing_project = self._gcp_project
+                # raise ValueError("GOOGLE_CLOUD_PROJECT or google_billing_project environment variable not set.")
+
+            # Use PrivateAttr default=None and check for None before using
+            if self._gcp_credentials_cached is None:
+                self._gcp_credentials_cached, self._gcp_project = default(
+                    quota_project_id=billing_project,
+                )
 
         # GCP tokens last 60 minutes and need to be refreshed after that
         # Ensure creds are not None before refreshing
-        if self._gcp_credentials_cached:
-            auth_request = Request()  # Use imported Request
-            self._gcp_credentials_cached.refresh(auth_request)
-        else:
-            # This case should ideally not be reached if initialization logic is correct
-            raise RuntimeError("GCP credentials were not initialized.")
+        auth_request = Request()  # Use imported Request
+        self._gcp_credentials_cached.refresh(auth_request)
 
         return self._gcp_credentials_cached
 

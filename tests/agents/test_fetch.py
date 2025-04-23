@@ -9,6 +9,44 @@ from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
 
+NEWS_RECORDS = [
+    (
+        "abc news web",
+        "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
+        "text/html",
+        5687,
+    ),
+    (
+        "semaphor web",
+        "https://www.semafor.com/article/11/12/2024/after-a-stinging-loss-democrats-debate-over-where-to-draw-the-line-on-transgender-rights",
+        "text/html",
+        5586,
+    ),
+]
+
+messages = [
+    (
+        None,
+        AgentInput(
+            inputs={"step": "testing", "content": "Just a regular message"},
+        ),
+    ),
+    (
+        "error",
+        AgentInput(
+            prompt="Check out https://example.com",
+            inputs={},
+        ),
+    ),
+    (
+        "missing",
+        AgentInput(
+            prompt="Get `#record123`",
+            inputs={"step": "testing"},
+        ),
+    ),
+]
+
 class TestFetch:
     """Tests for Fetch agent methods."""
 
@@ -203,6 +241,17 @@ class TestFetch:
             fetch.publish.assert_called_once()
             assert isinstance(result, AgentOutput)
 
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        argvalues=NEWS_RECORDS,
+        argnames=["id", "uri", "expected_mimetype", "expected_size"],
+        ids=[x[0] for x in NEWS_RECORDS],
+    )
+    async def test_ingest_news(self, fetch: FetchRecord, id, uri, expected_mimetype, expected_size):
+        media_obj = await fetch._run(uri=uri)
+        assert len(media_obj.text) == expected_size
+        assert media_obj.uri == uri
+
 
 @pytest.fixture
 def fetch_agent_cfg() -> AgentConfig:
@@ -220,30 +269,6 @@ def fetch_agent_cfg() -> AgentConfig:
             },
         ],
     )
-
-
-messages = [
-    (
-        None,
-        AgentInput(
-            inputs={"step": "testing", "content": "Just a regular message"},
-        ),
-    ),
-    (
-        "error",
-        AgentInput(
-            prompt="Check out https://example.com",
-            inputs={},
-        ),
-    ),
-    (
-        "missing",
-        AgentInput(
-            prompt="Get `#record123`",
-            inputs={"step": "testing"},
-        ),
-    ),
-]
 
 
 @pytest.mark.parametrize(["expected", "agent_input"], messages)
@@ -269,31 +294,3 @@ async def test_run_record_agent(
     )
     await runtime.stop_when_idle()
     assert result == expected
-
-
-NEWS_RECORDS = [
-    (
-        "abc news web",
-        "https://www.abc.net.au/news/2025-01-16/jewish-palestinian-australia-gaza/104825486",
-        "text/html",
-        5687,
-    ),
-    (
-        "semaphor web",
-        "https://www.semafor.com/article/11/12/2024/after-a-stinging-loss-democrats-debate-over-where-to-draw-the-line-on-transgender-rights",
-        "text/html",
-        5586,
-    ),
-]
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize(
-    argvalues=NEWS_RECORDS,
-    argnames=["id", "uri", "expected_mimetype", "expected_size"],
-    ids=[x[0] for x in NEWS_RECORDS],
-)
-async def test_ingest_news(fetch: FetchRecord, id, uri, expected_mimetype, expected_size):
-    media_obj = await fetch._run(uri=uri)
-    assert len(media_obj.text) == expected_size
-    assert media_obj.uri == uri

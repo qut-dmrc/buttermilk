@@ -31,7 +31,8 @@ def record_agent_cfg(
         case "Judger":
             return LLMAgent(
                 id=request.param,
-                rowl="judge",
+                role="judge",
+                name="judger",
                 description="apply rules",
                 parameters=dict(
                     model=model_name,
@@ -43,6 +44,7 @@ def record_agent_cfg(
         case "Owl":
             return LLMAgent(
                 role="owl",
+                name="owl",
                 description="look for things",
                 parameters=dict(
                     model=model_name,
