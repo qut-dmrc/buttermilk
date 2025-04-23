@@ -560,6 +560,12 @@ class Selector(AutogenOrchestrator):
                         # Loop back to _get_host_suggestion, providing the rejection context via _user_feedback.
                         continue
 
+                    # Handle user providing feedback with interrupt flag
+                    if user_response.interrupt:
+                        logger.info("User provided feedback with interrupt flag. Requesting conductor to review feedback before proceeding.")
+                        # Loop back to _get_host_suggestion, where the feedback is already stored in _user_feedback
+                        continue
+
                     # 3. Determine Variant and Execute Step
                     selected_variant_index = 0  # Default to the first variant
                     if self._last_user_selection:  # Check if user made a selection in _in_the_loop
