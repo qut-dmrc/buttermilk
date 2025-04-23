@@ -257,7 +257,7 @@ class Agent(AgentConfig):
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error preparing input state: {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Error preparing input state: {e}")
             error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
             error_output.set_error(f"Failed to prepare input state: {e}")
             return error_output
@@ -268,7 +268,6 @@ class Agent(AgentConfig):
         if call:
             call.display_name = self.name  # Set trace display name
             # TODO: Log inputs? Be careful about large data/PII.
-            # call.log_input({"message_prompt": message.prompt, "inputs_keys": list(message.inputs.keys())})
             logger.debug(f"Agent {self.id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
         else:
             logger.warning(f"Agent {self.id} __call__ executing outside Weave trace context.")
@@ -276,27 +275,19 @@ class Agent(AgentConfig):
         # --- Execute Core Logic ---
         try:
             result = await self._process(message=final_input, cancellation_token=cancellation_token, **kwargs)
-            # Optionally attach trace ID to result if needed elsewhere, though Weave handles association.
-            # if call and result: result.tracing.weave = call.ref.id
-            if call and result:
-                call.log_output(result)  # Log output to Weave trace
 
         except Exception as e:
             # Catch unexpected errors during _process.
             error_msg = f"Agent {self.id} error during _process: {e}"
-            logger.error(error_msg, exc_info=True)
-            result = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
+            logger.error(error_msg)
+            result = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt)
             result.set_error(error_msg)
-            if call:
-                call.log_output(result)  # Log error output to Weave trace
 
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result is None:
             logger.warning(f"Agent {self.id} _process returned None. Creating default error output.")
             result = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
             result.set_error("Agent _process method returned None unexpectedly.")
-            if call:
-                call.log_output(result)
 
         logger.debug(f"Agent {self.id} finished __call__.")
         return result
@@ -373,16 +364,18 @@ class Agent(AgentConfig):
             # Use 'contents' if available (likely parsed output)
             content_to_add = getattr(message, "contents", None)
             if content_to_add:
-                await self._model_context.add_message(AssistantMessage(content=str(content_to_add)))  # Assume Assistant role for outputs
+                await self._model_context.add_message(
+                    AssistantMessage(source=source, content=str(content_to_add))
+                )  # Assume Assistant role for outputs
         elif isinstance(message, UserInstructions):
             content_to_add = getattr(message, "prompt", None)
             if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(content_to_add)))
+                await self._model_context.add_message(UserMessage(source=source, content=str(content_to_add)))
         elif isinstance(message, ToolOutput):
             content_to_add = getattr(message, "content", None)
             if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
                 # TODO: Decide role for ToolOutput in history. User? Assistant? Special type? Using User for now.
-                await self._model_context.add_message(UserMessage(content=f"[Tool Output: {str(content_to_add)[:200]}...]"))
+                await self._model_context.add_message(UserMessage(source=source, content=f"[Tool Output: {str(content_to_add)[:200]}...]"))
         # Add other relevant types like UserMessage if needed
         elif isinstance(message, UserMessage):
             content_to_add = getattr(message, "content", None)
@@ -423,7 +416,7 @@ class Agent(AgentConfig):
 
     # --- Helper Methods ---
 
-    async def _check_heartbeat(self, timeout=60) -> bool:
+    async def _check_heartbeat(self, timeout=240) -> bool:
         """
         Waits for a heartbeat signal on the internal queue.
 
@@ -445,7 +438,7 @@ class Agent(AgentConfig):
             logger.warning(f"Agent {self.id} timed out waiting for heartbeat.")
             return False
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error checking heartbeat: {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Error checking heartbeat: {e}")
             return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
@@ -485,7 +478,7 @@ class Agent(AgentConfig):
             merged_inputs_dict = {**resolved_mappings, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error resolving input mappings: {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Error resolving input mappings: {e}")
             # Continue without resolved mappings? Or raise? Raising for clarity.
             raise ProcessingError(f"Error resolving input mappings for agent {self.id}") from e
 
@@ -498,7 +491,7 @@ class Agent(AgentConfig):
             # Prepend history so message.context comes after agent's context
             updated_inputs.context = history + updated_inputs.context
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error retrieving model context: {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Error retrieving model context: {e}")
             # Decide how to handle context retrieval failure. Continue without history?
 
         # Append stored records.
@@ -551,7 +544,7 @@ class Agent(AgentConfig):
                     # logger.debug(f"Mapping '{mapping}' for key '{key}' is not a valid JMESPath expression. Skipping.")
                     continue
                 except Exception as e:
-                    logger.warning(f"Agent {self.id}: Error applying JMESPath mapping '{mapping}' for key '{key}': {e}", exc_info=False)
+                    logger.warning(f"Agent {self.id}: Error applying JMESPath mapping '{mapping}' for key '{key}': {e}")
             else:
                 # Handle non-string or empty mappings if necessary. Currently warns.
                 logger.warning(f"Agent {self.id}: Invalid or complex input mapping for key '{key}': {mapping}. Skipping.")

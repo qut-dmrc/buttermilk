@@ -254,7 +254,7 @@ class LLMScorer(LLMAgent):
                 return
 
         except Exception as e:
-            logger.error(f"Scorer {self.id}: Error extracting variables for scoring: {e}", exc_info=True)
+            logger.error(f"Scorer {self.id}: Error extracting variables for scoring: {e}")
             return
 
         # Prepare the input for the scorer's own LLM call (_process)
@@ -324,7 +324,7 @@ class LLMScorer(LLMAgent):
             await weave.apply_scorer(weave_call, scorer_instance)  # Use apply_scorer utility
             logger.info(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.id}")
         except Exception as e:
-            logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.id if weave_call else 'N/A'}: {e}", exc_info=True)
+            logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.id if weave_call else 'N/A'}: {e}")
 
     # TODO: The base LLMAgent._process should handle the core logic. This override might be redundant
     #       or was intended for specific pre/post processing not done in _listen.

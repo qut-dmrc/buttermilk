@@ -363,9 +363,9 @@ class Record(BaseModel):
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""
 
-    prompt: str = Field(default="", description="The main prompt or question for the run.")
-    record_id: str = Field(default="", description="Record to lookup")
-    uri: str = Field(default="", description="URI to fetch")
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.")
+    record_id: str | None = Field(default="", description="Record to lookup")
+    uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
 
     model_config = ConfigDict(

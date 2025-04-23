@@ -215,7 +215,7 @@ class CLIUserAgent(UIAgent):
                 output_lines.append(message.content)
 
         except Exception as e:
-            logger.error(f"Error formatting message type {type(message)} from {source}: {e}", exc_info=True)
+            logger.error(f"Error formatting message type {type(message)} from {source}: {e}")
             # Fallback to raw representation on error
             try:
                 output_lines.append(f"_(Error formatting message. Raw data below)_")
@@ -324,7 +324,7 @@ class CLIUserAgent(UIAgent):
                 break  # Exit loop cleanly on cancellation
             except Exception as e:
                 # Log errors during input polling but try to continue
-                logger.error(f"{self.id}: Error polling console input: {e}", exc_info=True)
+                logger.error(f"{self.id}: Error polling console input: {e}")
                 # Consider adding a delay before retrying after an error
                 await asyncio.sleep(1)
                 # Re-raise if it's KeyboardInterrupt to allow stopping the application
@@ -373,7 +373,7 @@ class CLIUserAgent(UIAgent):
                 logger.info(f"{self.id}: Console input task successfully cancelled.")
             except Exception as e:
                 # Log if waiting for cancellation fails unexpectedly
-                logger.error(f"{self.id}: Error during input task cleanup: {e}", exc_info=True)
+                logger.error(f"{self.id}: Error during input task cleanup: {e}")
         else:
             logger.debug(f"{self.id}: No active input task to cancel.")
         # Call base class cleanup if needed

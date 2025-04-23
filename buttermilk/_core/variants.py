@@ -110,7 +110,16 @@ class AgentVariants(AgentConfig):
         Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
-        static_config = self.model_dump(exclude={"parallel_variants", "id", "sequential_variants", "num_runs", "parameters", "tasks", "name", "id"})
+        static_config = self.model_dump(
+            exclude={
+                "parallel_variants",
+                "id",
+                "sequential_variants",
+                "num_runs",
+                "parameters",
+                "tasks",
+            }
+        )
         base_parameters = self.parameters.copy()  # Base parameters common to all
 
         # Get agent class
@@ -146,9 +155,7 @@ class AgentVariants(AgentConfig):
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(
-                            f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with params {combined_params}: {e}", exc_info=True
-                        )
+                        logger.error(f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with params {combined_params}: {e}")
                         raise  # Re-raise by default
 
         if not generated_configs:  # Check if list is empty

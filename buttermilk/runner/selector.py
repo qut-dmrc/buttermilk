@@ -167,7 +167,7 @@ class Selector(AutogenOrchestrator):
         except StopAsyncIteration:
             raise  # Re-raise halt signal
         except Exception as e:
-            logger.error(f"Error waiting for user confirmation: {e}", exc_info=True)
+            logger.error(f"Error waiting for user confirmation: {e}")
             # Return an error response
             return ManagerResponse(error=[f"Error processing user input: {e}"], confirm=False, halt=False)
 
@@ -470,7 +470,7 @@ class Selector(AutogenOrchestrator):
                 response.outputs = {"raw_output": raw_output}
 
         except Exception as e:
-            logger.error(f"Error sending message to agent {variant_id} for execution {execution_id}: {e}", exc_info=True)
+            logger.error(f"Error sending message to agent {variant_id} for execution {execution_id}: {e}")
             # Create an error response
             response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
             response.set_error(f"Failed to execute agent: {e}")
@@ -580,7 +580,7 @@ class Selector(AutogenOrchestrator):
                 # --- Loop Exception Handling ---
                 except ProcessingError as e:
                     # Log non-fatal processing errors (e.g., template errors) and continue loop.
-                    logger.error(f"Processing error during Selector loop: {e}", exc_info=True)
+                    logger.error(f"Processing error during Selector loop: {e}")
                     # Optionally inform the user about the error?
                     await self._send_ui_message(ManagerMessage(content=f"⚠️ Encountered an error: {e}. Trying to continue..."))
                     continue  # Attempt to recover by getting next step suggestion
@@ -636,5 +636,5 @@ class Selector(AutogenOrchestrator):
         except ImportError:
             logger.error("Could not import FetchRecord agent for initial fetch.")
         except Exception as e:
-            logger.error(f"Error fetching initial record: {e}", exc_info=True)
+            logger.error(f"Error fetching initial record: {e}")
             # Should this prevent the flow from starting?

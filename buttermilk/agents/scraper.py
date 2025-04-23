@@ -10,10 +10,13 @@ import urllib3
 from pydantic import PrivateAttr
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
 )
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.exceptions import RateLimit
+from buttermilk._core.retry import TooManyRequests
 
 ########################
 # WebScraper(): a modular web scraping class
@@ -76,11 +79,9 @@ class WebScraperRequests(Agent):
                 TooManyRequests,
                 requests.exceptions.ConnectionError,
                 urllib3.exceptions.HTTPError,
-                selenium.common.exceptions.WebDriverException,
+                # selenium.common.exceptions.WebDriverException,
             ),
         ),
-        # Wait interval:  10 seconds first, increasing exponentially up to a max of two minutes between retries
-        wait=wait_exponential_jitter(initial=1, max=60, jitter=5),
         # Retry up to five times before giving up
         stop=stop_after_attempt(5),
     )

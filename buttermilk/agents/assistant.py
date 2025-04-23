@@ -95,7 +95,7 @@ class AssistantAgentWrapper(Agent):
                 system_message=system_message_content,
             )
         except Exception as e:
-            logger.error(f"Failed to initialize AssistantAgent {self.role}: {e}", exc_info=True)
+            logger.error(f"Failed to initialize AssistantAgent {self.role}: {e}")
             raise ValueError(f"AssistantAgent initialization failed for {self.role}") from e
 
         return self
@@ -149,7 +149,7 @@ class AssistantAgentWrapper(Agent):
         try:
             response = await self._assistant_agent.on_messages(messages=messages_to_send, cancellation_token=cancellation_token)
         except Exception as e:
-            logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}", exc_info=True)
+            logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}")
             return AgentOutput(
                 agent_id=self.id,
                 content=f"Error processing request: {e}",

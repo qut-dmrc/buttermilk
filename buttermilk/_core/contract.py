@@ -239,7 +239,7 @@ class AgentOutput(FlowMessage):
     """
 
     agent_id: str = Field(..., description="The unique ID of the agent instance that generated this output.")
-    run_id: str = Field(default_factory=_global_run_id, description="Global run identifier.")  # Use factory
+    run_id: str = Field(default=_global_run_id, description="Global run identifier.")
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this specific agent execution/response.",
@@ -381,7 +381,6 @@ class ToolOutput(FunctionExecutionResult):
     Inherits fields from Autogen's `FunctionExecutionResult` (like `call_id`, `function_name`, `content`).
     Adds Buttermilk-specific context.
     """
-
     # TODO: 'role' seems redundant if associated with an agent. Clarify purpose.
     role: str = Field(..., description="The role the tool provides (?)")
 
@@ -395,7 +394,7 @@ class ToolOutput(FunctionExecutionResult):
     # Content inherited from FunctionExecutionResult holds the tool's return value (often stringified).
     content: str = Field(..., description="String representation of the tool's execution result.")
     # Call ID inherited? If not, uncomment. Ensure consistency.
-    # call_id: str = Field(default="unknown", description="ID of the corresponding tool call request.")
+    call_id: str = Field(default="unknown", description="ID of the corresponding tool call request.")
     # TODO: 'is_error' - does FunctionExecutionResult have this? If not, uncomment.
     # is_error: bool | None = Field(default=False)
 

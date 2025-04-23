@@ -49,7 +49,7 @@ class BatchOrchestrator(Orchestrator):
                     self._agent_instances[variant_config.id] = instance  # Store by unique variant ID
                     logger.debug(f"Instantiated agent variant: {variant_config.id} ({step_name})")
                 except Exception as e:
-                    logger.error(f"Failed to instantiate agent variant {variant_config.id}: {e}", exc_info=True)
+                    logger.error(f"Failed to instantiate agent variant {variant_config.id}: {e}")
                     # Optionally raise FatalError to halt if agent is critical
 
         logger.info("BatchOrchestrator setup complete.")
@@ -122,7 +122,7 @@ class BatchOrchestrator(Orchestrator):
                     return AgentOutput(agent_id=self.name, error=[f"Unknown return type: {type(raw_output)}"])
 
             except Exception as e:
-                logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}", exc_info=True)
+                logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}")
                 # Ensure 'inputs' attribute exists on output for error cases
                 return AgentOutput(agent_id=self.name, error=[str(e)])
         else:

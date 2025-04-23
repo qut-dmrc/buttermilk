@@ -117,7 +117,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 self.agent = agent_cls(**agent_cfg.model_dump())
                 logger.debug(f"Adapter instantiated agent: {self.agent.id} ({agent_cls.__name__})")
             except Exception as e:
-                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.id}: {e}", exc_info=True)
+                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.id}: {e}")
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e
         else:
             # Insufficient information provided.
@@ -215,7 +215,7 @@ class AutogenAgentAdapter(RoutedAgent):
             return output  # Return the direct output to the caller in Autogen.
 
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} invocation: {e}", exc_info=True)
+            logger.error(f"Error during agent {self.agent.id} invocation: {e}")
             # Publish status update: Task Complete (Error)
             await self.publish_message(
                 TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
@@ -253,7 +253,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} listening to group chat message: {e}", exc_info=True)
+            logger.error(f"Error during agent {self.agent.id} listening to group chat message: {e}")
             # TODO: Consider publishing an ErrorEvent here as well?
 
     @message_handler
@@ -292,7 +292,7 @@ class AutogenAgentAdapter(RoutedAgent):
             # Note: Conductor responses are typically returned directly, not published separately by the adapter.
             return output
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} handling ConductorRequest: {e}", exc_info=True)
+            logger.error(f"Error during agent {self.agent.id} handling ConductorRequest: {e}")
             # TODO: Consider publishing ErrorEvent or returning a specific error response?
             return None  # Return None on error
 
@@ -328,7 +328,7 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
             return response  # Return response directly for OOB messages.
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} handling control message: {e}", exc_info=True)
+            logger.error(f"Error during agent {self.agent.id} handling control message: {e}")
             # TODO: Return an error OOB message?
             return None
 
