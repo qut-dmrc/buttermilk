@@ -150,7 +150,7 @@ class AgentConfig(BaseModel):
 
     # Private Attributes (Internal state, often defaults or generated)
     _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])  # Short unique ID component.
-    base_name: str | None = Field(default=None, description="Base name component derived from 'name' on init.", exclude=True)
+    base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=True)
     # Defines which attributes are combined to create the human-friendly 'name'.
     _name_components: list[str] = ["base_name", "_id"]
 

@@ -31,6 +31,7 @@ from buttermilk._core.exceptions import ProcessingError
 from .config import DataSourceConfig, SaveInfo, Tracing  # Core configuration models
 from .types import Record, _global_run_id  # Core data types
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
+from .log import logger
 
 # TODO: BASE_DIR seems unused. Consider removing.
 # BASE_DIR = Path(__file__).absolute().parent
