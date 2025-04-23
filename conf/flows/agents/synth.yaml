@@ -17,5 +17,5 @@ synthesiser:
     criteria: ${....params.criteria}
   inputs:
     records: "*.records"
-    answers: judge
+    answers: "[judge]"
     feedback: feedback

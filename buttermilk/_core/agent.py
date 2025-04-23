@@ -266,7 +266,7 @@ class Agent(AgentConfig):
         # Get the current Weave call context if available.
         call = weave.get_current_call()
         if call:
-            call.display_name = self.name  # Set trace display name
+            call.set_display_name(self.name)  # Set trace display name
             # TODO: Log inputs? Be careful about large data/PII.
             logger.debug(f"Agent {self.id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
         else:
@@ -361,27 +361,17 @@ class Agent(AgentConfig):
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
         # TODO: Refine logic for which message types/content get added to history.
-        if isinstance(message, (AgentOutput, ConductorResponse)):
+        if isinstance(message, AgentOutput):
             # Use 'contents' if available (likely parsed output)
             content_to_add = getattr(message, "contents", None)
             if content_to_add:
                 await self._model_context.add_message(
                     AssistantMessage(source=source, content=str(content_to_add))
                 )  # Assume Assistant role for outputs
-        elif isinstance(message, UserInstructions):
+        elif isinstance(message, (UserInstructions, UserMessage)):
             content_to_add = getattr(message, "prompt", None)
             if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(source=source, content=str(content_to_add)))
-        elif isinstance(message, ToolOutput):
-            content_to_add = getattr(message, "content", None)
-            if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
-                # TODO: Decide role for ToolOutput in history. User? Assistant? Special type? Using User for now.
-                await self._model_context.add_message(UserMessage(source=source, content=f"[Tool Output: {str(content_to_add)[:200]}...]"))
-        # Add other relevant types like UserMessage if needed
-        elif isinstance(message, UserMessage):
-            content_to_add = getattr(message, "content", None)
-            if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(content_to_add)))
         else:
             # don't log other types of messages to history by default
             logger.debug(f"Agent {self.id} ignored message type {type(message)} for context history.")
@@ -470,9 +460,16 @@ class Agent(AgentConfig):
         if updated_inputs.inputs is None:
             updated_inputs.inputs = {}
         try:
-            resolved_mappings = self._data._resolve_mappings(self.inputs)
+            extracted_data = {}
+            for key in self.inputs.keys():
+                data = self._data.get(key, [])
+                # the _data collector object always uses lists. Get the non-empty values
+                data = [x for x in data if x is not None]
+                if data != []:
+                    extracted_data[key] = data
+            # resolved_mappings = self._data._resolve_mappings(self.inputs)
             # Merge resolved mappings, letting message inputs override.
-            merged_inputs_dict = {**resolved_mappings, **updated_inputs.inputs}
+            merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict
         except Exception as e:
             logger.error(f"Agent {self.id}: Error resolving input mappings: {e}")
@@ -528,7 +525,8 @@ class Agent(AgentConfig):
                     # Use JMESPath to search the datadict based on the mapping expression.
                     # Example: mapping = "judge.outputs.prediction" -> search datadict["judge"]["outputs"]["prediction"]
                     search_result = jmespath.search(mapping, datadict)
-                    if search_result is not None:  # Store if JMESPath found something (could be False, 0, etc.)
+                    if search_result is not None and search_result != [] and search_result != {}:
+                        # Store if JMESPath found something (could be False, 0, etc.)
                         extracted[key] = search_result
                         logger.debug(f"Agent {self.id}: Extracted '{key}' using mapping '{mapping}'. Found: {type(search_result)}")
                     else:

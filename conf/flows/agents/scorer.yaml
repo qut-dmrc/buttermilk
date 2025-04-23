@@ -14,3 +14,5 @@ scorer:
     records: "*.records[]||*.inputs.records[]|[0]"
     expected: "*.records[0].ground_truth||*.inputs.records[0].ground_truth|[0].reasons"
     answers: "[judge,synth][]"
+    agent: "[judge,synth][].agent_id"
+    answer_id: "[judge,synth][].call_id"
