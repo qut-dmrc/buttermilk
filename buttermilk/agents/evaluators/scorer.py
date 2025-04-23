@@ -28,18 +28,26 @@ from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
 
 # --- Pydantic Models for Scoring ---
-
-
 class QualScoreCRA(BaseModel):
     """Represents a single Criterion-Referenced Assessment."""
 
     correct: bool = Field(..., description="Does the content meet this specific criterion?")
-    feedback: str = Field(..., description="Concise (e.g., one sentence) explanation for the 'correct' assessment.")
+    feedback: str = Field(..., description="Concise (e.g., one sentence) explanation for your assessment against this criterion.")
 
 
 class QualScore(BaseModel):
-    """Represents a qualitative score based on multiple criteria assessments."""
+    """Qualitative score of an LLM result against provided ground truth."""
 
+    assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
+
+
+class QualResults(QualScore):
+    """Extends QualScore to include metadata of assessed answers."""
+
+    # This model is designed to present results externally, it is not used directly by the agent's output model.
+    agent: str = Field(..., description="The name/ID of the agent whose output was assessed.")
+    answer_id: str = Field(..., description="A unique identifier for the specific answer/output being assessed.")
+    assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments, one for each criterion evaluated.")
 
     @computed_field
@@ -64,57 +72,10 @@ class QualScore(BaseModel):
             score_str = f"{self.correctness:.2f}"  # Format score to 2 decimal places
 
         assessment_lines = [f"**{'✔️' if cra.correct else '✘'}**: {cra.feedback}" for cra in self.assessments]
-        return f"**Score**: {score_str}\n\n\t- " + "\n\n\t- ".join(assessment_lines)
-
-
-class AggResults(QualScore):
-    """Extends QualScore to include metadata for aggregated results."""
-
-    # TODO: This model seems designed for storing results externally, might not be used directly by the agent's output model.
-    agent: str = Field(..., description="The name/ID of the agent whose output was assessed.")
-    answer_id: str = Field(..., description="A unique identifier for the specific answer/output being assessed.")
-    # assessments field inherited from QualScore.
-    assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
+        return f"**Answer**: {self.answer_id}\t\t**Score**: {score_str}\n\n\t- " + "\n\n\t- ".join(assessment_lines)
 
 
 # --- LLM Scorer Agent ---
-
-
-class QualScoreCRA(BaseModel):
-    """A single criterion-referenced asssessment."""
-
-    correct: bool = Field(..., description="Does the content meet the criterion?")
-    feedback: str = Field(..., description="One sentence explanation of your assessment.")
-
-
-class QualScore(BaseModel):
-    """Qualitative score of an LLM result against provided ground truth."""
-
-    answer_id: str = Field(..., description="The ID of the answer being assessed.")
-    assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
-
-    @computed_field
-    @property
-    def score(self) -> float | None:
-        """The overall score of the assessment (not weighted by default!)"""
-        return sum([cra.correct for cra in self.assessments]) / len(self.assessments)
-
-    def __str__(self) -> str:
-        """Markdown representation of the score"""
-        return f"**Answer**: {self.answer_id}\t\t**Score**: {self.score}\n" + "\n\t-".join(
-            [f"**{ '✔️' if cra.correct else '✘' }**: {cra.feedback}" for cra in self.assessments]
-        )
-
-
-class AggResults(QualScore):
-    """Aggregated results of qualitative assessments."""
-
-    agent: str = Field(..., description="The name of the agent who answered.")
-    answer_id: str = Field(..., description="The ID of the answer being assessed.")
-    assessments: list[QualScoreCRA] = Field(..., description="A list of qualitative scores.")
-    assessor: str = Field(..., description="The name of the assessor.")
-
-
 class LLMScorer(LLMAgent):
     """
     An LLM agent that qualitatively scores another agent's output against criteria and ground truth.
@@ -253,6 +214,7 @@ class LLMScorer(LLMAgent):
         # Prepare the input for the scorer's own LLM call (_process)
         # 'inputs' should match what the scorer's prompt template expects.
         # It needs the judge's output (message.outputs) and the ground_truth.
+        extracted_vars["assessor"] = self.id
         scorer_agent_input = AgentInput(
             inputs=extracted_vars,
             # Pass records if they are relevant to the scoring prompt itself.
@@ -290,6 +252,14 @@ class LLMScorer(LLMAgent):
                 # Return the score data as a dictionary for weave logging.
                 if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
                     # Publish the score back to the system using the provided callback.
+                    formatted_score = QualResults(
+                        **score_output.model_dump(),
+                        agent=scorer_agent_input.inputs["agent"],
+                        answer_id=scorer_agent_input.inputs["answer_id"],
+                        assessor=scorer_agent_input.inputs["assessor"],
+                    )
+                    # replace the outputs object
+                    score_output.outputs = formatted_score
                     await public_callback(score_output)
                     return score_output.outputs.model_dump()
                 else:
@@ -299,7 +269,7 @@ class LLMScorer(LLMAgent):
 
         try:
             # Apply the scorer to the original weave call.
-            score_resposne = await weave_call.apply_scorer(ButtermilkWeaveScorer())  # Use apply_scorer utility
+            score_response = await weave_call.apply_scorer(ButtermilkWeaveScorer())  # Use apply_scorer utility
             logger.debug(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.ref}")
         except Exception as e:
             logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.ref if weave_call else 'N/A'}: {e}")

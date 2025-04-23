@@ -181,9 +181,14 @@ class Orchestrator(BaseModel, ABC):
         }
         # Use weave.op to trace the internal _run method.
         try:
+            display_name = self.name
+            if "criteria" in self.params:
+                display_name = f"{display_name} {self.params['criteria'][0]}"
+            if request and request.record_id:
+                display_name = f"{display_name}: {request.record_id}"
             with weave.attributes(tracing_attributes):
                 # This creates a traced version of the _run method.
-                traced_run_op = weave.op(self._run, call_display_name=f"{self.name}")
+                traced_run_op = weave.op(self._run, call_display_name=)
                 # Execute the traced operation within a Weave context.
                 await traced_run_op(request=request)
 

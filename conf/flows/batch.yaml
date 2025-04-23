@@ -20,7 +20,7 @@ batch:
         - record_id
   params:
     criteria:
-      - trans_simplified
+      - trans_factored
     task: Assess this content.
   agents:
     host:

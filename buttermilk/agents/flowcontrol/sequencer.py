@@ -8,7 +8,8 @@ from pydantic import Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
-    COMMAND_SYMBOL,  # Symbol indicating a command message, likely ignored by _listen.
+    COMMAND_SYMBOL,
+    CONDUCTOR,  # Symbol indicating a command message, likely ignored by _listen.
     END,  # Special role indicating the end of the flow.
     MANAGER,  # Role name for the Manager/UI agent.
     WAIT,  # Special role indicating the conductor should wait.
@@ -309,7 +310,9 @@ class Sequencer(Agent):
                 return AgentOutput(agent_id=self.id, outputs=StepRequest(role=END, prompt="", description="No participants found."))
 
         # Get the next step from the generator.
-        next_step = await self._choose(message=message)  # _choose just wraps anext(_step_generator)
+        next_step = CONDUCTOR  # set to our value for the while loop; never return our own role
+        while next_step == CONDUCTOR:
+            next_step = await self._choose(message=message)  # _choose just wraps anext(_step_generator)
 
         # Prepare the output containing the next step request.
         output = AgentOutput(agent_id=self.id, outputs=next_step)
@@ -355,7 +358,7 @@ class Sequencer(Agent):
             logger.error(f"Error getting next step from generator: {e}")
             return StepRequest(role=END, prompt="", description=f"Error in sequence: {e}")
 
-    async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
         """Handles direct calls to the Sequencer agent (e.g., via AgentInput)."""
         # Primarily designed to respond to ConductorRequest via _handle_events.
         # This handles other AgentInput types, potentially for status or simple commands.
@@ -384,7 +387,6 @@ class Sequencer(Agent):
 
         try:
             # Log reception of the prompt.
-            # TODO: Implement actual processing logic if Sequencer should do more than just sequence.
             effective_prompt = prompt or task
             # TODO: AgentOutput doesn't have '.content'. Use '.outputs' or a dedicated field.
             # response.content = f"Sequencer {self.id} received direct input: '{effective_prompt[:100]}...'"

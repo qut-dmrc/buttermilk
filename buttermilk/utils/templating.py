@@ -43,7 +43,8 @@ class KeyValueCollector(BaseModel):
             self._data[key] = value
 
     def set(self, key: str, value: Any) -> None:
-        self._data[key] = value
+        if value is not None and value != [] and value != {} and value != "None":
+            self._data[key] = value
 
     def get_dict(self) -> dict:
         return dict(self._data)
@@ -67,6 +68,12 @@ class KeyValueCollector(BaseModel):
 
     def _resolve_mappings(self, mappings: dict[Any, Any]) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
+
+        ##
+        ##
+        ## TODO: I don't think this is needed anymore????
+        ##
+        ##
         resolved = {}
 
         if isinstance(mappings, str):

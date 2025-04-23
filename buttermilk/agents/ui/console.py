@@ -17,6 +17,7 @@ from rich.markdown import Markdown
 from rich.pretty import pretty_repr  # For formatted output of complex objects
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 
+from rich.syntax import Syntax
 from buttermilk import logger
 
 # Import base agent and specific message types used
@@ -33,7 +34,7 @@ from buttermilk._core.contract import (
     ToolOutput,  # Potentially displayable tool output
 )
 from buttermilk._core.types import Record  # For displaying record data
-from buttermilk.agents.evaluators.scorer import QualScore  # Specific format for scores
+from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import AgentReasons  # Specific format for judge reasons
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 import weave  # Import weave (though seemingly unused directly here)
@@ -115,14 +116,12 @@ class CLIUserAgent(UIAgent):
         # TODO: This function is complex. Refactor into smaller helpers for maintainability.
         #       Consider using a dictionary dispatch pattern based on message type.
         output_lines: list[str] = []  # Use list to build output lines
-        header = f"## Message from {source} "
 
         try:
             # Add specific identifiers if available
-            agent_id = getattr(message, "agent_id", None)
+            agent_id = getattr(message, "agent_id", "unknown")
             role = getattr(message, "role", None)
-            if agent_id:
-                header += f"({role or 'Agent'} {agent_id})"
+            header = f"## Message from {role or 'Agent'} {agent_id}"
 
             output_lines.append(header)
 
@@ -133,8 +132,8 @@ class CLIUserAgent(UIAgent):
                 metadata = getattr(message, "metadata", {})
 
                 # Display specific structured outputs
-                if isinstance(outputs, QualScore):
-                    output_lines.append(str(outputs))  # Use QualScore's __str__
+                if isinstance(outputs, QualResults):
+                    output_lines.append(str(outputs))  # Use QualResults's __str__
                 elif isinstance(outputs, AgentReasons):
                     output_lines.append("### Conclusion")
                     output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.confidence}")
@@ -184,8 +183,8 @@ class CLIUserAgent(UIAgent):
 
                 # Display metadata (like token usage)
                 if metadata:
-                    output_lines.append("### Metadata:")
-                    output_lines.append(f"```json\n{json.dumps(metadata, indent=2)}\n```")
+                    output_lines.append(f"### Metadata:\n\n{str(metadata)}")
+                    # syntax = Syntax(str(metadata), "python", theme="default", line_numbers=False, word_wrap=False)
 
             elif isinstance(message, AgentInput):
                 output_lines.append("### Input Request:")

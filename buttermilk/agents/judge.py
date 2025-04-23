@@ -80,10 +80,18 @@ class AgentReasons(BaseModel):
         ..., description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction."  # Make field required
     )
 
+    def __str__(self):
+        """Returns a nicely formatted string representation of the evaluation."""
+        reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
+        return (
+            f"**Conclusion:** {self.conclusion}\n"
+            f"**Violates Policy:** {'Yes' if self.prediction else 'No'}\n"
+            f"**Confidence:** {self.confidence.capitalize()}\n"
+            f"**Reasoning:**\n{reasons_str}"
+        )
+
 
 # --- Judge Agent ---
-
-
 class Judge(LLMAgent):
     """
     An LLM agent specialized in evaluating content based on provided criteria.
@@ -113,8 +121,7 @@ class Judge(LLMAgent):
     async def evaluate_content(  # Renamed for clarity from handle_agent_input
         self,
         message: AgentInput,
-        # ctx: MessageContext, # ctx might not be directly passed by the buttermilk_handler mechanism? LLMAgent._process uses self._runtime?
-    ) -> AgentOutput:  # Should return AgentOutput as per base Agent._process signature.
+    ) -> AgentOutput:
         """
         Handles an AgentInput request to evaluate content based on the agent's configured criteria.
 

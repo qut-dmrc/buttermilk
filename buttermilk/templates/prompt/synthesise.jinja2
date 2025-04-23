@@ -44,27 +44,14 @@ Your response should be written for an external audience. Do not mention our int
 {% endif %}
 
 
-{# --- User Message Construction --- #}
-{% if answers is defined %}
-{# This block formats the input when draft 'answers' are provided. #}
-{# TODO: The 'records' placeholder seems misplaced here. Is it intended to provide context before the answers? Review usage. #}
 # Placeholder:
 {{records}}
-# User:
-  {# Loop through each provided draft answer. #}
-  {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {# Extracts the 'reasons' part of the previous agent's output. Assumes answer is AgentOutput with AgentReasons in outputs. #}
-  {{ answer.outputs.reasons }}
-  <END DRAFT ANSWER>
-  {% endfor %}
-{% else %}
-{# Fallback if 'answers' are not defined. Uses 'context' instead. #}
-{# TODO: Clarify what 'context' represents here and when this branch is used. #}
-# Placeholder:
-{{ context }}
-{% endif %}
 
-{# TODO: The prompt doesn't explicitly request output in the AgentReasons format, but the agent class (Judge) expects it.
-   This might lead to parsing errors. Consider adding explicit instructions for the JSON format (like in score.jinja2 or another base template)
-   or changing the agent class/output model for the synthesiser role if a different output structure is desired. #}
+{# --- User Message Construction --- #}
+# User:
+{# Loop through each provided draft answer. #}
+{% for answer in answers %}
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+{{ answer.outputs }}
+<END DRAFT ANSWER>
+{% endfor %}
