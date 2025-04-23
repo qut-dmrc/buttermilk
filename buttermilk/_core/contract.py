@@ -239,7 +239,6 @@ class AgentOutput(FlowMessage):
     """
 
     agent_id: str = Field(..., description="The unique ID of the agent instance that generated this output.")
-    role: str = Field("", description="The role of the agent that generated this output.")  # Added role
     run_id: str = Field(default_factory=_global_run_id, description="Global run identifier.")  # Use factory
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
