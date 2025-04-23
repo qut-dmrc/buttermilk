@@ -306,7 +306,7 @@ class Orchestrator(BaseModel, ABC):
         Returns:
             The `AgentOutput` from the step, or None on failure.
         """
-        logger.info(f"Directly executing step for role: {request.role}")
+        logger.debug(f"Directly executing step for role: {request.role}")
         try:
             output = await self._execute_step(request)
             return output
@@ -323,14 +323,14 @@ class Orchestrator(BaseModel, ABC):
         """Helper method to fetch records based on RunRequest if needed."""
         if not self._records and not request.records:  # Only fetch if no records exist yet
             if request.uri or request.record_id:
-                logger.info(f"Fetching initial records for request (ID: {request.record_id}, URI: {request.uri})...")
+                logger.debug(f"Fetching initial records for request (ID: {request.record_id}, URI: {request.uri})...")
                 try:
                     # Use the FetchRecord agent directly (consider if this should be part of the flow instead)
                     fetch_agent = FetchRecord(role="fetch_init", data=list(self.data))
                     fetch_output = await fetch_agent._run(uri=request.uri, record_id=request.record_id, prompt=request.prompt)
                     if fetch_output and fetch_output.results:
                         self._records = fetch_output.results
-                        logger.info(f"Successfully fetched {len(self._records)} initial record(s).")
+                        logger.debug(f"Successfully fetched {len(self._records)} initial record(s).")
                     else:
                         logger.warning("Initial fetch did not return any results.")
                 except ImportError:
@@ -341,7 +341,7 @@ class Orchestrator(BaseModel, ABC):
             else:
                 logger.debug("No initial records, record_id, or uri provided in request.")
         elif request.records:
-            logger.info(f"Using {len(request.records)} records provided directly in RunRequest.")
+            logger.debug(f"Using {len(request.records)} records provided directly in RunRequest.")
             self._records = request.records  # Use records provided in request if available
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")

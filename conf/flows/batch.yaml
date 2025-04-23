@@ -20,7 +20,7 @@ batch:
         - record_id
   params:
     criteria:
-      - trans_factored
+      - tja
     task: Assess this content.
   agents:
     host:

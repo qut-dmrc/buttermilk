@@ -110,7 +110,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
-        logger.info("Autogen runtime started.")
+        logger.debug("Autogen runtime started.")
 
     async def _register_agents(self) -> None:
         """
@@ -121,7 +121,7 @@ class AutogenOrchestrator(Orchestrator):
         Sets up subscriptions so agents listen on the main group chat topic and
         potentially role-specific topics.
         """
-        logger.info("Registering agents with Autogen runtime...")
+        logger.debug("Registering agents with Autogen runtime...")
         for role_name, step_config in self.agents.items():
             registered_for_role = []
             # `get_configs` likely yields tuples of (AgentClass, agent_variant_config)
@@ -173,7 +173,7 @@ class AutogenOrchestrator(Orchestrator):
             # Store the list of (AgentType, variant_config) tuples for this role.
             # Use uppercase role name as the key, consistent with topic subscription.
             self._agent_types[role_name.upper()] = registered_for_role
-            logger.info(f"Registered {len(registered_for_role)} agent variants for role '{role_name}'.")
+            logger.debug(f"Registered {len(registered_for_role)} agent variants for role '{role_name}'.")
 
     async def _register_manager_interface(self) -> None:
         """Registers a ClosureAgent to handle responses from the MANAGER."""
@@ -288,7 +288,7 @@ class AutogenOrchestrator(Orchestrator):
                 # This case should ideally not happen if adapters work correctly.
                 logger.error(f"Agent {variant_config.id} (Type: {agent_type}) returned unexpected type: {type(response)}. Output: {response}")
 
-        logger.info(f"Received {len(valid_outputs)} valid responses from role '{role_key}'.")
+        logger.debug(f"Received {len(valid_outputs)} valid responses from role '{role_key}'.")
         return valid_outputs
 
     async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
@@ -313,7 +313,7 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""
-        logger.info("Cleaning up AutogenOrchestrator...")
+        logger.debug("Cleaning up AutogenOrchestrator...")
         try:
             # Stop the runtime
             if self._runtime._run_context:
@@ -340,7 +340,7 @@ class AutogenOrchestrator(Orchestrator):
         Raises:
             ProcessingError: If an error occurs during agent execution.
         """
-        logger.info(f"Executing step for role: {step.role}")
+        logger.debug(f"Executing step for role: {step.role}")
         try:
             # Prepare the input message for the agent(s).
             message = AgentInput(prompt=step.prompt, records=self._records)
@@ -402,7 +402,7 @@ class AutogenOrchestrator(Orchestrator):
             valid_responses[0].outputs, StepRequest
         ), f"Conductor returned unexpected type: Expected StepRequest, got {type(valid_responses[0].outputs)}"
         next_step: StepRequest = valid_responses[0].outputs
-        logger.info(f"Conductor suggested next step for role: {next_step.role}")
+        logger.debug(f"Conductor suggested next step for role: {next_step.role}")
 
         # TODO: The hardcoded sleep seems arbitrary. Consider removing or making configurable.
         #       Is it needed for timing issues or just pacing?
@@ -472,7 +472,7 @@ class AutogenOrchestrator(Orchestrator):
         # Outer try/except for handling overall flow completion or fatal errors.
         except (StopAsyncIteration, KeyboardInterrupt):
             # Normal termination (END signal or user interruption).
-            logger.info(f"AutogenOrchestrator run loop for topic '{self._topic.type}' completed.")
+            logger.debug(f"AutogenOrchestrator run loop for topic '{self._topic.type}' completed.")
         except FatalError as e:
             # Specific fatal error defined in Buttermilk.
             logger.error(f"Fatal error during orchestrator run: {e}")

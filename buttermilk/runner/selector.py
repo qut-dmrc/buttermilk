@@ -132,7 +132,7 @@ class Selector(AutogenOrchestrator):
         try:
             # Wait for a message on the queue filled by the manager interface agent.
             response: ManagerResponse = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
-            logger.info(
+            logger.debug(
                 f"Received user response: Confirm={response.confirm}, Halt={response.halt}, Selection='{response.selection}', Prompt='{str(response.prompt)[:50]}...'"
             )
 
@@ -185,7 +185,7 @@ class Selector(AutogenOrchestrator):
             The `ManagerResponse` from the user.
         """
         if step:
-            logger.info(f"Requesting user confirmation for step: {step.role}")
+            logger.debug(f"Requesting user confirmation for step: {step.role}")
             # Prepare context about available variants for the proposed step.
             variant_info = ""
             options_list = []  # For ManagerRequest options
@@ -215,7 +215,7 @@ class Selector(AutogenOrchestrator):
                 options=options_list,  # Pass variant IDs as options
             )
         elif prompt:
-            logger.info("Sending general prompt to user.")
+            logger.debug("Sending general prompt to user.")
             # Send a simple prompt if no step is provided.
             manager_request = ManagerRequest(prompt=prompt, role="user", content=prompt)  # Content=prompt for simple display
         else:
@@ -361,13 +361,13 @@ class Selector(AutogenOrchestrator):
             # TODO: What happens with the user_response here? It needs to be sent back
             #       to the conductor or used to influence the next _get_host_suggestion call.
             #       Currently, it's just received and stored in _user_feedback/_last_user_selection.
-            logger.info(
+            logger.debug(
                 f"Received user answer to host question: Confirm={user_response.confirm}, Selection='{user_response.selection}', Prompt='{user_response.prompt}'"
             )
 
         elif msg_type == "comparison":
             # Host provides a comparison of results (e.g., between variants).
-            logger.info("Host provided a comparison.")
+            logger.debug("Host provided a comparison.")
             await self._handle_comparison(message)  # Format and display comparison
 
         else:
@@ -443,7 +443,7 @@ class Selector(AutogenOrchestrator):
 
         agent_type, agent_config = variants[variant_index]
         variant_id = getattr(agent_config, "id", f"variant_{variant_index}")  # Get unique ID
-        logger.info(f"Executing step '{step.role}' using variant '{variant_id}' (Index: {variant_index}).")
+        logger.debug(f"Executing step '{step.role}' using variant '{variant_id}' (Index: {variant_index}).")
 
         # Create a unique ID for this specific execution instance in the exploration path.
         execution_id = f"{step.role}-{variant_id}-{shortuuid.uuid()[:4]}"
@@ -556,13 +556,13 @@ class Selector(AutogenOrchestrator):
 
                     # Handle user rejecting the step
                     if not user_response.confirm:
-                        logger.info("User rejected the proposed step. Asking conductor for alternatives.")
+                        logger.debug("User rejected the proposed step. Asking conductor for alternatives.")
                         # Loop back to _get_host_suggestion, providing the rejection context via _user_feedback.
                         continue
 
                     # Handle user providing feedback with interrupt flag
                     if user_response.interrupt:
-                        logger.info("User provided feedback with interrupt flag. Requesting conductor to review feedback before proceeding.")
+                        logger.debug("User provided feedback with interrupt flag. Requesting conductor to review feedback before proceeding.")
                         # Loop back to _get_host_suggestion, where the feedback is already stored in _user_feedback
                         continue
 
@@ -572,7 +572,9 @@ class Selector(AutogenOrchestrator):
                         # Attempt to find the index for the selected variant ID.
                         if self._last_user_selection in self._variant_mapping:
                             selected_variant_index = self._variant_mapping[self._last_user_selection]
-                            logger.info(f"Executing step with user-selected variant: '{self._last_user_selection}' (Index: {selected_variant_index})")
+                            logger.debug(
+                                f"Executing step with user-selected variant: '{self._last_user_selection}' (Index: {selected_variant_index})"
+                            )
                         else:
                             logger.warning(
                                 f"User selected variant '{self._last_user_selection}' not found for role '{suggested_step.role}'. Using default variant 0."
@@ -609,7 +611,7 @@ class Selector(AutogenOrchestrator):
         except Exception as e:
             logger.exception(f"Fatal error during Selector orchestrator run for '{self.name}': {e}")
         finally:
-            logger.info(f"Cleaning up Selector orchestrator for '{self.name}'.")
+            logger.debug(f"Cleaning up Selector orchestrator for '{self.name}'.")
             await self._cleanup()  # Ensure base class cleanup runs
 
     async def _fetch_record(self, request: RunRequest) -> ToolOutput | None:
@@ -636,7 +638,7 @@ class Selector(AutogenOrchestrator):
             fetch_output = await fetch_agent._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
             if fetch_output and fetch_output.results:
                 self._records = fetch_output.results
-                logger.info(f"Successfully fetched {len(self._records)} initial record(s).")
+                logger.debug(f"Successfully fetched {len(self._records)} initial record(s).")
                 return fetch_output
             else:
                 logger.warning("Fetch agent did not return any results.")
