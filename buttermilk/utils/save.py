@@ -1,10 +1,11 @@
+import asyncio
 import io
 import json
 import pickle
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Hashable
 
 import google.cloud.storage
 import pandas as pd
@@ -179,7 +180,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs) -> str:
 def data_to_export_rows(
     data: pd.DataFrame | Job | dict | list[Mapping[str, Any]],
     schema: list,
-) -> list[Mapping[str, Any]]:
+) -> list[Mapping[Hashable, Any]]:
     if isinstance(data, pd.DataFrame):
         # deduplicate columns
         data.columns = [
@@ -203,6 +204,48 @@ def data_to_export_rows(
 
     return bq_rows
 
+async def upload_rows_async(rows, *, schema, dataset):
+    """Upload results to Google Bigquery asynchronously"""
+    loop = asyncio.get_running_loop()
+    bq = await loop.run_in_executor(None, bigquery.Client)  # Run sync client instantiation in executor
+
+    if isinstance(schema, str):
+        schema = await loop.run_in_executor(None, bq.schema_from_json, schema)
+
+    # data_to_export_rows is CPU-bound, can run directly or in executor if very heavy
+    bq_rows = data_to_export_rows(rows, schema=schema)
+
+    if not bq_rows:
+        logger.warning("No rows found in async save function.")
+        return None
+
+    try:
+        # get_table is a network call, run in executor
+        table = await loop.run_in_executor(None, bq.get_table, dataset)
+    except Exception as e:
+        msg = f"Unable to save rows asynchronously. Table {dataset} does not exist or there was some other problem getting the table: {e} {e.args=}"
+        # Consider using a specific exception type if needed
+        raise OSError(msg)
+
+    logger.debug(f"Inserting {len(bq_rows)} rows asynchronously to BigQuery table {dataset}.")
+
+    tasks = []
+    # insert_rows is a blocking I/O call, run each chunk insertion in the executor
+    for chunk in chunks(bq_rows, 100): # Adjust chunk size as needed for BQ limits/performance
+        tasks.append(loop.run_in_executor(None, bq.insert_rows, table, chunk, schema))
+
+    results = await asyncio.gather(*tasks)
+    errors = [error for sublist in results for error in sublist] # Flatten list of lists
+
+    if not errors:
+        logger.debug(
+            f"Successfully pushed {len(bq_rows)} rows asynchronously to BigQuery table {dataset}.",
+        )
+    else:
+        # Consider more specific error handling or logging details
+        raise OSError(f"Google BigQuery returned an error result during async upload: {str(errors)[:1000]}")
+
+    return dataset
 
 def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) -> str:
     """Upload results to Google Bigquery"""

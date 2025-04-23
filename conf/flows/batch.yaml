@@ -22,6 +22,14 @@ batch:
     criteria:
       - tja
     task: Assess this content.
+  tools:
+    spy:
+      agent_obj: SpyAgent
+      save_dest:
+        type: bq
+        dataset: prosocial-443205.testing.flow
+        db_schema: flow.json
+
   agents:
     host:
       role: HOST

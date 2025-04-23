@@ -175,6 +175,37 @@ class AutogenOrchestrator(Orchestrator):
             self._agent_types[role_name.upper()] = registered_for_role
             logger.debug(f"Registered {len(registered_for_role)} agent variants for role '{role_name}'.")
 
+    async def _register_tools(self) -> None:
+        for role_name, step_config in self.tools.items():
+            for agent_cls, variant_config in step_config.get_configs():
+                def adapter_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
+                    # This log occurs when the factory is *called* by Autogen, not during registration.
+                    # logger.debug(f"Instantiating adapter for agent {cfg.id} (Role: {cfg.role}, Class: {cls.__name__})")
+                    return AutogenAgentAdapter(
+                        agent_cfg=cfg,
+                        agent_cls=cls,
+                        topic_type=topic_type,  # Pass the main topic type
+                    )
+
+                # Register the adapter factory with the runtime.
+                # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
+                agent_type: AgentType = await AutogenAgentAdapter.register(
+                    runtime=self._runtime,
+                    type=variant_config.id,  # Use the specific variant ID for registration
+                    factory=adapter_factory,
+                )
+                logger.debug(f"Registered tool agent: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
+
+                # Subscribe the newly registered agent type to the main group chat topic.
+                # This allows it to receive general messages sent to the group.
+                await self._runtime.add_subscription(
+                    TypeSubscription(
+                        topic_type=self._topic.type,  # Main group chat topic
+                        agent_type=agent_type,
+                    ),
+                )
+
+
     async def _register_manager_interface(self) -> None:
         """Registers a ClosureAgent to handle responses from the MANAGER."""
         logger.debug(f"Registering manager interface agent '{CONFIRM}'.")

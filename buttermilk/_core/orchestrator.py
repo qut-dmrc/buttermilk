@@ -92,6 +92,10 @@ class Orchestrator(BaseModel, ABC):
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
+    tools: Mapping[str, AgentVariants] = Field(
+        default_factory=dict,
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    )
     params: dict = Field(
         default_factory=dict,
         description="Flow-level parameters accessible by agents via their context.",
