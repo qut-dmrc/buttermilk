@@ -2,7 +2,7 @@
 Defines metadata and expected inputs for this prompt template.
 Inputs:
   - answers: A list of answers (AgentOutputs) from previous steps (e.g., judge, synth) to compare.
-             The template accesses `answer.params.agent_id` and `answer.outputs.reasons`.
+             The template accesses `answer.agent_id` and `answer.outputs.reasons`.
   - criteria: (Optional) The criteria used in the previous steps, potentially for context.
   - records: (Placeholder) Likely contains the original data record(s).
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
@@ -90,8 +90,7 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 Analyse the underlying reasons behind differences among the answers below.
 {# Loop through the provided answers. #}
 {% for answer in answers %}
-{# TODO: Confirm `answer.params.agent_id` is the correct way to access the agent ID. Could it be `answer.agent_id`? #}
-<BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
 {# Extract the reasoning from the previous agent's output. Assumes AgentOutput with AgentReasons structure. #}
 {{ answer.outputs.reasons }}
 <END DRAFT ANSWER>

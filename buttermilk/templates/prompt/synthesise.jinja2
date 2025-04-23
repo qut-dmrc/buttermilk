@@ -53,9 +53,8 @@ Your response should be written for an external audience. Do not mention our int
 # User:
   {# Loop through each provided draft answer. #}
   {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
   {# Extracts the 'reasons' part of the previous agent's output. Assumes answer is AgentOutput with AgentReasons in outputs. #}
-  {# TODO: Check if accessing `answer.params.agent_id` is reliable and intended. Maybe `answer.agent_id`? #}
   {{ answer.outputs.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}

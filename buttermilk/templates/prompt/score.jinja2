@@ -27,19 +27,17 @@ You should not refer to the analyst or their response in your answer; just expla
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-{% if expected %}
 <BEGIN EXPECTED ANSWER>
 {% for reason in expected %}- {{reason}}
 {% endfor %}
 <END EXPECTED ANSWER>
-{% endif %}
 
 # Placeholder:
 {{records}}
 
 # User:
 {% for answer in answers %}
-<BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
 {{ answer.outputs }}
 <END DRAFT ANSWER>
 {% endfor %}

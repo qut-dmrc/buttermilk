@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, PrivateAttr, computed_field
 # Buttermilk core imports
 from buttermilk import logger
 from buttermilk._core import ToolOutput
-from buttermilk._core.agent import buttermilk_handler  # Decorator for message handlers
+from buttermilk._core.agent import ProcessingError, buttermilk_handler  # Decorator for message handlers
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
@@ -239,15 +239,8 @@ class LLMScorer(LLMAgent):
             # It might search message.records or the broader context managed by the agent.
             extracted_vars = await self._extract_vars(message=message, datadict=datadict)
             records = extracted_vars.pop("records", [])  # Get records if extracted
-            ground_truth = extracted_vars.get("expected")  # Check if ground truth was found
 
-            # If ground truth wasn't in template_vars, check the first record attached to the message.
-            if not ground_truth and records and isinstance(records[0], list) and records[0]:
-                ground_truth = records[0][0].get("ground_truth")
-                if ground_truth:
-                    extracted_vars["expected"] = ground_truth  # Add to extracted vars if found
-
-            if not ground_truth:
+            if not extracted_vars.get("expected"):  # Check if ground truth was found
                 logger.warning(
                     f"Scorer {self.id}: No ground truth ('expected') found in template variables or records for message from {source}. Skipping scoring."
                 )
@@ -261,10 +254,9 @@ class LLMScorer(LLMAgent):
         # 'inputs' should match what the scorer's prompt template expects.
         # It needs the judge's output (message.outputs) and the ground_truth.
         scorer_agent_input = AgentInput(
-            inputs={**extracted_vars, "judge_reasons": message.outputs.model_dump()},  # Pass extracted vars + judge output
+            inputs=extracted_vars,
             # Pass records if they are relevant to the scoring prompt itself.
-            records=records if records else None,  # Pass records if found
-            prompt="Score the provided evaluation based on the ground truth.",  # Generic prompt, template likely holds specifics
+            records=[records],  # Pass records if found
         )
 
         # Get the weave call object associated with the message we are scoring.
@@ -273,7 +265,7 @@ class LLMScorer(LLMAgent):
         if hasattr(message, "tracing") and message.tracing.weave:
             try:
                 weave_call = bm.weave.get_call(message.tracing.weave)
-                logger.info(f"Scorer {self.id}: Found weave call {message.tracing.weave} to apply scorer.")
+                logger.debug(f"Scorer {self.id}: Found weave call {message.tracing.weave} to apply scorer.")
             except Exception as e:
                 logger.warning(f"Scorer {self.id}: Failed to get weave call for trace ID {message.tracing.weave}: {e}")
         else:
@@ -289,40 +281,28 @@ class LLMScorer(LLMAgent):
         class ButtermilkWeaveScorer(weave.Scorer):
             # This class provides the interface weave expects for applying a scorer.
             @weave.op  # Mark this as a weave operation
-            async def score(self, target: Any) -> dict | None:  # target is the output of the weave_call being scored
+            async def score(self, output: Any) -> dict | None:
                 """Executes the LLMScorer's process and returns the score dictionary."""
                 logger.debug(f"ButtermilkWeaveScorer invoked for target trace {weave_call.id if weave_call else 'N/A'}")
                 # Call the LLMScorer._process method with the prepared input.
                 score_output: AgentOutput = await score_fn(message=scorer_agent_input)
 
-                # Publish the score back to the system using the provided callback.
-                if public_callback:
-                    if score_output and not score_output.is_error:
-                        await public_callback(score_output)
-                        logger.info(f"Scorer {self.id} published score via callback.")
-                    elif score_output:  # Handle case where score_output is an error
-                        await public_callback(score_output)  # Publish the error output
-                        logger.error(f"Scorer {self.id} published error score via callback: {score_output.outputs}")
-                    else:
-                        logger.error(f"Scorer {self.id} failed to produce any output during scoring.")
-                else:
-                    logger.warning(f"Scorer {self.id}: No public_callback provided, cannot publish score.")
-
                 # Return the score data as a dictionary for weave logging.
                 if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
-                    score_dict = score_output.outputs.model_dump()
-                    logger.debug(f"ButtermilkWeaveScorer returning score dict: {score_dict}")
-                    return score_dict
+                    # Publish the score back to the system using the provided callback.
+                    await public_callback(score_output)
+                    return score_output.outputs.model_dump()
                 else:
-                    logger.error(f"ButtermilkWeaveScorer failed to get valid QualScore output.")
-                    return {"error": "Scoring failed or produced invalid output."}
+                    msg = f"ButtermilkWeaveScorer failed to get valid QualScore output."
+                    logger.error(msg)
+                    raise ProcessingError(msg)
 
         try:
             # Apply the scorer to the original weave call.
             scorer_instance = ButtermilkWeaveScorer()
-            # weave.apply_scorer logs the 'score' output under the 'weave_call' trace.
-            await weave.apply_scorer(weave_call, scorer_instance)  # Use apply_scorer utility
-            logger.info(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.id}")
+            # Log the 'score' output under the 'weave_call' trace.
+            await weave_call.apply_scorer(weave_call, scorer_instance)  # Use apply_scorer utility
+            logger.debug(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.id}")
         except Exception as e:
             logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.id if weave_call else 'N/A'}: {e}")
 
