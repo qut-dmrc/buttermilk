@@ -1,0 +1,24 @@
+defaults:
+  - _self_
+  - agents@selector.agents:
+      - conductor
+      - manager
+      - judge
+      - analyst
+
+selector:
+  _target_: buttermilk.runner.selector.SelectorOrchestrator
+  description: Interactive research chatbot with exploratory analysis
+  name: interactive_explorer
+  data:
+    - name: tja_train
+      type: file
+      path: gs://prosocial-dev/data/tja_train.jsonl
+      index:
+        - record_id
+  params:
+    task: >
+      The purpose of this interactive analysis is to explore a record with different analysis approaches.
+      The user should be able to guide the exploration process, select specific variants to try, and compare
+      results from different analysis methods. The conductor will facilitate this exploration by suggesting
+      steps and showing comparisons between different analysis variants.

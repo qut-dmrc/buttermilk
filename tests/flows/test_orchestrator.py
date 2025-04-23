@@ -1,119 +1,78 @@
-from unittest.mock import AsyncMock
+"""
+Tests for the base Orchestrator concepts and potentially specific implementations like BatchOrchestrator.
+"""
 
+from unittest.mock import AsyncMock
 import pytest
 
-from buttermilk._core.contract import AgentInput, StepRequest
-from buttermilk._core.orchestrator import Orchestrator
+# Buttermilk core imports
+from buttermilk._core.contract import AgentInput, StepRequest  # Needed for type hints potentially
+from buttermilk._core.orchestrator import Orchestrator  # Base class
 from buttermilk._core.variants import AgentVariants
+from buttermilk._core.types import RunRequest  # Import RunRequest
 
-
-class SimpleOrchestrator(Orchestrator):
-    """Simple implementation of Orchestrator for testing."""
-
-    async def run(self, request=None):
-        """Simple implementation that just runs steps in sequence."""
-        self.run_called = True
-        self.request = request
+# Specific orchestrator implementation being tested here
+from buttermilk.runner.batch import BatchOrchestrator
 
 
 @pytest.fixture
-def simple_orchestrator():
-    """Create a simple orchestrator for testing."""
-    return SimpleOrchestrator(
-        name="test_flow",
-        description="Test flow",
+def simple_batch_orchestrator() -> BatchOrchestrator:
+    """Creates a simple BatchOrchestrator instance for testing."""
+    # Using BatchOrchestrator as it was in the original test file.
+    # Note: This doesn't test AutogenOrchestrator or Selector specifically.
+    return BatchOrchestrator(
+        name="test_batch_flow",
+        description="Test Batch Flow",
         agents={
-            "step1": AgentVariants(
-                description="Step 1",
-                inputs={"key1": "value1"},
+            "STEP1": AgentVariants(  # Use uppercase role names as keys (consistent with validator)
+                role="step1",  # Role within variants can be lowercase
+                name="Step 1 Agent",
+                description="Agent for Step 1",
+                # Add agent_obj if BatchOrchestrator requires it for instantiation
             ),
-            "step2": AgentVariants(
-                description="Step 2",
-                inputs={"key2": "value2", "history": True},
+            "STEP2": AgentVariants(
+                role="step2",
+                name="Step 2 Agent",
+                description="Agent for Step 2",
             ),
         },
-        params={"param1": "value1"},
+        params={"flow_param": "flow_value"},
+        # Define a simple sequence for BatchOrchestrator if needed
+        sequence=["STEP1", "STEP2"],  # BatchOrchestrator likely needs a sequence defined
     )
 
 
-@pytest.mark.asyncio
-async def test_orchestrator_initialization(simple_orchestrator):
-    """Test that orchestrator initializes correctly."""
-    assert simple_orchestrator.name == "test_flow"
-    assert simple_orchestrator.description == "Test flow"
-    assert "step1" in simple_orchestrator.agents
-    assert "step2" in simple_orchestrator.agents
-    assert simple_orchestrator.params == {"param1": "value1"}
+@pytest.mark.anyio
+async def test_orchestrator_initialization(simple_batch_orchestrator: BatchOrchestrator):
+    """Test that BatchOrchestrator initializes correctly."""
+    assert simple_batch_orchestrator.name == "test_batch_flow"
+    assert simple_batch_orchestrator.description == "Test Batch Flow"
+    # Orchestrator validator converts keys to uppercase
+    assert "STEP1" in simple_batch_orchestrator.agents
+    assert "STEP2" in simple_batch_orchestrator.agents
+    assert simple_batch_orchestrator.params == {"flow_param": "flow_value"}
+    # Check sequence if applicable to BatchOrchestrator
+    assert hasattr(simple_batch_orchestrator, "sequence")
+    assert simple_batch_orchestrator.sequence == ["STEP1", "STEP2"]
 
 
-@pytest.mark.asyncio
-async def test_prepare_step_basic(simple_orchestrator):
-    """Test that _prepare_step returns the expected inputs."""
-    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step1"))
-    assert "key1" in inputs
-    assert inputs["key1"] == "value1"
+@pytest.mark.anyio
+async def test_orchestrator_call_method(simple_batch_orchestrator: BatchOrchestrator):
+    """Test that calling the orchestrator instance invokes its run method."""
+    # Mock the run method to check if __call__ delegates correctly
+    simple_batch_orchestrator.run = AsyncMock()
+    test_request = RunRequest(prompt="start run")
+
+    # Call the orchestrator instance
+    await simple_batch_orchestrator(request=test_request)
+
+    # Assert that the run method was called once with the correct request
+    simple_batch_orchestrator.run.assert_called_once_with(request=test_request)
 
 
-@pytest.mark.asyncio
-async def test_prepare_step_with_history(simple_orchestrator):
-    """Test that _prepare_step handles special variables correctly."""
-    # Add some history
-    simple_orchestrator.history = ["message1", "message2"]
-
-    inputs = await simple_orchestrator._prepare_step(StepRequest(role="step2"))
-    assert "key2" in inputs
-    assert inputs["key2"] == "value2"
-    assert "history" in inputs
-    assert inputs["history"] == "message1\nmessage2"
-
-
-@pytest.mark.asyncio
-async def test_prepare_step_message(simple_orchestrator):
-    """Test that _prepare_step creates a proper AgentInput."""
-    step = StepRequest(
-        role="step1",
-        prompt="Test prompt",
-        arguments={"extra_input": "extra_value"},
-    )
-    message = await simple_orchestrator._prepare_step(step)
-
-    assert isinstance(message, AgentInput)
-    assert message.role == "test_flow"
-    assert message.prompt == "Test prompt"
-    assert "key1" in message.inputs
-    assert message.inputs["key1"] == "value1"
-    assert "extra_input" in message.inputs
-    assert message.inputs["extra_input"] == "extra_value"
-    assert "prompt" in message.inputs
-    assert message.inputs["prompt"] == "Test prompt"
-
-
-@pytest.mark.asyncio
-async def test_call_method(simple_orchestrator):
-    """Test that calling the orchestrator invokes run."""
-    simple_orchestrator.run = AsyncMock()
-    await simple_orchestrator("test_request")
-
-    simple_orchestrator.run.assert_called_once_with(request="test_request")
-
-
-@pytest.mark.asyncio
-async def test_parse_history():
-    """Test the _parse_history validator."""
-    # Test with list of strings
-    result = Orchestrator._parse_history(["message1", "message2"])
-    assert result == ["message1", "message2"]
-
-    # Test with list of dicts
-    result = Orchestrator._parse_history([
-        {"type": "user", "content": "hello"},
-        {"type": "bot", "content": "hi there"},
-    ])
-    assert result == ["user: hello", "bot: hi there"]
-
-    # Test with mixed
-    result = Orchestrator._parse_history([
-        "plain message",
-        {"type": "user", "content": "dict message"},
-    ])
-    assert result == ["plain message", "user: dict message"]
+# Removed outdated tests:
+# - test_prepare_step_basic
+# - test_prepare_step_with_history
+# - test_prepare_step_message
+# - test_parse_history
+# (These tested methods that are no longer part of the base Orchestrator)

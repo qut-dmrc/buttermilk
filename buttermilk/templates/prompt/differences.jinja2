@@ -1,8 +1,28 @@
+{# --- Prompty Frontmatter ---
+Defines metadata and expected inputs for this prompt template.
+Inputs:
+  - answers: A list of answers (AgentOutputs) from previous steps (e.g., judge, synth) to compare.
+             The template accesses `answer.params.agent_id` and `answer.outputs.reasons`.
+  - criteria: (Optional) The criteria used in the previous steps, potentially for context.
+  - records: (Placeholder) Likely contains the original data record(s).
+  - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
+--- #}
 ---
 name: Differences in reasoning
 ---
 
-# System: 
+# System:
+{# --- System Prompt ---
+Sets the persona and task for the LLM: an auditor analyzing differences in reasoning between expert answers.
+Key Instructions:
+- Focus on *why* reasoning differs, not just conclusions.
+- Be granular and precise, explaining the basis of disagreement.
+- Identify differences in interpretation, criteria application, or findings.
+- Exclude points of unanimous consensus.
+- Do NOT comment on style, expression, or depth.
+- Do NOT provide an overall conclusion.
+- Output MUST be in the specified JSON format.
+#}
 You are a careful auditor assessing the output of a group of experts. Your analysis will be used to evaluate the reliability of each expert. It is critical that we understand where the experts differ in their findings and why.
 
 You will be given a series of responses. Your task is to identify the differences among the reasoning given in the expert answers.
@@ -15,15 +35,15 @@ You must specifically focus on:
 - instances where only some experts identified a potential breach of the criteria
 
 You should be granular and precise in your analysis. For example:
-- do not say: 'Some experts found the content to be offensive'; 
+- do not say: 'Some experts found the content to be offensive';
 - instead, say: 'Answers #x and #y concluded that the <specific quote> in the content was hateful towards <specific group>. Most other answers concluded that the content was a bare factual report and not offensive in itself, even though it reported on offensive material. Answer #z did not consider this point.'
 
 
 You must be succinct. Importantly:
 - Do not include conclusions where consensus was unanimous.
-- Do not merely list differences; you must do your best to explain in detail the basis of the disagreement. 
-- Do not provide any comment on the depth or detail level of the responses. 
-- Do not worry about differences in expression or style. 
+- Do not merely list differences; you must do your best to explain in detail the basis of the disagreement.
+- Do not provide any comment on the depth or detail level of the responses.
+- Do not worry about differences in expression or style.
 - Do not comment on the expert's stylistic or expressive choices.
 - Do not provide an overall conclusion; only your detailed analysis of any disagreement is useful.
 
@@ -36,13 +56,14 @@ You should work carefully step-by-step:
     - explain in detail the differences in reasoning or understanding that led experts to different conclusions.
 
 <REQUIRED FORMAT>
+{# Specifies the mandatory JSON output structure. #}
 You must reply only in a fully valid JSON format.
 
 {% raw %}
 ```json
 {
-    "reasons": [ ARRAY of STRING: <Each element should represent ONE SINGLE STEP in logical reasoning. Each step should comprise one to five sentences of text presenting a clear logical analysis.>, 
-    ..., <other STRING elements representing EACH remaining logical steps>, ...]
+    "reasons": [ ARRAY of STRING: <Each element should represent ONE SINGLE STEP in logical reasoning detailing a point of disagreement and its basis. Each step should comprise one to five sentences of text presenting a clear logical analysis.>,
+    ..., <other STRING elements representing EACH remaining logical steps>, ...],
     "error": <STRING, usually NULL: any error you encounter that prevents you from completing this task.>
 }
 ```
@@ -53,6 +74,7 @@ Ensure the response follows JSON formatting rules precisely, as it will be valid
 When referring to a draft answer, ALWAYS use the the full ID of the answer. The full ID is provided immediately before each answer, in the string: "<BEGIN DRAFT ANSWER #[ID]>"
 <END REQUIRED FORMAT>
 
+{# Optionally include the criteria if provided, for context. #}
 {% if criteria %}
 <BEGIN ORIGINAL INSTRUCTIONS>
 {{ criteria }}
@@ -60,21 +82,26 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 {% endif %}
 
 
+{# --- User Message Construction --- #}
+{# Placeholder for original records, likely for context. #}
 # Placeholder:
 {{records}}
 
 {% if answers %}
+{# This block formats the input when 'answers' are provided. #}
 # User:
 Analyse the underlying reasons behind differences among the answers below.
-
-  {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
-  {{ answer.outputs.reasons }}
-  <END DRAFT ANSWER>
-  {% endfor %}
+{# Loop through the provided answers. #}
+{% for answer in answers %}
+{# TODO: Confirm `answer.params.agent_id` is the correct way to access the agent ID. Could it be `answer.agent_id`? #}
+<BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+{# Extract the reasoning from the previous agent's output. Assumes AgentOutput with AgentReasons structure. #}
+{{ answer.outputs.reasons }}
+<END DRAFT ANSWER>
+{% endfor %}
 {% else %}
-
+{# Fallback if 'answers' are not provided. Uses 'context'. #}
+{# TODO: Clarify what 'context' represents here and when this branch is used. #}
 # Placeholder:
 {{context}}
-
 {% endif %}

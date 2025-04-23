@@ -25,18 +25,18 @@ class AgentRegistry:
         """Get an agent class by name."""
         agent_class = cls._agents.get(name)
         if agent_class is None:
-             # Attempt discovery if not found, might help in dynamic scenarios
-             cls.discover()
-             agent_class = cls._agents.get(name)
-             if agent_class is None:
-                 raise ValueError(f"Agent class '{name}' not found in registry after discovery.")
+            # Attempt discovery if not found, might help in dynamic scenarios
+            cls.discover()
+            agent_class = cls._agents.get(name)
+            if agent_class is None:
+                raise ValueError(f"Agent class '{name}' not found in registry after discovery.")
         return agent_class
-    
+
     @classmethod
     def get_all(cls) -> dict[str, type[Agent]]:
         """Get all registered agents."""
         return cls._agents.copy()
-    
+
     @classmethod
     def discover(cls, package_name: str = "buttermilk") -> None:
         """Discover and register all Agent subclasses in the package."""
@@ -69,6 +69,8 @@ class AgentRegistry:
         # Register all found subclasses
         for subclass in get_all_subclasses(Agent):
             cls.register(subclass)
+
+
 class AgentVariants(AgentConfig):
     """
     A factory for creating Agent instance variants based on parameter combinations.
@@ -89,7 +91,7 @@ class AgentVariants(AgentConfig):
         model: ["gpt-4", "claude-3"]    # Creates 2 parallel agent instances
       tasks:
         criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
-        temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent 
+        temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent
                                         # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
       parameters:
         template: analyst               # parameter sets shared for each task
@@ -98,21 +100,18 @@ class AgentVariants(AgentConfig):
     ```
     """
 
-    @model_validator(mode="after")
-    def validate_extra_fields(self):
-        """Convert any omegaconf objects in extra fields to plain Python objects."""
-        for key, value in dict(self.model_extra).items():
-            if isinstance(value, (DictConfig, ListConfig)):
-                self.model_extra[key] = OmegaConf.to_container(value, resolve=True)
-        return self 
+    # Define the fields expected from the configuration
+    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
+    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
+    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
 
     def get_configs(self) -> list[tuple[type, AgentConfig]]:
         """
         Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
-        static_config = self.model_dump(exclude={'parallel_variants', 'sequential_variants', 'num_runs', 'parameters', 'tasks'})
-        base_parameters = self.parameters.copy() # Base parameters common to all
+        static_config = self.model_dump(exclude={"parallel_variants", "id", "sequential_variants", "num_runs", "parameters", "tasks", "name", "id"})
+        base_parameters = self.parameters.copy()  # Base parameters common to all
 
         # Get agent class
         agent_class = AgentRegistry.get(self.agent_obj)
@@ -120,39 +119,40 @@ class AgentVariants(AgentConfig):
         # Expand parallel variants
         parallel_variant_combinations = expand_dict(self.variants)
         if not parallel_variant_combinations:
-            parallel_variant_combinations = [{}] # Ensure at least one base agent config
+            parallel_variant_combinations = [{}]  # Ensure at least one base agent config
 
         # Expand sequential variants
         sequential_task_sets = expand_dict(self.tasks)
         if not sequential_task_sets:
-            sequential_task_sets = [{}] # Default: one task with no specific sequential params
+            sequential_task_sets = [{}]  # Default: one task with no specific sequential params
 
         generated_configs = []
-        # Create agent configs based on parallel variants and num_runs
+        # Create agent configs based on combinations of parallel and sequential variants, and num_runs
         for i in range(self.num_runs):
             for parallel_params in parallel_variant_combinations:
-                # Start with static config and base parameters
-                cfg_dict = static_config.copy()
-                # Combine base parameters with the current parallel variant parameters
-                # Parallel variant parameters overwrite base parameters if keys conflict
-                cfg_dict["parameters"] = {**base_parameters, **parallel_params}
+                for task_params in sequential_task_sets:
+                    # Start with static config
+                    cfg_dict = static_config.copy()
 
-                # Assign the sequential task sets
-                cfg_dict["sequential_tasks"] = sequential_task_sets
+                    # Combine base parameters, parallel variant parameters, and sequential task parameters
+                    # Order matters: task params overwrite parallel, parallel overwrite base
+                    combined_params = {**base_parameters, **parallel_params, **task_params}
+                    cfg_dict["parameters"] = combined_params
 
-                # Generate unique ID
-                cfg_dict["id"] = f"{cfg_dict['role'].upper()}-{shortuuid.uuid()[:4]}"
+                    # Create and add the AgentConfig instance
+                    try:
+                        # Ensure AgentConfig allows extra fields if needed, or filter cfg_dict
+                        # AgentConfig currently has extra='allow', so unknown fields are okay
+                        agent_config_instance = AgentConfig(**cfg_dict)
+                        generated_configs.append((agent_class, agent_config_instance))
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with params {combined_params}: {e}", exc_info=True
+                        )
+                        raise  # Re-raise by default
 
-                # Create and add the AgentConfig instance
-                try:
-                    agent_config_instance = AgentConfig(**cfg_dict)
-                    generated_configs.append((agent_class, agent_config_instance))
-                except Exception as e:
-                    logger.error(f"Error creating AgentConfig for {cfg_dict.get('id', 'unknown')}: {e}", exc_info=True)
-                    raise # Re-raise by default
-
-        if len(generated_configs) == 0:
-            raise FatalError(f"Could not create agent variant configs for {self.role} {self.name}")
+        if not generated_configs:  # Check if list is empty
+            raise FatalError(f"Could not create any agent variant configs for {self.role} {self.name}")
 
         return generated_configs
 

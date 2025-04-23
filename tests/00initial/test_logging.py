@@ -58,10 +58,7 @@ def test_debug(capsys, logger_new):
 
 @pytest.fixture
 def cloud_logging_client_gcs(bm: BM):
-    google.cloud.logging.Client(
-        project=self.logger_cfg.project,
-    )
-    return google.cloud.logging.Client(project=bm._gcp_project)
+    return bm.gcs_log_client
 
 
 def test_info(capsys, cloud_logging_client_gcs, logger_new):

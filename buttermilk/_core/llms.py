@@ -3,6 +3,7 @@ from enum import Enum
 import json
 from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
 from autogen_core import CancellationToken, FunctionCall
+from regex import D
 import weave
 from anthropic import (
     AnthropicVertex,
@@ -22,6 +23,7 @@ from autogen_ext.models.openai._transformation.registry import (
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
 from buttermilk import logger
+from buttermilk._core import AgentOutput
 from buttermilk._core.agent import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from .retry import RetryWrapper
@@ -106,6 +108,10 @@ class LLMClient(BaseModel):
 T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
 
 
+class ModelOutput(CreateResult):
+    object: BaseModel | None = Field(default=None, description="The hydrated object from JSON or structured output")
+
+
 class AutoGenWrapper(RetryWrapper):
     """Wraps any ChatCompletionClient and adds rate limiting via a semaphore
     plus robust retry logic for handling API failures.
@@ -129,6 +135,8 @@ class AutoGenWrapper(RetryWrapper):
             else:
                 # By preference, pass a pydantic schema for structured output
                 # Otherwise, set json_output to True if the model supports it
+
+                # TODO: check if the word 'json' is in the system message or add a quick direction.
                 json_output = self.model_info.get("json_output", False)
 
             # Use the retry logic
@@ -146,39 +154,35 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError("Empty response from LLM")
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
                 raise ProcessingError("Unexpected tool response from LLM", create_result.content)
-
-            return create_result
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
             logger.warning(error_msg, exc_info=False)
             raise ProcessingError(error_msg)
+        return create_result
 
     async def call_chat(
         self,
         messages,
         cancellation_token,
         tools_list=[],
-        reflect_on_tool_use: bool = True,
         schema: Optional[type[BaseModel]] = None,
-    ) -> CreateResult | list[ToolOutput] | None:
+    ) -> CreateResult:
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
-        if not isinstance(create_result.content, list):
-            return create_result
+        if isinstance(create_result, list):
+            # Tool choices
 
-        tool_outputs = await self._execute_tools(
-            calls=create_result,
-            cancellation_token=cancellation_token,
-        )
-        if not reflect_on_tool_use:
-            return tool_outputs
+            tool_outputs = await self._execute_tools(
+                calls=create_result,
+                tools_list=tools_list,
+                cancellation_token=cancellation_token,
+            )
+            for tool_result in tool_outputs:
+                messages.extend(tool_result.messages)
+            create_result = await self.create(messages=messages, cancellation_token=cancellation_token)
 
-        reflection_messages = messages.copy()
-        for tool_result in tool_outputs:
-            reflection_messages.extend(tool_result.messages)
-        reflection_result = await self.create(messages=reflection_messages, cancellation_token=cancellation_token)
-        return reflection_result
+        return create_result
 
     async def _call_tool(
         self,
@@ -200,7 +204,6 @@ class AutoGenWrapper(RetryWrapper):
             outputs.append(result)
         return outputs
 
-    @weave.op
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
@@ -277,9 +280,7 @@ class LLMs(BaseModel):
 
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
-            _vertex_params = {
-                k: v for k, v in client_params.items() if k in ["region", "project_id"]
-            }
+            _vertex_params = {k: v for k, v in client_params.items() if k in ["region", "project_id"]}
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**client_params)

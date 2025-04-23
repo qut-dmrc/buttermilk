@@ -54,8 +54,8 @@ dependencies = [
     "google-cloud-pubsub<3.0.0,>=2.27.1",
     "bleach<7.0.0,>=6.2.0",
     "numpy>=1.26.4",
-    "promptflow>=0.17.dev0",
-    "promptflow-tracing>=1.17.dev0",
+    "promptflow>=0.17.0",
+    "promptflow-tracing>=1.17.0",
     "marshmallow==3.23.2",
     "chromadb>=0",
     "readabilipy>=0.3.0",
@@ -79,6 +79,7 @@ dependencies = [
     "pyzotero>=1.6.11",
     "langchain-text-splitters>=0.3.7",
     "langchain>=0.3.21",
+    "pytest-anyio>=0.0.0",
 ]
 
 [dependency-groups]
@@ -104,7 +105,6 @@ dev = [
     "pytest-timeout<3.0.0,>=2.3.1",
     "pytest-cov<6.0.0,>=5.0.0",
     "matplotlib<4.0.0,>=3.9.2",
-    "alt-pytest-asyncio<1.0.0,>=0.9.1; python_version >= \"3.11\"",
     "tqdm<5.0.0,>=4.66.5",
     "hydra-colorlog<2.0.0,>=1.2.0",
     "plotly<6.0.0,>=5.24.1",
@@ -121,6 +121,7 @@ dev = [
     "pandas-stubs>=2.2.3.241126",
     "ipykernel>=6.29.5",
     "buttermilk",
+    "pytest-anyio>=0.0.0",
 ]
 
 [tool.mypy]
@@ -147,44 +148,35 @@ buttermilk = { workspace = true }
 line-length = 150
 
 [tool.ruff]
+line-length = 150
+target-version = "py311"
 extend-include = ["*.ipynb"]
 
-# Same as Black.
-line-length = 150
-
-# Assume Python 3.11
-target-version = "py311"
-
 [tool.ruff.lint]
-
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-select = ["E", "F", "W", "Q", "I"] # ["E", "F"]
+select = ["E", "F", "W", "Q", "I"]
 ignore = [
     "RET504",  # Unnecessary variable assignment before return
     "RET503",  # Multiple returns 
     "E501",    # Line too long 
-    "TRY003", "EM101",   # No f-strings or string literals in exceptions
+    "TRY003", 
+    "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
-] 
-isort.combine-as-imports = true
-isort.known-first-party = ["buttermilk"]
-
-# Allow unused variables when underscore-prefixed.
+]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["buttermilk"]
+
 [tool.ruff.format]
-# Enable formatting
 quote-style = "double"
 indent-style = "space"
-skip-magic-trailing-comma = false
 line-ending = "auto"
-docstring-code-format = true
 
 [tool.pytest.ini_options]
 markers = [
   "integration: integration tests, don't run by default",
   "scheduled: mark tests to run in scheduled testing",
-  "asyncio",
 ]
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
@@ -194,13 +186,13 @@ addopts = [
     "--capture=fd", 
     "--continue-on-collection-errors",
     "--durations=10", 
-    "-n 12", 
+    "-n", "12", "-vv",
     "-rfEX",
-    "--tb=line",
+    "--tb=auto",
     "--show-capture=no",
     "--disable-warnings",
-    "-m not integration",
-    ]
+    "-m", "not integration",
+]
 
 #    "--no-summary",
 #    "--no-header",

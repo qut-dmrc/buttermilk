@@ -7,6 +7,7 @@ from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
 
 from autogen_core import CancellationToken, MessageContext
+import weave
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
@@ -84,9 +85,11 @@ class SlackUIAgent(UIAgent):
     async def _listen(
         self,
         message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
@@ -153,7 +156,7 @@ class SlackUIAgent(UIAgent):
             )
             self._current_input_message = None
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(inputs, (AgentInput, ManagerRequest)):
             await self._request_input(inputs)
@@ -187,7 +190,7 @@ class SlackUIAgent(UIAgent):
         async def feed_in(message, say):
             await self._cancel_input_request()
             await self._input_callback(ManagerResponse(confirm=False, role=self.name))
-            await self._input_callback(UserInstructions(content=message["text"], role=self.name))
+            await self._input_callback(UserInstructions(content=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):
@@ -292,7 +295,7 @@ class SlackUIAgent(UIAgent):
         self._handlers.decline = self.app.action("decline_action")(handle_decline)
         self._handlers.cancel = self.app.action("cancel_action")(handle_cancel)
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken = None,

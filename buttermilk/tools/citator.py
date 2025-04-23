@@ -35,8 +35,6 @@ class Citator(BaseModel):
             # Take the first N characters for citation generation
             citation_text = item.full_text[:CITATION_TEXT_CHAR_LIMIT]
             input_data = AgentInput(
-                role="citator",
-                source="Citator",
                 inputs={"text_extract": citation_text},
             )
             result = await self._agent(input_data, **kwargs)

@@ -1,35 +1,30 @@
 import asyncio
 from collections.abc import Awaitable
-from typing import Any, AsyncGenerator, Callable, Coroutine
+from typing import Any, AsyncGenerator, Callable, Coroutine, Optional  # Add Optional
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
+import weave  # Add weave import
 
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    FlowMessage,
-    ManagerMessage,
-    ManagerRequest,OOBMessages
-)
+from buttermilk._core.contract import AgentInput, AgentOutput, FlowMessage, ManagerMessage, ManagerRequest, OOBMessages
 
 
 class UIAgent(Agent):
-    _input_task: asyncio.Task
+    _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)  # Allow None and provide default
     _input_callback: Any = PrivateAttr(...)
     _trace_this = False
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    async def _process(
+        self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
+    ) -> AgentOutput | None:  # Match base signature
         """Send or receive input from the UI."""
         raise NotImplementedError
 
-    async def _handle_control_message(
+    async def _handle_events(
         self,
         message: OOBMessages,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
+        cancellation_token: CancellationToken | None = None,  # Match base signature
         **kwargs,
     ) -> OOBMessages | None:
         """Process control messages for agent coordination.

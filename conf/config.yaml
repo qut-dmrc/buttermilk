@@ -7,6 +7,12 @@ name: default_project
 job: development
 ui: console
 
+# launch params
+uri:
+flow:
+record_id:
+prompt:
+
 bm:
   _target_: buttermilk.bm.BM
 
@@ -20,4 +26,3 @@ bm:
     platform: local
     max_concurrency: 16
     flow_api: http://flow:8000/flow/
-    

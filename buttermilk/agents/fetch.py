@@ -6,8 +6,9 @@ from autogen_core import MessageContext
 import pydantic
 import regex as re
 from shortuuid import uuid
+import weave
 
-from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig
+from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig, buttermilk_handler
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
@@ -17,6 +18,7 @@ from buttermilk._core.contract import (
     ToolOutput,
     UserInstructions,
 )
+from datetime import datetime, timezone  # Added for timestamp
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
@@ -25,24 +27,14 @@ from buttermilk.utils.utils import URL_PATTERN, extract_url
 MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
-class FetchRecord(Agent, ToolConfig):
-    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
-    role: str
-    _data: dict[str, Any] = pydantic.PrivateAttr(default={})
+class FetchRecord(ToolConfig):
+    _data_sources: dict[str, Any] = pydantic.PrivateAttr(default={})
     _data_task: asyncio.Task = pydantic.PrivateAttr()
     _pat: Any = pydantic.PrivateAttr(default_factory=lambda: re.compile(MATCH_PATTERNS))
     _fns: list[FunctionTool] = pydantic.PrivateAttr(default=[])
-    _trace_this = True
-
-    _message_types_handled: type[Any] = pydantic.PrivateAttr(default=Union[UserInstructions | AgentInput])
-
-    @pydantic.model_validator(mode="after")
-    def load_data_task(self) -> Self:
-        self._data_task = asyncio.create_task(self.load_data())
-        return self
 
     async def load_data(self):
-        self._data = await prepare_step_df(self.data)
+        self._data_sources = await prepare_step_df(self.data)
 
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
@@ -57,99 +49,53 @@ class FetchRecord(Agent, ToolConfig):
             ]
         return self._fns
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        cancellation_token: CancellationToken = None,
-        public_callback: Callable = None,
-        message_callback: Callable = None,
-        source: str = None,
-        **kwargs,
-    ) -> None:
-        """Entry point when running this as an agent.
-
-        If running as an agent, watch for URLs or record ids and inject them
-        into the chat."""
-
-        if not isinstance(message, UserInstructions):
-            return
-        if not (match := re.match(self._pat, message.content)):
-            return
-        record = None
-        if uri := match[2]:
-            record = await download_and_convert(uri=uri)
-        else:
-            # Try to get by record_id (remove bang! first)
-            record_id = match[1].strip(COMMAND_SYMBOL)
-            record = await self._get_record_dataset(record_id=record_id)
-
-        if record:
-            output = AgentOutput(role=self.role, content=record.text, records=[record])
-            await public_callback(output)
-
-        return
-
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
-        if not (match := re.match(self._pat, inputs.prompt)):
-            return
-        record = None
-        if uri := match[2]:
-            record = await download_and_convert(uri=uri)
-        else:
-            # Try to get by record_id (remove bang! first)
-            record_id = match[1].strip(COMMAND_SYMBOL)
-            record = await self._get_record_dataset(record_id=record_id)
-
-        if record:
-            output = AgentOutput(role=self.role, content=record.text, records=[record])
-            return output
-        return None
-
-    async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
-        """Add local agent state to inputs"""
-        return inputs
-
     async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
         """Entry point when running as a tool."""
         record = None
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
+                # Try to get by record_id (remove bang! first)
                 record_id = prompt.strip().strip(COMMAND_SYMBOL)
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
         result = None
         if record_id:
             record = await self._get_record_dataset(record_id)
             if record:
+                # Ensure metadata exists and add provenance
+                if not record.metadata:
+                    record.metadata = {}
+                record.metadata["fetch_source_id"] = record_id
+                record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
                 result = ToolOutput(
                     role=self.role,
-                    name=self.id,
+                    name="fetch",
                     results=[record],
                     content=record.text,
-                    messages=[record.as_message()],
+                    messages=[record.as_message(role="user")],
                     args=dict(record_id=record_id),
-                    send_to_ui=True,
                 )
-        else:
+        else:  # uri case
             record = await download_and_convert(uri)
-            result = ToolOutput(
-                role=self.role,
-                name=self.id,
-                results=[record],
-                content=record.text,
-                messages=[record.as_message()],
-                args=dict(uri=uri),
-                send_to_ui=True,
-            )
+            if record:  # Check if download_and_convert succeeded
+                # Ensure metadata exists and add provenance
+                if not record.metadata:
+                    record.metadata = {}
+                record.metadata["fetch_source_uri"] = uri
+                record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
+                result = ToolOutput(
+                    role=self.role, name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
+                )
+            # If record is None, result remains None
 
         if result:
             return result
         return None
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
-        while not self._data_task.done():
-            await asyncio.sleep(1)
+        if not self._data_sources:
+            await self.load_data()
 
-        for dataset in self._data.values():
+        for dataset in self._data_sources.values():
             rec = dataset.query("record_id==@record_id")
             if rec.shape[0] == 1:
                 data = rec.iloc[0].to_dict()
@@ -164,5 +110,61 @@ class FetchRecord(Agent, ToolConfig):
                 raise ValueError(
                     f"More than one record found for query record_id == {record_id}",
                 )
+
+        return None
+
+
+class FetchAgent(FetchRecord, Agent):
+    id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")
+    pass
+
+    async def _listen(
+        self,
+        message: AgentInput | UserInstructions | GroupchatMessageTypes,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        source: str = "",
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
+        **kwargs,
+    ) -> None:
+        """Entry point when running this as an agent.
+
+        If running as an agent, watch for URLs or record ids and inject them
+        into the chat."""
+
+        result = None
+        if isinstance(message, AgentInput):
+            assert isinstance(message, AgentInput)  # Add assertion for type checker
+            uri = message.inputs.get("uri")
+            record_id = message.inputs.get("record_id")
+            if uri or record_id:
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+        if isinstance(message, UserInstructions):
+            result = await self._run(prompt=message.prompt)
+
+        if result:
+            output = UserInstructions(prompt=result.content, records=result.results)
+            # Add check before calling callback
+            if public_callback:
+                await public_callback(output)
+
+        return None  # _listen itself doesn't return anything meaningful here
+
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+
+        result = None
+        if isinstance(message, AgentInput):
+            uri = message.inputs.get("uri")
+            record_id = message.inputs.get("record_id")
+            if uri or record_id:
+                # Removed cancellation_token from _run call
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+        if isinstance(message, UserInstructions):
+            # Removed cancellation_token from _run call
+            result = await self._run(prompt=message.prompt)
+
+        if result:
+            return result
 
         return None

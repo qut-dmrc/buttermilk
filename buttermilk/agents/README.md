@@ -56,10 +56,10 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         *   `_register_agents()`: Iterates through the flow's agent configurations, wraps each Buttermilk agent using `AutogenAgentAdapter`, and registers the adapter with the Autogen runtime. Sets up topic subscriptions for message routing.
         *   `_register_collectors()` / `_register_human_in_the_loop()`: Registers special Autogen `ClosureAgent`s to handle message collection (`CLOSURE`) and user confirmation (`CONFIRM`).
         *   `run()`: Starts the Autogen runtime and potentially publishes an initial message. The actual flow logic might be delegated to subclasses or driven by messages within the Autogen runtime.
-        *   `_execute_step(step: StepRequest)`: Publishes an `AgentInput` message to a specific topic within the Autogen runtime, targeting the agent(s) subscribed to that topic (step role).
+        *   `_execute_step()`: Publishes an `AgentInput` message to a specific topic within the Autogen runtime, targeting the agent(s) subscribed to that topic (step role).
         *   `_send_ui_message(...)`: Publishes messages specifically for UI agents.
 
-3.  **`Selector` (`buttermilk.runner.chat.Selector`)**
+3.  **`Selector` (`buttermilk.runner.selector.Selector`)**
     *   These are concrete orchestrators inheriting from `AutogenOrchestrator`.
     *   They implement `_get_next_step()` as an async generator yielding `StepRequest` objects.
     *   Their `run()` methods typically loop through `_get_next_step()`, potentially ask for user confirmation (`_user_confirmation` queue), and then call `_execute_step()` to trigger the next agent via the Autogen runtime.
@@ -112,7 +112,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 pass
 
 
-        async def _process(self, *, inputs: AgentInput, 
+        async def _process(self, *, message: AgentInput, 
                 cancellation_token: CancellationToken = None, **kwargs
                 ) -> AgentOutput | ToolOutput | None:
                 logger.info(f"{self.id} received content: {input_data.content}")

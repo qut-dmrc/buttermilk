@@ -1,33 +1,52 @@
+{# --- Prompty Frontmatter ---
+Defines metadata and expected inputs for this prompt template.
+Inputs:
+  - instructions: The original task instructions given to the agents.
+  - q: (Implied) The original question or topic being addressed.
+  - content: (Implied) The original content being analyzed.
+  - answers: A list of draft answers, expected to be AgentOutputs from previous steps (e.g., Judge agents).
+             The template accesses `answer.outputs.reasons`.
+  - feedback: (Optional) Additional feedback to incorporate.
+  - criteria: The evaluation criteria to apply during synthesis.
+  - records: (Placeholder) Likely contains the original data record(s). Used as placeholder in template.
+  - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
+--- #}
 ---
-description: Synthesise answers
+description: Synthesise multiple draft answers and feedback into a final answer based on criteria.
 inputs:
   - instructions
   - q
   - content
   - answers
+  - feedback {# Added feedback as an explicit input based on prompt text #}
+  - criteria {# Added criteria as an explicit input #}
+  - records {# Added records as an explicit input #}
+  - context {# Added context as an explicit input #}
 prompt_placeholder: false
 ---
 
 system:
+{# --- System Prompt ---
+Sets the persona and overall task for the LLM.
+Instructs the LLM to act as a team leader synthesising information from draft answers and feedback.
+Emphasizes relying on provided information and writing for an external audience.
+#}
 Your task is to review one or more draft answers and come to a final conclusion.
 
 You are a team leader. Some members of your team have drafted answers to a question, and others have submitted notes or provided feedback on those answers. Your task is to synthesise the information that your team has developed so far and produce the best possible answer to a question. You should generally trust your team members, but they may not always be correct. Your response should not include any information from your general knowledge that is not explicitly provided.
 
 You may be provided with additional feedback to consider. You should incorporate this feedback into your final answer where it is helpful and relevant.
 
+Your response should be written for an external audience. Do not mention our internal deliberations, just provide the final answer.
 
-{% if formatting %}
-<BEGIN OUTPUT FORMAT>
-{{ formatting }}
-<END OUTPUT FORMAT>
-{% endif %}
-
+{# Optionally include the original instructions if provided #}
 {% if instructions %}
 <BEGIN ORIGINAL INSTRUCTIONS>
 {{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
+{# Optionally include the evaluation criteria if provided #}
 {% if criteria %}
 <BEGIN CRITERIA>
 {{ criteria }}
@@ -35,17 +54,28 @@ You may be provided with additional feedback to consider. You should incorporate
 {% endif %}
 
 
+{# --- User Message Construction --- #}
 {% if answers is defined %}
+{# This block formats the input when draft 'answers' are provided. #}
+{# TODO: The 'records' placeholder seems misplaced here. Is it intended to provide context before the answers? Review usage. #}
 # Placeholder:
 {{records}}
 # User:
+  {# Loop through each provided draft answer. #}
   {% for answer in answers %}
-  <BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+  <BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+  {# Extracts the 'reasons' part of the previous agent's output. Assumes answer is AgentOutput with AgentReasons in outputs. #}
+  {# TODO: Check if accessing `answer.params.agent_id` is reliable and intended. Maybe `answer.agent_id`? #}
   {{ answer.outputs.reasons }}
   <END DRAFT ANSWER>
   {% endfor %}
 {% else %}
+{# Fallback if 'answers' are not defined. Uses 'context' instead. #}
+{# TODO: Clarify what 'context' represents here and when this branch is used. #}
 # Placeholder:
 {{ context }}
 {% endif %}
 
+{# TODO: The prompt doesn't explicitly request output in the AgentReasons format, but the agent class (Judge) expects it.
+   This might lead to parsing errors. Consider adding explicit instructions for the JSON format (like in score.jinja2 or another base template)
+   or changing the agent class/output model for the synthesiser role if a different output structure is desired. #}

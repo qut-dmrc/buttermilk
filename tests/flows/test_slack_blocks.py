@@ -11,8 +11,7 @@ from buttermilk.agents.ui.formatting.slackblock import (
 def sample_agent_output():
     """Create a sample agent output for testing formatting."""
     return AgentOutput(
-        role="test_agent",
-        role="Test Agent",
+        agent_id="test",
         content="This is the main content",
         outputs={
             "prediction": "Test prediction",

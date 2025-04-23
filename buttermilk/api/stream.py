@@ -17,7 +17,6 @@ from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
 from buttermilk._core.llms import CHATMODELS
-from buttermilk.runner.flow import Flow
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import load_json_flexi
 from buttermilk.utils.validators import (
@@ -146,7 +145,7 @@ class FlowRequest(BaseModel):
 
 
 async def flow_stream(
-    flow: Flow,
+    flow,
     flow_request: FlowRequest,
     return_json=True,
 ) -> AsyncGenerator[str, None]:

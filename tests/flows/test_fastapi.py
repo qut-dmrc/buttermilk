@@ -11,6 +11,7 @@ from buttermilk._core.contract import AgentInput, AgentOutput
 class TestAgent:
     async def process(self, *, agent_input: AgentInput) -> AgentOutput:
         return AgentOutput(
+            agent_id="test",
             source="test_agent",
             role="TestAgent",
             content="Processed",

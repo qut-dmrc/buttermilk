@@ -29,7 +29,8 @@ You should not refer to the analyst or their response in your answer; just expla
 
 {% if expected %}
 <BEGIN EXPECTED ANSWER>
-{{ expected.reasons }}
+{% for reason in expected %}- {{reason}}
+{% endfor %}
 <END EXPECTED ANSWER>
 {% endif %}
 
@@ -38,7 +39,7 @@ You should not refer to the analyst or their response in your answer; just expla
 
 # User:
 {% for answer in answers %}
-<BEGIN DRAFT ANSWER #{{answer.call_id}}>
-{{ answer.outputs.reasons }}
+<BEGIN DRAFT ANSWER #{{answer.params.agent_id}}>
+{{ answer.outputs }}
 <END DRAFT ANSWER>
 {% endfor %}

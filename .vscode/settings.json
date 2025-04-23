@@ -25,6 +25,8 @@
     ".git",
     ".venv",
     ".venv/**/*",
+    "**/site-packages",
+    "**/__pycache__"
   ],
   "python.analysis.extraPaths": [
     "tests"
@@ -63,5 +65,9 @@
   ],
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "editor.codeActionsOnSave": {
+"source.organizeImports": "explicit",
+"source.fixAll.ruff": "explicit"
   },
 }
