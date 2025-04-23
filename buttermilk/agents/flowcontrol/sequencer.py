@@ -352,7 +352,7 @@ class Sequencer(Agent):
             return StepRequest(role=END, prompt="", description="Sequence generator finished.")
         except Exception as e:
             # Catch any other error during generation.
-            logger.error(f"Error getting next step from generator: {e}", exc_info=True)
+            logger.error(f"Error getting next step from generator: {e}")
             return StepRequest(role=END, prompt="", description=f"Error in sequence: {e}")
 
     async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput | None:
@@ -394,7 +394,7 @@ class Sequencer(Agent):
             # Currently doesn't *do* anything with the direct input other than acknowledge.
             return response
         except Exception as e:
-            logger.error(f"Error in Sequencer._process: {e}", exc_info=True)
+            logger.error(f"Error in Sequencer._process: {e}")
             # Populate error field in the standard AgentOutput.
             # Ensure outputs is initialized if error occurs before content is set.
             # TODO: AgentOutput doesn't have '.error'. Use is_error flag and put error in outputs.

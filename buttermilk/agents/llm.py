@@ -109,7 +109,7 @@ class LLMAgent(Agent):
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             self._model_client = bm.llms.get_autogen_chat_client(self._model)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to initialize model client for '{self._model}': {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Failed to initialize model client for '{self._model}': {e}")
             # Raise a more informative error or handle appropriately.
             raise ValueError(f"Failed to get model client for '{self._model}'") from e
 
@@ -178,7 +178,7 @@ class LLMAgent(Agent):
         try:
             prompty_structure = _parse_prompty(rendered_template)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to parse rendered template '{template_name}' as Prompty: {e}", exc_info=True)
+            logger.error(f"Agent {self.id}: Failed to parse rendered template '{template_name}' as Prompty: {e}")
             raise ProcessingError(f"Failed to parse template '{template_name}'") from e
 
         # Convert the Prompty structure into a list of Autogen message objects (System, User, etc.).
@@ -186,8 +186,8 @@ class LLMAgent(Agent):
         try:
             messages: list[LLMMessage] = make_messages(local_template=prompty_structure, context=context, records=records)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to create messages from Prompty structure for template '{template_name}': {e}", exc_info=True)
-            raise ProcessingError(f"Failed create messages from template '{template_name}'") from e
+            logger.error(f"Agent {self.id}: Failed to create messages from Prompty structure for template '{template_name}': {e}")
+            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
         # Check for any variables that were expected by the template but not provided in `inputs`.
         # Ignore 'records' and 'context' as they are handled separately by `make_messages`.
@@ -266,7 +266,7 @@ class LLMAgent(Agent):
                 except Exception as e:
                     # Log schema validation/parsing error
                     parse_error = f"Error parsing LLM response into {schema.__name__}: {e}"
-                    logger.warning(f"Agent {self.id}: {parse_error}", exc_info=False)
+                    logger.warning(f"Agent {self.id}: {parse_error}")
                     # Keep the error, we'll add it to output later.
             else:
                 # Content is not string and not pre-parsed object, schema validation fails.
@@ -288,7 +288,7 @@ class LLMAgent(Agent):
             except Exception as json_e:
                 # If generic JSON parsing also fails, store raw content
                 raw_content_error = f"Failed to parse LLM response as JSON: {json_e}. Storing raw content."
-                logger.warning(f"Agent {self.id}: {raw_content_error}", exc_info=False)
+                logger.warning(f"Agent {self.id}: {raw_content_error}")
                 output.outputs = chat_result.content  # Store raw string
                 # Add both schema error (if any) and JSON parsing error
                 if parse_error:
@@ -334,7 +334,7 @@ class LLMAgent(Agent):
             )
         except ProcessingError as template_error:
             # Log template errors clearly as they prevent LLM call
-            logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}", exc_info=True)
+            logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
             # Create an error output
             error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
             error_output.set_error(f"Template processing failed: {template_error}")
@@ -354,7 +354,7 @@ class LLMAgent(Agent):
             logger.debug(f"Agent {self.id}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call
-            logger.error(f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}", exc_info=True)
+            logger.error(f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}")
             error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt, messages=llm_messages)
             error_output.set_error(f"LLM API call failed: {llm_error}")
             return error_output

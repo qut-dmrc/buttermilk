@@ -156,7 +156,7 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError("Unexpected tool response from LLM", create_result.content)
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
-            logger.warning(error_msg, exc_info=False)
+            logger.warning(error_msg)
             raise ProcessingError(error_msg)
         return create_result
 

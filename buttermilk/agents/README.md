@@ -223,7 +223,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                     logger.info("Custom flow finished.")
 
                 except Exception as e:
-                    logger.error(f"Error in custom flow: {e}", exc_info=True)
+                    logger.error(f"Error in custom flow: {e}")
                 finally:
                     await self._cleanup() # Important for AutogenOrchestrator
 

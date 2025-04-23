@@ -144,7 +144,7 @@ class AutogenOrchestrator(Orchestrator):
                 # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
                 agent_type: AgentType = await AutogenAgentAdapter.register(
                     runtime=self._runtime,
-                    id=variant_config.id,  # Use the specific variant ID for registration
+                    type=variant_config.id,  # Use the specific variant ID for registration
                     factory=adapter_factory,
                 )
                 logger.debug(f"Registered agent adapter: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
@@ -204,7 +204,7 @@ class AutogenOrchestrator(Orchestrator):
         # Register the closure function as an agent named CONFIRM.
         await ClosureAgent.register_closure(
             runtime=self._runtime,
-            id=CONFIRM,  # Agent ID/Name.
+            type=CONFIRM,  # Agent ID/Name.
             closure=handle_manager_response,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
@@ -264,7 +264,7 @@ class AutogenOrchestrator(Orchestrator):
                 tasks.append(task)
             except Exception as e:
                 # Log errors during message sending setup, e.g., if runtime can't find the agent.
-                logger.error(f"Error preparing to send message to agent type {agent_type} for role {role_key}: {e}", exc_info=True)
+                logger.error(f"Error preparing to send message to agent type {agent_type} for role {role_key}: {e}")
 
         # Wait for all the send_message tasks to complete and gather responses.
         # `return_exceptions=True` prevents one failed agent from stopping others.
@@ -354,7 +354,7 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             # Wrap generic exceptions in ProcessingError for consistent handling.
             msg = f"Error during step execution for role '{step.role}': {e}"
-            logger.error(msg, exc_info=True)
+            logger.error(msg)
             raise ProcessingError(msg) from e
 
     async def _get_host_suggestion(self) -> StepRequest | None:
@@ -472,7 +472,7 @@ class AutogenOrchestrator(Orchestrator):
             logger.info(f"AutogenOrchestrator run loop for topic '{self._topic.type}' completed.")
         except FatalError as e:
             # Specific fatal error defined in Buttermilk.
-            logger.error(f"Fatal error during orchestrator run: {e}", exc_info=True)
+            logger.error(f"Fatal error during orchestrator run: {e}")
         except Exception as e:
             # Catch any other unexpected exceptions during the main loop.
             logger.exception(f"Unexpected error during orchestrator run: {e}")

@@ -304,7 +304,7 @@ class Orchestrator(BaseModel, ABC):
             output = await self._execute_step(request)
             return output
         except Exception as e:
-            logger.error(f"Error during direct execute for step '{request.role}': {e}", exc_info=True)
+            logger.error(f"Error during direct execute for step '{request.role}': {e}")
             return None
 
     async def __call__(self, request: RunRequest | None = None) -> None:
@@ -329,7 +329,7 @@ class Orchestrator(BaseModel, ABC):
                 except ImportError:
                     logger.error("Could not import FetchRecord agent for initial fetch.")
                 except Exception as e:
-                    logger.error(f"Error fetching initial record: {e}", exc_info=True)
+                    logger.error(f"Error fetching initial record: {e}")
                     # Decide if fetch failure is fatal
             else:
                 logger.debug("No initial records, record_id, or uri provided in request.")
