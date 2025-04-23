@@ -184,7 +184,7 @@ class LLMScorer(LLMAgent):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
-        logger.info(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
+        logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
 
         # Prepare data for the LLM scoring prompt template.
         # We need the original output (message.outputs) and ground truth.
@@ -254,7 +254,7 @@ class LLMScorer(LLMAgent):
                     # Publish the score back to the system using the provided callback.
                     formatted_score = QualResults(
                         assessments=score_output.outputs.assessments,
-                        agent=scorer_agent_input.inputs["agent"][0],
+                        agent=scorer_agent_input.inputs["agent_id"][0],
                         answer_id=scorer_agent_input.inputs["answer_id"][0],
                         assessor=scorer_agent_input.inputs["assessor"],
                     )

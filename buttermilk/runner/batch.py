@@ -57,10 +57,10 @@ class BatchOrchestrator(Orchestrator):
     async def _cleanup(self):
         """Clean up any resources used by the batch orchestrator."""
         # TODO: Add specific cleanup if needed (e.g., closing agent resources)
-        logger.info(f"Cleaning up BatchOrchestrator {self.session_id}...")
+        logger.debug(f"Cleaning up BatchOrchestrator {self.session_id}...")
         # Placeholder: Close connections, release resources.
         await asyncio.sleep(0.1)  # Simulate cleanup
-        logger.info("BatchOrchestrator cleanup complete.")
+        logger.debug("BatchOrchestrator cleanup complete.")
 
     async def _execute_step(
         self,
@@ -86,7 +86,7 @@ class BatchOrchestrator(Orchestrator):
 
         # Get the config for the first variant
         first_variant_config = variants_config.variants[0]
-        logger.info(f"Executing step '{step.role}' (using variant {first_variant_config.id})...")
+        logger.debug(f"Executing step '{step.role}' (using variant {first_variant_config.id})...")
         agent = self._get_agent_instance(first_variant_config.id)
         # --- End Variant Selection ---
 
@@ -107,7 +107,7 @@ class BatchOrchestrator(Orchestrator):
                     #     # TODO: Implement _evaluate_step for BatchOrchestrator
                     #     # await self._evaluate_step(output, ground_truth_record, criteria, None) # Pass None for weave_call
                     #     logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")
-                    logger.info(f"Step '{step.role}' variant '{first_variant_config.id}' completed.")
+                    logger.debug(f"Step '{step.role}' variant '{first_variant_config.id}' completed.")
                     return output  # Return AgentOutput
                 elif isinstance(raw_output, (ToolOutput, OOBMessages)):
                     logger.warning(

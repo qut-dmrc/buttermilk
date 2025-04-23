@@ -103,7 +103,7 @@ class LLMHostAgent(LLMAgent):
         if isinstance(message, TaskProcessingComplete):
             if message.role == self._current_step_name:
                 self._completed_agents_current_step.add(message.agent_id)
-                logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
+                logger.debug(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
         elif isinstance(message, TaskProcessingStarted):
             if message.role == self._current_step_name:
                 self._expected_agents_current_step.add(message.agent_id)
@@ -117,11 +117,11 @@ class LLMHostAgent(LLMAgent):
     async def _check_completions(self) -> None:
         required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
         if required_completions > 0:
-            logger.info(
+            logger.debug(
                 f"Waiting for step '{self._current_step_name}' to complete. So far we have received results from {len(self._completed_agents_current_step)} of {len(self._expected_agents_current_step)} agents for step '{self._current_step_name}'. Waiting for at least {required_completions} before moving on."
             )
             if len(self._completed_agents_current_step) >= required_completions:
-                logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
+                logger.debug(f"Completion threshold reached for step '{self._current_step_name}'.")
                 self._step_completion_event.set()
             else:
                 self._step_completion_event.clear()
@@ -142,7 +142,7 @@ class LLMHostAgent(LLMAgent):
             # Wait for enough completions, with a timeout
             await self._check_completions()
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
-            logger.info(f"Previous step '{self._current_step_name}' cleared, moving on.")
+            logger.debug(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
             logger.warning(
                 f"Timeout waiting for step completion. "
@@ -173,7 +173,7 @@ class LLMHostAgent(LLMAgent):
             agent_id=self.id,
         )
         response.outputs = step
-        logger.info(f"Next step: {self._current_step_name}.")
+        logger.debug(f"Next step: {self._current_step_name}.")
 
         return response
 

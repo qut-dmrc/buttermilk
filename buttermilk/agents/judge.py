@@ -132,7 +132,7 @@ class Judge(LLMAgent):
             An AgentOutput message containing the structured evaluation (AgentReasons)
             or an error if processing fails.
         """
-        logger.info(f"Judge agent '{self.id}' received evaluation request.")
+        logger.debug(f"Judge agent '{self.id}' received evaluation request.")
         try:
             # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
             # This method handles template rendering, API calls, retries, and parsing into _output_model.
@@ -141,9 +141,7 @@ class Judge(LLMAgent):
             # LLMAgent._process already creates and returns AgentOutput.
             # We might want to add specific logging or post-processing here if needed.
             if not result.is_error and isinstance(result.outputs, AgentReasons):
-                logger.info(f"Judge '{self.id}' completed evaluation successfully.")
-                # Example post-processing: Log the prediction
-                logger.debug(f"Judge '{self.id}' prediction: {result.outputs.prediction}")
+                logger.debug(f"Judge '{self.id}' completed evaluation successfully.")
             elif not result.is_error:
                 logger.warning(f"Judge '{self.id}' completed but output type is not AgentReasons: {type(result.outputs)}")
             else:
