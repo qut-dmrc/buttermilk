@@ -6,23 +6,24 @@ and exposes it to the Autogen ecosystem as an `autogen_core.RoutedAgent`. It han
 message translation, routing via topics, and lifecycle management within the Autogen
 runtime.
 """
+
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Sequence, Union # Added Union for type hints
+from typing import Sequence, Union  # Added Union for type hints
 
 from autogen_core import (
     DefaultTopicId,
     CancellationToken,
     MessageContext,
     RoutedAgent,
-    TopicId, # Identifier for message topics.
-    message_handler, # Decorator to register methods as message handlers.
+    TopicId,  # Identifier for message topics.
+    message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core.agent import Agent, AgentConfig, ToolOutput # Buttermilk base agent and config.
+from buttermilk._core.agent import Agent, AgentConfig, ToolOutput  # Buttermilk base agent and config.
 from buttermilk._core.contract import (
-    CONDUCTOR, # Constant representing the Conductor role.
-    AgentInput, # Standard input message for Buttermilk agents.
+    CONDUCTOR,  # Constant representing the Conductor role.
+    AgentInput,  # Standard input message for Buttermilk agents.
     AgentOutput,
     ConductorRequest,
     ConductorResponse,
@@ -32,18 +33,19 @@ from buttermilk._core.contract import (
     ManagerMessage,
     FlowMessage,
     ManagerRequest,
-    ManagerResponse, # Response from the Manager/UI.
-    OOBMessages, # Union type for Out-Of-Band control messages.
-    TaskProcessingComplete, # Status message indicating task completion.
-    TaskProcessingStarted, # Status message indicating task start.
-    UserInstructions, # Instructions from the user (potentially via Manager).
-    AllMessages, # Union of all possible message types (likely for broader type hints).
+    ManagerResponse,  # Response from the Manager/UI.
+    OOBMessages,  # Union type for Out-Of-Band control messages.
+    TaskProcessingComplete,  # Status message indicating task completion.
+    TaskProcessingStarted,  # Status message indicating task start.
+    UserInstructions,  # Instructions from the user (potentially via Manager).
+    AllMessages,  # Union of all possible message types (likely for broader type hints).
 )
+
 # TODO: These specific agent imports might create coupling. Consider if interfaces or protocols could be used.
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 from buttermilk.agents.ui.generic import UIAgent
-from buttermilk.bm import logger # Buttermilk logger instance.
+from buttermilk.bm import logger  # Buttermilk logger instance.
 
 
 # Define the expected return type more accurately using Union.
@@ -57,6 +59,7 @@ MaybeSequenceOutput = Union[
     ConductorResponse,
     Sequence[Union[AgentOutput, ToolOutput, TaskProcessingComplete, ConductorResponse]],
 ]
+
 
 class AutogenAgentAdapter(RoutedAgent):
     """
@@ -77,9 +80,9 @@ class AutogenAgentAdapter(RoutedAgent):
                            (Used for specific initialization logic).
     """
 
-    agent: Agent # The wrapped Buttermilk agent instance.
-    topic_id: TopicId # The primary topic ID for this agent adapter.
-    is_manager: bool # Flag for manager-like agents requiring special init.
+    agent: Agent  # The wrapped Buttermilk agent instance.
+    topic_id: TopicId  # The primary topic ID for this agent adapter.
+    is_manager: bool  # Flag for manager-like agents requiring special init.
 
     def __init__(
         self,
@@ -118,8 +121,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e
         else:
             # Insufficient information provided.
-            raise ValueError("AutogenAgentAdapter requires either a pre-instantiated 'agent' "
-                             "or both 'agent_cls' and 'agent_cfg'.")
+            raise ValueError("AutogenAgentAdapter requires either a pre-instantiated 'agent' " "or both 'agent_cls' and 'agent_cfg'.")
 
         # Set the default topic ID based on the provided type string.
         self.topic_id = DefaultTopicId(type=topic_type)
@@ -160,8 +162,8 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_invocation(
         self,
-        message: AgentInput, # Handles the standard Buttermilk agent input message.
-        ctx: MessageContext, # Provides context like sender, topic, cancellation token.
+        message: AgentInput,  # Handles the standard Buttermilk agent input message.
+        ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
     ) -> MaybeSequenceOutput:
         """
         Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
@@ -194,13 +196,13 @@ class AutogenAgentAdapter(RoutedAgent):
                 cancellation_token=ctx.cancellation_token,
                 # Provide callbacks for the agent to publish messages back if needed during execution.
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id), # Callback for topic of incoming message
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown", # Extract sender ID
+                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
+                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
 
             # If the agent returned something directly, publish it to the main topic.
-            if output and not isinstance(output, TaskProcessingComplete): # Don't republish completion status
+            if output and not isinstance(output, TaskProcessingComplete):  # Don't republish completion status
                 # TODO: Handle sequences of outputs correctly if agent returns multiple messages.
                 # Currently might only publish the sequence object itself, not individual items.
                 await self.publish_message(output, topic_id=self.topic_id)
@@ -210,7 +212,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False),
                 topic_id=self.topic_id,
             )
-            return output # Return the direct output to the caller in Autogen.
+            return output  # Return the direct output to the caller in Autogen.
 
         except Exception as e:
             logger.error(f"Error during agent {self.agent.id} invocation: {e}", exc_info=True)
@@ -227,7 +229,7 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_groupchat_message(
         self,
-        message: GroupchatMessageTypes, # Handles messages intended for general group chat consumption.
+        message: GroupchatMessageTypes,  # Handles messages intended for general group chat consumption.
         ctx: MessageContext,
     ) -> None:
         """
@@ -246,9 +248,9 @@ class AutogenAgentAdapter(RoutedAgent):
             await self.agent._listen(
                 message=message,
                 cancellation_token=ctx.cancellation_token,
-                public_callback=self._make_publish_callback(topic_id=self.topic_id), # Callback for default topic
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id), # Callback for specific incoming topic
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown", # Extract sender ID
+                public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
+                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
+                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
             logger.error(f"Error during agent {self.agent.id} listening to group chat message: {e}", exc_info=True)
@@ -257,7 +259,7 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_conductor_request(
         self,
-        message: ConductorRequest, # Handles specific requests targeted at Conductor agents.
+        message: ConductorRequest,  # Handles specific requests targeted at Conductor agents.
         ctx: MessageContext,
     ) -> MaybeSequenceOutput:
         """
@@ -284,7 +286,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 cancellation_token=ctx.cancellation_token,
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),
                 message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown", # Extract sender ID
+                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.id} completed ConductorRequest. Output type: {type(output).__name__}")
             # Note: Conductor responses are typically returned directly, not published separately by the adapter.
@@ -292,12 +294,12 @@ class AutogenAgentAdapter(RoutedAgent):
         except Exception as e:
             logger.error(f"Error during agent {self.agent.id} handling ConductorRequest: {e}", exc_info=True)
             # TODO: Consider publishing ErrorEvent or returning a specific error response?
-            return None # Return None on error
+            return None  # Return None on error
 
     @message_handler
     async def handle_control_message(
         self,
-        message: OOBMessages, # Handles out-of-band control messages.
+        message: OOBMessages,  # Handles out-of-band control messages.
         ctx: MessageContext,
     ) -> Union[OOBMessages, Sequence[OOBMessages], None]:
         """
@@ -324,7 +326,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
-            return response # Return response directly for OOB messages.
+            return response  # Return response directly for OOB messages.
         except Exception as e:
             logger.error(f"Error during agent {self.agent.id} handling control message: {e}", exc_info=True)
             # TODO: Return an error OOB message?

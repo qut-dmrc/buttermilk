@@ -1,15 +1,15 @@
 import pytest
-from typing import Dict, Any # Added for type hints
+from typing import Dict, Any  # Added for type hints
 
 # Buttermilk core imports
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk._core.agent import Agent # Base agent class (though not used directly here)
+from buttermilk._core.agent import Agent  # Base agent class (though not used directly here)
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
-from buttermilk.agents.judge import Judge, AgentReasons # Import Judge and its output model
+from buttermilk.agents.judge import Judge, AgentReasons  # Import Judge and its output model
 
 # Autogen Core (Potentially needed for fixtures/context, but not directly in these tests)
 # from autogen_core import CancellationToken
@@ -26,13 +26,13 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS) # Parametrize over cheap models
+@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using __call__."""
     agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name})
-    await agent.initialize() # Ensure agent is initialized
+    await agent.initialize()  # Ensure agent is initialized
 
-    response = await agent(message=request_paris) # Use __call__
+    response = await agent(message=request_paris)  # Use __call__
 
     assert isinstance(response, AgentOutput)
     assert not response.is_error, f"Agent returned error: {response.error}"
@@ -40,15 +40,15 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
     # Check if output is string and contains 'Paris' (case-insensitive)
     if isinstance(response.outputs, str):
         assert "paris" in response.outputs.lower()
-    elif isinstance(response.outputs, dict): # Handle cases where output might be dict
-         assert "paris" in str(response.outputs).lower()
+    elif isinstance(response.outputs, dict):  # Handle cases where output might be dict
+        assert "paris" in str(response.outputs).lower()
     else:
-         # Weaker assertion if output is neither string nor dict
-         assert "paris" in str(response.outputs).lower()
+        # Weaker assertion if output is neither string nor dict
+        assert "paris" in str(response.outputs).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS) # Parametrize over cheap models
+@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Judge agent needs a template, provide a default or configure one
@@ -58,11 +58,11 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     # If not, this test would need fixture/setup to load config properly.
     judge_params = {
         "model": model_name,
-        "template": "score", # Assuming 'score' template is suitable for judging based on criteria
-        "criteria": "Chief Joseph Speech Analysis Criteria:\n1. Identify the main speaker.\n2. Summarize the core message." # Example criteria
+        "template": "score",  # Assuming 'score' template is suitable for judging based on criteria
+        "criteria": "Chief Joseph Speech Analysis Criteria:\n1. Identify the main speaker.\n2. Summarize the core message.",  # Example criteria
     }
     agent = Judge(role="testing", name="Test Judge", description="Test judge agent", parameters=judge_params)
-    await agent.initialize() # Ensure agent is initialized
+    await agent.initialize()  # Ensure agent is initialized
 
     # Correctly call _process with 'message' keyword arg
     result = await agent._process(message=request_chief)

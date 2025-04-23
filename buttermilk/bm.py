@@ -23,6 +23,8 @@ from typing import (
 )
 import weave
 from weave.trace.weave_client import WeaveClient
+import weave
+from weave.trace.weave_client import WeaveClient
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly

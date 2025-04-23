@@ -361,6 +361,14 @@ class Orchestrator(BaseModel, ABC):
         logger.debug(f"Base _evaluate_step called for output from agent {output.agent_id}. No evaluation performed.")
         pass  # Default implementation does nothing.
 
+    @abstractmethod
+    async def _execute_step(
+        self,
+        step: AgentInput,
+    ) -> AgentOutput | None:
+        # Run step
+        raise NotImplementedError
+
 
 # --- Orchestrator Protocol (for Type Hinting/Hydra) ---
 

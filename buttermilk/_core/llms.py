@@ -280,9 +280,7 @@ class LLMs(BaseModel):
 
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
-            _vertex_params = {
-                k: v for k, v in client_params.items() if k in ["region", "project_id"]
-            }
+            _vertex_params = {k: v for k, v in client_params.items() if k in ["region", "project_id"]}
             _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**client_params)

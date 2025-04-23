@@ -1,39 +1,40 @@
 """
 Tests the LLMScorer agent, potentially in a simulated flow context.
 """
+
 import json
 import pytest
-from typing import Any # For fixture type hint
+from typing import Any  # For fixture type hint
 
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentOutput
-from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS # Use cheaper models for testing
+from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS  # Use cheaper models for testing
 from buttermilk._core.types import Record
 
 # Agent classes and models
-from buttermilk.agents.llm import LLMAgent # Base class (imported but maybe not needed directly)
-from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA # Scorer and its output models
-from buttermilk.agents.judge import AgentReasons # Judge's output model (used in input fixture)
+from buttermilk.agents.llm import LLMAgent  # Base class (imported but maybe not needed directly)
+from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA  # Scorer and its output models
+from buttermilk.agents.judge import AgentReasons  # Judge's output model (used in input fixture)
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS) # Parametrize over cheap models
+@pytest.fixture(params=CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 def scorer_agent(request) -> LLMScorer:
     """Fixture to create an LLMScorer instance."""
     # Instantiate LLMScorer correctly
     return LLMScorer(
-        role="scorer", # Correct role
+        role="scorer",  # Correct role
         name="Test Scorer Agent",
         description="Scorer test agent",
         parameters={
-            "template": "score", # Assumes 'score.jinja2' exists and is appropriate
-            "model": request.param, # Use parametrized model
-            "criteria": "criteria_ordinary", # Example criteria context for the template
+            "template": "score",  # Assumes 'score.jinja2' exists and is appropriate
+            "model": request.param,  # Use parametrized model
+            "criteria": "criteria_ordinary",  # Example criteria context for the template
             # "formatting": "json_rules", # LLMAgent usually handles JSON output if _output_model is set
         },
         # Inputs mapping might be needed depending on the 'score' template
         inputs={
-             "answer": "judge.outputs", # Example: map judge output to 'answer' template var
-             "expected": "ground_truth" # Example: map ground truth to 'expected' template var
+            "answer": "judge.outputs",  # Example: map judge output to 'answer' template var
+            "expected": "ground_truth",  # Example: map ground truth to 'expected' template var
         },
     )
 
@@ -125,15 +126,15 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
 
     # Create the AgentInput for the scorer
     scorer_input_data = AgentInput(
-        role="scorer", # Set the role for context if needed
+        role="scorer",  # Set the role for context if needed
         # Provide the judge's output and ground truth under keys expected by the scorer's template/input mapping
         inputs={
-            "judge_outputs": judge_outputs_data, # Pass the judge's structured output
-            "expected": ground_truth,          # Pass the ground truth
+            "judge_outputs": judge_outputs_data,  # Pass the judge's structured output
+            "expected": ground_truth,  # Pass the ground truth
             # Add other inputs if the 'score' template requires them
         },
         # Pass the relevant record(s) containing the original content and ground truth
-        records=judge_records[-1:], # Pass only the last record (containing GT)
+        records=judge_records[-1:],  # Pass only the last record (containing GT)
     )
 
     # Initialize the scorer agent (important if it has async init tasks)

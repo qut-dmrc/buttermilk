@@ -28,6 +28,7 @@ from buttermilk._core.contract import (
     UserInstructions,
 )
 from buttermilk._core.exceptions import ProcessingError
+
 # Restore original bm import
 from buttermilk.bm import bm, logger
 from buttermilk.utils._tools import create_tool_functions
@@ -114,7 +115,7 @@ class AssistantAgentWrapper(Agent):
             return None
 
         # Handle ConductorRequest specifically if needed
-        if isinstance(message, ConductorRequest):
+        if isinstance(inputs, ConductorRequest):
             logger.warning(f"Agent {self.role} received ConductorRequest, not fully implemented.")
             # Potentially extract relevant info or yield specific output
             return None
@@ -183,7 +184,7 @@ class AssistantAgentWrapper(Agent):
                 output_data = {}
 
             # Revert metadata handling (keep improvement if possible)
-            if hasattr(chat_msg, 'models_usage') and chat_msg.models_usage:
+            if hasattr(chat_msg, "models_usage") and chat_msg.models_usage:
                 # Assuming original might have just dumped the model if available
                 if hasattr(chat_msg.models_usage, "model_dump"):
                     llm_metadata = chat_msg.models_usage.model_dump(exclude_unset=True)

@@ -80,6 +80,41 @@ class AggResults(QualScore):
 # --- LLM Scorer Agent ---
 
 
+class QualScoreCRA(BaseModel):
+    """A single criterion-referenced asssessment."""
+
+    correct: bool = Field(..., description="Does the content meet the criterion?")
+    feedback: str = Field(..., description="One sentence explanation of your assessment.")
+
+
+class QualScore(BaseModel):
+    """Qualitative score of an LLM result against provided ground truth."""
+
+    answer_id: str = Field(..., description="The ID of the answer being assessed.")
+    assessments: list[QualScoreCRA] = Field(..., description="A list of assessments against the criteria.")
+
+    @computed_field
+    @property
+    def score(self) -> float | None:
+        """The overall score of the assessment (not weighted by default!)"""
+        return sum([cra.correct for cra in self.assessments]) / len(self.assessments)
+
+    def __str__(self) -> str:
+        """Markdown representation of the score"""
+        return f"**Answer**: {self.answer_id}\t\t**Score**: {self.score}\n" + "\n\t-".join(
+            [f"**{ '✔️' if cra.correct else '✘' }**: {cra.feedback}" for cra in self.assessments]
+        )
+
+
+class AggResults(QualScore):
+    """Aggregated results of qualitative assessments."""
+
+    agent: str = Field(..., description="The name of the agent who answered.")
+    answer_id: str = Field(..., description="The ID of the answer being assessed.")
+    assessments: list[QualScoreCRA] = Field(..., description="A list of qualitative scores.")
+    assessor: str = Field(..., description="The name of the assessor.")
+
+
 class LLMScorer(LLMAgent):
     """
     An LLM agent that qualitatively scores another agent's output against criteria and ground truth.

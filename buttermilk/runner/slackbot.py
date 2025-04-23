@@ -27,6 +27,8 @@ RESUME = "resume"
 
 ALLPATTERNS = re.compile(r"mod(.*)")
 
+bm = BM()
+
 
 def initialize_slack_bot(
     *,

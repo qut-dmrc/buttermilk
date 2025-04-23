@@ -2,11 +2,11 @@
 
 defaults:
   - /flows: trans
-  - override /flows/agents@flows.trans.agents: 
-    - host
-    - judge
-    - differences
-    - scorer
+  - override /flows/agents@flows.trans.agents:
+      - host
+      - judge
+      - differences
+      - scorer
   - _self_
 
 # Task specific parameters

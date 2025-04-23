@@ -47,6 +47,7 @@ messages = [
     ),
 ]
 
+
 class TestFetch:
     """Tests for Fetch agent methods."""
 
