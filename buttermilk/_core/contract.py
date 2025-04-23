@@ -245,9 +245,9 @@ class AgentOutput(FlowMessage):
         description="A unique ID for this specific agent execution/response.",
     )
     # Stores the original inputs dict that led to this output.
-    inputs: Optional[dict] = Field(  # Changed from AgentInput to dict based on LLMAgent.make_output
+    inputs: Optional[AgentInput] = Field(
         default=None,
-        description="The 'inputs' dictionary provided in the corresponding AgentInput.",
+        description="The corresponding AgentInput.",
     )
     # Stores the list of messages sent to the LLM during processing.
     messages: list[LLMMessage] = Field(

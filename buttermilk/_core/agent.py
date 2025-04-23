@@ -258,7 +258,7 @@ class Agent(AgentConfig):
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Agent {self.id}: Error preparing input state: {e}")
-            error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
+            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
             error_output.set_error(f"Failed to prepare input state: {e}")
             return error_output
 
@@ -280,13 +280,13 @@ class Agent(AgentConfig):
             # Catch unexpected errors during _process.
             error_msg = f"Agent {self.id} error during _process: {e}"
             logger.error(error_msg)
-            result = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt)
+            result = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
             result.set_error(error_msg)
 
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result is None:
             logger.warning(f"Agent {self.id} _process returned None. Creating default error output.")
-            result = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
+            result = AgentOutput(agent_id=self.id, role=self.role, inputs=message, prompt=message.prompt)
             result.set_error("Agent _process method returned None unexpectedly.")
 
         logger.debug(f"Agent {self.id} finished __call__.")

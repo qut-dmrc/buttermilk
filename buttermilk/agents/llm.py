@@ -231,9 +231,7 @@ class LLMAgent(Agent):
         """
         output = AgentOutput(
             agent_id=self.id,  # Include agent ID
-            role=self.role,  # Include agent role
-            # TODO: Should inputs store the whole AgentInput or just message.inputs dict? Storing dict for now.
-            inputs=inputs.inputs if inputs else None,
+            inputs=inputs,
             messages=messages,  # Messages sent to LLM
             params=parameters,  # Params for this call
             prompt=prompt,  # Original prompt
@@ -329,14 +327,12 @@ class LLMAgent(Agent):
         logger.debug(f"Agent {self.id} starting _process.")
         try:
             # 1. Prepare messages for the LLM using the template
-            llm_messages = await self._fill_template(
-                task_params=message.parameters, inputs=message.inputs, context=message.context, records=message.records
-            )
+            llm_messages = await self._fill_template(task_params=message.parameters, inputs=message, context=message.context, records=message.records)
         except ProcessingError as template_error:
             # Log template errors clearly as they prevent LLM call
             logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
             # Create an error output
-            error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt)
+            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
             error_output.set_error(f"Template processing failed: {template_error}")
             return error_output
             # Re-raising might be desired depending on orchestrator's error handling
@@ -355,7 +351,7 @@ class LLMAgent(Agent):
         except Exception as llm_error:
             # Catch errors during the actual LLM call
             logger.error(f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}")
-            error_output = AgentOutput(agent_id=self.id, role=self.role, inputs=message.inputs, prompt=message.prompt, messages=llm_messages)
+            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt, messages=llm_messages)
             error_output.set_error(f"LLM API call failed: {llm_error}")
             return error_output
             # Depending on severity, might want to raise
