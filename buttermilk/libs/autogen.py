@@ -356,7 +356,7 @@ class AutogenAgentAdapter(RoutedAgent):
             # Use the adapter's inherited publish_message method.
             await self.publish_message(
                 message,
-                topic_id=topic_id,
+                topic_id=target_topic_id,
             )
 
         return publish_callback

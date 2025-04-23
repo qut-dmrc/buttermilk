@@ -329,10 +329,7 @@ class AutogenOrchestrator(Orchestrator):
         finally:
             await asyncio.sleep(2)  # Give it some time to properly shut down
 
-    async def _execute_step(
-        self,
-        step: StepRequest,
-    ) -> None:
+    async def _execute_step(self, step: StepRequest, **kwargs) -> None:
         """
         Executes a single step in the workflow by sending a request to the appropriate agent(s).
 

@@ -340,6 +340,8 @@ class CLIUserAgent(UIAgent):
                     raise
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+        # Call base class initialize if needed
+        await super().initialize(**kwargs)
         """
         Initializes the agent and starts the background input polling task if a callback is provided.
 
@@ -366,8 +368,6 @@ class CLIUserAgent(UIAgent):
             # If no callback, input polling is disabled.
             logger.warning(f"{self.id}: Initialized without input_callback. Console input polling disabled.")
             self._input_task = None
-        # Call base class initialize if needed
-        await super().initialize(**kwargs)
 
     async def cleanup(self) -> None:
         """Cleans up resources, primarily by cancelling the input polling task."""
