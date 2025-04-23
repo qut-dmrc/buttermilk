@@ -9,7 +9,7 @@ from pydantic import BaseModel, PrivateAttr, model_validator
 import shortuuid
 
 # Buttermilk core imports
-from buttermilk._core.agent import ProcessingError
+from buttermilk._core.agent import ProcessingError, ToolOutput
 from buttermilk._core.contract import (
     CONDUCTOR,  # Role constant for the conductor/host agent
     CONFIRM,  # Role constant (unused directly here, but related to confirmation flow)
@@ -25,7 +25,7 @@ from buttermilk._core.contract import (
     StepRequest,  # Request defining the next step to execute
     UserInstructions,
 )
-from buttermilk._core.types import RunRequest  # Type for initial run request data
+from buttermilk._core.types import Record, RunRequest  # Type for initial run request data
 from buttermilk.bm import logger  # Buttermilk logger
 
 # Base orchestrator class
@@ -107,7 +107,6 @@ class Selector(AutogenOrchestrator):
                 f"At each step, you can:\n"
                 f"  ✅ **Confirm** (press Enter with no text) to proceed.\n"
                 f"  💬 **Provide Feedback/Instructions** (type text and press Enter) before confirming.\n"
-                f"  🔢 **Select a Variant** (type the variant ID and press Enter) if multiple are available.\n"
                 f"  ❌ **Reject** (type 'n', 'q', 'stop', etc.) to ask the conductor for a different step.\n"
                 f"  🚪 **Exit** (type 'exit') to stop the flow.\n\n"
                 f"Ready to begin?"
@@ -134,7 +133,7 @@ class Selector(AutogenOrchestrator):
             # Wait for a message on the queue filled by the manager interface agent.
             response: ManagerResponse = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
             logger.info(
-                f"Received user response: Confirm={response.confirm}, Halt={response.halt}, Selection='{response.selection}', Prompt='{response.prompt[:50]}...'"
+                f"Received user response: Confirm={response.confirm}, Halt={response.halt}, Selection='{response.selection}', Prompt='{str(response.prompt)[:50]}...'"
             )
 
             # Check if user wants to stop the entire flow.
@@ -145,7 +144,7 @@ class Selector(AutogenOrchestrator):
             # Store any feedback provided by the user.
             if response.prompt:
                 self._user_feedback.append(response.prompt)
-                logger.debug(f"Stored user feedback: '{response.prompt[:100]}...'")
+                logger.debug(f"Stored user feedback: '{str(response.prompt)[:100]}...'")
 
             # Store the specific variant selected by the user, if any.
             if response.selection:
@@ -190,14 +189,14 @@ class Selector(AutogenOrchestrator):
             # Prepare context about available variants for the proposed step.
             variant_info = ""
             options_list = []  # For ManagerRequest options
-            role_upper = step.role.upper()
-            if role_upper in self._active_variants:
-                variants = self._active_variants[role_upper]
-                if len(variants) > 1:
-                    variant_info_lines = [f"    {i+1}. {v[1].id} (Model: {v[1].parameters.get('model', 'N/A')})" for i, v in enumerate(variants)]
-                    # TODO: Include more descriptive variant info if available?
-                    variant_info = f"\n\nThis step has {len(variants)} variants available:\n" + "\n".join(variant_info_lines)
-                    options_list = [v[1].id for v in variants]  # Provide variant IDs as selectable options
+            # role_upper = step.role.upper()
+            # if role_upper in self._active_variants:
+            #     variants = self._active_variants[role_upper]
+            # if len(variants) > 1:
+            #     variant_info_lines = [f"    {i+1}. {v[1].id} (Model: {v[1].parameters.get('model', 'N/A')})" for i, v in enumerate(variants)]
+            #     # TODO: Include more descriptive variant info if available?
+            #     variant_info = f"\n\nThis step has {len(variants)} variants available:\n" + "\n".join(variant_info_lines)
+            #     options_list = [v[1].id for v in variants]  # Provide variant IDs as selectable options
 
             # Construct the message for the user.
             request_content = (
@@ -410,7 +409,7 @@ class Selector(AutogenOrchestrator):
         # Send the formatted comparison to the user.
         await self._send_ui_message(ManagerMessage(content=comparison_text))
 
-    async def _execute_step(
+    async def _execute_step(  # type: ignore
         self,
         step: StepRequest,
         variant_index: int = 0,  # Allow specifying which variant to use
@@ -434,7 +433,7 @@ class Selector(AutogenOrchestrator):
             return None
 
         # Prepare the input message for the agent.
-        message = AgentInput(prompt=step.prompt, records=self._records, parameters=step.parameters or {})  # Pass parameters from step request
+        message = AgentInput(prompt=step.prompt, records=self._records, parameters={})
 
         # Select the requested variant based on the index.
         variants = self._agent_types[role_upper]
@@ -522,7 +521,8 @@ class Selector(AutogenOrchestrator):
             if request:
                 # TODO: Refactor fetch logic. _fetch_record seems like a utility, not core run logic.
                 #       Perhaps call Fetch agent via _ask_agents or rely on initial setup message?
-                await self._fetch_record(request)
+                result = await self._fetch_record(request)
+                await self._runtime.publish_message(result, self._topic)
 
             # --- Main Interactive Loop ---
             while True:
@@ -612,7 +612,7 @@ class Selector(AutogenOrchestrator):
             logger.info(f"Cleaning up Selector orchestrator for '{self.name}'.")
             await self._cleanup()  # Ensure base class cleanup runs
 
-    async def _fetch_record(self, request: RunRequest) -> None:
+    async def _fetch_record(self, request: RunRequest) -> ToolOutput | None:
         """
         Utility to fetch initial record(s) based on RunRequest.
 
@@ -624,7 +624,7 @@ class Selector(AutogenOrchestrator):
         #       Keeping it for now but consider refactoring.
         if not (request.record_id or request.uri):
             logger.debug("No record_id or uri provided in RunRequest, skipping fetch.")
-            return
+            return None
 
         logger.info(f"Fetching initial record (ID: {request.record_id}, URI: {request.uri})...")
         try:
@@ -637,6 +637,7 @@ class Selector(AutogenOrchestrator):
             if fetch_output and fetch_output.results:
                 self._records = fetch_output.results
                 logger.info(f"Successfully fetched {len(self._records)} initial record(s).")
+                return fetch_output
             else:
                 logger.warning("Fetch agent did not return any results.")
         except ImportError:
@@ -644,3 +645,4 @@ class Selector(AutogenOrchestrator):
         except Exception as e:
             logger.error(f"Error fetching initial record: {e}")
             # Should this prevent the flow from starting?
+        return None
