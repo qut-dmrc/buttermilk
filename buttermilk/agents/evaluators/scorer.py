@@ -253,9 +253,9 @@ class LLMScorer(LLMAgent):
                 if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
                     # Publish the score back to the system using the provided callback.
                     formatted_score = QualResults(
-                        **score_output.model_dump(),
-                        agent=scorer_agent_input.inputs["agent"],
-                        answer_id=scorer_agent_input.inputs["answer_id"],
+                        assessments=score_output.outputs.assessments,
+                        agent=scorer_agent_input.inputs["agent"][0],
+                        answer_id=scorer_agent_input.inputs["answer_id"][0],
                         assessor=scorer_agent_input.inputs["assessor"],
                     )
                     # replace the outputs object

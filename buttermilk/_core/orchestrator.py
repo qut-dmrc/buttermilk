@@ -188,7 +188,7 @@ class Orchestrator(BaseModel, ABC):
                 display_name = f"{display_name}: {request.record_id}"
             with weave.attributes(tracing_attributes):
                 # This creates a traced version of the _run method.
-                traced_run_op = weave.op(self._run, call_display_name=)
+                traced_run_op = weave.op(self._run, call_display_name=display_name)
                 # Execute the traced operation within a Weave context.
                 await traced_run_op(request=request)
 

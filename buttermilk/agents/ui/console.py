@@ -298,12 +298,20 @@ class CLIUserAgent(UIAgent):
 
                 if is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerResponse(confirm=False, prompt="\n".join(current_prompt_lines))
+                    response = ManagerResponse(confirm=False, interrupt=False, prompt="\n".join(current_prompt_lines))
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)
                 elif is_confirmation:
-                    logger.info("User input interpreted as POSITIVE confirmation (or end of multi-line input).")
-                    response = ManagerResponse(confirm=True, prompt="\n".join(current_prompt_lines))
+                    # If we have accumulated feedback in the prompt buffer, this is a confirmation WITH feedback,
+                    # which should be treated as an interruption requiring the Conductor's attention
+                    has_feedback = bool(current_prompt_lines)
+                    if has_feedback:
+                        logger.info("User input interpreted as POSITIVE confirmation with feedback (interrupt).")
+                        response = ManagerResponse(confirm=True, interrupt=True, prompt="\n".join(current_prompt_lines))
+                    else:
+                        logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
+                        response = ManagerResponse(confirm=True, interrupt=False, prompt=None)
+
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)
                 else:

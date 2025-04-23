@@ -369,6 +369,7 @@ class ManagerResponse(FlowMessage):
 
     confirm: bool = Field(True, description="Indicates user confirmation (True) or rejection (False).")
     halt: bool = Field(False, description="If True, signals the user wants to stop the entire flow.")
+    interrupt: bool = Field(False, description="If True, signals the user wants to pause for conductor review of feedback.")
     prompt: Optional[str] = Field(None, description="Free-text feedback or instructions provided by the user.")
     selection: Optional[str] = Field(None, description="The option selected by the user (e.g., a specific variant ID).")
 
@@ -382,6 +383,7 @@ class ToolOutput(FunctionExecutionResult):
     Inherits fields from Autogen's `FunctionExecutionResult` (like `call_id`, `function_name`, `content`).
     Adds Buttermilk-specific context.
     """
+
     # TODO: 'role' seems redundant if associated with an agent. Clarify purpose.
     role: str = Field(..., description="The role the tool provides (?)")
 

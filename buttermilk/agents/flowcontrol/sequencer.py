@@ -383,7 +383,9 @@ class Sequencer(Agent):
         if not prompt and not task:
             logger.warning(f"Sequencer {self.id} called directly with no prompt or task.")
             # Maybe return status or help message? Returning None for now.
-            return None
+
+            response.outputs = StepRequest(role=WAIT, prompt="", description=f"Sequencer {self.id} called directly with no prompt or task.")
+            return response
 
         try:
             # Log reception of the prompt.
