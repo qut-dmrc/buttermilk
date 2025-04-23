@@ -181,14 +181,14 @@ class Orchestrator(BaseModel, ABC):
         }
         # Use weave.op to trace the internal _run method.
         try:
-            # This creates a traced version of the _run method.
-            traced_run_op = weave.op(self._run, call_display_name=f"{self.name}")
-            # Execute the traced operation within a Weave context.
             with weave.attributes(tracing_attributes):
+                # This creates a traced version of the _run method.
+                traced_run_op = weave.op(self._run, call_display_name=f"{self.name}")
+                # Execute the traced operation within a Weave context.
                 await traced_run_op(request=request)
-            logger.info(f"Orchestrator '{self.name}' run finished successfully.")
-            # Print weave link again
-            
+
+                logger.info(f"Orchestrator '{self.name}' run finished successfully.")
+
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.
             logger.exception(f"Orchestrator '{self.name}' run failed: {e}")

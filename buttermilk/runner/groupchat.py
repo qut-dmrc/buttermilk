@@ -319,9 +319,15 @@ class AutogenOrchestrator(Orchestrator):
             if self._runtime._run_context:
                 # runtime is started
                 await self._runtime.stop_when_idle()
-                await asyncio.sleep(2)  # Give it some time to properly shut down
+
+            # Print weave link again
+            call = weave.get_current_call()
+            logger.info(f"Tracing link for weave: 🍩 {call.ui_url}")
+
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
+        finally:
+            await asyncio.sleep(2)  # Give it some time to properly shut down
 
     async def _execute_step(
         self,
