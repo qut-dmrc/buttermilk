@@ -16,6 +16,7 @@ def test_template_synth():
         "formatting": "json_rules",
     }
     rendered, unfilled = load_template(
+        template="synthesise",
         parameters=params,
         untrusted_inputs=flow_data,
     )

@@ -3,12 +3,12 @@ inputs:
   - criteria
   - record
 ---
-
+{% from '_macros.jinja2' import render_or_include with context %}
 # System:
 You are a careful and precise auditor. You will be provided with a set of criteria and some material to be assessed.
 
 <BEGIN CRITERIA>
-{{ criteria }}
+{{ render_or_include(criteria) }}
 <END CRITERIA>
 
 # Placeholder:
