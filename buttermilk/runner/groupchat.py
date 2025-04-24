@@ -67,7 +67,7 @@ class AutogenOrchestrator(Orchestrator):
     supports interaction with a `MANAGER` agent (often representing a human user or UI)
     for approvals or feedback.
 
-    Inherits configuration fields (agents, params, data, etc.) from the base `Orchestrator`.
+    Inherits configuration fields (agents, parameters, data, etc.) from the base `Orchestrator`.
 
     Attributes:
         _runtime: The underlying Autogen runtime instance.
@@ -399,7 +399,7 @@ class AutogenOrchestrator(Orchestrator):
         conductor_inputs = {"participants": dict(self._agent_types.items())}
         # Include the overall task prompt and current records.
         request = ConductorRequest(
-            inputs=conductor_inputs, prompt=self.params.get("task", ""), records=self._records  # Get task description from flow params
+            inputs=conductor_inputs, prompt=self.parameters.get("task", ""), records=self._records  # Get task description from flow parameters
         )
 
         # Ask the CONDUCTOR agent(s).

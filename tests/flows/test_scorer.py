@@ -17,7 +17,7 @@ from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreC
 from buttermilk.agents.judge import AgentReasons  # Judge's output model (used in input fixture)
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)  # Parametrize over cheap models
+@pytest.fixture(parameters=CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 def scorer_agent(request) -> LLMScorer:
     """Fixture to create an LLMScorer instance."""
     # Instantiate LLMScorer correctly

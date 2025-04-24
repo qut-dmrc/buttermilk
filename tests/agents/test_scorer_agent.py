@@ -38,8 +38,8 @@ class TestLLMScorerListen:
     @pytest.fixture
     def mock_scorer(self) -> LLMScorer:
         """Fixture to create an LLMScorer instance with mocked _process and _extract_vars."""
-        params = {"model": "mock_model_name", "template": "score"}
-        scorer = LLMScorer(role="scorer", name="Test Scorer", description="A scorer for testing", parameters=params)
+        parameters = {"model": "mock_model_name", "template": "score"}
+        scorer = LLMScorer(role="scorer", name="Test Scorer", description="A scorer for testing", parameters=parameters)
         scorer._process = AsyncMock(name="_process")
         scorer._extract_vars = AsyncMock(name="_extract_vars")
         # Initialization might be needed if _listen relies on initialized state

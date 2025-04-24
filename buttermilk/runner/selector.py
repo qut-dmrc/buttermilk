@@ -244,7 +244,7 @@ class Selector(AutogenOrchestrator):
         logger.debug("Asking CONDUCTOR for next step suggestion with selector context...")
         # Prepare enhanced context for the CONDUCTOR.
         conductor_context = {
-            "task": self.params.get("task", "Assist the user"),  # Overall task goal
+            "task": self.parameters.get("task", "Assist the user"),  # Overall task goal
             "exploration_path": self._exploration_path,  # History of executed steps/variants
             "latest_results": (
                 self._exploration_results.get(self._exploration_path[-1]) if self._exploration_path else None

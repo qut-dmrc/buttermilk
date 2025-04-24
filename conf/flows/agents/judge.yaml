@@ -8,7 +8,7 @@ judge:
     template: judge
   variants:
     model: ${llms.judgers}
-    criteria: ${....params.criteria}
+    criteria: ${....parameters.criteria}
   inputs:
     records: fetch.records
     # criteria: ${flows[${....name}].criteria}

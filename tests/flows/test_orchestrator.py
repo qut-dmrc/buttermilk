@@ -36,7 +36,7 @@ def simple_batch_orchestrator() -> BatchOrchestrator:
                 description="Agent for Step 2",
             ),
         },
-        params={"flow_param": "flow_value"},
+        parameters={"flow_param": "flow_value"},
         # Define a simple sequence for BatchOrchestrator if needed
         sequence=["STEP1", "STEP2"],  # BatchOrchestrator likely needs a sequence defined
     )
@@ -50,7 +50,7 @@ async def test_orchestrator_initialization(simple_batch_orchestrator: BatchOrche
     # Orchestrator validator converts keys to uppercase
     assert "STEP1" in simple_batch_orchestrator.agents
     assert "STEP2" in simple_batch_orchestrator.agents
-    assert simple_batch_orchestrator.params == {"flow_param": "flow_value"}
+    assert simple_batch_orchestrator.parameters == {"flow_param": "flow_value"}
     # Check sequence if applicable to BatchOrchestrator
     assert hasattr(simple_batch_orchestrator, "sequence")
     assert simple_batch_orchestrator.sequence == ["STEP1", "STEP2"]

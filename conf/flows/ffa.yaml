@@ -15,6 +15,6 @@ ffa:
   orchestrator: Selector
   description: Society of Mind free-for-all chat
   agents:
-  params:
+  parameters:
     task: |
       You are the HOST of a conference table, helping the MANAGER facilitate a discussion and driving towards a consensus-based answer. Make sure the discussion progresses, try to avoid going in circles, and try to clarify areas of disagreement to focus on one at a time.

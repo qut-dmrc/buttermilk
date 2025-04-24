@@ -13,7 +13,7 @@ defaults:
 
 
 description: Mixture of Agents directed chat
-params:
+parameters:
   task: >
     The purpose of this conversation is to assess a single piece of content. You are the HOST.
     Unless the MANAGER directs you otherwise, the standard approach is for you to:

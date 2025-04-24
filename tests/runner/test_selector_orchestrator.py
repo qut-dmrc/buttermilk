@@ -27,7 +27,7 @@ def orchestrator():
             "description": "Test orchestrator",
             "data": [],
             "save": None,
-            "params": {"task": "Test task"},
+            "parameters": {"task": "Test task"},
             "agents": {},
         }
 

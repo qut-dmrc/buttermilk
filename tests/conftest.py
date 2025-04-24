@@ -40,22 +40,22 @@ def llms(bm: BM) -> LLMs:
     return bm.llms
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)
+@pytest.fixture(parameters=CHEAP_CHAT_MODELS)
 def model_name(request) -> str:
     return request.param
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(parameters=MULTIMODAL_MODELS)
 def llm_multimodal(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)
+@pytest.fixture(parameters=CHEAP_CHAT_MODELS)
 def llm(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(params=CHATMODELS)
+@pytest.fixture(parameters=CHATMODELS)
 def llm_expensive(request, bm: BM):
     return bm.llms[request.param]
 
@@ -203,7 +203,7 @@ Perhaps they could just shut up and get on with it.""",
 
 @pytest.fixture(
     scope="session",
-    params=MEDIA_RECORDS,
+    parameters=MEDIA_RECORDS,
     ids=[x[0] for x in MEDIA_RECORDS],
 )
 async def multimodal_record(request) -> Record:
@@ -217,7 +217,7 @@ async def multimodal_record(request) -> Record:
 
 @pytest.fixture(
     scope="session",
-    params=NEWS_RECORDS,
+    parameters=NEWS_RECORDS,
     ids=[x[0] for x in NEWS_RECORDS],
 )
 async def news_record(request) -> Record:
@@ -240,7 +240,7 @@ def fight_no_more_forever() -> Record:
 
 @pytest.fixture(
     scope="session",
-    params=TEXT_RECORDS,
+    parameters=TEXT_RECORDS,
     ids=[x[0] for x in TEXT_RECORDS],
 )
 async def text_record(request) -> Record:
@@ -262,7 +262,7 @@ VIDEO_URIS = [
 
 @pytest.fixture(
     scope="session",
-    params=[x[1] for x in VIDEO_URIS],
+    parameters=[x[1] for x in VIDEO_URIS],
     ids=[x[0] for x in VIDEO_URIS],
 )
 def video_url(request) -> str:

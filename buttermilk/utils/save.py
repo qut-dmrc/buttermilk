@@ -41,7 +41,7 @@ def save(
     uri: CloudPath | str = "",
     basename: str = "",
     extension: str = "",
-    **params,
+    **parameters,
 ):
     from .utils import reset_index_and_dedup_columns
     if not save_dir:
@@ -62,8 +62,8 @@ def save(
             data = reset_index_and_dedup_columns(data)
 
     try:
-        if "schema" in params and "dataset" in params:
-            destination = upload_rows(rows=data, **params)
+        if "schema" in parameters and "dataset" in parameters:
+            destination = upload_rows(rows=data, **parameters)
             logger.debug(f"Uploaded data to BigQuery: {destination}.")
             return destination
     except Exception as e:
@@ -74,7 +74,7 @@ def save(
     if not uri:
         try:
             save_dir = CloudPath(save_dir)
-            id = params.get("uuid", shortuuid.uuid())
+            id = parameters.get("uuid", shortuuid.uuid())
             basename = "_".join([x for x in [basename, id] if x])
             uri = save_dir / basename
             if extension:
@@ -83,7 +83,7 @@ def save(
             pass
         except Exception as e:
             logger.warning(
-                f"Error saving data to cloud uri: {e} {e.args=}, {params}",
+                f"Error saving data to cloud uri: {e} {e.args=}, {parameters}",
             )
 
     if isinstance(uri, CloudPath):
@@ -252,7 +252,7 @@ async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveI
 
     return dataset
 
-def upload_rows(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None, create_if_not_exists=False, **params) -> str:
+def upload_rows(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None, create_if_not_exists=False, **parameters) -> str:
     """Upload results to Google Bigquery asynchronously"""
     schema = schema or save_dest.bq_schema
     dataset = dataset or save_dest.dataset

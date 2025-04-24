@@ -6,7 +6,7 @@
 #   data: a dictionary, json string, list of dicts, or dataframe with already collected data
 #       OR
 #   uri: the api endpoint
-#   params: a dict of parameters
+#   parameters: a dict of parameters
 
 #
 # Output:
@@ -56,7 +56,7 @@ class Slurp(SingleAgent):
         job.outputs = []  # this doesn't actually work.
         async with httpx.AsyncClient() as client:
             while url:
-                response = await client.get(url, params=job.parameters)
+                response = await client.get(url, parameters=job.parameters)
                 response.raise_for_status()  # Raise an exception for bad status codes
 
                 data = response.json()

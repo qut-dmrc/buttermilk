@@ -153,7 +153,7 @@ class AgentVariants(AgentConfig):
         # Expand sequential variants
         sequential_task_sets = expand_dict(self.tasks)
         if not sequential_task_sets:
-            sequential_task_sets = [{}]  # Default: one task with no specific sequential params
+            sequential_task_sets = [{}]  # Default: one task with no specific sequential parameters
 
         generated_configs = []
         # Create agent configs based on combinations of parallel and sequential variants, and num_runs
@@ -164,7 +164,7 @@ class AgentVariants(AgentConfig):
                     cfg_dict = static_config.copy()
 
                     # Combine base parameters, parallel variant parameters, and sequential task parameters
-                    # Order matters: task params overwrite parallel, parallel overwrite base
+                    # Order matters: task parameters overwrite parallel, parallel overwrite base
                     combined_params = {**base_parameters, **parallel_params, **task_params}
                     cfg_dict["parameters"] = combined_params
 
@@ -175,7 +175,7 @@ class AgentVariants(AgentConfig):
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with params {combined_params}: {e}")
+                        logger.error(f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
                         raise  # Re-raise by default
 
         if not generated_configs:  # Check if list is empty

@@ -70,7 +70,7 @@ class FlowProtocol(BaseModel):
     data: list[DataSourceConfig] | None = Field(default_factory=list, description="List of data source configurations.")
     agents: Mapping[str, Any] = Field(default_factory=dict, description="Agent configurations (validated later by Orchestrator).")
     orchestrator: str = Field(..., description="Name or path of the Orchestrator class to use.")
-    params: dict = Field(default_factory=dict, description="Flow-level parameters.")
+    parameters: dict = Field(default_factory=dict, description="Flow-level parameters.")
 
 
 # --- Core Step Execution ---
@@ -257,7 +257,7 @@ class AgentOutput(FlowMessage):
     )
     parent_id: str | None = Field(default=None)
     # Parameters used to define this agent.
-    params: dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Parameters used for this agent execution.",
     )
@@ -342,7 +342,7 @@ class ManagerMessage(FlowMessage):
 class ConductorRequest(ManagerMessage, AgentInput):
     """
     A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
-    Inherits fields from `ManagerMessage` (content, outputs?) and `AgentInput` (inputs, params, context, records, prompt).
+    Inherits fields from `ManagerMessage` (content, outputs?) and `AgentInput` (inputs, parameters, context, records, prompt).
     The `inputs` field typically contains context like workflow state, participant list, etc.
     """
 

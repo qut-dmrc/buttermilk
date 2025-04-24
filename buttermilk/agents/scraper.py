@@ -85,7 +85,7 @@ class WebScraperRequests(Agent):
         # Retry up to five times before giving up
         stop=stop_after_attempt(5),
     )
-    def get(self, url, headers=None, **params):
+    def get(self, url, headers=None, **parameters):
         gc.logger.debug(f"Fetching URL: {url}")
 
         if not self.session:
@@ -362,11 +362,11 @@ class WebScraperSelenium(WebScraperRequests):
         # Retry up to five times before giving up
         stop=stop_after_attempt(5),
     )
-    def get(self, url, **params):
+    def get(self, url, **parameters):
         gc.logger.debug(f"Fetching URL: {url}")
         try:
             self.driver.get(url)  # Use webdriver to get the new page
-            self.try_save_page(**params)
+            self.try_save_page(**parameters)
             self.update_session()  # Ensure our requests session is updated with the new headers
         except selenium.common.exceptions.WebDriverException as e:
             gc.logger.warning(

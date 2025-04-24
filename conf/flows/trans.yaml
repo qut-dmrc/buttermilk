@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - criteria@trans.params.criteria: trans
+  - criteria@trans.parameters.criteria: trans
   - /flows@trans: moa
 
 trans:

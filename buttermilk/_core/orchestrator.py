@@ -67,7 +67,7 @@ class Orchestrator(BaseModel, ABC):
         save (SaveInfo | None): Configuration for saving results (optional).
         data (Sequence[DataSourceConfig]): List of data sources for the flow.
         agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
-        params (dict): Flow-level parameters accessible by agents.
+        parameters (dict): Flow-level parameters accessible by agents.
         _flow_data (KeyValueCollector): Internal state collector for the flow.
         _records (list[Record]): List of data records currently loaded/used in the flow.
     """
@@ -98,7 +98,7 @@ class Orchestrator(BaseModel, ABC):
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
-    params: dict = Field(
+    parameters: dict = Field(
         default_factory=dict,
         description="Flow-level parameters accessible by agents via their context.",
         # exclude=True, # Why exclude? Parameters seem important to serialize/log. Reconsider.
@@ -179,7 +179,7 @@ class Orchestrator(BaseModel, ABC):
         logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
         # Define attributes for Weave tracing.
         tracing_attributes = {
-            **self.params,
+            **self.parameters,
             "session_id": self.session_id,
             "orchestrator": self.__class__.__name__,  # Use class name
             "flow_name": self.name,
@@ -188,8 +188,8 @@ class Orchestrator(BaseModel, ABC):
         # Use weave.op to trace the internal _run method.
         try:
             display_name = self.name
-            if "criteria" in self.params:
-                display_name = f"{display_name} {self.params['criteria'][0]}"
+            if "criteria" in self.parameters:
+                display_name = f"{display_name} {self.parameters['criteria'][0]}"
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
             with weave.attributes(tracing_attributes):

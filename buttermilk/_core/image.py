@@ -23,7 +23,7 @@ class ImageRecord(BaseModel):
     enhanced_prompt: str | None = None
     source_uri: str | None = None
     model: str | None = None
-    params: dict | None = None
+    parameters: dict | None = None
     error: str | dict | None = None
 
     model_config = {

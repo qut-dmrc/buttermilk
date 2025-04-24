@@ -18,7 +18,7 @@ record:
 flows:
   trans:
     description: Trans criteria quick chat
-    params:
+    parameters:
       task: |
         A simple assessment process: get several JUDGEs to assess the content, ask the SYNTHESISERs to create consensus, report on the DIFFERENCES of opinion, and then SCORE the results.
       criteria: ${criteria}

@@ -50,7 +50,7 @@ def agent_input_message() -> AgentInput:
     return AgentInput(
         prompt="Evaluate this content based on criteria.",
         inputs={"content": "Some content to evaluate"},
-        parameters={}, # Add task-specific params if needed
+        parameters={}, # Add task-specific parameters if needed
     )
 
 # --- Test Class ---

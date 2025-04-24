@@ -28,7 +28,7 @@ Example YAML:
         type: llm_agent
         model: gpt-4
         template: template_name  # no .jinja2 extension
-        params:
+        parameters:
             # Simple field access
             judge_answer: judge.answer
             

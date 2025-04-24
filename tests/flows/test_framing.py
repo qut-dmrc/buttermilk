@@ -9,12 +9,12 @@ def param_model(request):
     return {"model": request.param}
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(parameters=MULTIMODAL_MODELS)
 def param_model_multimodal(request):
     return {"model": request.param}
 
 
-@pytest.fixture(params=CHEAP_CHAT_MODELS)
+@pytest.fixture(parameters=CHEAP_CHAT_MODELS)
 def param_model_cheap(request):
     return {"model": request.param}
 
