@@ -282,7 +282,7 @@ class AgentOutput(FlowMessage):
     session_id: str = Field(default=_global_run_id, description="Session identifier.")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
-    agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent")
+    agent_info: Optional["AgentConfig"] = Field(None, description="Configuration info from the agent")
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this specific agent execution/response.",

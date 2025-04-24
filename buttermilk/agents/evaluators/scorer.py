@@ -214,6 +214,9 @@ class LLMScorer(LLMAgent):
             records=[records],  # Pass records if needed
         )
 
+        # Define the scoring function (our own _process method)
+        score_fn = self._process
+
         # Get the weave call object associated with the message we are scoring.
         # This uses the tracing information attached by the Buttermilk framework.
         weave_call = None
@@ -224,49 +227,38 @@ class LLMScorer(LLMAgent):
             except Exception as e:
                 logger.warning(f"Scorer {self.id}: Failed to get weave call for trace ID {message.tracing.weave}: {e}")
         else:
-            logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer.")
-            # Option: Proceed with scoring but don't log via weave.apply_scorer?
-            # For now, let's skip if we can't link it via weave.
-            return
+            # Proceed with scoring anyway
+            logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer; trying to score without tracing instead.")
 
-        # Define the scoring function (our own _process method)
-        score_fn = self._process
+        # Call the LLMScorer._process method with the prepared input.
+        score_output: AgentOutput = await score_fn(message=scorer_agent_input)
 
-        # Define a weave.Scorer class dynamically to wrap our scoring logic.
-        class ButtermilkWeaveScorer(weave.Scorer):
-            # This class provides the interface weave expects for applying a scorer.
-            @weave.op  # Mark this as a weave operation
-            async def score(self, output: Any) -> dict | None:
-                """Executes the LLMScorer's process and returns the score dictionary."""
-                logger.debug(f"ButtermilkWeaveScorer invoked for target trace {weave_call.id if weave_call else 'N/A'}")
-                # Call the LLMScorer._process method with the prepared input.
-                score_output: AgentOutput = await score_fn(message=scorer_agent_input)
+        # Process the score for logging
+        if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
+            score = QualResults(
+                assessments=score_output.outputs.assessments,
+                agent_id=scorer_agent_input.inputs["answers"][0]["agent_id"],
+                agent_name=scorer_agent_input.inputs["answers"][0]["agent_name"],
+                answer_id=scorer_agent_input.inputs["answers"][0]["answer_id"],
+                assessor=scorer_agent_input.inputs["assessor"],
+            )
+            # replace the outputs object
+            score_output.outputs = score
 
-                # Return the score data as a dictionary for weave logging.
-                if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
-                    # Publish the score back to the system using the provided callback.
-                    formatted_score = QualResults(
-                        assessments=score_output.outputs.assessments,
-                        agent_id=scorer_agent_input.inputs["answers"][0]["agent_id"],
-                        agent_name=scorer_agent_input.inputs["answers"][0]["agent_name"],
-                        answer_id=scorer_agent_input.inputs["answers"][0]["answer_id"],
-                        assessor=scorer_agent_input.inputs["assessor"],
-                    )
-                    # replace the outputs object
-                    score_output.outputs = formatted_score
-                    await public_callback(score_output)
-                    return score_output.outputs.model_dump()
-                else:
-                    msg = "ButtermilkWeaveScorer failed to get valid QualScore output."
-                    logger.error(msg)
-                    raise ProcessingError(msg)
+            # Publish the score back to the system using the provided callback.
+            await public_callback(score)
 
-        try:
-            # Apply the scorer to the original weave call.
-            score_response = await weave_call.apply_scorer(ButtermilkWeaveScorer())  # Use apply_scorer utility
-            logger.debug(f"Scorer {self.id}: Applied ButtermilkWeaveScorer to weave call {weave_call.ref}")
-        except Exception as e:
-            logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.ref if weave_call else 'N/A'}: {e}")
+            # add feedback to Weave call
+            if weave_call:
+                try:
+                    # overall 'correctness' score
+                    logger.debug(f"Scorer {self.id}: Applying scorer result to weave call {weave_call.ref}")
+                    await weave_call.feedback.add("correctness", { "value": score.correctness, "assessor": score.assessor})
+                    # individual assessments (qualitative feedback)
+                    for assessment in score.assessments:
+                        await weave_call.feedback.add("feedback", assessment.model_dump())
+                except Exception as e:
+                    logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.ref if weave_call else 'N/A'}: {e}")
 
     # TODO: The base LLMAgent._process should handle the core logic. This override might be redundant
     #       or was intended for specific pre/post processing not done in _listen.

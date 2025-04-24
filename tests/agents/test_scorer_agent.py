@@ -22,6 +22,7 @@ def mock_global_weave():
         mock_call = MagicMock()
         mock_call.id = "mock_call_id_global"
         mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")
+
         mock_weave.get_call.return_value = mock_call
         # Also mock the standalone `weave.apply_scorer` if it's used directly
         with patch("weave.apply_scorer", new_callable=AsyncMock) as mock_apply_scorer:

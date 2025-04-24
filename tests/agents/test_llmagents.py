@@ -10,10 +10,6 @@ from buttermilk.agents.judge import AgentReasons, Judge  # Import Judge and its 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
 
-# Autogen Core (Potentially needed for fixtures/context, but not directly in these tests)
-# from autogen_core import CancellationToken
-
-
 @pytest.fixture
 def request_paris() -> AgentInput:
     return AgentInput(prompt="What is the capital of France?")

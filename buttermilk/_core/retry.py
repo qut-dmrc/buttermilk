@@ -84,8 +84,8 @@ class RetryWrapper(BaseModel):
                     AnthropicOverloadedError,
                     AnthropicInternalServerError,
                     AnthropicServiceUnavailableError,
-                    ModelError,
-                    ReplicateError,
+                    # ModelError,
+                    # ReplicateError,
                     TooManyRequests,
                     ConnectionResetError,
                     ConnectionError,
@@ -98,7 +98,7 @@ class RetryWrapper(BaseModel):
                 max=self.max_wait_seconds,
                 jitter=self.jitter_seconds,
             ),
-            "before_sleep": before_sleep_log(logger, logging.WARNING),
+            "before_sleep": before_sleep_log(logger, logging.WARNING, exc_info=False),
             "reraise": True,
         }
 
@@ -133,7 +133,7 @@ class RetryWrapper(BaseModel):
             or name in self.__annotations__
             or name in self.__class__.__dict__
             or (name.startswith("_") and hasattr(type(self), name))
-            or name in self.__private_attributes__
+            or (hasattr(type(self), "__private_attributes__") and name in self.__private_attributes__)
         ):
             # Let the normal attribute lookup process handle this (which will raise
             # AttributeError if appropriate)
