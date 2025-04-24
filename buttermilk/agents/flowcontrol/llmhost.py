@@ -100,7 +100,7 @@ class HostAgent(LLMAgent):
         elif isinstance(message, TaskProcessingComplete):
             if message.role == self._expected_agents_current_step:
                 self._completed_agents_current_step.add(message.agent_id)
-                logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")"
+                logger.info(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
 
             required_completions = max(1, int(len(self._expected_agents_current_step) * self.completion_threshold_ratio))
             if len(self._completed_agents_current_step) >= required_completions:

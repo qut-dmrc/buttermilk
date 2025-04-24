@@ -301,7 +301,7 @@ class Sequencer(Agent):
             # TODO: Validate the structure of message.inputs["participants"].
             self._participants = message.inputs.get("participants", {})
             if self._participants:
-                logger.info(f"Sequencer initialized participants: {list(self._participants.keys())}")
+                logger.info(f"Sequencer initialized with participants: {list(self._participants.keys())}")
                 # Need to re-initialize the generator now that participants are known.
                 self._step_generator = self._sequence()
             else:

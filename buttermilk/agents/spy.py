@@ -1,18 +1,8 @@
-"""
-Provides the adapter layer to integrate Buttermilk agents with the autogen-core runtime.
-
-This module defines `AutogenAgentAdapter`, which wraps a standard Buttermilk `Agent`
-and exposes it to the Autogen ecosystem as an `autogen_core.RoutedAgent`. It handles
-message translation, routing via topics, and lifecycle management within the Autogen
-runtime.
-"""
-
 import asyncio
 from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import Sequence, Union
 from uuid import uuid4  # Added Union for type hints
-from bm import bm
 from autogen_core import (
     DefaultTopicId,
     CancellationToken,
@@ -22,12 +12,14 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core.agent import ProcessingError
+from buttermilk._core.agent import Agent, AllMessages, ProcessingError
 from buttermilk._core.config import  SaveInfo
 from buttermilk._core.contract import (
-    AgentOutput)
-from buttermilk.utils.save import upload_rows_async
+    AgentOutput,
+    GroupchatMessageTypes)
+from buttermilk.utils.save import upload_rows, upload_rows_async
 from buttermilk.utils.uploader import AsyncDataUploader 
+from buttermilk.bm import bm, logger
 
 BATCH_SIZE = 10
 
@@ -38,13 +30,13 @@ class SpyAgent(RoutedAgent):
         self,
         save_dest: SaveInfo,
     ) -> None:
-        
-        self.save_dest = save_dest
-        self.upload_fn = partial(upload_rows_async, schema=save_dest.db_schema, dataset=save_dest.dataset)  
-        self.manager = AsyncDataUploader(upload_fn=self.upload_fn, buffer_size=BATCH_SIZE)
+        super().__init__(description="Save results to BQ")
+        self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE, save_dest = save_dest)
 
     @message_handler
-    async def _agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+    async def agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+        logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}") # Log received type and topic
+    
         """Captures outputs from other agents and saves them."""
         if isinstance(message, AgentOutput):
             await self.manager.add(message)

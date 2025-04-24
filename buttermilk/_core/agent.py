@@ -346,13 +346,10 @@ class Agent(AgentConfig):
         for key, value in extracted.items():
             if key == "records":
                 # Special handling for records: append to internal list.
-                if isinstance(value, list):
-                    # TODO: Validate that items in value are Record compatible?
-                    self._records.extend(value)
-                    logger.debug(f"Agent {self.id} added {len(value)} records from {source}.")
-                else:
-                    self._records.append(value)
-                    logger.warning(f"Agent {self.id} received non-list for 'records' input mapping from {source}: {type(value)}")
+                if not isinstance(value, Sequence) or isinstance(value, str):
+                    value = [value]
+                self._records.extend([r for r in value if isinstance(r, Record)])
+                logger.debug(f"Agent {self.id} added {len(value)} records from {source}.")
             else:
                 # Add other extracted data to the KeyValueCollector.
                 self._data.add(key, value)
@@ -464,10 +461,10 @@ class Agent(AgentConfig):
             for key in self.inputs.keys():
                 data = self._data.get(key, [])
                 # the _data collector object always uses lists. Get the non-empty values
-                data = [x for x in data if x is not None]
+                data = [x for x in data if x is not None and x is not [] and x is not {}]
                 if data != []:
                     extracted_data[key] = data
-            # resolved_mappings = self._data._resolve_mappings(self.inputs)
+                    
             # Merge resolved mappings, letting message inputs override.
             merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict

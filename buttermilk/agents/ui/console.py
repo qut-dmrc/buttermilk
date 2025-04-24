@@ -121,7 +121,7 @@ class CLIUserAgent(UIAgent):
             # Add specific identifiers if available
             agent_id = getattr(message, "agent_id", "unknown")
             role = getattr(message, "role", None)
-            header = f"## Message from {role or 'Agent'} {agent_id}"
+            header = f"## Message from {role or 'agent'} {agent_id}"
 
             output_lines.append(header)
 

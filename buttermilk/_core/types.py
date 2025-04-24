@@ -113,10 +113,10 @@ class SessionInfo(pydantic.BaseModel):
         self.save_dir = str(save_dir)
         return self
 
-    @pydantic.model_validator(mode="after")
-    def schedule_get_ip(self) -> Self:
-        self._get_ip_task = asyncio.create_task(self.get_ip())
-        return self
+    # @pydantic.model_validator(mode="after")
+    # def schedule_get_ip(self) -> Self:
+    #     self._get_ip_task = asyncio.create_task(self.get_ip())
+    #     return self
 
     async def get_ip(self):
         if not self.ip:

@@ -11,4 +11,4 @@ differentiator:
   parameters:
     template: differences
   inputs:
-    answers: "[judge,synth][]"
+    answers: "[judge,synth][].{agent_id: agent_id, result: outputs}"

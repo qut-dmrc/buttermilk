@@ -51,7 +51,7 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": true,
+      "justMyCode": false,
       "args": [
         "hydra.verbose=false",
         "+flows=[batch]",
