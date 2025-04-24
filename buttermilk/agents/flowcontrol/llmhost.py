@@ -107,7 +107,7 @@ class HostAgent(LLMAgent):
                 logger.info(f"Completion threshold reached for step '{self._current_step_name}'.")
                 self._step_completion_event.set()  # Signal that enough agents are done
 
-    async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
         try:
             # Wait for enough completions, with a timeout
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
@@ -123,7 +123,7 @@ class HostAgent(LLMAgent):
             self._completed_agents_current_step.clear()
             self._step_completion_event.clear()
 
-        result = await super()._process(inputs=inputs, cancellation_token=cancellation_token, **kwargs)
+        result = await super()._process(message=message, cancellation_token=cancellation_token, **kwargs)
 
         self._current_step_name = result.outputs.role 
         

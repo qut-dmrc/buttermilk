@@ -374,7 +374,7 @@ class Sequencer(Agent):
             return cast(AgentOutput, next_step_output)  # Potential type issue here.
 
         # Prepare a default response.
-        response = AgentOutput(agent_info=self._cfg,)
+        response = AgentOutput(agent_info=self._cfg)
 
         # Check if there's a meaningful prompt or task description.
         # TODO: Define more clearly what direct AgentInput prompts the Sequencer should handle.

@@ -90,7 +90,7 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 Analyse the underlying reasons behind differences among the answers below.
 {# Loop through the provided answers. #}
 {% for answer in answers %}
-<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:4]}}>
 {{ answer.result }}
 <END DRAFT ANSWER>
 {% endfor %}

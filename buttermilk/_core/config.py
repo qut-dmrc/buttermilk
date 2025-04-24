@@ -5,6 +5,7 @@ from typing import (
     Any,
     List,
     Literal,
+    Self,
 )
 
 import cloudpathlib
@@ -20,6 +21,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from shortuuid import uuid
 
 from .types import SessionInfo
 from .defaults import BQ_SCHEMA_DIR

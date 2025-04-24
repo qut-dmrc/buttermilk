@@ -17,5 +17,5 @@ synthesiser:
     criteria: ${....params.criteria}
   inputs:
     records: "*.records"
-    answers: "[judge][].{agent_id: agent_id, result: outputs}"
+    answers: "[judge,synth][].{agent_id: agent_info.agent_id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"
     feedback: feedback.outputs

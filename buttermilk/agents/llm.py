@@ -209,6 +209,7 @@ class LLMAgent(Agent):
         inputs: dict = {},  # Input variables
         messages: list[LLMMessage] = [],  # Messages sent to the LLM.
         parameters: dict = {},  # Parameters used for the request.
+        records: list[Record] = [], # Input data records
         prompt: Optional[str] = "",  # Original triggering prompt text.
         schema: Optional[Type[BaseModel]] = None,  # Optional Pydantic schema for validation.
     ) -> AgentOutput:
@@ -230,7 +231,7 @@ class LLMAgent(Agent):
             An AgentOutput message containing the processed results and metadata.
         """
         output = AgentOutput(
-            agent_id=self.id,  # Include agent ID
+            agent_info=self._cfg,  # Include agent information
             inputs=inputs,
             messages=messages,  # Messages sent to LLM
             params=parameters,  # Params for this call
@@ -299,7 +300,8 @@ class LLMAgent(Agent):
             output.outputs = None
             if parse_error:  # Add schema error if validation failed
                 output.set_error(parse_error)
-
+        if records:
+            output.records = records
         return output
 
     # This is the primary method subclasses should call in their handlers.
@@ -363,6 +365,7 @@ class LLMAgent(Agent):
             messages=llm_messages,  # Pass messages sent
             parameters=message.parameters,  # Pass task parameters
             prompt=message.prompt,  # Pass original prompt
+            records=message.records, # Pass input records
             schema=self._output_model,  # Pass schema used for validation attempt
         )
         # Add agent role/name for context in logs/outputs
