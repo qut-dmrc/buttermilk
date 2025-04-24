@@ -7,7 +7,7 @@ from buttermilk.toxicity import TOXCLIENTS
 
 
 class TestSpecificExamples:
-    @pytest.fixture(parameters=TOXCLIENTS)
+    @pytest.fixture(params=TOXCLIENTS)
     def toxclient(self, request: pytest.FixtureRequest):
         return request.param()
 

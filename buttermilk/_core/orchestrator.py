@@ -33,9 +33,9 @@ from buttermilk._core.agent import Agent,  ChatCompletionContext, FatalError, Pr
 
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.config import DataSourceConfig, SaveInfo  # Configuration models
-from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest, AgentOutput  # Core message types
+from buttermilk._core.contract import END, AgentInput, FlowProtocol, ManagerResponse, RunRequest, StepRequest, AgentOutput  # Core message types
 from buttermilk._core.flow import KeyValueCollector  # State management utility
-from buttermilk._core.types import Record, RunRequest  # Data types
+from buttermilk._core.types import Record  # Data types
 from buttermilk._core.variants import AgentVariants  # Agent variant configuration
 from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
 from buttermilk.bm import BM, bm, logger  # Global instance and logger
@@ -44,7 +44,7 @@ from buttermilk.bm import BM, bm, logger  # Global instance and logger
 # BASE_DIR = Path(__file__).absolute().parent
 
 
-class Orchestrator(BaseModel, ABC):
+class Orchestrator(FlowProtocol, ABC):
     """
     Abstract Base Class for orchestrators that manage agent-based flows.
 
@@ -59,50 +59,7 @@ class Orchestrator(BaseModel, ABC):
 
     Subclasses must implement `_setup`, `_cleanup`, and `_execute_step`.
     The `_run` method typically contains the main control loop logic.
-
-    Attributes:
-        session_id (str): Unique ID for the current flow execution session.
-        name (str): Human-friendly name for the flow.
-        description (str): Description of the flow's purpose.
-        save (SaveInfo | None): Configuration for saving results (optional).
-        data (Sequence[DataSourceConfig]): List of data sources for the flow.
-        agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
-        parameters (dict): Flow-level parameters accessible by agents.
-        _flow_data (KeyValueCollector): Internal state collector for the flow.
-        _records (list[Record]): List of data records currently loaded/used in the flow.
     """
-
-    # --- Configuration Fields ---
-    session_id: str = Field(
-        default_factory=lambda: shortuuid.uuid()[:8],
-        description="A unique session id for this specific flow execution.",
-    )
-    name: str = Field(
-        ...,  # Name is required
-        description="Human-friendly name identifying this flow configuration.",
-    )
-    description: str = Field(
-        default="",  # Default to empty string
-        description="Short description explaining the purpose of this flow.",
-    )
-    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
-    data: Sequence[DataSourceConfig] = Field(
-        default_factory=list,
-        description="Configuration for data sources to be loaded for the flow.",
-    )
-    agents: Mapping[str, AgentVariants] = Field(
-        default_factory=dict,
-        description="Mapping of agent roles (uppercase) to their variant configurations.",
-    )
-    tools: Mapping[str, AgentConfig] = Field(
-        default_factory=dict,
-        description="Mapping of agent roles (uppercase) to their variant configurations.",
-    )
-    parameters: dict = Field(
-        default_factory=dict,
-        description="Flow-level parameters accessible by agents via their context.",
-        # exclude=True, # Why exclude? Parameters seem important to serialize/log. Reconsider.
-    )
 
     # --- Internal State ---
     # Collects data passed between steps or used for templating.

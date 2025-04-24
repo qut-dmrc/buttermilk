@@ -29,7 +29,6 @@ from shortuuid import ShortUUID, uuid  # For generating unique IDs
 import weave  # For tracing
 
 # Buttermilk core imports
-from buttermilk._core.config import DataSourceConfig, ToolConfig  # Configuration models
 from buttermilk._core.contract import (COMMAND_SYMBOL, # Constant for command messages,
         AllMessages,  # Union of all message types
         OOBMessages,  # Union of Out-Of-Band control messages

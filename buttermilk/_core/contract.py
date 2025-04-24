@@ -20,6 +20,7 @@ from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult, LLMMessage
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     PrivateAttr,
     computed_field,
@@ -28,18 +29,12 @@ from pydantic import (
 import shortuuid  # For generating unique IDs
 
 from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
-# Buttermilk core imports
 
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.job import SessionInfo
-from .config import DataSourceConfig, SaveInfo, Tracing  # Core configuration models
+from .config import DataSourceConfig, SaveInfo, Tracing, AgentConfig # Core configuration models
 from .types import Record, _global_run_id  # Core data types
 from buttermilk.utils.validators import make_list_validator  # Pydantic validators
 from .log import logger
-
-# TODO: BASE_DIR seems unused. Consider removing.
-# BASE_DIR = Path(__file__).absolute().parent
 
 # --- Constants ---
 
@@ -61,17 +56,62 @@ WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/
 class FlowProtocol(BaseModel):
     """
     Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
-    Used primarily for validation or type hinting of the high-level flow definition.
+    Used to initialise a new orchestrated flow.
+
+    Attributes:
+        session_id (str): Unique ID for the current flow execution session.
+        name (str): Human-friendly name for the flow.
+        description (str): Description of the flow's purpose.
+        save (SaveInfo | None): Configuration for saving results (optional).
+        data (Sequence[DataSourceConfig]): List of data sources for the flow.
+        agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
+        parameters (dict): Flow-level parameters accessible by agents.
+        _flow_data (KeyValueCollector): Internal state collector for the flow.
+        _records (list[Record]): List of data records currently loaded/used in the flow.
     """
 
-    name: str = Field(..., description="Human-friendly name for the flow.")
-    description: str = Field(..., description="Description of the flow's purpose.")
-    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (optional).")
-    data: list[DataSourceConfig] | None = Field(default_factory=list, description="List of data source configurations.")
-    agents: Mapping[str, Any] = Field(default_factory=dict, description="Agent configurations (validated later by Orchestrator).")
-    orchestrator: str = Field(..., description="Name or path of the Orchestrator class to use.")
-    parameters: dict = Field(default_factory=dict, description="Flow-level parameters.")
+    # --- Configuration Fields ---
+    session_id: str = Field(
+        default_factory=lambda: shortuuid.uuid()[:8],
+        description="A unique session id for this specific flow execution.",
+    )
+    name: str = Field(
+        ...,  # Name is required
+        description="Human-friendly name identifying this flow configuration.",
+    )
+    description: str = Field(
+        default="",  # Default to empty string
+        description="Short description explaining the purpose of this flow.",
+    )
+    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
+    data: Sequence[DataSourceConfig] = Field(
+        default_factory=list,
+        description="Configuration for data sources to be loaded for the flow.",
+    )
+    agents: Mapping[str, AgentConfig] = Field(
+        default_factory=dict,
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    )
+    tools: Mapping[str, AgentConfig] = Field(
+        default_factory=dict,
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    )
+    parameters: dict = Field(
+        default_factory=dict,
+        description="Flow-level parameters accessible by agents via their context.",
+    )
 
+class RunRequest(BaseModel):
+    """Input object to initiate an orchestrator run."""
+
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.")
+    record_id: str | None = Field(default="", description="Record to lookup")
+    uri: str | None = Field(default="", description="URI to fetch")
+    records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
+
+    model_config = ConfigDict(
+        extra="forbid",  # Disallow extra fields for strict input
+    )
 
 # --- Core Step Execution ---
 
@@ -89,13 +129,10 @@ class StepRequest(BaseModel):
     role: str = Field(..., description="The ROLE name (uppercase) of the agent to execute.")
     prompt: str = Field(default="", description="The prompt/instruction text for the agent.")
     description: str = Field(default="", description="Brief explanation of this step's purpose.", exclude=True)  # Often excluded from LLM context
-    # TODO: Tool execution fields seem commented out. If tool calls are needed via StepRequest, uncomment and refine.
-    # tool: str = Field(default="", description="The tool to invoke, if any.")
-    # arguments: dict[str, Any] = Field(description="Arguments to provide to the tool, if any.")
 
     @field_validator("role")
     @classmethod
-    def role_must_be_uppercase(cls, v: str) -> str:
+    def _role_must_be_uppercase(cls, v: str) -> str:
         """Ensures the role field is always uppercase for consistency."""
         if v:
             return v.upper()
@@ -155,7 +192,7 @@ class AgentInput(FlowMessage):
     Standard input structure for triggering an agent's primary processing logic (`_process`).
 
     Carries the necessary data, parameters, context (history), and records needed by the agent.
-    The `Orchestrator` or `Adapter` typically constructs this before calling an agent.
+    The `Orchestrator` or another `Agent` typically constructs this before calling an agent.
     """
 
     inputs: dict[str, Any] = Field(
@@ -185,23 +222,7 @@ class AgentInput(FlowMessage):
 
 class UserInstructions(FlowMessage):
     """Represents instructions or input originating directly from the user (e.g., via CLI)."""
-
-    # TODO: Seems similar to AgentInput but simpler. Clarify distinction and usage.
-    #       CLIUserAgent uses ManagerResponse, not this. When is UserInstructions used?
-    records: list[Record] = Field(
-        default_factory=list,
-        description="List of records associated with the user's instruction.",
-    )
-    prompt: str = Field(
-        default="",
-        description="The user's prompt/instruction text.",
-    )
-    # TODO: 'confirm' and 'stop' fields seem out of place for *instructions*. They belong in a response. Verify usage.
-    # confirm: bool = Field(
-    #     default=False,
-    #     description="Response from user: confirm y/n", # Description indicates response field.
-    # )
-    # stop: bool = Field(default=False, description="Whether to stop the flow")
+    # REMOVE THIS IN FAVOUR OF ManagerRequest
 
 
 class TracingDetails(BaseModel):

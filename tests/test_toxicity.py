@@ -52,12 +52,12 @@ LLAMAGUARD_GPU_MODELS = [
 ]
 
 
-@pytest.fixture(parameters=LLAMAGUARD_MODELS)
+@pytest.fixture(params=LLAMAGUARD_MODELS)
 def llamaguard(request):
     return request.param()
 
 
-@pytest.fixture(parameters=LLAMAGUARD_GPU_MODELS)
+@pytest.fixture(params=LLAMAGUARD_GPU_MODELS)
 def llamaguard_gpu(request):
     return request.param()
 

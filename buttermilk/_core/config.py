@@ -5,6 +5,7 @@ from typing import (
     Any,
     List,
     Literal,
+    Optional,
     Self,
 )
 
@@ -183,7 +184,7 @@ class Project(BaseModel):
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
-    run_info: SessionInfo = Field(
+    run_info: Optional[SessionInfo] = Field(
         default=None,
         description="Information about the context in which this project runs",
     )
@@ -223,6 +224,11 @@ class AgentConfig(BaseModel):
         description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
         exclude=True,  # Excluded from model serialization, as it's primarily for loading.
     )
+
+    # Variant configuration
+    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
+    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
+    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
 
     # Behavior & Connections
     tools: list[ToolConfig] = Field(

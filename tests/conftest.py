@@ -40,22 +40,22 @@ def llms(bm: BM) -> LLMs:
     return bm.llms
 
 
-@pytest.fixture(parameters=CHEAP_CHAT_MODELS)
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
 def model_name(request) -> str:
     return request.param
 
 
-@pytest.fixture(parameters=MULTIMODAL_MODELS)
+@pytest.fixture(params=MULTIMODAL_MODELS)
 def llm_multimodal(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(parameters=CHEAP_CHAT_MODELS)
+@pytest.fixture(params=CHEAP_CHAT_MODELS)
 def llm(request, bm: BM):
     return bm.llms[request.param]
 
 
-@pytest.fixture(parameters=CHATMODELS)
+@pytest.fixture(params=CHATMODELS)
 def llm_expensive(request, bm: BM):
     return bm.llms[request.param]
 

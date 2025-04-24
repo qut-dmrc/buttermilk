@@ -22,7 +22,7 @@ from rich import print
 
 # TODO: Consider removing StepRequest if only RunRequest is actively used here.
 # from buttermilk._core.contract import StepRequest
-from buttermilk._core.types import RunRequest
+from buttermilk._core.contract import RunRequest
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 
 # TODO: FetchRecord seems unused directly in this script, consider removing if not needed for type hints elsewhere initialized via this entry point.

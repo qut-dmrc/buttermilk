@@ -22,7 +22,7 @@ def runtime():
     return SingleThreadedAgentRuntime()
 
 
-@pytest.fixture(parameters=["Judger", "Owl"], scope="function")
+@pytest.fixture(params=["Judger", "Owl"], scope="function")
 def record_agent_cfg(
     request,
     model_name,

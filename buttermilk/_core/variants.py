@@ -120,10 +120,6 @@ class AgentVariants(AgentConfig):
     ```
     """
 
-    # Define the fields expected from the configuration
-    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
-    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
-    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
 
     def get_configs(self) -> list[tuple[type, AgentConfig]]:
         """
