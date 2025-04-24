@@ -110,7 +110,7 @@ async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: L
     """
     # Arrange
     expected_step = StepRequest(role="NEXT_AGENT", prompt="Do something", description="Next action")
-    mock_output_from_process = AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=expected_step)
+    mock_output_from_process = AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=expected_step)
     mock_llm_host_agent._process.return_value = mock_output_from_process
     mock_llm_host_agent._step_completion_event.set()  # Assume previous step completed
 
@@ -147,9 +147,9 @@ async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LL
 
     # Simulate _process returning HOST, then MANAGER, then OTHER_AGENT
     mock_llm_host_agent._process.side_effect = [
-        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_self),
-        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_manager),
-        AgentOutput(agent_id=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_other),
+        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_self),
+        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_manager),
+        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_other),
     ]
     mock_llm_host_agent._step_completion_event.set()  # Start ready
 

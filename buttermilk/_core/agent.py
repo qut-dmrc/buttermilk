@@ -20,6 +20,7 @@ from pydantic import (
     BaseModel,
     Field,
     PrivateAttr,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -201,7 +202,32 @@ class Agent(AgentConfig):
     # _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
     # Heartbeat queue, potentially used by orchestrator/adapter for liveness checks.
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
-
+    
+    @computed_field()
+    @property
+    def _cfg(self) -> AgentConfig:
+        """
+        Extract AgentConfig parameters by creating a new AgentConfig from an Agent instance.
+        
+        Args:
+            agent: An instance of Agent or a subclass
+            
+        Returns:
+            AgentConfig: A clean AgentConfig object with only the config fields
+        """
+        # Get all field names from AgentConfig
+        agent_config_fields = set(AgentConfig.model_fields.keys())
+        
+        # Extract only the fields that are part of AgentConfig
+        config_data = {
+            field: getattr(self, field)
+            for field in agent_config_fields
+            if hasattr(self, field)
+        }
+        
+        # Create a new AgentConfig instance with the extracted data
+        return AgentConfig(**config_data)
+    
     # --- Core Methods (Lifecycle & Interaction) ---
 
     async def initialize(self, **kwargs) -> None:
@@ -258,7 +284,7 @@ class Agent(AgentConfig):
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Agent {self.id}: Error preparing input state: {e}")
-            error_output = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
+            error_output = AgentOutput(agent_info=self._cfg, inputs=message, prompt=message.prompt)
             error_output.set_error(f"Failed to prepare input state: {e}")
             return error_output
 
@@ -280,13 +306,13 @@ class Agent(AgentConfig):
             # Catch unexpected errors during _process.
             error_msg = f"Agent {self.id} error during _process: {e}"
             logger.error(error_msg)
-            result = AgentOutput(agent_id=self.id, inputs=message, prompt=message.prompt)
+            result = AgentOutput(agent_info=self._cfg, inputs=message, prompt=message.prompt)
             result.set_error(error_msg)
 
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result is None:
             logger.warning(f"Agent {self.id} _process returned None. Creating default error output.")
-            result = AgentOutput(agent_id=self.id, role=self.role, inputs=message, prompt=message.prompt)
+            result = AgentOutput(agent_info=self._cfg, role=self.role, inputs=message, prompt=message.prompt)
             result.set_error("Agent _process method returned None unexpectedly.")
 
         logger.debug(f"Agent {self.id} finished __call__.")

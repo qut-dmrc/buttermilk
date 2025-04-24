@@ -286,7 +286,7 @@ class LLMScorer(LLMAgent):
     #     # inputs = message.inputs or {} # Use empty dict if inputs is None
     #     # if "judge_reasons" not in inputs or "expected" not in inputs:
     #     #     logger.error(f"{self.id}: Missing 'judge_reasons' or 'expected' in inputs for scoring.")
-    #     #     error_output = AgentOutput(agent_id=self.id, inputs=message)
+    #     #     error_output = AgentOutput(agent_info=self._cfg, inputs=message)
     #     #     error_output.set_error("Missing 'judge_reasons' or 'expected' in inputs for scoring.")
     #     #     return error_output
 

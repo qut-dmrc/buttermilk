@@ -89,7 +89,7 @@ class TestConductorRouting:
         with patch.object(ExplorerHost, "__init__", return_value=None):
             explorer = ExplorerHost()
             explorer._process = AsyncMock(
-                name="_process", return_value=AgentOutput(agent_id="test", outputs=StepRequest(role="ANY", prompt="", description=""))
+                name="_process", return_value=AgentOutput(agent_info="test", outputs=StepRequest(role="ANY", prompt="", description=""))
             )
             # Add any attributes _choose might need
 

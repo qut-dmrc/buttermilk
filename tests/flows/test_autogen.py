@@ -132,7 +132,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = "different_agent"
 
-    message = AgentOutput(agent_id="test", content="test output")
+    message = AgentOutput(agent_info="test", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 
@@ -147,7 +147,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = agent_adapter.id
 
-    message = AgentOutput(agent_id="test", content="test output")
+    message = AgentOutput(agent_info="test", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 

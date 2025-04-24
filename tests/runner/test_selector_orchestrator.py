@@ -97,7 +97,7 @@ async def test_get_host_action_success(orchestrator):
 
     # Fix the mock response - use a proper StepRequest object directly
     step_request = StepRequest(role="test_agent", description="test step", prompt="test prompt")
-    mock_step_response = AgentOutput(agent_id="test", content="Next step", outputs=step_request)
+    mock_step_response = AgentOutput(agent_info="test", content="Next step", outputs=step_request)
 
     # Reset the mock with proper responses
     orchestrator._ask_agents = AsyncMock(
@@ -201,7 +201,7 @@ async def test_execute_step(orchestrator):
     orchestrator._agent_types = {"test_agent": [(mock_agent_type, mock_agent_config)]}
 
     mock_input = AgentInput(role="user", content="test input")
-    mock_response = AgentOutput(agent_id="test", role="assistant", content="test output", outputs={"key": "value"})
+    mock_response = AgentOutput(agent_info="test", role="assistant", content="test output", outputs={"key": "value"})
 
     # Mock runtime and get_agent
     orchestrator._runtime = AsyncMock()

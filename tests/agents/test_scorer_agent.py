@@ -86,7 +86,7 @@ class TestLLMScorerListen:
 
         # Mock evaluation result that _process should produce
         mock_score_result = QualScore(assessments=[QualScoreCRA(correct=True, feedback="Looks correct.")])
-        mock_process_output = AgentOutput(agent_id=mock_scorer.id, role=mock_scorer.role, outputs=mock_score_result)
+        mock_process_output = AgentOutput(agent_info=mock_scorer.id, role=mock_scorer.role, outputs=mock_score_result)
         mock_scorer._process.return_value = mock_process_output
 
         # Mock callback
@@ -158,7 +158,7 @@ class TestLLMScorerListen:
         mock_apply_scorer_func.reset_mock()
 
         # Test with AgentOutput but wrong output type
-        wrong_output = AgentOutput(agent_id="judge-xyz", role="judge", outputs={"some": "dict"}, tracing={"weave": "trace2"})
+        wrong_output = AgentOutput(agent_info="judge-xyz", role="judge", outputs={"some": "dict"}, tracing={"weave": "trace2"})
         await mock_scorer._listen(message=wrong_output, source="judge-xyz", public_callback=mock_public_callback)
 
         mock_scorer._process.assert_not_called()
@@ -173,7 +173,7 @@ class TestLLMScorerListen:
         judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
         # Create record without 'ground_truth' in data
         record_no_gt = Record(content="Some content", data={"other": "info"})
-        judge_output_msg = AgentOutput(agent_id="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"})
+        judge_output_msg = AgentOutput(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"})
         # Configure mock _extract_vars to return no 'expected'
         mock_scorer._extract_vars.return_value = {"records": [record_no_gt]}  # No 'expected' key
 
@@ -191,7 +191,7 @@ class TestLLMScorerListen:
         mock_public_callback = AsyncMock()
         judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
         # Message *without* tracing info
-        judge_output_msg = AgentOutput(agent_id="judge-abc", role="judge", outputs=judge_reasons, records=[ground_truth_record])
+        judge_output_msg = AgentOutput(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[ground_truth_record])
         # Mock extract_vars to return ground truth (so it doesn't skip for that reason)
         mock_scorer._extract_vars.return_value = {"expected": "gt", "records": [ground_truth_record]}
 

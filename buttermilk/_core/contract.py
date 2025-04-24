@@ -8,6 +8,7 @@ and interactions with manager/conductor roles.
 
 from asyncio import streams  # TODO: Unused import?
 from collections.abc import Mapping
+import datetime
 from email.policy import strict  # TODO: Unused import?
 from enum import Enum  # TODO: Unused import?
 from math import e  # TODO: Unused import?
@@ -27,6 +28,7 @@ from pydantic import (
 import shortuuid  # For generating unique IDs
 
 # Buttermilk core imports
+from buttermilk._core.agent import AgentConfig
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.job import SessionInfo
 from .config import DataSourceConfig, SaveInfo, Tracing  # Core configuration models
@@ -243,14 +245,15 @@ class AgentOutput(FlowMessage):
     messages exchanged with LLMs, errors, and tracing information.
     """
 
-    agent_id: str = Field(..., description="The unique ID of the agent instance that generated this output.")
     session_id: str = Field(default=_global_run_id, description="Session identifier.")
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    run_info: SessionInfo = Field(default_factory=_get_run_info)
+    agent_info: AgentConfig = Field(..., description="Configuration info from the agent")
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this specific agent execution/response.",
     )
     parent_id: str | None = Field(default=None)
-    run_info: SessionInfo = Field(default_factory=_get_run_info)
     # Parameters used to define this agent.
     params: dict[str, Any] = Field(
         default_factory=dict,
@@ -294,7 +297,9 @@ class AgentOutput(FlowMessage):
         # Ensure nested Pydantic models in 'outputs' are also serialized.
         if isinstance(self.outputs, BaseModel):
             data["outputs"] = self.outputs.model_dump()
-        # TODO: Consider similar handling for 'inputs' if it could contain Pydantic models.
+        
+        # add an extra field here that helps us rehydrate the object later on
+        data["object_type"] = str(type(self.outputs))
         return data
 
     @property

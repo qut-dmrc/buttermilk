@@ -23,8 +23,8 @@ class AsyncDataUploader:
     def __init__(
         self,
         save_dest: SaveInfo,
-        buffer_size: int = 1000,
-        flush_interval: int = 60,
+        buffer_size: int = 10,
+        flush_interval: int = 30,
     ):
         
         # Validate that save_dest is a proper SaveInfo instance

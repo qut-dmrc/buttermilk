@@ -50,7 +50,7 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
 
     # Instantiate ActualAgentOutput - provide minimal required fields if any
     # Adjust instantiation based on ActualAgentOutput's actual fields/defaults
-    output_obj = ActualAgentOutput(agent_id="test",
+    output_obj = ActualAgentOutput(agent_info="test",
         call_id="actual_test_id",
         # Add other necessary fields for ActualAgentOutput if they lack defaults
     )
