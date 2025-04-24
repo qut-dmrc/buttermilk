@@ -1,10 +1,10 @@
-import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch  # Import patch
+from unittest.mock import AsyncMock, MagicMock, patch  # Import patch
 
+import pytest
+
+# Global Buttermilk instance (for mocking weave)
 # Autogen types (optional, for context if needed)
 # from autogen_core import MessageContext, DefaultTopicId
-
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.types import Record
@@ -12,9 +12,6 @@ from buttermilk._core.types import Record
 # Agent classes and models being tested/used
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
 from buttermilk.agents.judge import AgentReasons  # Judge output model
-
-# Global Buttermilk instance (for mocking weave)
-from buttermilk import bm
 
 
 # Mock weave globally for all tests in this module
@@ -173,7 +170,9 @@ class TestLLMScorerListen:
         judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
         # Create record without 'ground_truth' in data
         record_no_gt = Record(content="Some content", data={"other": "info"})
-        judge_output_msg = AgentOutput(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"})
+        judge_output_msg = AgentOutput(
+            agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"}
+        )
         # Configure mock _extract_vars to return no 'expected'
         mock_scorer._extract_vars.return_value = {"records": [record_no_gt]}  # No 'expected' key
 

@@ -104,9 +104,7 @@ async def import_parquet_files_to_chroma(
                             chunk_text=row["chunk_text"],
                             document_id=row["document_id"],
                             embedding=embedding,
-                            metadata=json.loads(row["chunk_metadata"])
-                            if isinstance(row["chunk_metadata"], str)
-                            else {},
+                            metadata=json.loads(row["chunk_metadata"]) if isinstance(row["chunk_metadata"], str) else {},
                         )
                         doc.chunks.append(chunk)
 
@@ -132,10 +130,7 @@ async def import_parquet_files_to_chroma(
         failed_docs += failed
 
     # Process all files in batches
-    file_batches = [
-        parquet_files[i : i + batch_size]
-        for i in range(0, len(parquet_files), batch_size)
-    ]
+    file_batches = [parquet_files[i : i + batch_size] for i in range(0, len(parquet_files), batch_size)]
 
     # Create progress bar with tqdm
     progress_bar = tqdm(total=len(file_batches), desc="Processing file batches")
@@ -154,8 +149,7 @@ async def import_parquet_files_to_chroma(
     progress_bar.close()
 
     print(
-        f"Import complete! Successfully processed {successful_docs} documents, "
-        f"failed: {failed_docs}, total chunks: {total_chunks}",
+        f"Import complete! Successfully processed {successful_docs} documents, failed: {failed_docs}, total chunks: {total_chunks}",
     )
 
 

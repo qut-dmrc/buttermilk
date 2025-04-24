@@ -3,57 +3,18 @@ Defines the Judge agent, an LLM-based agent specialized for evaluating content
 against predefined criteria.
 """
 
-import asyncio
-from curses import meta
-import json
-import pprint
-from types import NoneType
-from typing import Any, AsyncGenerator, Callable, Literal, Optional, Self, Dict, List, Type, Union
+from typing import Literal, Optional, Type
 
 # Import Autogen core components needed for type hints and potential interaction (though handled by adapter)
-from autogen_core import CancellationToken, FunctionCall, MessageContext, RoutedAgent, message_handler, Agent as AutogenAgent
-from autogen_core.model_context import UnboundedChatCompletionContext
-from autogen_core.models import (
-    AssistantMessage,
-    ChatCompletionClient,
-    SystemMessage,
-    UserMessage,  # Used for type hinting in context
-)
-from autogen_core.tools import FunctionTool, Tool, ToolSchema
-import pydantic
-from promptflow.core._prompty_utils import parse_chat  # Used in templating utils
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
-import regex as re
-import weave  # Likely for logging/tracing
+from pydantic import BaseModel, Field
 
 # Buttermilk core imports
 from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler  # Base types and decorator
-from buttermilk._core.contract import (
-    # TODO: Review if all these contract types are strictly necessary for this agent's logic vs. type hinting context.
-    AllMessages,
-    ConductorRequest,
-    FlowMessage,
-    GroupchatMessageTypes,
-    LLMMessage,
-    OOBMessages,
-    ProceedToNextTaskSignal,
-    TaskProcessingComplete,
-    ToolOutput,
-    UserInstructions,
-)
-from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import AutoGenWrapper, CreateResult  # LLM interaction wrappers
-from buttermilk._core.types import Record  # Data record structure
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
-from buttermilk.bm import bm, logger  # Global Buttermilk instance and logger
+from buttermilk.bm import logger  # Global Buttermilk instance and logger
 
 # Utility imports
 # TODO: Confirm these utils are necessary here or only in LLMAgent/templating.py
-from buttermilk.utils.templating import (
-    _parse_prompty,  # Used if loading Prompty files directly here
-    load_template,  # Used if loading Jinja templates directly here
-    make_messages,  # Handled by LLMAgent
-)
 
 
 # --- Pydantic Models ---
@@ -77,7 +38,8 @@ class AgentReasons(BaseModel):
         description="A list of strings, where each string represents a distinct step in the reasoning process leading to the conclusion and prediction.",
     )
     confidence: Literal["high", "medium", "low"] = Field(
-        ..., description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction."  # Make field required
+        ...,
+        description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction.",  # Make field required
     )
 
     def __str__(self):

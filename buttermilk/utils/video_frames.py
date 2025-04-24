@@ -7,7 +7,7 @@ from pydantic import validate_call
 
 @validate_call
 def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
-    """ Extract frames from video for use in analysis."""
+    """Extract frames from video for use in analysis."""
 
     base64Frames = []
 
@@ -15,7 +15,7 @@ def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = video.get(cv2.CAP_PROP_FPS)
     frames_to_skip = int(fps * seconds_per_frame)
-    curr_frame=0
+    curr_frame = 0
 
     # Loop through the video and extract frames at specified sampling rate
     while curr_frame < total_frames - 1:

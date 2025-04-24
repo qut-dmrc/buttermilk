@@ -1,10 +1,10 @@
 # Example: Create a new file, maybe buttermilk/_integration/autogen_adapter.py
 import inspect
-from typing import Annotated, Any, Dict, Optional, Union, Type
-from autogen_core import Agent as AutogenAgent, RoutedAgent, MessageContext, CancellationToken, message_handler
+from typing import Any, Optional, Type
+
+from autogen_core import MessageContext, RoutedAgent, message_handler
 
 from buttermilk._core.config import AgentConfig as ButtermilkAgentConfig  # Your base Buttermilk agent
-from buttermilk._core.contract import AgentInput  # Example message type
 from buttermilk._core.log import logger
 
 

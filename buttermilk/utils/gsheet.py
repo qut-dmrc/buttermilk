@@ -1,4 +1,3 @@
-
 from functools import cached_property
 from typing import Optional
 
@@ -15,7 +14,6 @@ from buttermilk.utils.utils import make_serialisable, reset_index_and_dedup_colu
 
 
 class GSheet(BaseModel):
-
     @cached_property
     def sheets(self):
         ## Make sure user logs in with drive credentials:
@@ -29,9 +27,8 @@ class GSheet(BaseModel):
                 "https://spreadsheets.google.com/feeds",
             ]
         )
-        return googleapiclient.discovery.build(
-            "sheets", "v4", credentials=credentials
-        )
+        return googleapiclient.discovery.build("sheets", "v4", credentials=credentials)
+
     @cached_property
     def gspread_client(self):
         """Produce a gspread client."""
@@ -48,7 +45,6 @@ class GSheet(BaseModel):
         # google sheets client
         return gspread.authorize(credentials)
 
-
     def save_gsheet(
         self,
         df: pd.DataFrame,
@@ -59,7 +55,6 @@ class GSheet(BaseModel):
         uri: Optional[str] = None,
         **kwargs,
     ) -> gspread.spreadsheet.Spreadsheet:
-
         # drop the index so we can save it.
         df = reset_index_and_dedup_columns(df)
 
@@ -83,9 +78,7 @@ class GSheet(BaseModel):
                 # cols = worksheet.
                 #
             except gspread.exceptions.WorksheetNotFound:
-                worksheet = spreadsheet.add_worksheet(
-                    title=sheet_name, rows=1, cols=len(df.columns)
-                )
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1, cols=len(df.columns))
 
                 # add header row
                 worksheet.append_rows(values=[df.columns.values.tolist()])
@@ -95,9 +88,7 @@ class GSheet(BaseModel):
                     try:
                         spreadsheet.del_worksheet(oldsheet)
                     except Exception as e:
-                        logger.warning(
-                            f"Unable to delete default worksheet: {e} {e.args=}"
-                        )
+                        logger.warning(f"Unable to delete default worksheet: {e} {e.args=}")
 
         # convert to string where we have to
         for col in df.columns:
@@ -120,8 +111,7 @@ def format_strings(df, convert_json_columns: list = []):
     for col in convert_json_columns:
         if col in df.columns:
             # convert json columns
-            df[col] = df[col].apply(lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False)
-            )
+            df[col] = df[col].apply(lambda x: yaml.dump(x, default_flow_style=False, sort_keys=False))
 
     # for all the columns in the dataframe that are text columns, ensure that no cells are longer than 50,000 characters
     for col in df.select_dtypes(include=[object]).columns:  # type: ignore

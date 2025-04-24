@@ -1,14 +1,15 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, Mock, call
 
 from buttermilk._core.contract import (
+    AgentOutput,
     ConductorRequest,
     StepRequest,
-    AgentOutput,
 )
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 # This is the same as using the @pytest.mark.anyio on all test functions in the module
 pytestmark = pytest.mark.anyio

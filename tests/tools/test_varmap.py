@@ -150,9 +150,7 @@ class TestFlowVariableRouter:
 
         # Should include scores from both judges
         assert isinstance(result["analysis"]["score_summary"], list)
-        assert (
-            len(result["analysis"]["score_summary"]) == 4
-        )  # 3 from first judge + 1 from second
+        assert len(result["analysis"]["score_summary"]) == 4  # 3 from first judge + 1 from second
 
         # Should have feedback as a list
         assert result["analysis"]["feedback"] == ["Needs improvement in clarity"]

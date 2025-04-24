@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, mock_open
 import pytest
 
 from buttermilk.data.vector import InputDocument
-from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
 from buttermilk.libs.zotero import ZotDownloader
+from buttermilk.tools.citator import CITATION_TEXT_CHAR_LIMIT
 
 
 # Mock bm object and credentials if ZotDownloader relies on them during init

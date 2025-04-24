@@ -3,41 +3,37 @@ Defines the CLIUserAgent for interacting with the user via the command line cons
 """
 
 import asyncio
-from collections.abc import AsyncGenerator
 import json
-from textwrap import indent
-from typing import Any, Awaitable, Callable, List, Union, Optional  # Added List, Union, Optional
+from typing import Awaitable, Callable, Optional, Union  # Added List, Union, Optional
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import CancellationToken, MessageContext  # Autogen types (used by base Agent)
-from pydantic import PrivateAttr, BaseModel
+from autogen_core import CancellationToken  # Autogen types (used by base Agent)
+from pydantic import PrivateAttr
 from rich.console import Console
+from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.markdown import Markdown
 from rich.pretty import pretty_repr  # For formatted output of complex objects
-from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 
-from rich.syntax import Syntax
 from buttermilk import logger
 
 # Import base agent and specific message types used
-from buttermilk._core.agent import AgentInput, ConductorResponse, OOBMessages, buttermilk_handler
+from buttermilk._core.agent import AgentInput, OOBMessages
 from buttermilk._core.contract import (
     AgentOutput,
+    ConductorResponse,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
-    HeartBeat,  # For signaling readiness?
     ManagerRequest,  # Requests sent *to* the manager (this agent)
     ManagerResponse,  # Responses sent *from* the manager (this agent)
     TaskProcessingComplete,  # Status updates
-    UserInstructions,  # Potentially displayable instructions
     ToolOutput,  # Potentially displayable tool output
+    UserInstructions,  # Potentially displayable instructions
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import AgentReasons  # Specific format for judge reasons
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
-import weave  # Import weave (though seemingly unused directly here)
 
 # Initialize a global console instance with JSON highlighting
 console = Console(highlighter=JSONHighlighter())
@@ -146,7 +142,7 @@ class CLIUserAgent(UIAgent):
                     # Check if it's a list of Records - needs better type checking maybe
                     if outputs and isinstance(outputs[0], dict) and "record_id" in outputs[0]:
                         for i, rec_dict in enumerate(outputs):
-                            output_lines.append(f"### Record {i+1}: {rec_dict.get('record_id', 'N/A')}")
+                            output_lines.append(f"### Record {i + 1}: {rec_dict.get('record_id', 'N/A')}")
                             # Display limited fields for brevity
                             output_lines.append(f"```\n{pretty_repr(rec_dict, max_string=500)}\n```")
                     else:  # Generic list
@@ -218,10 +214,10 @@ class CLIUserAgent(UIAgent):
             logger.error(f"Error formatting message type {type(message)} from {source}: {e}")
             # Fallback to raw representation on error
             try:
-                output_lines.append(f"_(Error formatting message. Raw data below)_")
+                output_lines.append("_(Error formatting message. Raw data below)_")
                 output_lines.append(f"```\n{pretty_repr(message, max_string=1000)}\n```")
             except Exception:  # If even pretty_repr fails
-                output_lines.append(f"_(Error formatting message, could not represent raw data)_")
+                output_lines.append("_(Error formatting message, could not represent raw data)_")
 
         # Filter out the header if no other content was added, or if content is just empty strings/None
         filtered_output = [line for line in output_lines if isinstance(line, str) and line.strip()]

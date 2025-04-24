@@ -2,44 +2,23 @@
 Defines the LLMAgent, a base class for Buttermilk agents that interact with Language Models.
 """
 
-import asyncio
-from curses import meta
-import json
-import pprint
-from types import NoneType
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Type  # Added Type for Pydantic model hinting
+from typing import Any, Optional, Self, Type  # Added Type for Pydantic model hinting
+
+import pydantic
 
 # Import Autogen components used for type hints and LLM interaction
-from autogen_core import CancellationToken, FunctionCall, MessageContext
-from autogen_core.model_context import UnboundedChatCompletionContext
+from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import (
     AssistantMessage,
-    ChatCompletionClient,
-    SystemMessage,
-    UserMessage, 
 )
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
-import pydantic
-from promptflow.core._prompty_utils import parse_chat  # Used in template parsing
-from psutil import Process  # Seems unused, consider removing
 from pydantic import BaseModel, Field, PrivateAttr
-import regex as re
-import weave  # For tracing/logging
 
 # Buttermilk core imports
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ConductorResponse  # Base agent and message types
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput  # Base agent and message types
 from buttermilk._core.contract import (
     # TODO: Review necessary contract types for this base class
-    AllMessages,
-    ConductorRequest,
-    FlowMessage,
-    GroupchatMessageTypes,
     LLMMessage,  # Type hint for message lists
-    OOBMessages,
-    ProceedToNextTaskSignal,
-    TaskProcessingComplete,
-    ToolOutput,
-    UserInstructions,
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
@@ -209,7 +188,7 @@ class LLMAgent(Agent):
         inputs: dict = {},  # Input variables
         messages: list[LLMMessage] = [],  # Messages sent to the LLM.
         parameters: dict = {},  # Parameters used for the request.
-        records: list[Record] = [], # Input data records
+        records: list[Record] = [],  # Input data records
         prompt: Optional[str] = "",  # Original triggering prompt text.
         schema: Optional[Type[BaseModel]] = None,  # Optional Pydantic schema for validation.
     ) -> AgentOutput:
@@ -352,7 +331,14 @@ class LLMAgent(Agent):
             # Catch errors during the actual LLM call
             msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
-            error_output = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt, messages=llm_messages, metadata={"role": self.role, "name": self.name}, error=[msg])
+            error_output = AgentOutput(
+                agent_info=self._cfg,
+                inputs=message.inputs,
+                prompt=message.prompt,
+                messages=llm_messages,
+                metadata={"role": self.role, "name": self.name},
+                error=[msg],
+            )
             error_output.set_error(f"LLM API call failed: {llm_error}")
             return error_output
             # Depending on severity, might want to raise
@@ -365,7 +351,7 @@ class LLMAgent(Agent):
             messages=llm_messages,  # Pass messages sent
             parameters=message.parameters,  # Pass task parameters
             prompt=message.prompt,  # Pass original prompt
-            records=message.records, # Pass input records
+            records=message.records,  # Pass input records
             schema=self._output_model,  # Pass schema used for validation attempt
         )
         # Add agent role/name for context in logs/outputs

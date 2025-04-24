@@ -203,7 +203,7 @@ Perhaps they could just shut up and get on with it.""",
 
 @pytest.fixture(
     scope="session",
-    parameters=MEDIA_RECORDS,
+    params=MEDIA_RECORDS,
     ids=[x[0] for x in MEDIA_RECORDS],
 )
 async def multimodal_record(request) -> Record:
@@ -217,7 +217,7 @@ async def multimodal_record(request) -> Record:
 
 @pytest.fixture(
     scope="session",
-    parameters=NEWS_RECORDS,
+    params=NEWS_RECORDS,
     ids=[x[0] for x in NEWS_RECORDS],
 )
 async def news_record(request) -> Record:
@@ -240,7 +240,7 @@ def fight_no_more_forever() -> Record:
 
 @pytest.fixture(
     scope="session",
-    parameters=TEXT_RECORDS,
+    params=TEXT_RECORDS,
     ids=[x[0] for x in TEXT_RECORDS],
 )
 async def text_record(request) -> Record:
@@ -262,7 +262,7 @@ VIDEO_URIS = [
 
 @pytest.fixture(
     scope="session",
-    parameters=[x[1] for x in VIDEO_URIS],
+    params=[x[1] for x in VIDEO_URIS],
     ids=[x[0] for x in VIDEO_URIS],
 )
 def video_url(request) -> str:

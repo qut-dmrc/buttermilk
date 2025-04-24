@@ -1,4 +1,3 @@
-
 def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
     output = {}
     for k, v in mapping_dict.items():
@@ -8,6 +7,7 @@ def col_mapping_hydra_to_pf(mapping_dict: dict) -> dict:
         output[k] = f"${{{v}}}"
 
     return output
+
 
 def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
     # do nothing right now.
@@ -22,10 +22,10 @@ def col_mapping_hydra_to_local(mapping_dict: dict) -> dict:
 
     # return output
 
+
 def col_mapping_hydra_to_pandas(mapping_dict: dict) -> dict:
     # For local dataframe mapping
     output = col_mapping_hydra_to_local(mapping_dict)
-    output = {v:k for k,v in mapping_dict.items()}
+    output = {v: k for k, v in mapping_dict.items()}
 
     return output
-

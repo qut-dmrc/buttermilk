@@ -1,4 +1,3 @@
-
 import os
 from enum import Enum, EnumMeta
 from pathlib import Path
@@ -138,11 +137,7 @@ class LlamaGuardTox(ToxicityModel):
     def make_prompt(self, content):
         # Load the message info into the output
         agent_type = "Agent"
-        content = (
-            "[INST] "
-            + self.template.format(prompt=content, agent_type=agent_type)
-            + "[/INST]"
-        )
+        content = "[INST] " + self.template.format(prompt=content, agent_type=agent_type) + "[/INST]"
 
         return content
 
@@ -291,6 +286,7 @@ class LlamaGuard2HF(LlamaGuardTox):
 
     def init_client(self) -> None:
         from buttermilk.libs import HFInferenceClient
+
         self.client = HFInferenceClient(hf_model_path=self.model, **self.options)
 
 

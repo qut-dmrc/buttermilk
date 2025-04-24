@@ -1,26 +1,24 @@
 """Tests for AutogenAgentAdapter integration with Autogen runtime."""
-import asyncio
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # Autogen imports
-from autogen_core import MessageContext, DefaultTopicId, Agent as AutogenAgent
-from autogen_core import SingleThreadedAgentRuntime
+from autogen_core import DefaultTopicId, MessageContext, SingleThreadedAgentRuntime
 
 # Buttermilk core types
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, buttermilk_handler
-
+from buttermilk._core.agent import AgentInput, AgentOutput
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import UserInstructions, StepRequest # Import other types if needed
 
 # Specific agent classes
-from buttermilk.agents.judge import Judge, AgentReasons
-from buttermilk.agents.llm import LLMAgent # Import base LLMAgent if testing with it
+from buttermilk.agents.judge import AgentReasons, Judge
 
 # The adapter under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
 # --- Test Fixtures ---
+
 
 @pytest.fixture
 def mock_agent_config() -> AgentConfig:
@@ -30,8 +28,9 @@ def mock_agent_config() -> AgentConfig:
         role="judge",
         name="Test Judge Agent",
         description="A test judge agent",
-        parameters={"model": "mock_llm_model"} # Mock model is fine if _process is mocked
+        parameters={"model": "mock_llm_model"},  # Mock model is fine if _process is mocked
     )
+
 
 @pytest.fixture
 def mock_message_context() -> MagicMock:
@@ -41,8 +40,9 @@ def mock_message_context() -> MagicMock:
     context.sender = "mock_sender/instance"
     context.message_id = "mock-message-id"
     context.cancellation_token = None
-    context.is_rpc = False # Typically False for standard message handling
+    context.is_rpc = False  # Typically False for standard message handling
     return context
+
 
 @pytest.fixture
 def agent_input_message() -> AgentInput:
@@ -50,25 +50,26 @@ def agent_input_message() -> AgentInput:
     return AgentInput(
         prompt="Evaluate this content based on criteria.",
         inputs={"content": "Some content to evaluate"},
-        parameters={}, # Add task-specific parameters if needed
+        parameters={},  # Add task-specific parameters if needed
     )
+
 
 # --- Test Class ---
 
+
 @pytest.mark.anyio
 class TestAutogenAdapterIntegration:
-
     async def test_adapter_initialization(self, mock_agent_config):
         """Test adapter initializes the underlying agent correctly."""
         # Mock LLM client lookup needed by Judge (which inherits from LLMAgent)
         with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
             adapter = AutogenAgentAdapter(
-                topic_type="test_topic", # Provide topic_type
-                agent_cls=Judge,         # Use correct param name
+                topic_type="test_topic",  # Provide topic_type
+                agent_cls=Judge,  # Use correct param name
                 agent_cfg=mock_agent_config,
             )
             # Initialization happens within adapter's __init__ now
-            await adapter.agent.initialize() # Ensure any async init in agent runs
+            await adapter.agent.initialize()  # Ensure any async init in agent runs
 
         assert isinstance(adapter.agent, Judge)
         assert adapter.agent.name == mock_agent_config.name
@@ -81,15 +82,19 @@ class TestAutogenAdapterIntegration:
         # The documented Judge uses evaluate_content (renamed from handle_agent_input)
         mock_judge = MagicMock(spec=Judge)
         mock_judge.evaluate_content = AsyncMock(name="evaluate_content")
-        mock_response = AgentOutput(agent_info=mock_judge._cfg, outputs=AgentReasons(prediction=True, reasons=[], confidence='low', conclusion='mocked'))
+        mock_response = AgentOutput(
+            agent_info=mock_judge._cfg, outputs=AgentReasons(prediction=True, reasons=[], confidence="low", conclusion="mocked")
+        )
         mock_judge.evaluate_content.return_value = mock_response
         # Set necessary attributes
-        mock_judge.id = "mock_judge_id"; mock_judge.role = "judge"; mock_judge.description = "Mock Judge"
-        mock_judge.initialize = AsyncMock() # Needs initialize method
+        mock_judge.id = "mock_judge_id"
+        mock_judge.role = "judge"
+        mock_judge.description = "Mock Judge"
+        mock_judge.initialize = AsyncMock()  # Needs initialize method
 
         # Create adapter with the *mock* agent instance
         adapter = AutogenAgentAdapter(topic_type="test_topic", agent=mock_judge)
-        adapter.publish_message = AsyncMock() # Mock publishing
+        adapter.publish_message = AsyncMock()  # Mock publishing
 
         # Directly call the adapter's handler for AgentInput
         # The adapter's internal routing logic finds the @buttermilk_handler method
@@ -105,8 +110,8 @@ class TestAutogenAdapterIntegration:
         # Let's adjust the test to mock __call__ as that's what the handler invokes.
 
         # --- Re-run with __call__ mocked ---
-        mock_judge.reset_mock() # Reset mocks
-        mock_judge.__call__ = AsyncMock(name="__call__", return_value=mock_response) # Mock __call__ instead
+        mock_judge.reset_mock()  # Reset mocks
+        mock_judge.__call__ = AsyncMock(name="__call__", return_value=mock_response)  # Mock __call__ instead
         adapter = AutogenAgentAdapter(topic_type="test_topic", agent=mock_judge)
         adapter.publish_message = AsyncMock()
 
@@ -115,33 +120,32 @@ class TestAutogenAdapterIntegration:
         # Assert __call__ was invoked by the handler
         mock_judge.__call__.assert_called_once()
         call_args, call_kwargs = mock_judge.__call__.call_args
-        assert call_kwargs.get("message") == agent_input_message # Check message passed to __call__
+        assert call_kwargs.get("message") == agent_input_message  # Check message passed to __call__
 
         # Assert the result returned by the handler is the result from __call__
         assert result == mock_response
         # Assert task processing events were published (checked in adapter tests, less critical here)
-        assert adapter.publish_message.call_count >= 2 # Start and Complete
-
+        assert adapter.publish_message.call_count >= 2  # Start and Complete
 
     async def test_autogen_registration_and_get(self, mock_agent_config):
         """Test agent registration and retrieval using the adapter."""
         runtime = SingleThreadedAgentRuntime()
-        agent_type_id = "test-judge-reg" # Use a unique ID for registration type
+        agent_type_id = "test-judge-reg"  # Use a unique ID for registration type
 
         # Define the factory function
         def adapter_factory():
             # Mock LLM client lookup inside the factory
             with patch("buttermilk.bm.bm.llms.get_autogen_chat_client", return_value=MagicMock()):
                 return AutogenAgentAdapter(
-                    topic_type="reg_topic",      # Provide topic_type
-                    agent_cls=Judge,             # Use agent_cls
+                    topic_type="reg_topic",  # Provide topic_type
+                    agent_cls=Judge,  # Use agent_cls
                     agent_cfg=mock_agent_config,
                 )
 
         # Register using the static method
         registered_agent_type = await AutogenAgentAdapter.register(
             runtime=runtime,
-            id=agent_type_id, # The ID to register this type under
+            id=agent_type_id,  # The ID to register this type under
             factory=adapter_factory,
         )
 
@@ -153,7 +157,7 @@ class TestAutogenAdapterIntegration:
         # This implicitly calls the factory
         agent_instance_id = await runtime.get(registered_agent_type)
         assert agent_instance_id is not None
-        assert isinstance(agent_instance_id, str) # Runtime stores instance IDs as strings
+        assert isinstance(agent_instance_id, str)  # Runtime stores instance IDs as strings
 
         # Optional: Check if runtime has the instance (internal detail)
         # assert agent_instance_id in runtime._agent_threads # Accessing private member

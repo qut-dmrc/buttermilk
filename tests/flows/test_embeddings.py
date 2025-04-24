@@ -158,7 +158,9 @@ def vector_store(
     persist_dir = tmp_path / "chroma_test"
     persist_dir.mkdir()
     # Initialization triggers mocked load_models and splitter creation
-    store = ChromaDBEmbeddings(name="test", type="chromadb",
+    store = ChromaDBEmbeddings(
+        name="test",
+        type="chromadb",
         collection_name="test_collection",
         persist_directory=str(persist_dir),
         concurrency=5,  # Example concurrency
@@ -453,26 +455,18 @@ async def test_create_vectorstore_pipeline(
         mock_embed.assert_called_once()
         # Check the input to get_embedded_records was the output of prepare_docs
         # (Difficult to assert directly on the generator object, rely on flow)
-        assert (
-            mock_embed.call_args[1]["batch_size"] == vector_store.concurrency
-        )  # Check batch size used
+        assert mock_embed.call_args[1]["batch_size"] == vector_store.concurrency  # Check batch size used
 
         # Verify batching for upsert (expect 2 batches of size 1)
         assert mock_batch_iter.call_count >= 1  # Called at least for the upsert stage
         upsert_batch_args = [call for call in mock_batch_iter.call_args_list if call[0][1] == vector_store.upsert_batch_size]
-        assert (
-            len(upsert_batch_args) == 1
-        )  # Should be called once for the upsert stage batching
+        assert len(upsert_batch_args) == 1  # Should be called once for the upsert stage batching
 
         # Verify upsert calls (should be 2 calls due to batch size 1)
         assert mock_chroma_collection.upsert.call_count == 2
-        upsert_calls = (
-            vector_store._client.mock_calls
-        )  # Access upsert calls via mocked client->collection
+        upsert_calls = vector_store._client.mock_calls  # Access upsert calls via mocked client->collection
         # Call 1
-        call1_args = upsert_calls[
-            0
-        ].args  # Adjust index if other client methods were mocked/called
+        call1_args = upsert_calls[0].args  # Adjust index if other client methods were mocked/called
         assert call1_args[0]["ids"] == [embedded_chunk1.chunk_id]
         assert call1_args[0]["embeddings"] == [embedded_chunk1.embedding]
         # Call 2
@@ -484,7 +478,9 @@ async def test_create_vectorstore_pipeline(
         assert count == 2  # embedded_chunk1 and embedded_chunk3 were upserted
 
         # Verify logs
-        mock_logger.info.assert_any_call(f"Starting vector store creation pipeline for collection '{vector_store.collection_name}' (upsert batch size: {vector_store.upsert_batch_size}).")
+        mock_logger.info.assert_any_call(
+            f"Starting vector store creation pipeline for collection '{vector_store.collection_name}' (upsert batch size: {vector_store.upsert_batch_size})."
+        )
         mock_logger.info.assert_any_call("Upserting batch #1 (1 chunks) into ChromaDB collection 'test_collection'...")
         mock_logger.info.assert_any_call("Upserting batch #2 (1 chunks) into ChromaDB collection 'test_collection'...")
         mock_logger.info.assert_any_call("Vector store creation pipeline finished. Total chunks successfully upserted: 2.")
@@ -499,10 +495,12 @@ async def test_create_vectorstore_empty_iterator(vector_store, mock_logger):
         patch.object(vector_store, "prepare_docs") as mock_prepare,
         patch.object(vector_store, "get_embedded_records") as mock_embed,
     ):
+
         async def mock_empty_prepare(*args, **kwargs):
             if False:  # Never yield
                 yield
             await asyncio.sleep(0)
+
         mock_prepare.side_effect = mock_empty_prepare
 
         count = await vector_store.create_vectorstore_chromadb(input_iterator)

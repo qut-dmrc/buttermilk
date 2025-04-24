@@ -17,21 +17,20 @@ import os
 import threading
 
 import hydra
-from omegaconf import DictConfig, OmegaConf  # Import DictConfig for type hinting
-from rich import print
+import uvicorn
+from omegaconf import DictConfig  # Import DictConfig for type hinting
 
 # TODO: Consider removing StepRequest if only RunRequest is actively used here.
 # from buttermilk._core.contract import StepRequest
 from buttermilk._core.contract import RunRequest
-from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
+from buttermilk._core.orchestrator import Orchestrator
 
 # TODO: FetchRecord seems unused directly in this script, consider removing if not needed for type hints elsewhere initialized via this entry point.
 # from buttermilk.agents.fetch import FetchRecord
 from buttermilk.bm import BM
-from buttermilk.runner.selector import Selector
 from buttermilk.runner.groupchat import AutogenOrchestrator
+from buttermilk.runner.selector import Selector
 from buttermilk.runner.slackbot import register_handlers
-import uvicorn
 
 # Maps orchestrator names (used in config) to their implementation classes.
 # Allows selecting the orchestration strategy (e.g., simple group chat vs. selector-based) via configuration.
@@ -83,7 +82,9 @@ def main(cfg: DictConfig) -> None:
             # Prepare the initial request data for the orchestrator.
             # Uses command-line overrides or defaults from config for record_id, prompt, uri.
             run_request = RunRequest(
-                record_id=cfg.get("record_id", ""), prompt=cfg.get("prompt", ""), uri=cfg.get("uri", "")  # Use .get for safer access
+                record_id=cfg.get("record_id", ""),
+                prompt=cfg.get("prompt", ""),
+                uri=cfg.get("uri", ""),  # Use .get for safer access
             )
             # Execute the orchestrator's main run method.
             bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
@@ -162,7 +163,10 @@ def main(cfg: DictConfig) -> None:
                 # Register the specific Buttermilk command/event handlers with the Bolt app.
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 await register_handlers(
-                    slack_app=slack_app, flows=objs.flows, orchestrator_tasks=orchestrator_tasks, bm=bm  # Pass instantiated flows  # Pass bm instance
+                    slack_app=slack_app,
+                    flows=objs.flows,
+                    orchestrator_tasks=orchestrator_tasks,
+                    bm=bm,  # Pass instantiated flows  # Pass bm instance
                 )
                 bm.logger.info("Slack handlers registered. Bot is ready.")
                 # Keep the event loop running indefinitely for the bot.

@@ -1,9 +1,9 @@
-
 from enum import Enum, EnumMeta
 from typing import (
     Any,
     ClassVar,
 )
+
 import torch
 from peft.config import PeftConfig
 from peft.peft_model import PeftModel
@@ -20,19 +20,19 @@ from .toxicity import TEMPLATE_DIR
 
 
 class AegisCategories(Enum):
-     O1 = "Violence"
-     O2 = "Sexual"
-     O3 = "Criminal Planning/Confessions"
-     O4 = "Guns and Illegal Weapons"
-     O5 = "Controlled/Regulated Substances"
-     O6 = "Suicide and Self Harm"
-     O7 = "Sexual (minor)"
-     O8 = "Hate /identity hate"
-     O9 = "PII/Privacy"
-     O10 = "Harassment"
-     O11 = "Threat"
-     O12 = "Profanity"
-     O13 = "Needs Caution"
+    O1 = "Violence"
+    O2 = "Sexual"
+    O3 = "Criminal Planning/Confessions"
+    O4 = "Guns and Illegal Weapons"
+    O5 = "Controlled/Regulated Substances"
+    O6 = "Suicide and Self Harm"
+    O7 = "Sexual (minor)"
+    O8 = "Hate /identity hate"
+    O9 = "PII/Privacy"
+    O10 = "Harassment"
+    O11 = "Threat"
+    O12 = "Profanity"
+    O13 = "Needs Caution"
 
 
 class Aegis(LlamaGuardTox):
@@ -50,9 +50,7 @@ class Aegis(LlamaGuardTox):
     options: ClassVar[dict] = {}
 
     def init_client(self):
-        config = PeftConfig.from_pretrained(
-            "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0"
-        )
+        config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
         self.tokenizer = AutoTokenizer.from_pretrained(
             "meta-llama/LlamaGuard-7b",
             revision="3e764390d6b39028ddea5b20603c89476107b41e",

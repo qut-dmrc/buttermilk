@@ -1,10 +1,10 @@
 import asyncio
 from math import ceil
-from typing import Any, AsyncGenerator, Callable, Awaitable, Optional, cast, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, cast
 
-import weave
 from pydantic import Field, PrivateAttr
 
+from autogen_core.models import AssistantMessage, UserMessage
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
@@ -15,7 +15,6 @@ from buttermilk._core.contract import (
     WAIT,  # Special role indicating the conductor should wait.
     AgentInput,  # Standard input message type.
     AgentOutput,
-    AssistantMessage,
     ConductorRequest,
     ConductorResponse,
     GroupchatMessageTypes,
@@ -23,7 +22,6 @@ from buttermilk._core.contract import (
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    UserMessage,  # Message type for user-originated content.
 )
 
 # Maximum length to truncate messages stored in the agent's context history.
@@ -226,10 +224,9 @@ class Sequencer(Agent):
             if not self._step_completion_event.is_set():
                 logger.info(f"Completion threshold reached for step '{self._current_step_name}'. Setting event.")
                 self._step_completion_event.set()
-        else:
-            if self._step_completion_event.is_set():
-                logger.info(f"Completion threshold NOT met for step '{self._current_step_name}'. Clearing event.")
-                self._step_completion_event.clear()
+        elif self._step_completion_event.is_set():
+            logger.info(f"Completion threshold NOT met for step '{self._current_step_name}'. Clearing event.")
+            self._step_completion_event.clear()
             # else: Event already clear, no change needed.
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:

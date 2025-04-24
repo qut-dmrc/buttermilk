@@ -61,10 +61,11 @@ def mock_slack_app():
     mock_init_slack = MagicMock(return_value=(mock_slack_app, mock_handler))
     mock_register_handlers = AsyncMock()
 
-    with patch("buttermilk.runner.cli.initialize_slack_bot", mock_init_slack), \
-         patch("buttermilk.runner.cli.register_handlers", mock_register_handlers), \
-         patch("buttermilk.runner.cli.asyncio", autospec=True) as mock_asyncio:
-
+    with (
+        patch("buttermilk.runner.cli.initialize_slack_bot", mock_init_slack),
+        patch("buttermilk.runner.cli.register_handlers", mock_register_handlers),
+        patch("buttermilk.runner.cli.asyncio", autospec=True) as mock_asyncio,
+    ):
         mock_asyncio.Queue = MagicMock()
         mock_asyncio.sleep = AsyncMock()
 

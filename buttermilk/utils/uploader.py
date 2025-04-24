@@ -1,21 +1,18 @@
 import asyncio
 import atexit
-from functools import partial
 import json
 import signal
 import time
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
-from collections.abc import Mapping, Sequence
-from cloudpathlib import CloudPath
-from promptflow.tracing import trace
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from pydantic import BaseModel
 
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.job import Job
-from buttermilk.bm import logger, bm
+from buttermilk.bm import bm, logger
 from buttermilk.utils.save import upload_rows, upload_rows_async
 
 
@@ -26,7 +23,6 @@ class AsyncDataUploader:
         buffer_size: int = 10,
         flush_interval: int = 30,
     ):
-        
         # Validate that save_dest is a proper SaveInfo instance
         if not isinstance(save_dest, SaveInfo):
             # If it's a dict (from Hydra), try to create a SaveInfo object
@@ -37,9 +33,9 @@ class AsyncDataUploader:
                     raise TypeError(f"Failed to convert save_dest dict to SaveInfo: {e}")
             else:
                 raise TypeError(f"save_dest must be a SaveInfo object, got {type(save_dest)}")
-                
+
         self.save_dest = save_dest
-        
+
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
 
@@ -79,10 +75,7 @@ class AsyncDataUploader:
                     pass
 
                 # Check if we should flush
-                should_flush = (
-                    len(self.buffer) >= self.buffer_size
-                    or time.time() - self.last_flush >= self.flush_interval
-                )
+                should_flush = len(self.buffer) >= self.buffer_size or time.time() - self.last_flush >= self.flush_interval
 
                 if should_flush and self.buffer:
                     await self._flush()
@@ -90,7 +83,7 @@ class AsyncDataUploader:
             except Exception as e:
                 logger.error(f"Worker error: {e}")
                 await asyncio.sleep(1)
-        logger.info(f"Data uploader loop finished.")
+        logger.info("Data uploader loop finished.")
 
     async def _flush(self):
         """Upload buffered items"""
@@ -120,7 +113,7 @@ class AsyncDataUploader:
     def shutdown(self, *args):
         """Graceful shutdown ensuring all data is flushed."""
         self._shutdown.set()
-            
+
         # Handle synchronously to avoid event loop issues
         if self.buffer:
             try:
@@ -128,11 +121,10 @@ class AsyncDataUploader:
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
                 bm.save(self.buffer)
-                    
+
                 # Clean backup files synchronously
                 for f in self.backup_dir.glob("backup_*.json"):
                     try:
                         f.unlink()
                     except Exception:
                         pass
-                        

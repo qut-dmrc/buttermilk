@@ -17,6 +17,7 @@ from .._core.log import getLogger
 
 logger = getLogger()
 
+
 ########
 #
 # Extract error info from the variety of Exceptions we tend to hit. This is mainly
@@ -29,20 +30,20 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
     error_dict.update(process_info)
     try:
         error_dict["status_code"] = e.status_code
-        error_dict["request_id"]=e.request_id
+        error_dict["request_id"] = e.request_id
     except AttributeError:
         pass
 
     try:
         if isinstance(e, openai.APIStatusError):
             if e.status_code == 400:
-                error_dict.update({
-                    "error": "blocked",
-                    "metadata": e.body.get("innererror", {}).get(
-                        "content_filter_result", {}
-                    ),
-                    "code": e.body.get("innererror", {}).get("code"),
-                })
+                error_dict.update(
+                    {
+                        "error": "blocked",
+                        "metadata": e.body.get("innererror", {}).get("content_filter_result", {}),
+                        "code": e.body.get("innererror", {}).get("code"),
+                    }
+                )
 
             else:
                 error_dict.update(e.body)
@@ -71,7 +72,9 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             raise RateLimit(*e.args)
 
     except Exception as secondary_error:
-        logger.warning(f"Unable to extract error information from error: {type(e).__name__} {e} {e.args=}. Hit secondary error: {type(secondary_error).__name__} {secondary_error} {secondary_error.args=}")
+        logger.warning(
+            f"Unable to extract error information from error: {type(e).__name__} {e} {e.args=}. Hit secondary error: {type(secondary_error).__name__} {secondary_error} {secondary_error.args=}"
+        )
 
     return error_dict
 

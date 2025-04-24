@@ -1,42 +1,27 @@
 import asyncio
 from collections.abc import Awaitable
 from math import ceil
-from huggingface_hub import User
+from typing import Any, AsyncGenerator, Callable, Optional, Union, cast
+
+from autogen_core import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr
-import weave
+
+from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk import logger
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     END,
     WAIT,
-    AssistantMessage,
+    AgentOutput,
     ConductorRequest,
     ConductorResponse,
-    ManagerMessage,
-    ManagerRequest,
-    ManagerResponse,
-    OOBMessages,
-    StepRequest,
-    TaskProcessingStarted,
-    UserMessage,
-)
-from buttermilk.agents.llm import LLMAgent
-
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Union, cast
-from autogen_core import CancellationToken, MessageContext, message_handler
-
-from buttermilk import logger
-from buttermilk._core.config import DataSourceConfig
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    AllMessages,
-    FlowMessage,
     GroupchatMessageTypes,
     OOBMessages,
-    UserInstructions,
+    StepRequest,
     TaskProcessingComplete,
-    ProceedToNextTaskSignal,
+    TaskProcessingStarted,
 )
+from buttermilk.agents.llm import LLMAgent
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -88,9 +73,8 @@ class LLMHostAgent(LLMAgent):
 
         if isinstance(message, (AgentOutput, ConductorResponse)):
             await self._model_context.add_message(AssistantMessage(content=str(message.contents)[:TRUNCATE_LEN], source=source))
-        else:
-            if not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+        elif not message.content.startswith(COMMAND_SYMBOL):
+            await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
 
     async def _handle_events(
         self,
@@ -98,7 +82,6 @@ class LLMHostAgent(LLMAgent):
         cancellation_token: CancellationToken = None,
         **kwargs,
     ) -> OOBMessages | None:
-
         # --- Handle Task Completion from Worker Agents ---
         if isinstance(message, TaskProcessingComplete):
             if message.role == self._current_step_name:
@@ -134,7 +117,7 @@ class LLMHostAgent(LLMAgent):
             await asyncio.sleep(0.1)
         for step_name, cfg in self._participants.items():
             yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
-        yield StepRequest(role=END, description=f"Sequence wrapping up.")
+        yield StepRequest(role=END, description="Sequence wrapping up.")
 
     async def _get_next_step(self, message: ConductorRequest) -> AgentOutput:
         """Determine the next step based on the current flow data."""

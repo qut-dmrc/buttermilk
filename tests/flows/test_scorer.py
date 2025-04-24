@@ -3,18 +3,16 @@ Tests the LLMScorer agent, potentially in a simulated flow context.
 """
 
 import json
-import pytest
 from typing import Any  # For fixture type hint
+
+import pytest
 
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentOutput
-from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS  # Use cheaper models for testing
-from buttermilk._core.types import Record
+from buttermilk._core.llms import CHEAP_CHAT_MODELS  # Use cheaper models for testing
+from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA  # Scorer and its output models
 
 # Agent classes and models
-from buttermilk.agents.llm import LLMAgent  # Base class (imported but maybe not needed directly)
-from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA  # Scorer and its output models
-from buttermilk.agents.judge import AgentReasons  # Judge's output model (used in input fixture)
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)  # Parametrize over cheap models

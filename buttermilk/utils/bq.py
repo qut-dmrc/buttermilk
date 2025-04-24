@@ -41,14 +41,9 @@ def construct_dict_from_schema(schema: list, d: dict, remove_extra=True):
 
         # Handle repeated fields - use the same schema as we were passed
         elif isinstance(d[key_name], list) and "fields" in row:
-            new_dict[key_name] = [
-                construct_dict_from_schema(row["fields"], item) for item in d[key_name]
-            ]
+            new_dict[key_name] = [construct_dict_from_schema(row["fields"], item) for item in d[key_name]]
 
-        elif isinstance(d[key_name], str) and (
-            str.upper(remove_punctuation(d[key_name])) == "NULL"
-            or remove_punctuation(d[key_name]) == ""
-        ):
+        elif isinstance(d[key_name], str) and (str.upper(remove_punctuation(d[key_name])) == "NULL" or remove_punctuation(d[key_name]) == ""):
             # don't add null values
             keys_deleted.append(key_name)
             continue
@@ -123,12 +118,10 @@ class TableWriter(BaseModel):
 
     """
 
-    write_client:  BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
+    write_client: BigQueryWriteAsyncClient = Field(default_factory=BigQueryWriteAsyncClient)
     destination: str | None = None
     bq_schema: str | None = None
-    stream: str | None = (
-        "_default"  # fully qualified table ID in the form `dataset.project.table`
-    )
+    stream: str | None = "_default"  # fully qualified table ID in the form `dataset.project.table`
     project_id: str | None = None
     dataset_id: str | None = None
     table_id: str | None = None
@@ -149,11 +142,7 @@ class TableWriter(BaseModel):
     def make_table_path(cls, v, values) -> str:
         if v:
             return v
-        if (
-            values.get("project_id")
-            and values.get("dataset_id")
-            and values.get("table_id")
-        ):
+        if values.get("project_id") and values.get("dataset_id") and values.get("table_id"):
             pass
         elif values.get("table"):
             values["project_id"], values["dataset_id"], values["table_id"] = v.split(
@@ -176,10 +165,7 @@ class TableWriter(BaseModel):
         if isinstance(rows, pd.DataFrame):
             # deduplicate columns
             rows.columns = [
-                x[1]
-                if x[1] not in rows.columns[: x[0]]
-                else f"{x[1]}_{list(rows.columns[: x[0]]).count(x[1])}"
-                for x in enumerate(rows.columns)
+                x[1] if x[1] not in rows.columns[: x[0]] else f"{x[1]}_{list(rows.columns[: x[0]]).count(x[1])}" for x in enumerate(rows.columns)
             ]
 
             batch = rows.to_dict(orient="records")

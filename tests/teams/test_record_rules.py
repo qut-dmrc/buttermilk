@@ -1,8 +1,5 @@
 import pytest
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.messages import TextMessage
 from autogen_core import (
-    CancellationToken,
     DefaultTopicId,
     SingleThreadedAgentRuntime,
     TypeSubscription,
@@ -14,7 +11,6 @@ from autogen_core.models import (
 from buttermilk._core import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llm import LLMAgent
-from buttermilk._core.llms import CHATMODELS
 
 
 @pytest.fixture

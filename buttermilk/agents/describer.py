@@ -32,11 +32,7 @@ class Describer(LLMAgent):
 
         media_exists = False
         for component in job.record.components:
-            if (
-                component.mime.startswith("image")
-                or component.mime.startswith("video")
-                or component.mime.startswith("audio")
-            ):
+            if component.mime.startswith("image") or component.mime.startswith("video") or component.mime.startswith("audio"):
                 media_exists = True
         if not media_exists:
             # don't try to describe only text components

@@ -37,10 +37,12 @@ def extract_url(text: str) -> str | None:
     for word in words:
         try:
             parsed_url = urlparse(word)
-            if all([
-                parsed_url.scheme,
-                parsed_url.netloc,
-            ]):  # Check for valid scheme and netloc
+            if all(
+                [
+                    parsed_url.scheme,
+                    parsed_url.netloc,
+                ]
+            ):  # Check for valid scheme and netloc
                 return word
         except ValueError:  # Invalid url
             pass
@@ -99,7 +101,6 @@ async def download_limited_async(
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
 ) -> tuple[bytes, str]:
-
     try:
         url = CloudPath(url)
         data = await run_async_newthread(url.read_bytes)
@@ -118,10 +119,7 @@ async def download_limited_async(
 
         r = await client.get(url, headers=headers, follow_redirects=True)
 
-        if (
-            not allow_arbitrarily_large_downloads
-            and int(r.headers.get("Content-Length", 0)) > max_size
-        ):
+        if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
             raise OSError("File too large, download aborted")
 
         data = []
@@ -155,10 +153,7 @@ def download_limited(
         r = requests.get(url, headers=headers, stream=True, timeout=timeout)
     else:
         r = requests.get(url, stream=True, timeout=timeout)
-    if (
-        not allow_arbitrarily_large_downloads
-        and int(r.headers.get("Content-Length", 0)) > max_size
-    ):
+    if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
         raise OSError("File too large, download aborted")
 
     data = []
@@ -225,12 +220,7 @@ def scrub_keys(data: Sequence | Mapping) -> T:
         return [scrub_keys(v) for v in data]
     if isinstance(data, Mapping):
         return {
-            k: scrub_keys(v)
-            for k, v in data.items()
-            if not any(
-                x in str(k).lower()
-                for x in ["key", "token", "password", "secret", "credential"]
-            )
+            k: scrub_keys(v) for k, v in data.items() if not any(x in str(k).lower() for x in ["key", "token", "password", "secret", "credential"])
         }
     return data
 
@@ -273,11 +263,7 @@ def scrub_serializable(d) -> T:
     if isinstance(d, np.generic):
         # This should catch all other numpy objects
         return d.item()
-    if (
-        isinstance(d, datetime.date)
-        or isinstance(d, datetime.datetime)
-        or isinstance(d, pd.Timestamp)
-    ):
+    if isinstance(d, datetime.date) or isinstance(d, datetime.datetime) or isinstance(d, pd.Timestamp):
         # ensure dates and datetimes are stored as strings in ISO format for uploading
         d = d.isoformat()
     elif isinstance(d, uuid.UUID):
@@ -299,9 +285,7 @@ def dedup_columns(df):
         cols = pd.Series(df.columns)
         dup_count = cols.value_counts()
         for dup in cols[cols.duplicated()].unique():
-            cols[cols[cols == dup].index.values.tolist()] = [dup] + [
-                dup + str(i) for i in range(2, dup_count[dup] + 1)
-            ]
+            cols[cols[cols == dup].index.values.tolist()] = [dup] + [dup + str(i) for i in range(2, dup_count[dup] + 1)]
 
         df.columns = cols
 
@@ -476,23 +460,14 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
         return [{}]
 
     # Separate keys with list values and keys with single values
-    list_keys = {
-        k: v
-        for k, v in d.items()
-        if v and isinstance(v, Sequence) and not isinstance(v, str)
-    }
-    single_keys = {
-        k: v for k, v in d.items() if not isinstance(v, Sequence) or isinstance(v, str)
-    }
+    list_keys = {k: v for k, v in d.items() if v and isinstance(v, Sequence) and not isinstance(v, str)}
+    single_keys = {k: v for k, v in d.items() if not isinstance(v, Sequence) or isinstance(v, str)}
 
     # Generate all combinations of list values
     combinations = list(itertools.product(*list_keys.values()))
 
     # Create a list of dictionaries with all combinations
-    expanded_dicts = [
-        {**single_keys, **dict(zip(list_keys.keys(), combo, strict=False))}
-        for combo in combinations
-    ]
+    expanded_dicts = [{**single_keys, **dict(zip(list_keys.keys(), combo, strict=False))} for combo in combinations]
 
     # Guarantee at least a list with an empty dict
     if len(expanded_dicts) == 0:

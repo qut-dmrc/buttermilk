@@ -1,4 +1,3 @@
-
 import asyncio
 import random
 from typing import AsyncGenerator, Sequence
@@ -26,6 +25,7 @@ class LoaderGCS(BaseModel):
         # yield one file at a time
 
         semaphore = asyncio.Semaphore(num_readers)
+
         async def sem_read_file(file):
             async with semaphore:
                 file_content = await self._fs.cat(file)

@@ -1,15 +1,11 @@
 import asyncio
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import Field, PrivateAttr
-import weave
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, FatalError, ProcessingError
-
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import StepRequest, ToolOutput, OOBMessages  # Added ToolOutput, OOBMessages
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, FatalError
+from buttermilk._core.contract import OOBMessages, StepRequest, ToolOutput, RunRequest  # Added ToolOutput, OOBMessages
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk._core.types import Record, RunRequest
 from buttermilk.bm import logger
 
 
@@ -127,10 +123,6 @@ class BatchOrchestrator(Orchestrator):
                 logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}")
                 # Ensure 'inputs' attribute exists on output for error cases
                 # return AgentOutput(agent_id=self.name, error=[str(e)])
-        else:
-            # Error already logged by _get_agent_instance
-            # Ensure 'inputs' attribute exists on output for error cases
-            # return AgentOutput(agent_id=self.name, error=[f"Agent instance not found: {first_variant_config.id}"])
 
     async def _run(self, request: RunRequest | None = None) -> None:
         """

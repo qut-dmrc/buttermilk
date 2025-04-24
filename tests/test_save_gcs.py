@@ -23,9 +23,7 @@ def test_upload_dataframe_json_success(mock_blob_from_string, mock_storage_clien
     # Assert that the data written to the blob is in the expected JSONL format
     call_args, _ = mock_blob.upload_from_file.call_args
     uploaded_data = call_args[0].read().decode("utf-8")
-    expected_data = "\n".join(
-        mock_df.to_json(orient="records", lines=True).splitlines()
-    )
+    expected_data = "\n".join(mock_df.to_json(orient="records", lines=True).splitlines())
     assert uploaded_data == expected_data
 
 
@@ -62,9 +60,7 @@ def test_upload_dataframe_json_invalid_data():
 
 @patch("google.cloud.storage.Client")
 @patch("google.cloud.storage.blob.Blob.from_string")
-def test_upload_dataframe_json_duplicate_columns(
-    mock_blob_from_string, mock_storage_client
-):
+def test_upload_dataframe_json_duplicate_columns(mock_blob_from_string, mock_storage_client):
     """Test that duplicate columns are handled correctly."""
     mock_blob = MagicMock()
     mock_blob_from_string.return_value = mock_blob

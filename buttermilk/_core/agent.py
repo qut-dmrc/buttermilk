@@ -2,56 +2,39 @@
 Defines the core Agent base class, configuration, and handler decorator for Buttermilk.
 """
 
-from abc import ABC, abstractmethod
 import asyncio
-from collections.abc import Awaitable, Callable
+from abc import abstractmethod
+from collections.abc import Callable
 from functools import wraps  # Import wraps for decorator
-import time
-from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
+from typing import Any, Callable, Sequence
 
-# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from autogen_core import CancellationToken, MessageContext
-from autogen_core.model_context import UnboundedChatCompletionContext, ChatCompletionContext
-from autogen_core.tools import BaseTool, FunctionTool
 import jmespath  # For resolving input mappings
-import pydantic
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    Field,
-    PrivateAttr,
-    computed_field,
-    field_validator,
-    model_validator,
-)
-from buttermilk._core.config import AgentConfig
-from shortuuid import ShortUUID, uuid  # For generating unique IDs
 import weave  # For tracing
 
+# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
+from autogen_core import CancellationToken
+from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
+from pydantic import (
+    PrivateAttr,
+    computed_field,
+)
+
+from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk._core.config import AgentConfig
+
 # Buttermilk core imports
-from buttermilk._core.contract import (COMMAND_SYMBOL, # Constant for command messages,
-        AllMessages,  # Union of all message types
-        OOBMessages,  # Union of Out-Of-Band control messages
-        GroupchatMessageTypes,  # Union of types expected in group chat listening
-        AgentInput,  # Standard input message structure
-        AgentOutput,  # Standard output message structure
-        AssistantMessage,  # Message type for LLM/agent responses
-        ConductorRequest,  # Request type for conductor agents
-        ConductorResponse,  # Response type from conductor agents
-        ErrorEvent,  # Message type for signaling errors
-        FlowMessage,  # Base class for messages in the flow
-        ManagerResponse,  # Response from a Manager/UI agent
-        TaskProcessingComplete,  # Status message
-        TaskProcessingStarted,  # Status message
-        ToolOutput,  # Output from a tool execution
-        UserInstructions,  # Message containing user instructions
-        UserMessage,  # Message type for user input
+from buttermilk._core.contract import (
+    COMMAND_SYMBOL,  # Constant for command messages,
+    AgentInput,  # Standard input message structure
+    AgentOutput,  # Standard output message structure
+    GroupchatMessageTypes,  # Union of types expected in group chat listening
+    OOBMessages,  # Union of Out-Of-Band control messages
+    UserInstructions,  # Message containing user instructions
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
-from buttermilk._core.flow import KeyValueCollector  # Utility for managing state data
+from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.types import Record  # Data record structure
-
 
 # --- Buttermilk Handler Decorator ---
 
@@ -92,7 +75,6 @@ def buttermilk_handler(message_types: type):
     return decorator
 
 
-
 # --- Base Agent Class ---
 
 
@@ -113,32 +95,28 @@ class Agent(AgentConfig):
     # _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
     # Heartbeat queue, potentially used by orchestrator/adapter for liveness checks.
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
-    
+
     @computed_field()
     @property
     def _cfg(self) -> AgentConfig:
         """
         Extract AgentConfig parameters by creating a new AgentConfig from an Agent instance.
-        
+
         Args:
             agent: An instance of Agent or a subclass
-            
+
         Returns:
             AgentConfig: A clean AgentConfig object with only the config fields
         """
         # Get all field names from AgentConfig
         agent_config_fields = set(AgentConfig.model_fields.keys())
-        
+
         # Extract only the fields that are part of AgentConfig
-        config_data = {
-            field: getattr(self, field)
-            for field in agent_config_fields
-            if hasattr(self, field)
-        }
-        
+        config_data = {field: getattr(self, field) for field in agent_config_fields if hasattr(self, field)}
+
         # Create a new AgentConfig instance with the extracted data
         return AgentConfig(**config_data)
-    
+
     # --- Core Methods (Lifecycle & Interaction) ---
 
     async def initialize(self, **kwargs) -> None:
@@ -398,10 +376,10 @@ class Agent(AgentConfig):
             for key in self.inputs.keys():
                 data = self._data.get(key, [])
                 # the _data collector object always uses lists. Get the non-empty values
-                data = [x for x in data if x is not None and x is not [] and x is not {}]
+                data = [x for x in data if x is not None and x != [] and x != {}]
                 if data != []:
                     extracted_data[key] = data
-                    
+
             # Merge resolved mappings, letting message inputs override.
             merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict

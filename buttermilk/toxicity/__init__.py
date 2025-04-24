@@ -57,7 +57,14 @@ TOXCLIENTS = [
     LlamaGuard3Together,
     GoogleModerate,
     REGARD,
-    NemoInputSimpleGPT4o,NemoInputComplexGPT4o,NemoOutputSimpleGPT4o, NemoOutputComplexGPT4o,NemoInputSimpleLlama31_70b,NemoInputComplexLlama31_70b,NemoOutputSimpleLlama31_70b,NemoOutputComplexLlama31_70b
+    NemoInputSimpleGPT4o,
+    NemoInputComplexGPT4o,
+    NemoOutputSimpleGPT4o,
+    NemoOutputComplexGPT4o,
+    NemoInputSimpleLlama31_70b,
+    NemoInputComplexLlama31_70b,
+    NemoOutputSimpleLlama31_70b,
+    NemoOutputComplexLlama31_70b,
 ]
 
 
@@ -73,18 +80,22 @@ TOXCLIENTS_LOCAL = [
     LlamaGuard2Local,
     LlamaGuard3Local,
     LlamaGuard3LocalInt8,
-    ShieldGemma,ShieldGemma2b,ShieldGemma9b,
+    ShieldGemma,
+    ShieldGemma2b,
+    ShieldGemma9b,
     MDJudge2,
     MDJudgeLocalDomain,
     MDJudgeLocalTask,
     GPTJT,
     Aegis,
-    Wildguard
+    Wildguard,
 ]
+
 
 # Let's provide an interface for all the various toxicity models
 def get_tox_flow(flow: str, **kwargs) -> ToxicityModel:
     return globals()[flow]
+
 
 def load_tox_flow(flow: str, **kwargs) -> ToxicityModel:
     return globals()[flow](**kwargs)

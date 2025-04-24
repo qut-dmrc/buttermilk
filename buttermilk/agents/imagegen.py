@@ -121,7 +121,6 @@ class Imagegen3(TextToImageClient):
         aspect_ratio="3:4",
         **kwargs,
     ) -> ImageRecord:
-
         parameters = dict(
             number_of_images=1,
             aspect_ratio=aspect_ratio,
@@ -520,10 +519,7 @@ class BatchImageGenerator(BaseModel):
                     for name, model in self._clients.items():
                         # await asyncio.sleep(0.1)
                         try:
-                            img_path = (
-                                batch_path
-                                / f"{input['id']}_{model.prefix}{j}_{ShortUUID().uuid()[:12]}.png"
-                            ).as_uri()
+                            img_path = (batch_path / f"{input['id']}_{model.prefix}{j}_{ShortUUID().uuid()[:12]}.png").as_uri()
                             self._tasks.append(
                                 model.generate(**input, save_path=img_path),
                             )

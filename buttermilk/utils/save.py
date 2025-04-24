@@ -44,9 +44,11 @@ def save(
     **parameters,
 ):
     from .utils import reset_index_and_dedup_columns
+
     if not save_dir:
         try:
             from buttermilk.bm import bm
+
             save_dir = bm.save_dir
         except Exception as e:
             logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")
@@ -185,10 +187,7 @@ def data_to_export_rows(
     if isinstance(data, pd.DataFrame):
         # deduplicate columns
         data.columns = [
-            x[1]
-            if x[1] not in data.columns[: x[0]]
-            else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}"
-            for x in enumerate(data.columns)
+            x[1] if x[1] not in data.columns[: x[0]] else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}" for x in enumerate(data.columns)
         ]
 
         bq_rows = data.to_dict(orient="records")
@@ -204,6 +203,7 @@ def data_to_export_rows(
     bq_rows = make_serialisable(bq_rows)
 
     return bq_rows
+
 
 async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None):
     """Upload results to Google Bigquery asynchronously"""
@@ -236,11 +236,11 @@ async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveI
 
     tasks = []
     # insert_rows is a blocking I/O call, run each chunk insertion in the executor
-    for chunk in chunks(bq_rows, 100): # Adjust chunk size as needed for BQ limits/performance
+    for chunk in chunks(bq_rows, 100):  # Adjust chunk size as needed for BQ limits/performance
         tasks.append(loop.run_in_executor(None, bq.insert_rows, table, chunk, schema))
 
     results = await asyncio.gather(*tasks)
-    errors = [error for sublist in results for error in sublist] # Flatten list of lists
+    errors = [error for sublist in results for error in sublist]  # Flatten list of lists
 
     if not errors:
         logger.debug(
@@ -251,6 +251,7 @@ async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveI
         raise OSError(f"Google BigQuery returned an error result during async upload: {str(errors)[:1000]}")
 
     return dataset
+
 
 def upload_rows(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None, create_if_not_exists=False, **parameters) -> str:
     """Upload results to Google Bigquery asynchronously"""

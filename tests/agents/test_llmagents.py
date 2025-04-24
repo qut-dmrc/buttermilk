@@ -1,15 +1,14 @@
+
 import pytest
-from typing import Dict, Any  # Added for type hints
 
 # Buttermilk core imports
 from buttermilk._core.contract import AgentInput, AgentOutput
-from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS
+from buttermilk._core.llms import CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk._core.agent import Agent  # Base agent class (though not used directly here)
+from buttermilk.agents.judge import AgentReasons, Judge  # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
-from buttermilk.agents.judge import Judge, AgentReasons  # Import Judge and its output model
 
 # Autogen Core (Potentially needed for fixtures/context, but not directly in these tests)
 # from autogen_core import CancellationToken

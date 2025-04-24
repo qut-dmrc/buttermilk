@@ -1,29 +1,26 @@
 import asyncio
-from collections.abc import AsyncGenerator
-from typing import Any, Callable, Coroutine, Self, Union
+from datetime import datetime, timezone  # Added for timestamp
+from typing import Any, Callable
 
-from autogen_core import MessageContext
+from autogen_core.tools import FunctionTool
 import pydantic
 import regex as re
 from shortuuid import uuid
-import weave
 
-from buttermilk._core.agent import Agent, CancellationToken, FunctionTool, ToolConfig, buttermilk_handler
+from buttermilk._core.agent import Agent, CancellationToken
+from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
     AgentOutput,
-    FlowMessage,
     GroupchatMessageTypes,
     ToolOutput,
     UserInstructions,
 )
-from datetime import datetime, timezone  # Added for timestamp
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import URL_PATTERN, extract_url
-
 MATCH_PATTERNS = rf"^(![\d\w_]+)|<({URL_PATTERN})>"
 
 
@@ -149,10 +146,8 @@ class FetchAgent(FetchRecord, Agent):
             if public_callback:
                 await public_callback(output)
 
-        return None  # _listen itself doesn't return anything meaningful here
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
-
         result = None
         if isinstance(message, AgentInput):
             uri = message.inputs.get("uri")

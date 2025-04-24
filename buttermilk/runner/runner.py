@@ -79,8 +79,8 @@ from pydantic import (
 from tqdm.asyncio import tqdm as atqdm
 
 from buttermilk._core.agent import Agent
-from buttermilk._core.log import logger
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import load_json_flexi
 
@@ -120,9 +120,7 @@ class Consumer(BaseModel):
 
     """
 
-    agent: str | None = (
-        ""  # This is model, or client, or whatever is used to get the result
-    )
+    agent: str | None = ""  # This is model, or client, or whatever is used to get the result
     step_name: str  # This is the step in the process that includes this particular task
     input_queue: Queue[Job] = Field(default_factory=Queue)
     output_queue: Queue[Job] = None
@@ -146,9 +144,7 @@ class Consumer(BaseModel):
             raise ValueError("concurrent must be at least 1")
 
         # Make a unique worker name for identification and logging
-        self.agent = "_".join([
-            x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x
-        ])
+        self.agent = "_".join([x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x])
 
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
@@ -325,9 +321,7 @@ class TaskDistributor(BaseModel):
                         not self.shutdown  # Global shutdown flag not set
                         and not self._collector.shutdown  # Collector has not stopped
                         and len(self._consumers) > 0  # Consumers still alive
-                        and not all([
-                            w.done for w in self._consumers.values()
-                        ])  # Consumers still working
+                        and not all([w.done for w in self._consumers.values()])  # Consumers still working
                     ):
                         await asyncio.sleep(0.1)
                         for w in self._consumers.values():

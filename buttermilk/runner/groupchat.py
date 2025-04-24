@@ -8,10 +8,10 @@ and integrates with the Buttermilk agent and contract system.
 """
 
 import asyncio
-from typing import Any, AsyncGenerator, Self  # Added type hints for clarity
+from typing import Any, Self  # Added type hints for clarity
 
-import pydantic
 import shortuuid
+import weave  # weave is likely used for experiment tracking/logging.
 from autogen_core import (
     AgentType,  # Represents a registered type of agent in the runtime.
     ClosureAgent,  # An agent defined by simple Python functions (closures).
@@ -21,16 +21,13 @@ from autogen_core import (
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
-    message_handler,  # Decorator (though not used directly here) for message handling.
-)
-from pydantic import Field, PrivateAttr, model_validator
-import weave  # weave is likely used for experiment tracking/logging.
+    )
+from pydantic import PrivateAttr, model_validator
 
 # TODO: TaskProcessingComplete seems unused in this file. Consider removal.
 # from buttermilk._core import TaskProcessingComplete
-from buttermilk._core.agent import Agent, ConductorRequest, FatalError, ProcessingError  # Added Agent
+from buttermilk._core.agent import FatalError, ProcessingError  # Added Agent
 from buttermilk._core.contract import (
-    CLOSURE,
     CONDUCTOR,
     # Added QualScore
     CONFIRM,
@@ -38,19 +35,16 @@ from buttermilk._core.contract import (
     MANAGER,
     AgentInput,
     AgentOutput,
-    FlowMessage,
-    GroupchatMessageTypes,
+    ConductorRequest,
     ManagerMessage,
     ManagerRequest,  # Request sent to the MANAGER (UI/Human).
-    ManagerResponse,  # Response received from the MANAGER.
+    ManagerResponse,
+    RunRequest,  # Response received from the MANAGER.
     StepRequest,  # Defines a request for a specific step/agent execution.
-    UserInstructions,  # Represents instructions provided by the user.
-)
+    )
 
 # TODO: Check if UserInstructions is actually used within this orchestrator's logic.
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
-from buttermilk._core.types import Record, RunRequest
-from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore  # Agent for scoring outputs.
 from buttermilk.agents.fetch import FetchRecord  # Agent for fetching data records.
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
@@ -182,7 +176,7 @@ class AutogenOrchestrator(Orchestrator):
             # TODO: this is a hack and should be changed
             from buttermilk.agents import SpyAgent
 
-            if step_config.agent_obj == 'SpyAgent':
+            if step_config.agent_obj == "SpyAgent":
                 # Register the adapter factory with the runtime.
                 # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
                 agent_type: AgentType = await SpyAgent.register(
@@ -200,7 +194,6 @@ class AutogenOrchestrator(Orchestrator):
                     ),
                 )
                 logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
-
 
     async def _register_manager_interface(self) -> None:
         """Registers a ClosureAgent to handle responses from the MANAGER."""
@@ -235,7 +228,7 @@ class AutogenOrchestrator(Orchestrator):
             closure=handle_manager_response,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=self._topic.type,  # Subscribe to the main group chat topic 
+                    topic_type=self._topic.type,  # Subscribe to the main group chat topic
                     agent_type=CONFIRM,  # Only messages for the CONFIRM agent.
                 )
             ],
@@ -243,7 +236,6 @@ class AutogenOrchestrator(Orchestrator):
             unknown_type_policy="ignore",
         )
         logger.debug(f"Manager interface agent '{CONFIRM}' registered and subscribed.")
-
 
     async def _ask_agents(
         self,
@@ -330,7 +322,6 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"Publishing UI message ({type(message).__name__}) to topic '{MANAGER}'")
         await self._runtime.publish_message(message, topic_id=manager_topic_id)
 
-
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""
         logger.debug("Cleaning up AutogenOrchestrator...")
@@ -399,7 +390,9 @@ class AutogenOrchestrator(Orchestrator):
         conductor_inputs = {"participants": dict(self._agent_types.items())}
         # Include the overall task prompt and current records.
         request = ConductorRequest(
-            inputs=conductor_inputs, prompt=self.parameters.get("task", ""), records=self._records  # Get task description from flow parameters
+            inputs=conductor_inputs,
+            prompt=self.parameters.get("task", ""),
+            records=self._records,  # Get task description from flow parameters
         )
 
         # Ask the CONDUCTOR agent(s).
@@ -418,9 +411,9 @@ class AutogenOrchestrator(Orchestrator):
         # Use the first valid response
         # Add assertion for type checker clarity, although it might fail if conductor returns non-StepRequest.
         # TODO: Add more robust handling if the assertion fails or if valid_responses[0].outputs isn't StepRequest.
-        assert isinstance(
-            valid_responses[0].outputs, StepRequest
-        ), f"Conductor returned unexpected type: Expected StepRequest, got {type(valid_responses[0].outputs)}"
+        assert isinstance(valid_responses[0].outputs, StepRequest), (
+            f"Conductor returned unexpected type: Expected StepRequest, got {type(valid_responses[0].outputs)}"
+        )
         next_step: StepRequest = valid_responses[0].outputs
         logger.debug(f"Conductor suggested next step for role: {next_step.role}")
 

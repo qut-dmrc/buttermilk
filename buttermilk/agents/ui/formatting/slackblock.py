@@ -46,9 +46,7 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
 
     for line in lines:
         text = re.sub(r"\n{2,+}", "\n", line)
-        text = (
-            str(text) + " "
-        )  # add trailing space here, and we'll remove it in the next step if it's duplicated
+        text = str(text) + " "  # add trailing space here, and we'll remove it in the next step if it's duplicated
         text = re.sub(r"\s{2,+}", " ", text)
         stripped += text
 
@@ -58,6 +56,7 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
         width=SLACK_MAX_MESSAGE_LENGTH,
         replace_whitespace=False,
     )  # Preserve newlines
+
 
 # Add this helper function after the strip_and_wrap function
 
@@ -78,10 +77,12 @@ def create_context_blocks(elements_list, max_elements_per_block=10):
     # Process elements in chunks respecting Slack's element limit
     for i in range(0, len(elements_list), max_elements_per_block):
         chunk = elements_list[i : i + max_elements_per_block]
-        blocks.append({
-            "type": "context",
-            "elements": chunk,
-        })
+        blocks.append(
+            {
+                "type": "context",
+                "elements": chunk,
+            }
+        )
 
     return blocks
 
@@ -129,138 +130,139 @@ def format_slack_message(result: AgentOutput) -> dict:
         result_copy.outputs = result_copy.outputs.model_dump()
 
     # Add header with model identifier
-    header_text = (
-        f":robot_face: {result_copy.parameters.get('name', '')} {result_copy.parameters.get('agent_id', '')}  {result_copy.parameters.get('model', '')} ".strip()
+    header_text = f":robot_face: {result_copy.parameters.get('name', '')} {result_copy.parameters.get('agent_id', '')}  {result_copy.parameters.get('model', '')} ".strip()
+    blocks.append(
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": header_text,
+                "emoji": True,
+            },
+        }
     )
-    blocks.append({
-        "type": "header",
-        "text": {
-            "type": "plain_text",
-            "text": header_text,
-            "emoji": True,
-        },
-    })
 
     # Handle error case
     if result.error:
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "*Error!*\n" + "\n".join(format_response(result.error)),
-            },
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Error!*\n" + "\n".join(format_response(result.error)),
+                },
+            }
+        )
 
+    elif isinstance(result_copy.outputs, QualScore):
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": str(result_copy.outputs),
+                },
+            }
+        )
     else:
-        if isinstance(result_copy.outputs, QualScore):
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": str(result_copy.outputs),
-                    },
-                }
-            )
-        else:
-            icontext = blocks_with_icon(
-                result_copy.parameters,
-                [
-                    ("input", ":mag:"),
-                    ("criteria", ":clipboard:"),
-                ],
-            )
-            if icontext:
-                blocks.append(icontext)
+        icontext = blocks_with_icon(
+            result_copy.parameters,
+            [
+                ("input", ":mag:"),
+                ("criteria", ":clipboard:"),
+            ],
+        )
+        if icontext:
+            blocks.append(icontext)
 
-            judge_results = dict(
-                prediction=result_copy.outputs.pop("prediction", None),
-                confidence=result_copy.outputs.pop("confidence", None),
-                severity=result_copy.outputs.pop("severity", None),
-            )
-            icontext = blocks_with_icon(
-                judge_results,
-                [
-                    ("prediction", (":biohazard_sign:", ":ring_buoy:")),
-                    ("confidence", ":bar_chart:"),
-                    ("severity", ":warning:"),
-                ],
-            )
-            if icontext:
-                blocks.append(icontext)
+        judge_results = dict(
+            prediction=result_copy.outputs.pop("prediction", None),
+            confidence=result_copy.outputs.pop("confidence", None),
+            severity=result_copy.outputs.pop("severity", None),
+        )
+        icontext = blocks_with_icon(
+            judge_results,
+            [
+                ("prediction", (":biohazard_sign:", ":ring_buoy:")),
+                ("confidence", ":bar_chart:"),
+                ("severity", ":warning:"),
+            ],
+        )
+        if icontext:
+            blocks.append(icontext)
 
-            # Add labels as chips if present
+        # Add labels as chips if present
 
-            if labels := result_copy.outputs.pop("labels", None):
-                label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels if label])
-                if label_text:
-                    blocks.append(
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": label_text,
-                            },
-                        }
-                    )
-
-            # Extract reasons for special handling
-            reasons = result_copy.outputs.pop("reasons", []) if isinstance(result_copy.outputs, dict) else []
-
-            # Handle any remaining fields in outputs
-            blocks.extend(dict_to_blocks(result_copy.outputs))
-
-            # Add divider before reasons if there are any
-            if reasons:
+        if labels := result_copy.outputs.pop("labels", None):
+            label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels if label])
+            if label_text:
                 blocks.append(
                     {
-                        "type": "divider",
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": label_text,
+                        },
                     }
                 )
 
-                # Add each reason as its own contextual block for better readability
+        # Extract reasons for special handling
+        reasons = result_copy.outputs.pop("reasons", []) if isinstance(result_copy.outputs, dict) else []
 
-                # Convert reasons to mrkdwn elements
-                reason_elements = [{"type": "mrkdwn", "text": f"{i + 1}. {reason}"} for i, reason in enumerate(reasons)]
-                # Add chunked context blocks
-                blocks.extend(create_context_blocks(reason_elements))
+        # Handle any remaining fields in outputs
+        blocks.extend(dict_to_blocks(result_copy.outputs))
 
-            # Handle records if present
-            if hasattr(result_copy, "records") and result_copy.records:
-                # Process each record
-                for record in result_copy.records:
-                    record_metadata = dict(record.metadata)
-                    record_metadata["record_id"] = record.record_id
-                    record_metadata["title"] = record_metadata.get("title") or record.title
+        # Add divider before reasons if there are any
+        if reasons:
+            blocks.append(
+                {
+                    "type": "divider",
+                }
+            )
 
-                    # Extract metadata
-                    icontext = blocks_with_icon(
-                        record.metadata,
-                        keys_to_icon_map=[
-                            ("title", ":bookmark:"),
-                            ("outlet", ":newspaper:"),
-                            ("date", ":calendar:"),
-                            ("url", ":link:"),
-                            ("record_id", ":id:"),
-                        ],
+            # Add each reason as its own contextual block for better readability
+
+            # Convert reasons to mrkdwn elements
+            reason_elements = [{"type": "mrkdwn", "text": f"{i + 1}. {reason}"} for i, reason in enumerate(reasons)]
+            # Add chunked context blocks
+            blocks.extend(create_context_blocks(reason_elements))
+
+        # Handle records if present
+        if hasattr(result_copy, "records") and result_copy.records:
+            # Process each record
+            for record in result_copy.records:
+                record_metadata = dict(record.metadata)
+                record_metadata["record_id"] = record.record_id
+                record_metadata["title"] = record_metadata.get("title") or record.title
+
+                # Extract metadata
+                icontext = blocks_with_icon(
+                    record.metadata,
+                    keys_to_icon_map=[
+                        ("title", ":bookmark:"),
+                        ("outlet", ":newspaper:"),
+                        ("date", ":calendar:"),
+                        ("url", ":link:"),
+                        ("record_id", ":id:"),
+                    ],
+                )
+
+                if icontext:
+                    blocks.append(icontext)
+
+                elements = []
+
+                # Split text into chunks of ~3000 chars
+                chunk_size = 2950
+                for i in range(0, len(record.content), chunk_size):
+                    chunk = record.content[i : i + chunk_size]
+                    elements.append(
+                        {
+                            "type": "mrkdwn",
+                            "text": chunk,
+                        }
                     )
-
-                    if icontext:
-                        blocks.append(icontext)
-
-                    elements = []
-
-                    # Split text into chunks of ~3000 chars
-                    chunk_size = 2950
-                    for i in range(0, len(record.content), chunk_size):
-                        chunk = record.content[i : i + chunk_size]
-                        elements.append(
-                            {
-                                "type": "mrkdwn",
-                                "text": chunk,
-                            }
-                        )
-                    blocks.extend(create_context_blocks(elements))
+                blocks.extend(create_context_blocks(elements))
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit
@@ -324,23 +326,25 @@ def confirm_options(
     ]
     if extra_blocks:
         blocks.extend(extra_blocks)
-    blocks.extend([
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "static_select",
-                    "placeholder": {
-                        "type": "plain_text",
-                        "text": placeholder,
-                        "emoji": True,
+    blocks.extend(
+        [
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "static_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": placeholder,
+                            "emoji": True,
+                        },
+                        "options": slack_options,
+                        "action_id": action_id,
                     },
-                    "options": slack_options,
-                    "action_id": action_id,
-                },
-            ],
-        },
-    ])
+                ],
+            },
+        ]
+    )
     return {
         "blocks": blocks,
         "text": f"Selection required: {message}",  # Fallback text

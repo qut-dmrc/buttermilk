@@ -10,6 +10,7 @@ from .toxicity import EvalRecord, Score, ToxicityModel
 # These are categories that we do not interpret as relevant to an overall 'toxic' result
 NON_TOXIC_CATS = ["public safety", "health", "religion and belief", "war and conflict", "finance", "politics", "legal"]
 
+
 class GoogleModerate(ToxicityModel):
     model: str = "PaLM 2"
     standard: str = "Google Moderate Text v2"
@@ -24,10 +25,7 @@ class GoogleModerate(ToxicityModel):
         return content
 
     @trace
-    def call_client(
-        self, prompt: str, **kwargs
-    ) -> language_v2.ModerateTextResponse:
-
+    def call_client(self, prompt: str, **kwargs) -> language_v2.ModerateTextResponse:
         document = language_v2.Document(
             content=prompt,
             type_=language_v2.Document.Type.PLAIN_TEXT,
@@ -57,4 +55,3 @@ class GoogleModerate(ToxicityModel):
             outcome.response = str(response)
 
         return outcome
-

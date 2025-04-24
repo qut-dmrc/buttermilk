@@ -3,13 +3,12 @@ Tests for the base Orchestrator concepts and potentially specific implementation
 """
 
 from unittest.mock import AsyncMock
+
 import pytest
 
 # Buttermilk core imports
-from buttermilk._core.contract import AgentInput, StepRequest  # Needed for type hints potentially
-from buttermilk._core.orchestrator import Orchestrator  # Base class
-from buttermilk._core.variants import AgentVariants
 from buttermilk._core.types import RunRequest  # Import RunRequest
+from buttermilk._core.variants import AgentVariants
 
 # Specific orchestrator implementation being tested here
 from buttermilk.runner.batch import BatchOrchestrator

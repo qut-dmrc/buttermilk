@@ -13,41 +13,33 @@ from typing import Sequence, Union  # Added Union for type hints
 
 from autogen_core import (
     DefaultTopicId,
-    CancellationToken,
     MessageContext,
     RoutedAgent,
     TopicId,  # Identifier for message topics.
     message_handler,  # Decorator to register methods as message handlers.
 )
 
+from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.agent import Agent,ToolOutput  # Buttermilk base agent and config.
-from buttermilk._core.contract import (
-    CONDUCTOR,  # Constant representing the Conductor role.
+from buttermilk._core.contract import (ToolOutput,
     AgentInput,  # Standard input message for Buttermilk agents.
     AgentOutput,
     ConductorRequest,
     ConductorResponse,
     ErrorEvent,
+    FlowMessage,
     GroupchatMessageTypes,
     HeartBeat,
-    ManagerMessage,
-    FlowMessage,
-    ManagerRequest,
-    ManagerResponse,  # Response from the Manager/UI.
     OOBMessages,  # Union type for Out-Of-Band control messages.
     TaskProcessingComplete,  # Status message indicating task completion.
     TaskProcessingStarted,  # Status message indicating task start.
-    UserInstructions,  # Instructions from the user (potentially via Manager).
-    AllMessages,  # Union of all possible message types (likely for broader type hints).
-)
+    )
 
 # TODO: These specific agent imports might create coupling. Consider if interfaces or protocols could be used.
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.bm import logger  # Buttermilk logger instance.
-
 
 # Define the expected return type more accurately using Union.
 # Can return None, a single output, or a sequence of outputs.
@@ -122,7 +114,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e
         else:
             # Insufficient information provided.
-            raise ValueError("AutogenAgentAdapter requires either a pre-instantiated 'agent' " "or both 'agent_cls' and 'agent_cfg'.")
+            raise ValueError("AutogenAgentAdapter requires either a pre-instantiated 'agent' or both 'agent_cls' and 'agent_cfg'.")
 
         # Set the default topic ID based on the provided type string.
         self.topic_id = DefaultTopicId(type=topic_type)

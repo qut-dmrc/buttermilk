@@ -2,7 +2,6 @@ import random
 import time
 from typing import Any
 
-import googleapiclient.errors
 import requests
 
 # import selenium.common.exceptions
@@ -177,9 +176,7 @@ class WebScraperSelenium(WebScraperRequests):
             if recurse and recurse > 0:
                 recurse_records.extend(self.extract_next(record=record))
 
-            if (
-                i > 5 and i < len(records) - 1
-            ):  # don't wait the first few times -- speeds up testing.
+            if i > 5 and i < len(records) - 1:  # don't wait the first few times -- speeds up testing.
                 wait = random.randint(self.wait_time, self.wait_time * 2)
                 gc.logger.debug(f"Sleeping for {wait} seconds.")
                 time.sleep(self.wait_time)

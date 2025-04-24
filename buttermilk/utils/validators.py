@@ -41,16 +41,20 @@ def make_list_validator() -> Callable[[Any], list]:
     return validator
 
 
+def convert_omegaconf_objects_recursive(v):
+    """Recursively convert OmegaConf objects to standard Python types."""
+    if isinstance(v, (DictConfig, ListConfig)):
+        return OmegaConf.to_container(v, resolve=True)
+    elif isinstance(v, dict):
+        return {k: convert_omegaconf_objects_recursive(v) for k, v in v.items()}
+    elif isinstance(v, list):
+        return [convert_omegaconf_objects_recursive(item) for item in v]
+    return v
+
 def convert_omegaconf_objects() -> Callable[[Any], dict | list]:
     """Convert OmegaConf items to python objects"""
 
-    def validator(v: Any) -> list | dict:
-        if isinstance(v, (DictConfig, ListConfig)):
-            return OmegaConf.to_container(v, resolve=True)
-        return v
-
-    return validator
-
+    return convert_omegaconf_objects_recursive
 
 def make_uri_validator() -> Callable[[Any], str]:
     """Convert input to string URI if possible"""
@@ -85,9 +89,7 @@ def make_path_validator() -> Callable[[Any], str]:
 
 def sanitize_html(value: str) -> str:
     """Sanitizes HTML input."""
-    cleaned = clean(
-        value, tags=[], attributes={}, strip=True
-    )  # Allow no tags/attributes
+    cleaned = clean(value, tags=[], attributes={}, strip=True)  # Allow no tags/attributes
     return cleaned
 
 

@@ -1,37 +1,33 @@
 """Tests for the AutogenAgentAdapter which bridges Buttermilk agents and Autogen runtime."""
 
-import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # Autogen imports
-from autogen_core import MessageContext, CancellationToken
+from autogen_core import MessageContext
 
 # Buttermilk core types
 from buttermilk._core.agent import Agent
-
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
-    ConductorRequest,
-    ConductorResponse,
-    StepRequest,
-    AgentOutput,
-    AgentInput,
-    TaskProcessingComplete,
-    TaskProcessingStarted,
     END,  # Import END constant
     WAIT,  # Import WAIT constant
+    AgentInput,
+    AgentOutput,
+    ConductorRequest,
+    StepRequest,
+    TaskProcessingComplete,
+    TaskProcessingStarted,
 )
+from buttermilk.agents.flowcontrol.explorer import ExplorerHost
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
 # Specific agent classes being wrapped
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.explorer import ExplorerHost
-from buttermilk.agents.ui.generic import UIAgent  # Import UIAgent
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
-
 
 # --- Fixtures ---
 
@@ -132,7 +128,9 @@ class TestAutogenAgentAdapter:
         """Test adapter routes ConductorRequest to the wrapped agent's __call__."""
         mock_agent = MagicMock(spec=Agent)
         mock_agent.__call__ = AsyncMock(name="__call__")
-        mock_response = AgentOutput(agent_info="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc"))
+        mock_response = AgentOutput(
+            agent_info="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc")
+        )
         mock_agent.__call__.return_value = mock_response
         mock_agent.id = "mock_agent_id"
         mock_agent.role = "test"

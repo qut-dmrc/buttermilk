@@ -9,9 +9,7 @@ def my_function(input: str) -> str:
 
 def test_trace():
     my_function("This is my function")
-    start_trace(
-        collection="my_custom_collection", resource_attributes=dict(job="testing")
-    )
+    start_trace(collection="my_custom_collection", resource_attributes=dict(job="testing"))
 
 
 def test_azure_default():

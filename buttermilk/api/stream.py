@@ -3,7 +3,6 @@ from urllib.parse import parse_qs
 
 import shortuuid
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -13,10 +12,10 @@ from pydantic import (
 )
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.llms import CHATMODELS
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.bm import bm, logger
-from buttermilk._core.llms import CHATMODELS
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import load_json_flexi
 from buttermilk.utils.validators import (
@@ -130,16 +129,8 @@ class FlowRequest(BaseModel):
     def to_job(self) -> "Job":
         job_vars = {k: v for k, v in self.model_dump().items() if k in Job.model_fields}
         _job = Job(**job_vars)
-        _job.parameters.update(**{
-            k: v
-            for k, v in self.model_dump().items()
-            if k in ["model", "template", "template_vars"]
-        })
-        _job.inputs.update(**{
-            k: v
-            for k, v in self.model_dump().items()
-            if k not in Job.model_fields and k not in _job.parameters
-        })
+        _job.parameters.update(**{k: v for k, v in self.model_dump().items() if k in ["model", "template", "template_vars"]})
+        _job.inputs.update(**{k: v for k, v in self.model_dump().items() if k not in Job.model_fields and k not in _job.parameters})
 
         return _job
 

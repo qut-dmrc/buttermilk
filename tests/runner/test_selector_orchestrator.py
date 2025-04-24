@@ -3,10 +3,11 @@ Tests for the Selector class.
 """
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from buttermilk._core.contract import AgentInput, AgentOutput, ConductorRequest, ConductorResponse, StepRequest, ManagerMessage, WAIT
+import pytest
+
+from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.selector import Selector
 
@@ -21,7 +22,6 @@ def orchestrator():
         patch("buttermilk.runner.groupchat.weave", MagicMock()),
         patch("buttermilk.runner.selector.asyncio.Queue", MagicMock()),
     ):
-
         config = {
             "name": "test_selector",
             "description": "Test orchestrator",

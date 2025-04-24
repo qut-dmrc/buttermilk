@@ -6,35 +6,30 @@ This includes message types for agent inputs, outputs, control flow, status upda
 and interactions with manager/conductor roles.
 """
 
-from asyncio import streams  # TODO: Unused import?
-from collections.abc import Mapping
 import datetime
-from email.policy import strict  # TODO: Unused import?
-from enum import Enum  # TODO: Unused import?
-from math import e  # TODO: Unused import?
-from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Sequence, Union
+from collections.abc import Mapping
+from typing import Any, Dict, Optional, Sequence, Union
+
+import numpy as np
+from omegaconf import DictConfig, ListConfig, OmegaConf
+import shortuuid  # For generating unique IDs
 
 # Import Autogen types used as base or components
-from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 from autogen_core.models import FunctionExecutionResult, LLMMessage
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
     computed_field,
     field_validator,
 )
-import shortuuid  # For generating unique IDs
-
-from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
 
 from buttermilk._core.job import SessionInfo
-from .config import DataSourceConfig, SaveInfo, Tracing, AgentConfig # Core configuration models
-from .types import Record, _global_run_id  # Core data types
-from buttermilk.utils.validators import make_list_validator  # Pydantic validators
+from buttermilk.utils.validators import convert_omegaconf_objects, convert_omegaconf_objects_recursive, make_list_validator  # Pydantic validators
+
+from .config import AgentConfig, AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
 from .log import logger
+from .types import Record, _global_run_id  # Core data types
 
 # --- Constants ---
 
@@ -88,7 +83,7 @@ class FlowProtocol(BaseModel):
         default_factory=list,
         description="Configuration for data sources to be loaded for the flow.",
     )
-    agents: Mapping[str, AgentConfig] = Field(
+    agents: Mapping[str, AgentVariants] = Field(
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
@@ -101,6 +96,10 @@ class FlowProtocol(BaseModel):
         description="Flow-level parameters accessible by agents via their context.",
     )
 
+
+    # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
+    _validate_parameters = field_validator("parameters", "data", "agents", "tools", mode="before")(convert_omegaconf_objects())
+
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""
 
@@ -112,6 +111,7 @@ class RunRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields for strict input
     )
+
 
 # --- Core Step Execution ---
 
@@ -222,6 +222,7 @@ class AgentInput(FlowMessage):
 
 class UserInstructions(FlowMessage):
     """Represents instructions or input originating directly from the user (e.g., via CLI)."""
+
     # REMOVE THIS IN FAVOUR OF ManagerRequest
 
 
@@ -259,7 +260,10 @@ class TracingDetails(BaseModel):
 
 def _get_run_info() -> SessionInfo:
     from buttermilk.bm import bm
+
     return bm.run_info
+
+
 class AgentOutput(FlowMessage):
     """
     Standard output structure returned by an agent after processing an `AgentInput`.
@@ -297,7 +301,7 @@ class AgentOutput(FlowMessage):
         default_factory=list,
         description="Messages sent to the LLM for this execution step.",
     )
-    prompt: str|None = Field(default=None, description="The prompt provided.")
+    prompt: str | None = Field(default=None, description="The prompt provided.")
 
     # The main result data from the agent, can be a Pydantic model or a dictionary.
     outputs: Union[BaseModel, Dict[str, Any], str, None] = Field(  # Allow str/None based on LLMAgent
@@ -311,26 +315,50 @@ class AgentOutput(FlowMessage):
     # Validator to ensure context and records are always lists.
     _ensure_input_list = field_validator("messages", "records", mode="before")(make_list_validator())
 
+    # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
+    _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
+
     # Validator inherited from FlowMessage handles 'error' field.
 
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        use_enum_values=True,
+        json_encoders={
+            np.bool_: bool,
+            datetime.datetime: lambda v: v.isoformat(),
+            ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+            DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
+        },
+        validate_assignment=True,
+        exclude_unset=True,
+        exclude_none=True,
+    )  # type: ignore
 
-    def model_dump(self, **kwargs):
-        """Custom serialization to handle Pydantic models within 'outputs'."""
-        data = super().model_dump(**kwargs)
-        # Ensure nested Pydantic models in 'outputs' are also serialized.
-        if isinstance(self.outputs, BaseModel):
-            data["outputs"] = self.outputs.model_dump()
-        
+    @computed_field
+    @property
+    def object_type(self) -> str:
         # add an extra field here that helps us rehydrate the object later on
-        data["object_type"] = str(type(self.outputs))
-        return data
+        return type(self.outputs).__name__
 
     @property
     def contents(self) -> str:
         """Provides a string representation of the 'outputs' field."""
         # TODO: Improve string representation for different output types (dict, list, model).
         return str(self.outputs)
-
+    
+    def model_dump(self, **kwargs):
+        """Custom serialization to handle Pydantic models and OmegaConf objects recursively."""
+        data = super().model_dump(**kwargs)
+        
+        # Handle Pydantic models in 'outputs'
+        if isinstance(self.outputs, BaseModel):
+            data["outputs"] = self.outputs.model_dump()
+        
+        # Recursively convert OmegaConf objects in the output data
+        data = convert_omegaconf_objects_recursive(data)
+        return data
 
 # --- Manager / Conductor / UI Interaction Messages ---
 # These messages facilitate communication between the orchestrator, conductor agents,
@@ -444,9 +472,6 @@ class ToolOutput(FunctionExecutionResult):
     # TODO: 'is_error' - does FunctionExecutionResult have this? If not, uncomment.
     # is_error: bool | None = Field(default=False)
 
-    # TODO: 'send_to_ui' flag - clarify purpose and implementation.
-    send_to_ui: bool = Field(False, description="Flag indicating if this tool output should be directly shown to the UI.")
-
 
 # --- Status & Coordination Messages ---
 # Primarily used internally by agents/orchestrators, especially within Autogen context.
@@ -508,4 +533,3 @@ GroupchatMessageTypes = Union[
 
 # All possible message types used within the system.
 AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ProceedToNextTaskSignal, HeartBeat]
-

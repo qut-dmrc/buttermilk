@@ -1,29 +1,18 @@
 import asyncio
+import base64
 import datetime
 import platform
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Self, Sequence, Union
+from typing import Any, Literal, Self, Sequence, Union
 
 import psutil
 import pydantic
 import shortuuid
+from autogen_core.models import AssistantMessage, UserMessage
 from cloudpathlib import AnyPath, CloudPath
-from pydantic import (
-    ConfigDict,
-    Field,
-)
-from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
-
-import base64
-from collections.abc import Mapping
-from pathlib import Path
-from typing import Any, Literal, Self
 from PIL.Image import Image
-import shortuuid
-from cloudpathlib import CloudPath
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -34,10 +23,6 @@ from pydantic import (
 )
 
 from buttermilk.utils.utils import is_b64
-
-from .log import logger
-from .contract import AssistantMessage, UserMessage
-
 
 _global_run_id = ""
 
@@ -287,7 +272,7 @@ class Record(BaseModel):
                 images.append(x)
         if images:
             return images
-        return None 
+        return None
 
     @computed_field
     @property
@@ -369,4 +354,3 @@ class Record(BaseModel):
             message_content = list(self.content)
 
         return UserMessage(content=message_content, source=self.record_id)
-

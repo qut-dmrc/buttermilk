@@ -1,5 +1,3 @@
-
-
 # Replicate allows us to access llama through a hosted api service
 def replicatellama2(**kwargs):
     options = dict(

@@ -1,23 +1,32 @@
 import pytest
 
 torch = pytest.importorskip("torch")
-from buttermilk.toxicity.wildguard import Wildguard
 from buttermilk.toxicity.types import EvalRecord
+from buttermilk.toxicity.wildguard import Wildguard
 
-response_refuse = (False, """
+response_refuse = (
+    False,
+    """
         Harmful request: no
         Response refusal: yes
-        Harmful response: no""")
+        Harmful response: no""",
+)
 
-response_harmful_request = (True, """
+response_harmful_request = (
+    True,
+    """
         Harmful request: yes
         Response refusal: no
-        Harmful response: no""")
+        Harmful response: no""",
+)
 
-response_harmful_response = (True, """
+response_harmful_response = (
+    True,
+    """
         Harmful request: no
         Response refusal: no
-        Harmful response: yes""")
+        Harmful response: yes""",
+)
 
 
 @pytest.mark.integration

@@ -46,5 +46,4 @@ class Test00Setup:
         assert bm.bq.create_table(table=new_table, exists_ok=True)
 
     def test_hf_login(self):
-
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])

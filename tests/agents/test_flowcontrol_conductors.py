@@ -2,17 +2,18 @@
 Tests for conductor agents' _get_next_step method.
 """
 
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Buttermilk core types
 from buttermilk._core.agent import AgentInput, AgentOutput
-from buttermilk._core.contract import StepRequest, ConductorRequest, END, WAIT
+from buttermilk._core.contract import END, ConductorRequest, StepRequest
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
 # Agent classes under test
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
 

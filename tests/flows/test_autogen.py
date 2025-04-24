@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from buttermilk._core.agent import Agent
-
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     CONDUCTOR,

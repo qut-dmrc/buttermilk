@@ -5,19 +5,18 @@ import jmespath
 import regex as re
 from jinja2 import (
     FileSystemLoader,
-    TemplateNotFound,
     Undefined,
     sandbox,
 )
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
+from autogen_core.models import AssistantMessage, UserMessage, LLMMessage, SystemMessage
 from buttermilk._core.defaults import TEMPLATES_PATH
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.types import Record
-from buttermilk.utils.utils import list_files, list_files_with_content, read_text
+from buttermilk.utils.utils import list_files, list_files_with_content
 
-from buttermilk._core.contract import AllMessages, AssistantMessage, LLMMessage, SystemMessage, UserMessage
 
 class KeyValueCollector(BaseModel):
     """A simple collector for key-value pairs
@@ -59,6 +58,7 @@ class KeyValueCollector(BaseModel):
     def init(self, keys: list[str]) -> None:
         for key in keys:
             self._data[key] = []
+
     """Routes variables between workflow steps using mappings
 
     Data is essentially a dict of lists, where each key is the name of a step and
@@ -86,7 +86,7 @@ class KeyValueCollector(BaseModel):
         if isinstance(mappings, str):
             # We have reached the end of the recursive road
             return self._resolve_simple_path(mappings, data_dict)
-        
+
         for target, source_spec in mappings.items():
             if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case
@@ -110,21 +110,19 @@ class KeyValueCollector(BaseModel):
 
         return resolved
 
-    def _resolve_simple_path(self, path: str, data: Mapping) -> Any: 
+    def _resolve_simple_path(self, path: str, data: Mapping) -> Any:
         """Resolve a JMESPath expression against the collected data."""
         if not path:
             return None
-        
+
         try:
             # Directly search the entire data structure using the JMESPath expression
             result = jmespath.search(path, data)
             return result
-        except Exception as e:
+        except Exception:
             # Optional: Log the error if the JMESPath expression is invalid or fails
             # logger.warning(f"JMESPath search failed for path '{path}': {e}")
             return None
-
-
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
@@ -159,7 +157,8 @@ def _parse_prompty(string_template) -> str:
     return result.group(2)
 
 
-def load_template(template: str,
+def load_template(
+    template: str,
     parameters: dict,
     untrusted_inputs: dict = {},
 ) -> tuple[str, set[str]]:
@@ -174,9 +173,7 @@ def load_template(template: str,
 
     """
 
-    recursive_paths = [TEMPLATES_PATH] + [
-        p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()
-    ]
+    recursive_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
     loader = FileSystemLoader(searchpath=recursive_paths)
 
     undefined_vars = []
@@ -228,24 +225,19 @@ def make_messages(
     # Next we use Prompty's format to set roles within the template
     from promptflow.core._prompty_utils import parse_chat
 
-    messages = parse_chat(
-        prompty,
-        valid_roles=["system", "user", "assistant", "placeholder",
-                "developer",
-                "human"]
-    )
+    messages = parse_chat(prompty, valid_roles=["system", "user", "assistant", "placeholder", "developer", "human"])
 
     # Convert to LLMMessage
     for message in messages:
         var_name = re.sub(r"[^\w\d_]+", "", message["content"]).lower()
         if not var_name:
             # don't add empty messages
-            continue 
-        match message['role'].lower():
+            continue
+        match message["role"].lower():
             case "developer" | "system":
                 output.append(SystemMessage(content=message["content"]))
-            case "user" | "human":            
-                output.append(UserMessage(content=message["content"], source="template"))                      
+            case "user" | "human":
+                output.append(UserMessage(content=message["content"], source="template"))
             case "assistant":
                 output.append(AssistantMessage(content=message["content"], source="template"))
             case "placeholder":
@@ -259,9 +251,7 @@ def make_messages(
                     err = (f"Missing {var_name} in placeholder vars.",)
                     raise ProcessingError(err)
             case _:
-                err = (
-                        f"Missing {var_name} in placeholder vars.",
-                    )
+                err = (f"Missing {var_name} in placeholder vars.",)
                 if fail_on_missing_placeholders:
                     raise ProcessingError(err)
                 logger.warning(err)

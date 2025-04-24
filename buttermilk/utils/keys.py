@@ -39,9 +39,7 @@ class SecretsManager(CloudProviderCfg):
 
         _client = self.client
 
-        name = "/".join([
-            x for x in [self._path, secret_name, "versions", version or "latest"] if x
-        ])
+        name = "/".join([x for x in [self._path, secret_name, "versions", version or "latest"] if x])
 
         try:
             response = _client.access_secret_version(request={"name": name})

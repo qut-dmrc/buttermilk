@@ -13,12 +13,8 @@ class Scorer:
         groundtruth: str = "expected",
         prediction: str = COL_PREDICTION,
     ):
-        df.loc[:, "preds"] = (
-            pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
-        )
-        df["correct"] = df.apply(
-            lambda x: x[col][prediction] == x[groundtruth]["answer"], axis="columns"
-        )
+        df.loc[:, "preds"] = pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
+        df["correct"] = df.apply(lambda x: x[col][prediction] == x[groundtruth]["answer"], axis="columns")
         return df
 
 
@@ -59,45 +55,26 @@ class Metriciser:
             grouper = df_results.groupby(level=idx_cols)
 
         # Calculate confusion matrix components
-        df_results["TP"] = (df_results[groundtruth] == 1) & (
-            df_results[prediction] == 1
-        )
-        df_results["TN"] = (df_results[groundtruth] == 0) & (
-            df_results[prediction] == 0
-        )
-        df_results["FP"] = (df_results[groundtruth] == 0) & (
-            df_results[prediction] == 1
-        )
-        df_results["FN"] = (df_results[groundtruth] == 1) & (
-            df_results[prediction] == 0
-        )
+        df_results["TP"] = (df_results[groundtruth] == 1) & (df_results[prediction] == 1)
+        df_results["TN"] = (df_results[groundtruth] == 0) & (df_results[prediction] == 0)
+        df_results["FP"] = (df_results[groundtruth] == 0) & (df_results[prediction] == 1)
+        df_results["FN"] = (df_results[groundtruth] == 1) & (df_results[prediction] == 0)
 
         # Aggregate confusion matrix components
         conf_matrix = grouper[["TP", "TN", "FP", "FN"]].sum()
 
         # Calculate metrics
-        conf_matrix["precision"] = conf_matrix["TP"] / (
-            conf_matrix["TP"] + conf_matrix["FP"]
-        ).replace(0, 1)
-        conf_matrix["recall"] = conf_matrix["TP"] / (
-            conf_matrix["TP"] + conf_matrix["FN"]
-        ).replace(0, 1)
+        conf_matrix["precision"] = conf_matrix["TP"] / (conf_matrix["TP"] + conf_matrix["FP"]).replace(0, 1)
+        conf_matrix["recall"] = conf_matrix["TP"] / (conf_matrix["TP"] + conf_matrix["FN"]).replace(0, 1)
         conf_matrix["f1-score"] = (
-            2
-            * (conf_matrix["precision"] * conf_matrix["recall"])
-            / (conf_matrix["precision"] + conf_matrix["recall"]).replace(0, 1)
+            2 * (conf_matrix["precision"] * conf_matrix["recall"]) / (conf_matrix["precision"] + conf_matrix["recall"]).replace(0, 1)
         )
         conf_matrix["accuracy"] = (conf_matrix["TP"] + conf_matrix["TN"]) / (
-            conf_matrix["TP"]
-            + conf_matrix["TN"]
-            + conf_matrix["FP"]
-            + conf_matrix["FN"]
+            conf_matrix["TP"] + conf_matrix["TN"] + conf_matrix["FP"] + conf_matrix["FN"]
         ).replace(0, 1)
 
         # Calculate proportions
-        proportion = conf_matrix[["TP", "TN", "FP", "FN"]].div(
-            conf_matrix[["TP", "TN", "FP", "FN"]].sum(axis=1), axis=0
-        )
+        proportion = conf_matrix[["TP", "TN", "FP", "FN"]].div(conf_matrix[["TP", "TN", "FP", "FN"]].sum(axis=1), axis=0)
         proportion.columns = [f"{col}_proportion" for col in proportion.columns]
 
         # Add number of examples

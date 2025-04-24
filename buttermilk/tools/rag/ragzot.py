@@ -9,7 +9,7 @@ from autogen_core.tools import FunctionTool
 from chromadb import Collection
 
 from buttermilk import logger
-from buttermilk._core.agent import ToolConfig
+from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import ToolOutput
 from buttermilk.agents.llm import LLMAgent, Tool, ToolSchema
 from buttermilk.data.vector import ChromaDBEmbeddings
@@ -133,9 +133,7 @@ class RagZot(LLMAgent, ToolConfig):
                 "metadatas",
             ],
         )
-        records = [
-            RefResult.from_chroma(results, i) for i in range(len(results["ids"][0]))
-        ]
+        records = [RefResult.from_chroma(results, i) for i in range(len(results["ids"][0]))]
 
         if self.no_duplicates:
             already_included = []

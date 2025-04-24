@@ -20,6 +20,7 @@ from vertexai.language_models import (
     TextEmbeddingInput,
     TextEmbeddingModel,
 )
+
 from buttermilk import logger
 from buttermilk._core.config import DataSouce
 from buttermilk.bm import BM, bm
@@ -215,6 +216,7 @@ class VertexAIEmbeddingFunction(EmbeddingFunction):
         # convert from numpy
         return [cast("list[float]", r.values) for r in results]
 
+
 # --- Core Embedding and DB Interaction Class ---
 class ChromaDBEmbeddings(DataSouce):
     """Handles configuration, embedding model interaction, and ChromaDB connection."""
@@ -225,7 +227,7 @@ class ChromaDBEmbeddings(DataSouce):
     task: str = "RETRIEVAL_DOCUMENT"
     collection_name: str = Field(default=...)
     dimensionality: int = Field(default=3072)
-    persist_directory: str= Field(default=...)
+    persist_directory: str = Field(default=...)
     concurrency: int = Field(default=20)
     upsert_batch_size: int = DEFAULT_UPSERT_BATCH_SIZE
     embedding_batch_size: int = Field(default=1)
@@ -292,14 +294,16 @@ class ChromaDBEmbeddings(DataSouce):
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for chunk in input_doc.chunks:
             if chunk.chunk_index is not None:
-                embeddings_input.append((
-                    chunk.chunk_index,
-                    TextEmbeddingInput(
-                        text=chunk.chunk_text,
-                        task_type=self.task,
-                        title=chunk.chunk_title,
-                    ),
-                ))
+                embeddings_input.append(
+                    (
+                        chunk.chunk_index,
+                        TextEmbeddingInput(
+                            text=chunk.chunk_text,
+                            task_type=self.task,
+                            title=chunk.chunk_title,
+                        ),
+                    )
+                )
             else:
                 logger.warning(
                     f"Chunk missing index in doc {input_doc.record_id}, skipping embedding for this chunk.",
@@ -310,11 +314,7 @@ class ChromaDBEmbeddings(DataSouce):
         successful_embeddings = 0
         for idx, embedding in embedding_results:
             try:
-                list_index = next(
-                    i
-                    for i, chk in enumerate(input_doc.chunks)
-                    if chk.chunk_index == idx
-                )
+                list_index = next(i for i, chk in enumerate(input_doc.chunks) if chk.chunk_index == idx)
                 if embedding is not None:
                     input_doc.chunks[list_index].embedding = embedding
                     successful_embeddings += 1
@@ -367,28 +367,25 @@ class ChromaDBEmbeddings(DataSouce):
             "document_title": [c.document_title for c in doc.chunks],
             "chunk_index": [c.chunk_index for c in doc.chunks],
             "chunk_text": [c.chunk_text for c in doc.chunks],
-            "embedding": [
-                list(c.embedding) if c.embedding is not None else None
-                for c in doc.chunks
-            ],
-            "chunk_metadata": [
-                json.dumps(c.metadata) if c.metadata else None for c in doc.chunks
-            ],
+            "embedding": [list(c.embedding) if c.embedding is not None else None for c in doc.chunks],
+            "chunk_metadata": [json.dumps(c.metadata) if c.metadata else None for c in doc.chunks],
         }
 
         embedding_type = pa.list_(pa.float32())
         if self.dimensionality:
             embedding_type = pa.list_(pa.float32(), self.dimensionality)
 
-        schema = pa.schema([
-            pa.field("chunk_id", pa.string()),
-            pa.field("document_id", pa.string()),
-            pa.field("document_title", pa.string()),
-            pa.field("chunk_index", pa.int32()),
-            pa.field("chunk_text", pa.string()),
-            pa.field("embedding", embedding_type),
-            pa.field("chunk_metadata", pa.string()),
-        ])
+        schema = pa.schema(
+            [
+                pa.field("chunk_id", pa.string()),
+                pa.field("document_id", pa.string()),
+                pa.field("document_title", pa.string()),
+                pa.field("chunk_index", pa.int32()),
+                pa.field("chunk_text", pa.string()),
+                pa.field("embedding", embedding_type),
+                pa.field("chunk_metadata", pa.string()),
+            ]
+        )
 
         table = pa.Table.from_pydict(data, schema=schema)
 
@@ -399,10 +396,7 @@ class ChromaDBEmbeddings(DataSouce):
             "record_path": doc.record_path,
             "metadata": json.dumps(doc.metadata),
         }
-        arrow_metadata = {
-            k.encode("utf-8"): str(v).encode("utf-8")
-            for k, v in doc_meta_serializable.items()
-        }
+        arrow_metadata = {k.encode("utf-8"): str(v).encode("utf-8") for k, v in doc_meta_serializable.items()}
 
         final_schema = table.schema.with_metadata(arrow_metadata)
         table = table.cast(final_schema)
@@ -421,9 +415,7 @@ class ChromaDBEmbeddings(DataSouce):
                 auto_truncate=False,
             )
             try:
-                embeddings_result: list[
-                    TextEmbedding
-                ] = await self._embedding_model.get_embeddings_async(
+                embeddings_result: list[TextEmbedding] = await self._embedding_model.get_embeddings_async(
                     [chunk_input],
                     **kwargs,
                 )
@@ -444,10 +436,7 @@ class ChromaDBEmbeddings(DataSouce):
         """Internal async method to call the Vertex AI embedding model concurrently."""
         if not inputs:
             return []
-        tasks = [
-            self._run_embedding_task(chunk_input=chunk_input, index=idx)
-            for idx, chunk_input in inputs
-        ]
+        tasks = [self._run_embedding_task(chunk_input=chunk_input, index=idx) for idx, chunk_input in inputs]
         results: list[tuple[int, list[float | int] | None]] = await asyncio.gather(
             *tasks,
         )
@@ -539,11 +528,7 @@ class ChromaDBEmbeddings(DataSouce):
                     f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
                 )
                 try:
-                    failed_doc_filename = (
-                        bm.save_dir
-                        / Path(FAILED_BATCH_DIR)
-                        / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
-                    )
+                    failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     logger.info(
                         f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                     )
@@ -581,9 +566,7 @@ class ChromaDBEmbeddings(DataSouce):
             embeddings_list = []
             metadatas = []
 
-            chunks_to_upsert = [
-                c for c in doc_with_embeddings.chunks if c.embedding is not None
-            ]
+            chunks_to_upsert = [c for c in doc_with_embeddings.chunks if c.embedding is not None]
 
             for chunk in chunks_to_upsert:
                 ids.append(chunk.chunk_id)
@@ -618,11 +601,7 @@ class ChromaDBEmbeddings(DataSouce):
             logger.error(f"Failed to upsert document {doc.record_id}: {e}")
             # Save the failed document for retry
             try:
-                failed_doc_filename = (
-                    bm.save_dir
-                    / Path(FAILED_BATCH_DIR)
-                    / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
-                )
+                failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 logger.info(
                     f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                 )

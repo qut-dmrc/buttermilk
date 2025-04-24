@@ -117,9 +117,7 @@ class ZotDownloader(BaseModel):
             # Fetch next page if available
             if _next:
                 try:
-                    logger.debug(
-                        f"Following 'next' link for more Zotero items: {_next}"
-                    )
+                    logger.debug(f"Following 'next' link for more Zotero items: {_next}")
                     items = self._zot._retrieve_data(_next).json()
                     _next = self._zot._extract_links().get("next")
                 except Exception as e:
@@ -127,9 +125,7 @@ class ZotDownloader(BaseModel):
                         f"Error fetching next page from Zotero: {e} {e.args=}",
                     )
                     break  # Stop if pagination fails
-            elif (
-                not items
-            ):  # Break if no next link AND no items left from previous fetch
+            elif not items:  # Break if no next link AND no items left from previous fetch
                 logger.debug(
                     "No 'next' link and no more items, finishing Zotero item retrieval.",
                 )
@@ -156,9 +152,7 @@ class ZotDownloader(BaseModel):
 
         # Find the PDF attachment link
         attachment = item["links"].get("attachment", {})
-        if (attachment.get("attachmentType") == "application/pdf") and (
-            pdf_attachment := attachment.get("href")
-        ):
+        if (attachment.get("attachmentType") == "application/pdf") and (pdf_attachment := attachment.get("href")):
             attachment_key = pdf_attachment.split("/")[-1]
             try:
                 # --- Download PDF ---

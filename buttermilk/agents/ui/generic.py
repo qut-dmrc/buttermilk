@@ -1,13 +1,12 @@
 import asyncio
 from collections.abc import Awaitable
-from typing import Any, AsyncGenerator, Callable, Coroutine, Optional  # Add Optional
+from typing import Any, Callable, Optional  # Add Optional
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
-import weave  # Add weave import
 
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput, AgentOutput, FlowMessage, ManagerMessage, ManagerRequest, OOBMessages
+from buttermilk._core.contract import AgentInput, AgentOutput, OOBMessages
 
 
 class UIAgent(Agent):

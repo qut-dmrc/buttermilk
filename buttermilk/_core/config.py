@@ -13,7 +13,6 @@ import cloudpathlib
 from google.cloud.bigquery.schema import SchemaField
 from pydantic import (
     AfterValidator,
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -24,10 +23,16 @@ from pydantic import (
 )
 from shortuuid import uuid
 
-from .types import SessionInfo
-from .defaults import BQ_SCHEMA_DIR
+from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
+from buttermilk.utils.utils import expand_dict
+from buttermilk.utils.validators import (
+    convert_omegaconf_objects,
+    lowercase_validator,  # Pydantic validators
+)
 
-from buttermilk.utils.validators import convert_omegaconf_objects, lowercase_validator  # Pydantic validators
+from .defaults import BQ_SCHEMA_DIR
+from .types import SessionInfo
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -63,7 +68,7 @@ class SaveInfo(CloudProviderCfg):
     destination: str | cloudpathlib.AnyPath | None = None
     db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
-    
+
     _loaded_schema: List[SchemaField] = PrivateAttr(default=[])
 
     # model_config = ConfigDict(
@@ -98,13 +103,14 @@ class SaveInfo(CloudProviderCfg):
                 "Nowhere to save to! Either destination or dataset must be provided.",
             )
         return self
-    
+
     @computed_field
     @property
     def bq_schema(self) -> List[SchemaField]:
         if not self._loaded_schema:
             from buttermilk.bm import bm
-            self._loaded_schema= bm.bq.schema_from_json(self.db_schema)
+
+            self._loaded_schema = bm.bq.schema_from_json(self.db_schema)
         return self._loaded_schema
 
 
@@ -146,6 +152,7 @@ class DataSourceConfig(BaseModel):
         exclude_none=True,
         exclude_unset=True,
     )
+
 
 class DataSouce(DataSourceConfig):
     pass
@@ -288,3 +295,92 @@ class AgentConfig(BaseModel):
         name_parts = [getattr(self, comp, None) for comp in self._name_components]
         self.name = " ".join([str(part) for part in name_parts if part])  # Join non-None parts.
         return self
+
+
+class AgentVariants(AgentConfig):
+    """
+    A factory for creating Agent instance variants based on parameter combinations.
+
+    Defines two types of variants:
+    1. `parallel_variants`: Parameters whose combinations create distinct agent instances
+       (e.g., different models). These agents can potentially run in parallel.
+    2. `sequential_variants`: Parameters whose combinations define sequential tasks
+       executed by *each* agent instance created from `parallel_variants`.
+
+    Example:
+    ```yaml
+    - id: ANALYST
+      role: "Analyst"
+      agent_obj: LLMAgent
+      num_runs: 1
+      variants:
+        model: ["gpt-4", "claude-3"]    # Creates 2 parallel agent instances
+      tasks:
+        criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
+        temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent
+                                        # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
+      parameters:
+        template: analyst               # parameter sets shared for each task
+      inputs:
+        results: othertask.outputs.results  # dynamic inputs mapped from other data
+    ```
+    """
+
+    def get_configs(self) -> list[tuple[type, AgentConfig]]:
+        """
+        Generates agent configurations based on parallel and sequential variants.
+        """
+        # Get static config (base attributes excluding variant fields)
+        static_config = self.model_dump(
+            exclude={
+                "parallel_variants",
+                "id",
+                "sequential_variants",
+                "num_runs",
+                "parameters",
+                "tasks",
+            }
+        )
+        base_parameters = self.parameters.copy()  # Base parameters common to all
+
+        # Get agent class
+        from buttermilk._core.variants import AgentRegistry
+        agent_class = AgentRegistry.get(self.agent_obj)
+
+        # Expand parallel variants
+        parallel_variant_combinations = expand_dict(self.variants)
+        if not parallel_variant_combinations:
+            parallel_variant_combinations = [{}]  # Ensure at least one base agent config
+
+        # Expand sequential variants
+        sequential_task_sets = expand_dict(self.tasks)
+        if not sequential_task_sets:
+            sequential_task_sets = [{}]  # Default: one task with no specific sequential parameters
+
+        generated_configs = []
+        # Create agent configs based on combinations of parallel and sequential variants, and num_runs
+        for i in range(self.num_runs):
+            for parallel_params in parallel_variant_combinations:
+                for task_params in sequential_task_sets:
+                    # Start with static config
+                    cfg_dict = static_config.copy()
+
+                    # Combine base parameters, parallel variant parameters, and sequential task parameters
+                    # Order matters: task parameters overwrite parallel, parallel overwrite base
+                    combined_params = {**base_parameters, **parallel_params, **task_params}
+                    cfg_dict["parameters"] = combined_params
+
+                    # Create and add the AgentConfig instance
+                    try:
+                        # Ensure AgentConfig allows extra fields if needed, or filter cfg_dict
+                        # AgentConfig currently has extra='allow', so unknown fields are okay
+                        agent_config_instance = AgentConfig(**cfg_dict)
+                        generated_configs.append((agent_class, agent_config_instance))
+                    except Exception as e:
+                        logger.error(f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
+                        raise  # Re-raise by default
+
+        if not generated_configs:  # Check if list is empty
+            raise FatalError(f"Could not create any agent variant configs for {self.role} {self.name}")
+
+        return generated_configs

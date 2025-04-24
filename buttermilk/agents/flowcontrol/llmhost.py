@@ -1,47 +1,34 @@
 import asyncio
 from collections.abc import Awaitable
-from huggingface_hub import User
+from typing import Any, Callable, Optional, Union
+
+from autogen_core import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr
+
+from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk import logger
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
-    END,
-    AssistantMessage,
+    AgentInput,
+    AgentOutput,
     ConductorRequest,
     ConductorResponse,
-    ManagerMessage,
-    ManagerRequest,
-    ManagerResponse,
+    GroupchatMessageTypes,
     OOBMessages,
     StepRequest,
+    TaskProcessingComplete,
     TaskProcessingStarted,
-    ToolOutput,
-    UserMessage,
 )
 from buttermilk.agents.llm import LLMAgent
 
-from typing import Any, AsyncGenerator, Callable, Optional, Self, Union
-from autogen_core import CancellationToken, MessageContext, message_handler
-
-from buttermilk import logger
-from buttermilk._core.config import DataSourceConfig
-from buttermilk._core.contract import (
-    AgentInput,
-    AgentOutput,
-    AllMessages,
-    FlowMessage,
-    GroupchatMessageTypes,
-    OOBMessages,
-    UserInstructions,
-    TaskProcessingComplete,
-    ProceedToNextTaskSignal,
-)
-
 TRUNCATE_LEN = 1000  # characters per history message
+
+
 class HostAgent(LLMAgent):
     """Coordinators for group chats that use an LLM. Can act as the 'beat' to regulate flow."""
 
     _input_callback: Any = PrivateAttr(...)
-    _pending_agent_id: str | None = PrivateAttr(default=None) # Track agent waiting for signal
+    _pending_agent_id: str | None = PrivateAttr(default=None)  # Track agent waiting for signal
 
     _output_model: Optional[type[BaseModel]] = StepRequest
     _message_types_handled: type[Any] = PrivateAttr(default=Union[ConductorRequest])
@@ -65,7 +52,7 @@ class HostAgent(LLMAgent):
         """Initialize the agent"""
         self._input_callback = input_callback
         self._step_completion_event.set()  # Ready to process
-        await super().initialize(**kwargs) # Call parent initialize if needed
+        await super().initialize(**kwargs)  # Call parent initialize if needed
 
     async def _listen(
         self,
@@ -80,9 +67,8 @@ class HostAgent(LLMAgent):
 
         if isinstance(message, (AgentOutput, ConductorResponse)):
             await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
-        else:
-            if not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+        elif not message.content.startswith(COMMAND_SYMBOL):
+            await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
 
     async def _handle_control_message(
         self,
@@ -92,7 +78,6 @@ class HostAgent(LLMAgent):
         message_callback: Callable = None,
         **kwargs,
     ) -> OOBMessages | None:
-
         # --- Handle Task Completion from Worker Agents ---
         if isinstance(message, TaskProcessingStarted):
             if message.role == self._expected_agents_current_step:
@@ -125,6 +110,6 @@ class HostAgent(LLMAgent):
 
         result = await super()._process(message=message, cancellation_token=cancellation_token, **kwargs)
 
-        self._current_step_name = result.outputs.role 
-        
+        self._current_step_name = result.outputs.role
+
         return result

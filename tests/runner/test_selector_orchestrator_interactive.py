@@ -3,9 +3,9 @@ Tests for the interactive features of SelectorOrchestrator.
 """
 
 import asyncio
-import json
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, ANY, call
 
 from buttermilk._core.contract import (
     AgentOutput,
@@ -15,11 +15,9 @@ from buttermilk._core.contract import (
     ManagerRequest,
     ManagerResponse,
     StepRequest,
-    UserInstructions,
 )
-from buttermilk._core.types import Record, RunRequest
+from buttermilk._core.types import Record
 from buttermilk._core.variants import AgentVariants
-
 from buttermilk.runner.selector import Selector
 
 

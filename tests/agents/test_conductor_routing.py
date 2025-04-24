@@ -3,21 +3,21 @@ Tests the internal routing logic of conductor agents, ensuring ConductorRequest
 is handled correctly by delegating to step-choosing methods.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-import inspect  # Keep inspect only if absolutely needed for debugging, remove from final tests
 
 # Buttermilk core types
 from buttermilk._core.contract import (
+    AgentOutput,
     ConductorRequest,
     StepRequest,
-    AgentOutput,
 )
+from buttermilk.agents.flowcontrol.explorer import ExplorerHost
+from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
 # Conductor agent classes under test
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 
 pytestmark = pytest.mark.anyio
 

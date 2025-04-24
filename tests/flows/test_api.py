@@ -29,9 +29,7 @@ def test_api_request_simple(
     flow_request_data: dict,
     client,
 ):
-    resolved_req_cfg = {
-        k: v() if callable(v) else v for k, v in flow_request_data.items()
-    }
+    resolved_req_cfg = {k: v() if callable(v) else v for k, v in flow_request_data.items()}
     flow_request = FlowRequest(**resolved_req_cfg)
     response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
     assert response.status_code == 200
@@ -52,9 +50,7 @@ def test_run_flow_html(client, bm: Any, flow_request_data: dict[str, Any]):
     response = client.post("/html/flow/test_flow", json=flow_request_data)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert (
-        "Sample text" in response.text
-    )  # Check if the response contains the expected text
+    assert "Sample text" in response.text  # Check if the response contains the expected text
 
 
 def test_get_runs(client, bm: Any):

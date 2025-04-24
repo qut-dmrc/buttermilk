@@ -3,7 +3,6 @@ import datetime
 import pandas as pd
 import shortuuid
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -61,9 +60,7 @@ class EvalRecord(BaseModel):
     labels: list[str] = Field(default=[])
 
     error: str | None = None
-    response: str | None = (
-        None  # when we receive an invalid response, log it in this field
-    )
+    response: str | None = None  # when we receive an invalid response, log it in this field
 
     metadata: dict | None = {}
     model_config = ConfigDict(
@@ -112,9 +109,7 @@ class EvalRecord(BaseModel):
     @classmethod
     def check_types(cls, values):
         if isinstance(values.get("scores"), dict):
-            values["scores"] = [
-                Score(measure=k, score=v) for k, v in values["scores"].items()
-            ]
+            values["scores"] = [Score(measure=k, score=v) for k, v in values["scores"].items()]
 
         if reasons := values.pop("reasons", None):
             converted_reasons = []
@@ -135,9 +130,7 @@ class EvalRecord(BaseModel):
             record[COL_PREDICTION] = self.prediction
 
         if self.scores and isinstance(self.scores, list):
-            record["scores"] = [
-                {"measure": s.measure, "score": s.score} for s in self.scores
-            ]
+            record["scores"] = [{"measure": s.measure, "score": s.score} for s in self.scores]
 
         # ensure timestamp is in pandas format.
         record["timestamp"] = pd.to_datetime(record["timestamp"])

@@ -2,30 +2,24 @@
 Defines agents and models for evaluating/scoring LLM outputs, often against ground truth.
 """
 
-from typing import Any, AsyncGenerator, Callable, Optional, Type, List, ClassVar
+from typing import Any, Callable, Optional
 
 import weave  # For logging, tracing, and potentially defining scorers.
-from autogen_core import CancellationToken, DefaultTopicId, MessageContext
-from pydantic import BaseModel, Field, PrivateAttr, computed_field
+from autogen_core import CancellationToken
+from pydantic import BaseModel, Field, computed_field
 
 # Buttermilk core imports
 from buttermilk import logger
-from buttermilk._core import ToolOutput
-from buttermilk._core.agent import ProcessingError, buttermilk_handler  # Decorator for message handlers
+from buttermilk._core.agent import ProcessingError  # Decorator for message handlers
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    AllMessages,  # Type hint union
-    ConductorRequest,
-    ConductorResponse,
     GroupchatMessageTypes,  # Type hint union for listen
-    OOBMessages,  # Type hint union
-    TaskProcessingStarted,  # Status messages (potentially used by base classes)
-    TaskProcessingComplete,
-)
+    )
 from buttermilk.agents.judge import AgentReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
+
 
 # --- Pydantic Models for Scoring ---
 class QualScoreCRA(BaseModel):
@@ -263,7 +257,7 @@ class LLMScorer(LLMAgent):
                     await public_callback(score_output)
                     return score_output.outputs.model_dump()
                 else:
-                    msg = f"ButtermilkWeaveScorer failed to get valid QualScore output."
+                    msg = "ButtermilkWeaveScorer failed to get valid QualScore output."
                     logger.error(msg)
                     raise ProcessingError(msg)
 

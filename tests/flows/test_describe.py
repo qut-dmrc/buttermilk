@@ -1,8 +1,8 @@
 import pytest
 
+from buttermilk._core.llms import MULTIMODAL_MODELS
 from buttermilk._core.types import Record
 from buttermilk.agents.describer import Describer
-from buttermilk._core.llms import MULTIMODAL_MODELS
 from buttermilk.utils.media import download_and_convert
 
 
@@ -18,7 +18,6 @@ def flow_describer(request):
         inputs={"record": "record"},
         outputs={"record": "record"},
     )
-    return  # Flow(source="testing", steps=[agent])
 
 
 @pytest.mark.anyio

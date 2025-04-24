@@ -3,6 +3,7 @@ from tempfile import NamedTemporaryFile
 
 import cloudpathlib
 import pandas as pd
+
 from buttermilk._core.config import DataSourceConfig
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
@@ -115,9 +116,7 @@ def load_jobs(data_cfg: DataSourceConfig) -> pd.DataFrame:
             elif condition and isinstance(condition, str):
                 sql += f' AND {comparison_string} = "{condition}" '
             elif condition and isinstance(condition, Sequence):
-                multi_or = " OR ".join([
-                    f'{comparison_string} = "{term}"' for term in condition
-                ])
+                multi_or = " OR ".join([f'{comparison_string} = "{term}"' for term in condition])
                 sql += f" AND ({multi_or})"
 
     # exclude records already processed if necessary
@@ -144,11 +143,10 @@ def group_and_filter_jobs(
     raise_on_error=True,
 ) -> pd.DataFrame:
     from buttermilk import logger
+
     # expand and rename columns if we need to
     pairs_to_expand = (
-        list(find_key_string_pairs(data_cfg.join))
-        + list(find_key_string_pairs(data_cfg.group))
-        + list(find_key_string_pairs(data_cfg.columns))
+        list(find_key_string_pairs(data_cfg.join)) + list(find_key_string_pairs(data_cfg.group)) + list(find_key_string_pairs(data_cfg.columns))
     )
 
     for col_name, grp in pairs_to_expand:
@@ -184,9 +182,7 @@ def group_and_filter_jobs(
                 raise e
 
     # Add columns to group by to the index
-    idx_cols = (
-        list(data_cfg.join.keys()) + list(data_cfg.group.keys()) + list(data_cfg.index)
-    )
+    idx_cols = list(data_cfg.join.keys()) + list(data_cfg.group.keys()) + list(data_cfg.index)
 
     idx_cols = [c for c in idx_cols if c in data.columns]
     if idx_cols:
@@ -203,11 +199,7 @@ def group_and_filter_jobs(
     if data_cfg.max_records_per_group > 0 and idx_cols:
         # Reduce down to n list items per index (but don't aggregate
         # at this time, just keep a random selection of rows)
-        data = (
-            data.sample(frac=1)
-            .groupby(level=idx_cols, as_index=True)
-            .agg(lambda x: x.tolist()[: data_cfg.max_records_per_group])
-        )
+        data = data.sample(frac=1).groupby(level=idx_cols, as_index=True).agg(lambda x: x.tolist()[: data_cfg.max_records_per_group])
 
     # Only return the columns we need
     if data_cfg.columns and len(data_cfg.columns) > 0:
@@ -253,7 +245,6 @@ def cache_data(uri: str) -> str:
     return dataset
 
 
-
 async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.DataFrame]:
     # This works for small datasets that we can easily read and load.
     datasets = {}
@@ -295,6 +286,7 @@ async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.
 
 def read_all_files(uri, pattern, columns: dict[str, str]):
     from buttermilk import logger
+
     filelist = cloudpathlib.GSPath(uri).glob(pattern)
     # Read each file into a DataFrame and store in a list
     dataset = pd.DataFrame(columns=columns.keys())
@@ -368,11 +360,7 @@ def parse_flow_vars(
             value = []
             for x in path:
                 sub_value = descend(map=map, path=x)
-                if (
-                    sub_value
-                    and isinstance(sub_value, Sequence)
-                    and not isinstance(sub_value, str)
-                ):
+                if sub_value and isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
                     value.extend(sub_value)
                 elif sub_value:
                     value.append(sub_value)

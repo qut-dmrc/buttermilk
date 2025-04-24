@@ -1,8 +1,7 @@
-import time
+import asyncio
 import uuid
 
 import pytest
-import asyncio
 
 from buttermilk.bm import BM
 

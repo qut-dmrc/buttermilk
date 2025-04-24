@@ -1,17 +1,15 @@
 import asyncio
-from enum import Enum
 import json
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
-from autogen_core import CancellationToken, FunctionCall
-from regex import D
-import weave
+
 from anthropic import (
     AnthropicVertex,
     AsyncAnthropicVertex,
 )
-
-from autogen_core.tools import FunctionTool, Tool, ToolSchema
-from autogen_core.models import ChatCompletionClient, ModelFamily, ModelInfo
+from autogen_core import CancellationToken, FunctionCall
+from autogen_core.models import ChatCompletionClient, CreateResult, LLMMessage, ModelFamily, ModelInfo
+from autogen_core.tools import Tool, ToolSchema
 from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import (
     AzureOpenAIChatCompletionClient,
@@ -22,13 +20,11 @@ from autogen_ext.models.openai._transformation.registry import (
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
-from buttermilk import logger
-from buttermilk._core import AgentOutput
-from buttermilk._core.agent import ToolOutput
+
+from buttermilk._core.log import logger
+from buttermilk._core.contract import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from .retry import RetryWrapper
-
-from autogen_core.models import CreateResult, LLMMessage, RequestUsage
 
 _ = "ChatCompletionClient"
 
@@ -190,7 +186,6 @@ class AutoGenWrapper(RetryWrapper):
         tool,
         cancellation_token: CancellationToken | None,
     ) -> list[ToolOutput]:
-
         # Run the tool and capture the result.
         arguments = json.loads(call.arguments)
         results = await tool.run_json(arguments, cancellation_token)
@@ -267,7 +262,6 @@ class LLMs(BaseModel):
         if self.connections[name].api_type == "azure":
             client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
-
             client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(
                 **client_params,
             )

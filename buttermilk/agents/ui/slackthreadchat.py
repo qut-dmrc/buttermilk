@@ -1,18 +1,16 @@
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, Callable
 
 import pydantic
+from autogen_core import CancellationToken
 from pydantic import BaseModel, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
 
-from autogen_core import CancellationToken, MessageContext
-import weave
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    FlowMessage,
     GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
@@ -30,7 +28,6 @@ from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.libs.slack import (
     SlackContext,
     post_message_with_retry,
-    request_with_retry,
 )
 
 _active_thread_registry = {}
@@ -183,8 +180,7 @@ class SlackUIAgent(UIAgent):
         async def matcher(message):
             return (
                 # It's a message in our thread, not from the bot.
-                message.get("thread_ts") == thread_ts
-                and message.get("subtype") != "bot_message"
+                message.get("thread_ts") == thread_ts and message.get("subtype") != "bot_message"
             )
 
         async def feed_in(message, say):

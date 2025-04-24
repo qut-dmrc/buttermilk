@@ -1,15 +1,12 @@
 import contextlib
-from io import BytesIO
 from typing import Any
 
-import PIL
-import PIL.Image
 import regex as re
 from bs4 import BeautifulSoup
 from readabilipy import simple_json_from_html_string
 
 from buttermilk._core.image import read_image
-from buttermilk._core.types import MediaObj, Record, is_b64
+from buttermilk._core.types import MediaObj, Record
 from buttermilk.utils.utils import (
     download_limited_async,
     is_filepath,
@@ -150,15 +147,17 @@ def extract_main_content_bs(html: bytes | str) -> str:
     soup = BeautifulSoup(html, "html.parser")
 
     # Remove unwanted elements
-    for element in soup.find_all([
-        "script",
-        "style",
-        "header",
-        "footer",
-        "nav",
-        "iframe",
-        "aside",
-    ]):
+    for element in soup.find_all(
+        [
+            "script",
+            "style",
+            "header",
+            "footer",
+            "nav",
+            "iframe",
+            "aside",
+        ]
+    ):
         element.decompose()
 
     # Try to find main content
@@ -182,11 +181,7 @@ def extract_main_content_bs(html: bytes | str) -> str:
         main_content = soup.body or soup
 
     # Extract and clean text
-    text = " ".join(
-        line.strip()
-        for line in main_content.get_text(separator=" ").splitlines()
-        if line.strip()
-    )
+    text = " ".join(line.strip() for line in main_content.get_text(separator=" ").splitlines() if line.strip())
 
     # Clean extra whitespace
     text = re.sub(r"\s+", " ", text).strip()

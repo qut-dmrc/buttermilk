@@ -1,11 +1,11 @@
+from typing import Literal
+
 import pytest
-from autogen_core.models import AssistantMessage, UserMessage, SystemMessage
+from autogen_core.models import AssistantMessage, UserMessage, LLMMessage, SystemMessage
+from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
 
 @pytest.mark.integration
 @pytest.mark.anyio
@@ -33,7 +33,6 @@ async def test_cheap_llm(llm):
 
 
 class TestPromptStyles:
-
     @pytest.mark.anyio
     async def test_usertext_and_placeholder(
         self,
@@ -44,7 +43,8 @@ class TestPromptStyles:
             UserMessage(
                 content="Hi, can you please summarise this content for me?",
                 source="user",
-            ), text_record.as_message(role="user"),
+            ),
+            text_record.as_message(role="user"),
         ]
 
         response = await llm.create(messages=messages)
@@ -56,7 +56,8 @@ class TestPromptStyles:
     async def test_words_in_mouth(self, llm_expensive):
         messages = [
             UserMessage(content="hi! I'm Siobhan. What's your name?", source="test"),
-            AssistantMessage(content= "Hi Siobhan! I'm a chatbot, my developers call me",
+            AssistantMessage(
+                content="Hi Siobhan! I'm a chatbot, my developers call me",
                 source="assistant",
             ),
         ]

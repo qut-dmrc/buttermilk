@@ -28,8 +28,8 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from buttermilk._core.log import logger
 from buttermilk._core.exceptions import RateLimit
+from buttermilk._core.log import logger
 
 
 class RetryWrapper(BaseModel):

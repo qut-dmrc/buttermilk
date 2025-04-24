@@ -1,6 +1,7 @@
+
 import pytest
-import asyncio
-from buttermilk._core.contract import AgentInput, StepRequest, ConductorRequest, AgentOutput, END, WAIT
+
+from buttermilk._core.contract import END, AgentInput, AgentOutput, ConductorRequest, StepRequest
 from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 
@@ -11,16 +12,16 @@ async def test_sequencer_initialization():
 
     await agent.initialize()
     assert agent.role == "sequencer"
-    assert "Test Sequencer" in agent.name # Checks generated name
+    assert "Test Sequencer" in agent.name  # Checks generated name
 
     # Process a basic input to test initialization and the _process path
-    test_input = AgentInput(prompt="Hello", inputs={"task": "Test task"}) # Add task as _process checks it
-    result = await agent._process(message=test_input) # Pass as 'message' kwarg
+    test_input = AgentInput(prompt="Hello", inputs={"task": "Test task"})  # Add task as _process checks it
+    result = await agent._process(message=test_input)  # Pass as 'message' kwarg
     assert isinstance(result, AgentOutput)
     assert result.outputs is not None
     assert isinstance(result.outputs, dict)
     assert "status" in result.outputs
-    assert "Sequencer received" in result.outputs["status"] # Check status field in outputs dict
+    assert "Sequencer received" in result.outputs["status"]  # Check status field in outputs dict
 
 
 @pytest.mark.anyio
@@ -41,7 +42,7 @@ async def test_sequencer_round_robin():
     request = ConductorRequest(inputs={"participants": participants})
 
     # Get the first step
-    step1_response = await agent._get_next_step(message=request) # Pass as 'message' kwarg
+    step1_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg
     assert isinstance(step1_response, AgentOutput), "Response should be AgentOutput"
     assert isinstance(step1_response.outputs, StepRequest), "outputs should contain StepRequest"
 
@@ -56,7 +57,7 @@ async def test_sequencer_round_robin():
     assert first_agent in expected_sequence, f"First agent '{first_agent}' should be in {expected_sequence}"
 
     # Get the second step
-    step2_response = await agent._get_next_step(message=request) # Pass as 'message' kwarg
+    step2_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg
     step2 = step2_response.outputs
     assert isinstance(step2, StepRequest)
     second_agent = step2.role
@@ -66,7 +67,7 @@ async def test_sequencer_round_robin():
     assert second_agent != first_agent, f"Round-robin failed: Second agent '{second_agent}' is same as first '{first_agent}'"
 
     # Get the third step
-    step3_response = await agent._get_next_step(message=request) # Pass as 'message' kwarg
+    step3_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg
     step3 = step3_response.outputs
     assert isinstance(step3, StepRequest)
     third_agent = step3.role
@@ -76,7 +77,7 @@ async def test_sequencer_round_robin():
     assert third_agent != first_agent and third_agent != second_agent, f"Round-robin failed: Third agent '{third_agent}' matches previous"
 
     # Get the fourth step - should be END after one cycle
-    step4_response = await agent._get_next_step(message=request) # Pass as 'message' kwarg
+    step4_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg
     step4 = step4_response.outputs
     assert isinstance(step4, StepRequest)
     fourth_agent_role = step4.role

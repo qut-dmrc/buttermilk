@@ -18,19 +18,16 @@ from pathlib import Path
 from typing import (
     Any,
     ClassVar,
-    Self,
     TypeVar,
 )
-import weave
-from weave.trace.weave_client import WeaveClient
-import weave
-from weave.trace.weave_client import WeaveClient
+
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
 import pandas as pd
 import pydantic
 import shortuuid
+import weave
 from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
@@ -39,17 +36,14 @@ from pydantic import (
     PrivateAttr,
     model_validator,
 )
+from weave.trace.weave_client import WeaveClient
 
 from ._core.config import Project
 from ._core.llms import LLMs
-from .utils.keys import SecretsManager
-from .utils.utils import load_json_flexi
-
 from ._core.log import logger
 from .utils import save
-
-from typing import Any  # Already present but good to confirm
-
+from .utils.keys import SecretsManager
+from .utils.utils import load_json_flexi
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 _MODELS_CFG_KEY = "models_secret"
@@ -125,11 +119,10 @@ class BM(Singleton, Project):
 
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
-        from google.auth import default, transport
+        from google.auth import default
         from google.auth.transport.requests import Request  # Correct import needed here too
 
         if self._gcp_credentials_cached is None:
-
             billing_project = os.environ.get("google_billing_project", os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project))
             if not billing_project:
                 self._gcp_credentials_cached, self._gcp_project = default()
@@ -419,7 +412,8 @@ class BM(Singleton, Project):
 
         if _REGISTRY.get("gcslogging") is None:
             _REGISTRY["gcslogging"] = google.cloud.logging.Client(
-                project=self.logger_cfg.project, credentials=self._gcp_credentials_cached  # type: ignore[attr-defined]  # Pass credentials
+                project=self.logger_cfg.project,
+                credentials=self._gcp_credentials_cached,  # type: ignore[attr-defined]  # Pass credentials
             )
         return _REGISTRY["gcslogging"]
 

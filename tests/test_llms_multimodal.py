@@ -1,8 +1,8 @@
 import pytest
 from rich import print as rprint
 
-from buttermilk._core.types import MediaObj, Record
 from buttermilk._core.llms import MULTIMODAL_MODELS, LLMClient, LLMs
+from buttermilk._core.types import MediaObj, Record
 
 
 @pytest.mark.anyio

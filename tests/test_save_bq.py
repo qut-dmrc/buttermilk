@@ -6,20 +6,22 @@ import pytest
 torch = pytest.importorskip("torch")
 
 # Mock data
-mock_results = pd.DataFrame({
-    "record_id": [1, 2, 3],
-    "content": ["Text 1", "Text 2", "Text 3"],
-    "groundtruth": ["a", "b", "c"],
-    "step": ["moderation", "moderation", "moderation"],
-    "dataset": ["test_dataset", "test_dataset", "test_dataset"],
-    "platform": ["local", "local", "local"],
-    "flow": ["Perspective", "Perspective", "Perspective"],
-    "model": ["Perspective", "Perspective", "Perspective"],
-    "process": ["Perspective", "Perspective", "Perspective"],
-    "standard": ["Perspective", "Perspective", "Perspective"],
-    "toxicity_score": [0.1, 0.8, 0.5],
-    "another_score": [0.2, 0.9, 0.6],
-})
+mock_results = pd.DataFrame(
+    {
+        "record_id": [1, 2, 3],
+        "content": ["Text 1", "Text 2", "Text 3"],
+        "groundtruth": ["a", "b", "c"],
+        "step": ["moderation", "moderation", "moderation"],
+        "dataset": ["test_dataset", "test_dataset", "test_dataset"],
+        "platform": ["local", "local", "local"],
+        "flow": ["Perspective", "Perspective", "Perspective"],
+        "model": ["Perspective", "Perspective", "Perspective"],
+        "process": ["Perspective", "Perspective", "Perspective"],
+        "standard": ["Perspective", "Perspective", "Perspective"],
+        "toxicity_score": [0.1, 0.8, 0.5],
+        "another_score": [0.2, 0.9, 0.6],
+    }
+)
 
 mock_schema = [
     {"name": "record_id", "type": "INTEGER"},

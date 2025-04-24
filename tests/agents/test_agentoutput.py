@@ -1,7 +1,6 @@
-import pytest
-from pydantic import BaseModel, Field, ValidationError, computed_field
-from typing import Any, List, Dict, Literal, Optional, Union
 
+import pytest
+from pydantic import ValidationError
 
 # --- Test Data ---
 
@@ -50,7 +49,8 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
 
     # Instantiate ActualAgentOutput - provide minimal required fields if any
     # Adjust instantiation based on ActualAgentOutput's actual fields/defaults
-    output_obj = ActualAgentOutput(agent_info="test",
+    output_obj = ActualAgentOutput(
+        agent_info="test",
         call_id="actual_test_id",
         # Add other necessary fields for ActualAgentOutput if they lack defaults
     )
@@ -62,9 +62,9 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
     # --- Assertions ---
     assert "outputs" in full_dump, "'outputs' key missing in actual model_dump result"
     assert full_dump["outputs"] != {}, "'outputs' field is an empty dict in actual model_dump result"
-    assert (
-        full_dump["outputs"] == SAMPLE_REASONS_DATA
-    ), f"Content of 'outputs' field ({full_dump.get('outputs')}) in actual dump does not match expected data ({SAMPLE_REASONS_DATA})"
+    assert full_dump["outputs"] == SAMPLE_REASONS_DATA, (
+        f"Content of 'outputs' field ({full_dump.get('outputs')}) in actual dump does not match expected data ({SAMPLE_REASONS_DATA})"
+    )
     assert full_dump["call_id"] == "actual_test_id"  # Verify other fields
 
 

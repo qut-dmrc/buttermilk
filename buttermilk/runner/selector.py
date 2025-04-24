@@ -3,16 +3,16 @@ Selector Orchestrator: Enables interactive, user-guided exploration of agent wor
 """
 
 import asyncio
-import time
-from typing import Any, Dict, List, Optional, Self, Sequence, Union, cast
-from pydantic import BaseModel, PrivateAttr, model_validator
+from typing import Any, Dict, List, Optional, cast
+
 import shortuuid
+from pydantic import BaseModel, PrivateAttr
+from rich.pretty import pretty_repr  # For formatted output of complex objects
 
 # Buttermilk core imports
-from buttermilk._core.agent import ProcessingError, ToolOutput
+from buttermilk._core.agent import ProcessingError
 from buttermilk._core.contract import (
     CONDUCTOR,  # Role constant for the conductor/host agent
-    CONFIRM,  # Role constant (unused directly here, but related to confirmation flow)
     END,  # Special role indicating flow completion
     WAIT,  # Special role indicating the orchestrator should wait
     AgentInput,
@@ -21,11 +21,11 @@ from buttermilk._core.contract import (
     ConductorResponse,  # Response *from* the conductor (can contain special types)
     ManagerMessage,  # Message *to* the user/manager
     ManagerRequest,  # Request *to* the user/manager (for confirmation/input)
-    ManagerResponse,  # Response *from* the user/manager
+    ManagerResponse,
+    RunRequest,  # Response *from* the user/manager
     StepRequest,  # Request defining the next step to execute
-    UserInstructions,
-)
-from buttermilk._core.types import Record, RunRequest  # Type for initial run request data
+    ToolOutput,
+    )
 from buttermilk.bm import logger  # Buttermilk logger
 
 # Base orchestrator class
@@ -372,7 +372,7 @@ class Selector(AutogenOrchestrator):
 
         else:
             # Unknown or generic message type, just display content to user.
-            logger.debug(f"Forwarding generic host message to user.")
+            logger.debug("Forwarding generic host message to user.")
             await self._send_ui_message(ManagerMessage(content=message.contents or "(Host sent message with unknown type)"))
 
     async def _handle_comparison(self, message: ConductorResponse) -> None:
@@ -438,7 +438,7 @@ class Selector(AutogenOrchestrator):
         # Select the requested variant based on the index.
         variants = self._agent_types[role_upper]
         if not (0 <= variant_index < len(variants)):
-            logger.warning(f"Variant index {variant_index} out of range for role {step.role} (0-{len(variants)-1}). Using index 0.")
+            logger.warning(f"Variant index {variant_index} out of range for role {step.role} (0-{len(variants) - 1}). Using index 0.")
             variant_index = 0
 
         agent_type, agent_config = variants[variant_index]
