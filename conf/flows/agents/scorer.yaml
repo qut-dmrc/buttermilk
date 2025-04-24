@@ -10,7 +10,7 @@ scorer:
     template: score
   inputs:
     # criteria: Evaluate how well the provided content aligns with the rules.
-    criteria: "*.inputs.parameters.criteria|[0]"
-    records: "*.records[]||*.inputs.records[]|[0]"
-    expected: "*.records[0].ground_truth||*.inputs.records[0].ground_truth|[0].reasons"
-    answers: "[judge,synth][].{agent_id: agent_info.agent_id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"
+    criteria: "*.parameters.criteria|[0]"
+    records: "*.records[]||*.records[]|[0]"
+    expected: "*.records[0].ground_truth||*.records[0].ground_truth|[0].reasons"
+    answers: "[judge,synth][].{agent_id: agent_info.id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"
