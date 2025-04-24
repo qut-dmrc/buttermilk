@@ -10,8 +10,9 @@ from buttermilk.agents.judge import AgentReasons
 from buttermilk.utils.uploader import AsyncDataUploader
 
 # Sample data based on provided examples
-SAMPLE_OUTPUTS = [
-    AgentOutput(
+@pytest.fixture(autouse=True)
+def sample_outputs() -> list[AgentOutput]:
+    return [AgentOutput(
         **{
             "error": [],
             "metadata": {},
@@ -60,7 +61,7 @@ SAMPLE_OUTPUTS = [
             "outputs": AgentReasons(assessments=QualScoreCRA(**{"correct": True, "feedback": "Feedback text"})),
             "is_error": False,
         }
-    ),
+    )
 ]
 
 
@@ -91,10 +92,10 @@ async def test_init(save_info):
 async def test_add_single_item(uploader):
     """Test adding a single item below buffer threshold."""
     with patch.object(uploader, "_flush", AsyncMock()) as mock_flush:
-        await uploader.add(SAMPLE_OUTPUTS[0])
+        await uploader.add(sample_outputs[0])
 
         assert len(uploader.buffer) == 1
-        assert uploader.buffer[0] == SAMPLE_OUTPUTS[0]
+        assert uploader.buffer[0] == sample_outputs[0]
         mock_flush.assert_not_called()
 
 
@@ -103,8 +104,8 @@ async def test_add_triggers_flush(uploader):
     """Test adding items that trigger an automatic flush."""
     with patch.object(uploader, "_flush", AsyncMock()) as mock_flush:
         # Add enough items to trigger a flush (buffer_size=2)
-        await uploader.add(SAMPLE_OUTPUTS[0])
-        await uploader.add(SAMPLE_OUTPUTS[1])
+        await uploader.add(sample_outputs[0])
+        await uploader.add(sample_outputs[1])
 
         # Flush should have been called once
         mock_flush.assert_called_once()
@@ -116,7 +117,7 @@ async def test_add_triggers_flush(uploader):
 async def test_manual_flush(uploader):
     """Test manually flushing the buffer."""
     with patch.object(uploader, "_flush", AsyncMock()) as mock_flush:
-        await uploader.add(SAMPLE_OUTPUTS[0])
+        await uploader.add(sample_outputs[0])
         await uploader._flush()
 
         mock_flush.assert_called_once()
@@ -140,8 +141,8 @@ async def test_flush_mechanics(save_info):
 
     with patch("buttermilk.utils.save.upload_rows_async", AsyncMock()) as mock_upload:
         # Add two items
-        await uploader.add(SAMPLE_OUTPUTS[0])
-        await uploader.add(SAMPLE_OUTPUTS[1])
+        await uploader.add(sample_outputs[0])
+        await uploader.add(sample_outputs[1])
 
         # Manually flush
         await uploader._flush()
@@ -160,7 +161,7 @@ async def test_flush_mechanics(save_info):
 async def test_aclose(uploader):
     """Test that aclose properly flushes remaining items."""
     with patch.object(uploader, "flush", AsyncMock()) as mock_flush:
-        await uploader.add(SAMPLE_OUTPUTS[0])
+        await uploader.add(sample_outputs[0])
         await uploader.aclose()
 
         mock_flush.assert_called_once()
@@ -170,15 +171,15 @@ async def test_aclose(uploader):
 async def test_dict_conversion(uploader):
     """Test that items are properly converted to dictionaries before upload."""
     with patch("buttermilk.utils.save.upload_rows_async", AsyncMock()) as mock_upload:
-        await uploader.add(SAMPLE_OUTPUTS[0])
+        await uploader.add(sample_outputs[0])
         await uploader._flush()
 
         # Get the first argument passed to upload_rows_async (the list of dicts)
         uploaded_items = mock_upload.call_args[0][0]
 
         assert isinstance(uploaded_items[0], dict)
-        assert uploaded_items[0]["agent_id"] == SAMPLE_OUTPUTS[0].agent_id
-        assert uploaded_items[0]["session_id"] == SAMPLE_OUTPUTS[0].session_id
+        assert uploaded_items[0]["agent_id"] == sample_outputs[0].agent_id
+        assert uploaded_items[0]["session_id"] == sample_outputs[0].session_id
 
 
 @pytest.mark.anyio
@@ -186,12 +187,12 @@ async def test_multiple_flushes(uploader):
     """Test multiple flushes with different items."""
     with patch("buttermilk.utils.save.upload_rows_async", AsyncMock()) as mock_upload:
         # First batch
-        await uploader.add(SAMPLE_OUTPUTS[0])
-        await uploader.add(SAMPLE_OUTPUTS[1])
+        await uploader.add(sample_outputs[0])
+        await uploader.add(sample_outputs[1])
         # Should trigger automatic flush
 
         # Second batch
-        await uploader.add(SAMPLE_OUTPUTS[2])
+        await uploader.add(sample_outputs[2])
         await uploader._flush()
 
         # Should have called upload twice
@@ -216,8 +217,8 @@ async def test_error_handling_during_flush(save_info):
     with patch("buttermilk.utils.save.upload_rows_async", AsyncMock(side_effect=Exception("Upload failed"))) as mock_upload:
         with patch("buttermilk.utils.uploader.logger", MagicMock()) as mock_logger:
             # Add items and trigger flush
-            await uploader.add(SAMPLE_OUTPUTS[0])
-            await uploader.add(SAMPLE_OUTPUTS[1])
+            await uploader.add(sample_outputs[0])
+            await uploader.add(sample_outputs[1])
 
             # Verify logger.error was called
             mock_logger.error.assert_called()
@@ -233,8 +234,8 @@ async def test_integration_with_fixture_save(save_info):
     uploader = AsyncDataUploader(buffer_size=2, save_dest=save_info)
 
     # Test basic functionality
-    await uploader.add(SAMPLE_OUTPUTS[0])
-    await uploader.add(SAMPLE_OUTPUTS[1])  # This should trigger a flush
+    await uploader.add(sample_outputs[0])
+    await uploader.add(sample_outputs[1])  # This should trigger a flush
 
     # todo: check the rows were actually inserted
     pass

@@ -186,7 +186,14 @@ class FlowMessage(BaseModel):
             self.error = []
         self.error.append(error_msg)
 
-
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        validate_assignment=True,
+        exclude_unset=True,
+        exclude_none=True,
+        exclude={"is_error"},
+    )  # type: ignore
 class AgentInput(FlowMessage):
     """
     Standard input structure for triggering an agent's primary processing logic (`_process`).

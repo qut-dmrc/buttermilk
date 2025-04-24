@@ -218,12 +218,12 @@ class AgentConfig(BaseModel):
     # Core Identification
     id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.")
     role: Annotated[str, AfterValidator(lowercase_validator)] = Field(
-        ...,  # Role is required
+        default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor'). Must be lowercase.",
     )
     name: str = Field(default="", description="A human-friendly name for the agent instance, often including the role and a unique ID.")
     description: str = Field(
-        ...,  # Description is required
+        default="",
         description="A brief explanation of the agent's purpose and capabilities.",
     )
     agent_obj: str = Field(  # Class name used by Hydra for instantiation.

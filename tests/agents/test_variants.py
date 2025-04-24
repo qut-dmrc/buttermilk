@@ -6,8 +6,8 @@ from omegaconf import OmegaConf
 # Assuming AgentConfig and Agent are importable for type hinting/instance checks
 # Adjust imports based on your actual project structure
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.variants import AgentRegistry, AgentVariants
+from buttermilk._core.config import AgentConfig, AgentVariants
+from buttermilk._core.variants import AgentRegistry
 
 
 # Dummy Agent class for testing

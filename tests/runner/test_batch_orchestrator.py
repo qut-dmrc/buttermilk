@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 # Buttermilk core imports
-from buttermilk._core.types import RunRequest  # Import RunRequest
-from buttermilk._core.variants import AgentVariants
 
+from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest, RunRequest
 # Specific orchestrator implementation being tested here
 from buttermilk.runner.batch import BatchOrchestrator
 

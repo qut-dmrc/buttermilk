@@ -17,7 +17,7 @@ from buttermilk._core.contract import (
     StepRequest,
 )
 from buttermilk._core.types import Record
-from buttermilk._core.variants import AgentVariants
+from buttermilk._core.config import AgentVariants
 from buttermilk.runner.selector import Selector
 
 

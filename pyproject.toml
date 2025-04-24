@@ -173,6 +173,10 @@ quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
 
+[project.scripts]
+bm-chat = "buttermilk.runner.cli:main"
+bm-test-agent = "buttermilk.runner.agent_tester:main"
+
 [tool.pytest.ini_options]
 markers = [
   "integration: integration tests, don't run by default",
