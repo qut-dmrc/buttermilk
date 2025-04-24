@@ -307,7 +307,7 @@ class Sequencer(Agent):
             else:
                 logger.warning("ConductorRequest received, but no participants found in inputs.")
                 # Return END step if no participants.
-                return AgentOutput(agent_id=self.id, outputs=StepRequest(role=END, prompt="", description="No participants found."))
+                return AgentOutput(agent_info=self._cfg, outputs=StepRequest(role=END, prompt="", description="No participants found."))
 
         # Get the next step from the generator.
         next_step = CONDUCTOR  # set to our value for the while loop; never return our own role
@@ -315,7 +315,7 @@ class Sequencer(Agent):
             next_step = await self._choose(message=message)  # _choose just wraps anext(_step_generator)
 
         # Prepare the output containing the next step request.
-        output = AgentOutput(agent_id=self.id, outputs=next_step)
+        output = AgentOutput(agent_info=self._cfg, outputs=next_step)
 
         if not next_step or next_step.role == END:
             logger.info("Sequencer reached end of sequence.")
@@ -374,7 +374,7 @@ class Sequencer(Agent):
             return cast(AgentOutput, next_step_output)  # Potential type issue here.
 
         # Prepare a default response.
-        response = AgentOutput(agent_id=self.id)
+        response = AgentOutput(agent_info=self._cfg,)
 
         # Check if there's a meaningful prompt or task description.
         # TODO: Define more clearly what direct AgentInput prompts the Sequencer should handle.

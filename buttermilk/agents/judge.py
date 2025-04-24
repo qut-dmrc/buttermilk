@@ -158,7 +158,7 @@ class Judge(LLMAgent):
         except Exception as e:
             logger.exception(f"Unexpected error in Judge.evaluate_content for agent '{self.id}': {e}")
             # Create an AgentOutput indicating an error.
-            error_output = AgentOutput(agent_id=self.id)
+            error_output = AgentOutput(agent_info=self._cfg,)
             error_output.set_error(f"Unexpected error in Judge agent: {e}")
             return error_output
 

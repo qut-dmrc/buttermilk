@@ -329,7 +329,7 @@ class LLMAgent(Agent):
             # Log template errors clearly as they prevent LLM call
             logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
             # Create an error output
-            error_output = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt)
+            error_output = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
             error_output.set_error(f"Template processing failed: {template_error}")
             return error_output
             # Re-raising might be desired depending on orchestrator's error handling
@@ -350,7 +350,7 @@ class LLMAgent(Agent):
             # Catch errors during the actual LLM call
             msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
-            error_output = AgentOutput(agent_id=self.id, inputs=message.inputs, prompt=message.prompt, messages=llm_messages, metadata={"role": self.role, "name": self.name}, error=[msg])
+            error_output = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt, messages=llm_messages, metadata={"role": self.role, "name": self.name}, error=[msg])
             error_output.set_error(f"LLM API call failed: {llm_error}")
             return error_output
             # Depending on severity, might want to raise

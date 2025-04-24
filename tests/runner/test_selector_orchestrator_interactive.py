@@ -71,8 +71,8 @@ async def test_interactive_user_feedback(selector_config):
 
     orchestrator._ask_agents = AsyncMock(
         side_effect=[
-            [AgentOutput(agent_id="test", outputs=step1)],  # First call returns step1
-            [AgentOutput(agent_id="test", outputs=step2)],  # Second call returns step2
+            [AgentOutput(agent_info="test", outputs=step1)],  # First call returns step1
+            [AgentOutput(agent_info="test", outputs=step2)],  # Second call returns step2
         ]
     )
 

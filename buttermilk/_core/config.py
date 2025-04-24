@@ -57,7 +57,7 @@ class SaveInfo(CloudProviderCfg):
     db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
     
-    _loaded_schema: PrivateAttr(default=None)
+    _loaded_schema: List[SchemaField] = PrivateAttr(default=[])
 
     # model_config = ConfigDict(
     #     json_encoders={

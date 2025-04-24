@@ -130,7 +130,7 @@ class TestAutogenAgentAdapter:
         """Test adapter routes ConductorRequest to the wrapped agent's __call__."""
         mock_agent = MagicMock(spec=Agent)
         mock_agent.__call__ = AsyncMock(name="__call__")
-        mock_response = AgentOutput(agent_id="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc"))
+        mock_response = AgentOutput(agent_info="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc"))
         mock_agent.__call__.return_value = mock_response
         mock_agent.id = "mock_agent_id"
         mock_agent.role = "test"
@@ -156,7 +156,7 @@ class TestAutogenAgentAdapter:
         """Test adapter sends TaskProcessingStarted/Complete during handle_invocation."""
         mock_agent = MagicMock(spec=Agent)
         mock_agent.__call__ = AsyncMock(name="__call__")
-        mock_response = AgentOutput(agent_id="mock_agent_id", role="test_role", outputs={"result": "done"})
+        mock_response = AgentOutput(agent_info="mock_agent_id", role="test_role", outputs={"result": "done"})
         mock_agent.__call__.return_value = mock_response
         mock_agent.id = "mock_agent_id"
         mock_agent.role = "test_role"

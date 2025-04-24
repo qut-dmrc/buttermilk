@@ -464,15 +464,15 @@ class Selector(AutogenOrchestrator):
                 logger.warning(f"Agent {variant_id} returned unexpected type {type(response)}. Expected AgentOutput.")
                 # Attempt to wrap it? Or discard? For now, store raw if possible.
                 raw_output = response
-                response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
-                response.set_error(f"Agent returned unexpected type: {type(raw_output)}")
-                response.outputs = {"raw_output": raw_output}
+                # response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
+                # response.set_error(f"Agent returned unexpected type: {type(raw_output)}")
+                # response.outputs = {"raw_output": raw_output}
 
         except Exception as e:
             logger.error(f"Error sending message to agent {variant_id} for execution {execution_id}: {e}")
             # Create an error response
-            response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
-            response.set_error(f"Failed to execute agent: {e}")
+            # response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
+            # response.set_error(f"Failed to execute agent: {e}")
 
         # --- Store results ---
         if response:

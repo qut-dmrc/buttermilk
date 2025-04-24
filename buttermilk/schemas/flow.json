@@ -17,7 +17,8 @@
     {
         "name": "timestamp",
         "type": "TIMESTAMP",
-        "mode": "REQUIRED"
+        "mode": "REQUIRED",
+        "default": "CURRENT_TIMESTAMP()"
     },
     {
         "name": "run_info",
@@ -57,6 +58,11 @@
     {
         "name": "outputs",
         "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "object_type",
+        "type": "STRING",
         "mode": "NULLABLE"
     },
     {
