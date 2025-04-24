@@ -29,24 +29,23 @@ import weave  # For tracing
 
 # Buttermilk core imports
 from buttermilk._core.config import DataSourceConfig, ToolConfig  # Configuration models
-from buttermilk._core.contract import (
-    COMMAND_SYMBOL,  # Constant for command messages
-    AgentInput,  # Standard input message structure
-    AgentOutput,  # Standard output message structure
-    AllMessages,  # Union of all message types
-    AssistantMessage,  # Message type for LLM/agent responses
-    ConductorRequest,  # Request type for conductor agents
-    ConductorResponse,  # Response type from conductor agents
-    ErrorEvent,  # Message type for signaling errors
-    FlowMessage,  # Base class for messages in the flow
-    GroupchatMessageTypes,  # Union of types expected in group chat listening
-    ManagerResponse,  # Response from a Manager/UI agent
-    OOBMessages,  # Union of Out-Of-Band control messages
-    TaskProcessingComplete,  # Status message
-    TaskProcessingStarted,  # Status message
-    ToolOutput,  # Output from a tool execution
-    UserInstructions,  # Message containing user instructions
-    UserMessage,  # Message type for user input
+from buttermilk._core.contract import (COMMAND_SYMBOL, # Constant for command messages,
+        AllMessages,  # Union of all message types
+        OOBMessages,  # Union of Out-Of-Band control messages
+        GroupchatMessageTypes,  # Union of types expected in group chat listening
+        AgentInput,  # Standard input message structure
+        AgentOutput,  # Standard output message structure
+        AssistantMessage,  # Message type for LLM/agent responses
+        ConductorRequest,  # Request type for conductor agents
+        ConductorResponse,  # Response type from conductor agents
+        ErrorEvent,  # Message type for signaling errors
+        FlowMessage,  # Base class for messages in the flow
+        ManagerResponse,  # Response from a Manager/UI agent
+        TaskProcessingComplete,  # Status message
+        TaskProcessingStarted,  # Status message
+        ToolOutput,  # Output from a tool execution
+        UserInstructions,  # Message containing user instructions
+        UserMessage,  # Message type for user input
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.flow import KeyValueCollector  # Utility for managing state data

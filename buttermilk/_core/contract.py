@@ -27,8 +27,11 @@ from pydantic import (
 )
 import shortuuid  # For generating unique IDs
 
+from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
 # Buttermilk core imports
-from buttermilk._core.agent import AgentConfig
+
+if TYPE_CHECKING:
+    from buttermilk._core.agent import AgentConfig
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.job import SessionInfo
 from .config import DataSourceConfig, SaveInfo, Tracing  # Core configuration models
@@ -248,7 +251,7 @@ class AgentOutput(FlowMessage):
     session_id: str = Field(default=_global_run_id, description="Session identifier.")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
-    agent_info: AgentConfig = Field(..., description="Configuration info from the agent")
+    agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent")
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this specific agent execution/response.",
