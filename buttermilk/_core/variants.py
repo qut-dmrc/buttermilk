@@ -6,7 +6,8 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from buttermilk._core.log import logger
-from buttermilk._core.agent import Agent, AgentConfig, FatalError
+from buttermilk._core.agent import Agent, FatalError
+from buttermilk._core.config import AgentConfig
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import convert_omegaconf_objects
 

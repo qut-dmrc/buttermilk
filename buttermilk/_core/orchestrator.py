@@ -29,7 +29,9 @@ import weave  # For tracing
 from buttermilk._core import TaskProcessingComplete  # Status message type
 
 # Agent base class and related types
-from buttermilk._core.agent import Agent, AgentConfig, ChatCompletionContext, FatalError, ProcessingError
+from buttermilk._core.agent import Agent,  ChatCompletionContext, FatalError, ProcessingError
+
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.config import DataSourceConfig, SaveInfo  # Configuration models
 from buttermilk._core.contract import END, AgentInput, ManagerResponse, StepRequest, AgentOutput  # Core message types
 from buttermilk._core.flow import KeyValueCollector  # State management utility

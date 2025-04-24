@@ -2,7 +2,8 @@
 import inspect
 from typing import Annotated, Any, Dict, Optional, Union, Type
 from autogen_core import Agent as AutogenAgent, RoutedAgent, MessageContext, CancellationToken, message_handler
-from buttermilk._core.agent import AgentConfig as ButtermilkAgentConfig  # Your base Buttermilk agent
+
+from buttermilk._core.config import AgentConfig as ButtermilkAgentConfig  # Your base Buttermilk agent
 from buttermilk._core.contract import AgentInput  # Example message type
 from buttermilk._core.log import logger
 

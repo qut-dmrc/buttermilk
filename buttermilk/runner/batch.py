@@ -4,7 +4,9 @@ from typing import Any, Optional
 from pydantic import Field, PrivateAttr
 import weave
 
-from buttermilk._core.agent import Agent, AgentConfig, AgentInput, AgentOutput, FatalError, ProcessingError
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, FatalError, ProcessingError
+
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import StepRequest, ToolOutput, OOBMessages  # Added ToolOutput, OOBMessages
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import Record, RunRequest

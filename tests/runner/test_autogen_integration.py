@@ -8,7 +8,9 @@ from autogen_core import MessageContext, DefaultTopicId, Agent as AutogenAgent
 from autogen_core import SingleThreadedAgentRuntime
 
 # Buttermilk core types
-from buttermilk._core.agent import Agent, AgentConfig, AgentInput, AgentOutput, buttermilk_handler
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput, buttermilk_handler
+
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import UserInstructions, StepRequest # Import other types if needed
 
 # Specific agent classes
