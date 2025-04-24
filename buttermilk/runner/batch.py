@@ -105,7 +105,7 @@ class BatchOrchestrator(Orchestrator):
                     # if not output.is_error:
                     #     # Call evaluation if possible
                     #     ground_truth_record = next((r for r in input.records if getattr(r, "ground_truth", None) is not None), None)
-                    #     criteria = input.parameters.get("criteria") or self.params.get("criteria")
+                    #     criteria = input.parameters.get("criteria") or self.parameters.get("criteria")
                     #     # TODO: Implement _evaluate_step for BatchOrchestrator
                     #     # await self._evaluate_step(output, ground_truth_record, criteria, None) # Pass None for weave_call
                     #     logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")

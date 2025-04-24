@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - /flows@hate: moa
-  - criteria@hate.params.criteria: hate
+  - criteria@hate.parameters.criteria: hate
 
 hate:
   name: hate

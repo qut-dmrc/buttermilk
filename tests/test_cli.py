@@ -90,7 +90,7 @@ def test_main_console_mode(mock_hydra, mock_console_app):
     # Call the function through the mock
     main(mock_cfg)
 
-    # Verify Sequencer was created with correct params
+    # Verify Sequencer was created with correct parameters
     mock_selector.assert_called_once()
     # Verify we tried to run it
     mock_orchestrator.run.assert_called_once()

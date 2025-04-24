@@ -130,7 +130,7 @@ def format_slack_message(result: AgentOutput) -> dict:
 
     # Add header with model identifier
     header_text = (
-        f":robot_face: {result_copy.params.get('name', '')} {result_copy.params.get('agent_id', '')}  {result_copy.params.get('model', '')} ".strip()
+        f":robot_face: {result_copy.parameters.get('name', '')} {result_copy.parameters.get('agent_id', '')}  {result_copy.parameters.get('model', '')} ".strip()
     )
     blocks.append({
         "type": "header",
@@ -164,7 +164,7 @@ def format_slack_message(result: AgentOutput) -> dict:
             )
         else:
             icontext = blocks_with_icon(
-                result_copy.params,
+                result_copy.parameters,
                 [
                     ("input", ":mag:"),
                     ("criteria", ":clipboard:"),

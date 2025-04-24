@@ -102,7 +102,7 @@ MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
 class LLMClient(BaseModel):
     client: Any
     connection: str
-    params: dict = {}
+    parameters: dict = {}
 
 
 T_ChatClient = TypeVar("T_ChatClient", bound=ChatCompletionClient)
@@ -273,7 +273,7 @@ class LLMs(BaseModel):
             )
         elif self.connections[name].api_type == "vertex":
             client_params["api_key"] = bm._gcp_credentials.token
-            #             client = GeminiChatCompletionClient(**params)
+            #             client = GeminiChatCompletionClient(**parameters)
             client = OpenAIChatCompletionClient(
                 **client_params,
             )

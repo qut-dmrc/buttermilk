@@ -48,7 +48,7 @@ def selector_config():
             "conductor": conductor_variants,
             "ui": ui_variants,
         },
-        "params": {"task": "Test task"},
+        "parameters": {"task": "Test task"},
     }
 
 

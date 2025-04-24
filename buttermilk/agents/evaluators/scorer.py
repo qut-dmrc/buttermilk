@@ -45,7 +45,8 @@ class QualResults(QualScore):
     """Extends QualScore to include metadata of assessed answers."""
 
     # This model is designed to present results externally, it is not used directly by the agent's output model.
-    agent: str = Field(..., description="The name/ID of the agent whose output was assessed.")
+    agent_name: str = Field(..., description="The name of the agent whose output was assessed.")
+    agent_id: str = Field(..., description="The ID of the agent whose output was assessed.")
     answer_id: str = Field(..., description="A unique identifier for the specific answer/output being assessed.")
     assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments, one for each criterion evaluated.")
@@ -252,7 +253,8 @@ class LLMScorer(LLMAgent):
                     # Publish the score back to the system using the provided callback.
                     formatted_score = QualResults(
                         assessments=score_output.outputs.assessments,
-                        agent=scorer_agent_input.inputs["answers"][0]["agent_id"],
+                        agent_id=scorer_agent_input.inputs["answers"][0]["agent_id"],
+                        agent_name=scorer_agent_input.inputs["answers"][0]["agent_name"],
                         answer_id=scorer_agent_input.inputs["answers"][0]["answer_id"],
                         assessor=scorer_agent_input.inputs["assessor"],
                     )

@@ -162,7 +162,7 @@ class LLMAgent(Agent):
             raise ProcessingError(f"Agent {self.id}: No template name provided in parameters or inputs.")
         logger.debug(f"Agent {self.id}: Using template '{template_name}'.")
 
-        # Combine agent default parameters and task-specific parameters. Task params override defaults.
+        # Combine agent default parameters and task-specific parameters. Task parameters override defaults.
         combined_params = {**self.parameters, **task_params}
 
         # Render the Jinja2 template. `load_template` handles finding and rendering.
@@ -170,7 +170,7 @@ class LLMAgent(Agent):
         # and the `untrusted_inputs` which are directly available for filling placeholders.
         rendered_template, unfilled_vars = load_template(
             template=template_name,
-            parameters=combined_params,  # Params for template source logic (e.g., finding criteria file)
+            parameters=combined_params,  # parameters for template source logic (e.g., finding criteria file)
             untrusted_inputs=inputs,  # Vars directly available to Jinja {{ }}
         )
 
@@ -234,7 +234,7 @@ class LLMAgent(Agent):
             agent_info=self._cfg,  # Include agent information
             inputs=inputs,
             messages=messages,  # Messages sent to LLM
-            params=parameters,  # Params for this call
+            parameters=parameters,  # parameters for this call
             prompt=prompt,  # Original prompt
             # Store LLM usage info (tokens, cost) and other metadata from CreateResult.
             # Exclude raw content and object type which are handled below.

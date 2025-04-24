@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - criteria@panel.params.criteria: trans
+  - criteria@panel.parameters.criteria: trans
   - agents@panel.agents:
       - manager
       - fetch
@@ -18,7 +18,7 @@ panel:
       path: gs://prosocial-dev/data/tja_train.jsonl
       index:
         - record_id
-  params:
+  parameters:
     criteria: replace
     task: >
       The purpose of this conversation is to assess a single piece of content. You are the HOST.

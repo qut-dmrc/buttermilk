@@ -54,7 +54,7 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     # Judge agent needs a template, provide a default or configure one
     # Assuming a default 'judge' template exists or parameters are set in config
     # We might need to load config via Hydra or pass parameters explicitly here
-    # For simplicity, let's assume the necessary template/params are available via default agent config loading
+    # For simplicity, let's assume the necessary template/parameters are available via default agent config loading
     # If not, this test would need fixture/setup to load config properly.
     judge_params = {
         "model": model_name,

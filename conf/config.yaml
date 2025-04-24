@@ -7,7 +7,7 @@ name: default_project
 job: development
 ui: console
 
-# launch params
+# launch parameters
 uri:
 flow:
 record_id:

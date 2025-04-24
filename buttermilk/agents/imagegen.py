@@ -55,7 +55,7 @@ class TextToImageClient(RetryWrapper):
             msg = f"Generating image with {self.model} using prompt: ```{text}```, saving to `{save_path}`"
         logger.info(msg)
 
-        params = dict(
+        parameters = dict(
             text=text,
             negative_prompt=negative_prompt,
             **kwargs,
@@ -64,7 +64,7 @@ class TextToImageClient(RetryWrapper):
         try:
             image = await self._execute_with_retry(
                 self.generate_image,
-                **params,
+                **parameters,
             )
             image.uri = image.save(save_path)
             image.prompt = text
@@ -86,7 +86,7 @@ class TextToImageClient(RetryWrapper):
         image = ImageRecord(
             image=None,
             model=self.model,
-            params=params,
+            parameters=parameters,
             error=error_dict,
         )
 
@@ -122,7 +122,7 @@ class Imagegen3(TextToImageClient):
         **kwargs,
     ) -> ImageRecord:
 
-        params = dict(
+        parameters = dict(
             number_of_images=1,
             aspect_ratio=aspect_ratio,
             safety_filter_level="BLOCK_ONLY_HIGH",
@@ -135,7 +135,7 @@ class Imagegen3(TextToImageClient):
             model=self.model,
             prompt=text,
             config=types.GenerateImagesConfig(
-                **params,
+                **parameters,
             ),
         )
         if not image.generated_images:
@@ -147,7 +147,7 @@ class Imagegen3(TextToImageClient):
         image = ImageRecord(
             image=pil_image,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=prompt,
             enhanced_prompt=enhanced_prompt,
             negative_prompt=negative_prompt,
@@ -195,7 +195,7 @@ class SD35Large(TextToImageClient):
         response.raise_for_status()
         image = read_image(image_b64=response.json().get("image"))
         image.model = self.model
-        image.params = request_data
+        image.parameters = request_data
 
         return image
 
@@ -216,13 +216,13 @@ class SD3(TextToImageClient):
         output_format: str = "png",
         **kwargs,
     ) -> ImageRecord:
-        params = dict(prompt=text, output_format=output_format, **kwargs)
+        parameters = dict(prompt=text, output_format=output_format, **kwargs)
 
         if negative_prompt:
-            params["negative_prompt"] = negative_prompt
+            parameters["negative_prompt"] = negative_prompt
 
         form = aiohttp.FormData()
-        for k, v in params.items():
+        for k, v in parameters.items():
             form.add_field(k, v, content_type="multipart/form-data")
 
         timeout = aiohttp.ClientTimeout(total=600)
@@ -240,12 +240,12 @@ class SD3(TextToImageClient):
             img = Image.open(BytesIO(data))
 
         # add extra keys not passed to model after generation
-        params.update(**kwargs)
+        parameters.update(**kwargs)
 
         image = ImageRecord(
             image=img,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -276,8 +276,8 @@ class SDXL(TextToImageClient):
                 "stabilityai/stable-diffusion-xl-refiner-1.0",
                 timeout=600,
             )
-        params = dict(prompt=text, negative_prompt=negative_prompt, **self.image_params)
-        img = await self.client.text_to_image(**params)
+        parameters = dict(prompt=text, negative_prompt=negative_prompt, **self.image_params)
+        img = await self.client.text_to_image(**parameters)
 
         # Use both stages of the model to refine the image
         # refined_img = await self.refiner.image_to_image(
@@ -292,12 +292,12 @@ class SDXL(TextToImageClient):
         img_to_refine = ImageRecord(image=img).as_bytestream()
         refined_img = self.refiner.image_to_image(img_to_refine, text)
         # add extra keys not passed to model after generation
-        params.update(**kwargs)
+        parameters.update(**kwargs)
 
         image = ImageRecord(
             image=refined_img,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -324,10 +324,10 @@ class SDXLReplicate(TextToImageClient):
         negative_prompt: str | None = None,
         **kwargs,
     ) -> ImageRecord:
-        params = dict(prompt=text, negative_prompt=negative_prompt, **self.image_params)
+        parameters = dict(prompt=text, negative_prompt=negative_prompt, **self.image_params)
         response = await replicate.async_run(
             "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
-            input=params,
+            input=parameters,
         )
         output_uri = response[0]
 
@@ -338,12 +338,12 @@ class SDXLReplicate(TextToImageClient):
 
             img = Image.open(BytesIO(await response.content.read()))
         # add extra keys not passed to model after generation
-        params.update(**kwargs)
+        parameters.update(**kwargs)
 
         image = ImageRecord(
             image=img,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -370,14 +370,14 @@ class SD(TextToImageClient):
         negative_prompt: str | None = None,
         **kwargs,
     ) -> ImageRecord:
-        params = self.image_params.copy()
-        params["prompt"] = text
+        parameters = self.image_params.copy()
+        parameters["prompt"] = text
         if negative_prompt:
-            params["negative_prompt"] = negative_prompt
-        output = await replicate.async_run(self.model, input=params)
+            parameters["negative_prompt"] = negative_prompt
+        output = await replicate.async_run(self.model, input=parameters)
 
         # add extra keys not passed to model after generation
-        params.update(**kwargs)
+        parameters.update(**kwargs)
 
         output_uri = output[0]
         timeout = aiohttp.ClientTimeout(total=300)
@@ -389,7 +389,7 @@ class SD(TextToImageClient):
         image = ImageRecord(
             image=img,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -409,7 +409,7 @@ class DALLE(TextToImageClient):
         quality="standard",
         **kwargs,
     ) -> ImageRecord:
-        params = dict(
+        parameters = dict(
             model=self.model,
             size=size,
             style=style,
@@ -422,20 +422,20 @@ class DALLE(TextToImageClient):
                 timeout=600,
             )
         if negative_prompt:
-            params["prompt"] = f"{text} \nDO NOT INCLUDE: {negative_prompt}"
+            parameters["prompt"] = f"{text} \nDO NOT INCLUDE: {negative_prompt}"
         else:
-            params["prompt"] = text
+            parameters["prompt"] = text
 
         response = await self.client.images.generate(
-            **params,
+            **parameters,
         )
 
         # add extra keys not passed to model after generation
-        params.update(**kwargs)
+        parameters.update(**kwargs)
 
         output_uri = response.data[0].url
         if revised_prompt := response.data[0].revised_prompt:
-            params["revised_prompt"] = revised_prompt
+            parameters["revised_prompt"] = revised_prompt
         async with httpx.AsyncClient() as client:
             response = await client.get(output_uri)
         response.raise_for_status()
@@ -443,7 +443,7 @@ class DALLE(TextToImageClient):
         image = ImageRecord(
             image=img,
             model=self.model,
-            params=params,
+            parameters=parameters,
             prompt=text,
             negative_prompt=negative_prompt,
         )
@@ -541,7 +541,7 @@ class BatchImageGenerator(BaseModel):
                     # if not using as_completed(): result = t.result()
                     yield result
                     info = dict(
-                        params=result.params,
+                        parameters=result.parameters,
                         model=result.model,
                         uri=result.uri,
                     )

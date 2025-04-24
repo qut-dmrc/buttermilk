@@ -6,7 +6,7 @@ from buttermilk._core.llms import MULTIMODAL_MODELS
 from buttermilk.utils.media import download_and_convert
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(parameters=MULTIMODAL_MODELS)
 def flow_describer(request):
     agent = Describer(
         agent_id="testdescriber",

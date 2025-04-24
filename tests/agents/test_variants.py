@@ -104,7 +104,7 @@ def test_only_sequential_variants(base_variant_config):
     assert agent_class is MockAgent
     assert isinstance(config, AgentConfig)
     assert config.id == "TEST_AGENT" # Original ID, no parallel variants
-    assert config.parameters == {"base_param": "base_value"} # Base params only
+    assert config.parameters == {"base_param": "base_value"} # Base parameters only
     assert len(config.sequential_tasks) == 4 # 2 criteria * 2 temp
     expected_tasks = [
         {"criteria": "c1", "temp": 0.5},
