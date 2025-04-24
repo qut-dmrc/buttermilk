@@ -1,12 +1,12 @@
 defaults:
   - _self_
-  # - criteria@batch.parameters.criteria: trans
+  - criteria@batch.parameters.criteria: trans
   - agents@batch.agents:
       - manager
       - judge
-      # - synth
+      - synth
       - scorer
-      # - differences
+      - differences
 
 batch:
   _target_: buttermilk.runner.groupchat.AutogenOrchestrator
@@ -20,7 +20,7 @@ batch:
         - record_id
   parameters:
     criteria:
-      - tja
+      - abc
     task: Assess this content.
   tools:
     spy:
