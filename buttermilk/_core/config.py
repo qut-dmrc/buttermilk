@@ -13,6 +13,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -54,6 +56,8 @@ class SaveInfo(CloudProviderCfg):
     destination: str | cloudpathlib.AnyPath | None = None
     db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
+    
+    _loaded_schema: PrivateAttr(default=None)
 
     # model_config = ConfigDict(
     #     json_encoders={
@@ -88,9 +92,13 @@ class SaveInfo(CloudProviderCfg):
             )
         return self
     
-    def load_schema(self) -> List[SchemaField]:
-        from buttermilk.bm import bm
-        return bm.bq.schema_from_json(self.db_schema)
+    @computed_field
+    @property
+    def bq_schema(self) -> List[SchemaField]:
+        if not self._loaded_schema:
+            from buttermilk.bm import bm
+            self._loaded_schema= bm.bq.schema_from_json(self.db_schema)
+        return self._loaded_schema
 
 
 class DataSourceConfig(BaseModel):

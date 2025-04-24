@@ -22,6 +22,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from buttermilk._core.config import SaveInfo
 from buttermilk._core.job import Job
 
 from .._core.log import logger
@@ -204,8 +205,12 @@ def data_to_export_rows(
 
     return bq_rows
 
-async def upload_rows_async(rows, *, schema, dataset):
+async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None):
     """Upload results to Google Bigquery asynchronously"""
+    schema = schema or save_dest.bq_schema
+    dataset = dataset or save_dest.dataset
+    assert schema is not None and dataset is not None
+
     loop = asyncio.get_running_loop()
     bq = await loop.run_in_executor(None, bigquery.Client)  # Run sync client instantiation in executor
 
@@ -247,7 +252,12 @@ async def upload_rows_async(rows, *, schema, dataset):
 
     return dataset
 
-def upload_rows(rows, *, schema, dataset, create_if_not_exists=False, **params) -> str:
+def upload_rows(rows, *, schema=None, dataset=None, save_dest: SaveInfo = None, create_if_not_exists=False, **params) -> str:
+    """Upload results to Google Bigquery asynchronously"""
+    schema = schema or save_dest.bq_schema
+    dataset = dataset or save_dest.dataset
+    assert schema is not None and dataset is not None
+
     """Upload results to Google Bigquery"""
     bq = bigquery.Client()  # use application default credentials
 

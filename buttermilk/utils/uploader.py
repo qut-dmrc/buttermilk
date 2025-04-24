@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
-
+from collections.abc import Mapping, Sequence
 from cloudpathlib import CloudPath
 from promptflow.tracing import trace
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,6 +26,18 @@ class AsyncDataUploader:
         buffer_size: int = 1000,
         flush_interval: int = 60,
     ):
+        
+        # Validate that save_dest is a proper SaveInfo instance
+        if not isinstance(save_dest, SaveInfo):
+            # If it's a dict (from Hydra), try to create a SaveInfo object
+            if isinstance(save_dest, Mapping):
+                try:
+                    save_dest = SaveInfo(**save_dest)
+                except Exception as e:
+                    raise TypeError(f"Failed to convert save_dest dict to SaveInfo: {e}")
+            else:
+                raise TypeError(f"save_dest must be a SaveInfo object, got {type(save_dest)}")
+                
         self.save_dest = save_dest
         
         self.buffer_size = buffer_size
@@ -49,8 +61,11 @@ class AsyncDataUploader:
 
     async def add(self, item: Any):
         """Add item to upload queue."""
-        await self.queue.put(item)
+        if isinstance(item, BaseModel):
+            # Convert to serialisable types
+            item = item.model_dump(mode="json")
         await self._backup_item(item)
+        await self.queue.put(item)
 
     async def _worker(self):
         """Background worker that processes the queue."""
@@ -83,7 +98,7 @@ class AsyncDataUploader:
             return
 
         try:
-            await upload_rows_async(self.buffer, schema=self.save_dest.db_schema, dataset=self.save_dest.dataset)
+            await upload_rows_async(self.buffer, save_dest=self.save_dest)
             self.last_flush = time.time()
             self.buffer = []
             await self._clear_backup()
@@ -94,9 +109,6 @@ class AsyncDataUploader:
     async def _backup_item(self, item):
         """Write item to backup file."""
 
-        if isinstance(item, BaseModel):
-            # Convert to serialisable types
-            item = item.model_dump(mode="json")
         backup_file = self.backup_dir / f"backup_{datetime.now().isoformat()}.json"
         backup_file.write_text(json.dumps(item))
 
@@ -112,7 +124,7 @@ class AsyncDataUploader:
         # Handle synchronously to avoid event loop issues
         if self.buffer:
             try:
-                upload_rows(self.buffer, schema=self.save_dest.db_schema, dataset=self.save_dest.dataset)
+                upload_rows(self.buffer, save_dest=self.save_dest)
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
                 bm.save(self.buffer)
