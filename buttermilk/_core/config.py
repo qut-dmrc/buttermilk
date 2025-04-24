@@ -2,10 +2,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import (
     Any,
+    List,
     Literal,
 )
 
 import cloudpathlib
+from google.cloud.bigquery.schema import SchemaField
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -50,9 +52,7 @@ class CloudProviderCfg(BaseModel):
 
 class SaveInfo(CloudProviderCfg):
     destination: str | cloudpathlib.AnyPath | None = None
-    db_schema: str | None = Field(
-        default=None,
-    )
+    db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
 
     # model_config = ConfigDict(
@@ -87,6 +87,10 @@ class SaveInfo(CloudProviderCfg):
                 "Nowhere to save to! Either destination or dataset must be provided.",
             )
         return self
+    
+    def load_schema(self) -> List[SchemaField]:
+        from buttermilk.bm import bm
+        return bm.bq.schema_from_json(self.db_schema)
 
 
 class DataSourceConfig(BaseModel):

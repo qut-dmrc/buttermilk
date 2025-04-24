@@ -4,9 +4,9 @@ defaults:
   - agents@batch.agents:
       - manager
       - judge
-      - synth
+      # - synth
       - scorer
-      - differences
+      # - differences
 
 batch:
   _target_: buttermilk.runner.groupchat.AutogenOrchestrator
@@ -24,6 +24,9 @@ batch:
     task: Assess this content.
   tools:
     spy:
+      name: "🕵️spy"
+      description: Log agent outputs to Bigquery
+      role: spy
       agent_obj: SpyAgent
       save_dest:
         type: bq

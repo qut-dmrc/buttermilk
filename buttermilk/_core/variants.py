@@ -12,6 +12,15 @@ from buttermilk.utils.validators import convert_omegaconf_objects
 
 
 class AgentRegistry:
+    """
+    Manages the registration and retrieval of Agent subclasses.
+
+    This class acts as a central repository for all available Agent types
+    within the application. Agents can be registered explicitly using the
+    `register` method (often used as a decorator) or discovered automatically
+    from specified packages using the `discover` method. This allows for
+    dynamic loading and instantiation of agents based on configuration.
+    """
     _agents: dict[str, type[Agent]] = {}
 
     @classmethod
@@ -22,7 +31,12 @@ class AgentRegistry:
 
     @classmethod
     def get(cls, name: str) -> type[Agent]:
-        """Get an agent class by name."""
+        """
+        Get an agent class by name.
+
+        If the agent is not found initially, it triggers the discovery
+        process before raising an error.
+        """
         agent_class = cls._agents.get(name)
         if agent_class is None:
             # Attempt discovery if not found, might help in dynamic scenarios
@@ -39,7 +53,12 @@ class AgentRegistry:
 
     @classmethod
     def discover(cls, package_name: str = "buttermilk") -> None:
-        """Discover and register all Agent subclasses in the package."""
+        """
+        Discover and register all Agent subclasses in the specified package.
+
+        Recursively walks through the package and its subpackages, importing
+        modules to trigger agent registration (e.g., via decorators).
+        """
         try:
             package = importlib.import_module(package_name)
         except ModuleNotFoundError:

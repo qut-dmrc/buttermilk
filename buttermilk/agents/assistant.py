@@ -183,7 +183,6 @@ class AssistantAgentWrapper(Agent):
                 output_content = ""  # Content is None
                 output_data = {}
 
-            # Revert metadata handling (keep improvement if possible)
             if hasattr(chat_msg, "models_usage") and chat_msg.models_usage:
                 # Assuming original might have just dumped the model if available
                 if hasattr(chat_msg.models_usage, "model_dump"):

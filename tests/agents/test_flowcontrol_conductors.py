@@ -100,7 +100,6 @@ def mock_llm_host_agent() -> LLMHostAgent:
         agent._records = []
         agent._model_context = MagicMock()  # Mock context if needed
         agent._data = MagicMock()  # Mock data collector if needed
-        agent._data._resolve_mappings.return_value = {}  # Mock mapping resolution
         return agent
 
 

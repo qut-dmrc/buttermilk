@@ -210,7 +210,7 @@ async def upload_rows_async(rows, *, schema, dataset):
     bq = await loop.run_in_executor(None, bigquery.Client)  # Run sync client instantiation in executor
 
     if isinstance(schema, str):
-        schema = await loop.run_in_executor(None, bq.schema_from_json, schema)
+        schema = bq.schema_from_json(schema)
 
     # data_to_export_rows is CPU-bound, can run directly or in executor if very heavy
     bq_rows = data_to_export_rows(rows, schema=schema)

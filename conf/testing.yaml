@@ -20,7 +20,7 @@ bm:
   clouds:
     - type: gcp
       project: prosocial-443205
-      verbose: false
+      verbose: true
     - type: vertex
       project: prosocial-443205
       region: us-central1

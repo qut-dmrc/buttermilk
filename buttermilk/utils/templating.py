@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import jmespath
 import regex as re
 from jinja2 import (
     FileSystemLoader,
@@ -66,7 +67,7 @@ class KeyValueCollector(BaseModel):
 
     _data: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-    def _resolve_mappings(self, mappings: dict[Any, Any]) -> dict[str, Any]:
+    def _resolve_mappings(self, mappings: dict[Any, Any], data: Mapping) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
 
         ##
@@ -76,16 +77,22 @@ class KeyValueCollector(BaseModel):
         ##
         resolved = {}
 
+        # Convert Pydantic models to dictionaries for JMESPath
+        if hasattr(data, "model_dump"):
+            data_dict = data.model_dump()
+        else:
+            data_dict = data
+
         if isinstance(mappings, str):
             # We have reached the end of the recursive road
-            return self._resolve_simple_path(mappings)
-
+            return self._resolve_simple_path(mappings, data_dict)
+        
         for target, source_spec in mappings.items():
             if isinstance(source_spec, Sequence) and not isinstance(source_spec, str):
                 # Handle aggregation case
                 results = []
                 for src in source_spec:
-                    result = self._resolve_mappings(src)
+                    result = self._resolve_mappings(src, data_dict)
                     if result:
                         if isinstance(result, list):
                             results.extend(result)
@@ -94,62 +101,30 @@ class KeyValueCollector(BaseModel):
                 resolved[target] = results
             elif isinstance(source_spec, Mapping | dict):
                 # Handle nested mappings
-                resolved[target] = self._resolve_mappings(source_spec)
+                resolved[target] = self._resolve_mappings(source_spec, data_dict)
             else:
-                resolved[target] = self._resolve_simple_path(source_spec)
+                resolved[target] = self._resolve_simple_path(source_spec, data_dict)
 
-        # remove empty values, but keep in empty lists etc where we found the
-        # variable to substitute but it was empty.
-        resolved = {k: v for k, v in resolved.items() if v is not None}
+        # remove empty values and empty containers
+        resolved = {k: v for k, v in resolved.items() if v is not None and v != {} and v != []}
 
         return resolved
 
-    def _resolve_simple_path(self, path: str) -> Any:
-        """Resolve a simple dot-notation path
-
-        When a step has multiple outputs, returns a list with all matching results.
-        For JMESPath expressions that return lists, flattens the results.
-        """
+    def _resolve_simple_path(self, path: str, data: Mapping) -> Any: 
+        """Resolve a JMESPath expression against the collected data."""
         if not path:
             return None
-        if "." not in path:
-            # Direct reference to a step's complete output list
-            return self._data.get(path, None)
-
-        # Handle dot notation for nested fields
-        step_name, field_path = path.split(".", 1)
-
-        if step_name not in self._data:
+        
+        try:
+            # Directly search the entire data structure using the JMESPath expression
+            result = jmespath.search(path, data)
+            return result
+        except Exception as e:
+            # Optional: Log the error if the JMESPath expression is invalid or fails
+            # logger.warning(f"JMESPath search failed for path '{path}': {e}")
             return None
 
-        # Get all outputs for this step
-        step_results = self._data[step_name]
-        if not step_results:
-            return None
 
-        # Collect all matching results from all outputs
-        all_matches = []
-
-        for result in step_results:
-            # Convert Pydantic models to dictionaries for JMESPath
-            if hasattr(result, "model_dump"):
-                result_dict = result.model_dump()
-            else:
-                result_dict = result
-
-            value = jmespath.search(field_path, result_dict)
-            if value is not None:
-                # If the value is already a list, extend our results
-                if isinstance(value, list):
-                    all_matches.extend(value)
-                else:
-                    all_matches.append(value)
-
-        # If no match was found, return None
-        if not all_matches:
-            return None
-
-        return all_matches
 
 
 def get_templates(pattern: str = "", parent: str = "", extension: str = ""):
@@ -279,7 +254,7 @@ def make_messages(
                     # special case for context
                     output.extend(context)
                 elif var_name == "records":
-                    output.extend([rec.as_message() for rec in records])
+                    output.extend([rec.as_message() for rec in records if isinstance(rec, Record)])
                 else:
                     err = (f"Missing {var_name} in placeholder vars.",)
                     raise ProcessingError(err)

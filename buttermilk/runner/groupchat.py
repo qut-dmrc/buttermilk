@@ -103,6 +103,7 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
+        await self._register_tools()
         await self._register_agents()
 
         # Register a special agent to handle interactions with the MANAGER (UI/Human).
@@ -177,24 +178,18 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _register_tools(self) -> None:
         for role_name, step_config in self.tools.items():
-            for agent_cls, variant_config in step_config.get_configs():
-                def adapter_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
-                    # This log occurs when the factory is *called* by Autogen, not during registration.
-                    # logger.debug(f"Instantiating adapter for agent {cfg.id} (Role: {cfg.role}, Class: {cls.__name__})")
-                    return AutogenAgentAdapter(
-                        agent_cfg=cfg,
-                        agent_cls=cls,
-                        topic_type=topic_type,  # Pass the main topic type
-                    )
+            # instantiate known autogen native tools directly
+            # TODO: this is a hack and should be changed
+            from buttermilk.agents import SpyAgent
 
+            if step_config.agent_obj == 'SpyAgent':
                 # Register the adapter factory with the runtime.
                 # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                agent_type: AgentType = await AutogenAgentAdapter.register(
+                agent_type: AgentType = await SpyAgent.register(
                     runtime=self._runtime,
-                    type=variant_config.id,  # Use the specific variant ID for registration
-                    factory=adapter_factory,
+                    type=role_name.upper(),  # Use the specific variant ID for registration
+                    factory=lambda: SpyAgent(save_dest=step_config.save_dest),
                 )
-                logger.debug(f"Registered tool agent: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
 
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.
@@ -204,6 +199,7 @@ class AutogenOrchestrator(Orchestrator):
                         agent_type=agent_type,
                     ),
                 )
+                logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
 
     async def _register_manager_interface(self) -> None:
@@ -239,19 +235,15 @@ class AutogenOrchestrator(Orchestrator):
             closure=handle_manager_response,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
-                    topic_type=sub_topic_type,  # Subscribe to this topic type.
+                    topic_type=self._topic.type,  # Subscribe to the main group chat topic 
                     agent_type=CONFIRM,  # Only messages for the CONFIRM agent.
                 )
-                # Subscribe this agent to the main group chat topic AND all role-specific topics.
-                # This ensures it receives ManagerResponse messages regardless of the specific topic
-                # they might be published on (though typically they'd be on MANAGER or the main topic).
-                # TODO: Review if subscribing to *all* role topics is necessary or could be simplified.
-                for sub_topic_type in [self._topic.type] + list(self.agents.keys())
             ],
             # If a message arrives that isn't ManagerResponse, just ignore it silently.
             unknown_type_policy="ignore",
         )
         logger.debug(f"Manager interface agent '{CONFIRM}' registered and subscribed.")
+
 
     async def _ask_agents(
         self,
@@ -333,14 +325,11 @@ class AutogenOrchestrator(Orchestrator):
         Args:
             message: The ManagerMessage or ManagerRequest to send.
         """
-        # Publish to the specific MANAGER topic first.
+        # Publish to the specific MANAGER topic.
         manager_topic_id = DefaultTopicId(type=MANAGER)
         logger.debug(f"Publishing UI message ({type(message).__name__}) to topic '{MANAGER}'")
         await self._runtime.publish_message(message, topic_id=manager_topic_id)
 
-        # Also publish to the main group chat topic for broader visibility.
-        logger.debug(f"Publishing UI message ({type(message).__name__}) to main topic '{self._topic.type}'")
-        await self._runtime.publish_message(message, topic_id=self._topic)
 
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""
