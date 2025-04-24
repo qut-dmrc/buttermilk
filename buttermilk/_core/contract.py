@@ -30,8 +30,7 @@ import shortuuid  # For generating unique IDs
 from typing import Annotated, Any, AsyncGenerator, Callable, Self, Sequence, Union, TYPE_CHECKING
 # Buttermilk core imports
 
-if TYPE_CHECKING:
-    from buttermilk._core.agent import AgentConfig
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.job import SessionInfo
 from .config import DataSourceConfig, SaveInfo, Tracing  # Core configuration models
@@ -488,3 +487,4 @@ GroupchatMessageTypes = Union[
 
 # All possible message types used within the system.
 AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ProceedToNextTaskSignal, HeartBeat]
+

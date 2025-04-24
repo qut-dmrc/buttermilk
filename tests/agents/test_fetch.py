@@ -3,7 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
-from buttermilk._core.agent import Agent, AgentConfig
+from buttermilk._core.agent import Agent
+
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord

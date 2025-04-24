@@ -20,7 +20,8 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core.agent import Agent, AgentConfig, ToolOutput  # Buttermilk base agent and config.
+from buttermilk._core.config import AgentConfig
+from buttermilk._core.agent import Agent,ToolOutput  # Buttermilk base agent and config.
 from buttermilk._core.contract import (
     CONDUCTOR,  # Constant representing the Conductor role.
     AgentInput,  # Standard input message for Buttermilk agents.

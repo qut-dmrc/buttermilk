@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from autogen_core import MessageContext, CancellationToken
 
 # Buttermilk core types
-from buttermilk._core.agent import Agent, AgentConfig
+from buttermilk._core.agent import Agent
+
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     ConductorRequest,
     ConductorResponse,
