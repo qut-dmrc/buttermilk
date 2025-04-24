@@ -268,7 +268,7 @@ class AgentOutput(FlowMessage):
         description="The input for this call.",
     )
 
-    # The data records that realte to this call.
+    # The data records that relate to this call.
     records: Sequence[Record] = Field(default=[], description="Data records passed to agent.")
 
     # Stores the list of messages sent to the LLM during processing.

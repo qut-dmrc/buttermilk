@@ -51,7 +51,7 @@ Your response should be written for an external audience. Do not mention our int
 # User:
 {# Loop through each provided draft answer. #}
 {% for answer in answers %}
-<BEGIN DRAFT ANSWER #{{answer.agent_id}}>
+<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:4]}}>
 {{ answer.result }}
 <END DRAFT ANSWER>
 {% endfor %}

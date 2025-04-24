@@ -81,7 +81,7 @@ class TestAutogenAdapterIntegration:
         # The documented Judge uses evaluate_content (renamed from handle_agent_input)
         mock_judge = MagicMock(spec=Judge)
         mock_judge.evaluate_content = AsyncMock(name="evaluate_content")
-        mock_response = AgentOutput(agent_info="mock_judge", role="judge", outputs=AgentReasons(prediction=True, reasons=[], confidence='low', conclusion='mocked'))
+        mock_response = AgentOutput(agent_info=mock_judge._cfg, outputs=AgentReasons(prediction=True, reasons=[], confidence='low', conclusion='mocked'))
         mock_judge.evaluate_content.return_value = mock_response
         # Set necessary attributes
         mock_judge.id = "mock_judge_id"; mock_judge.role = "judge"; mock_judge.description = "Mock Judge"

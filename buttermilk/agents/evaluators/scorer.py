@@ -193,11 +193,10 @@ class LLMScorer(LLMAgent):
         # TODO: The structure `datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}` seems fragile.
         #       It assumes the source ID format and might not be robust. Clarify how context is passed.
         agent_source_id = source.split("-", maxsplit=1)[0]  # Attempt to get base agent ID
-        datadict = {agent_source_id: message.model_dump(exclude={"records"})}  # Pass judge's output
+        datadict = {agent_source_id: message.model_dump()}  # Pass judge's output
 
         try:
-            # _extract_vars likely uses self.template_vars to find needed inputs like 'expected' (ground truth)
-            # It might search message.records or the broader context managed by the agent.
+            # _extract_vars uses self.inputs to find needed inputs from other agents.
             extracted_vars = await self._extract_vars(message=message, datadict=datadict)
             records = extracted_vars.pop("records", [])  # Get records if extracted
 
@@ -217,8 +216,7 @@ class LLMScorer(LLMAgent):
         extracted_vars["assessor"] = self.id
         scorer_agent_input = AgentInput(
             inputs=extracted_vars,
-            # Pass records if they are relevant to the scoring prompt itself.
-            records=[records],  # Pass records if found
+            records=[records],  # Pass records if needed
         )
 
         # Get the weave call object associated with the message we are scoring.
@@ -254,8 +252,8 @@ class LLMScorer(LLMAgent):
                     # Publish the score back to the system using the provided callback.
                     formatted_score = QualResults(
                         assessments=score_output.outputs.assessments,
-                        agent=scorer_agent_input.inputs["agent_id"][0],
-                        answer_id=scorer_agent_input.inputs["answer_id"][0],
+                        agent=scorer_agent_input.inputs["answers"][0]["agent_id"],
+                        answer_id=scorer_agent_input.inputs["answers"][0]["answer_id"],
                         assessor=scorer_agent_input.inputs["assessor"],
                     )
                     # replace the outputs object

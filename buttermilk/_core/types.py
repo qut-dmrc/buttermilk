@@ -269,7 +269,7 @@ class Record(BaseModel):
         default=None,
     )
 
-    content: str | Sequence[Union[str, Image]]
+    content: str | Sequence[Union[str, Image]] = Field()
 
     mime: str | None = Field(
         default="text/plain",
@@ -277,6 +277,17 @@ class Record(BaseModel):
 
     def __str__(self) -> str:
         return self.text
+
+    @computed_field
+    @property
+    def images(self) -> list[Image] | None:
+        images = []
+        for x in self.content:
+            if x and isinstance(x, Image):
+                images.append(x)
+        if images:
+            return images
+        return None 
 
     @computed_field
     @property
@@ -307,7 +318,7 @@ class Record(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["title", "text"],
+        exclude=["title", "text", "images"],
         positional_args=True,
     )  # type: ignore
 

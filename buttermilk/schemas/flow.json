@@ -5,11 +5,6 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "agent_id",
-        "type": "STRING",
-        "mode": "REQUIRED"
-    },
-    {
         "name": "call_id",
         "type": "STRING",
         "mode": "REQUIRED"

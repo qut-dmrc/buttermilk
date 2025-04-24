@@ -59,7 +59,7 @@ class TestLLMScorerListen:
         # Often list of lists: [[record1], [record2]] or just list: [record1, record2]
         # Using list[Record] based on documentation, adjust if needed.
         return AgentOutput(
-            agent_id="judge-abc",
+            agent_info="judge-abc",
             role="judge",
             outputs=judge_reasons,
             records=[ground_truth_record],  # Pass record directly in a list
