@@ -242,6 +242,15 @@ wheels = [
 ]
 
 [[package]]
+name = "appdirs"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/d8/05696357e0311f5b5c316d7b95f46c669dd9c15aaeecbb48c7d0aeb88c40/appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41", size = 13470 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/00/2344469e2084fb287c2e0b57b72910309874c3245463acd6cf5e3db69324/appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128", size = 9566 },
+]
+
+[[package]]
 name = "appnope"
 version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1092,6 +1101,7 @@ dependencies = [
     { name = "rich" },
     { name = "sentencepiece" },
     { name = "sentry-sdk" },
+    { name = "shiny" },
     { name = "shortuuid" },
     { name = "slack-bolt" },
     { name = "traceloop-sdk" },
@@ -1210,6 +1220,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9.4,<14.0.0" },
     { name = "sentencepiece", specifier = ">=0.2.0,<1.0.0" },
     { name = "sentry-sdk", specifier = ">=2.24.0" },
+    { name = "shiny", specifier = ">=1.4.0" },
     { name = "shortuuid", specifier = ">=1.0.13,<2.0.0" },
     { name = "slack-bolt", specifier = ">=1.21.2,<2.0.0" },
     { name = "traceloop-sdk", specifier = ">=0.38.5" },
@@ -3005,6 +3016,19 @@ wheels = [
 ]
 
 [[package]]
+name = "htmltools"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/1d/c568d17e9fb5ad5aa0ca3531c58d36fe69deb8eee4e53ff6425c1f99f210/htmltools-0.6.0.tar.gz", hash = "sha256:e8a3fb023d748935035db7ff17f620612ffc814a6a80b6ae388f7b7ab182adf7", size = 97152 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/ba/aa99706246f1938ca905eb6eeb7db832ac2e157aa4b805acb5cd4cd1791a/htmltools-0.6.0-py3-none-any.whl", hash = "sha256:072a274ff5e2851e0acce13fc5bb2bbdbbad8268dc8b123f881c05012ce7dce0", size = 84954 },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -3835,6 +3859,18 @@ wheels = [
 ]
 
 [[package]]
+name = "linkify-it-py"
+version = "2.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "uc-micro-py" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/ae/bb56c6828e4797ba5a4821eec7c43b8bf40f69cda4d4f5f8c8a2810ec96a/linkify-it-py-2.0.3.tar.gz", hash = "sha256:68cda27e162e9215c17d786649d1da0021a451bdc436ef9e0fa0ba5234b9b048", size = 27946 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/1e/b832de447dee8b582cac175871d2f6c3d5077cc56d5575cadba1fd1cccfa/linkify_it_py-2.0.3-py3-none-any.whl", hash = "sha256:6bcbc417b0ac14323382aef5c5192c0075bf8a9d6b41820a2b66371eac6b6d79", size = 19820 },
+]
+
+[[package]]
 name = "loky"
 version = "3.5.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4093,6 +4129,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mdit-py-plugins"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/03/a2ecab526543b152300717cf232bb4bb8605b6edb946c845016fa9c9c9fd/mdit_py_plugins-0.4.2.tar.gz", hash = "sha256:5f2cd1fdb606ddf152d37ec30e46101a60512bc0e5fa1a7002c36647b09e26b5", size = 43542 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/f7/7782a043553ee469c1ff49cfa1cdace2d6bf99a1f333cf38676b3ddf30da/mdit_py_plugins-0.4.2-py3-none-any.whl", hash = "sha256:0c673c3f889399a33b95e88d2f0d111b4447bdfea7f237dab2d488f459835636", size = 55316 },
+]
+
+[[package]]
 name = "mdurl"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4218,16 +4266,16 @@ wheels = [
 
 [[package]]
 name = "msal"
-version = "1.32.1"
+version = "1.32.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7a/fe/dbf56cfcf85eebdf7079d2cd5d8c7e73cd04cc276394f4f194504406fd59/msal-1.32.1.tar.gz", hash = "sha256:9a36837fa9ead0b63f3d7aed51f9af5d586e482fbec196bbb8e5dc9492ee0f1a", size = 151125 }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/94/e855c8347c181caf5f3f7e0641cfbe09a4275882db4b90f8f525e91bc399/msal-1.32.2.tar.gz", hash = "sha256:81622b1bfcc3bde9146b72cdd240599791e652a69371422d3b4cc907501a6c65", size = 151387 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/b2/2be80f7e46c3610cd045d31fc6f36b9e55ffcdc992b5952661163da7989f/msal-1.32.1-py3-none-any.whl", hash = "sha256:f9d278fbe4d261232da52424c4a77d6e7f1485d1fc6a8aab6134b5f328a4e9ce", size = 115126 },
+    { url = "https://files.pythonhosted.org/packages/68/b2/466eef0b0447d5ad4319fda63d899b88d04fc4e1bab4630bed3583795b04/msal-1.32.2-py3-none-any.whl", hash = "sha256:2e8cafac9063dd522d4bd5a8ac7f2d5f897d66c72b3953c90a1aa7e570d2b917", size = 115277 },
 ]
 
 [[package]]
@@ -4385,6 +4433,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/7d/a988f258104dcd2ccf1ed40fdc97e26c4ac351eeaf81d76e266c52d84e2f/multiprocess-0.70.16-py312-none-any.whl", hash = "sha256:fc0544c531920dde3b00c29863377f87e1632601092ea2daca74e4beb40faa2e", size = 146741 },
     { url = "https://files.pythonhosted.org/packages/ea/89/38df130f2c799090c978b366cfdf5b96d08de5b29a4a293df7f7429fa50b/multiprocess-0.70.16-py38-none-any.whl", hash = "sha256:a71d82033454891091a226dfc319d0cfa8019a4e888ef9ca910372a446de4435", size = 132628 },
     { url = "https://files.pythonhosted.org/packages/da/d9/f7f9379981e39b8c2511c9e0326d212accacb82f12fbfdc1aa2ce2a7b2b6/multiprocess-0.70.16-py39-none-any.whl", hash = "sha256:a0bafd3ae1b732eac64be2e72038231c1ba97724b60b09400d68f229fcc2fbf3", size = 133351 },
+]
+
+[[package]]
+name = "narwhals"
+version = "1.36.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/65/92/503f99e2244a271aacd6c2588e0af1b59232292b217708748cdb30214dc3/narwhals-1.36.0.tar.gz", hash = "sha256:7cd860e7e066609bd8a042bb5b8e4193275532114448210a91cbd5c622b6e5eb", size = 270385 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/bf/fbcbd9f8676e06ed43d644a4ddbf31478a44056487578ce67f191da430cb/narwhals-1.36.0-py3-none-any.whl", hash = "sha256:e3c50dd1d769bc145f57ae17c1f0f0da6c3d397d62cdd0bb167e9b618e95c9d6", size = 331018 },
 ]
 
 [[package]]
@@ -6689,6 +6746,18 @@ wheels = [
 ]
 
 [[package]]
+name = "questionary"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "prompt-toolkit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/b8/d16eb579277f3de9e56e5ad25280fab52fc5774117fb70362e8c2e016559/questionary-2.1.0.tar.gz", hash = "sha256:6302cdd645b19667d8f6e6634774e9538bfcd1aad9be287e743d96cacaf95587", size = 26775 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/3f/11dd4cd4f39e05128bfd20138faea57bec56f9ffba6185d276e3107ba5b2/questionary-2.1.0-py3-none-any.whl", hash = "sha256:44174d237b68bc828e4878c763a9ad6790ee61990e0ae72927694ead57bab8ec", size = 36747 },
+]
+
+[[package]]
 name = "readabilipy"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -7422,6 +7491,36 @@ wheels = [
 ]
 
 [[package]]
+name = "shiny"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "appdirs" },
+    { name = "asgiref" },
+    { name = "click", marker = "sys_platform != 'emscripten'" },
+    { name = "htmltools" },
+    { name = "linkify-it-py" },
+    { name = "markdown-it-py" },
+    { name = "mdit-py-plugins" },
+    { name = "narwhals" },
+    { name = "orjson" },
+    { name = "packaging" },
+    { name = "prompt-toolkit", marker = "sys_platform != 'emscripten'" },
+    { name = "python-multipart", marker = "sys_platform != 'emscripten'" },
+    { name = "questionary", marker = "sys_platform != 'emscripten'" },
+    { name = "setuptools", marker = "python_full_version >= '3.12'" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
+    { name = "watchfiles", marker = "sys_platform != 'emscripten'" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/dc/1f1da052f0af709ee73dc07ef12f4c5395eff861e430143ae115fabdc3bb/shiny-1.4.0.tar.gz", hash = "sha256:05c709c2a074b9e9f5a82065460815ff40bc686286bacfcab5195a69f3ae759b", size = 4837146 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/e8/ae54ce930d965211c77b28a8c3792f78a80ad1bd012bbb05000176dd246c/shiny-1.4.0-py3-none-any.whl", hash = "sha256:c7748d0cd32696477613b9c00664320ea1604b9d9770a2ec2e8ea7ea5e0b44b4", size = 3870396 },
+]
+
+[[package]]
 name = "shortuuid"
 version = "1.0.13"
 source = { registry = "https://pypi.org/simple" }
@@ -7966,6 +8065,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/95/32/1a225d6164441be760d75c2c42e2780dc0873fe382da3e98a2e1e48361e5/tzdata-2025.2.tar.gz", hash = "sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9", size = 196380 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl", hash = "sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8", size = 347839 },
+]
+
+[[package]]
+name = "uc-micro-py"
+version = "1.0.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/91/7a/146a99696aee0609e3712f2b44c6274566bc368dfe8375191278045186b8/uc-micro-py-1.0.3.tar.gz", hash = "sha256:d321b92cff673ec58027c04015fcaa8bb1e005478643ff4a500882eaab88c48a", size = 6043 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/87/1f677586e8ac487e29672e4b17455758fce261de06a0d086167bb760361a/uc_micro_py-1.0.3-py3-none-any.whl", hash = "sha256:db1dffff340817673d7b466ec86114a9dc0e9d4d9b5ba229d9d60e5c12600cd5", size = 6229 },
 ]
 
 [[package]]

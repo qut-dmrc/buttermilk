@@ -78,8 +78,6 @@ def main(cfg: DictConfig) -> None:
             # Run a flow directly in the console.
             flow_name = cfg.flow
             
-            
-            
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(
                 record_id=cfg.get("record_id", ""),
@@ -93,7 +91,35 @@ def main(cfg: DictConfig) -> None:
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
             
         
+        case "shiny":
+            flow_name = cfg.flow
             
+            from buttermilk.api.flow import create_app
+            import uvicorn
+            app = create_app(
+                bm=bm,
+                flows=flow_runner,
+            )
+            # Configure Uvicorn server
+            config = uvicorn.Config(
+                app=app,
+                host="0.0.0.0",
+                port=8000,
+                reload=False,  # Set to True if you want hot reloading
+                log_level="info",
+                access_log=True,
+                workers=1
+            )
+
+            # Create and run the server
+            server = uvicorn.Server(config)
+            bm.logger.info("Starting API server...")
+            
+            try:
+                server.run()
+            except KeyboardInterrupt:
+                bm.logger.info("Shutting down API server...")
+
         case "api":
 
             # Inject the instantiated flows and orchestrator classes into the FastAPI app's state
