@@ -44,17 +44,6 @@ ORCHESTRATOR_CLASSES = {
 # TODO: This mapping is currently hardcoded. Consider if it should be dynamically discoverable or configurable.
 
 
-def create_app(bm: BM, flows: dict) -> FastAPI:
-    """Create and configure the FastAPI application."""
-    app = FastAPI()
-    
-    # Set up state
-    app.state.bm = bm
-    app.state.flows = flows
-    
-    # ...rest of your FastAPI setup...
-    return app
-
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """
@@ -69,11 +58,11 @@ def main(cfg: DictConfig) -> None:
              attempted before) could improve type safety if cfg structure is stable.
     """
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
-    # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flow=batch`).
+    # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
 
     flow_runner: FlowRunner = hydra.utils.instantiate(cfg)
     bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
-
+         
     # Perform essential setup for the Buttermilk instance *after* it's been instantiated by Hydra.
     # This might involve loading credentials, setting up logging, initializing API clients, etc.
     bm.setup_instance()
@@ -117,18 +106,19 @@ def main(cfg: DictConfig) -> None:
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
             
         case "api":
-            # Start a FastAPI server to expose flows via an HTTP API.
-            from buttermilk.api.flow import app  # Import the FastAPI app instance.
 
             # Inject the instantiated flows and orchestrator classes into the FastAPI app's state
             # so that API endpoints can access them.
             # TODO: Using app.state is simple but can be considered a form of global state.
             #       Dependency injection frameworks (like FastAPI's Depends) might offer cleaner alternatives
             #       for larger applications.
+
             # Create the FastAPI app with dependencies
+            from buttermilk.api.flow import create_app
+            import uvicorn
             app = create_app(
                 bm=bm,
-                flows=flow_runner.flows,
+                flows=flow_runner,
             )
             # Configure Uvicorn server
             config = uvicorn.Config(

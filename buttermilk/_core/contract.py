@@ -17,6 +17,7 @@ import shortuuid  # For generating unique IDs
 # Import Autogen types used as base or components
 from autogen_core.models import FunctionExecutionResult, LLMMessage
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -51,7 +52,7 @@ WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""
 
-    prompt: str | None = Field(default="", description="The main prompt or question for the run.")
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices(["prompt","q"]))
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")

@@ -67,6 +67,7 @@ class OrchestratorProtocol(BaseModel):
     """
 
     # --- Configuration Fields ---
+    orchestrator: str = Field(..., description="Name of the orchestrator object to use.")
     session_id: str = Field(
         default_factory=lambda: shortuuid.uuid()[:8],
         description="A unique session id for this specific flow execution.",

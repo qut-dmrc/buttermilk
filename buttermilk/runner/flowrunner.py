@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Mapping
+import importlib
 from typing import Literal, Optional, Dict, Any, Union, Type
 
 from pydantic import BaseModel, ConfigDict
@@ -17,16 +18,8 @@ class FlowRunner(BaseModel):
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
     """
     bm: BM
-    flows: Mapping[str, OrchestratorProtocol]  # Dictionary of configured flow orchestrators.
-    ui: Literal["console", "api", "pub/sub", "slackbot"]  # The selected UI mode.
+    flows: Mapping[str, OrchestratorProtocol]  # Dictionary of unconfigured flow orchestrators.
     save: SaveInfo
-    llms: Mapping[str, str|list[str]]
-
-    # Optional command-line overrides for the 'console' UI mode.
-    record_id: str = ""
-    flow: str = ""
-    uri: str = ""
-    prompt: str = ""
 
     model_config = ConfigDict(extra="allow")
     
@@ -64,3 +57,37 @@ class FlowRunner(BaseModel):
         # Run synchronously and wait for completion
         await orchestrator.run(request=run_request)
         return None
+    
+
+    async def stream(self, 
+                        flow_name: str,
+                        run_request: Optional[RunRequest] = None,
+                      history: Optional[list] = None,
+                      **kwargs) -> AsyncGenerator[Any, None]:
+        """
+        Run a flow based on its configuration and a request.
+
+        Streams results back
+
+        Args:
+            flow_name: The configured flow name
+            run_request: The request containing input parameters
+            history: Optional conversation history (for chat-based interfaces)
+            **kwargs: Additional keyword arguments for orchestrator instantiation
+
+        Returns:
+            None
+
+        """            
+        module_name, class_name = self.flows[flow_name].orchestrator.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        orchestrator_cls = getattr(module, class_name)
+    
+        config = self.flows[flow_name].model_dump()
+        # Create orchestrator instance
+        orchestrator = orchestrator_cls(**config)
+        
+        logger.info(f"Starting flow '{flow_name}' with orchestrator '{orchestrator_cls.__name__}'")
+    
+        async for chunk in orchestrator.run(request=run_request):
+            yield chunk
