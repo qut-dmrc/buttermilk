@@ -3,6 +3,8 @@ defaults:
   - local
   - llms: lite
 
+_target_: buttermilk.runner.flowrunner.FlowRunner
+
 name: default_project
 job: development
 ui: console

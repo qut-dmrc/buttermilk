@@ -45,59 +45,8 @@ END = "END"  # Special role/signal used by Conductor/Host to indicate the flow s
 WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/waiting.
 
 
-# --- Flow Protocol ---
+# --- Flow Protocol Start signal ---
 
-
-class FlowProtocol(BaseModel):
-    """
-    Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
-    Used to initialise a new orchestrated flow.
-
-    Attributes:
-        session_id (str): Unique ID for the current flow execution session.
-        name (str): Human-friendly name for the flow.
-        description (str): Description of the flow's purpose.
-        save (SaveInfo | None): Configuration for saving results (optional).
-        data (Sequence[DataSourceConfig]): List of data sources for the flow.
-        agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
-        parameters (dict): Flow-level parameters accessible by agents.
-        _flow_data (KeyValueCollector): Internal state collector for the flow.
-        _records (list[Record]): List of data records currently loaded/used in the flow.
-    """
-
-    # --- Configuration Fields ---
-    session_id: str = Field(
-        default_factory=lambda: shortuuid.uuid()[:8],
-        description="A unique session id for this specific flow execution.",
-    )
-    name: str = Field(
-        default="",
-        description="Human-friendly name identifying this flow configuration.",
-    )
-    description: str = Field(
-        default="",  # Default to empty string
-        description="Short description explaining the purpose of this flow.",
-    )
-    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
-    data: Mapping[str, DataSourceConfig] = Field(
-        default_factory=dict,
-        description="Configuration for data sources to be loaded for the flow.",
-    )
-    agents: Mapping[str, AgentVariants] = Field(
-        default_factory=dict,
-        description="Mapping of agent roles (uppercase) to their variant configurations.",
-    )
-    tools: Mapping[str, AgentConfig] = Field(
-        default_factory=dict,
-        description="Mapping of agent roles (uppercase) to their variant configurations.",
-    )
-    parameters: Mapping[str, Any] = Field(
-        default_factory=dict,
-        description="Flow-level parameters accessible by agents via their context.",
-    )
-
-    # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
-    _validate_parameters = field_validator("parameters", "data", "agents", "tools", mode="before")(convert_omegaconf_objects())
 
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""

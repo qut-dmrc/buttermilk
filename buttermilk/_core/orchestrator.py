@@ -24,16 +24,87 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Agent variant configuration
     DataSourceConfig,
 )
-from buttermilk._core.contract import AgentInput, AgentOutput, FlowProtocol, ManagerResponse, RunRequest, StepRequest  # Core message types
+from buttermilk._core.contract import AgentInput, AgentOutput, ManagerResponse, RunRequest, StepRequest  # Core message types
 from buttermilk._core.types import Record  # Data types
 from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
 from buttermilk.bm import BM, logger # Global instance and logger
 from buttermilk.utils.templating import KeyValueCollector   # State management utility
 
-# TODO: BASE_DIR seems unused. Consider removing.
-# BASE_DIR = Path(__file__).absolute().parent
+from collections.abc import Mapping
+from typing import Any, Dict, Optional, Sequence, Union
 
-class Orchestrator(FlowProtocol, ABC):
+import shortuuid  # For generating unique IDs
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+)
+from buttermilk.utils.validators import convert_omegaconf_objects
+
+from .config import AgentConfig, AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
+from .log import logger
+from .types import Record # Core data types
+
+
+class OrchestratorProtocol(BaseModel):
+    """
+    Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
+    Used to initialise a new orchestrated flow.
+
+    Attributes:
+        session_id (str): Unique ID for the current flow execution session.
+        name (str): Human-friendly name for the flow.
+        description (str): Description of the flow's purpose.
+        save (SaveInfo | None): Configuration for saving results (optional).
+        data (Sequence[DataSourceConfig]): List of data sources for the flow.
+        agents (Mapping[str, AgentVariants]): Dictionary mapping role names to agent variant configurations.
+        parameters (dict): Flow-level parameters accessible by agents.
+        _flow_data (KeyValueCollector): Internal state collector for the flow.
+        _records (list[Record]): List of data records currently loaded/used in the flow.
+    """
+
+    # --- Configuration Fields ---
+    session_id: str = Field(
+        default_factory=lambda: shortuuid.uuid()[:8],
+        description="A unique session id for this specific flow execution.",
+    )
+    name: str = Field(
+        default="",
+        description="Human-friendly name identifying this flow configuration.",
+    )
+    description: str = Field(
+        default="",  # Default to empty string
+        description="Short description explaining the purpose of this flow.",
+    )
+    save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
+    data: Mapping[str, DataSourceConfig] = Field(
+        default_factory=dict,
+        description="Configuration for data sources to be loaded for the flow.",
+    )
+    agents: Mapping[str, AgentVariants] = Field(
+        default_factory=dict,
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    )
+    tools: Mapping[str, AgentConfig] = Field(
+        default_factory=dict,
+        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    )
+    parameters: Mapping[str, Any] = Field(
+        default_factory=dict,
+        description="Flow-level parameters accessible by agents via their context.",
+    )
+
+    # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
+    _validate_parameters = field_validator("parameters", "data", "agents", "tools", mode="before")(convert_omegaconf_objects())
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="ignore", 
+    )
+class Orchestrator(OrchestratorProtocol, ABC):
     """
     Abstract Base Class for orchestrators that manage agent-based flows.
 
@@ -248,11 +319,6 @@ class Orchestrator(FlowProtocol, ABC):
             logger.error(f"Error during direct execute for step '{request.role}': {e}")
             return None
 
-    async def __call__(self, request: RunRequest | None = None) -> None:
-        """Makes the orchestrator instance callable, triggering its `run` method."""
-        await self.run(request=request)
-        # Typically __call__ in this pattern doesn't return a value. Results are handled internally or via saving.
-
     async def _fetch_initial_records(self, request: RunRequest) -> None:
         """Helper method to fetch records based on RunRequest if needed."""
         if not self._records and not request.records:  # Only fetch if no records exist yet
@@ -280,50 +346,3 @@ class Orchestrator(FlowProtocol, ABC):
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")
 
-    async def _evaluate_step(
-        self,
-        output: AgentOutput,
-        ground_truth_record: Record | None,
-        criteria: Any | None,
-        weave_call: Any | None,  # Weave call object for logging
-    ) -> None:
-        """
-        Placeholder for evaluating an agent's output.
-
-        Subclasses can override this to find and execute appropriate 'scorer' agents,
-        potentially logging results back to the Weave trace associated with `weave_call`.
-
-        Args:
-            output: The AgentOutput to evaluate.
-            ground_truth_record: The ground truth data (if available).
-            criteria: The criteria used for evaluation (if available).
-            weave_call: The Weave call object associated with the `output` generation.
-        """
-        logger.debug(f"Base _evaluate_step called for output from agent {output.agent_id}. No evaluation performed.")
-        pass  # Default implementation does nothing.
-
-    @abstractmethod
-    async def _execute_step(
-        self,
-        step: AgentInput,
-    ) -> AgentOutput | None:
-        # Run step
-        raise NotImplementedError
-
-
-# --- Orchestrator Protocol (for Type Hinting/Hydra) ---
-
-
-# Defines the expected structure of the configuration object *after* Hydra instantiation.
-# Used primarily for type hinting in the `cli.py` entry point.
-class OrchestratorProtocol(BaseModel):
-    """Defines the expected structure of the Hydra configuration object after instantiation."""
-
-    bm: BM  # The core Buttermilk instance.
-    flows: Mapping[str, Orchestrator]  # Dictionary of configured flow orchestrators.
-    ui: Literal["console", "api", "pub/sub", "slackbot"]  # The selected UI mode.
-    flow: str  # The name of the specific flow selected to run (e.g., 'batch', 'panel').
-    # Optional command-line overrides for the 'console' UI mode.
-    record_id: str = ""
-    uri: str = ""
-    prompt: str = ""

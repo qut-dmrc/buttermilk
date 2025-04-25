@@ -3,6 +3,6 @@ fetch:
   name: "🔍 fetch record"
   agent_obj: FetchAgent
   description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
-  data: ${flows.data}
+  data: ${...data}
   inputs:
     prompt: prompt

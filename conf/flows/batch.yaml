@@ -1,3 +1,4 @@
+# @package flows.batch
 # COMMENTED OUT # @package _global_
 defaults:
   - /data: tja_train 

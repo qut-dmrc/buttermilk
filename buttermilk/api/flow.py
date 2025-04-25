@@ -4,8 +4,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
+from buttermilk._core.contract import RunRequest
 from buttermilk.api.stream import FlowRequest, flow_stream
 from buttermilk.bm import logger
+from buttermilk.runner.flowrunner import FlowRunner
 
 from .runs import get_recent_runs
 
@@ -68,12 +70,10 @@ async def run_flow_json(
     if not hasattr(request.app.state, "bm"):
         raise HTTPException(status_code=500, detail="BM instance not found in app state")
 
-    current_bm = request.app.state.bm
     # Get a copy of the flow config to avoid modifying the state directly
     flow_config = request.app.state.flows[flow_name].copy()
     orchestrator_name = flow_config.get("orchestrator", None)
 
-    orchestrator = None
     if orchestrator_name:
         orchestrator_cls = request.app.state.orchestrators.get(orchestrator_name)
         if orchestrator_cls:
@@ -84,8 +84,20 @@ async def run_flow_json(
     else:
         raise HTTPException(status_code=500, detail="Orchestrator not specified in flow config")
 
+    # Get flow configuration
+    flow_runner = request.app.state.flow_runner
+    
+    
+    # Convert FlowRequest to RunRequest
+    run_request = RunRequest(
+        prompt=getattr(flow_request, "q", None) or getattr(flow_request, "prompt", ""),
+        record_id=getattr(flow_request, "record_id", ""),
+        uri=getattr(flow_request, "uri", ""),
+    )
+    
+    # Use flow_stream with the new flow_runner
     return StreamingResponse(
-        flow_stream(orchestrator.run(), flow_request),
+        flow_stream(flow_runner, flow_config, run_request, flow_request),
         media_type="application/json",
     )
     raise HTTPException(status_code=403, detail="Flow not valid")
