@@ -158,8 +158,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
-    @app.websocket("/ws/agent/{session_id}")
-    async def agent_websocket(websocket: WebSocket, session_id: str):
+    @app.websocket("/ws/{flow_name}/{session_id}")
+    async def agent_websocket(websocket: WebSocket, flow_name: str, session_id: str):
         """
         WebSocket endpoint for client communication with the WebUIAgent.
         
@@ -172,10 +172,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         await websocket.accept()
         try:
             # Start the flow, passing in our websocket and session_id
-            run_request = RunRequest(record_id="", websocket=websocket, session_id=session_id)
-            await app.state.flow_runner.run(run_request)
+            # Wait for client message
+            while True:
+                client_message = await websocket.receive_json()
+                if record_id := client_message.get('record_id'):
+                    run_request = RunRequest(record_id=record_id, websocket=websocket, session_id=session_id)
+                    break
+            await app.state.flow_runner.run_flow(flow_name, run_request)
 
-                    
         except WebSocketDisconnect:
             logger.info("Client disconnected")
         except Exception as e:
@@ -201,8 +205,5 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """
         return {"session_id": str(uuid.uuid4())}
     
-    @app.websocket("/ws/chat")
-    async def chat(websocket: WebSocket):
-       
 
     return app

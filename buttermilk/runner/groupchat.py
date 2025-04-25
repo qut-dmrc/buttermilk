@@ -100,10 +100,9 @@ class AutogenOrchestrator(Orchestrator):
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_tools()
         await self._register_agents()
-        await self._register_manager_interface()
 
         # Register a special agent to handle interactions with the MANAGER (UI/Human).
-        await self._register_manager_interface()  # Renamed for clarity
+        await self._register_manager_interface(request.websocket, request.session_id)  # Renamed for clarity
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
@@ -198,7 +197,7 @@ class AutogenOrchestrator(Orchestrator):
                 )
                 logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
-    async def _register_manager_interface(self) -> None:
+    async def _register_manager_interface(self, websocket, session_id) -> None:
         """Registers an agent to communicate with the MANAGER (user)."""
         logger.debug(f"Registering manager interface agent '{MANAGER}'.")
 
@@ -455,8 +454,7 @@ class AutogenOrchestrator(Orchestrator):
         try:
             await self._setup(request)
             if request:
-                # Fixed: Pass list(self.data)
-                fetch = FetchRecord(data=list(self.data))
+                fetch = FetchRecord(data=self.data)
                 fetch_output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
                 # Fixed: Extract results list
                 if fetch_output and fetch_output.results:

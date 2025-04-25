@@ -193,7 +193,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
             with weave.attributes(tracing_attributes):
-                await self._run(__weave={"display_name": display_name}) 
+                await self._run(request=request, __weave={"display_name": display_name}) 
 
                 logger.info(f"Orchestrator '{self.name}' run finished successfully.")
 
