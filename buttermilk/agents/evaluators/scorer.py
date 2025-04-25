@@ -183,8 +183,6 @@ class LLMScorer(LLMAgent):
 
         # Prepare data for the LLM scoring prompt template.
         # We need the original output (message.outputs) and ground truth.
-        # Use _extract_vars which likely gets data from message.records or context.
-        # Assume 'datadict' provides context for _extract_vars, mapping source agent ID to its output.
         # TODO: The structure `datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}` seems fragile.
         #       It assumes the source ID format and might not be robust. Clarify how context is passed.
         agent_source_id = source.split("-", maxsplit=1)[0]  # Attempt to get base agent ID

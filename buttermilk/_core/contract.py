@@ -71,7 +71,7 @@ class FlowProtocol(BaseModel):
         description="A unique session id for this specific flow execution.",
     )
     name: str = Field(
-        ...,  # Name is required
+        default="",
         description="Human-friendly name identifying this flow configuration.",
     )
     description: str = Field(
@@ -79,8 +79,8 @@ class FlowProtocol(BaseModel):
         description="Short description explaining the purpose of this flow.",
     )
     save: SaveInfo | None = Field(default=None, description="Configuration for saving results (e.g., to disk, database). Optional.")
-    data: Sequence[DataSourceConfig] = Field(
-        default_factory=list,
+    data: Mapping[str, DataSourceConfig] = Field(
+        default_factory=dict,
         description="Configuration for data sources to be loaded for the flow.",
     )
     agents: Mapping[str, AgentVariants] = Field(
@@ -91,11 +91,10 @@ class FlowProtocol(BaseModel):
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
-    parameters: dict = Field(
+    parameters: Mapping[str, Any] = Field(
         default_factory=dict,
         description="Flow-level parameters accessible by agents via their context.",
     )
-
 
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
     _validate_parameters = field_validator("parameters", "data", "agents", "tools", mode="before")(convert_omegaconf_objects())

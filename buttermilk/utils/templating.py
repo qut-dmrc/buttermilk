@@ -176,6 +176,8 @@ def load_template(
     recursive_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
     loader = FileSystemLoader(searchpath=recursive_paths)
 
+    untrusted_inputs = {}
+
     undefined_vars = []
 
     class KeepUndefined(Undefined):
@@ -191,10 +193,19 @@ def load_template(
     sandbox_env = sandbox.SandboxedEnvironment(
         loader=loader,
         trim_blocks=True,
+        lstrip_blocks=True,
         undefined=KeepUndefined,  # Retain unfilled placeholders
         keep_trailing_newline=False,
     )
 
+    # Add a custom filter for comprehensive whitespace stripping
+    def strip_all(s):
+        if isinstance(s, str):
+            return s.strip()
+        return s
+        
+    sandbox_env.filters['strip_all'] = strip_all
+    
     # Load main template
     try:
         tpl = sandbox_env.get_template(f"{template}.jinja2")
@@ -229,8 +240,8 @@ def make_messages(
 
     # Convert to LLMMessage
     for message in messages:
-        var_name = re.sub(r"[^\w\d_]+", "", message["content"]).lower()
-        if not var_name:
+        template_content = re.sub(r"[^\w\d_]+", "", message["content"]).lower()
+        if not template_content:
             # don't add empty messages
             continue
         match message["role"].lower():
@@ -242,16 +253,16 @@ def make_messages(
                 output.append(AssistantMessage(content=message["content"], source="template"))
             case "placeholder":
                 # Remove everything except word chars to get the variable name
-                if var_name == "context":
+                if template_content == "context":
                     # special case for context
                     output.extend(context)
-                elif var_name == "records":
+                elif template_content == "records":
                     output.extend([rec.as_message() for rec in records if isinstance(rec, Record)])
                 else:
-                    err = (f"Missing {var_name} in placeholder vars.",)
+                    err = (f"Missing {template_content} in placeholder vars.",)
                     raise ProcessingError(err)
             case _:
-                err = (f"Missing {var_name} in placeholder vars.",)
+                err = (f"Missing {template_content} in placeholder vars.",)
                 if fail_on_missing_placeholders:
                     raise ProcessingError(err)
                 logger.warning(err)

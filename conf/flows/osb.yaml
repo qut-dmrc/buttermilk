@@ -32,7 +32,7 @@ osb:
         answers: search
         
   data:
-    - name: cases
+    cases:
       type: vector
       uri: gs://prosocial-public/osb/03_osb_fulltext_summaries.json
       db:

@@ -74,13 +74,14 @@ class Judge(LLMAgent):
     # Initialization (`__init__`) is handled by the parent LLMAgent, which takes
     # configuration (like model, template, parameters) via its AgentConfig.
 
+
     # --- Buttermilk/Autogen Message Handler ---
 
     # This decorator registers the method with the Buttermilk framework.
     # When this agent (wrapped by AutogenAgentAdapter) receives an AgentInput message
     # via Autogen, the adapter will likely route it to this handler.
     @buttermilk_handler(AgentInput)
-    async def evaluate_content(  # Renamed for clarity from handle_agent_input
+    async def evaluate_content(  
         self,
         message: AgentInput,
     ) -> AgentOutput:
@@ -95,34 +96,14 @@ class Judge(LLMAgent):
             or an error if processing fails.
         """
         logger.debug(f"Judge agent '{self.id}' received evaluation request.")
-        try:
-            # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
-            # This method handles template rendering, API calls, retries, and parsing into _output_model.
-            result: AgentOutput = await self._process(message=message)
+        # Note that we don't do error handling here. If the call fails, the Autogen Adapter
+        # or whatever else called us has to deal with it.
+    
+        # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
+        # This method handles template rendering, API calls, retries, and parsing into _output_model.
+        result: AgentOutput = await self._process(message=message)
 
-            # LLMAgent._process already creates and returns AgentOutput.
-            # We might want to add specific logging or post-processing here if needed.
-            if not result.is_error and isinstance(result.outputs, AgentReasons):
-                logger.debug(f"Judge '{self.id}' completed evaluation successfully.")
-            elif not result.is_error:
-                logger.warning(f"Judge '{self.id}' completed but output type is not AgentReasons: {type(result.outputs)}")
-            else:
-                logger.error(f"Judge '{self.id}' encountered an error during processing: {result.outputs}")
-
-            # LLMAgent._process returns the AgentOutput directly.
-            # The AutogenAgentAdapter is responsible for publishing this if needed.
-            # The commented-out publish line below seems redundant if the adapter handles it.
-            # TODO: Verify if explicit publishing is needed here or handled by the adapter/orchestrator.
-            # await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
-
-            return result
-
-        except Exception as e:
-            logger.exception(f"Unexpected error in Judge.evaluate_content for agent '{self.id}': {e}")
-            # Create an AgentOutput indicating an error.
-            error_output = AgentOutput(agent_info=self._cfg)
-            error_output.set_error(f"Unexpected error in Judge agent: {e}")
-            return error_output
+        return result
 
     # Note: Other handlers (like _listen, _handle_events) can be added here if the Judge
     # needs to react to other message types or perform background tasks, inheriting or

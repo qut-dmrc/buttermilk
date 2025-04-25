@@ -7,8 +7,8 @@
       {% include variable_value + template_suffix ignore missing with context %}
     {% endset %}
 
-    {#- Trim whitespace from captured content -#}
-    {% set included_content = included_content | trim %}
+    {#- Trim whitespace from captured content (custom function) -#}
+    {% set included_content = included_content | strip_all  %}
 
     {#- Output included content if found, otherwise output the original variable value -#}
     {% if included_content %}

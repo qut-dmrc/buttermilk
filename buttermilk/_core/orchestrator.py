@@ -33,7 +33,6 @@ from buttermilk.utils.templating import KeyValueCollector   # State management u
 # TODO: BASE_DIR seems unused. Consider removing.
 # BASE_DIR = Path(__file__).absolute().parent
 
-KeyValueCollector
 class Orchestrator(FlowProtocol, ABC):
     """
     Abstract Base Class for orchestrators that manage agent-based flows.
@@ -65,24 +64,6 @@ class Orchestrator(FlowProtocol, ABC):
     )
 
     # --- Validators ---
-
-    @field_validator("data", mode="before")
-    @classmethod
-    def validate_data(cls, value: Sequence[DataSourceConfig | Mapping]) -> list[DataSourceConfig]:
-        """Ensures all items in the 'data' list are valid DataSourceConfig objects."""
-        validated_data = []
-        for i, source in enumerate(value):
-            if isinstance(source, Mapping):
-                try:
-                    validated_data.append(DataSourceConfig(**source))
-                except Exception as e:
-                    logger.error(f"Invalid DataSource configuration at index {i}: {source}. Error: {e}")
-                    raise ValueError(f"Invalid DataSource config at index {i}") from e
-            elif isinstance(source, DataSourceConfig):
-                validated_data.append(source)
-            else:
-                raise TypeError(f"Invalid type for data source at index {i}: {type(source)}. Expected dict or DataSourceConfig.")
-        return validated_data
 
     @model_validator(mode="after")
     def validate_and_initialize_agents(self) -> Self:

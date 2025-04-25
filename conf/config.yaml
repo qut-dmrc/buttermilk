@@ -7,12 +7,6 @@ name: default_project
 job: development
 ui: console
 
-# launch parameters
-uri:
-flow:
-record_id:
-prompt:
-
 bm:
   _target_: buttermilk.bm.BM
 

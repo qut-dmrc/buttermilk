@@ -1,0 +1,5 @@
+tja_train:
+  type: file
+  path: gs://prosocial-dev/data/tja_train.jsonl
+  index:
+    - record_id

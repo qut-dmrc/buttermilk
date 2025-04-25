@@ -115,7 +115,6 @@ class SaveInfo(CloudProviderCfg):
 
 
 class DataSourceConfig(BaseModel):
-    name: str
     max_records_per_group: int = -1
     type: Literal[
         "job",
@@ -242,8 +241,8 @@ class AgentConfig(BaseModel):
         default_factory=list,  # Use factory for mutable default
         description="Configuration for tools (functions) that the agent can potentially use.",
     )
-    data: list[DataSourceConfig] = Field(
-        default_factory=list,  # Use factory for mutable default
+    data: Mapping[str, DataSourceConfig] = Field(
+        default_factory=dict,  # Use factory for mutable default
         description="Configuration for data sources the agent might need access to.",
     )
     parameters: dict[str, Any] = Field(

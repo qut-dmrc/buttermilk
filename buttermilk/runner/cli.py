@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flow=batch`).
     objs: DictConfig = hydra.utils.instantiate(
         cfg
-    )  # TODO: Typing `objs` accurately is hard due to Hydra's dynamic instantiation. Consider a helper or protocol.
+    ) 
     bm: BM = objs.bm  # Access the instantiated Buttermilk core instance.
 
     # Perform essential setup for the Buttermilk instance *after* it's been instantiated by Hydra.
@@ -100,7 +100,7 @@ def main(cfg: DictConfig) -> None:
             # TODO: Using app.state is simple but can be considered a form of global state.
             #       Dependency injection frameworks (like FastAPI's Depends) might offer cleaner alternatives
             #       for larger applications.
-            app.state.bm = bm  # Make bm available to API endpoints
+            app.state.bm = bm 
             app.state.flows = objs.flows
             app.state.orchestrators = ORCHESTRATOR_CLASSES  # Provide mapping for potential dynamic selection via API.
 
