@@ -411,8 +411,6 @@ class Sequencer(Agent):
         self._completed_agents_current_step.clear()
         self._expected_agents_current_step.clear()
         self._participants.clear()
-        # TODO: _current_idx is unused? Confirm and remove if true.
-        # self._current_idx = 0
         # Re-initialize the step generator (will wait for participants again).
         self._step_generator = self._sequence()
         # Set completion event to ready state.

@@ -63,7 +63,7 @@ class Selector(AutogenOrchestrator):
     # Maps variant ID (AgentConfig.id) to its index within the role's variant list. Dict[str, int]
     _variant_mapping: Dict[str, int] = PrivateAttr(default_factory=dict)
 
-    async def _setup(self) -> None:
+    async def _setup(self, request: RunRequest | None = None) -> None:
         """
         Initializes the Selector orchestrator.
 

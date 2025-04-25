@@ -76,8 +76,10 @@ def main(cfg: DictConfig) -> None:
     match flow_runner.ui:
         case "console":
             # Run a flow directly in the console.
-            flow_name = flow_runner.flow
-            orchestrator: OrchestratorProtocol = flow_runner.flows[flow_name]  # Get the instantiated orchestrator for the selected flow.
+            flow_name = cfg.flow
+            
+            
+            
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(
                 record_id=cfg.get("record_id", ""),
@@ -85,25 +87,12 @@ def main(cfg: DictConfig) -> None:
                 uri=cfg.get("uri", ""),
             )
             
-            # Run the flow asynchronously
+            # Run the flow synchronously
             bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
             asyncio.run(flow_runner.run_flow(flow_name=flow_name, run_request=run_request))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
             
-            # Prepare the initial request data for the orchestrator.
-            # Uses command-line overrides or defaults from config for record_id, prompt, uri.
-            run_request = RunRequest(
-                record_id=cfg.get("record_id", ""),
-                prompt=cfg.get("prompt", ""),
-                uri=cfg.get("uri", ""),  # Use .get for safer access
-            )
-            asyncio.run(orchestrator.run(request=run_request))
-            bm.logger.info(f"Flow '{cfg.flow}' finished.")
-            
-            # Run the flow synchronously
-            bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
-            asyncio.run(flow_runner.run_flow(flow_config, run_request))
-            bm.logger.info(f"Flow '{cfg.flow}' finished.")
+        
             
         case "api":
 

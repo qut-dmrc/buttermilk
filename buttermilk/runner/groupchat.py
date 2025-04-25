@@ -91,7 +91,7 @@ class AutogenOrchestrator(Orchestrator):
         # NOTE: _runtime and _agent_types are initialized within _setup.
         return self
 
-    async def _setup(self) -> None:
+    async def _setup(self, request: RunRequest | None = None) -> None:
         """Initializes the Autogen runtime and registers all configured agents."""
         logger.info(f"Setting up AutogenOrchestrator for topic: {self._topic.type}")
         self._runtime = SingleThreadedAgentRuntime()
@@ -196,8 +196,11 @@ class AutogenOrchestrator(Orchestrator):
                 logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
     async def _register_manager_interface(self) -> None:
-        """Registers a ClosureAgent to handle responses from the MANAGER."""
-        logger.debug(f"Registering manager interface agent '{CONFIRM}'.")
+        """Registers an agent to communicate with the MANAGER (user)."""
+        logger.debug(f"Registering manager interface agent '{MANAGER}'.")
+
+        # Inject messages into the groupchat from the UI 
+        
 
         # This agent listens for ManagerResponse messages on relevant topics.
         async def handle_manager_response(
@@ -221,21 +224,21 @@ class AutogenOrchestrator(Orchestrator):
                 # Log if an unexpected type arrives, although ignore policy should handle it.
                 logger.warning(f"Manager interface received unexpected message type: {type(message)}")
 
-        # Register the closure function as an agent named CONFIRM.
+        # Register the closure function as an agent named MANAGER.
         await ClosureAgent.register_closure(
             runtime=self._runtime,
-            type=CONFIRM,  # Agent ID/Name.
+            type=MANAGER,  # Agent ID/Name.
             closure=handle_manager_response,  # The async function to handle messages.
             subscriptions=lambda: [
                 TypeSubscription(
                     topic_type=self._topic.type,  # Subscribe to the main group chat topic
-                    agent_type=CONFIRM,  # Only messages for the CONFIRM agent.
+                    agent_type=MANAGER, 
                 )
             ],
             # If a message arrives that isn't ManagerResponse, just ignore it silently.
             unknown_type_policy="ignore",
         )
-        logger.debug(f"Manager interface agent '{CONFIRM}' registered and subscribed.")
+        logger.debug(f"Manager interface agent '{MANAGER}' registered and subscribed.")
 
     async def _ask_agents(
         self,
@@ -309,10 +312,6 @@ class AutogenOrchestrator(Orchestrator):
     async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
         """
         Sends a message intended for the user interface (MANAGER).
-
-        Publishes the message to both the dedicated MANAGER topic and the main
-        group chat topic to ensure visibility, especially for UI components
-        that might only be listening on one.
 
         Args:
             message: The ManagerMessage or ManagerRequest to send.
@@ -422,6 +421,7 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(5)
         return next_step
 
+    @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
         """
         Main execution loop for the orchestrator.
@@ -438,7 +438,7 @@ class AutogenOrchestrator(Orchestrator):
                      If provided, it fetches the initial record(s).
         """
         try:
-            await self._setup()
+            await self._setup(request)
             if request:
                 # Fixed: Pass list(self.data)
                 fetch = FetchRecord(data=list(self.data))

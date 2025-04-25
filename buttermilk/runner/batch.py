@@ -25,7 +25,7 @@ class BatchOrchestrator(Orchestrator):
     )
     _agent_instances: dict[str, Agent] = PrivateAttr(default_factory=dict)  # Store agent instances by ID
 
-    async def _setup(self):
+    async def _setup(self, request: RunRequest | None = None):
         """
         Set up resources for batch execution.
 

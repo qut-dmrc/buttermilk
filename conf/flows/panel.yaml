@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - criteria@panel.parameters.criteria: trans
+  - /agents/manager@agents: climanager
   - agents@panel.agents:
-      - manager
       - fetch
       - host
       - judge

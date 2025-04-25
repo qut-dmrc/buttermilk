@@ -55,7 +55,9 @@
       "args": [
         "hydra.verbose=false",
         "+flows=batch",
-        "ui=api",
+        "++flow=batch",
+        "ui=console",
+        "++record_id=jenner_criticises_khalif_dailymail",
         "llms=lite",
         "name=testing",
         //"+record_id=${input:query}" // Will prompt for query

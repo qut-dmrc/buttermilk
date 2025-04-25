@@ -122,24 +122,10 @@ class AutogenAgentAdapter(RoutedAgent):
         # Initialize the base Autogen RoutedAgent class, using the Buttermilk agent's description.
         super().__init__(description=self.agent.description)
 
-        # TODO: This check for manager types is brittle. Relying on specific class types
-        # (UIAgent, LLMHostAgent, Sequencer) makes it hard to extend.
-        # Consider using a role property, capability flag, or specific interface instead.
-        self.is_manager = isinstance(self.agent, (UIAgent, LLMHostAgent, Sequencer))
-        logger.debug(f"Agent {self.agent.id} identified as manager: {self.is_manager}")
-
-        # Perform agent-specific asynchronous initialization in the current event loop.
-        # Manager agents get a callback to publish messages back through the adapter.
-        if self.is_manager:
-            # This allows UI agents, for example, to send user input back into the Autogen flow.
-            init_task = self.agent.initialize(input_callback=self._make_publish_callback())
-            asyncio.create_task(init_task)
-            logger.debug(f"Scheduled initialization for manager agent {self.agent.id} with callback.")
-        else:
-            # Non-manager agents might still have async initialization tasks.
-            init_task = self.agent.initialize()
-            asyncio.create_task(init_task)
-            logger.debug(f"Scheduled standard initialization for agent {self.agent.id}.")
+        # This allows UI agents, for example, to send user input back into the Autogen flow.
+        init_task = self.agent.initialize(input_callback=self._make_publish_callback())
+        asyncio.create_task(init_task)
+        logger.debug(f"Scheduled initialization for agent {self.agent.id} with callback.")
 
     @message_handler
     async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:

@@ -7,7 +7,7 @@ of agent-based workflows (flows).
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, Self
+from typing import Any, AsyncGenerator, Literal, Self
 
 import weave  # For tracing
 from pydantic import (
@@ -165,8 +165,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         return self
 
     # --- Public Execution Method ---
-
-    async def run(self, request: RunRequest | None = None) -> None:
+    async def run(self, request: RunRequest | None = None):
         """
         Public entry point to start the orchestrator's flow execution.
 
@@ -185,7 +184,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_name": self.name,
             "flow_description": self.description,
         }
-        # Use weave.op to trace the internal _run method.
         try:
             display_name = self.name
             if "criteria" in self.parameters:
@@ -193,10 +191,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
             with weave.attributes(tracing_attributes):
-                # This creates a traced version of the _run method.
-                traced_run_op = weave.op(self._run, call_display_name=display_name)
-                # Execute the traced operation within a Weave context.
-                await traced_run_op(request=request)
+                await self._run(__weave={"display_name": display_name}) 
 
                 logger.info(f"Orchestrator '{self.name}' run finished successfully.")
 
@@ -208,7 +203,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # --- Abstract & Core Internal Methods ---
 
     @abstractmethod
-    async def _setup(self) -> None:
+    async def _setup(self, request: RunRequest | None = None) -> None:
         """
         Abstract method for orchestrator-specific setup.
 
@@ -247,8 +242,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         raise NotImplementedError("Orchestrator subclasses must implement _execute_step.")
 
+    @weave.op
     @abstractmethod
-    async def _run(self, request: RunRequest | None = None) -> None:
+    async def _run(self, request: RunRequest | None = None):
         """
         Abstract method containing the main execution logic/control loop for the flow.
 

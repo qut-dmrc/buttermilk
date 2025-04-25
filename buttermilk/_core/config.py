@@ -162,7 +162,7 @@ class ToolConfig(BaseModel):
     description: str = Field(default="")
     tool_obj: str = Field(default="")
 
-    data: list[DataSourceConfig] = Field(
+    data: Mapping[str, DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
@@ -225,16 +225,6 @@ class AgentConfig(BaseModel):
         default="",
         description="A brief explanation of the agent's purpose and capabilities.",
     )
-    agent_obj: str = Field(  # Class name used by Hydra for instantiation.
-        default="",
-        description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
-        exclude=True,  # Excluded from model serialization, as it's primarily for loading.
-    )
-
-    # Variant configuration
-    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
-    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
-    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
 
     # Behavior & Connections
     tools: list[ToolConfig] = Field(
@@ -324,6 +314,15 @@ class AgentVariants(AgentConfig):
         results: othertask.outputs.results  # dynamic inputs mapped from other data
     ```
     """
+    #--- Variant configuration: fields used to generate AgentConfig objects ---
+    agent_obj: str = Field(  # Class name used by Hydra for instantiation.
+        default="",
+        description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
+    )
+    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
+    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
+    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
+    #--- Variant configuration: fields used to generate AgentConfig objects ---
 
     def get_configs(self) -> list[tuple[type, AgentConfig]]:
         """

@@ -4,10 +4,26 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
-from buttermilk._core.contract import RunRequest
+from buttermilk._core.contract import ManagerResponse, RunRequest
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
+import json
+import logging
+import os
+from typing import Any, Awaitable, Callable, Optional
 
+import aiofiles
+import yaml
+from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+from autogen_agentchat.base import TaskResult
+from autogen_agentchat.messages import TextMessage, UserInputRequestedEvent
+from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_core import CancellationToken
+from autogen_core.models import ChatCompletionClient
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from .runs import get_recent_runs
 
 INPUT_SOURCE = "api"
@@ -141,6 +157,60 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
-    
-    # ...rest of your FastAPI setup...
+
+
+    @app.websocket("/ws/chat")
+    async def chat(websocket: WebSocket):
+        await websocket.accept()
+
+        # User input function used by the team.
+        async def _user_input(prompt: str, cancellation_token: CancellationToken | None) -> str:
+            data = await websocket.receive_json()
+            message = ManagerResponse(content=data)
+            return message.content
+
+        try:
+            while True:
+                # Get user message.
+                data = await websocket.receive_json()
+                request = ManagerResponse(content=data)
+
+                try:
+                    # Get the team and respond to the message.
+                    team = await get_team(_user_input)
+                    stream = team.run_stream(task=request)
+                    async for message in stream:
+                        if isinstance(message, TaskResult):
+                            continue
+                        await websocket.send_json(message.model_dump())
+
+                except Exception as e:
+                    # Send error message to client
+                    error_message = {
+                        "type": "error",
+                        "content": f"Error: {str(e)}",
+                        "source": "system"
+                    }
+                    await websocket.send_json(error_message)
+                    # Re-enable input after error
+                    await websocket.send_json({
+                        "type": "UserInputRequestedEvent",
+                        "content": "An error occurred. Please try again.",
+                        "source": "system"
+                    })
+                    
+        except WebSocketDisconnect:
+            logger.info("Client disconnected")
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "content": f"Unexpected error: {str(e)}",
+                    "source": "system"
+                })
+            except:
+                pass
+
+
     return app

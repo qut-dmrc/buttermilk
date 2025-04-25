@@ -52,11 +52,12 @@ WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""
 
-    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices(["prompt","q"]))
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
-
+    websocket: Any = Field(default=None)
+    callback: Any = Field(default=None)
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields for strict input
     )
@@ -331,18 +332,6 @@ class ManagerMessage(FlowMessage):
         default=None,
         description="Human-readable text content of the message.",
     )
-    # TODO: 'outputs' field seems redundant if 'content' holds the main info. Clarify purpose.
-    outputs: BaseModel | dict[str, Any] | None = Field(  # Allow None
-        default=None,
-        description="Optional structured data payload associated with the message.",
-    )
-    agent_id: str = Field(
-        # Default likely overridden by sender context (e.g., orchestrator or specific agent).
-        default="system",
-        description="ID of the entity sending the message to the manager.",
-    )
-    role: str = Field(default="system", description="Role of the entity sending the message.")  # Added role for clarity
-
 
 class ConductorRequest(ManagerMessage, AgentInput):
     """
