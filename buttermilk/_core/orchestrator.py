@@ -89,6 +89,8 @@ class OrchestratorProtocol(BaseModel):
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
+    ui: Any = Field(default=None)
+    
     tools: Mapping[str, AgentConfig] = Field(
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",

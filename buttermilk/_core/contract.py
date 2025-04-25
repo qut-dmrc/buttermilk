@@ -57,7 +57,7 @@ class RunRequest(BaseModel):
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
     websocket: Any = Field(default=None)
-    callback: Any = Field(default=None)
+    session_id: Any = Field(default=None)
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields for strict input
     )
@@ -382,7 +382,7 @@ class ManagerResponse(FlowMessage):
     A response sent *from* the MANAGER (UI/User) back to the orchestrator/system.
     Communicates user decisions like confirmation, feedback, or selections.
     """
-
+    content: Optional[Any] = Field(None)
     confirm: bool = Field(True, description="Indicates user confirmation (True) or rejection (False).")
     halt: bool = Field(False, description="If True, signals the user wants to stop the entire flow.")
     interrupt: bool = Field(False, description="If True, signals the user wants to pause for conductor review of feedback.")

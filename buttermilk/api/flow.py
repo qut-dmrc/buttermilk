@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncGenerator, Sequence
-
+import uuid 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -157,47 +158,23 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
+    @app.websocket("/ws/agent/{session_id}")
+    async def agent_websocket(websocket: WebSocket, session_id: str):
+        """
+        WebSocket endpoint for client communication with the WebUIAgent.
+        
+        Args:
+            websocket: WebSocket connection
+            session_id: Unique identifier for this client session
+        """
 
-
-    @app.websocket("/ws/chat")
-    async def chat(websocket: WebSocket):
+        # Accept the connection first
         await websocket.accept()
-
-        # User input function used by the team.
-        async def _user_input(prompt: str, cancellation_token: CancellationToken | None) -> str:
-            data = await websocket.receive_json()
-            message = ManagerResponse(content=data)
-            return message.content
-
         try:
-            while True:
-                # Get user message.
-                data = await websocket.receive_json()
-                request = ManagerResponse(content=data)
+            # Start the flow, passing in our websocket and session_id
+            run_request = RunRequest(record_id="", websocket=websocket, session_id=session_id)
+            await app.state.flow_runner.run(run_request)
 
-                try:
-                    # Get the team and respond to the message.
-                    team = await get_team(_user_input)
-                    stream = team.run_stream(task=request)
-                    async for message in stream:
-                        if isinstance(message, TaskResult):
-                            continue
-                        await websocket.send_json(message.model_dump())
-
-                except Exception as e:
-                    # Send error message to client
-                    error_message = {
-                        "type": "error",
-                        "content": f"Error: {str(e)}",
-                        "source": "system"
-                    }
-                    await websocket.send_json(error_message)
-                    # Re-enable input after error
-                    await websocket.send_json({
-                        "type": "UserInputRequestedEvent",
-                        "content": "An error occurred. Please try again.",
-                        "source": "system"
-                    })
                     
         except WebSocketDisconnect:
             logger.info("Client disconnected")
@@ -212,5 +189,20 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             except:
                 pass
 
+    
+    # Helper route to generate session IDs for clients
+    @app.get("/api/session")
+    async def create_session():
+        """
+        Generates a unique session ID for new web clients.
+        
+        Returns:
+            Dict with new session ID
+        """
+        return {"session_id": str(uuid.uuid4())}
+    
+    @app.websocket("/ws/chat")
+    async def chat(websocket: WebSocket):
+       
 
     return app

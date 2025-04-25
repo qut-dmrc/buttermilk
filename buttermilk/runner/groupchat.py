@@ -46,6 +46,7 @@ from buttermilk._core.contract import (
 # TODO: Check if UserInstructions is actually used within this orchestrator's logic.
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk.agents.fetch import FetchRecord  # Agent for fetching data records.
+from buttermilk.agents.ui.web import WebUIAgent
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
 
@@ -99,6 +100,7 @@ class AutogenOrchestrator(Orchestrator):
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_tools()
         await self._register_agents()
+        await self._register_manager_interface()
 
         # Register a special agent to handle interactions with the MANAGER (UI/Human).
         await self._register_manager_interface()  # Renamed for clarity
@@ -106,6 +108,7 @@ class AutogenOrchestrator(Orchestrator):
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
         logger.debug("Autogen runtime started.")
+
 
     async def _register_agents(self) -> None:
         """
@@ -200,7 +203,19 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"Registering manager interface agent '{MANAGER}'.")
 
         # Inject messages into the groupchat from the UI 
-        
+        agent_type = await WebUIAgent.register(
+                    runtime=self._runtime,
+                    type=MANAGER,
+                    factory=lambda: WebUIAgent(websocket, session_id),
+                )
+
+        await self._runtime.add_subscription(
+            TypeSubscription(
+                topic_type=self._topic.type,  # Main group chat topic
+                agent_type=agent_type,
+            ),
+        )
+        return
 
         # This agent listens for ManagerResponse messages on relevant topics.
         async def handle_manager_response(
