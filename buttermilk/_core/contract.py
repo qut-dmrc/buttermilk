@@ -56,8 +56,8 @@ class RunRequest(BaseModel):
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
-    websocket: Any = Field(default=None)
-    session_id: Any = Field(default=None)
+    websocket: Any = Field(default=None, exclude=True)
+    session_id: Any = Field(default=None, exclude=True)
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields for strict input
     )
@@ -79,7 +79,8 @@ class StepRequest(BaseModel):
     role: str = Field(..., description="The ROLE name (uppercase) of the agent to execute.")
     prompt: str = Field(default="", description="The prompt/instruction text for the agent.")
     description: str = Field(default="", description="Brief explanation of this step's purpose.", exclude=True)  # Often excluded from LLM context
-
+    data: dict[str, Any] = Field(default={}, description="Data to pass to the executing agent.")
+    
     @field_validator("role")
     @classmethod
     def _role_must_be_uppercase(cls, v: str) -> str:

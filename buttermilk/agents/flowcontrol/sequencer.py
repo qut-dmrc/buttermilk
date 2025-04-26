@@ -110,89 +110,6 @@ class Sequencer(Agent):
         await super().initialize(**kwargs)
         logger.debug(f"Sequencer agent {self.id} initialized.")
 
-    async def _listen(
-        self,
-        message: GroupchatMessageTypes,
-        *,
-        cancellation_token: Optional[Any] = None,  # Autogen cancellation token.
-        source: str = "",
-        public_callback: Callable | None = None,  # Callback to publish to default topic (unused here).
-        message_callback: Callable | None = None,  # Callback to publish to incoming message topic (unused here).
-        **kwargs,
-    ) -> None:
-        """Passively listens to messages on the bus, adding them to context history."""
-        # Only logs messages, doesn't actively react in _listen phase.
-        # Truncates messages to avoid overly long history.
-        # TODO: Consider more sophisticated history management (e.g., summaries, filtering).
-        if isinstance(message, (AgentOutput, ConductorResponse)):
-            # Store assistant messages (agent outputs).
-            await self._model_context.add_message(AssistantMessage(content=message.contents[:TRUNCATE_LEN], source=source))
-        else:
-            # Store user messages, ignoring commands.
-            # Attempts to get 'content' or 'prompt' attributes.
-            content = getattr(message, "content", getattr(message, "prompt", ""))
-            if content and not str(content).startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(content)[:TRUNCATE_LEN], source=source))
-
-    async def _handle_events(
-        self,
-        message: OOBMessages,
-        cancellation_token=None,
-        **kwargs,
-    ) -> OOBMessages | None:
-        """Handles Out-Of-Band messages, primarily TaskProcessing status updates and ConductorRequests."""
-        logger.debug(f"Sequencer {self.id} handling event: {type(message).__name__}")
-
-        # Handle task completion signals from worker agents.
-        if isinstance(message, TaskProcessingComplete):
-            # Only track completions for the currently active step.
-            if message.role == self._current_step_name:
-                if message.agent_id not in self._completed_agents_current_step:
-                    self._completed_agents_current_step.add(message.agent_id)
-                    logger.info(
-                        f"Sequencer received TaskComplete from {message.agent_id} for step '{self._current_step_name}' "
-                        f"(Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error})"
-                    )
-                    # Check if the completion threshold is now met.
-                    await self._check_completions()
-                else:
-                    # Log if we receive a duplicate completion signal.
-                    logger.warning(f"Sequencer received duplicate TaskComplete from {message.agent_id} for step '{self._current_step_name}'.")
-            else:
-                # Ignore completions for steps other than the current one.
-                logger.debug(
-                    f"Sequencer ignored TaskComplete for inactive step '{message.role}' (current: '{self._current_step_name}') from {message.agent_id}."
-                )
-
-        elif isinstance(message, TaskProcessingStarted):
-            # Track which agents have started the current step.
-            if message.role == self._current_step_name:
-                if message.agent_id not in self._expected_agents_current_step:
-                    self._expected_agents_current_step.add(message.agent_id)
-                    logger.info(f"Sequencer noted TaskStarted from {message.agent_id} for step '{self._current_step_name}'.")
-                    # Re-check completions in case threshold changes due to newly started agents.
-                    await self._check_completions()
-                # else: Agent already known to have started.
-            else:
-                # Ignore starts for steps other than the current one.
-                logger.debug(
-                    f"Sequencer ignored TaskStarted for inactive step '{message.role}' (current: '{self._current_step_name}') from {message.agent_id}."
-                )
-
-        # If this is a direct request for the next step (ConductorRequest).
-        if isinstance(message, ConductorRequest):
-            # Get the next step suggestion and return it as the response.
-            # Note: This assumes _get_next_step returns AgentOutput compatible with ConductorResponse needs.
-            # TODO: Ensure AgentOutput structure matches expected ConductorResponse.
-            next_step_output = await self._get_next_step(message=message)
-            # The return type hint expects OOBMessages, AgentOutput isn't strictly that, but
-            # Autogen might handle the direct return value appropriately in send_message context.
-            # We cast here primarily for type checker satisfaction based on observed usage.
-            # TODO: Revisit this cast. Consider returning a ConductorResponse explicitly if needed.
-            return cast(OOBMessages, next_step_output)
-
-        # Return None for status updates that don't require a direct response back to the sender.
-        return None
 
     async def _check_completions(self) -> None:
         """
@@ -205,7 +122,6 @@ class Sequencer(Agent):
             # If no agents were expected (or none have started yet), consider it complete.
             if not self._step_completion_event.is_set():
                 logger.debug(f"No agents expected or started for step '{self._current_step_name}', setting completion event.")
-                self._step_completion_event.set()
             return
 
         # Calculate the minimum number of agents required to complete.

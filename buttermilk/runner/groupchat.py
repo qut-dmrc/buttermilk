@@ -89,6 +89,9 @@ class AutogenOrchestrator(Orchestrator):
         logger.info(msg)
         self._runtime = SingleThreadedAgentRuntime()
 
+        if request is None:
+            request = RunRequest()
+
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
 
@@ -101,7 +104,7 @@ class AutogenOrchestrator(Orchestrator):
         
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
-        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic_id=DefaultTopicId(type=CONDUCTOR))
+        await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump()), topic_id=DefaultTopicId(type=CONDUCTOR))
 
 
     async def _register_agents(self, params: Mapping[str, Any]) -> None:
