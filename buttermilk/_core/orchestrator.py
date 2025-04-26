@@ -298,8 +298,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         Returns:
             A `ManagerResponse` indicating automatic confirmation.
         """
-        logger.info("Base _in_the_loop called: Auto-confirming step in 20 seconds.")
-        await asyncio.sleep(20)  # put in a delay
+        logger.info("Base _in_the_loop called: Auto-confirming step in 5 seconds.")
+        await asyncio.sleep(5)  # put in a delay
         return ManagerResponse(confirm=True)  # Default: automatically confirm
 
     async def execute(self, request: StepRequest) -> AgentOutput | None:

@@ -62,23 +62,29 @@ class WebUIAgent(RoutedAgent):
         self.task = asyncio.create_task(self.comms())
 
     async def send_to_client(self, message) -> None:
+        if isinstance(message, BaseModel):
+            msg = message.model_dump_json()
+        else:
+            msg = json.dumps(message)
+        # TODO: convert to markdown
+
         try:
-            await self.websocket.stream([message])
+            await self.websocket.stream([msg])
             return
         except Exception as e:
             logger.error(f"Unable to write to websocket (shiny style)")
+
         try:
-            if isinstance(message, BaseModel):
-                await self.websocket.send_json(message.model_dump())
-            elif isinstance(message, dict):
-                await self.websocket.send_json(message)
-            else:
-                # Try to convert to string if not a dict or BaseModel
-                await self.websocket.send_text(str(message))
+            await self.websocket.send_json(msg)
+        except:
+            # Try to convert to string if not a dict or BaseModel
+            try:
+                await self.websocket.send_text(msg)
+            except Exception as e:
+                logger.error(f"Error sending message to client {self.session_id}: {e}")
+                return
                 
-            logger.debug(f"Message sent to client {self.session_id}")
-        except Exception as e:
-            logger.error(f"Error sending message to client {self.session_id}: {e}")
+        logger.debug(f"Message sent to client {self.session_id}")
     
     async def comms(self):
         # Register a new WebSocket connection from a client.

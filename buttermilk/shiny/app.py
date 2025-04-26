@@ -22,11 +22,10 @@ app_ui = ui.page_sidebar(
     ),
     ui.card(
         ui.card_header("Hello"),
-        ui.chat_ui("chat", messages=["Hello! How can I help you today?"], width="100%"),
+        ui.output_markdown_stream("chat"),
         style="width:min(680px, 100%)",
         class_="mx-auto",
     ),
-    ui.output_markdown_stream("my_stream"),
 )
 
 ## THIS CODE DOESNT WORK YET
