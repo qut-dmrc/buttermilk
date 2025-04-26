@@ -95,7 +95,7 @@ class SequentialBatchHost(LLMHostAgent):
                 # End if we've gone through the whole sequence
                 if step_num > len(self.sequence):
                     logger.info(f"Completed full sequence of {len(self.sequence)} steps")
-                    yield StepRequest(role=END, description="Completed all steps in sequence")
+                    yield StepRequest(role=END, content="Completed all steps in sequence")
                     break
             
             # Get the next role in sequence
@@ -105,13 +105,13 @@ class SequentialBatchHost(LLMHostAgent):
             # Generate the step
             yield StepRequest(
                 role=role, 
-                description=f"Batch step {step_num} calling {role} (sequence position {self._current_sequence_index})"
+                content=f"Batch step {step_num} calling {role} (sequence position {self._current_sequence_index})"
             )
             
         # If max_steps is reached
         if step_num >= self.max_steps:
             logger.info(f"Reached maximum number of steps ({self.max_steps})")
-            yield StepRequest(role=END, description=f"Reached maximum steps limit of {self.max_steps}")
+            yield StepRequest(role=END, content=f"Reached maximum steps limit of {self.max_steps}")
     
     async def _should_execute_directly(self, step: StepRequest) -> bool:
         """Always execute steps directly in batch mode"""

@@ -13,7 +13,11 @@ from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
     AgentOutput,
+    ErrorEvent,
     GroupchatMessageTypes,
+    ManagerMessage,
+    ManagerRequest,
+    StepRequest,
     ToolOutput,
     UserInstructions,
 )
@@ -46,7 +50,7 @@ class FetchRecord(ToolConfig):
             ]
         return self._fns
 
-    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | None:  # type: ignore
+    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> ToolOutput | ErrorEvent:  # type: ignore
         """Entry point when running as a tool."""
         record = None
         if prompt and not record_id and not uri:
@@ -85,7 +89,8 @@ class FetchRecord(ToolConfig):
 
         if result:
             return result
-        return None
+        # Return an ErrorEvent instead of None since None is not allowed in the return type
+        return ErrorEvent(source=self.id, content="No result found")
 
     async def _get_record_dataset(self, record_id: str) -> Record | None:
         if not self._data_sources:
@@ -139,14 +144,14 @@ class FetchAgent(FetchRecord, Agent):
         if isinstance(message, UserInstructions):
             result = await self._run(prompt=message.prompt)
 
-        if result:
+        if result and isinstance(result, ToolOutput):
             output = UserInstructions(prompt=result.content, records=result.results)
             # Add check before calling callback
             if public_callback:
                 await public_callback(output)
 
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | ToolOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         result = None
         if isinstance(message, AgentInput):
             uri = message.inputs.get("uri")
@@ -159,4 +164,5 @@ class FetchAgent(FetchRecord, Agent):
         if result:
             return result
 
-        return None
+        # Return an ErrorEvent instead of None
+        return ErrorEvent(source=self.id, content="No result found in _process")

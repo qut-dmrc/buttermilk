@@ -324,7 +324,7 @@ class AgentVariants(AgentConfig):
     extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
     #--- Variant configuration: fields used to generate AgentConfig objects ---
 
-    def get_configs(self, params: Mapping[str, Any]) -> list[tuple[type, AgentConfig]]:
+    def get_configs(self, params: "RunRequest") -> list[tuple[type, AgentConfig]]:
         """
         Generates agent configurations based on parallel and sequential variants.
         """
@@ -343,9 +343,9 @@ class AgentVariants(AgentConfig):
 
         # Get extra parameters passed in at runtime if requested
         for key in self.extra_params:
-            if key not in params:
+            if key not in params.model_fields_set:
                 raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
-            base_parameters[key] = params[key]
+            base_parameters[key] = getattr(params, key)
 
         # Get agent class
         from buttermilk._core.variants import AgentRegistry

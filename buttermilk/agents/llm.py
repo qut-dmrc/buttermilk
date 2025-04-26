@@ -20,6 +20,10 @@ from buttermilk._core.contract import (
     # TODO: Review necessary contract types for this base class
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
+    ManagerMessage,
+    ManagerRequest,
+    StepRequest,
+    ToolOutput,
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
@@ -285,8 +289,8 @@ class LLMAgent(Agent):
         return output
 
     # This is the primary method subclasses should call in their handlers.
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput|ErrorEvent:
-        """ s
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+        """
         Core processing logic: fills template, calls LLM, makes AgentOutput.
 
         Args:

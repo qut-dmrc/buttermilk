@@ -209,7 +209,7 @@ class Selector(AutogenOrchestrator):
             request_content = (
                 f"**Next Proposed Step:**\n"
                 f"- **Agent Role:** {step.role}\n"
-                f"- **Description:** {step.description or '(No description)'}\n"
+                f"- **Description:** {step.content or '(No description)'}\n"
                 f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}"
                 f"{variant_info}\n\n"
                 f"Confirm (Enter), provide feedback, select a variant ID, or reject ('n'/'q')."
@@ -217,7 +217,7 @@ class Selector(AutogenOrchestrator):
             manager_request = ManagerRequest(
                 content=request_content,
                 prompt=step.prompt,  # Full prompt can be useful context
-                description=step.description,
+                description=step.content,
                 options=options_list,  # Pass variant IDs as options
             )
         elif prompt:
@@ -275,7 +275,7 @@ class Selector(AutogenOrchestrator):
         responses = await self._ask_agents(CONDUCTOR, message=request)
 
         # Define a default WAIT step if conductor fails.
-        wait_step = StepRequest(role=WAIT, description="Waiting for conductor instructions.", prompt="")
+        wait_step = StepRequest(role=WAIT, content="Waiting for conductor instructions.", prompt="")
 
         # Process the response(s). Expecting a single AgentOutput.
         if not responses:
@@ -287,7 +287,11 @@ class Selector(AutogenOrchestrator):
         agent_output = responses[0]
 
         # Handle if the conductor returned an error
-        if not isinstance(agent_output, AgentOutput) or agent_output.is_error:
+        if isinstance(agent_output, ErrorEvent):
+            err_details = agent_output.content
+            logger.error(f"Conductor returned an error: {err_details}")
+            return StepRequest(role=WAIT, content=f"Error from conductor: {err_details}")
+        elif isinstance(agent_output, AgentOutput) and agent_output.is_error:
             err_details = agent_output.outputs if agent_output else "No response object"
             logger.error(f"Conductor returned an error or invalid output: {err_details}")
             # Maybe ask user what to do? For now, just wait.

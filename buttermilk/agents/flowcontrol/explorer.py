@@ -3,15 +3,20 @@ from typing import Optional, Dict, Any, List, Union, cast, AsyncGenerator
 
 from pydantic import BaseModel, Field
 
+from autogen_core import CancellationToken
 from buttermilk import logger
 from buttermilk._core.contract import (
     END,
     WAIT,
+    AgentInput,
     AgentOutput,
     ConductorRequest,
+    ErrorEvent,
+    ManagerMessage,
     ManagerRequest,
     ManagerResponse,
     StepRequest,
+    ToolOutput,
 )
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
@@ -29,6 +34,12 @@ class ExplorerHost(LLMHostAgent):
     """
     
     _output_model: Optional[type[BaseModel]] = StepRequest
+    
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+        """Process a message for the Explorer agent - calls _choose to determine the next step"""
+        if isinstance(message, ConductorRequest):
+            return await self._choose(message=message)
+        return StepRequest(role=WAIT, content="Waiting for conductor request")
     
     # Explorer-specific configuration
     exploration_mode: str = Field(
@@ -66,7 +77,7 @@ class ExplorerHost(LLMHostAgent):
         # Check if we've reached the maximum exploration steps
         if len(self._exploration_path) >= self.max_exploration_steps:
             logger.info(f"Reached maximum exploration steps ({self.max_exploration_steps}), suggesting END")
-            return StepRequest(role=END, description="Reached maximum exploration steps")
+            return StepRequest(role=END, content="Reached maximum exploration steps")
         
         # Enhance message context with exploration-specific information
         enhanced_message = await self._enhance_message_for_exploration(message)
@@ -74,20 +85,23 @@ class ExplorerHost(LLMHostAgent):
         # Use LLM to determine the next step
         result = await self._process(message=enhanced_message)
         
-        # Process the result to ensure we return a valid StepRequest
+        # Process the result - since we've updated our type system, result should now be directly a StepRequest
+        # But keep the fallback logic for backward compatibility
         if isinstance(result, StepRequest):
             step = result
         elif isinstance(result, AgentOutput) and hasattr(result, 'outputs') and isinstance(result.outputs, StepRequest):
+            # Legacy code path - the LLM returned a StepRequest wrapped in AgentOutput
+            # In the future, this branch can be removed as agents are updated
             step = result.outputs
         else:
             # Fallback for invalid or unexpected return types
             logger.warning(f"Explorer received unexpected result type from LLM: {type(result)}")
-            step = StepRequest(role=WAIT, description="Waiting after receiving invalid result type")
+            step = StepRequest(role=WAIT, content="Waiting after receiving invalid result type")
         
         # Validate the step has a role
         if not step.role:
             logger.warning("Explorer received step without role from LLM, using fallback")
-            step = StepRequest(role=WAIT, description="Waiting after receiving invalid step suggestion")
+            step = StepRequest(role=WAIT, content="Waiting after receiving invalid step suggestion")
             
         return step
     
@@ -196,6 +210,12 @@ class SequentialHost(LLMHostAgent):
     
     _output_model: Optional[type[BaseModel]] = StepRequest
     
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+        """Process a message for the Sequential agent - calls _choose to determine the next step"""
+        if isinstance(message, ConductorRequest):
+            return await self._choose(message=message)
+        return StepRequest(role=WAIT, content="Waiting for conductor request")
+    
     # Sequential host configuration
     sequence: List[str] = Field(
         default_factory=list,
@@ -237,14 +257,14 @@ class SequentialHost(LLMHostAgent):
                         self._current_sequence_index = 0
                     else:
                         # End the sequence
-                        yield StepRequest(role=END, description="Sequence completed")
+                        yield StepRequest(role=END, content="Sequence completed")
                         break
                 
                 # Get the next role in sequence
                 role = self.sequence[self._current_sequence_index]
                 self._current_sequence_index += 1
                 
-                yield StepRequest(role=role, description=f"Sequential step {self._current_sequence_index} calling {role}")
+                yield StepRequest(role=role, content=f"Sequential step {self._current_sequence_index} calling {role}")
         else:
             # Fall back to the parent implementation if no sequence defined
             async for step in super()._sequence():
@@ -275,4 +295,4 @@ class SequentialHost(LLMHostAgent):
             return step
         except StopAsyncIteration:
             # End the sequence if the generator is exhausted
-            return StepRequest(role=END, description="Sequence exhausted")
+            return StepRequest(role=END, content="Sequence exhausted")

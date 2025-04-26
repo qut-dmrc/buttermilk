@@ -3,10 +3,11 @@
 defaults:
   - /data: tja_train 
   - /agents:
-    # - judge
-    # - synth
-    # - scorer
-    # - differences
+    - judge
+    - synth
+    - scorer
+    - differences
+  - /agents@tools:
     - fetch
   - /agents/host@agents: sequencer
   - /agents/interface@agents: web
@@ -16,7 +17,7 @@ orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
   criteria:
-    - trans_simplified
+    # - trans_simplified
     - cte
     # - tja
     # - glaad

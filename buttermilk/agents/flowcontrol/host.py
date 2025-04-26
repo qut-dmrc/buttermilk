@@ -104,8 +104,14 @@ class LLMHostAgent(LLMAgent):
         # Log messages to our local context cache, but truncate them
         if isinstance(message, (AgentOutput, ConductorResponse)):
             await self._model_context.add_message(AssistantMessage(content=str(message.contents)[:TRUNCATE_LEN], source=source))
-        elif hasattr(message, 'content') and not message.content.startswith(COMMAND_SYMBOL):
-            await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+        elif isinstance(message, StepRequest):
+            # StepRequest has content field but it might be empty
+            if message.content and not message.content.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+        elif isinstance(message, ManagerMessage) and message.content:
+            # ManagerMessage and subclasses have content field
+            if not message.content.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
         
         # Store user feedback if available
         if isinstance(message, ManagerResponse) and message.prompt:
@@ -236,8 +242,8 @@ class LLMHostAgent(LLMAgent):
         while self._participants is None:
             await asyncio.sleep(0.1)
         for step_name, cfg in self._participants.items():
-            yield StepRequest(role=step_name, description=f"Sequence host calling {step_name}.")
-        yield StepRequest(role=END, description="Sequence wrapping up.")
+            yield StepRequest(role=step_name, content=f"Sequence host calling {step_name}.")
+        yield StepRequest(role=END, content="Sequence wrapping up.")
 
     async def _run_flow(self, message: ConductorRequest) -> StepRequest:
         """
@@ -401,7 +407,7 @@ class LLMHostAgent(LLMAgent):
         request_content = (
             f"**Next Proposed Step:**\n"
             f"- **Agent Role:** {step.role}\n"
-            f"- **Description:** {step.description or '(No description)'}\n"
+            f"- **Description:** {step.content or '(No description)'}\n"
             f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
             f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
         )

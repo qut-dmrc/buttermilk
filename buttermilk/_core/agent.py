@@ -15,6 +15,7 @@ import weave  # For tracing
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from pydantic import (
+    BaseModel,
     PrivateAttr,
     computed_field,
 )
@@ -30,6 +31,10 @@ from buttermilk._core.contract import (
     ErrorEvent,  # Standard output message structure
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     OOBMessages,  # Union of Out-Of-Band control messages
+    ManagerMessage,  # Messages for display to the user
+    ManagerRequest,  # Request sent to the manager
+    StepRequest,  # Request to execute a specific step
+    ToolOutput,  # The result of a tool execution
     UserInstructions,  # Message containing user instructions
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
@@ -151,7 +156,7 @@ class Agent(AgentConfig):
         message: AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentOutput|ErrorEvent:
+    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         """
         Primary entry point for agent execution, called by the orchestrator/adapter.
 
@@ -164,9 +169,11 @@ class Agent(AgentConfig):
             **kwargs: Additional keyword arguments (e.g., callbacks from adapter).
 
         Returns:
-            An `AgentOutput` containing the result or error information.
+            Either an AgentOutput for standard agent results, 
+            or a direct message type (StepRequest, ManagerRequest, ManagerMessage)
+            for flow control agents, or an ErrorEvent if there were errors.
         """
-        result: AgentOutput | None = None
+        result = None
         logger.debug(f"Agent {self.id} received input via __call__.")
 
         # Prepare the final input by merging message data with internal agent state.
@@ -207,13 +214,17 @@ class Agent(AgentConfig):
         return result
 
     @abstractmethod
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         """
         Abstract method for core agent logic. Subclasses MUST implement this.
 
         This method receives the `AgentInput` (potentially augmented with internal state
-        by `_add_state_to_input`) and should perform the agent's primary task,
-        returning an `AgentOutput`.
+        by `_add_state_to_input`) and should perform the agent's primary task.
+        
+        LLM agent implementations will typically return AgentOutput.
+        Flow control agents (like host agents) will typically return StepRequest directly.
+        Interface agents may return ManagerRequest or ManagerMessage.
+        Tool agents typically return ToolOutput.
 
         Args:
             message: The fully prepared input message.
@@ -221,7 +232,7 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments passed from `__call__`.
 
         Returns:
-            An `AgentOutput` instance containing the results or errors.
+            An AgentOutput, StepRequest, ManagerRequest, ManagerMessage or ErrorEvent
         """
         raise NotImplementedError("Subclasses must implement the _process method.")
 
@@ -277,12 +288,20 @@ class Agent(AgentConfig):
             content_to_add = getattr(message, "contents", None)
             if content_to_add:
                 await self._model_context.add_message(
-                    AssistantMessage(source=source, content=str(content_to_add))
+                    AssistantMessage(content=str(content_to_add), source=source)
                 )  # Assume Assistant role for outputs
         elif isinstance(message, (UserInstructions, UserMessage)):
             content_to_add = getattr(message, "prompt", None)
             if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(source=source, content=str(content_to_add)))
+                await self._model_context.add_message(UserMessage(content=str(content_to_add), source=source))
+        elif isinstance(message, StepRequest) and message.content:
+            # StepRequest has content field
+            if not message.content.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
+        elif isinstance(message, ManagerMessage) and message.content:
+            # ManagerMessage and subclasses have content field
+            if not message.content.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
         else:
             # don't log other types of messages to history by default
             logger.debug(f"Agent {self.id} ignored message type {type(message)} for context history.")

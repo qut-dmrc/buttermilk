@@ -46,52 +46,7 @@ END = "END"  # Special role/signal used by Conductor/Host to indicate the flow s
 WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/waiting.
 
 
-# --- Flow Protocol Start signal ---
-
-
-class RunRequest(BaseModel):
-    """Input object to initiate an orchestrator run."""
-
-    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
-    record_id: str | None = Field(default="", description="Record to lookup")
-    uri: str | None = Field(default="", description="URI to fetch")
-    records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
-    websocket: Any = Field(default=None, exclude=True)
-    session_id: Any = Field(default=None, exclude=True)
-    model_config = ConfigDict(
-        extra="forbid",  # Disallow extra fields for strict input
-    )
-
-
-# --- Core Step Execution ---
-
-
-class StepRequest(BaseModel):
-    """
-    Represents a request, typically from a Conductor agent, to execute a specific step in the flow.
-
-    Attributes:
-        role: The uppercase role name of the agent(s) that should execute this step.
-        prompt: The primary input prompt or instruction for the target agent(s).
-        description: Human-readable description of why this step is being executed.
-    """
-
-    role: str = Field(..., description="The ROLE name (uppercase) of the agent to execute.")
-    prompt: str = Field(default="", description="The prompt/instruction text for the agent.")
-    description: str = Field(default="", description="Brief explanation of this step's purpose.", exclude=True)  # Often excluded from LLM context
-    data: dict[str, Any] = Field(default={}, description="Data to pass to the executing agent.")
-    
-    @field_validator("role")
-    @classmethod
-    def _role_must_be_uppercase(cls, v: str) -> str:
-        """Ensures the role field is always uppercase for consistency."""
-        if v:
-            return v.upper()
-        return v
-
-
 # --- General Communication & Base Messages ---
-
 
 class FlowEvent(BaseModel):
     """Base model for simple event messages within the flow (potentially OOB)."""
@@ -145,38 +100,6 @@ class FlowMessage(BaseModel):
         exclude_none=True,
         exclude={"is_error"},
     )  # type: ignore
-class AgentInput(FlowMessage):
-    """
-    Standard input structure for triggering an agent's primary processing logic (`_process`).
-
-    Carries the necessary data, parameters, context (history), and records needed by the agent.
-    The `Orchestrator` or another `Agent` typically constructs this before calling an agent.
-    """
-
-    inputs: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Dictionary containing input data resolved from mappings or passed directly.",
-    )
-    parameters: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Task-specific parameters overriding agent defaults (e.g., different template).",
-    )
-    context: list[LLMMessage] = Field(
-        default_factory=list,
-        description="Conversation history (list of SystemMessage, UserMessage, AssistantMessage).",
-    )
-    records: list[Record] = Field(
-        default_factory=list,
-        description="List of data records relevant to the current task.",
-    )
-    prompt: str | None = Field(
-        default="",
-        description="The primary prompt or instruction for the agent.",
-    )
-
-    # Validator to ensure context and records are always lists.
-    _ensure_input_list = field_validator("context", "records", mode="before")(make_list_validator())
-
 
 class UserInstructions(FlowMessage):
     """Represents instructions or input originating directly from the user (e.g., via CLI)."""
@@ -221,6 +144,80 @@ def _get_run_info() -> SessionInfo:
 
     return bm.run_info
 
+
+
+# --- Flow Protocol Start signal ---
+
+
+class RunRequest(BaseModel):
+    """Input object to initiate an orchestrator run."""
+
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
+    record_id: str | None = Field(default="", description="Record to lookup")
+    uri: str | None = Field(default="", description="URI to fetch")
+    records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
+    websocket: Any = Field(default=None, exclude=True)
+    session_id: Any = Field(default=None, exclude=True)
+    model_config = ConfigDict(
+        extra="forbid",  # Disallow extra fields for strict input
+    )
+
+
+# --- Core Step Execution ---
+
+class AgentInput(FlowMessage):
+    """
+    Standard input structure for triggering an agent's primary processing logic (`_process`).
+
+    Carries the necessary data, parameters, context (history), and records needed by the agent.
+    The `Orchestrator` or another `Agent` typically constructs this before calling an agent.
+    """
+
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Dictionary containing input data resolved from mappings or passed directly.",
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Task-specific parameters overriding agent defaults (e.g., different template).",
+    )
+    context: list[LLMMessage] = Field(
+        default_factory=list,
+        description="Conversation history (list of SystemMessage, UserMessage, AssistantMessage).",
+    )
+    records: list[Record] = Field(
+        default_factory=list,
+        description="List of data records relevant to the current task.",
+    )
+    prompt: str | None = Field(
+        default="",
+        description="The primary prompt or instruction for the agent.",
+    )
+
+    # Validator to ensure context and records are always lists.
+    _ensure_input_list = field_validator("context", "records", mode="before")(make_list_validator())
+
+
+class StepRequest(AgentInput):
+    """
+    Represents a request, typically from a Conductor agent, to execute a specific step in the flow.
+    Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
+
+    Attributes:
+        role: The uppercase role name of the agent(s) that should execute this step.
+        description: Human-readable description of why this step is being executed.
+    """
+
+    role: str = Field(..., description="The ROLE name (uppercase) of the agent to execute.")
+    content: str = Field(default="", description="Brief explanation of this step's purpose.", exclude=True)  # Often excluded from LLM context
+
+    @field_validator("role")
+    @classmethod
+    def _role_must_be_uppercase(cls, v: str) -> str:
+        """Ensures the role field is always uppercase for consistency."""
+        if v:
+            return v.upper()
+        return v
 
 class AgentOutput(FlowMessage):
     """
@@ -334,13 +331,13 @@ class ManagerMessage(FlowMessage):
         description="Human-readable text content of the message.",
     )
 
-class ConductorRequest(ManagerMessage, AgentInput):
+class ConductorRequest(AgentInput):
     """
     A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
-    Inherits fields from `ManagerMessage` (content, outputs?) and `AgentInput` (inputs, parameters, context, records, prompt).
-    The `inputs` field typically contains context like workflow state, participant list, etc.
+    Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
     """
-
+    participants: Mapping[str,str] = Field(..., description="Chat participant roles and descriptions of their purposes")
+    
     # No additional fields specific to ConductorRequest currently defined.
     pass
 
@@ -469,7 +466,14 @@ OOBMessages = Union[
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentOutput,
-    ToolOutput,ErrorEvent,
+    ToolOutput,
+    ErrorEvent,
+    StepRequest,
+    ManagerRequest,
+    ManagerResponse,
+    AgentInput,
+    ConductorRequest,
+    ConductorResponse,
     # Add other types that are typically broadcast in the chat?
 ]
 

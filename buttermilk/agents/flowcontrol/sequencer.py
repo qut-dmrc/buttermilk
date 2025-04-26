@@ -4,6 +4,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional, cast
 
 from pydantic import Field, PrivateAttr
 
+from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -17,11 +18,15 @@ from buttermilk._core.contract import (
     AgentOutput,
     ConductorRequest,
     ConductorResponse,
+    ErrorEvent,
     GroupchatMessageTypes,
+    ManagerMessage,
+    ManagerRequest,
     OOBMessages,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
+    ToolOutput,
 )
 
 # Maximum length to truncate messages stored in the agent's context history.
@@ -81,34 +86,7 @@ class Sequencer(Agent):
         self._step_generator = self._sequence()
         await super().initialize(**kwargs)
 
-    # Configuration
-    max_wait_time: int = Field(
-        default=300,
-        description="Maximum time to wait for agent responses in seconds",
-    )
-    completion_threshold_ratio: float = Field(
-        default=0.8,
-        description="Ratio of agents that must complete a step before proceeding (0.0 to 1.0)",
-    )
-
-    # State tracking
-    _current_step_name: str | None = PrivateAttr(default=None)
-    _completed_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-    _expected_agents_current_step: set[str] = PrivateAttr(default_factory=set)
-
-    _step_generator: Any = PrivateAttr(default=None)
-    _participants: dict = PrivateAttr(default_factory=dict)
-    _step_completion_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    _current_idx: int = PrivateAttr(default=0)  # Track current position in round-robin
-
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
-        """Initialize the agent"""
-        logger.debug(f"Initializing Sequencer agent {self.id}...")
-        self._input_callback = input_callback
-        self._step_completion_event.set()  # Ready to process
-        self._step_generator = self._sequence()  # Initialize the step generator.
-        await super().initialize(**kwargs)
-        logger.debug(f"Sequencer agent {self.id} initialized.")
+    # Initialization is already defined above - removing duplicate
 
 
     async def _check_completions(self) -> None:
@@ -158,11 +136,10 @@ class Sequencer(Agent):
         if not roles:
             logger.warning("Sequencer has no participant roles to sequence.")
             # Yield END immediately if no participants.
-            yield StepRequest(role=END, prompt="", description="No participants in sequence.")
+            yield StepRequest(role=END, prompt="", content="No participants in sequence.")
             return  # Stop generation
 
-        # Cycle through roles indefinitely (until generator is closed).
-        # This basic version just does one round.
+        # Cycle through roles. This basic version just does one round.
         # TODO: Implement logic for multiple rounds or different termination conditions if needed.
         current_round = 0
         logger.info(f"Starting round {current_round + 1} of sequence.")
@@ -173,13 +150,13 @@ class Sequencer(Agent):
                 continue
 
             logger.debug(f"Sequencer yielding step for role: {role}")
-            yield StepRequest(role=role, prompt="", description=f"Round-robin sequencer requesting action from {role}.")
+            yield StepRequest(role=role, prompt="", content=f"Round-robin sequencer requesting action from {role}.")
 
         # After one full pass through the roles, signal the end.
         logger.info("Sequence completed one round. Yielding END.")
-        yield StepRequest(role=END, prompt="", description="Round-robin sequence complete.")
+        yield StepRequest(role=END, prompt="", content="Round-robin sequence complete.")
 
-    async def _get_next_step(self, message: ConductorRequest) -> AgentOutput:
+    async def _get_next_step(self, message: ConductorRequest) -> StepRequest:
         """
         Determines the next step, waiting for the previous step's completion.
 
@@ -190,7 +167,7 @@ class Sequencer(Agent):
             message: The incoming ConductorRequest containing participant info.
 
         Returns:
-            An AgentOutput containing the next StepRequest or a WAIT/END step.
+            An StepRequest or a WAIT/END step.
         """
         try:
             # Wait for the previous step to meet its completion threshold.
@@ -210,8 +187,6 @@ class Sequencer(Agent):
 
         # Initialize participants if this is the first request.
         if not self._participants:
-            # Extract participants from the 'inputs' field of the ConductorRequest.
-            # TODO: Validate the structure of message.inputs["participants"].
             self._participants = message.inputs.get("participants", {})
             if self._participants:
                 logger.info(f"Sequencer initialized with participants: {list(self._participants.keys())}")
@@ -220,44 +195,29 @@ class Sequencer(Agent):
             else:
                 logger.warning("ConductorRequest received, but no participants found in inputs.")
                 # Return END step if no participants.
-                return AgentOutput(agent_info=self._cfg, outputs=StepRequest(role=END, prompt="", description="No participants found."))
+                return StepRequest(role=END, prompt="", content="No participants found.")
 
         # Get the next step from the generator.
-        next_step = CONDUCTOR  # set to our value for the while loop; never return our own role
-        while next_step == CONDUCTOR:
-            next_step = await self._choose(message=message)  # _choose just wraps anext(_step_generator)
+        next_step = await self._choose(message=message)  # _choose just wraps anext(_step_generator)
+        if next_step.role == CONDUCTOR:  # never return our own role
+            next_step.role = WAIT
 
-        # Prepare the output containing the next step request.
-        output = AgentOutput(agent_info=self._cfg, outputs=next_step)
+        # Prepare for the new step.
+        logger.info(f"Sequencer initiating next step for role: {next_step.role}")
+        self._current_step_name = next_step.role
+        self._expected_agents_current_step.clear()
+        self._completed_agents_current_step.clear()
+        # Clear the event; it will be set again when the new step completes.
+        self._step_completion_event.clear()
 
-        if not next_step or next_step.role == END:
-            logger.info("Sequencer reached end of sequence.")
-            self._current_step_name = END  # Mark current step as END
-        else:
-            # If the suggested role isn't a known participant, signal WAIT.
-            # TODO: Should this raise an error or try the *next* participant instead?
-            if next_step.role not in self._participants:
-                logger.warning(f"Sequencer suggested role '{next_step.role}' not in participants {list(self._participants.keys())}. Setting to WAIT.")
-                next_step.role = WAIT
-                next_step.description = f"Suggested role {next_step.role} not found."
-                output.outputs = next_step  # Update output
-
-            # Prepare for the new step.
-            logger.info(f"Sequencer initiating next step for role: {next_step.role}")
-            self._current_step_name = next_step.role
-            self._expected_agents_current_step.clear()
-            self._completed_agents_current_step.clear()
-            # Clear the event; it will be set again when the new step completes.
-            self._step_completion_event.clear()
-
-        return output
+        return next_step
 
     async def _choose(self, message: ConductorRequest) -> StepRequest:
         """Retrieves the next step from the internal step generator."""
         if not self._step_generator:
             logger.error("Step generator not initialized!")
             # Attempt to recover? Or raise error? For now, return END.
-            return StepRequest(role=END, prompt="", description="Error: Step generator missing.")
+            return StepRequest(role=END, prompt="", content="Error: Step generator missing.")
         try:
             # Get the next item from the async generator.
             step = await anext(self._step_generator)
@@ -265,59 +225,23 @@ class Sequencer(Agent):
         except StopAsyncIteration:
             # Generator is exhausted (sequence finished).
             logger.info("Step generator finished.")
-            return StepRequest(role=END, prompt="", description="Sequence generator finished.")
+            return StepRequest(role=END, prompt="", content="Sequence generator finished.")
         except Exception as e:
             # Catch any other error during generation.
             logger.error(f"Error getting next step from generator: {e}")
-            return StepRequest(role=END, prompt="", description=f"Error in sequence: {e}")
+            return StepRequest(role=END, prompt="", content=f"Error in sequence: {e}")
 
-    async def _process(self, *, message: AgentInput, cancellation_token=None, **kwargs) -> AgentOutput:
+    async def _process(self, *, message: AgentInput | ConductorRequest, cancellation_token: CancellationToken | None = None, **kwargs) -> StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         """Handles direct calls to the Sequencer agent (e.g., via AgentInput)."""
         # Primarily designed to respond to ConductorRequest via _handle_events.
-        # This handles other AgentInput types, potentially for status or simple commands.
         logger.debug(f"Sequencer {self.id} processing direct message: {type(message).__name__}")
 
-        # If it's actually a ConductorRequest disguised as AgentInput (less ideal).
         if isinstance(message, ConductorRequest):
-            # Delegate to the standard ConductorRequest handling.
-            next_step_output = await self._get_next_step(message=message)
-            # TODO: The return type mismatch needs careful handling.
-            # _process expects AgentOutput|None, but _get_next_step returns AgentOutput containing StepRequest.
-            # This cast might be okay if the caller handles the nested structure.
-            return cast(AgentOutput, next_step_output)  # Potential type issue here.
+            return await self._get_next_step(message=message)
 
         # Prepare a default response.
-        response = AgentOutput(agent_info=self._cfg)
+        return StepRequest(role=WAIT)
 
-        # Check if there's a meaningful prompt or task description.
-        # TODO: Define more clearly what direct AgentInput prompts the Sequencer should handle.
-        prompt = getattr(message, "prompt", "")
-        task = message.inputs.get("task", "") if hasattr(message, "inputs") else ""
-        if not prompt and not task:
-            logger.warning(f"Sequencer {self.id} called directly with no prompt or task.")
-            # Maybe return status or help message? Returning None for now.
-
-            response.outputs = StepRequest(role=WAIT, prompt="", description=f"Sequencer {self.id} called directly with no prompt or task.")
-            return response
-
-        try:
-            # Log reception of the prompt.
-            effective_prompt = prompt or task
-            # TODO: AgentOutput doesn't have '.content'. Use '.outputs' or a dedicated field.
-            # response.content = f"Sequencer {self.id} received direct input: '{effective_prompt[:100]}...'"
-            response.outputs = {"status": f"Sequencer {self.id} received direct input: '{effective_prompt[:100]}...'"}
-            logger.info(f"Sequencer {self.id} received direct input: '{effective_prompt[:100]}...'")
-
-            # Currently doesn't *do* anything with the direct input other than acknowledge.
-            return response
-        except Exception as e:
-            logger.error(f"Error in Sequencer._process: {e}")
-            # Populate error field in the standard AgentOutput.
-            # Ensure outputs is initialized if error occurs before content is set.
-            # TODO: AgentOutput doesn't have '.error'. Use is_error flag and put error in outputs.
-            # response.error = [str(e)]
-            response.set_error(str(e))
-            return response
 
     async def on_reset(self, cancellation_token=None) -> None:
         """Resets the Sequencer's internal state."""

@@ -97,7 +97,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_tools()
-        await self._register_agents(params=request.model_dump())
+        await self._register_agents(params=request)
 
 
         logger.debug("Autogen runtime started.")
@@ -107,7 +107,7 @@ class AutogenOrchestrator(Orchestrator):
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump()), topic_id=DefaultTopicId(type=CONDUCTOR))
 
 
-    async def _register_agents(self, params: Mapping[str, Any]) -> None:
+    async def _register_agents(self,params: RunRequest ) -> None:
         """
         Registers Buttermilk agents (via Adapters) with the Autogen runtime.
 
