@@ -63,6 +63,11 @@ class WebUIAgent(RoutedAgent):
 
     async def send_to_client(self, message) -> None:
         try:
+            await self.websocket.stream([message])
+            return
+        except Exception as e:
+            logger.error(f"Unable to write to websocket (shiny style)")
+        try:
             if isinstance(message, BaseModel):
                 await self.websocket.send_json(message.model_dump())
             elif isinstance(message, dict):

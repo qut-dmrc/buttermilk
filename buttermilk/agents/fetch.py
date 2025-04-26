@@ -64,7 +64,6 @@ class FetchRecord(ToolConfig):
                 record.metadata["fetch_source_id"] = record_id
                 record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
                 result = ToolOutput(
-                    role=self.role,
                     name="fetch",
                     results=[record],
                     content=record.text,
@@ -80,7 +79,7 @@ class FetchRecord(ToolConfig):
                 record.metadata["fetch_source_uri"] = uri
                 record.metadata["fetch_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
                 result = ToolOutput(
-                    role=self.role, name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
+                     name="fetch", results=[record], content=record.text, messages=[record.as_message(role="user")], args=dict(uri=uri)
                 )
             # If record is None, result remains None
 

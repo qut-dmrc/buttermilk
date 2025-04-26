@@ -208,7 +208,6 @@ class Selector(AutogenOrchestrator):
                 f"Confirm (Enter), provide feedback, select a variant ID, or reject ('n'/'q')."
             )
             manager_request = ManagerRequest(
-                role=step.role,  # Indicate which role this confirmation relates to
                 content=request_content,
                 prompt=step.prompt,  # Full prompt can be useful context
                 description=step.description,
@@ -217,7 +216,7 @@ class Selector(AutogenOrchestrator):
         elif prompt:
             logger.debug("Sending general prompt to user.")
             # Send a simple prompt if no step is provided.
-            manager_request = ManagerRequest(prompt=prompt, role="user", content=prompt)  # Content=prompt for simple display
+            manager_request = ManagerRequest(prompt=prompt, content=prompt)  # Content=prompt for simple display
         else:
             logger.error("Selector._in_the_loop called without step or prompt.")
             # Cannot proceed without something to ask the user.
@@ -351,7 +350,6 @@ class Selector(AutogenOrchestrator):
             options_text = "\nOptions:\n" + "\n".join([f"- {opt}" for opt in options]) if options else ""
 
             question_request = ManagerRequest(
-                role="user",  # Request directed at the user
                 content=f"{question_text}{options_text}",
                 options=options,  # Pass options for potential UI elements
             )
@@ -464,14 +462,14 @@ class Selector(AutogenOrchestrator):
                 logger.warning(f"Agent {variant_id} returned unexpected type {type(response)}. Expected AgentOutput.")
                 # Attempt to wrap it? Or discard? For now, store raw if possible.
                 raw_output = response
-                # response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
+                # response = AgentOutput(agent_id=variant_id, inputs=message.inputs)
                 # response.set_error(f"Agent returned unexpected type: {type(raw_output)}")
                 # response.outputs = {"raw_output": raw_output}
 
         except Exception as e:
             logger.error(f"Error sending message to agent {variant_id} for execution {execution_id}: {e}")
             # Create an error response
-            # response = AgentOutput(agent_id=variant_id, role=step.role, inputs=message.inputs)
+            # response = AgentOutput(agent_id=variant_id, inputs=message.inputs)
             # response.set_error(f"Failed to execute agent: {e}")
 
         # --- Store results ---

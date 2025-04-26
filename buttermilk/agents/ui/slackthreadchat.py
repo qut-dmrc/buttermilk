@@ -185,8 +185,7 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self._input_callback(ManagerResponse(confirm=False, role=self.name))
-            await self._input_callback(UserInstructions(content=message["text"]))
+            await self._input_callback(ManagerResponse(confirm=False, content=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):
@@ -218,7 +217,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean False
-            await self._input_callback(ManagerResponse(confirm=False, role=self.name))
+            await self._input_callback(ManagerResponse(confirm=False))
 
         async def handle_confirm(ack, body, client):
             await ack()
@@ -253,7 +252,7 @@ class SlackUIAgent(UIAgent):
                 actions=None,
             )
             # Call callback with boolean True
-            await self._input_callback(ManagerResponse(confirm=True, role=self.name))
+            await self._input_callback(ManagerResponse(confirm=True))
             self._current_input_message = None
 
         async def handle_cancel(ack, body, client):
@@ -284,7 +283,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean Halt signal.
-            await self._input_callback(ManagerResponse(confirm=False, halt=True, role=self.name))
+            await self._input_callback(ManagerResponse(confirm=False, halt=True))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)

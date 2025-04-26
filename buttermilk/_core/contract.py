@@ -400,9 +400,6 @@ class ToolOutput(FunctionExecutionResult):
     Adds Buttermilk-specific context.
     """
 
-    # TODO: 'role' seems redundant if associated with an agent. Clarify purpose.
-    role: str = Field(..., description="The role the tool provides (?)")
-
     # TODO: 'results' seems duplicative of 'content' from base class. Consolidate or clarify.
     results: Any = Field(default=None)  # Default to None
     # TODO: 'messages' seems out of place for tool output. Clarify purpose.

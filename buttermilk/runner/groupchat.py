@@ -94,7 +94,8 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _setup(self, request: RunRequest | None = None) -> None:
         """Initializes the Autogen runtime and registers all configured agents."""
-        logger.info(f"Setting up AutogenOrchestrator for topic: {self._topic.type}")
+        msg =f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
+        logger.info(msg)
         self._runtime = SingleThreadedAgentRuntime()
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
@@ -103,10 +104,11 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register a special agent to handle interactions with the MANAGER (UI/Human).
         await self._register_manager_interface(request.websocket, request.session_id)  # Renamed for clarity
-
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
         logger.debug("Autogen runtime started.")
+        
+        await self._send_ui_message(ManagerMessage(content=msg))
 
 
     async def _register_agents(self) -> None:

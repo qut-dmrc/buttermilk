@@ -201,7 +201,7 @@ class Agent(AgentConfig):
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result is None:
             logger.warning(f"Agent {self.id} _process returned None. Creating default error output.")
-            result = AgentOutput(agent_info=self._cfg, role=self.role, inputs=message.inputs, prompt=message.prompt)
+            result = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
             result.set_error("Agent _process method returned None unexpectedly.")
 
         logger.debug(f"Agent {self.id} finished __call__.")

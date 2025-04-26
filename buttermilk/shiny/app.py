@@ -35,8 +35,8 @@ app_ui = ui.page_sidebar(
 def create_app(flows: FlowRunner):
      
     def server(input):
-        # stream = ui.MarkdownStream(id="my_stream")
-        stream = ui.Chat(id="chat")
+        stream = ui.MarkdownStream(id="chat")
+        # chat = ui.Chat(id="chat")
         flow_runner = flows
 
         @reactive.effect
@@ -45,11 +45,11 @@ def create_app(flows: FlowRunner):
             run_request=RunRequest(record_id=input.record_id(), websocket=stream, session_id=uuid.uuid4())
             await flow_runner.run_flow(flow_name="batch", run_request=run_request)
 
-        # Generate a response when the user submits a message
-        @chat.on_user_submit
-        async def handle_user_input(user_input: str):
-            response = await chat_client.stream_async(user_input)
-            await chat.append_message_stream(response)
+        # # Generate a response when the user submits a message
+        # @chat.on_user_submit
+        # async def handle_user_input(user_input: str):
+        #     response = await stream.stream([user_input])
+        #     await chat.append_message_stream(response)
 
 
     app = App(app_ui, server)

@@ -325,7 +325,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 logger.debug(f"Fetching initial records for request (ID: {request.record_id}, URI: {request.uri})...")
                 try:
                     # Use the FetchRecord agent directly (consider if this should be part of the flow instead)
-                    fetch_agent = FetchRecord(role="fetch_init", data=list(self.data))
+                    fetch_agent = FetchRecord(data=self.data)
                     fetch_output = await fetch_agent._run(uri=request.uri, record_id=request.record_id, prompt=request.prompt)
                     if fetch_output and fetch_output.results:
                         self._records = fetch_output.results

@@ -158,7 +158,6 @@ class DataSouce(DataSourceConfig):
 
 
 class ToolConfig(BaseModel):
-    role: str = Field(default="")
     description: str = Field(default="")
     tool_obj: str = Field(default="")
 
