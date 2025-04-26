@@ -31,7 +31,14 @@ from buttermilk.bm import logger  # Buttermilk logger
 # Base orchestrator class
 from buttermilk.runner.groupchat import AutogenOrchestrator
 
-
+####
+####
+####
+#### THIS NEESD A REWRITE TO MOVE LOGIC TO CONDUCTOR AGENT
+#####
+####
+####
+####
 class Selector(AutogenOrchestrator):
     """
     An orchestrator facilitating interactive exploration of multi-agent workflows.

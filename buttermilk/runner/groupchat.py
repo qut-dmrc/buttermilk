@@ -18,7 +18,8 @@ from autogen_core import (
     ClosureAgent,  # An agent defined by simple Python functions (closures).
     ClosureContext,  # Context provided to closure agent functions.
     DefaultTopicId,  # A standard implementation for topic identifiers.
-    MessageContext,  # Context associated with a message during processing.
+    MessageContext,
+    RoutedAgent,  # Context associated with a message during processing.
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
@@ -27,7 +28,7 @@ from pydantic import PrivateAttr, model_validator
 
 # TODO: TaskProcessingComplete seems unused in this file. Consider removal.
 # from buttermilk._core import TaskProcessingComplete
-from buttermilk._core.agent import FatalError, ProcessingError  # Added Agent
+from buttermilk._core.agent import Agent, FatalError, ProcessingError  # Added Agent
 from buttermilk._core.contract import (
     CONDUCTOR,
     # Added QualScore
@@ -114,29 +115,31 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Registering agents with Autogen runtime...")
         for role_name, step_config in self.agents.items():
             registered_for_role = []
-            # `get_configs` likely yields tuples of (AgentClass, agent_variant_config)
+            # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params):
-                # Add extra params passed in at run-time where required
                 # Define a factory function required by Autogen's registration.
-                # This function creates an instance of the AutogenAgentAdapter,
-                # wrapping the actual Buttermilk agent logic.
-                # It captures loop variables (variant_config, agent_cls, self._topic.type)
-                # to ensure the correct configuration is used when the factory is called.
-                def adapter_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
-                    # This log occurs when the factory is *called* by Autogen, not during registration.
-                    # logger.debug(f"Instantiating adapter for agent {cfg.id} (Role: {cfg.role}, Class: {cls.__name__})")
-                    return AutogenAgentAdapter(
-                        agent_cfg=cfg,
-                        agent_cls=cls,
-                        topic_type=topic_type,  # Pass the main topic type
-                    )
+                if isinstance(agent_cls, type(Agent)):
+                    # This function creates an instance of the AutogenAgentAdapter,
+                    # wrapping the actual Buttermilk agent logic.
+                    # It captures loop variables (variant_config, agent_cls, self._topic.type)
+                    # to ensure the correct configuration is used when the factory is called.
+                    def agent_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
+                        # This log occurs when the factory is *called* by Autogen, not during registration.
+                        # logger.debug(f"Instantiating adapter for agent {cfg.id} (Role: {cfg.role}, Class: {cls.__name__})")
+                        return AutogenAgentAdapter(
+                            agent_cfg=cfg,
+                            agent_cls=cls,
+                            topic_type=topic_type,  # Pass the main topic type
+                        )
+                else:
+                    agent_factory = agent_cls
 
                 # Register the adapter factory with the runtime.
                 # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                agent_type: AgentType = await AutogenAgentAdapter.register(
+                agent_type: AgentType = await agent_cls.register(
                     runtime=self._runtime,
                     type=variant_config.id,  # Use the specific variant ID for registration
-                    factory=adapter_factory,
+                    factory=agent_factory,
                 )
                 logger.debug(f"Registered agent adapter: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
 
@@ -192,77 +195,6 @@ class AutogenOrchestrator(Orchestrator):
                 )
                 logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
-
-    async def _ask_agents(
-        self,
-        role_name: str,  # Changed from step_name for clarity
-        message: AgentInput | ConductorRequest | StepRequest,
-    ) -> list[AgentOutput]:
-        """
-        Sends a message to all registered agents for a specific role and collects their outputs.
-
-        Args:
-            role_name: The UPPERCASE name of the role (e.g., "JUDGE", "SCORER").
-            message: The input message (AgentInput, ConductorRequest, or StepRequest) to send.
-
-        Returns:
-            A list of AgentOutput objects received from the agents. Includes only successful responses.
-        """
-        tasks = []
-        # Ensure role_name is uppercase to match the keys in _agent_types.
-        role_key = role_name.upper()
-        if role_key not in self._agent_types:
-            logger.warning(f"Attempted to ask agents for unknown role: {role_key}")
-            return []
-
-        tasks = []
-        # Copy the message to avoid potential modification issues if sent to multiple agents.
-        input_message = message.model_copy(deep=True)  # Use deep copy for safety.
-        logger.debug(f"Asking agents for role '{role_key}' with message type {type(input_message).__name__}")
-
-        # Iterate through all registered agent types for the specified role.
-        for agent_type, variant_config in self._agent_types[role_key]:
-            try:
-                # Get the specific agent instance ID from the runtime using its type.
-                agent_id = await self._runtime.get(agent_type)  # This retrieves the instance ID created by the factory.
-                logger.debug(f"Sending message to agent instance {agent_id} (Type: {agent_type}, Variant: {variant_config.id})")
-                # Send the message asynchronously to the agent instance.
-                # The runtime handles routing this to the adapter and then the Buttermilk agent.
-                task = self._runtime.send_message(
-                    message=input_message,
-                    recipient=agent_id,
-                )
-                tasks.append(task)
-            except Exception as e:
-                # Log errors during message sending setup, e.g., if runtime can't find the agent.
-                logger.error(f"Error preparing to send message to agent type {agent_type} for role {role_key}: {e}")
-
-        # Wait for all the send_message tasks to complete and gather responses.
-        # `return_exceptions=True` prevents one failed agent from stopping others.
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process responses: filter out errors/None and ensure they are AgentOutput.
-        valid_outputs: list[AgentOutput] = []
-        for i, response in enumerate(responses):
-            agent_type, variant_config = self._agent_types[role_key][i]
-            if isinstance(response, Exception):
-                logger.error(f"Agent {variant_config.id} (Type: {agent_type}) failed processing message: {response}", exc_info=response)
-            elif response is None:
-                logger.warning(f"Agent {variant_config.id} (Type: {agent_type}) returned None.")
-            elif isinstance(response, AgentOutput):
-                if response.is_error:
-                    logger.warning(f"Agent {variant_config.id} (Type: {agent_type}) returned an error output: {response.outputs}")
-                else:
-                    valid_outputs.append(response)
-                    logger.debug(f"Agent {variant_config.id} (Type: {agent_type}) returned valid output.")
-            else:
-                # This case should ideally not happen if adapters work correctly.
-                logger.error(f"Agent {variant_config.id} (Type: {agent_type}) returned unexpected type: {type(response)}. Output: {response}")
-
-        logger.debug(f"Received {len(valid_outputs)} valid responses from role '{role_key}'.")
-        return valid_outputs
-
-
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""
         logger.debug("Cleaning up AutogenOrchestrator...")
@@ -280,83 +212,6 @@ class AutogenOrchestrator(Orchestrator):
             logger.warning(f"Error during runtime cleanup: {e}")
         finally:
             await asyncio.sleep(2)  # Give it some time to properly shut down
-
-    async def _execute_step(self, step: StepRequest, **kwargs) -> None:
-        """
-        Executes a step when the host agent delegates execution to the orchestrator.
-        
-        This method is simpler now as most of the flow control logic has moved to 
-        the host agent, which now has the ability to execute steps directly.
-        
-        Args:
-            step: A StepRequest object containing the role of the agent to execute
-                  and the prompt/input for that agent.
-                  
-        Raises:
-            ProcessingError: If an error occurs during agent execution.
-        """
-        logger.debug(f"Executing step for role: {step.role}")
-        try:
-            # Prepare the input message for the agent(s).
-            message = AgentInput(prompt=step.prompt, records=self._records)
-            # Send the message to all agents registered for the specified role.
-            # The result (list of AgentOutputs) is ignored here, assuming side effects or
-            # subsequent steps rely on messages published by the agents.
-            # TODO: Consider if the output from _ask_agents should be captured or processed here.
-            _ = await self._ask_agents(
-                step.role,
-                message=message,
-            )
-            await asyncio.sleep(0.1)
-
-        except Exception as e:
-            # Wrap generic exceptions in ProcessingError for consistent handling.
-            msg = f"Error during step execution for role '{step.role}': {e}"
-            logger.error(msg)
-            raise ProcessingError(msg) from e
-
-    async def _get_host_suggestion(self) -> StepRequest | None:
-        """
-        Delegates flow control to the CONDUCTOR (host) agent.
-        
-        This simplified version delegates the entire flow control logic to the host agent,
-        which is now responsible for maintaining conversation state, tracking agent
-        completions, and determining the next steps. The orchestrator simply serves
-        as a message bus between agents.
-
-        Returns:
-            A StepRequest for the next step, or None if the conductor doesn't provide one.
-        """
-        logger.debug("Delegating flow control to host agent...")
-        
-        # Provide basic context about participants to the host
-        conductor_inputs = {"participants": dict(self._agent_types.items())}
-        
-        # Create the request for the host agent
-        request = ConductorRequest(
-            inputs=conductor_inputs,
-            prompt=self.parameters.get("task", ""),
-            records=self._records,
-        )
-
-        # Send the message to the host agent 
-        responses = await self._ask_agents(
-            CONDUCTOR,
-            message=request,
-        )
-
-        # Process the response
-        valid_responses = [r for r in responses if isinstance(r, AgentOutput) and not r.is_error and isinstance(r.outputs, StepRequest)]
-
-        if not valid_responses:
-            logger.warning("Host agent did not return a valid StepRequest.")
-            return None
-
-        # Extract the next step
-        next_step: StepRequest = valid_responses[0].outputs
-        logger.debug(f"Host agent suggested next step for role: {next_step.role}")
-        
-        return next_step
 
     @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
@@ -397,27 +252,12 @@ class AutogenOrchestrator(Orchestrator):
             # 3. Enter the main loop - now much simpler
             while True:
                 try:
-                    # Get next step from host agent
-                    step = await self._get_host_suggestion()
-                    
-                    # Handle no step case
-                    if not step:
-                        logger.debug("No step suggestion from host agent, waiting...")
-                        await asyncio.sleep(5)
-                        continue
+                    await asyncio.sleep(1)
+                    # # Handle END signal
+                    # if step.role == END:
+                    #     logger.info("Host agent signaled flow completion")
+                    #     break
                         
-                    # Handle END signal
-                    if step.role == END:
-                        logger.info("Host agent signaled flow completion")
-                        break
-                        
-                    # Get user confirmation if needed
-                    if not await self._in_the_loop(step):
-                        logger.debug("User rejected step, continuing to next suggestion")
-                        continue
-                        
-                    # Execute the suggested step
-                    await self._execute_step(step=step)
                     
                 except ProcessingError as e:
                     # Non-fatal error - let the host agent decide how to recover

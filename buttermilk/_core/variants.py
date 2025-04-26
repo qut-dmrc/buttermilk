@@ -3,7 +3,7 @@ import pkgutil
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.log import logger
-
+from autogen_core import RoutedAgent
 
 class AgentRegistry:
     """
@@ -84,6 +84,8 @@ class AgentRegistry:
         for subclass in get_all_subclasses(Agent):
             cls.register(subclass)
 
+        for subclass in get_all_subclasses(RoutedAgent):
+            cls.register(subclass)
 
 # Discover all agent classes
 AgentRegistry.discover("buttermilk.agents")
