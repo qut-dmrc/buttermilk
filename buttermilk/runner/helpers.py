@@ -249,7 +249,6 @@ async def prepare_step_df(data_configs: Mapping[str, DataSourceConfig]) -> dict[
     # This works for small datasets that we can easily read and load.
     datasets = {}
     source_list = []
-    dataset_configs = []
 
     # data_cfg is not ordered. Loop through and load the static data first.
     for key, src in data_configs.items():
@@ -258,7 +257,7 @@ async def prepare_step_df(data_configs: Mapping[str, DataSourceConfig]) -> dict[
             source_list.append(key)
         else:
             # start of list
-            source_list = [key] + dataset_configs
+            source_list = [key] + source_list
 
 
     combined_df = pd.DataFrame()

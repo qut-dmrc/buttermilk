@@ -152,10 +152,8 @@ class FetchAgent(FetchRecord, Agent):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                # Removed cancellation_token from _run call
                 result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
         if isinstance(message, UserInstructions):
-            # Removed cancellation_token from _run call
             result = await self._run(prompt=message.prompt)
 
         if result:
