@@ -8,7 +8,8 @@ and integrates with the Buttermilk agent and contract system.
 """
 
 import asyncio
-from typing import Any, Self  # Added type hints for clarity
+import itertools
+from typing import Any, Mapping, Self  # Added type hints for clarity
 
 import shortuuid
 import weave  # weave is likely used for experiment tracking/logging.
@@ -74,23 +75,12 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
-    _user_confirmation: asyncio.Queue[ManagerResponse] = PrivateAttr()
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
     _topic: TopicId = PrivateAttr(
-        default_factory=lambda: DefaultTopicId(type=f"groupchat-{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:4]}")
+        default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}")
     )
-    # TODO: Consider making the topic generation strategy more configurable or robust,
-    # especially if persistence or specific naming conventions are needed.
-
-    @model_validator(mode="after")
-    def _initialize_internals(self) -> Self:
-        """Initialize private attributes after standard Pydantic validation."""
-        # Using a validator ensures these are set up after the main object initialization.
-        self._user_confirmation = asyncio.Queue(maxsize=1)  # Queue for handling user/manager responses.
-        # NOTE: _runtime and _agent_types are initialized within _setup.
-        return self
 
     async def _setup(self, request: RunRequest | None = None) -> None:
         """Initializes the Autogen runtime and registers all configured agents."""
@@ -100,18 +90,19 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_tools()
-        await self._register_agents()
+        await self._register_agents(params=request.model_dump())
 
-        # Register a special agent to handle interactions with the MANAGER (UI/Human).
-        await self._register_manager_interface(request.websocket, request.session_id)  # Renamed for clarity
+
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
         logger.debug("Autogen runtime started.")
         
-        await self._send_ui_message(ManagerMessage(content=msg))
+        # Send a welcome message to the UI and start up the host agent
+        await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=MANAGER)
+        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic=CONDUCTOR)
 
 
-    async def _register_agents(self) -> None:
+    async def _register_agents(self, params: Mapping[str, Any]) -> None:
         """
         Registers Buttermilk agents (via Adapters) with the Autogen runtime.
 
@@ -124,7 +115,8 @@ class AutogenOrchestrator(Orchestrator):
         for role_name, step_config in self.agents.items():
             registered_for_role = []
             # `get_configs` likely yields tuples of (AgentClass, agent_variant_config)
-            for agent_cls, variant_config in step_config.get_configs():
+            for agent_cls, variant_config in step_config.get_configs(params=params):
+                # Add extra params passed in at run-time where required
                 # Define a factory function required by Autogen's registration.
                 # This function creates an instance of the AutogenAgentAdapter,
                 # wrapping the actual Buttermilk agent logic.
@@ -169,6 +161,7 @@ class AutogenOrchestrator(Orchestrator):
                 logger.debug(f"Agent type '{agent_type}' subscribed to topics: '{self._topic.type}', '{role_topic_type}'")
 
                 registered_for_role.append((agent_type, variant_config))
+
             # Store the list of (AgentType, variant_config) tuples for this role.
             # Use uppercase role name as the key, consistent with topic subscription.
             self._agent_types[role_name.upper()] = registered_for_role
@@ -199,62 +192,6 @@ class AutogenOrchestrator(Orchestrator):
                 )
                 logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
-    async def _register_manager_interface(self, websocket, session_id) -> None:
-        """Registers an agent to communicate with the MANAGER (user)."""
-        logger.debug(f"Registering manager interface agent '{MANAGER}'.")
-
-        # Inject messages into the groupchat from the UI 
-        agent_type = await WebUIAgent.register(
-                    runtime=self._runtime,
-                    type=MANAGER,
-                    factory=lambda: WebUIAgent(websocket, session_id),
-                )
-
-        await self._runtime.add_subscription(
-            TypeSubscription(
-                topic_type=self._topic.type,  # Main group chat topic
-                agent_type=agent_type,
-            ),
-        )
-        return
-
-        # This agent listens for ManagerResponse messages on relevant topics.
-        async def handle_manager_response(
-            _agent_ctx: ClosureContext,  # Context for the closure agent itself (unused here).
-            message: ManagerResponse,  # The message received.
-            _msg_ctx: MessageContext,  # Context of the message (unused here).
-        ) -> None:
-            """Puts received ManagerResponse messages into the confirmation queue."""
-            # We only care about ManagerResponse messages here.
-            # Other message types might arrive on the subscribed topics but will be ignored
-            # due to the `unknown_type_policy="ignore"` setting below.
-            if isinstance(message, ManagerResponse):
-                logger.debug(f"Manager interface received confirmation: {message.dict()}")
-                try:
-                    # Place the confirmation message into the queue for the main loop to pick up.
-                    self._user_confirmation.put_nowait(message)
-                except asyncio.QueueFull:
-                    # This shouldn't happen often with maxsize=1 if the main loop processes confirmations promptly.
-                    logger.warning(f"User confirmation queue full. Discarding confirmation: {message.dict()}")
-            else:
-                # Log if an unexpected type arrives, although ignore policy should handle it.
-                logger.warning(f"Manager interface received unexpected message type: {type(message)}")
-
-        # Register the closure function as an agent named MANAGER.
-        await ClosureAgent.register_closure(
-            runtime=self._runtime,
-            type=MANAGER,  # Agent ID/Name.
-            closure=handle_manager_response,  # The async function to handle messages.
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=self._topic.type,  # Subscribe to the main group chat topic
-                    agent_type=MANAGER, 
-                )
-            ],
-            # If a message arrives that isn't ManagerResponse, just ignore it silently.
-            unknown_type_policy="ignore",
-        )
-        logger.debug(f"Manager interface agent '{MANAGER}' registered and subscribed.")
 
     async def _ask_agents(
         self,
@@ -325,17 +262,6 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug(f"Received {len(valid_outputs)} valid responses from role '{role_key}'.")
         return valid_outputs
 
-    async def _send_ui_message(self, message: ManagerMessage | ManagerRequest) -> None:
-        """
-        Sends a message intended for the user interface (MANAGER).
-
-        Args:
-            message: The ManagerMessage or ManagerRequest to send.
-        """
-        # Publish to the specific MANAGER topic.
-        manager_topic_id = DefaultTopicId(type=MANAGER)
-        logger.debug(f"Publishing UI message ({type(message).__name__}) to topic '{MANAGER}'")
-        await self._runtime.publish_message(message, topic_id=manager_topic_id)
 
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""

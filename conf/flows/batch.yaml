@@ -9,6 +9,7 @@ defaults:
     # - differences
     - fetch
   - /agents/host@agents: sequencer
+  - /agents/interface@agents: web
   - _self_ 
 
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator

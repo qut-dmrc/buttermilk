@@ -321,9 +321,10 @@ class AgentVariants(AgentConfig):
     variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
     tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
     num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
+    extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
     #--- Variant configuration: fields used to generate AgentConfig objects ---
 
-    def get_configs(self) -> list[tuple[type, AgentConfig]]:
+    def get_configs(self, params: Mapping[str, Any]) -> list[tuple[type, AgentConfig]]:
         """
         Generates agent configurations based on parallel and sequential variants.
         """
@@ -339,6 +340,12 @@ class AgentVariants(AgentConfig):
             }
         )
         base_parameters = self.parameters.copy()  # Base parameters common to all
+
+        # Get extra parameters passed in at runtime if requested
+        for key in self.extra_params:
+            if key not in params:
+                raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
+            base_parameters[key] = params[key]
 
         # Get agent class
         from buttermilk._core.variants import AgentRegistry

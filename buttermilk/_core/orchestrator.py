@@ -227,23 +227,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
 
-    @abstractmethod
-    async def _execute_step(self, step: StepRequest) -> AgentOutput | None:
-        """
-        Abstract method to execute a single step defined by a `StepRequest`.
-
-        Implementations handle the mechanism for invoking the correct agent
-        (based on `step.role`) with the appropriate input (`step.prompt`, context, etc.)
-        and returning the agent's `AgentOutput`. This might involve direct calls or
-        messaging via a runtime.
-
-        Args:
-            step: The `StepRequest` detailing the step to execute.
-
-        Returns:
-            The `AgentOutput` from the executed agent, or None if execution failed.
-        """
-        raise NotImplementedError("Orchestrator subclasses must implement _execute_step.")
 
     @weave.op
     @abstractmethod
@@ -282,43 +265,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Cleanup is handled by the public `run` method's finally block.
 
     # --- Optional Overridable Methods ---
-
-    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse:
-        """
-        Placeholder for human-in-the-loop interaction.
-
-        Interactive orchestrators (like `Selector`) override this to send `ManagerRequest`
-        messages to the UI/user and wait for a `ManagerResponse`. The base implementation
-        skips interaction and automatically confirms progression.
-
-        Args:
-            step: The proposed step for confirmation (optional).
-            prompt: A message to display if no step is provided (optional).
-
-        Returns:
-            A `ManagerResponse` indicating automatic confirmation.
-        """
-        logger.info("Base _in_the_loop called: Auto-confirming step in 5 seconds.")
-        await asyncio.sleep(5)  # put in a delay
-        return ManagerResponse(confirm=True)  # Default: automatically confirm
-
-    async def execute(self, request: StepRequest) -> AgentOutput | None:
-        """
-        Allows direct execution of a single step (e.g., for testing or specific control flows).
-
-        Args:
-            request: The `StepRequest` defining the step to execute.
-
-        Returns:
-            The `AgentOutput` from the step, or None on failure.
-        """
-        logger.debug(f"Directly executing step for role: {request.role}")
-        try:
-            output = await self._execute_step(request)
-            return output
-        except Exception as e:
-            logger.error(f"Error during direct execute for step '{request.role}': {e}")
-            return None
 
     async def _fetch_initial_records(self, request: RunRequest) -> None:
         """Helper method to fetch records based on RunRequest if needed."""
