@@ -357,12 +357,15 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _execute_step(self, step: StepRequest, **kwargs) -> None:
         """
-        Executes a single step in the workflow by sending a request to the appropriate agent(s).
-
+        Executes a step when the host agent delegates execution to the orchestrator.
+        
+        This method is simpler now as most of the flow control logic has moved to 
+        the host agent, which now has the ability to execute steps directly.
+        
         Args:
             step: A StepRequest object containing the role of the agent to execute
                   and the prompt/input for that agent.
-
+                  
         Raises:
             ProcessingError: If an error occurs during agent execution.
         """
@@ -388,125 +391,133 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _get_host_suggestion(self) -> StepRequest | None:
         """
-        Asks the CONDUCTOR agent to determine the next step in the workflow.
-
-        Sends the current list of participants and the overall task prompt to the
-        CONDUCTOR agent and expects a StepRequest in return, indicating the next
-        agent role and prompt.
+        Delegates flow control to the CONDUCTOR (host) agent.
+        
+        This simplified version delegates the entire flow control logic to the host agent,
+        which is now responsible for maintaining conversation state, tracking agent
+        completions, and determining the next steps. The orchestrator simply serves
+        as a message bus between agents.
 
         Returns:
             A StepRequest for the next step, or None if the conductor doesn't provide one.
         """
-        logger.debug("Asking CONDUCTOR for next step suggestion...")
-        # Prepare the input for the CONDUCTOR agent.
-        # Provide the list of currently registered agent types/roles.
-        # TODO: `dict(self._agent_types.items())` might expose internal variant details.
-        #       Consider passing just role names or a cleaner representation.
+        logger.debug("Delegating flow control to host agent...")
+        
+        # Provide basic context about participants to the host
         conductor_inputs = {"participants": dict(self._agent_types.items())}
-        # Include the overall task prompt and current records.
+        
+        # Create the request for the host agent
         request = ConductorRequest(
             inputs=conductor_inputs,
             prompt=self.parameters.get("task", ""),
-            records=self._records,  # Get task description from flow parameters
+            records=self._records,
         )
 
-        # Ask the CONDUCTOR agent(s).
+        # Send the message to the host agent 
         responses = await self._ask_agents(
             CONDUCTOR,
             message=request,
         )
 
-        # Determine the next step based on the response
+        # Process the response
         valid_responses = [r for r in responses if isinstance(r, AgentOutput) and not r.is_error and isinstance(r.outputs, StepRequest)]
 
         if not valid_responses:
-            logger.warning("Conductor did not return a valid StepRequest.")
+            logger.warning("Host agent did not return a valid StepRequest.")
             return None
 
-        # Use the first valid response
-        # Add assertion for type checker clarity, although it might fail if conductor returns non-StepRequest.
-        # TODO: Add more robust handling if the assertion fails or if valid_responses[0].outputs isn't StepRequest.
-        assert isinstance(valid_responses[0].outputs, StepRequest), (
-            f"Conductor returned unexpected type: Expected StepRequest, got {type(valid_responses[0].outputs)}"
-        )
+        # Extract the next step
         next_step: StepRequest = valid_responses[0].outputs
-        logger.debug(f"Conductor suggested next step for role: {next_step.role}")
-
-        # TODO: The hardcoded sleep seems arbitrary. Consider removing or making configurable.
-        #       Is it needed for timing issues or just pacing?
-        await asyncio.sleep(5)
+        logger.debug(f"Host agent suggested next step for role: {next_step.role}")
+        
         return next_step
 
     @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
         """
-        Main execution loop for the orchestrator.
-
-        Sets up the Autogen runtime and agents, then enters a loop that repeatedly:
-        1. Asks the CONDUCTOR agent for the next step.
-        2. Optionally interacts with the MANAGER for confirmation (human-in-the-loop).
-        3. Executes the suggested step by calling the appropriate agent(s).
-        The loop continues until the CONDUCTOR signals the end (END role) or an
-        unrecoverable error occurs.
+        Simplified main execution loop for the orchestrator.
+        
+        This version delegates most of the substantive flow control to the
+        host (CONDUCTOR) agent. The orchestrator now acts mainly as a message
+        bus between agents, handling only the technical aspects of execution:
+        1. Setting up the runtime and agents
+        2. Loading initial data if needed
+        3. Getting step suggestions from the host agent
+        4. Getting user confirmation if needed
+        5. Executing the steps by sending messages
+        
+        All decisions about what steps to take, pacing, and agent coordination
+        are delegated to the host agent.
 
         Args:
-            request: An optional RunRequest containing initial data like record_id, uri, or prompt.
-                     If provided, it fetches the initial record(s).
+            request: An optional RunRequest containing initial data.
         """
         try:
-            await self._setup(request)
-            if request:
+            # 1. Setup the runtime and agents
+            await self._setup(request or RunRequest())
+            
+            # 2. Load initial data if provided
+            if request and (request.record_id or request.uri or request.prompt):
                 fetch = FetchRecord(data=self.data)
-                fetch_output = await fetch._run(record_id=request.record_id, uri=request.uri, prompt=request.prompt)
-                # Fixed: Extract results list
+                fetch_output = await fetch._run(
+                    record_id=getattr(request, 'record_id', None),
+                    uri=getattr(request, 'uri', None), 
+                    prompt=getattr(request, 'prompt', None)
+                )
                 if fetch_output and fetch_output.results:
                     self._records = fetch_output.results
+                    logger.debug(f"Loaded {len(self._records)} initial records")
 
+            # 3. Enter the main loop - now much simpler
             while True:
                 try:
-                    # Loop until we receive an error
-                    await asyncio.sleep(1)
-
-                    # # Get next step in the flow
-                    if not (step := await self._get_host_suggestion()):
-                        # No next step at the moment; wait and try a bit
-                        await asyncio.sleep(10)
+                    # Get next step from host agent
+                    step = await self._get_host_suggestion()
+                    
+                    # Handle no step case
+                    if not step:
+                        logger.debug("No step suggestion from host agent, waiting...")
+                        await asyncio.sleep(5)
                         continue
-
+                        
+                    # Handle END signal
                     if step.role == END:
-                        raise StopAsyncIteration("Host signaled that flow has been completed.")
-
+                        logger.info("Host agent signaled flow completion")
+                        break
+                        
+                    # Get user confirmation if needed
                     if not await self._in_the_loop(step):
-                        # User did not confirm plan; go back and get new instructions
+                        logger.debug("User rejected step, continuing to next suggestion")
                         continue
-
+                        
+                    # Execute the suggested step
                     await self._execute_step(step=step)
-
-                    # sleep a bit
-                    await asyncio.sleep(5)
-
+                    
                 except ProcessingError as e:
-                    # non-fatal error
-                    logger.error(f"Error in Orchestrator run: {e}")
+                    # Non-fatal error - let the host agent decide how to recover
+                    logger.error(f"Error in execution: {e}")
                     continue
                 except (StopAsyncIteration, KeyboardInterrupt):
                     raise
                 except FatalError:
                     raise
-                except Exception as e:  # This is only here for debugging for now.
-                    logger.exception(f"Error in Orchestrator.run: {e}")
+                except Exception as e:
+                    logger.exception(f"Unexpected error: {e}")
                     raise FatalError from e
 
-        # Outer try/except for handling overall flow completion or fatal errors.
         except (StopAsyncIteration, KeyboardInterrupt):
-            # Normal termination (END signal or user interruption).
-            logger.debug(f"AutogenOrchestrator run loop for topic '{self._topic.type}' completed.")
+            logger.info("Flow terminated normally")
         except FatalError as e:
-            # Specific fatal error defined in Buttermilk.
-            logger.error(f"Fatal error during orchestrator run: {e}")
+            logger.error(f"Fatal error: {e}")
         except Exception as e:
-            # Catch any other unexpected exceptions during the main loop.
-            logger.exception(f"Unexpected error during orchestrator run: {e}")
+            logger.exception(f"Unhandled exception: {e}")
         finally:
-            # Ensure cleanup happens regardless of how the loop exits.
             await self._cleanup()
+            
+            # Log completion - use try/except to handle possible None cases
+            try:
+                call = weave.get_current_call()
+                if call and hasattr(call, 'ui_url'):
+                    logger.info(f"Tracing link: 🍩 {call.ui_url}")
+            except Exception:
+                pass
