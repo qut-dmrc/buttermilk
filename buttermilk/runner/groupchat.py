@@ -100,8 +100,8 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Autogen runtime started.")
         
         # Send a welcome message to the UI and start up the host agent
-        await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=MANAGER)
-        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic_id=CONDUCTOR)
+        await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
+        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic_id=DefaultTopicId(type=CONDUCTOR))
 
 
     async def _register_agents(self, params: Mapping[str, Any]) -> None:
@@ -125,24 +125,29 @@ class AutogenOrchestrator(Orchestrator):
                     # It captures loop variables (variant_config, agent_cls, self._topic.type)
                     # to ensure the correct configuration is used when the factory is called.
                     def agent_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
-                        # This log occurs when the factory is *called* by Autogen, not during registration.
-                        # logger.debug(f"Instantiating adapter for agent {cfg.id} (Role: {cfg.role}, Class: {cls.__name__})")
                         return AutogenAgentAdapter(
                             agent_cfg=cfg,
                             agent_cls=cls,
                             topic_type=topic_type,  # Pass the main topic type
                         )
+                        
+                    # Register the adapter factory with the runtime.
+                    # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
+                    agent_type: AgentType = await AutogenAgentAdapter.register(
+                        runtime=self._runtime,
+                        type=variant_config.id,  # Use the specific variant ID for registration
+                        factory=agent_factory,
+                    )
                 else:
-                    agent_factory = agent_cls
 
+                    # Register the adapter factory with the runtime.
+                    # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
+                    agent_type: AgentType = await agent_cls.register(
+                        runtime=self._runtime,
+                        type=variant_config.id,  # Use the specific variant ID for registration
+                        factory=lambda variant_config=variant_config: agent_cls(**variant_config.parameters),
+                    )
 
-                # Register the adapter factory with the runtime.
-                # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                agent_type: AgentType = await RoutedAgent.register(
-                    runtime=self._runtime,
-                    type=variant_config.id,  # Use the specific variant ID for registration
-                    factory=agent_factory,
-                )
                 logger.debug(f"Registered agent adapter: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
 
                 # Subscribe the newly registered agent type to the main group chat topic.
@@ -243,8 +248,8 @@ class AutogenOrchestrator(Orchestrator):
             if request and (request.record_id or request.uri or request.prompt):
                 # Get the record from the fetch agent. Need to clean this up eventually.
                 msg = AgentInput(inputs=request.model_dump())
-                await self._runtime.publish_message(msg, topic_id="FETCH")
-                
+                await self._runtime.publish_message(msg, topic_id=DefaultTopicId(type="FETCH"))
+
 
             # 3. Enter the main loop - now much simpler
             while True:

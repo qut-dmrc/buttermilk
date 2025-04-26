@@ -47,7 +47,7 @@ class WebUIAgent(RoutedAgent):
     connections from web clients.
     """
     
-    def __init__(self, websocket: WebSocket, session_id: str, description: str = "Web UI Agent for handling user interactions",):
+    def __init__(self, websocket: WebSocket, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
         """
         Initialize the WebUIAgent.
         
