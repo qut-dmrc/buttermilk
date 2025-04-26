@@ -6,6 +6,7 @@ of agent-based workflows (flows).
 """
 
 from abc import ABC, abstractmethod
+import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any, AsyncGenerator, Literal, Self
 
@@ -297,7 +298,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         Returns:
             A `ManagerResponse` indicating automatic confirmation.
         """
-        logger.debug("Base _in_the_loop called: Auto-confirming step.")
+        logger.info("Base _in_the_loop called: Auto-confirming step in 20 seconds.")
+        await asyncio.sleep(20)  # put in a delay
         return ManagerResponse(confirm=True)  # Default: automatically confirm
 
     async def execute(self, request: StepRequest) -> AgentOutput | None:

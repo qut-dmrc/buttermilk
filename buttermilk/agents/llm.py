@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput  # Base agent and message types
 from buttermilk._core.contract import (
     # TODO: Review necessary contract types for this base class
+    ErrorEvent,
     LLMMessage,  # Type hint for message lists
 )
 from buttermilk._core.exceptions import ProcessingError
@@ -284,8 +285,8 @@ class LLMAgent(Agent):
         return output
 
     # This is the primary method subclasses should call in their handlers.
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
-        """
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput|ErrorEvent:
+        """ s
         Core processing logic: fills template, calls LLM, makes AgentOutput.
 
         Args:
@@ -308,10 +309,10 @@ class LLMAgent(Agent):
             )
         except ProcessingError as template_error:
             # Log template errors clearly as they prevent LLM call
-            logger.error(f"Agent {self.id}: Critical error during template processing: {template_error}")
+            msg = f"Agent {self.id}: Critical error during template processing: {template_error}"
+            logger.error(msg)
             # Create an error output
-            error_output = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
-            error_output.set_error(f"Template processing failed: {template_error}")
+            error_output = ErrorEvent(source=self.id, content=msg)
             return error_output
             # Re-raising might be desired depending on orchestrator's error handling
             # raise template_error
@@ -331,15 +332,7 @@ class LLMAgent(Agent):
             # Catch errors during the actual LLM call
             msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
-            error_output = AgentOutput(
-                agent_info=self._cfg,
-                inputs=message.inputs,
-                prompt=message.prompt,
-                messages=llm_messages,
-                metadata={"role": self.role, "name": self.name},
-                error=[msg],
-            )
-            error_output.set_error(f"LLM API call failed: {llm_error}")
+            error_output = ErrorEvent(source=self.id, content=msg)
             return error_output
             # Depending on severity, might want to raise
             # raise ProcessingError(f"LLM call failed for agent {self.id}") from llm_error

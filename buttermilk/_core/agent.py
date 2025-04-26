@@ -26,7 +26,8 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,  # Constant for command messages,
     AgentInput,  # Standard input message structure
-    AgentOutput,  # Standard output message structure
+    AgentOutput,
+    ErrorEvent,  # Standard output message structure
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     OOBMessages,  # Union of Out-Of-Band control messages
     UserInstructions,  # Message containing user instructions
@@ -150,7 +151,7 @@ class Agent(AgentConfig):
         message: AgentInput,
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentOutput:
+    ) -> AgentOutput|ErrorEvent:
         """
         Primary entry point for agent execution, called by the orchestrator/adapter.
 
@@ -173,8 +174,7 @@ class Agent(AgentConfig):
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Agent {self.id}: Error preparing input state: {e}")
-            error_output = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
-            error_output.set_error(f"Failed to prepare input state: {e}")
+            error_output = ErrorEvent(source=self.id, content=f"Failed to prepare input state: {e}")
             return error_output
 
         # --- Weave Tracing ---
@@ -195,14 +195,13 @@ class Agent(AgentConfig):
             # Catch unexpected errors during _process.
             error_msg = f"Agent {self.id} error during _process: {e}"
             logger.error(error_msg)
-            result = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
-            result.set_error(error_msg)
+            result = ErrorEvent(source=self.id, content=error_msg)
 
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result is None:
-            logger.warning(f"Agent {self.id} _process returned None. Creating default error output.")
-            result = AgentOutput(agent_info=self._cfg, inputs=message.inputs, prompt=message.prompt)
-            result.set_error("Agent _process method returned None unexpectedly.")
+            msg = f"Agent {self.id} _process returned None. Creating default error output."
+            logger.warning(msg)
+            result = ErrorEvent(source=self.id, content=msg)
 
         logger.debug(f"Agent {self.id} finished __call__.")
         return result

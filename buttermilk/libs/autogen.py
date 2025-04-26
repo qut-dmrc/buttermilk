@@ -48,7 +48,7 @@ MaybeSequenceOutput = Union[
     AgentOutput,
     ToolOutput,
     TaskProcessingComplete,
-    TaskProcessingStarted,
+    TaskProcessingStarted,ErrorEvent,
     ConductorResponse,
     Sequence[Union[AgentOutput, ToolOutput, TaskProcessingComplete, ConductorResponse]],
 ]
@@ -232,8 +232,9 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} listening to group chat message: {e}")
-            # TODO: Consider publishing an ErrorEvent here as well?
+            msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
+            logger.error(msg)
+            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
 
     @message_handler
     async def handle_conductor_request(
@@ -271,8 +272,9 @@ class AutogenAgentAdapter(RoutedAgent):
             # Note: Conductor responses are typically returned directly, not published separately by the adapter.
             return output
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} handling ConductorRequest: {e}")
-            # TODO: Consider publishing ErrorEvent or returning a specific error response?
+            msg = f"Error during agent {self.agent.id} handling ConductorRequest: {e}"
+            logger.error(msg)
+            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None  # Return None on error
 
     @message_handler
@@ -307,9 +309,9 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
             return response  # Return response directly for OOB messages.
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} handling control message: {e}")
-            # TODO: Return an error OOB message?
-            return None
+            msg = f"Error during agent {self.agent.id} handling control message: {e}"
+            logger.error(msg)
+            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
         """

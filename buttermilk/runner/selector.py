@@ -10,7 +10,7 @@ from pydantic import BaseModel, PrivateAttr
 from rich.pretty import pretty_repr  # For formatted output of complex objects
 
 # Buttermilk core imports
-from buttermilk._core.agent import ProcessingError
+from buttermilk._core.agent import ErrorEvent, ProcessingError
 from buttermilk._core.contract import (
     CONDUCTOR,  # Role constant for the conductor/host agent
     END,  # Special role indicating flow completion
@@ -170,7 +170,7 @@ class Selector(AutogenOrchestrator):
             # Return an error response
             return ManagerResponse(error=[f"Error processing user input: {e}"], confirm=False, halt=False)
 
-    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse:
+    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse|ErrorEvent:
         """
         Sends a request to the user (MANAGER) for confirmation, feedback, or selection,
         and waits for their response.
@@ -220,7 +220,7 @@ class Selector(AutogenOrchestrator):
         else:
             logger.error("Selector._in_the_loop called without step or prompt.")
             # Cannot proceed without something to ask the user.
-            return ManagerResponse(error=["Internal error: _in_the_loop called inappropriately."], confirm=False)
+            return ErrorEvent(source=self.name, content=["Internal error: _in_the_loop called inappropriately."])
 
         # Send the request to the MANAGER interface agent.
         await self._send_ui_message(manager_request)

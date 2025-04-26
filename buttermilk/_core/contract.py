@@ -462,14 +462,13 @@ OOBMessages = Union[
     TaskProcessingStarted,
     ConductorResponse,
     ConductorRequest,
-    ErrorEvent,  # Added ErrorEvent
+    ErrorEvent, 
 ]
 
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentOutput,
-    ToolOutput,
-    UserInstructions,  # Why UserInstructions here? Seems misplaced.
+    ToolOutput,ErrorEvent,
     # Add other types that are typically broadcast in the chat?
 ]
 

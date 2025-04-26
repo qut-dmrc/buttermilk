@@ -2,9 +2,10 @@ import asyncio
 from typing import Optional
 
 from pydantic import Field, PrivateAttr
+import weave
 
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput, FatalError
-from buttermilk._core.contract import OOBMessages, StepRequest, ToolOutput, RunRequest  # Added ToolOutput, OOBMessages
+from buttermilk._core.contract import ErrorEvent, OOBMessages, StepRequest, ToolOutput, RunRequest  # Added ToolOutput, OOBMessages
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk.bm import logger
 
@@ -63,7 +64,7 @@ class BatchOrchestrator(Orchestrator):
     async def _execute_step(
         self,
         step: StepRequest,
-    ) -> AgentOutput | None:
+    ) -> AgentOutput | ErrorEvent:
         """
         Executes a single step of the flow for the given agent role.
 
@@ -80,7 +81,7 @@ class BatchOrchestrator(Orchestrator):
         variants_config = self.agents.get(step.role.lower())
         if not variants_config or not variants_config.variants:
             logger.error(f"No variants found for step '{step.role}'. Skipping.")
-            # return AgentOutput(agent_id=self.name, error=[f"No variants configured for step: {step.role}"])
+            return ErrorEvent(source=self.name, content="No variants configured for step: {step.role}")
 
         # Get the config for the first variant
         first_variant_config = variants_config.variants[0]
@@ -116,14 +117,21 @@ class BatchOrchestrator(Orchestrator):
                     logger.warning(f"Step '{step.role}' variant '{first_variant_config.id}' returned None.")
                     return None
                 else:
-                    logger.error(f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}.")
-                    # return AgentOutput(agent_id=self.name, error=[f"Unknown return type: {type(raw_output)}"])
+                    msg = f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}."
+                    logger.error(msg)
+                    return ErrorEvent(source=self.name, content=msg)
 
             except Exception as e:
-                logger.error(f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}")
+                msg = f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}"
                 # Ensure 'inputs' attribute exists on output for error cases
-                # return AgentOutput(agent_id=self.name, error=[str(e)])
+                logger.error(msg)
+                return ErrorEvent(source=self.name, content=msg)
 
+        msg = f"Error executing step '{step.role}' variant '{first_variant_config.id}': No agent found."
+        logger.error(msg)
+        return ErrorEvent(source=self.name, content=msg)
+    
+    @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
         """
         Main execution method for batch processing.

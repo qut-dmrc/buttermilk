@@ -16,6 +16,7 @@ from pydantic import PrivateAttr
 from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ToolOutput
 from buttermilk._core.contract import (
     ConductorRequest,
+    ErrorEvent,
     UserInstructions,
 )
 
@@ -131,12 +132,10 @@ class AssistantAgentWrapper(Agent):
         try:
             response = await self._assistant_agent.on_messages(messages=messages_to_send, cancellation_token=cancellation_token)
         except Exception as e:
-            logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}")
-            return AgentOutput(
-                agent_info=self._cfg,
-                content=f"Error processing request: {e}",
-                error=[str(e)],
-            )
+            msg = f"Agent {self.role} error during AssistantAgent.on_messages: {e}"
+            logger.error(msg)
+            result = ErrorEvent(source=self.id, content=msg)
+            return result
 
         # --- Translate Response ---
         output_content = ""
