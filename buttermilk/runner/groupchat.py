@@ -89,18 +89,19 @@ class AutogenOrchestrator(Orchestrator):
         logger.info(msg)
         self._runtime = SingleThreadedAgentRuntime()
 
+        # Start the Autogen runtime's processing loop in the background.
+        self._runtime.start()
+
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_tools()
         await self._register_agents(params=request.model_dump())
 
 
-        # Start the Autogen runtime's processing loop in the background.
-        self._runtime.start()
         logger.debug("Autogen runtime started.")
         
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=MANAGER)
-        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic=CONDUCTOR)
+        await self._runtime.publish_message(StepRequest(role=CONDUCTOR, prompt = request.prompt), topic_id=CONDUCTOR)
 
 
     async def _register_agents(self, params: Mapping[str, Any]) -> None:
@@ -134,9 +135,10 @@ class AutogenOrchestrator(Orchestrator):
                 else:
                     agent_factory = agent_cls
 
+
                 # Register the adapter factory with the runtime.
                 # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                agent_type: AgentType = await agent_cls.register(
+                agent_type: AgentType = await RoutedAgent.register(
                     runtime=self._runtime,
                     type=variant_config.id,  # Use the specific variant ID for registration
                     factory=agent_factory,
@@ -239,15 +241,10 @@ class AutogenOrchestrator(Orchestrator):
             
             # 2. Load initial data if provided
             if request and (request.record_id or request.uri or request.prompt):
-                fetch = FetchRecord(data=self.data)
-                fetch_output = await fetch._run(
-                    record_id=getattr(request, 'record_id', None),
-                    uri=getattr(request, 'uri', None), 
-                    prompt=getattr(request, 'prompt', None)
-                )
-                if fetch_output and fetch_output.results:
-                    self._records = fetch_output.results
-                    logger.debug(f"Loaded {len(self._records)} initial records")
+                # Get the record from the fetch agent. Need to clean this up eventually.
+                msg = AgentInput(inputs=request.model_dump())
+                await self._runtime.publish_message(msg, topic_id="FETCH")
+                
 
             # 3. Enter the main loop - now much simpler
             while True:
