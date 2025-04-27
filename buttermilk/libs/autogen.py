@@ -108,6 +108,35 @@ class AutogenAgentAdapter(RoutedAgent):
         asyncio.create_task(init_task)
         logger.debug(f"Scheduled initialization for agent {self.agent.id} with callback.")
 
+    def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
+        """
+        Creates an asynchronous callback function that the wrapped Buttermilk agent can use
+        to publish messages back into the Autogen system via this adapter.
+
+        This is crucial for agents (like UI agents or managers) that need to send messages
+        (e.g., user input, commands) during their operation or initialization.
+
+        Args:
+            topic_id: The specific Autogen topic to publish the message to.
+                      Defaults to the adapter's main `self.topic_id`.
+
+        Returns:
+            An async callback function that takes a `FlowMessage` and publishes it.
+        """
+        # Determine the target topic ID, defaulting to the adapter's main topic.
+        target_topic_id = topic_id or self.topic_id
+
+        async def publish_callback(message: FlowMessage) -> None:
+            """The actual callback that publishes the message using the adapter."""
+            logger.debug(f"Publish callback invoked by agent {self.agent.id}. Publishing {type(message).__name__} to topic {target_topic_id}")
+            # Use the adapter's inherited publish_message method.
+            await self.publish_message(
+                message,
+                topic_id=target_topic_id,
+            )
+
+        return publish_callback
+
     @message_handler
     async def _heartbeat(self, message: HeartBeat, ctx: MessageContext) -> None:
         """Handles internal HeartBeat messages (if used by the runtime/orchestrator)."""
@@ -118,71 +147,6 @@ class AutogenAgentAdapter(RoutedAgent):
         except asyncio.QueueFull:
             # If the agent isn't processing heartbeats quickly enough.
             logger.debug(f"Heartbeat queue full for agent {self.agent.id}. Agent may be busy or stuck.")
-
-    @message_handler
-    async def handle_invocation(
-        self,
-        message: AgentInput|StepRequest,  # Handles the standard Buttermilk agent input message.
-        ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
-    ) -> AllMessages:
-        """
-        Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
-
-        This typically corresponds to the Buttermilk agent's `__call__` method.
-        It publishes TaskProcessingStarted/Complete messages and the agent's output
-        to the default topic.
-
-        Args:
-            message: The input data and prompt for the agent.
-            ctx: The Autogen message context.
-
-        Returns:
-            The direct output from the agent's execution, which might be None, a single
-            response object (AgentOutput, ToolOutput, etc.), or a sequence of them.
-            Autogen uses this return value as the response to the `send_message` call.
-        """
-        logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
-        output: AllMessages = None
-
-        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
-
-        try:
-            # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
-            # Pass the cancellation token from Autogen context.
-            output = await self.agent(
-                message=message,
-                cancellation_token=ctx.cancellation_token,
-                # Provide callbacks for the agent to publish messages back if needed during execution.
-                public_callback=self._make_publish_callback(topic_id=self.topic_id),
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
-            )
-            logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
-
-            # If the agent returned something directly, publish it to the main topic.
-            if output and not isinstance(output, TaskProcessingComplete):  # Don't republish completion status
-                # TODO: Handle sequences of outputs correctly if agent returns multiple messages.
-                # Currently might only publish the sequence object itself, not individual items.
-                await self.publish_message(output, topic_id=self.topic_id)
-
-            # Publish status update: Task Complete (Success)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False),
-                topic_id=self.topic_id,
-            )
-            return output  # Return the direct output to the caller in Autogen.
-
-        except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} invocation: {e}")
-            # Publish status update: Task Complete (Error)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
-                topic_id=self.topic_id,
-            )
-            # Publish an ErrorEvent message for listeners.
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
-            # Do not return the exception itself, let Autogen handle failed `send_message`.
-            return None
 
     @message_handler
     async def handle_groupchat_message(
@@ -260,31 +224,67 @@ class AutogenAgentAdapter(RoutedAgent):
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None
 
-    def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
+    @message_handler
+    async def handle_invocation(
+        self,
+        message: AgentInput|StepRequest,  # Handles the standard Buttermilk agent input message.
+        ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
+    ) -> AllMessages:
         """
-        Creates an asynchronous callback function that the wrapped Buttermilk agent can use
-        to publish messages back into the Autogen system via this adapter.
+        Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
 
-        This is crucial for agents (like UI agents or managers) that need to send messages
-        (e.g., user input, commands) during their operation or initialization.
+        This typically corresponds to the Buttermilk agent's `__call__` method.
+        It publishes TaskProcessingStarted/Complete messages and the agent's output
+        to the default topic.
 
         Args:
-            topic_id: The specific Autogen topic to publish the message to.
-                      Defaults to the adapter's main `self.topic_id`.
+            message: The input data and prompt for the agent.
+            ctx: The Autogen message context.
 
         Returns:
-            An async callback function that takes a `FlowMessage` and publishes it.
+            The direct output from the agent's execution, which might be None, a single
+            response object (AgentOutput, ToolOutput, etc.), or a sequence of them.
+            Autogen uses this return value as the response to the `send_message` call.
         """
-        # Determine the target topic ID, defaulting to the adapter's main topic.
-        target_topic_id = topic_id or self.topic_id
+        logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
+        output: AllMessages = None
 
-        async def publish_callback(message: FlowMessage) -> None:
-            """The actual callback that publishes the message using the adapter."""
-            logger.debug(f"Publish callback invoked by agent {self.agent.id}. Publishing {type(message).__name__} to topic {target_topic_id}")
-            # Use the adapter's inherited publish_message method.
-            await self.publish_message(
-                message,
-                topic_id=target_topic_id,
+        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
+
+        try:
+            # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
+            # Pass the cancellation token from Autogen context.
+            output = await self.agent(
+                message=message,
+                cancellation_token=ctx.cancellation_token,
+                # Provide callbacks for the agent to publish messages back if needed during execution.
+                public_callback=self._make_publish_callback(topic_id=self.topic_id),
+                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
+                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
+            logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
 
-        return publish_callback
+            # If the agent returned something directly, publish it to the main topic.
+            if output and not isinstance(output, TaskProcessingComplete):  # Don't republish completion status
+                # TODO: Handle sequences of outputs correctly if agent returns multiple messages.
+                # Currently might only publish the sequence object itself, not individual items.
+                await self.publish_message(output, topic_id=self.topic_id)
+
+            # Publish status update: Task Complete (Success)
+            await self.publish_message(
+                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False),
+                topic_id=self.topic_id,
+            )
+            return output  # Return the direct output to the caller in Autogen.
+
+        except Exception as e:
+            logger.error(f"Error during agent {self.agent.id} invocation: {e}")
+            # Publish status update: Task Complete (Error)
+            await self.publish_message(
+                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
+                topic_id=self.topic_id,
+            )
+            # Publish an ErrorEvent message for listeners.
+            await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
+            # Do not return the exception itself, let Autogen handle failed `send_message`.
+            return None

@@ -32,7 +32,7 @@ from buttermilk.utils.validators import (
 )
 
 from .defaults import BQ_SCHEMA_DIR
-from .types import SessionInfo
+from .types import SessionInfo, RunRequest
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -253,7 +253,7 @@ class AgentConfig(BaseModel):
     }
 
     # Private Attributes (Internal state, often defaults or generated)
-    _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])  # Short unique ID component.
+    unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
     base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=False)
     # Defines which attributes are combined to create the human-friendly 'name'.
     _name_components: list[str] = ["base_name", "_id"]
@@ -271,7 +271,7 @@ class AgentConfig(BaseModel):
         - Sets `name` by combining components defined in `_name_components`.
         """
         # Generate the full unique ID: e.g., "judge-a1b2c3"
-        self.id = f"{self.role}-{self._id}"
+        self.id = f"{self.role}-{self.unique_identifier}"
 
         # Set the base_name from the initially provided 'name' if not already set.
         if not self.base_name:
@@ -324,7 +324,7 @@ class AgentVariants(AgentConfig):
     extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
     #--- Variant configuration: fields used to generate AgentConfig objects ---
 
-    def get_configs(self, params: "RunRequest") -> list[tuple[type, AgentConfig]]:
+    def get_configs(self, params: RunRequest|None = None) -> list[tuple[type, AgentConfig]]:
         """
         Generates agent configurations based on parallel and sequential variants.
         """
@@ -332,7 +332,7 @@ class AgentVariants(AgentConfig):
         static_config = self.model_dump(
             exclude={
                 "parallel_variants",
-                "id",
+                "id","unique_identifier"
                 "sequential_variants",
                 "num_runs",
                 "parameters",
@@ -342,10 +342,11 @@ class AgentVariants(AgentConfig):
         base_parameters = self.parameters.copy()  # Base parameters common to all
 
         # Get extra parameters passed in at runtime if requested
-        for key in self.extra_params:
-            if key not in params.model_fields_set:
-                raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
-            base_parameters[key] = getattr(params, key)
+        if params:
+            for key in self.extra_params:
+                if key not in params.model_fields_set:
+                    raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
+                base_parameters[key] = getattr(params, key)
 
         # Get agent class
         from buttermilk._core.variants import AgentRegistry

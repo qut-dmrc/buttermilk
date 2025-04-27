@@ -3,7 +3,7 @@ defaults:
   - local
   - _self_
 
-name: buttermilk
+name: development
 job: testing
 ui: console
 

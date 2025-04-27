@@ -9,4 +9,4 @@ frames:
   variants:
     model: ${llms.general}
   inputs:
-    records: fetch.records
+    records: FETCH

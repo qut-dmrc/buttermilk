@@ -10,5 +10,5 @@ judge:
     model: ${llms.judgers}
     criteria: ${....parameters.criteria}
   inputs:
-    records: "*.records"
+    records: FETCH
     # criteria: ${flows[${....name}].criteria}

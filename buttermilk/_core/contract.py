@@ -30,7 +30,7 @@ from buttermilk.utils.validators import convert_omegaconf_objects, convert_omega
 
 from .config import AgentConfig, AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
 from .log import logger
-from .types import Record, _global_run_id  # Core data types
+from .types import Record, _global_run_id, RunRequest  # Core data types
 
 # --- Constants ---
 
@@ -143,28 +143,6 @@ def _get_run_info() -> SessionInfo:
 
     return bm.run_info
 
-
-
-# --- Flow Protocol Start signal ---
-
-
-class RunRequest(BaseModel):
-    """Input object to initiate an orchestrator run."""
-
-    flow: str = Field(..., description="The name of the flow to execute")
-    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
-    record_id: str | None = Field(default="", description="Record to lookup")
-    uri: str | None = Field(default="", description="URI to fetch")
-    records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
-    parameters: dict = Field(default={})
-
-    # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
-    client_callback: Any = Field(default=None, exclude=True)
-    session_id: Any = Field(default=None, exclude=True)
-    
-    model_config = ConfigDict(
-        extra="forbid",  # Disallow extra fields for strict input
-    )
 
 
 # --- Core Step Execution ---
