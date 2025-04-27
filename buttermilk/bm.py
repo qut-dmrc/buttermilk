@@ -112,9 +112,11 @@ class BM(Singleton, Project):
     def weave(self) -> WeaveClient:
         if not hasattr(self, "_weave"):
             # Ensure run_info is available before accessing name/job
-            if not self.run_info:
-                raise RuntimeError("run_info not set, cannot initialize Weave.")
-            self._weave = weave.init(f"{self.run_info.name}-{self.run_info.job}")
+            if self.tracing and self.run_info and self.tracing.enabled and self.tracing.provider == "weave":
+                collection = f"{self.run_info.name}-{self.run_info.job}"
+                self._weave = weave.init(collection)
+            else:
+                raise RuntimeError("run_info/tracing details not set, cannot initialize Weave.")
         return self._weave
 
     @property
@@ -213,9 +215,7 @@ class BM(Singleton, Project):
         # Ensure run_info exists before setting up tracing
         if self.tracing and self.run_info and self.tracing.enabled:
             collection = f"{self.run_info.name}-{self.run_info.job}"
-            if self.tracing.provider == "weave":
-                self._weave = weave.init(collection)
-            elif self.tracing.provider == "traceloop":
+            if self.tracing.provider == "traceloop":
                 from traceloop.sdk import Traceloop
 
                 Traceloop.init(

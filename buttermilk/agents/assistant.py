@@ -17,7 +17,6 @@ from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ToolOutput
 from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
-    UserInstructions,
 )
 
 # Restore original bm import
@@ -92,8 +91,8 @@ class AssistantAgentWrapper(Agent):
         # Decide whether to process this incoming message.
 
         # Only process specific message types relevant to the assistant
-        # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
-        if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
+        # (e.g.,  AgentOutput from others, or specific AgentInput)
+        if not isinstance(message, ( AgentOutput, AgentInput, ConductorRequest)):
             logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(message)}")
             return None
 

@@ -8,7 +8,6 @@ from buttermilk._core.contract import (
     CONDUCTOR,
     AgentInput,
     AgentOutput,
-    UserInstructions,
 )
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
@@ -174,7 +173,7 @@ async def test_agent_adapter_handle_input_ui_agent():
 
     # Test the callback
     with patch.object(adapter, "publish_message", new_callable=AsyncMock) as mock_publish:
-        message = UserInstructions(content="test input")
+        message = AgentInput(prompt="test input")
         await callback(message)
 
         mock_publish.assert_called_once_with(message, topic_id=adapter.topic_id)

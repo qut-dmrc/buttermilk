@@ -35,13 +35,13 @@ from .types import Record, _global_run_id  # Core data types
 # --- Constants ---
 
 # Standard Agent Roles
-CONDUCTOR = "HOST"  # Role name often used for the agent directing the flow (e.g., Sequencer, LLMHostAgent). Configurable?
+CONDUCTOR = "HOST"  # Role name often used for the agent directing the flow (e.g., LLMHostAgent). Configurable?
 MANAGER = "MANAGER"  # Role name often used for the user interface or human-in-the-loop agent.
 CLOSURE = "COLLECTOR"  # Role name (Collector?) - Usage context unclear from surrounding files. TODO: Verify usage.
 CONFIRM = "CONFIRM"  # Special agent/topic name used by AutogenOrchestrator for handling ManagerResponse.
 
 # Special Symbols / States
-COMMAND_SYMBOL = "!"  # Prefix potentially used to identify command messages (ignored by Sequencer._listen).
+COMMAND_SYMBOL = "!"  # Prefix potentially used to identify command messages 
 END = "END"  # Special role/signal used by Conductor/Host to indicate the flow should terminate.
 WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/waiting.
 
@@ -100,11 +100,6 @@ class FlowMessage(BaseModel):
         exclude_none=True,
         exclude={"is_error"},
     )  # type: ignore
-
-class UserInstructions(FlowMessage):
-    """Represents instructions or input originating directly from the user (e.g., via CLI)."""
-
-    # REMOVE THIS IN FAVOUR OF ManagerRequest
 
 
 class TracingDetails(BaseModel):
@@ -383,12 +378,12 @@ class ManagerResponse(FlowMessage):
     A response sent *from* the MANAGER (UI/User) back to the orchestrator/system.
     Communicates user decisions like confirmation, feedback, or selections.
     """
-    content: Optional[Any] = Field(None)
-    confirm: bool = Field(True, description="Indicates user confirmation (True) or rejection (False).")
-    halt: bool = Field(False, description="If True, signals the user wants to stop the entire flow.")
-    interrupt: bool = Field(False, description="If True, signals the user wants to pause for conductor review of feedback.")
-    prompt: Optional[str] = Field(None, description="Free-text feedback or instructions provided by the user.")
-    selection: Optional[str] = Field(None, description="The option selected by the user (e.g., a specific variant ID).")
+    confirm: bool = Field(default=False, description="Indicates user confirmation (True) or rejection (False).")
+    halt: bool = Field(default=False, description="If True, signals the user wants to stop the entire flow.")
+    interrupt: bool = Field(default=False, description="If True, signals the user wants to pause for conductor review of feedback.")
+    prompt: Optional[str] = Field(default=None, description="Free-text feedback or instructions provided by the user.")
+    selection: Optional[str] = Field(default=None, description="The option selected by the user (e.g., a specific variant ID).")
+    params: Optional[Mapping[str, Any]] = Field(default=None)
 
 
 # --- Tool / Function Call Messages ---
@@ -463,22 +458,16 @@ OOBMessages = Union[
     TaskProcessingStarted,
     ConductorResponse,
     ConductorRequest,
-    ErrorEvent, 
+    ErrorEvent, StepRequest,ProceedToNextTaskSignal, HeartBeat
 ]
 
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentOutput,
     ToolOutput,
-    ErrorEvent,
-    StepRequest,
-    ManagerRequest,
-    ManagerResponse,
     AgentInput,
-    ConductorRequest,
-    ConductorResponse,
-    # Add other types that are typically broadcast in the chat?
+    Record,
 ]
 
 # All possible message types used within the system.
-AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ProceedToNextTaskSignal, HeartBeat]
+AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ]

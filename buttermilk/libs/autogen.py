@@ -21,7 +21,7 @@ from autogen_core import (
 
 from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import (ToolOutput,
+from buttermilk._core.contract import (AllMessages, ToolOutput,
     AgentInput,  # Standard input message for Buttermilk agents.
     AgentOutput,
     ConductorRequest,
@@ -35,23 +35,8 @@ from buttermilk._core.contract import (ToolOutput,
     TaskProcessingStarted,  # Status message indicating task start.
     )
 
-# TODO: These specific agent imports might create coupling. Consider if interfaces or protocols could be used.
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
-from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.bm import logger  # Buttermilk logger instance.
 
-# Define the expected return type more accurately using Union.
-# Can return None, a single output, or a sequence of outputs.
-MaybeSequenceOutput = Union[
-    None,
-    AgentOutput,
-    ToolOutput,
-    TaskProcessingComplete,
-    TaskProcessingStarted,ErrorEvent,
-    ConductorResponse,
-    Sequence[Union[AgentOutput, ToolOutput, TaskProcessingComplete, ConductorResponse]],
-]
 
 
 class AutogenAgentAdapter(RoutedAgent):
@@ -69,13 +54,10 @@ class AutogenAgentAdapter(RoutedAgent):
     Attributes:
         agent (Agent): The instance of the Buttermilk agent being wrapped.
         topic_id (TopicId): The default Autogen topic this agent primarily interacts with.
-        is_manager (bool): Flag indicating if the wrapped agent is considered a manager/conductor type.
-                           (Used for specific initialization logic).
     """
 
     agent: Agent  # The wrapped Buttermilk agent instance.
     topic_id: TopicId  # The primary topic ID for this agent adapter.
-    is_manager: bool  # Flag for manager-like agents requiring special init.
 
     def __init__(
         self,
@@ -89,7 +71,6 @@ class AutogenAgentAdapter(RoutedAgent):
 
         Requires either a pre-instantiated `agent` or both `agent_cls` and `agent_cfg`
         to instantiate a new agent. Sets up the agent, topic ID, and Autogen base class.
-        Also performs specific initialization for manager-type agents.
 
         Args:
             topic_type: String identifier for the default Autogen topic.
@@ -143,7 +124,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: AgentInput,  # Handles the standard Buttermilk agent input message.
         ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
-    ) -> MaybeSequenceOutput:
+    ) -> AllMessages:
         """
         Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
 
@@ -161,7 +142,7 @@ class AutogenAgentAdapter(RoutedAgent):
             Autogen uses this return value as the response to the `send_message` call.
         """
         logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
-        output: MaybeSequenceOutput = None
+        output: AllMessages = None
 
         # Publish status update: Task Started
         # Use self.type (which is the agent's registered type/role in Autogen)
@@ -223,7 +204,7 @@ class AutogenAgentAdapter(RoutedAgent):
         """
         logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
         try:
-            # Delegate to the agent's _listen method for passive processing.
+            # Delegate to the agent's _listen method for processing.
             await self.agent._listen(
                 message=message,
                 cancellation_token=ctx.cancellation_token,
@@ -237,52 +218,11 @@ class AutogenAgentAdapter(RoutedAgent):
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
 
     @message_handler
-    async def handle_conductor_request(
-        self,
-        message: ConductorRequest,  # Handles specific requests targeted at Conductor agents.
-        ctx: MessageContext,
-    ) -> MaybeSequenceOutput:
-        """
-        Handles `ConductorRequest` messages, typically intended for agents acting as conductors/hosts.
-
-        Delegates processing to the wrapped agent's `__call__` method, similar to `handle_invocation`,
-        but specifically typed for ConductorRequest. The response (often a `StepRequest` or
-        `ConductorResponse`) is returned directly to the caller in Autogen.
-
-        Args:
-            message: The conductor request message.
-            ctx: The Autogen message context.
-
-        Returns:
-            The direct output from the agent's execution.
-        """
-        logger.debug(f"Agent {self.agent.id} received ConductorRequest.")
-        output: MaybeSequenceOutput = None
-        # Note: No TaskProcessingStarted/Complete messages published here, assuming conductor interactions are synchronous requests.
-        try:
-            # Delegate to the agent's __call__ method.
-            output = await self.agent(
-                message=message,
-                cancellation_token=ctx.cancellation_token,
-                public_callback=self._make_publish_callback(topic_id=self.topic_id),
-                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
-            )
-            logger.debug(f"Agent {self.agent.id} completed ConductorRequest. Output type: {type(output).__name__}")
-            # Note: Conductor responses are typically returned directly, not published separately by the adapter.
-            return output
-        except Exception as e:
-            msg = f"Error during agent {self.agent.id} handling ConductorRequest: {e}"
-            logger.error(msg)
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
-            return None  # Return None on error
-
-    @message_handler
     async def handle_control_message(
         self,
         message: OOBMessages,  # Handles out-of-band control messages.
         ctx: MessageContext,
-    ) -> Union[OOBMessages, Sequence[OOBMessages], None]:
+    ) -> OOBMessages| None:
         """
         Handles Out-Of-Band (OOB) control messages.
 
@@ -312,6 +252,7 @@ class AutogenAgentAdapter(RoutedAgent):
             msg = f"Error during agent {self.agent.id} handling control message: {e}"
             logger.error(msg)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
+            return None
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
         """

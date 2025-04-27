@@ -28,7 +28,7 @@ from buttermilk._core.config import (  # Configuration models
 from buttermilk._core.contract import AgentInput, AgentOutput, ManagerResponse, RunRequest, StepRequest  # Core message types
 from buttermilk._core.types import Record  # Data types
 from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
-from buttermilk.bm import BM, logger # Global instance and logger
+from buttermilk.bm import bm, logger # Global instance and logger
 from buttermilk.utils.templating import KeyValueCollector   # State management utility
 
 from collections.abc import Mapping
@@ -101,7 +101,7 @@ class OrchestratorProtocol(BaseModel):
     )
 
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
-    _validate_parameters = field_validator("parameters", "data", "agents", "tools", mode="before")(convert_omegaconf_objects())
+    _validate_parameters = field_validator("parameters", "data", "agents", "observers", mode="before")(convert_omegaconf_objects())
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -187,6 +187,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_description": self.description,
         }
         try:
+            assert bm.weave
             display_name = self.name
             if "criteria" in self.parameters:
                 display_name = f"{display_name} {self.parameters['criteria'][0]}"

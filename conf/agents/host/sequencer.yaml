@@ -1,8 +1,8 @@
 host:
   role: HOST
-  name: "🎯 Host"
+  name: "🎯 Sequencer"
   description: Your role, facilitating the discussion and directing questions to those best placed to answer. You have access to some tools that you can run directly if required, but you should generally defer to your participants. Try not to go back to the MANAGER every time for more information.
-  agent_obj: Sequencer
+  agent_obj: HostAgent
   inputs:
     task: |
       The purpose of this conversation is to assess a single piece of content. You are the HOST.

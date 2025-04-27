@@ -15,7 +15,6 @@ from .contract import (
     StepRequest,
     TaskProcessingComplete,
     ToolOutput,
-    UserInstructions,
 )
 
 ALL = [
@@ -23,7 +22,6 @@ ALL = [
     "FlowMessage",
     "AgentInput",
     "AgentOutput",
-    "UserInstructions",
     "ManagerMessage",
     "ManagerRequest",
     "ManagerResponse",

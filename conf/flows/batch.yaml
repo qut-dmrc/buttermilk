@@ -11,8 +11,8 @@ defaults:
     - fetch
     - spy
     - owl
-    - sequencer
-    - web
+    - host/sequencer
+    - interface/web
   - _self_ 
 
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator

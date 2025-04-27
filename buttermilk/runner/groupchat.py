@@ -45,7 +45,6 @@ from buttermilk._core.contract import (
     StepRequest,  # Defines a request for a specific step/agent execution.
     )
 
-# TODO: Check if UserInstructions is actually used within this orchestrator's logic.
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk.agents.fetch import FetchRecord  # Agent for fetching data records.
 from buttermilk.agents.ui.web import WebUIAgent
@@ -69,7 +68,6 @@ class AutogenOrchestrator(Orchestrator):
     Attributes:
         _runtime: The underlying Autogen runtime instance.
         _agent_types: Maps role names (UPPERCASE) to lists of registered Autogen AgentTypes and variant configs.
-        _user_confirmation: Queue for receiving confirmation responses from the MANAGER.
         _topic: The main topic ID for this specific group chat instance, generated uniquely per run.
     """
 
@@ -101,6 +99,9 @@ class AutogenOrchestrator(Orchestrator):
 
         self._participants = { k: v.description for k, v in self.agents.items() }
         logger.debug("Autogen runtime started.")
+
+        # does it need a second to spin up?
+        await asyncio.sleep(1)
         
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
@@ -147,7 +148,7 @@ class AutogenOrchestrator(Orchestrator):
                     agent_type: AgentType = await agent_cls.register(
                         runtime=self._runtime,
                         type=variant_config.id,  # Use the specific variant ID for registration
-                        factory=lambda variant_config=variant_config: agent_cls(**variant_config.parameters),
+                        factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
 
                 logger.debug(f"Registered agent adapter: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")

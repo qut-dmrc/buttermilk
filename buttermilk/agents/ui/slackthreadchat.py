@@ -16,7 +16,6 @@ from buttermilk._core.contract import (
     ManagerRequest,
     ManagerResponse,
     OOBMessages,
-    UserInstructions,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
@@ -64,10 +63,10 @@ class SlackUIAgent(UIAgent):
             if isinstance(message, AgentOutput):
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
-            elif message.content:
-                await self.send_to_thread(text=message.content)
+            elif message.params:
+                await self.send_to_thread(text=message.params)
         except Exception as e:  # noqa
-            await self.send_to_thread(text=message.content)
+            await self.send_to_thread(text=message.params)
             _fn_debug_blocks(message)
 
     async def send_to_thread(self, text=None, blocks=None, **kwargs):
@@ -185,7 +184,7 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self._input_callback(ManagerResponse(confirm=False, content=message["text"]))
+            await self._input_callback(ManagerResponse(confirm=False, params=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):

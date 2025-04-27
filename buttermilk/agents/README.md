@@ -31,7 +31,6 @@ These components form the foundation of Buttermilk and are designed to be runtim
         *   `FlowMessage`: Base class for all messages.
         *   `AgentInput`: Standard input to an agent's `_process` method. Contains `content`, `context`, `inputs`, `records`, etc.
         *   `AgentOutput`: Standard output yielded by an agent's `_process` method. Contains `content`, `outputs`, `metadata`, `error`, etc.
-        *   `UserInstructions`: Input from a user via a UI agent.
         *   `ManagerRequest`, `ManagerResponse`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
         *   `StepRequest`: Used by some orchestrators (`Selector`) to define the next agent to run and its parameters.
 
@@ -71,7 +70,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
 2.  **Runtime Setup:** The `AutogenOrchestrator`'s `run()` method calls `_setup_runtime()`.
 3.  **Agent Registration:** `_register_agents()` creates `AutogenAgentAdapter` instances for each Buttermilk agent defined in the config and registers them with the Autogen runtime. UI agents (`UIAgent` subclasses) are also registered.
 4.  **Flow Start:** The orchestrator might prompt the user via `_send_ui_message()`. The UI agent (e.g., `SlackUIAgent`, `CLIUserAgent`) displays the prompt.
-5.  **User Input:** The user provides input (text, button click). The UI agent's callback (`_input_callback` provided by `AutogenAgentAdapter.handle_input()`) publishes a `UserInstructions` or `ManagerResponse` message into the Autogen runtime via the adapter.
+5.  **User Input:** The user provides input (text, button click). The UI agent's callback (`_input_callback` provided by `AutogenAgentAdapter.handle_input()`) publishes   `ManagerResponse` message into the Autogen runtime via the adapter.
 6.  **Orchestration Logic:**
     *   The orchestrator (e.g., `Selector`) might receive the user input (if subscribed) or proceed based on its internal logic (`_get_next_step`).
     *   It determines the next `StepRequest`.
@@ -173,7 +172,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         # filepath: /path/to/your/custom_orchestrator.py
         import asyncio
         from buttermilk._core.orchestrator import Orchestrator # Or AutogenOrchestrator
-        from buttermilk._core.contract import AgentInput, UserInstructions # etc.
+        from buttermilk._core.contract import AgentInput  # etc.
         from buttermilk.bm import logger
 
         class MyCustomOrchestrator(Orchestrator): # Or AutogenOrchestrator

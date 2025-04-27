@@ -22,7 +22,6 @@ from buttermilk._core.contract import (
     ManagerResponse,  # Responses sent *from* the manager (this agent)
     TaskProcessingComplete,  # Status updates
     ToolOutput,  # Potentially displayable tool output
-    UserInstructions,  # Potentially displayable instructions
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores

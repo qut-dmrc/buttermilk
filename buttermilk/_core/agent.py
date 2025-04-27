@@ -35,7 +35,6 @@ from buttermilk._core.contract import (
     ManagerRequest,  # Request sent to the manager
     StepRequest,  # Request to execute a specific step
     ToolOutput,  # The result of a tool execution
-    UserInstructions,  # Message containing user instructions
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
@@ -290,7 +289,7 @@ class Agent(AgentConfig):
                 await self._model_context.add_message(
                     AssistantMessage(content=str(content_to_add), source=source)
                 )  # Assume Assistant role for outputs
-        elif isinstance(message, (UserInstructions, UserMessage)):
+        elif isinstance(message, UserMessage):
             content_to_add = getattr(message, "prompt", None)
             if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
                 await self._model_context.add_message(UserMessage(content=str(content_to_add), source=source))

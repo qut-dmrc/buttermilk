@@ -131,7 +131,7 @@ class WebUIAgent(RoutedAgent):
             # Create response to forward to the group chat
             response = ManagerResponse(
                 prompt=prompt,
-                content=message_data,
+                params=message_data,
                 confirm=confirm,
                 interrupt=interrupt,
                 halt=False,

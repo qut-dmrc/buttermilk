@@ -18,7 +18,7 @@ from buttermilk._core.contract import (
     StepRequest,
     ToolOutput,
 )
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from .llmhost import LLMHostAgent
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -197,102 +197,3 @@ class ExplorerHost(LLMHostAgent):
                 
         return summary
 
-
-class SequentialHost(LLMHostAgent):
-    """
-    A simple host agent that sequentially steps through a predefined list of agents.
-    
-    This host is designed for batch processing and pipeline scenarios where the
-    flow is predetermined and minimal human interaction is desired. It follows
-    a fixed sequence of steps defined either at initialization or extracted 
-    from participant information.
-    """
-    
-    _output_model: Optional[type[BaseModel]] = StepRequest
-    
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
-        """Process a message for the Sequential agent - calls _choose to determine the next step"""
-        if isinstance(message, ConductorRequest):
-            return await self._choose(message=message)
-        return StepRequest(role=WAIT, content="Waiting for conductor request")
-    
-    # Sequential host configuration
-    sequence: List[str] = Field(
-        default_factory=list,
-        description="Predefined sequence of agent roles to execute in order"
-    )
-    repeat_sequence: bool = Field(
-        default=False,
-        description="Whether to restart the sequence when completed"
-    )
-    skip_errors: bool = Field(
-        default=True,
-        description="Whether to continue execution if a step fails"
-    )
-    
-    # Override human_in_loop to default to False for this host
-    human_in_loop: bool = Field(
-        default=False,
-        description="Whether to interact with the human/manager for step confirmation"
-    )
-    
-    async def initialize(self, input_callback=None, **kwargs) -> None:
-        """Initialize the agent with a specific step sequence if provided"""
-        self._current_sequence_index = 0
-        await super().initialize(input_callback=input_callback, **kwargs)
-        
-    async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
-        """
-        Generate steps from the predefined sequence.
-        
-        This override replaces the default generator approach with a simple
-        index-based approach using the predefined sequence list.
-        """
-        # Use the predefined sequence if available
-        if self.sequence:
-            while True:
-                if self._current_sequence_index >= len(self.sequence):
-                    if self.repeat_sequence:
-                        # Start over
-                        self._current_sequence_index = 0
-                    else:
-                        # End the sequence
-                        yield StepRequest(role=END, content="Sequence completed")
-                        break
-                
-                # Get the next role in sequence
-                role = self.sequence[self._current_sequence_index]
-                self._current_sequence_index += 1
-                
-                yield StepRequest(role=role, content=f"Sequential step {self._current_sequence_index} calling {role}")
-        else:
-            # Fall back to the parent implementation if no sequence defined
-            async for step in super()._sequence():
-                yield step
-
-    async def _choose(self, message: ConductorRequest) -> StepRequest:
-        """
-        Choose the next step based on the predefined sequence.
-        
-        This method simply returns the next step in the sequence without
-        any complex decision making.
-        
-        Args:
-            message: The ConductorRequest (mostly ignored in this implementation)
-            
-        Returns:
-            A StepRequest for the next step in sequence
-        """
-        # If sequence is empty but we have participants, initialize from participants
-        if not self.sequence and self._participants:
-            self.sequence = list(self._participants.keys())
-            self._current_sequence_index = 0
-            logger.info(f"Initialized sequence from participants: {self.sequence}")
-        
-        # Get the next step from the sequence generator
-        try:
-            step = await anext(self._step_generator)
-            return step
-        except StopAsyncIteration:
-            # End the sequence if the generator is exhausted
-            return StepRequest(role=END, content="Sequence exhausted")

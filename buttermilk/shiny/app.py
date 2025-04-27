@@ -28,8 +28,6 @@ app_ui = ui.page_sidebar(
     ),
 )
 
-## THIS CODE DOESNT WORK YET
-
 
 def create_app(flows: FlowRunner):
      
