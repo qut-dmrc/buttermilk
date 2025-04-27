@@ -92,9 +92,8 @@ class OrchestratorProtocol(BaseModel):
     )
     ui: Any = Field(default=None)
     
-    tools: Mapping[str, AgentVariants] = Field(
-        default_factory=dict,
-        description="Mapping of agent roles (uppercase) to their variant configurations.",
+    observers: Mapping[str, AgentVariants] = Field(
+        default_factory=dict,        description="Agents that will not be called upon but are still present in a discussion.",
     )
     parameters: Mapping[str, Any] = Field(
         default_factory=dict,

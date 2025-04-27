@@ -96,15 +96,14 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime.start()
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
-        await self._register_tools()
         await self._register_agents(params=request)
 
-
+        self._participants = { k: v.description for k, v in self.agents.items() }
         logger.debug("Autogen runtime started.")
         
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
-        await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump()), topic_id=DefaultTopicId(type=CONDUCTOR))
+        await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
 
 
     async def _register_agents(self,params: RunRequest ) -> None:
@@ -117,7 +116,7 @@ class AutogenOrchestrator(Orchestrator):
         potentially role-specific topics.
         """
         logger.debug("Registering agents with Autogen runtime...")
-        for role_name, step_config in self.agents.items():
+        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params):
@@ -144,7 +143,6 @@ class AutogenOrchestrator(Orchestrator):
                 else:
 
                     # Register the adapter factory with the runtime.
-                    # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
                     agent_type: AgentType = await agent_cls.register(
                         runtime=self._runtime,
                         type=variant_config.id,  # Use the specific variant ID for registration
@@ -179,31 +177,6 @@ class AutogenOrchestrator(Orchestrator):
             # Use uppercase role name as the key, consistent with topic subscription.
             self._agent_types[role_name.upper()] = registered_for_role
             logger.debug(f"Registered {len(registered_for_role)} agent variants for role '{role_name}'.")
-
-    async def _register_tools(self) -> None:
-        for role_name, step_config in self.tools.items():
-            # instantiate known autogen native tools directly
-            # TODO: this is a hack and should be changed
-            from buttermilk.agents import SpyAgent
-
-            if step_config.agent_obj == "SpyAgent":
-                # Register the adapter factory with the runtime.
-                # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
-                agent_type: AgentType = await SpyAgent.register(
-                    runtime=self._runtime,
-                    type=role_name.upper(),  # Use the specific variant ID for registration
-                    factory=lambda: SpyAgent(save_dest=step_config.save_dest),
-                )
-
-                # Subscribe the newly registered agent type to the main group chat topic.
-                # This allows it to receive general messages sent to the group.
-                await self._runtime.add_subscription(
-                    TypeSubscription(
-                        topic_type=self._topic.type,  # Main group chat topic
-                        agent_type=agent_type,
-                    ),
-                )
-                logger.info(f"Registered spy {agent_type} and subscribed for topic '{self._topic.type}' ...")
 
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""

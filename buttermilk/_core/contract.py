@@ -156,8 +156,11 @@ class RunRequest(BaseModel):
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
+
+    # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
     websocket: Any = Field(default=None, exclude=True)
     session_id: Any = Field(default=None, exclude=True)
+    
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields for strict input
     )

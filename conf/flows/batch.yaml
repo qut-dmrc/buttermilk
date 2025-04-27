@@ -7,10 +7,12 @@ defaults:
     - synth
     - scorer
     - differences
-  - /agents@tools:
+  - /agents@observers:
     - fetch
-  - /agents/host@agents: sequencer
-  - /agents/interface@agents: web
+    - spy
+    - owl
+    - sequencer
+    - web
   - _self_ 
 
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator
