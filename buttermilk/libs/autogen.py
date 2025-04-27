@@ -235,16 +235,24 @@ class AutogenAgentAdapter(RoutedAgent):
         Returns:
             An OOB message response, a sequence of them, or None.
         """
-        logger.debug(f"Agent {self.agent.id} received control message: {type(message).__name__}")
         response: Union[OOBMessages, Sequence[OOBMessages], None] = None
         try:
-            # Delegate to the agent's _handle_events method.
-            response = await self.agent._handle_events(
-                message=message,
-                cancellation_token=ctx.cancellation_token,
-                source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
-            )
-            logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
+            
+            if isinstance(message, StepRequest) and message.role == self.agent.role:
+                # Call agent's main execution method
+                logger.debug(f"Agent {self.agent.id} received control message: {type(message).__name__}")
+                response = await self.agent(message=message,
+                    cancellation_token=ctx.cancellation_token,
+                    source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
+                )
+            else:
+                # Delegate to the agent's _handle_events method.
+                response = await self.agent._handle_events(
+                    message=message,
+                    cancellation_token=ctx.cancellation_token,
+                    source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
+                )
+                logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
             return response  # Return response directly for OOB messages.
         except Exception as e:
             msg = f"Error during agent {self.agent.id} handling control message: {e}"

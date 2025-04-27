@@ -28,7 +28,7 @@ from buttermilk._core.log import logger
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,
-    lowercase_validator,  # Pydantic validators
+    uppercase_validator,  # Pydantic validators
 )
 
 from .defaults import BQ_SCHEMA_DIR
@@ -215,9 +215,9 @@ class AgentConfig(BaseModel):
 
     # Core Identification
     id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.")
-    role: Annotated[str, AfterValidator(lowercase_validator)] = Field(
+    role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
         default="",
-        description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor'). Must be lowercase.",
+        description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
     )
     name: str = Field(default="", description="A human-friendly name for the agent instance, often including the role and a unique ID.")
     description: str = Field(
