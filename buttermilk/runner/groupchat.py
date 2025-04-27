@@ -76,6 +76,7 @@ class AutogenOrchestrator(Orchestrator):
     # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
+    _participants: dict[str, str] = PrivateAttr()
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
