@@ -144,8 +144,6 @@ class AutogenAgentAdapter(RoutedAgent):
         logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
         output: AllMessages = None
 
-        # Publish status update: Task Started
-        # Use self.type (which is the agent's registered type/role in Autogen)
         await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
 
         try:

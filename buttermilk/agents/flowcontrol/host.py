@@ -246,12 +246,12 @@ class HostAgent(Agent):
             # We aren't in a step, no use waiting.
             return 
         
-        required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
         try: 
             logger.debug(f"Waiting for completion of '{self._current_step_name}'.")
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
             logger.debug(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
+            required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
             msg= f"Timeout waiting for step completion. {self.id} heard back from {len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed agents (required: {required_completions})."
             logger.warning(msg)
             if len(self._completed_agents_current_step) >= required_completions:

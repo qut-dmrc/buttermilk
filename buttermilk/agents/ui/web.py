@@ -27,6 +27,7 @@ from buttermilk._core.contract import (
     MANAGER,
     AgentInput,
     AgentOutput,
+    AllMessages,
     ConductorResponse,
     ErrorEvent,
     FlowMessage,
@@ -107,10 +108,21 @@ class WebUIAgent(RoutedAgent):
         # Format different message types for the web client
         client_msg = self._format_message_for_client(message, ctx)
         
-        if client_msg:
-            # Broadcast to all connected clients
-            await self.callback_to_ui(client_msg['content'])
+        # Broadcast to all connected clients
+        await self.callback_to_ui(client_msg)
     
+    @message_handler
+    async def handle_control_message(
+        self,
+        message: AllMessages,  # Handles out-of-band control messages.
+        ctx: MessageContext,
+    ) -> OOBMessages| None:
+        logger.debug(f"WebUIAgent received event message: {type(message).__name__}")
+        client_msg = self._format_message_for_client(message, ctx)
+        
+        if client_msg:
+            await self.callback_to_ui(client_msg)
+        return None
     def _format_message_for_client(self, message: Any, ctx: MessageContext) -> Optional[Dict[str, Any]]:
         """
         Format different message types for web client consumption.
@@ -147,7 +159,8 @@ class WebUIAgent(RoutedAgent):
         elif isinstance(message, ConductorResponse):
             msg_type = "conductor_response"
             content = getattr(message, "content", str(message))
-            
+        elif isinstance(message, ManagerResponse):
+            content = message.model_dump_json()
         elif isinstance(message, TaskProcessingComplete):
             msg_type = "status"
             content = "Task completed" if not message.is_error else "Task failed"
@@ -191,15 +204,6 @@ class WebUIAgent(RoutedAgent):
             
         return result
     
-    @message_handler
-    async def handle_control_message(
-        self,
-        message: OOBMessages,  # Handles out-of-band control messages.
-        ctx: MessageContext,
-    ) -> OOBMessages| None:
-        logger.debug(f"WebUIAgent received event message: {type(message).__name__}")
-        await self.callback_to_ui(message)
-        return None
 
     async def cleanup(self):
         """Clean up resources when the agent is no longer needed."""

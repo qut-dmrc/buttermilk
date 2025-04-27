@@ -289,14 +289,6 @@ class Agent(AgentConfig):
                 await self._model_context.add_message(
                     AssistantMessage(content=str(content_to_add), source=source)
                 )  # Assume Assistant role for outputs
-        elif isinstance(message, UserMessage):
-            content_to_add = getattr(message, "prompt", None)
-            if content_to_add and not str(content_to_add).startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(content_to_add), source=source))
-        elif isinstance(message, StepRequest) and message.content:
-            # StepRequest has content field
-            if not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
         elif isinstance(message, ManagerMessage) and message.content:
             # ManagerMessage and subclasses have content field
             if not message.content.startswith(COMMAND_SYMBOL):
