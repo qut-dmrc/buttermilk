@@ -23,7 +23,8 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 from buttermilk.libs.autogen import AutogenAgentAdapter
 from buttermilk.bm import bm, logger

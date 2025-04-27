@@ -332,7 +332,7 @@ class AgentVariants(AgentConfig):
         static_config = self.model_dump(
             exclude={
                 "parallel_variants",
-                "id","unique_identifier"
+                "id","unique_identifier",
                 "sequential_variants",
                 "num_runs",
                 "parameters",

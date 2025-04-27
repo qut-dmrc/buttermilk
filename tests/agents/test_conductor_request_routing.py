@@ -8,8 +8,8 @@ from buttermilk._core.contract import (
     StepRequest,
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 # This is the same as using the @pytest.mark.anyio on all test functions in the module
 pytestmark = pytest.mark.anyio
@@ -37,15 +37,15 @@ class TestConductorRequestRouting:
         """Test that Sequencer._handle_events routes ConductorRequest to _get_next_step."""
         # Create a mocked Sequencer instance
         # Mock the required methods
-        with patch("buttermilk.agents.flowcontrol.sequencer.Sequencer._get_next_step") as mock_get_next_step:
-            with patch("buttermilk.agents.flowcontrol.sequencer.Sequencer._check_completions"):
+        with patch("buttermilk.agents.flowcontrol.host.HostAgent._get_next_step") as mock_get_next_step:
+            with patch("buttermilk.agents.flowcontrol.host.HostAgent._check_completions"):
                 # Set up mock response
                 mock_response = AgentOutput(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
 
                 # Call the method under test directly with mocked input and output
                 # Note: we use self=mock_get_next_step as a workaround to test the method directly
-                result = await Sequencer._handle_events(mock_get_next_step, conductor_request)
+                result = await HostAgent._handle_events(mock_get_next_step, conductor_request)
 
                 # Check if the mock was called properly
                 mock_get_next_step.assert_called_once_with(inputs=conductor_request)

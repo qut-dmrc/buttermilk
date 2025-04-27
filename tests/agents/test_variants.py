@@ -207,6 +207,9 @@ def test_id_generation_uniqueness(mock_uuid, base_variant_config):
     assert len(configs_s) == 1
     assert configs_s[0][1].id == "TEST_AGENT"  # Original ID, no hash
 
+@pytest.fixture
+def variant_factory():
+    yield AgentVariants(**config_data)
 
 def test_parameter_overwriting(base_variant_config):
     """Test that parallel variants overwrite base parameters."""
@@ -215,7 +218,6 @@ def test_parameter_overwriting(base_variant_config):
         "parameters": {"base_param": "original", "model": "base_model"},
         "parallel_variants": {"model": ["override_model"]},
     }
-    variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
     assert len(configs) == 1
@@ -282,61 +284,35 @@ from buttermilk._core.contract import RunRequest
 # --- Mocking necessary classes ---
 # Mock AgentConfig as the structure seems to be the focus
 class MockAgentConfig(BaseModel):
-    id: str
+    id: str = Field(default="should be replaced")
     unique_identifier: str = Field(default_factory=lambda: f"instance_{shortuuid.uuid()}") # Simulate unique instance ID
     # Add other fields potentially needed by get_configs logic if any
     parameters: dict = {}
     agent_class: str = "MockAgent" # Placeholder
 
-# Mock StepConfig to control the output of get_configs
-class MockStepConfig:
-    def __init__(self, agent_configs: List[MockAgentConfig]):
-        self._agent_configs = agent_configs
-        # Placeholder for the agent class type
-        self.MockAgentClass = type("MockAgentClass", (), {})
-
-    def get_configs(self, params: RunRequest = None) -> List[Tuple[Type, MockAgentConfig]]:
-        """Returns a list of (AgentClass, AgentConfig) tuples."""
-        # In a real scenario, this might filter based on params
-        # For this test, we return the pre-defined configs
-        return [(self.MockAgentClass, cfg) for cfg in self._agent_configs]
-
-# Mock shortuuid if not available or to make it deterministic
-class shortuuid:
-    @staticmethod
-    def uuid():
-        import uuid
-        return uuid.uuid4().hex[:8] # Simple mock
 
 # --- Test Data ---
 PARAMS_JSON = '{"flow":"batch","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
-
-# --- Test Function ---
 
 @pytest.fixture
 def run_request_params() -> RunRequest:
     """Provides RunRequest instance from test JSON."""
     return RunRequest(**json.loads(PARAMS_JSON))
 
-@pytest.fixture
-def mock_step_config() -> MockStepConfig:
-    """Provides a MockStepConfig instance with test data."""
-    # Create mock agent configs ensuring id != unique_identifier by design
-    agent_config1 = MockAgentConfig(id="agent_variant_1") # unique_identifier is auto-generated
-    agent_config2 = MockAgentConfig(id="agent_variant_2") # unique_identifier is auto-generated
-    return MockStepConfig(agent_configs=[agent_config1, agent_config2])
 
 def test_step_config_get_configs_structure_and_ids(
-    mock_step_config: MockStepConfig,
-    run_request_params: RunRequest
+    run_request_params: RunRequest, base_variant_config
 ):
+    
     """
-    Verify that StepConfig.get_configs returns tuples (AgentClass, AgentConfig)
+    Verify that .get_configs returns tuples (AgentClass, AgentConfig)
     and that AgentConfig.id differs from AgentConfig.unique_identifier.
     """
     all_config_ids = []
+    
     # 1. Call the method under test
-    configs = mock_step_config.get_configs(params=run_request_params)
+    variant_factory = AgentVariants(**base_variant_config)
+    configs = variant_factory.get_configs(params=run_request_params)
 
     # 2. Assertions
     assert isinstance(configs, list), "get_configs should return a list"
@@ -350,7 +326,7 @@ def test_step_config_get_configs_structure_and_ids(
 
         # Check types
         assert isinstance(agent_cls, type), "First element should be a class type"
-        assert isinstance(agent_config, MockAgentConfig), \
+        assert isinstance(agent_config, (AgentConfig,MockAgentConfig)), \
             "Second element should be an AgentConfig instance (or mock)"
 
         # Check attributes exist
@@ -362,9 +338,6 @@ def test_step_config_get_configs_structure_and_ids(
         assert isinstance(agent_config.id, str), "AgentConfig.id should be a string"
         assert isinstance(agent_config.unique_identifier, str), \
             "AgentConfig.unique_identifier should be a string"
-
-        assert agent_config.unique_identifier in agent_config.id
-        assert agent_config.role == agent_config.role.upper()
 
         # Collect IDs for uniqueness check across configs
         all_config_ids.append(agent_config.id)

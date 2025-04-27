@@ -12,8 +12,8 @@ from buttermilk._core.agent import AgentInput, AgentOutput
 from buttermilk._core.contract import END, ConductorRequest, StepRequest
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
-# Agent classes under test
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.host import HostAgent
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
 
