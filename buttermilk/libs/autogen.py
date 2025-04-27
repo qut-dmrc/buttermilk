@@ -19,7 +19,7 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
+from buttermilk._core.agent import Agent, StepRequest  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (AllMessages, ToolOutput,
     AgentInput,  # Standard input message for Buttermilk agents.
@@ -122,7 +122,7 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_invocation(
         self,
-        message: AgentInput,  # Handles the standard Buttermilk agent input message.
+        message: AgentInput|StepRequest,  # Handles the standard Buttermilk agent input message.
         ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
     ) -> AllMessages:
         """
