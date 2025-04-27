@@ -206,7 +206,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # --- Abstract & Core Internal Methods ---
 
     @abstractmethod
-    async def _setup(self, request: RunRequest | None = None) -> None:
+    async def _setup(self, request: RunRequest ) -> None:
         """
         Abstract method for orchestrator-specific setup.
 

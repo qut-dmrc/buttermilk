@@ -285,9 +285,11 @@ class Record(BaseModel):
 
         if self.metadata:
             if self.title:
-                parts.append(f"## {self.title}")
+                parts.append(f"### {self.title}")
+            parts.append(f"**{self.record_id}**")
             for k, v in self.metadata.items():
-                parts.append(f"**{k}**: {v}")
+                if k not in ['title', 'fetch_timestamp_utc', 'fetch_source_id']:
+                    parts.append(f"**{k}**: {v}")
             parts.append("")  # Separator
 
         if isinstance(self.content, str):
@@ -295,7 +297,7 @@ class Record(BaseModel):
         else:
             parts.append(self.alt_text)
 
-        return "\n".join(parts)
+        return "\n\n".join(parts)
 
     model_config = ConfigDict(
         extra="ignore",

@@ -54,12 +54,15 @@ class FlowEvent(BaseModel):
     source: str = Field(..., description="Identifier of the message source (e.g., agent ID).")
     content: str = Field(..., description="The main content of the event message.")
 
-
+    def __str__(self) -> str:
+        return self.content
 class ErrorEvent(FlowEvent):
     """Specific event type for broadcasting errors."""
 
     # Inherits source and content, content typically holds the error message string.
-    pass
+    
+    def __str__(self) -> str:
+        return "ERROR: " + self.content
 
 
 class FlowMessage(BaseModel):
@@ -101,7 +104,8 @@ class FlowMessage(BaseModel):
         exclude={"is_error"},
     )  # type: ignore
 
-
+    def __str__(self) -> str:
+        return self.model_dump_json()
 class TracingDetails(BaseModel):
     """Holds tracing identifiers, primarily the Weave call ID."""
 
@@ -147,13 +151,15 @@ def _get_run_info() -> SessionInfo:
 class RunRequest(BaseModel):
     """Input object to initiate an orchestrator run."""
 
+    flow: str = Field(..., description="The name of the flow to execute")
     prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
+    parameters: dict = Field(default={})
 
     # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
-    websocket: Any = Field(default=None, exclude=True)
+    client_callback: Any = Field(default=None, exclude=True)
     session_id: Any = Field(default=None, exclude=True)
     
     model_config = ConfigDict(
@@ -217,6 +223,8 @@ class StepRequest(AgentInput):
             return v.upper()
         return v
 
+    def __str__(self) -> str:
+        return self.content
 class AgentOutput(FlowMessage):
     """
     Standard output structure returned by an agent after processing an `AgentInput`.
@@ -301,6 +309,9 @@ class AgentOutput(FlowMessage):
         # TODO: Improve string representation for different output types (dict, list, model).
         return str(self.outputs)
     
+    def __str__(self) -> str:
+        return self.contents
+    
     def model_dump(self, **kwargs):
         """Custom serialization to handle Pydantic models and OmegaConf objects recursively."""
         data = super().model_dump(**kwargs)
@@ -329,6 +340,8 @@ class ManagerMessage(FlowMessage):
         description="Human-readable text content of the message.",
     )
 
+    def __str__(self) -> str:
+        return self.content
 class ConductorRequest(AgentInput):
     """
     A request sent *to* a CONDUCTOR agent, asking for the next step or decision.

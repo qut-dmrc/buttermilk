@@ -56,7 +56,7 @@
         "hydra.verbose=false",
         "+flows=batch",
         "++flow=batch",
-        "ui=shiny",
+        "ui=api",
         "++record_id=jenner_criticises_khalif_dailymail",
         "llms=lite",
         "name=testing",

@@ -373,7 +373,7 @@ async def test_run_with_records(orchestrator):
     # Mock sleep to speed up test
     with patch("asyncio.sleep", new=AsyncMock()):
         # Run with record
-        request = RunRequest(record_id="test_id")
+        request = RunRequest(flow="selector", record_id="test_id")
         orchestrator._records = ["test_record"]
 
         # Call the method

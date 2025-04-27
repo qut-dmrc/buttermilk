@@ -25,15 +25,12 @@ class FlowRunner(BaseModel):
     model_config = ConfigDict(extra="allow")
     
     async def run_flow(self, 
-                        flow_name: str,
-                        run_request: Optional[RunRequest] = None,
-                      history: Optional[list] = None,
+                        run_request: RunRequest,
                       **kwargs) -> Any:
         """
         Run a flow based on its configuration and a request.
         
         Args:
-            flow_name: The configured flow name
             run_request: The request containing input parameters
             history: Optional conversation history (for chat-based interfaces)
             **kwargs: Additional keyword arguments for orchestrator instantiation
@@ -44,21 +41,18 @@ class FlowRunner(BaseModel):
         Raises:
             ValueError: If orchestrator isn't specified or unknown
         """
-        if not flow_name:
-            logger.error("Orchestrator not specified in flow config")
-            raise ValueError("Orchestrator not specified in flow config")
            
-        module_name, class_name = self.flows[flow_name].orchestrator.rsplit(".", 1)
+        module_name, class_name = self.flows[run_request.flow].orchestrator.rsplit(".", 1)
         module = importlib.import_module(module_name)
         orchestrator_cls = getattr(module, class_name)
     
-        config = self.flows[flow_name].model_dump()
+        config = self.flows[run_request.flow].model_dump()
         # Create orchestrator instance
         orchestrator = orchestrator_cls(**config)
         
         callback = orchestrator._make_publish_callback()
 
-        logger.info(f"Starting flow '{flow_name}' with orchestrator '{orchestrator_cls.__name__}'")
+        logger.info(f"Starting flow '{run_request.flow}' with orchestrator '{orchestrator_cls.__name__}'")
         self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))
         
         return callback

@@ -59,7 +59,7 @@ async def test_orchestrator_call_method(simple_batch_orchestrator: BatchOrchestr
     """Test that calling the orchestrator instance invokes its run method."""
     # Mock the run method to check if __call__ delegates correctly
     simple_batch_orchestrator.run = AsyncMock()
-    test_request = RunRequest(prompt="start run")
+    test_request = RunRequest(flow="simple", prompt="start run")
 
     # Call the orchestrator instance
     await simple_batch_orchestrator(request=test_request)

@@ -84,14 +84,11 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}")
     )
 
-    async def _setup(self, request: RunRequest | None = None) -> None:
+    async def _setup(self, request: RunRequest) -> None:
         """Initializes the Autogen runtime and registers all configured agents."""
         msg =f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
         self._runtime = SingleThreadedAgentRuntime()
-
-        if request is None:
-            request = RunRequest()
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()

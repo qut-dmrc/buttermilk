@@ -278,7 +278,7 @@ class BM(Singleton, Project):
         # for clarity
         from ._core.log import logger as bm_logger
 
-        console_format = "%(asctime)s %(hostname)s %(name)s %(filename).20s[%(lineno)4d] %(levelname)s %(message)s"
+        console_format = "%(asctime)s %(hostname)s %(name)s %(filename)s:%(lineno)d %(levelname)s %(message)s"
         coloredlogs.install(
             logger=bm_logger,
             fmt=console_format,

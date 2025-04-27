@@ -79,7 +79,7 @@ def main(cfg: DictConfig) -> None:
             flow_name = cfg.flow
             
             # Prepare the RunRequest with command-line parameters
-            run_request = RunRequest(
+            run_request = RunRequest(flow=cfg.get("flow"),
                 record_id=cfg.get("record_id", ""),
                 prompt=cfg.get("prompt", ""),
                 uri=cfg.get("uri", ""),
@@ -126,9 +126,9 @@ def main(cfg: DictConfig) -> None:
             except KeyboardInterrupt:
                 bm.logger.info("Shutting down API server...")
         case "shiny":
-            from buttermilk.shiny.app import create_app
+            from buttermilk.shiny.app import get_shiny_app
             import uvicorn
-            app = create_app(
+            app = get_shiny_app(
                 flows=flow_runner,
             )
             # Configure Uvicorn server

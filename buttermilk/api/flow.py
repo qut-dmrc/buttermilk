@@ -5,7 +5,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
-from buttermilk._core.contract import ManagerResponse, RunRequest
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+import pydantic
+import uvicorn
+import asyncio
+import random
+from buttermilk._core.contract import ErrorEvent, ManagerResponse, RunRequest
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 import json
@@ -56,27 +62,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         )
 
 
-    @app.api_route("/runs/", methods=["GET", "POST"])
-    async def get_runs_json(request: Request) -> Sequence:
-        runs = get_recent_runs()
-
-        results = [Job(**row) for _, row in runs.iterrows()]
-
-        return results
-
-
-    @app.api_route("/html/runs/", methods=["GET", "POST"])
-    async def get_runs_html(request: Request) -> HTMLResponse:
-        data = get_recent_runs()
-
-        rendered_result = templates.TemplateResponse(
-            "runs_html.html",
-            {"request": request, "data": data},
-        )
-
-        return HTMLResponse(rendered_result.body.decode("utf-8"), status_code=200)
-
-
     @app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
     async def run_flow_json(
         flow_name: str,
@@ -94,7 +79,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             request.app.flow_runner.stream(run_request),
             media_type="application/json",
         )
-
 
     @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
     @app.api_route("/html/flow", methods=["GET", "POST"])
@@ -158,8 +142,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
-    @app.websocket("/ws/{flow_name}/{session_id}")
-    async def agent_websocket(websocket: WebSocket, flow_name: str, session_id: str):
+    @app.websocket("/ws/{session_id}")
+    async def agent_websocket(websocket: WebSocket, session_id: str):
         """
         WebSocket endpoint for client communication with the WebUIAgent.
         
@@ -170,15 +154,43 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         # Accept the connection first
         await websocket.accept()
+        client_listener_task = None
         try:
             # Start the flow, passing in our websocket and session_id
             # Wait for client message
             while True:
                 client_message = await websocket.receive_json()
-                if record_id := client_message.get('record_id'):
-                    run_request = RunRequest(record_id=record_id, websocket=websocket, session_id=session_id)
+                try:
+                    run_request = RunRequest.model_validate(client_message)
+                    run_request.client_callback=websocket
+                    run_request.session_id=session_id
                     break
-            await app.state.flow_runner.run_flow(flow_name, run_request)
+                except (pydantic.ValidationError, json.JSONDecodeError):
+                    await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start."))
+                
+            agent_callback = await app.state.flow_runner.run_flow(run_request)
+            
+            async def listen_client():
+                """Task to listen for incoming messages from the client."""
+                while True:
+                    try:
+                        incoming_data = await websocket.receive_json()
+                        # Forward data to the running flow via the handler
+                        await agent_callback(incoming_data) 
+                    except WebSocketDisconnect:
+                        logger.info(f"Client {session_id} disconnected.")
+                        # Optionally signal the flow task to stop if needed
+                        # if flow_task_handle:
+                        #     flow_task_handle.cancel()
+                        break # Exit loop on disconnect
+                    except Exception as e:
+                        logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+                        # Decide if you want to break or continue
+                        # break # Exit loop on other errors
+
+            client_listener_task = asyncio.create_task(listen_client())
+
+            await client_listener_task
 
         except WebSocketDisconnect:
             logger.info("Client disconnected")
@@ -192,6 +204,9 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 })
             except:
                 pass
+        finally:
+            if client_listener_task and not client_listener_task.done():
+                client_listener_task.cancel()
 
     
     # Helper route to generate session IDs for clients
@@ -206,4 +221,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         return {"session_id": str(uuid.uuid4())}
     
 
+
+
+
+    # --- Import Shiny App object ---
+    from buttermilk.web.shiny import get_shiny_app
+
+    # --- Mount the Shiny App ---
+    shiny_app_asgi = get_shiny_app(flows=flows)
+    app.mount("/ui", shiny_app_asgi, name="shiny_app")
+
     return app
+
