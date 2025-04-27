@@ -1,12 +1,14 @@
 
+import asyncio
 import os
+from typing import Callable
 import uuid
 
 from shiny import App, reactive, ui
 
-from buttermilk._core.contract import RunRequest
+from buttermilk._core.contract import RunRequest, ManagerResponse
 from buttermilk.runner.flowrunner import FlowRunner
-
+ 
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.input_select(
@@ -19,10 +21,11 @@ app_ui = ui.page_sidebar(
             "Record ID",value="jenner_criticises_khalif_dailymail"
         ),
         ui.input_action_button("go", "Rate"),
+        ui.input_action_button("confirm", "Confirm"),
     ),
     ui.card(
         ui.card_header("Hello"),
-        ui.output_markdown_stream("chat"),
+        ui.chat_ui("chat"),
         style="width:min(680px, 100%)",
         class_="mx-auto",
     ),
@@ -32,39 +35,41 @@ app_ui = ui.page_sidebar(
 def create_app(flows: FlowRunner):
      
     def server(input):
-        stream = ui.MarkdownStream(id="chat")
-        # chat = ui.Chat(id="chat")
+        # stream = ui.MarkdownStream(id="chat")
+        chat = ui.Chat(id="chat")
         flow_runner = flows
+        current_session_id = reactive.Value(None)
+        callback = None
 
         @reactive.effect
         @reactive.event(input.go)
         async def run_flow():
-            run_request=RunRequest(record_id=input.record_id(), websocket=stream, session_id=uuid.uuid4())
-            await flow_runner.run_flow(flow_name="batch", run_request=run_request)
+            global callback
+            session_id = uuid.uuid4()
+            current_session_id.set(session_id)
+            run_request=RunRequest(record_id=input.record_id(), websocket=chat, session_id=session_id)
+            
+            callback = await flow_runner.run_flow(flow_name="batch", run_request=run_request)
+            await chat.append_message("*Flow started...*\n")
 
-        # # Generate a response when the user submits a message
-        # @chat.on_user_submit
-        # async def handle_user_input(user_input: str):
-        #     response = await stream.stream([user_input])
-        #     await chat.append_message_stream(response)
+        # Define a callback to run when the user submits a message
+        @chat.on_user_submit
+        async def handle_user_input(user_input: str):
+            # Create a response message stream
+            if callback:
+                await callback(user_input)
+
+        # Add reactive effect for the new confirm button
+        @reactive.effect
+        @reactive.event(input.confirm)
+        async def handle_confirm():
+            """Handles the confirm button click."""
+            message = ManagerResponse(confirm=True)
+            if callback:
+                await callback(message)
+
+            # await stream.write(f"\n\n*Confirm button pressed. Message prepared: `{message}`*\n\n")
 
 
     app = App(app_ui, server)
     return app
-
-# app_ui = ui.page_fluid(
-#     ui.tags.link(rel="stylesheet", href="style.css"),
-#     ui.tags.script(src="script.js"),
-#     ui.chat_ui("chat"),
-# )
-
-# # Create a chat instance, with an initial message
-# chat = ui.Chat(
-#     id="chat",
-#     messages=["Hello! How can I help you today?"],
-# )
-# chat.ui()
-
-# # Store chat state in the url when an "assistant" response occurs
-# chat.enable_bookmarking(chat_client, bookmark_store="url")
-

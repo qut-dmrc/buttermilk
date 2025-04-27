@@ -3,7 +3,7 @@ from collections.abc import Mapping
 import importlib
 from typing import AsyncGenerator, Literal, Optional, Dict, Any, Union, Type
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import RunRequest
@@ -20,14 +20,15 @@ class FlowRunner(BaseModel):
     bm: BM
     flows: Mapping[str, OrchestratorProtocol]  # Dictionary of unconfigured flow orchestrators.
     save: SaveInfo
+    tasks: list = Field(default=[])
 
     model_config = ConfigDict(extra="allow")
     
     async def run_flow(self, 
                         flow_name: str,
                         run_request: Optional[RunRequest] = None,
-                      history: Optional[list] = None,callback=None,
-                      **kwargs) -> Union[asyncio.Task, None]:
+                      history: Optional[list] = None,
+                      **kwargs) -> Any:
         """
         Run a flow based on its configuration and a request.
         
@@ -55,9 +56,10 @@ class FlowRunner(BaseModel):
         # Create orchestrator instance
         orchestrator = orchestrator_cls(**config)
         
+        callback = orchestrator._make_publish_callback()
+
         logger.info(f"Starting flow '{flow_name}' with orchestrator '{orchestrator_cls.__name__}'")
-    
-        # Run synchronously and wait for completion
-        await orchestrator.run(request=run_request)
-        return None
+        self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))
+        
+        return callback
     

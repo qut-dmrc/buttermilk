@@ -8,8 +8,9 @@ and integrates with the Buttermilk agent and contract system.
 """
 
 import asyncio
+from collections.abc import Callable
 import itertools
-from typing import Any, Mapping, Self  # Added type hints for clarity
+from typing import Any, Awaitable, Mapping, Self  # Added type hints for clarity
 
 import shortuuid
 import weave  # weave is likely used for experiment tracking/logging.
@@ -38,6 +39,7 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
     ConductorRequest,
+    FlowMessage,
     ManagerMessage,
     ManagerRequest,  # Request sent to the MANAGER (UI/Human).
     ManagerResponse,
@@ -267,3 +269,18 @@ class AutogenOrchestrator(Orchestrator):
                     logger.info(f"Tracing link: 🍩 {call.ui_url}")
             except Exception:
                 pass
+
+    def _make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
+        """
+        Creates an asynchronous callback function for the UI to use.
+
+        Returns:
+            An async callback function that takes a `FlowMessage` and publishes it.
+        """
+        async def publish_callback(message: FlowMessage) -> None:
+            await self._runtime.publish_message(
+                message,
+                topic_id=self._topic,
+            )
+
+        return publish_callback

@@ -248,6 +248,7 @@ class HostAgent(Agent):
         
         required_completions = ceil(len(self._expected_agents_current_step) * self.completion_threshold_ratio)
         try: 
+            logger.debug(f"Waiting for completion of '{self._current_step_name}'.")
             await asyncio.wait_for(self._step_completion_event.wait(), timeout=self.max_wait_time)
             logger.debug(f"Previous step '{self._current_step_name}' cleared, moving on.")
         except asyncio.TimeoutError:
@@ -331,7 +332,6 @@ class HostAgent(Agent):
 
                     # TODO: Add some way to incorporate user feedback here.
 
-            step = StepRequest(role=step.role)
             logger.info(f"Host calling for execution of role: {step.role}")
             await self._execute_step(step)
 
@@ -424,7 +424,7 @@ class HostAgent(Agent):
             f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
             f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
         )
-        
+        logger.debug(f"Requesting info from user about proposed step {step.role}.")
         return StepRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
 
     async def _choose(self, message: ConductorRequest|None) -> StepRequest:
@@ -440,12 +440,13 @@ class HostAgent(Agent):
         Returns:
             A StepRequest representing the next step to execute
         """
-        if message:
-            # We've been asked a specific question. This time we won't go with the flow, 
-            # we should make sure we respond to it.
-            return StepRequest(role=WAIT)
+        # if message:
+        #     # We've been asked a specific question. This time we won't go with the flow, 
+        #     # we should make sure we respond to it.
+        #     return StepRequest(role=WAIT)
 
         step = await anext(self._step_generator)
+        logger.debug(f"Host {self.id} suggests next step: {step.role}.")
         return step
 
 

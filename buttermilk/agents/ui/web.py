@@ -36,6 +36,7 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     ToolOutput,
 )
+from buttermilk._core.types import Record
 
 
 class WebUIAgent(RoutedAgent):
@@ -47,7 +48,7 @@ class WebUIAgent(RoutedAgent):
     connections from web clients.
     """
     
-    def __init__(self, websocket: WebSocket, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
+    def __init__(self, websocket: Any, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
         """
         Initialize the WebUIAgent.
         
@@ -64,12 +65,12 @@ class WebUIAgent(RoutedAgent):
     async def send_to_client(self, message) -> None:
         if isinstance(message, BaseModel):
             msg = message.model_dump_json()
-        else:
+        elif not isinstance(message, str):
             msg = json.dumps(message)
-        # TODO: convert to markdown
 
         try:
-            await self.websocket.stream([msg])
+            await self.websocket.append_message(message)
+            # await self.websocket.stream([msg])
             return
         except Exception as e:
             logger.error(f"Unable to write to websocket (shiny style)")
@@ -171,7 +172,7 @@ class WebUIAgent(RoutedAgent):
         
         if client_msg:
             # Broadcast to all connected clients
-            await self.send_to_client(client_msg)
+            await self.send_to_client(client_msg['content'])
     
     def _format_message_for_client(self, message: Any, ctx: MessageContext) -> Optional[Dict[str, Any]]:
         """
@@ -203,7 +204,9 @@ class WebUIAgent(RoutedAgent):
                     
             # Try to extract agent_id if available
             source = getattr(message, "agent_id", source)
-            
+        elif isinstance(message, Record):  # Add handling for Record
+            content = message.text
+            source = getattr(message, "agent_id", source)
         elif isinstance(message, ConductorResponse):
             msg_type = "conductor_response"
             content = getattr(message, "content", str(message))
@@ -251,6 +254,20 @@ class WebUIAgent(RoutedAgent):
             
         return result
     
+    @message_handler
+    async def handle_control_message(
+        self,
+        message: OOBMessages,  # Handles out-of-band control messages.
+        ctx: MessageContext,
+    ) -> OOBMessages| None:
+        logger.debug(f"WebUIAgent received event message: {type(message).__name__}")
+        # Format different message types for the web client
+        client_msg = self._format_message_for_client(message, ctx)
+        
+        if client_msg:
+            # Broadcast to all connected clients
+            await self.send_to_client(client_msg['content'])
+        
     async def cleanup(self):
         """Clean up resources when the agent is no longer needed."""
         if hasattr(self, 'task') and self.task:
