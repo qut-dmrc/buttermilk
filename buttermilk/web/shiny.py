@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 import uuid
 import json
 
@@ -13,12 +13,28 @@ import uuid
 
 from shiny import App, reactive, ui
 
-from buttermilk._core.contract import RunRequest, ManagerResponse
+from buttermilk._core.agent import AgentInput, AgentOutput, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
+from buttermilk._core.contract import ConductorRequest, ConductorResponse, ErrorEvent, HeartBeat, ProceedToNextTaskSignal, RunRequest, ManagerResponse, TaskProcessingComplete, TaskProcessingStarted
+from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
  
 from buttermilk._core.contract import ManagerResponse
 from buttermilk.runner.flowrunner import FlowRunner
+from buttermilk.web.messages import _format_message_for_client
 
+ALL_MESSAGES = Union[
+    ManagerMessage,
+    ManagerRequest,
+    ManagerResponse,
+    TaskProcessingComplete,
+    TaskProcessingStarted,
+    ConductorResponse,
+    ConductorRequest,
+    ErrorEvent, StepRequest,ProceedToNextTaskSignal, HeartBeat,
+    AgentOutput,
+    ToolOutput,
+    AgentInput,
+    Record]
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.input_select(

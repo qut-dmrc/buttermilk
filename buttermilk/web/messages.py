@@ -67,5 +67,5 @@ def _format_message_for_client( message) -> str|None:
     else:
         # Unhandled message type
         return str(message)
-        
+    return content    
     
