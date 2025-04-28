@@ -89,34 +89,6 @@ class LLMScorer(LLMAgent):
     # Sets the expected output structure for the LLM call made by _process.
     _output_model: Optional[type[BaseModel]] = QualScore
 
-    # TODO: The commented-out handler suggests this agent might have initially been designed
-    #       to be called directly via AgentInput, but now primarily uses the _listen mechanism.
-    #       If direct invocation is still needed, this handler would need to be uncommented and potentially updated.
-    # @buttermilk_handler(AgentInput)
-    # async def handle_agent_input(
-    #     self,
-    #     message: AgentInput,
-    #     ctx: MessageContext, # Assuming context is passed if handler is used directly
-    # ) -> Optional[QualScore]:
-    #     """Handles direct AgentInput requests to perform scoring."""
-    #     logger.info(f"Scorer agent '{self.id}' received direct scoring request.")
-    #     # Use the _process method inherited from LLMAgent
-    #     result: AgentOutput = await self._process(message=message)
-
-    #     # Publish the structured output back? Or just return? Depends on orchestrator.
-    #     if result and not result.is_error and isinstance(result.outputs, QualScore):
-    #         # Example: publish if run via Autogen adapter that doesn't auto-publish returns
-    #         # if hasattr(self, '_runtime') and hasattr(self, 'id'): # Check if running in Autogen context
-    #         #    await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
-    #         logger.info(f"Scorer '{self.id}' completed direct scoring successfully.")
-    #         return result.outputs
-    #     else:
-    #         err_msg = result.error[0] if result and result.error else "Unknown processing error"
-    #         logger.error(f"Scorer '{self.id}' failed direct scoring: {err_msg}")
-    #         return None
-
-    # This helper seems intended for weave integration but isn't explicitly used in _listen.
-    # TODO: Verify if this helper is needed or if weave trace is accessed differently now.
     def _extract_original_trace(self, message: GroupchatMessageTypes) -> Any:
         """
         Attempts to extract the original weave trace ID from various potential locations within a message.
@@ -206,8 +178,8 @@ class LLMScorer(LLMAgent):
         # It needs the judge's output (message.outputs) and the ground_truth.
         scorer_agent_input.inputs["assessor"] = self.id
 
-        # Define the scoring function (our own _process method)
-        score_fn = self._process
+        # Define the scoring function (our own __call__ method)
+        score_fn = self
 
         # Get the weave call object associated with the message we are scoring.
         # This uses the tracing information attached by the Buttermilk framework.

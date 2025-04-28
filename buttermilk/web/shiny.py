@@ -218,25 +218,11 @@ def get_shiny_app(flows: FlowRunner):
                 # Get the dataset from the config in local.yaml
                 sql = f"""
                 SELECT
-                    created_at,
-                    run_id,
-                    agent_type,
-                    flow_name,
-                    record_id,
-                    criteria,
-                    parameters,
-                    result
+                    *
                 FROM
-                    `{flows.save.dataset}`
-                WHERE
-                    flow_name = '{selected_flow}'
-                    AND criteria = '{selected_criteria}'
-                    AND record_id = '{selected_record_id}'
-                    AND agent_type IN ('judge', 'synth')
-                ORDER BY
-                    created_at DESC
-                LIMIT 100
+                    `prosocial-443205.testing.flow_score_results`
                 """
+                    # --`{flows.save.dataset}`
                 
                 # Execute the query using bm.run_query
                 results_df = bm.run_query(sql)
