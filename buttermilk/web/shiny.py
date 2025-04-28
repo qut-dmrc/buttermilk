@@ -87,21 +87,16 @@ def get_shiny_app(flows: FlowRunner):
             if content:
                 await chat.append_message(str(content))
 
-            if isinstance(message, ConductorRequest):
+            if isinstance(message, ManagerRequest):
                 confirm_button_state.set("ready")
 
         @reactive.effect
         @reactive.event(input.confirm)
         async def handle_confirm():
-            if confirm_button_state.get() == "ready":
-                message = ManagerResponse(confirm=True)
-                if callback_to_chat.get():
-                    await callback_to_chat.get()(message)
-                    confirm_button_state.set("confirmed")
-                else:
-                    await chat.append_message("*Error: Cannot confirm, flow not ready.*")
-            else:
-                await chat.append_message(f"*Confirm button clicked in state: {confirm_button_state.get()} (Ignoring)*")
+            message = ManagerResponse(confirm=True)
+            if callback_to_chat.get():
+                await callback_to_chat.get()(message)
+                confirm_button_state.set("confirmed")
 
         @output
         @render.ui
@@ -110,9 +105,9 @@ def get_shiny_app(flows: FlowRunner):
             if state == "ready":
                 return ui.input_action_button("confirm", "Confirm", class_="btn btn-success", disabled=False)
             elif state == "confirmed":
-                return ui.input_action_button("confirm", "Confirmed", class_="btn btn-danger", disabled=True)
+                return ui.input_action_button("confirm", "Confirmed", class_="btn btn-danger", disabled=False)
             else:
-                return ui.input_action_button("confirm", "Confirm", class_="btn btn-secondary", disabled=True)
+                return ui.input_action_button("confirm", "Confirm", class_="btn btn-secondary", disabled=False)
 
     app = App(app_ui, server)
     return app

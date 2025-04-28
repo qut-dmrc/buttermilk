@@ -165,7 +165,9 @@ class Agent(AgentConfig):
     @weave.op()  # Mark the primary execution method for Weave tracing.
     async def __call__(
         self,
-        message: AgentInput,public_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
+        message: AgentInput,
+        public_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
+        message_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
     ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent|None:
@@ -211,7 +213,10 @@ class Agent(AgentConfig):
 
             await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
 
-            result = await self._process(message=final_input, cancellation_token=cancellation_token, **kwargs)
+            result = await self._process(message=final_input, cancellation_token=cancellation_token,
+        public_callback=public_callback,  # Callback provided by adapter
+        message_callback=message_callback,  # Callback provided by adapter 
+          **kwargs)
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -233,7 +238,10 @@ class Agent(AgentConfig):
         return None
 
     @abstractmethod
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, 
+        public_callback: Callable | None = None,  # Callback provided by adapter
+        message_callback: Callable | None = None,  # Callback provided by adapter,
+        **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         """
         Abstract method for core agent logic. Subclasses MUST implement this.
 
@@ -261,8 +269,8 @@ class Agent(AgentConfig):
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",  # ID/Name of the sending agent
-        public_callback: Callable | None = None,  # Callback provided by adapter (unused by default)
-        message_callback: Callable | None = None,  # Callback provided by adapter (unused by default)
+        public_callback: Callable | None = None,  # Callback provided by adapter
+        message_callback: Callable | None = None,  # Callback provided by adapter 
         **kwargs,
     ) -> None:
         """
@@ -329,6 +337,8 @@ class Agent(AgentConfig):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
+        public_callback: Callable | None = None,  # Callback provided by adapter
+        message_callback: Callable | None = None,  # Callback provided by adapter 
         **kwargs,
     ) -> OOBMessages | None:
         """

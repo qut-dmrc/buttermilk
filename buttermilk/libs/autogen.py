@@ -209,6 +209,8 @@ class AutogenAgentAdapter(RoutedAgent):
                 response = await self.agent(message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
+                public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
+                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             else:
                 # Delegate to the agent's _handle_events method.
@@ -216,6 +218,8 @@ class AutogenAgentAdapter(RoutedAgent):
                     message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
+                public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
+                message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
             if response:
                 try:
