@@ -54,12 +54,11 @@
       "justMyCode": false,
       "args": [
         "hydra.verbose=false",
-        "+flows=batch",
-        "++flow=batch",
+        "+flows=trans",
         "ui=api",
-        "++record_id=jenner_criticises_khalif_dailymail",
         "llms=lite",
-        "name=testing",
+        "name=bmdevelopment",
+        "job=api",
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",

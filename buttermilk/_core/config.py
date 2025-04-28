@@ -214,7 +214,7 @@ class AgentConfig(BaseModel):
     """
 
     # Core Identification
-    id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.")
+    id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
         default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
@@ -256,7 +256,7 @@ class AgentConfig(BaseModel):
     unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
     base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=False)
     # Defines which attributes are combined to create the human-friendly 'name'.
-    _name_components: list[str] = ["base_name", "_id"]
+    _name_components: list[str] = ["base_name", "id"]
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
@@ -266,23 +266,56 @@ class AgentConfig(BaseModel):
     def _generate_name_and_id(self) -> Self:
         """
         Generates the unique `id` and formatted `name` for the agent instance after validation.
+        Designed to be idempotent to work with validate_assignment=True.
 
-        - Sets `id` based on `role` and `_id`.
-        - Sets `name` by combining components defined in `_name_components`.
+        - Sets `id` based on `role` and `unique_identifier`.
+        - Sets `base_name` from the initial `name` if not already set.
+        - Sets final `name` by combining components defined in `_name_components`.
         """
-        # Generate the full unique ID: e.g., "judge-a1b2c3"
-        self.id = f"{self.role}-{self.unique_identifier}"
+        # 1. Determine the intended base_name
+        # 'self.name' here holds the value provided *before* this validator potentially modifies it.
+        intended_base_name = self.base_name
+        if intended_base_name is None:
+            if not self.name: # Check if initial name was provided
+                raise ValueError("AgentConfig requires an initial human-friendly 'name' field in configuration.")
+            intended_base_name = self.name # Intend to use the initial name as base
 
-        # Set the base_name from the initially provided 'name' if not already set.
-        if not self.base_name:
-            if not self.name:  # Ensure a base name was provided in the config.
-                raise ValueError("AgentConfig requires a human-friendly 'name' field in configuration.")
-            self.base_name = self.name  # Store the original human-friendly name part.
+        # 2. Calculate the intended final ID
+        intended_id = f"{self.role}-{self.unique_identifier}"
 
-        # Construct the final display 'name' from specified components.
-        name_parts = [getattr(self, comp, None) for comp in self._name_components]
-        self.name = " ".join([str(part) for part in name_parts if part])  # Join non-None parts.
+        # 3. Calculate the intended final name based on components
+        name_parts = []
+        # Use the *intended* base_name for calculation, not necessarily the current self.base_name
+        current_base_name_for_calc = intended_base_name if intended_base_name is not None else ""
+
+        for comp in self._name_components:
+            if comp == "base_name":
+                part = current_base_name_for_calc
+            else:
+                # Get other components like unique_identifier, role etc.
+                part = getattr(self, comp, None)
+
+            if part is not None and str(part): # Ensure part is not None and not empty string
+                name_parts.append(str(part))
+
+        intended_name = " ".join(name_parts)
+
+        # 4. Assign values only if they differ from the calculated intended state
+        # This prevents infinite loops with validate_assignment=True
+        if self.base_name != intended_base_name:
+             # Only set base_name if it's currently None and we determined it from initial name
+             if self.base_name is None and intended_base_name is not None:
+                 self.base_name = intended_base_name
+
+        if self.id != intended_id:
+            self.id = intended_id
+
+        if self.name != intended_name:
+            # Update the 'name' field to the final composed name
+            self.name = intended_name
+
         return self
+
 
 
 class AgentVariants(AgentConfig):
@@ -377,8 +410,8 @@ class AgentVariants(AgentConfig):
 
                     # Create and add the AgentConfig instance
                     try:
-                        # Ensure AgentConfig allows extra fields if needed, or filter cfg_dict
-                        # AgentConfig currently has extra='allow', so unknown fields are okay
+                        # Filter dict so we only provide values that belong in the final AgentConfig instance
+                        cfg_dict = {k: v for k, v in cfg_dict.items() if k in AgentConfig.model_fields}
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:

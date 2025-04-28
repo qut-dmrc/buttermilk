@@ -12,6 +12,6 @@ scorer:
     model: "*.parameters.model|[0]"
     criteria: "*.parameters.criteria|[0]"
     template: "*.parameters.template|[0]"
-    records: "FETCH||*.records[]||*.records[]|[0]"
-    expected: "*.records[0].ground_truth||*.records[0].ground_truth|[0].reasons"
+    records: "[FETCH]||*.records[]||*.records[]"
+    expected: "[FETCH]||*.records[]||*.records[]|[0].reasons"
     answers: "[judge,synth][].{agent_id: agent_info.id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"

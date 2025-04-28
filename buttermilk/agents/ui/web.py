@@ -123,6 +123,7 @@ class WebUIAgent(RoutedAgent):
         if client_msg:
             await self.callback_to_ui(client_msg)
         return None
+    
     def _format_message_for_client(self, message: Any, ctx: MessageContext) -> Optional[Dict[str, Any]]:
         """
         Format different message types for web client consumption.

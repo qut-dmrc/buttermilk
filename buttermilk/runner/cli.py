@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
 
-    flow_runner: FlowRunner = hydra.utils.instantiate(cfg)
+    flow_runner: FlowRunner = FlowRunner.model_validate(cfg) #hydra.utils.instantiate(cfg)
     bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
          
     # Perform essential setup for the Buttermilk instance *after* it's been instantiated by Hydra.

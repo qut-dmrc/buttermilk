@@ -101,6 +101,13 @@ class Agent(AgentConfig):
     # Heartbeat queue, potentially used by orchestrator/adapter for liveness checks.
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
 
+    model_config = {    # Pydantic Model Configuration
+        "extra": "forbid",  
+        "arbitrary_types_allowed": False,  # Disallow arbitrary types unless explicitly handled.
+        "populate_by_name": True,  # Allow population by field name.
+        "validate_assignment": True
+    }
+    
     @computed_field()
     @property
     def _cfg(self) -> AgentConfig:
@@ -268,16 +275,22 @@ class Agent(AgentConfig):
 
         # Update internal state (_data, _records)
         for key, value in extracted.items():
-            if key == "records":
-                # Special handling for records: append to internal list.
-                if not isinstance(value, Sequence) or isinstance(value, str):
-                    value = [value]
-                self._records.extend([r for r in value if isinstance(r, Record)])
-                logger.debug(f"Agent {self.id} added {len(value)} records from {source}.")
-            else:
-                # Add other extracted data to the KeyValueCollector.
-                self._data.add(key, value)
-                logger.debug(f"Agent {self.id} updated state key '{key}' from {source}.")
+            if value and value != [] and value != {}:
+                if key == "records":
+                    # Special handling for records: append to internal list.
+                    if not isinstance(value, Sequence) or isinstance(value, str):
+                        value = [value]
+                    for rec in value:
+                        if isinstance(rec, Record):
+                            self._records.append(rec)
+                        else:
+                            self._records.append(Record(**rec))
+
+                    logger.debug(f"Agent {self.id} added {len(value)} records from {source} ({len(self._records)} total).")
+                else:
+                    # Add other extracted data to the KeyValueCollector.
+                    self._data.add(key, value)
+                    logger.debug(f"Agent {self.id} updated state key '{key}' from {source}.")
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -319,7 +332,7 @@ class Agent(AgentConfig):
         Returns:
             An OOB message as a response, or None if no direct response is needed.
         """
-        logger.debug(f"Agent {self.id} received OOB event: {type(message).__name__}. Default handler dropping.")
+        # logger.debug(f"Agent {self.id} received OOB event: {type(message).__name__}. Default handler dropping.")
         # Example: Handle a specific reset request
         # if isinstance(message, ResetSignal):
         #    await self.on_reset(cancellation_token)
@@ -446,10 +459,12 @@ class Agent(AgentConfig):
                     # Use JMESPath to search the datadict based on the mapping expression.
                     # Example: mapping = "judge.outputs.prediction" -> search datadict["judge"]["outputs"]["prediction"]
                     search_result = jmespath.search(mapping, datadict)
+                    if isinstance(search_result, Sequence) and not isinstance(search_result, str):
+                        # Remove None or empty results
+                        search_result = [x for x in search_result if x is not None and x != [] and x != {}]
                     if search_result is not None and search_result != [] and search_result != {}:
                         # Store if JMESPath found something (could be False, 0, etc.)
                         extracted[key] = search_result
-                        logger.debug(f"Agent {self.id}: Extracted '{key}' using mapping '{mapping}'. Found: {type(search_result)}")
                     else:
                         logger.debug(f"Agent {self.id}: Mapping '{mapping}' for key '{key}' yielded None.")
 

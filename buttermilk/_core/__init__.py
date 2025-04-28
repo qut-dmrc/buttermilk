@@ -1,3 +1,4 @@
+from .config import (Project, AgentConfig, AgentVariants)
 from .contract import (
     AgentInput,
     AgentOutput,
@@ -18,6 +19,9 @@ from .contract import (
 )
 
 ALL = [
+    "AgentConfig",
+    "AgentVariants",
+    "Project",
     "StepRequest",
     "FlowMessage",
     "AgentInput",

@@ -24,7 +24,7 @@ app_ui = ui.page_sidebar(
         ui.input_select(
             "flow",
             "Choose flow",
-            choices=["batch"],
+            choices=["trans"],
         ),
         ui.input_select(
             "criteria",

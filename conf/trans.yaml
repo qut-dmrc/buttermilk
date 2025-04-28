@@ -1,4 +1,0 @@
-_target_: buttermilk.runner.flowrunner.FlowRunner
-name: development
-job: trans
-ui: console

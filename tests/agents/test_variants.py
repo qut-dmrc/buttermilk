@@ -1,5 +1,5 @@
 from unittest.mock import patch
-
+import shortuuid
 import pytest
 from omegaconf import OmegaConf
 
@@ -173,11 +173,8 @@ def test_num_runs_greater_than_one(base_variant_config):
         ids.add(config.id)
     assert len(ids) == 3  # Ensure unique IDs across runs
 
-
-@patch("buttermilk._core.variants.shortuuid.uuid")
-def test_id_generation_uniqueness(mock_uuid, base_variant_config):
+def test_id_generation_uniqueness(base_variant_config):
     """Test ID generation includes hash for uniqueness when needed."""
-    mock_uuid.side_effect = ["abcd", "efgh", "ijkl", "mnop"]  # Provide unique suffixes
 
     # Case 1: Multiple parallel variants (needs hash)
     config_data_p = {
@@ -292,7 +289,7 @@ class MockAgentConfig(BaseModel):
 
 
 # --- Test Data ---
-PARAMS_JSON = '{"flow":"batch","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
+PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
 
 @pytest.fixture
 def run_request_params() -> RunRequest:

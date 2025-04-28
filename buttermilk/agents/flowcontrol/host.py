@@ -371,7 +371,6 @@ class HostAgent(Agent):
             logger.warning(f"No publish callback available to execute step {step.role}")
             
         # Note: Completion will be tracked when TaskProcessingComplete messages are received
-        logger.debug(f"Initiated step execution for {step.role}")
     
     def _build_conductor_context(self, message: ConductorRequest) -> Dict[str, Any]:
         """

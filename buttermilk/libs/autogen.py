@@ -184,7 +184,7 @@ class AutogenAgentAdapter(RoutedAgent):
         self,
         message: OOBMessages,  # Handles out-of-band control messages.
         ctx: MessageContext,
-    ) -> OOBMessages| None:
+    ) -> AllMessages | None:
         """
         Handles Out-Of-Band (OOB) control messages.
 
@@ -197,14 +197,12 @@ class AutogenAgentAdapter(RoutedAgent):
             ctx: The Autogen message context.
 
         Returns:
-            An OOB message response, a sequence of them, or None.
-        """
-        response: Union[OOBMessages, Sequence[OOBMessages], None] = None
-        try:
             
+        """
+        response: AllMessages|None = None
+        try:
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
-                logger.debug(f"Agent {self.agent.id} received control message: {type(message).__name__}")
                 response = await self.agent(message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
@@ -216,10 +214,14 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 )
-                logger.debug(f"Agent {self.agent.id} completed handling control message. Response type: {type(response).__name__}")
+                logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__}")
+            
+            if response:
+                await self.publish_message(response, topic_id=self.topic_id)
+
             return response  # Return response directly for OOB messages.
         except Exception as e:
-            msg = f"Error during agent {self.agent.id} handling control message: {e}"
+            msg = f"Error during agent {self.agent.id} handling control message {type(message).__name__}: {e}"
             logger.error(msg)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None
@@ -247,7 +249,7 @@ class AutogenAgentAdapter(RoutedAgent):
             Autogen uses this return value as the response to the `send_message` call.
         """
         logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
-        output: AllMessages = None
+        output: AllMessages|None = None
 
         await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
 
@@ -263,11 +265,9 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
-
+                
             # If the agent returned something directly, publish it to the main topic.
-            if output and not isinstance(output, TaskProcessingComplete):  # Don't republish completion status
-                # TODO: Handle sequences of outputs correctly if agent returns multiple messages.
-                # Currently might only publish the sequence object itself, not individual items.
+            if output:
                 await self.publish_message(output, topic_id=self.topic_id)
 
             # Publish status update: Task Complete (Success)

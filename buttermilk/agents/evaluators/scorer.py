@@ -16,6 +16,7 @@ from buttermilk._core.contract import (
     AgentOutput,
     GroupchatMessageTypes,  # Type hint union for listen
     )
+from buttermilk._core.types import Record
 from buttermilk.agents.judge import AgentReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
@@ -174,8 +175,17 @@ class LLMScorer(LLMAgent):
         original message's trace. The score result (AgentOutput containing QualScore)
         is published back using the `public_callback`.
         """
-        # Ignore messages that are not AgentOutput or don't have AgentReasons in outputs
-        if not isinstance(message, AgentOutput) or not isinstance(message.outputs, AgentReasons):
+        # First, use the superclass to process messages for inputs we might need.
+        await super()._listen(
+            message=message,
+            cancellation_token=cancellation_token,
+            source=source,
+            public_callback=public_callback,
+            message_callback=message_callback,
+            **kwargs,
+        )
+        # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs 
+        if not isinstance(message, AgentOutput) or not isinstance(message.outputs, AgentReasons) or not isinstance(message, Record):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
@@ -209,7 +219,7 @@ class LLMScorer(LLMAgent):
         extracted_vars["assessor"] = self.id
         scorer_agent_input = AgentInput(
             inputs=extracted_vars,
-            records=[records],  # Pass records if needed
+            records=records,  # Pass records if needed
         )
 
         # Define the scoring function (our own _process method)

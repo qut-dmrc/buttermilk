@@ -14,7 +14,7 @@ defaults:
     - host/sequencer
     - interface/web
   - _self_ 
-
+  
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
