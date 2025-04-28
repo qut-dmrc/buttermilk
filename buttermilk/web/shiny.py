@@ -35,6 +35,7 @@ ALL_MESSAGES = Union[
     ToolOutput,
     AgentInput,
     Record]
+
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.input_select(
@@ -101,7 +102,8 @@ def get_shiny_app(flows: FlowRunner):
                  await chat.append_message(str(content))
             
             # Update the reactive value based on message type
-            confirm_enabled.set(isinstance(message, ConductorRequest))
+            if isinstance(message,ManagerRequest ):
+                confirm_enabled.set(True)
 
         # Add reactive effect for the new confirm button
         @reactive.effect
