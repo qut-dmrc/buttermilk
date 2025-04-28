@@ -51,7 +51,7 @@ class HostAgent(Agent):
 
     # Additional configuration
     max_wait_time: int = Field(
-        default=30,
+        default=240,
         description="Maximum time to wait for agent responses in seconds",
     )
     human_in_loop: bool = Field(

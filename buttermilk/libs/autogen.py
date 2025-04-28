@@ -165,7 +165,12 @@ class AutogenAgentAdapter(RoutedAgent):
             ctx: The Autogen message context.
         """
         logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
+
+        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
+
         try:
+            await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
+
             # Delegate to the agent's _listen method for processing.
             await self.agent._listen(
                 message=message,
@@ -178,6 +183,12 @@ class AutogenAgentAdapter(RoutedAgent):
             msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
             logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
+        finally:
+            # Publish status update: Task Complete (Error)
+            await self.publish_message(
+                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
+                topic_id=self.topic_id,
+            )
 
     @message_handler
     async def handle_control_message(
@@ -200,7 +211,10 @@ class AutogenAgentAdapter(RoutedAgent):
             
         """
         response: AllMessages|None = None
+
         try:
+            await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
+
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
                 response = await self.agent(message=message,
@@ -227,6 +241,12 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None
+        finally:
+            # Publish status update: Task Complete (Error)
+            await self.publish_message(
+                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
+                topic_id=self.topic_id,
+            )
 
     @message_handler
     async def handle_invocation(
@@ -281,12 +301,13 @@ class AutogenAgentAdapter(RoutedAgent):
 
         except Exception as e:
             logger.error(f"Error during agent {self.agent.id} invocation: {e}")
+            # Publish an ErrorEvent message for listeners.
+            await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
+            # Do not return the exception itself, let Autogen handle failed `send_message`.
+            return None
+        finally:
             # Publish status update: Task Complete (Error)
             await self.publish_message(
                 TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
                 topic_id=self.topic_id,
             )
-            # Publish an ErrorEvent message for listeners.
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
-            # Do not return the exception itself, let Autogen handle failed `send_message`.
-            return None
