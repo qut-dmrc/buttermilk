@@ -52,7 +52,7 @@ class HostAgent(Agent):
 
     # Additional configuration
     max_wait_time: int = Field(
-        default=300,
+        default=60,
         description="Maximum time to wait for agent responses in seconds",
     )
     completion_threshold_ratio: float = Field(
@@ -152,9 +152,6 @@ class HostAgent(Agent):
         if isinstance(message, TaskProcessingComplete):
             # Only track completions for the currently active step.
             if message.role == self._current_step_name:
-                self._completed_agents_current_step.add(message.agent_id)
-                logger.debug(f"Host received TaskComplete from {message.agent_id} (Task {message.task_index}, More: {message.more_tasks_remain})")
-                
                 # Store task completion info in exploration path
                 execution_id = f"{message.role}-{message.agent_id}"
                 self._exploration_path.append(execution_id)
@@ -164,18 +161,24 @@ class HostAgent(Agent):
                     "task_index": message.task_index,
                     "is_error": message.is_error,
                 }
-                if message.agent_id not in self._completed_agents_current_step:
+                # Check if this agent was expected and hasn't completed yet
+                if message.agent_id in self._expected_agents_current_step and message.agent_id not in self._completed_agents_current_step:
                     self._completed_agents_current_step.add(message.agent_id)
                     logger.info(
                         f"Host received TaskComplete from {message.agent_id} for step '{self._current_step_name}' "
-                        f"(Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error})"
+                        f"({len(self._completed_agents_current_step)}/{len(self._expected_agents_current_step)} completed). "
+                        f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}"
                     )
-                    if  self._completed_agents_current_step == self._expected_agents_current_step:
-                        # Finished all expected agents.
+                    # Check if all expected agents have now completed
+                    if self._completed_agents_current_step == self._expected_agents_current_step:
+                        logger.info(f"All expected agents completed step '{self._current_step_name}'. Setting completion event.")
                         self._step_completion_event.set()
-                else:
+                elif message.agent_id in self._completed_agents_current_step:
                     # Log if we receive a duplicate completion signal.
                     logger.warning(f"Host received duplicate TaskComplete from {message.agent_id} for step '{self._current_step_name}'.")
+                else:
+                    # Log if an unexpected agent sends completion.
+                    logger.warning(f"Host received TaskComplete from unexpected agent {message.agent_id} for step '{self._current_step_name}'.")
             else:
                 # Ignore completions for steps other than the current one.
                 logger.debug(
@@ -185,10 +188,11 @@ class HostAgent(Agent):
         elif isinstance(message, TaskProcessingStarted):
             # Track which agents have started the current step.
             if message.role == self._current_step_name:
-                if message.agent_id not in self._expected_agents_current_step:
-                    self._expected_agents_current_step.add(message.agent_id)
-                    logger.info(f"Host noted TaskStarted from {message.agent_id} for step '{self._current_step_name}'.")
-                # else: Agent already known to have started.
+                # Log that the agent started, but we don't need to add to _expected_agents_current_step here anymore.
+                if message.agent_id in self._expected_agents_current_step:
+                     logger.info(f"Host noted TaskStarted from expected agent {message.agent_id} for step '{self._current_step_name}'.")
+                else:
+                     logger.warning(f"Host noted TaskStarted from unexpected agent {message.agent_id} for step '{self._current_step_name}'.")
             else:
                 # Ignore starts for steps other than the current one.
                 logger.debug(
@@ -197,35 +201,22 @@ class HostAgent(Agent):
         
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
-            if not self._conductor_task:
+            if not self._conductor_task or self._conductor_task.done():
+                 # Check if task exists and is done (e.g., due to previous error or completion)
+                if self._conductor_task and self._conductor_task.done():
+                    try:
+                        # Retrieve potential exceptions from the completed task
+                        self._conductor_task.result()
+                    except Exception as e:
+                        logger.error(f"Previous conductor task ended with exception: {e}")
+                logger.info(f"Host {self.id} starting new conductor task.")
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
+            else:
+                 logger.warning(f"Host {self.id} received ConductorRequest but task is already running.")
+
             
         return None
 
-    def _store_exploration_result(self, execution_id: str, output: AgentOutput) -> None:
-        """
-        Store the result of an agent execution in the exploration history.
-        
-        Args:
-            execution_id: A unique identifier for this execution
-            output: The AgentOutput from the agent execution
-        """
-        # Add to exploration path if not already there
-        if execution_id not in self._exploration_path:
-            self._exploration_path.append(execution_id)
-        
-        # Store the result
-        self._exploration_results[execution_id] = {
-            "id": output.call_id,
-            "role": self._current_step_name or "unknown",
-            "inputs": getattr(output, "inputs", {}),
-            "outputs": getattr(output, "outputs", getattr(output, "contents", "")),
-            "is_error": getattr(output, "is_error", False),
-            "error_details": getattr(output, "error", []) if getattr(output, "is_error", False) else None,
-            "metadata": getattr(output, "metadata", {}),
-        }
-        logger.debug(f"Stored result for execution {execution_id}")
-    
     async def _wait_for_user(self) -> ManagerResponse:
         try: 
             response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_wait_time)
@@ -293,31 +284,40 @@ class HostAgent(Agent):
         Returns:
             An AgentOutput containing the next StepRequest
         """
+        # Initialize participants if not done yet
+        if not self._participants:
+            self._participants = message.participants
+            if not self._participants:
+                 logger.warning("Host received ConductorRequest with no participants.")
+                 # Decide how to handle this - maybe wait or raise error?
+                 # For now, let's wait and hope participants arrive later (e.g., via config update)
+                 # This might require more robust handling depending on application logic.
+                 return StepRequest(role=WAIT, content="Waiting for participants to be defined.")
+
+
         while True:
             # Wait for enough completions, with a timeout
-            await self._wait_for_completions()
+            await self._wait_for_completions() 
         
-            if not self._participants:
-                # Initialize from the message if not done yet
-                self._participants = message.participants
-                
-            # Build enhanced context for decision making
-            conductor_context = self._build_conductor_context(message)
-            
             # Get the next step using the strategy provided by the specific host implementation
-            step = await self._choose(message=message)
+            step = await self._choose(message=message) 
 
             if step.role == self.role:
                 # Don't call ourselves please
+                logger.warning(f"Host chose itself ({self.role}) for the next step. Switching to WAIT.")
                 step.role = WAIT
 
             if step.role not in self._participants and step.role not in [WAIT, END]:
-                logger.warning(f"Host could not find next step. Suggested {step.role}, which doesn't exist.")
+                logger.warning(f"Host could not find next step. Suggested role '{step.role}', which doesn't exist in participants {list(self._participants.keys())}. Switching to WAIT.")
                 step.role = WAIT
             
             # If this is an END step, wrap it up
             if step.role == END:
-                raise StopAsyncIteration
+                logger.info("Host received END step. Stopping flow.")
+                # Signal completion or cleanup if necessary before stopping
+                # Consider sending a final ConductorResponse or similar
+                # For now, just break the loop
+                break # Exit the while loop
             
             # Get user confirmation if needed
             if step.role != WAIT and self.human_in_loop:
@@ -326,83 +326,105 @@ class HostAgent(Agent):
                 manager_response: ManagerResponse = await self._wait_for_user()
                 if not manager_response.confirm:
                     # User rejected the step
-                    logger.info(f"User rejected step for role: {step.role}")
+                    logger.info(f"User rejected step for role: {step.role}. Switching to WAIT.")
                     # Use a WAIT step instead to signal orchestrator to try again
                     step.role = WAIT
+                    # TODO: Add logic here to incorporate user feedback from manager_response.prompt
+                    if manager_response.prompt:
+                        logger.info(f"User provided feedback: {manager_response.prompt}")
+                        self._user_feedback.append(manager_response.prompt)
+                        # Potentially modify the next step choice or context based on feedback
 
-                    # TODO: Add some way to incorporate user feedback here.
+            logger.info(f"Host proceeding with role: {step.role}")
+            # Pass the participants dictionary to _execute_step
+            await self._execute_step(step, self._participants)
 
-            logger.info(f"Host calling for execution of role: {step.role}")
-            await self._execute_step(step)
+        # After loop ends (due to END step)
+        logger.info(f"Host {self.id} flow execution finished.")
+        # Optionally return a final status or message
+        return StepRequest(role=END, content="Flow completed.") # Or potentially ConductorResponse
 
-    async def _execute_step(self, step: StepRequest) -> None:
+
+    async def _execute_step(self, step: StepRequest, participants: Dict[str, Any]) -> None:
         """
-        Execute a step by sending a message directly to the target agent.
+        Execute a step by sending a message directly to the target agent(s).
         
         This method allows the host to bypass the orchestrator and directly
         handle the execution of steps, giving it more control over the
         conversation flow. It uses topic-based publishing to send messages
-        to the agents.
+        to the agents. It also sets up the tracking for expected completions.
         
         Args:
             step: The step to execute
+            participants: The dictionary mapping roles to agent configurations.
         """
         if step.role == END or step.role == WAIT:
-            logger.debug(f"Skipping direct execution for control step: {step.role}")
+            logger.debug(f"Skipping execution setup for control step: {step.role}")
+            # Ensure completion event is set if we are just waiting, allowing the loop to continue
+            if step.role == WAIT and not self._step_completion_event.is_set():
+                 self._step_completion_event.set()
             return
         
         logger.info(f"Host executing step for role: {step.role}")
         
-        # Create the message for the target agent
-        message = StepRequest(role=step.role, records=getattr(self, '_records', []))
-        
-        # Set step as current for completion tracking
+        # --- Determine expected agents for this step ---
         self._current_step_name = step.role
-        self._expected_agents_current_step.clear()
         self._completed_agents_current_step.clear()
-        self._step_completion_event.clear()
+        self._expected_agents_current_step.clear() # Clear previous expectations first
         
-        # Publish the message using the _input_callback if available
-        # This callback is provided by the AutogenAgentAdapter during initialization
-        # and allows publishing messages to topics
-        if hasattr(self, '_input_callback') and self._input_callback:
-            await self._input_callback(message)
+        agent_configs = participants.get(step.role, [])
+        if not isinstance(agent_configs, list): # Ensure it's a list
+             agent_configs = [agent_configs]
+
+        expected_ids = {agent_config['id'] for agent_config in agent_configs if 'id' in agent_config}
+
+        if not expected_ids:
+             logger.warning(f"No agent IDs found for role '{step.role}' in participants. Cannot track completion.")
+             # If no agents are expected, the step is trivially complete.
+             self._step_completion_event.set()
+             # Decide if we should proceed or log an error/wait.
+             # Setting the event allows the flow to continue, assuming this is valid.
         else:
-            logger.warning(f"No publish callback available to execute step {step.role}")
-            
-        # Note: Completion will be tracked when TaskProcessingComplete messages are received
-    
-    def _build_conductor_context(self, message: ConductorRequest) -> Dict[str, Any]:
-        """
-        Build an enhanced context dictionary for decision making.
+             self._expected_agents_current_step = expected_ids
+             logger.info(f"Expecting completion from {len(self._expected_agents_current_step)} agents for step '{step.role}': {self._expected_agents_current_step}")
+             self._step_completion_event.clear() # Clear event, ready to wait for completions
+
+        # Create the message for the target agent(s) - assuming StepRequest is broadcast or handled by orchestrator routing
+        # The content might need to be tailored based on the step or context
+        message_content = step.content or f"Executing step for role {step.role}"
+        message = StepRequest(role=step.role, content=message_content, records=getattr(self, '_records', [])) # Pass records if needed
         
-        This collects relevant information from the host's state and the incoming
-        message to provide better context for the next step decision.
+        # Publish the message using the _input_callback
+        await self._input_callback(message)
+        logger.debug(f"Host published StepRequest for role {step.role}")
+
+        # Note: Completion will be tracked when TaskProcessingComplete messages are received by _handle_events
+    
+    def _store_exploration_result(self, execution_id: str, output: AgentOutput) -> None:
+        """
+        Store the result of an agent execution in the exploration history.
         
         Args:
-            message: The ConductorRequest containing base context
-            
-        Returns:
-            An enhanced context dictionary
+            execution_id: A unique identifier for this execution
+            output: The AgentOutput from the agent execution
         """
-        # Start with the inputs from the message
-        context = dict(message.inputs)
+        # Add to exploration path if not already there
+        if execution_id not in self._exploration_path:
+            self._exploration_path.append(execution_id)
         
-        # Add exploration history
-        context.update({
-            "exploration_path": self._exploration_path,
-            "latest_results": (
-                self._exploration_results.get(self._exploration_path[-1]) 
-                if self._exploration_path else None
-            ),
-            "user_feedback": self._user_feedback,
-        })
-        
-        # Clear feedback after using it
-        self._user_feedback = []
-        
-        return context
+        # Store the result
+        self._exploration_results[execution_id] = {
+            "id": output.call_id,
+            "role": self._current_step_name or "unknown",
+            "inputs": getattr(output, "inputs", {}),
+            "outputs": getattr(output, "outputs", getattr(output, "contents", "")),
+            "is_error": getattr(output, "is_error", False),
+            "error_details": getattr(output, "error", []) if getattr(output, "is_error", False) else None,
+            "metadata": getattr(output, "metadata", {}),
+        }
+        logger.debug(f"Stored result for execution {execution_id}")
     
+
     async def request_user_confirmation(self, step: StepRequest) -> StepRequest:
         """
         Request confirmation from the user for the next step.
@@ -422,7 +444,7 @@ class HostAgent(Agent):
             f"- **Description:** {step.content or '(No description)'}\n"
             f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
             f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
-        )
+            )
         logger.debug(f"Requesting info from user about proposed step {step.role}.")
         return StepRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
 
@@ -463,6 +485,6 @@ class HostAgent(Agent):
         self._step_completion_event.set()
         logger.info(f"Sequencer agent {self.id} reset complete.")
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent | None:
         pass  # this host does nothing when called
-     
+        return None

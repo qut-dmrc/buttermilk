@@ -5,12 +5,12 @@ defaults:
   - /agents:
     - judge
     - synth
-    - scorer
     - differences
   - /agents@observers:
     - fetch
     - spy
     - owl
+    - scorer
     - host/sequencer
     - interface/web
   - _self_ 

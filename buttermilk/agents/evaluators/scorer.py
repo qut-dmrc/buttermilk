@@ -185,7 +185,7 @@ class LLMScorer(LLMAgent):
             **kwargs,
         )
         # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs 
-        if not isinstance(message, AgentOutput) or not isinstance(message.outputs, AgentReasons) or not isinstance(message, Record):
+        if not isinstance(message, AgentOutput) or not isinstance(message.outputs, AgentReasons):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 

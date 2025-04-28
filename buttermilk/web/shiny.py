@@ -75,7 +75,10 @@ def get_shiny_app(flows: FlowRunner):
                 await callback_to_chat.get()(user_input)
 
         async def callback_to_ui(message):
-            await chat.append_message(str(message))
+            if isinstance(message, dict) and (content := message.get('content')):
+                 await chat.append_message(str(content))
+            else:
+                 await chat.append_message(str(message))
             
         # Add reactive effect for the new confirm button
         @reactive.effect
