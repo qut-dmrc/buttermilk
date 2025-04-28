@@ -4,10 +4,10 @@ from typing import Callable, Optional, Union
 import uuid
 import json
 
-from shiny import App, reactive, render, ui, Session
+from shiny import App, reactive, render, ui, Session, req
 import pandas as pd
 
-from buttermilk._core.agent import AgentInput, AgentOutput, ManagerMessage, ManagerRequest, StepRequest, ToolOutput, logger
+from buttermilk._core.agent import AgentInput, AgentOutput, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
 from buttermilk._core.contract import ConductorRequest, ConductorResponse, ErrorEvent, HeartBeat, ProceedToNextTaskSignal, RunRequest, ManagerResponse, TaskProcessingComplete, TaskProcessingStarted
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
@@ -15,6 +15,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 # Assuming prepare_step_df is potentially async
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.web.messages import _format_message_for_client
+from buttermilk.bm import bm, logger
 
 ALL_MESSAGES = Union[
     ManagerMessage,
@@ -57,13 +58,24 @@ def get_shiny_app(flows: FlowRunner):
             ),
             ui.input_action_button("go", "Rate"),
             ui.output_ui("confirm_button_ui"),
+            ui.hr(),
+            ui.input_action_button("load_history", "Load Run History", class_="btn btn-info")
         ),
-        ui.card(
-            ui.card_header("autogen chat"),
-            ui.chat_ui("chat", width="min(1400px, 100%)"),
-            style="width:min(1400px, 100%)",
-            class_="mx-auto",
-        ),
+        ui.layout_columns(
+            ui.card(
+                ui.card_header("autogen chat"),
+                ui.chat_ui("chat", width="100%"),
+                style="width:100%",
+            ),
+            ui.card(
+                ui.card_header("Judge & Synth Run History"),
+                ui.output_data_frame("run_history_table"),
+                style="width:100%",
+            ),
+            col_widths=[6, 6],  # Equal width columns
+            fill=True,
+            height="800px"
+        )
     )
 
 
@@ -75,6 +87,8 @@ def get_shiny_app(flows: FlowRunner):
         current_session_id = reactive.Value(None)
         callback_to_chat = reactive.Value(None)
         confirm_button_state = reactive.Value("neutral")
+        # New reactive value to store run history from BigQuery
+        run_history_df = reactive.Value(pd.DataFrame())
 
         # This effect loads data when the flow selection changes and updates the record_id dropdown
         @reactive.Effect
@@ -186,6 +200,57 @@ def get_shiny_app(flows: FlowRunner):
                 confirm_button_state.set("confirmed")
 
 
+        @reactive.effect
+        @reactive.event(input.load_history)
+        async def load_run_history():
+            # Get the currently selected values from inputs
+            selected_flow = input.flow()
+            selected_criteria = input.criteria()
+            selected_record_id = input.record_id()
+            
+            # Ensure required inputs are selected
+            if not all([selected_flow, selected_criteria, selected_record_id]):
+                await chat.append_message("*Please select a Flow, Criteria, and Record ID before loading history.*\n")
+                return
+            
+            try:
+                # Format of the SQL query to get judge and synth runs
+                # Get the dataset from the config in local.yaml
+                sql = f"""
+                SELECT
+                    created_at,
+                    run_id,
+                    agent_type,
+                    flow_name,
+                    record_id,
+                    criteria,
+                    parameters,
+                    result
+                FROM
+                    `{flows.save.dataset}`
+                WHERE
+                    flow_name = '{selected_flow}'
+                    AND criteria = '{selected_criteria}'
+                    AND record_id = '{selected_record_id}'
+                    AND agent_type IN ('judge', 'synth')
+                ORDER BY
+                    created_at DESC
+                LIMIT 100
+                """
+                
+                # Execute the query using bm.run_query
+                results_df = bm.run_query(sql)
+                
+                # If we got results, update the reactive value
+                if isinstance(results_df, pd.DataFrame) and not results_df.empty:
+                    run_history_df.set(results_df)
+                    await chat.append_message(f"*Run history loaded successfully.*\n")
+                else:
+                    await chat.append_message(f"*No judge or synth runs found for Flow: {selected_flow}, Criteria: {selected_criteria}, Record ID: {selected_record_id}*\n")
+            except Exception as e:
+                await chat.append_message(f"*Error loading run history: {e}*\n")
+                logger.error(f"Error loading run history: {e}")
+        
         @output
         @render.ui
         def confirm_button_ui():
@@ -196,6 +261,30 @@ def get_shiny_app(flows: FlowRunner):
                 return ui.input_action_button("confirm", "Confirmed", class_="btn btn-success", disabled=False)
             else: # neutral state
                 return ui.input_action_button("confirm", "Confirm", class_="btn btn-secondary", disabled=False)
+        
+        @output
+        @render.data_frame
+        def run_history_table():
+            # Get the current dataframe from the reactive value
+            df = run_history_df.get()
+            if df.empty:
+                return {}
+            
+            # Format the dataframe for display
+            # - Convert timestamps to readable format
+            # - Truncate long text fields
+            display_df = df.copy()
+            if 'created_at' in display_df.columns:
+                display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # For JSON columns that might contain complex nested structures, show a summary
+            for col in ['parameters', 'result']:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].apply(
+                        lambda x: (json.dumps(x)[:100] + '...') if isinstance(x, (dict, list)) and len(json.dumps(x)) > 100 else x
+                    )
+            
+            return display_df
 
 
     app = App(app_ui, server)
