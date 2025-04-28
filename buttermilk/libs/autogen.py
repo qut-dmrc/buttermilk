@@ -176,7 +176,7 @@ class AutogenAgentAdapter(RoutedAgent):
             )
         except Exception as e:
             msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
-            logger.error(msg)
+            logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
 
     @message_handler
@@ -214,10 +214,12 @@ class AutogenAgentAdapter(RoutedAgent):
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 )
-                logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__}")
-            
             if response:
-                await self.publish_message(response, topic_id=self.topic_id)
+                try:
+                    logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__}")
+                    await self.publish_message(response, topic_id=self.topic_id)
+                except Exception as e:
+                    breakpoint()
 
             return response  # Return response directly for OOB messages.
         except Exception as e:

@@ -4,6 +4,7 @@ Defines the core Agent base class, configuration, and handler decorator for Butt
 
 import asyncio
 from abc import abstractmethod
+from collections import Counter
 from collections.abc import Callable
 from functools import wraps  # Import wraps for decorator
 from typing import Any, Callable, Sequence
@@ -272,7 +273,7 @@ class Agent(AgentConfig):
         # TODO: Consider adding error handling for _extract_vars.
         datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}  # Simple source mapping
         extracted = await self._extract_vars(message=message, datadict=datadict)
-
+        found = []
         # Update internal state (_data, _records)
         for key, value in extracted.items():
             if value and value != [] and value != {}:
@@ -285,12 +286,13 @@ class Agent(AgentConfig):
                             self._records.append(rec)
                         else:
                             self._records.append(Record(**rec))
-
-                    logger.debug(f"Agent {self.id} added {len(value)} records from {source} ({len(self._records)} total).")
+                    found.append(key)
                 else:
                     # Add other extracted data to the KeyValueCollector.
                     self._data.add(key, value)
-                    logger.debug(f"Agent {self.id} updated state key '{key}' from {source}.")
+                    found.append(key)
+        if found:
+            logger.debug(f"Agent {self.id} extracted keys [{found}] from {source}.")
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -459,9 +461,10 @@ class Agent(AgentConfig):
                     # Use JMESPath to search the datadict based on the mapping expression.
                     # Example: mapping = "judge.outputs.prediction" -> search datadict["judge"]["outputs"]["prediction"]
                     search_result = jmespath.search(mapping, datadict)
-                    if isinstance(search_result, Sequence) and not isinstance(search_result, str):
+                    if search_result and isinstance(search_result, Sequence) and not isinstance(search_result, str):
                         # Remove None or empty results
                         search_result = [x for x in search_result if x is not None and x != [] and x != {}]
+                            
                     if search_result is not None and search_result != [] and search_result != {}:
                         # Store if JMESPath found something (could be False, 0, etc.)
                         extracted[key] = search_result

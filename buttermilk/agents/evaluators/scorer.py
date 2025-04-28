@@ -14,6 +14,7 @@ from buttermilk._core.agent import ProcessingError  # Decorator for message hand
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
+    ErrorEvent,
     GroupchatMessageTypes,  # Type hint union for listen
     )
 from buttermilk._core.types import Record
@@ -191,36 +192,19 @@ class LLMScorer(LLMAgent):
 
         logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
 
-        # Prepare data for the LLM scoring prompt template.
-        # We need the original output (message.outputs) and ground truth.
-        # TODO: The structure `datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}` seems fragile.
-        #       It assumes the source ID format and might not be robust. Clarify how context is passed.
-        agent_source_id = source.split("-", maxsplit=1)[0]  # Attempt to get base agent ID
-        datadict = {agent_source_id: message.model_dump()}  # Pass judge's output
-
+        # Prepare the scoring input from internal agent state.
         try:
-            # _extract_vars uses self.inputs to find needed inputs from other agents.
-            extracted_vars = await self._extract_vars(message=message, datadict=datadict)
-            records = extracted_vars.pop("records", [])  # Get records if extracted
-
-            if not extracted_vars.get("expected"):  # Check if ground truth was found
-                logger.warning(
-                    f"Scorer {self.id}: No ground truth ('expected') found in template variables or records for message from {source}. Skipping scoring."
-                )
-                return
-
+            scorer_agent_input = await self._add_state_to_input(AgentInput())
         except Exception as e:
-            logger.error(f"Scorer {self.id}: Error extracting variables for scoring: {e}")
+            logger.error(f"Agent {self.id}: Error preparing input state: {e}")
+            error_output = ErrorEvent(source=self.id, content=f"Failed to prepare input state: {e}")
+            await public_callback(error_output)
             return
-
+        
         # Prepare the input for the scorer's own LLM call (_process)
         # 'inputs' should match what the scorer's prompt template expects.
         # It needs the judge's output (message.outputs) and the ground_truth.
-        extracted_vars["assessor"] = self.id
-        scorer_agent_input = AgentInput(
-            inputs=extracted_vars,
-            records=records,  # Pass records if needed
-        )
+        scorer_agent_input.inputs["assessor"] = self.id
 
         # Define the scoring function (our own _process method)
         score_fn = self._process

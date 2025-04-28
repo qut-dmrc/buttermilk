@@ -51,7 +51,7 @@ class HostAgent(Agent):
 
     # Additional configuration
     max_wait_time: int = Field(
-        default=60,
+        default=30,
         description="Maximum time to wait for agent responses in seconds",
     )
     human_in_loop: bool = Field(
@@ -212,7 +212,7 @@ class HostAgent(Agent):
             return response
         except asyncio.TimeoutError:
             logger.warning(f"{self.id} hit timeout waiting for manager response after {self.max_wait_time} seconds.")
-            return ManagerResponse(confirm=False)
+            return await self._wait_for_user()
 
 
     async def _wait_for_completions(self) -> None:
