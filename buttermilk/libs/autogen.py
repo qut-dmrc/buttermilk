@@ -166,11 +166,7 @@ class AutogenAgentAdapter(RoutedAgent):
         """
         logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
 
-        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
-
         try:
-            await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
-
             # Delegate to the agent's _listen method for processing.
             await self.agent._listen(
                 message=message,
@@ -183,12 +179,7 @@ class AutogenAgentAdapter(RoutedAgent):
             msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
             logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
-        finally:
-            # Publish status update: Task Complete (Error)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
-                topic_id=self.topic_id,
-            )
+
 
     @message_handler
     async def handle_control_message(
@@ -213,8 +204,6 @@ class AutogenAgentAdapter(RoutedAgent):
         response: AllMessages|None = None
 
         try:
-            await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
-
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
                 response = await self.agent(message=message,
@@ -241,12 +230,6 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None
-        finally:
-            # Publish status update: Task Complete (Error)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
-                topic_id=self.topic_id,
-            )
 
     @message_handler
     async def handle_invocation(
@@ -273,8 +256,6 @@ class AutogenAgentAdapter(RoutedAgent):
         logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
         output: AllMessages|None = None
 
-        await self.publish_message(TaskProcessingStarted(agent_id=self.agent.id, role=self.type, task_index=0), topic_id=self.topic_id)
-
         try:
             # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
             # Pass the cancellation token from Autogen context.
@@ -288,15 +269,6 @@ class AutogenAgentAdapter(RoutedAgent):
             )
             logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
                 
-            # If the agent returned something directly, publish it to the main topic.
-            if output:
-                await self.publish_message(output, topic_id=self.topic_id)
-
-            # Publish status update: Task Complete (Success)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=False),
-                topic_id=self.topic_id,
-            )
             return output  # Return the direct output to the caller in Autogen.
 
         except Exception as e:
@@ -305,9 +277,3 @@ class AutogenAgentAdapter(RoutedAgent):
             await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
             # Do not return the exception itself, let Autogen handle failed `send_message`.
             return None
-        finally:
-            # Publish status update: Task Complete (Error)
-            await self.publish_message(
-                TaskProcessingComplete(agent_id=self.agent.id, role=self.type, task_index=0, more_tasks_remain=False, is_error=True),
-                topic_id=self.topic_id,
-            )

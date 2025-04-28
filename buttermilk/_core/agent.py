@@ -29,18 +29,23 @@ from buttermilk._core.contract import (
     COMMAND_SYMBOL,  # Constant for command messages,
     AgentInput,  # Standard input message structure
     AgentOutput,
-    ErrorEvent,  # Standard output message structure
+    ErrorEvent,
+    FlowEvent,
+    FlowMessage,  # Standard output message structure
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     OOBMessages,  # Union of Out-Of-Band control messages
     ManagerMessage,  # Messages for display to the user
     ManagerRequest,  # Request sent to the manager
-    StepRequest,  # Request to execute a specific step
+    StepRequest,
+    TaskProcessingComplete,
+    TaskProcessingStarted,  # Request to execute a specific step
     ToolOutput,  # The result of a tool execution
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.types import Record  # Data record structure
+from typing import Awaitable
 
 # --- Buttermilk Handler Decorator ---
 
@@ -160,10 +165,10 @@ class Agent(AgentConfig):
     @weave.op()  # Mark the primary execution method for Weave tracing.
     async def __call__(
         self,
-        message: AgentInput,
+        message: AgentInput,public_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent|None:
         """
         Primary entry point for agent execution, called by the orchestrator/adapter.
 
@@ -203,6 +208,9 @@ class Agent(AgentConfig):
 
         # --- Execute Core Logic ---
         try:
+
+            await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
+
             result = await self._process(message=final_input, cancellation_token=cancellation_token, **kwargs)
 
         except Exception as e:
@@ -211,14 +219,18 @@ class Agent(AgentConfig):
             logger.error(error_msg)
             result = ErrorEvent(source=self.id, content=error_msg)
 
+        finally:
+            # Publish status update: Task Complete (Error)
+            await public_callback(
+                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
+            )
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
-        if result is None:
-            msg = f"Agent {self.id} _process returned None. Creating default error output."
-            logger.warning(msg)
-            result = ErrorEvent(source=self.id, content=msg)
+        if result:
+            await public_callback(result)
+            return result
 
         logger.debug(f"Agent {self.id} finished __call__.")
-        return result
+        return None
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:

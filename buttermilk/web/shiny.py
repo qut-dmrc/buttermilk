@@ -53,7 +53,8 @@ app_ui = ui.page_sidebar(
             value="jenner_criticises_khalif_dailymail"
         ),
         ui.input_action_button("go", "Rate"),
-        ui.input_action_button("confirm", "Confirm"),
+        # Initialize confirm button as disabled
+        ui.input_action_button("confirm", "Confirm", disabled=True),
     ),
     ui.card(
         ui.card_header("autogen chat"),
@@ -66,18 +67,22 @@ app_ui = ui.page_sidebar(
 
 def get_shiny_app(flows: FlowRunner):
      
-    def server(input):
+    def server(input, output, session: Session): # Add session parameter
         # stream = ui.MarkdownStream(id="chat")
         chat = ui.Chat(id="chat")
         flow_runner = flows
         current_session_id = reactive.Value(None)
         callback_to_chat = reactive.Value(None)
+        # Reactive value to control confirm button state
+        confirm_enabled = reactive.Value(False)
 
         @reactive.effect
         @reactive.event(input.go)
         async def run_flow():
             session_id = str(uuid.uuid4())
             current_session_id.set(session_id)
+            # Reset confirm button state on new run
+            confirm_enabled.set(False)
             run_request=RunRequest(flow=input.flow(), record_id=input.record_id(), parameters=dict(criteria=input.criteria()), client_callback=callback_to_ui, session_id=session_id)
             
             callback_to_chat.set(await flow_runner.run_flow(flow_name="batch", run_request=run_request))
@@ -95,15 +100,32 @@ def get_shiny_app(flows: FlowRunner):
             if content:
                  await chat.append_message(str(content))
             
+            # Update the reactive value based on message type
+            confirm_enabled.set(isinstance(message, ConductorRequest))
+
         # Add reactive effect for the new confirm button
         @reactive.effect
         @reactive.event(input.confirm)
         async def handle_confirm():
             """Handles the confirm button click."""
-            message = ManagerResponse(confirm=True)
-            await callback_to_chat.get()(message)
+            # Only proceed if the button should be enabled (redundant check, but safe)
+            if confirm_enabled.get():
+                message = ManagerResponse(confirm=True)
+                if callback_to_chat.get():
+                    await callback_to_chat.get()(message)
+                    # Disable button after confirming
+                    confirm_enabled.set(False)
+                else:
+                    # Handle case where callback is not yet set (should not happen if button is enabled)
+                    await chat.append_message("*Error: Cannot confirm, flow not ready.*")
+
 
             # await stream.write(f"\n\n*Confirm button pressed. Message prepared: `{message}`*\n\n")
+
+        # Effect to update the button's disabled state based on the reactive value
+        @reactive.effect
+        def _update_confirm_button_state():
+            ui.update_action_button("confirm", disabled=not confirm_enabled.get())
 
 
     app = App(app_ui, server)
