@@ -167,8 +167,8 @@ class CLIUserAgent(UIAgent):
                     output_lines.append(outputs)
 
                 # Display raw content if available and not handled above
-                elif hasattr(message, "contents") and message.contents and not outputs:
-                    output_lines.append(message.contents)
+                elif hasattr(message, "contents") and message.content and not outputs:
+                    output_lines.append(message.content)
 
                 # Optionally display inputs that led to this output
                 # if inputs:

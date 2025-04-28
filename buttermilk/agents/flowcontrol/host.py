@@ -104,7 +104,7 @@ class HostAgent(Agent):
         """
         # Log messages to our local context cache, but truncate them
         if isinstance(message, (AgentOutput, ConductorResponse)):
-            await self._model_context.add_message(AssistantMessage(content=str(message.contents)[:TRUNCATE_LEN], source=source))
+            await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
         elif isinstance(message, StepRequest):
             # StepRequest has content field but it might be empty
             if message.content and not message.content.startswith(COMMAND_SYMBOL):

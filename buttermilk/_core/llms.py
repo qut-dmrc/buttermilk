@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
@@ -126,8 +127,15 @@ class AutoGenWrapper(RetryWrapper):
     ) -> CreateResult | list[ToolOutput]:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
-            if schema and self.model_info.get("structured_output", False):
+            is_valid_schema_type = (
+                schema is not None
+                and inspect.isclass(schema)
+                and issubclass(schema, BaseModel)
+                and schema is not BaseModel
+            )
+            if is_valid_schema_type and self.model_info.get("structured_output", False):
                 json_output = schema
+                
             else:
                 # By preference, pass a pydantic schema for structured output
                 # Otherwise, set json_output to True if the model supports it

@@ -232,7 +232,6 @@ class LLMAgent(Agent):
         if schema:
             if isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
                 # If client already parsed into the correct schema object
-                logger.debug(f"Agent {self.id}: LLM client returned pre-parsed object matching schema {schema.__name__}.")
                 parsed_object = chat_result.object
             elif isinstance(chat_result.content, str):
                 # If content is a string, try to parse/validate it against the schema
@@ -260,9 +259,6 @@ class LLMAgent(Agent):
             try:
                 output.outputs = self._json_parser.parse(chat_result.content)
                 logger.debug(f"Agent {self.id}: Successfully parsed content as generic JSON.")
-                # If schema validation failed earlier, add that error now.
-                if parse_error:
-                    output.set_error(parse_error)
             except Exception as json_e:
                 # If generic JSON parsing also fails, store raw content
                 raw_content_error = f"Failed to parse LLM response as JSON: {json_e}. Storing raw content."

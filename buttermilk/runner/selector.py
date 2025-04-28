@@ -348,7 +348,7 @@ class Selector(AutogenOrchestrator):
         outputs = message.outputs
         if not isinstance(outputs, dict):
             logger.warning(f"Host message outputs are not a dict: {type(outputs)}. Forwarding content.")
-            await self._send_ui_message(ManagerMessage(content=message.contents or "(Host sent non-dict message)"))
+            await self._send_ui_message(ManagerMessage(content=message.content or "(Host sent non-dict message)"))
             return
 
         msg_type = outputs.get("type", "").lower()
@@ -356,7 +356,7 @@ class Selector(AutogenOrchestrator):
         if msg_type == "question":
             # Host asks user a question, potentially with options.
             logger.info("Host is asking the user a question.")
-            question_text = outputs.get("question", message.contents or "Host has a question:")
+            question_text = outputs.get("question", message.content or "Host has a question:")
             options = outputs.get("options", [])
             options_text = "\nOptions:\n" + "\n".join([f"- {opt}" for opt in options]) if options else ""
 
@@ -382,7 +382,7 @@ class Selector(AutogenOrchestrator):
         else:
             # Unknown or generic message type, just display content to user.
             logger.debug("Forwarding generic host message to user.")
-            await self._send_ui_message(ManagerMessage(content=message.contents or "(Host sent message with unknown type)"))
+            await self._send_ui_message(ManagerMessage(content=message.content or "(Host sent message with unknown type)"))
 
     async def _handle_comparison(self, message: ConductorResponse) -> None:
         """
@@ -398,7 +398,7 @@ class Selector(AutogenOrchestrator):
 
         variants_compared = outputs.get("variants", [])
         results_data = outputs.get("results", {})
-        comparison_intro = message.contents or "The conductor provided the following comparison:"
+        comparison_intro = message.content or "The conductor provided the following comparison:"
 
         logger.debug(f"Formatting comparison for variants: {variants_compared}")
 
