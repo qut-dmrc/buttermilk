@@ -275,18 +275,16 @@ class HostAgent(Agent):
         Args:
             message: The ConductorRequest containing context information
             
-        Returns:
-            An AgentOutput containing the next StepRequest
         """
-        # Initialize participants if not done yet
-        if not self._participants:
-            self._participants = message.participants # Store role descriptions
-            if not self._participants:
-                 logger.warning("Host received ConductorRequest with no participants.")
-                 return StepRequest(role=WAIT, content="Waiting for participants to be defined.")
 
 
         while True:
+            # Initialize participants if not done yet
+            if not self._participants:
+                self._participants = message.participants # Store role descriptions
+                if not self._participants:
+                    raise FatalError("Host received ConductorRequest with no participants.")
+                
             # Wait for enough completions, with a timeout
             await self._wait_for_completions() 
         
@@ -336,10 +334,10 @@ class HostAgent(Agent):
     async def _execute_step(self, step: StepRequest) -> None:
         """
         Prepare for a step execution by setting state and sending the StepRequest.
-        
+
         Sets the current step name, resets completion tracking state, and publishes
         the StepRequest message via the input callback.
-        
+
         Args:
             step: The step to execute
         """
@@ -352,28 +350,29 @@ class HostAgent(Agent):
             self._current_step_name = None
             self._active_agents_current_step.clear()
             return
-        
+
         logger.info(f"Host executing step for role: {step.role}")
-        
+
         # --- Set up state for the new step ---
         self._current_step_name = step.role
         self._active_agents_current_step.clear()
-        # Set the event initially. It will be cleared if/when a TaskProcessingStarted arrives.
-        self._step_completion_event.set() 
-        logger.debug(f"Cleared active agents for step '{step.role}'. Completion event initially SET.")
+        # Clear the event. It will be cleared again by TaskProcessingStarted
+        # and only set by TaskProcessingComplete when the last agent finishes.
+        self._step_completion_event.clear()
+        logger.debug(f"Cleared active agents for step '{step.role}'. Completion event initially CLEARED.")
 
         # Create the message for the target role
         message_content = step.content or f"Executing step for role {step.role}"
         # Pass records if needed (assuming self._records exists or is handled)
-        message = StepRequest(role=step.role, content=message_content, records=getattr(self, '_records', [])) 
-        
+        message = StepRequest(role=step.role, content=message_content, records=getattr(self, '_records', []))
+
         # Publish the message using the _input_callback
         if not hasattr(self, '_input_callback') or not callable(self._input_callback):
             logger.error(f"Host {self.id} cannot publish StepRequest for role {step.role}: _input_callback is not set or not callable.")
-            # If the step can't be sent, reset state and ensure event is set
-            self._current_step_name = None 
+            # If the step can't be sent, reset state and ensure event is set to unblock
+            self._current_step_name = None
             self._active_agents_current_step.clear()
-            self._step_completion_event.set() 
+            self._step_completion_event.set() # Set here to prevent deadlock if publish fails
             return
 
         try:
@@ -383,9 +382,9 @@ class HostAgent(Agent):
         except Exception as e:
             logger.exception(f"Host {self.id} encountered an error calling _input_callback for role {step.role}: {e}")
             # Reset state and ensure event is set to prevent deadlock
-            self._current_step_name = None 
+            self._current_step_name = None
             self._active_agents_current_step.clear()
-            self._step_completion_event.set() 
+            self._step_completion_event.set() # Set here to prevent deadlock on exception
 
     def _store_exploration_result(self, execution_id: str, output: AgentOutput) -> None:
         """

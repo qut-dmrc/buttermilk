@@ -222,7 +222,7 @@ class AutogenAgentAdapter(RoutedAgent):
             return response  # Return response directly for OOB messages.
         except Exception as e:
             msg = f"Error during agent {self.agent.id} handling control message {type(message).__name__}: {e}"
-            logger.error(msg)
+            logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
             return None
 
