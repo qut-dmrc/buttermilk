@@ -195,7 +195,9 @@ class LLMScorer(LLMAgent):
             logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer; trying to score without tracing instead.")
 
         # Call the LLMScorer._process method with the prepared input.
-        score_output: AgentOutput = await score_fn(message=scorer_agent_input)
+        score_output: AgentOutput = await score_fn(message=scorer_agent_input,
+            public_callback=public_callback,
+            message_callback=message_callback,)
 
         # Process the score for logging
         if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
