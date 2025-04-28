@@ -176,8 +176,6 @@ def load_template(
     recursive_paths = [TEMPLATES_PATH] + [p for p in Path(TEMPLATES_PATH).rglob("*") if p.is_dir()]
     loader = FileSystemLoader(searchpath=recursive_paths)
 
-    untrusted_inputs = {}
-
     undefined_vars = []
 
     class KeepUndefined(Undefined):

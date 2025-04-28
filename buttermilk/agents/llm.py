@@ -75,7 +75,7 @@ class LLMAgent(Agent):
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: AutoGenWrapper = PrivateAttr(default=None)  # Populated by init_model validator
     # Subclasses should override this if they expect specific structured output
-    _output_model: Optional[Type[BaseModel]] = None
+    _output_model: Optional[Type[BaseModel]] = PrivateAttr(default=None)
     # TODO: _pause seems unused in this base class. Consider removing or implementing usage.
     # _pause: bool = PrivateAttr(default=False)
 
@@ -326,7 +326,7 @@ class LLMAgent(Agent):
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected schema to client if supported
             )
-            llm_messages = llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.id))
+            llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.id))
             logger.debug(f"Agent {self.id}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call

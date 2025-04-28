@@ -49,7 +49,7 @@ app_ui = ui.page_sidebar(
     ),
     ui.card(
         ui.card_header("autogen chat"),
-        ui.chat_ui("chat"),
+        ui.chat_ui("chat", width="min(1400px, 100%)"),
         style="width:min(1400px, 100%)",
         class_="mx-auto",
     ),
@@ -76,6 +76,7 @@ def get_shiny_app(flows: FlowRunner):
             callback_to_chat.set(await flow_runner.run_flow(flow_name="batch", run_request=run_request))
 
             await chat.append_message("*Flow started...*\n")
+            ui.input_action_button("go", "Running...", disabled=True)
 
         @chat.on_user_submit
         async def handle_user_input(user_input: str):

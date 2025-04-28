@@ -80,12 +80,8 @@ class WebUIAgent(RoutedAgent):
                 logger.info(f"Client disconnected from flow for session {self.session_id}")
                 break
             except Exception as e:
-                logger.error(f"Error in flow runner: {e}")
-                await self.callback_to_ui({
-                    "type": "error",
-                    "content": f"Error: {str(e)}",
-                    "source": "system"
-                })
+                logger.error(f"Error in web ui: {e}")
+                await self.callback_to_ui(ErrorEvent(source="web runner", content=f"Error: {str(e)}"))
 
     
     # ===== Autogen Message Handlers =====    
