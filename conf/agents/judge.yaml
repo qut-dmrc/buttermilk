@@ -11,4 +11,3 @@ judge:
     criteria: ${....parameters.criteria}
   inputs:
     records: "[FETCH]||*.records[]||*.records[]"
-    # criteria: ${flows[${....name}].criteria}
