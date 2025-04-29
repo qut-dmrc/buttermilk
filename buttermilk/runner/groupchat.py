@@ -198,7 +198,6 @@ class AutogenOrchestrator(Orchestrator):
         finally:
             await asyncio.sleep(2)  # Give it some time to properly shut down
 
-    @observe()
     @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
         """

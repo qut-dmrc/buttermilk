@@ -185,7 +185,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
 
     # --- Public Execution Method ---
-    observe()
+    @observe()
     async def run(self, request: RunRequest | None = None):
         """
         Public entry point to start the orchestrator's flow execution.
@@ -255,7 +255,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
 
-    @observe()
     @weave.op
     @abstractmethod
     async def _run(self, request: RunRequest | None = None):

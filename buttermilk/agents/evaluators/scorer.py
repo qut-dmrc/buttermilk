@@ -89,46 +89,6 @@ class LLMScorer(LLMAgent):
     # Sets the expected output structure for the LLM call made by _process.
     _output_model: Optional[type[BaseModel]] = QualScore
 
-    def _extract_original_trace(self, message: GroupchatMessageTypes) -> Any:
-        """
-        Attempts to extract the original weave trace ID from various potential locations within a message.
-
-        Args:
-            message: The incoming message object.
-
-        Returns:
-            The weave trace ID if found, otherwise None.
-        """
-        if not isinstance(message, AgentOutput):
-            return None
-
-        # Check if trace is directly on the AgentOutput itself (might be added by framework)
-        if hasattr(message, "tracing") and hasattr(message.tracing, "weave"):
-            trace_id = getattr(message.tracing, "weave", None)
-            if trace_id:
-                logger.debug(f"Found weave trace '{trace_id}' directly on AgentOutput tracing.")
-                return trace_id
-
-        # Check older potential attribute (less likely used now)
-        if hasattr(message, "_weave_trace"):
-            trace_id = getattr(message, "_weave_trace", None)
-            if trace_id:
-                logger.debug(f"Found weave trace '{trace_id}' on AgentOutput._weave_trace.")
-                return trace_id
-
-        # Less common: Check if AgentInput was nested inside AgentOutput.inputs
-        if hasattr(message, "inputs") and isinstance(message.inputs, AgentInput):
-            # This structure seems unlikely based on typical flow, but checking just in case.
-            # It implies the scorer input itself contained another agent's output *with* trace info.
-            if hasattr(message.inputs, "tracing") and hasattr(message.inputs.tracing, "weave"):
-                trace_id = getattr(message.inputs.tracing, "weave", None)
-                if trace_id:
-                    logger.debug(f"Found weave trace '{trace_id}' on nested AgentInput tracing.")
-                    return trace_id
-
-        logger.debug("Could not extract weave trace from message.")
-        return None
-
     async def _listen(
         self,
         message: AgentOutput,  # Specifically listen for AgentOutput
