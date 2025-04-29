@@ -42,6 +42,26 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "streamlit",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "args": ["run", "buttermilk/runner/cli.py",
+        "hydra.verbose=false",
+        "+flows=trans",
+        "ui=streamlit",
+        "llms=lite",
+        "name=bmdevelopment",
+        "job=api",
+        //"+record_id=${input:query}" // Will prompt for query
+      ],
+    },
+    {
       "name": "api web",
       "type": "debugpy",
       "request": "launch",
@@ -54,7 +74,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=trans",
-        "ui=api",
+        "ui=streamlit",
         "llms=lite",
         "name=bmdevelopment",
         "job=api",

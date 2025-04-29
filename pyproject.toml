@@ -83,6 +83,7 @@ dependencies = [
     "shiny>=1.4.0",
     "langfuse>=2.60.3",
     "openlit>=1.33.20",
+    "streamlit>=1.45.0",
 ]
 
 [dependency-groups]
