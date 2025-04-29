@@ -2,15 +2,13 @@ host: gemini2flashlite
 
 cheap:
   - gemini2flashlite
-  - gemini2flash
 
 general:
   - gemini2flashlite
-  - gemini2flash
 
 judgers:
   - gemini2flashlite
-  - gemini2flash
+  - o4mini
   
 
 synthesisers:

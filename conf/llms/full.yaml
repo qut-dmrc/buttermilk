@@ -8,7 +8,7 @@ general:
 judgers:
   - gemini2flash
   - gemini2flashlite
-  - o3-mini-high
+  - o4-mini
   - gemini25pro
 
 synthesisers:

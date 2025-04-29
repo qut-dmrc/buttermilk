@@ -258,6 +258,7 @@ class BM(Singleton, Project):
             # openlit.init(tracer=self._tracer, disable_batch=False)
 
             # pass
+            logger.info(f"Tracing set up, tracing to {os.environ.get('LANGFUSE_HOST')}.")
 
     @property
     def save_dir(self) -> str:

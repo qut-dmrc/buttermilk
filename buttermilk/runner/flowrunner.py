@@ -21,7 +21,7 @@ class FlowRunner(BaseModel):
     flows: Mapping[str, OrchestratorProtocol]  # Dictionary of unconfigured flow orchestrators.
     save: SaveInfo
     tasks: list = Field(default=[])
-
+    ui: str
     model_config = ConfigDict(extra="allow")
     
     async def run_flow(self, 

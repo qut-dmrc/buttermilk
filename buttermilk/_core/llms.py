@@ -79,8 +79,8 @@ CHATMODELS = [
     "gemini2flash",
     "gemini2flashlite",
     "gemini2flashthinking",
-    "gpt4o",
-    "o3-mini-high",
+    "gpt41mini",
+    "o4-mini",
     "llama31_8b",
     "llama32_90b",
     "llama33_70b",
@@ -90,7 +90,7 @@ CHATMODELS = [
 CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini2flash",
-    "o3-mini-high",
+    "o4-mini",
     "llama31_8b",
     "gemini2flashthinking",
     "gemini2flashlite",
@@ -271,6 +271,7 @@ class LLMs(BaseModel):
         # add in model parameters from the config dict
         client_params.update(**self.connections[name].configs)
         if self.connections[name].api_type == "azure":
+            client_params['azure_endpoint'] = client_params.pop('base_url')  # rename field
             client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
             client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(

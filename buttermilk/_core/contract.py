@@ -400,13 +400,12 @@ class TaskProgressUpdate(FlowMessage):
     step_name: str = Field(..., description="Name of the current step")
     status: str = Field(..., description="Current status (e.g., 'started', 'in_progress', 'completed', 'error')")
     message: str = Field(default="", description="Human-readable message explaining the current progress")
-    progress: float = Field(default=0.0, description="Numeric progress indicator (0.0 to 1.0)")
     total_steps: int = Field(default=0, description="Total number of steps in the workflow")
     current_step: int = Field(default=0, description="Current step number")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
     
     def __str__(self) -> str:
-        return f"[{self.status.upper()}] {self.message} ({self.progress:.0%})"
+        return f"[{self.status.upper()}] {self.message} ({self.current_step:.0%})"
 
 
 # --- Tool / Function Call Messages ---

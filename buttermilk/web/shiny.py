@@ -19,7 +19,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 # Assuming prepare_step_df is potentially async
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.web.messages import _format_message_for_client
-from buttermilk.bm import bm, logger
+from buttermilk.bm import  logger
 
 ALL_MESSAGES = Union[
     ManagerMessage,
@@ -69,27 +69,26 @@ def get_shiny_app(flows: FlowRunner):
         ),
         ui.layout_columns(
             ui.column(
-                6,
+                10,
                 ui.card(
                     ui.card_header("autogen chat"),
-                    ui.chat_ui("chat", width="100%"),
-                    style="width:100%",
+                    ui.chat_ui("chat", width="min(1400px, 100%)"),
+                    style="width:min(1400px, 100%)"
                 ),
+            height="800px"
             ),
             ui.column(
-                6,
+                2,
                 ui.card(
                     ui.card_header("Judge & Synth Run History"),
                     ui.output_data_frame("run_history_table"),
-                    style="width:100%",
                 ),
                 ui.card(
                     ui.card_header("Workflow Progress"),
                     ui.output_ui("progress_tracker_ui"),
-                    style="width:100%",
                 ),
             ),
-            fill=True,
+            fill=False,
             height="800px"
         )
     )
@@ -107,9 +106,7 @@ def get_shiny_app(flows: FlowRunner):
         run_history_df = reactive.Value(pd.DataFrame())
         
         # Progress tracking
-        workflow_steps = reactive.Value([])
         current_progress = reactive.Value({})
-        progress_obj = reactive.Value(None)  # Store the Progress object
 
         # This effect loads data when the flow selection changes and updates the record_id dropdown and criteria dropdown
         @reactive.Effect
@@ -209,6 +206,9 @@ def get_shiny_app(flows: FlowRunner):
                 await cb(user_input)
 
         async def callback_to_ui(message):
+            # Log all received messages for debugging
+            logger.debug(f"Received message in callback_to_ui: Type={type(message)}, Content={message}")
+
             content = _format_message_for_client(message)
             if content:
                 await chat.append_message(str(content))
@@ -219,60 +219,29 @@ def get_shiny_app(flows: FlowRunner):
             # Handle task progress updates without sending to chat
             if isinstance(message, TaskProgressUpdate):
                 # Update the progress tracking
+                # Exclude timestamp just in case it causes issues with reactivity/rendering
                 progress_data = {
                     "role": message.role,
                     "step_name": message.step_name,
                     "status": message.status,
                     "message": message.message,
-                    "progress": message.progress,
                     "total_steps": message.total_steps,
                     "current_step": message.current_step,
-                    "timestamp": message.timestamp
+                    # "timestamp": message.timestamp # Excluded
                 }
-                
+
+                # Log the specific progress data being set
+                logger.info(f"Updating progress tracker with data: {progress_data}")
+
                 # Update progress tracker
                 current_progress.set(progress_data)
-                
-                # If this is the first time seeing this step, add it to workflow_steps
-                steps = workflow_steps.get().copy()  # Make a copy to trigger reactivity
-                step_names = [s.get("step_name") for s in steps]
-                
-                if message.step_name not in step_names:
-                    steps.append(progress_data)
-                    workflow_steps.set(steps)
-                else:
-                    # Update existing step
-                    for i, step in enumerate(steps):
-                        if step.get("step_name") == message.step_name:
-                            steps[i] = progress_data
-                            workflow_steps.set(steps)
-                            break
-                
-                # Update the native Shiny progress bar if it exists
-                p = progress_obj.get()
-                if p and message.total_steps > 0:
-                    # Calculate the current progress value (1-based for Progress component)
-                    current = max(1, int(message.current_step))
-                    total = max(1, int(message.total_steps))
-                    
-                    # Set the progress
-                    try:
-                        p.set(
-                            value=current,
-                            message=f"Step {current}/{total}: {message.role}",
-                            detail=message.message
-                        )
-                        
-                        # If we're at the end, close the progress indicator
-                        if message.status == "completed" and message.progress >= 0.99:
-                            p.close()
-                    except Exception as e:
-                        logger.error(f"Error updating progress: {e}")
-                            
+
                 # Don't continue processing this message for the chat UI
                 return
                 
             if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)):
+                # Log when the flow signals completion or requires interaction
+                logger.debug(f"Received flow end/interaction signal: {type(message)}")
                 ui.update_action_button("go", label="Rate", disabled=False)
 
 
@@ -311,7 +280,7 @@ def get_shiny_app(flows: FlowRunner):
                     # --`{flows.save.dataset}`
                 
                 # Execute the query using bm.run_query
-                results_df = bm.run_query(sql)
+                results_df = flows.bm.run_query(sql)
                 
                 # If we got results, update the reactive value
                 if isinstance(results_df, pd.DataFrame) and not results_df.empty:
@@ -358,82 +327,64 @@ def get_shiny_app(flows: FlowRunner):
             
             return display_df
         
-        @reactive.effect
-        @reactive.event(input.go)
-        async def create_progress_indicator():
-            """Create a new progress indicator when the flow starts running"""
-            # Get information about the current flow
-            selected_flow = input.flow()
-            selected_record_id = input.record_id()
-            
-            # Get the flow details to determine steps if possible
-            max_steps = 1  # Default to 1 if we can't determine
-            if selected_flow and selected_flow in flows.flows:
-                try:
-                    # Try to get the number of participant roles as the max steps
-                    flow_obj = flows.flows[selected_flow]
-                    if hasattr(flow_obj, 'participants') and flow_obj.participants:
-                        max_steps = len(flow_obj.participants)
-                except Exception as e:
-                    logger.error(f"Error determining steps for flow {selected_flow}: {e}")
-            
-            # Create the Progress object
-            try:
-                # Use a higher max value to allow for fractional progress
-                p = ui.Progress(min=1, max=max_steps)
-                p.set(message=f"Starting flow: {selected_flow}", detail=f"Record ID: {selected_record_id}")
-                progress_obj.set(p)
-                logger.info(f"Created progress indicator with max_steps={max_steps}")
-            except Exception as e:
-                logger.error(f"Error creating progress indicator: {e}")
-
         @output
         @render.ui
         def progress_tracker_ui():
-            """Render the progress tracker UI with current steps and their statuses"""
-            steps = workflow_steps.get()
+            """Render a simple progress bar indicating overall workflow progress."""
+            progress_data = current_progress.get()
+            # Log when the UI render function is called and what data it sees
+            logger.debug(f"Rendering progress_tracker_ui with data: {progress_data}")
             
-            if not steps:
-                return ui.div(ui.h5("No workflow steps recorded yet."))
-            
-            # Create step indicators
-            step_indicators = []
-            for step in steps:
-                status = step.get("status", "")
-                role = step.get("role", "")
-                message = step.get("message", "")
-                
-                # Icon based on status
-                if status == "completed":
-                    icon = ui.tags.i(class_="fa fa-check-circle text-success")
-                elif status == "error":
-                    icon = ui.tags.i(class_="fa fa-times-circle text-danger")
-                elif status == "started":
-                    icon = ui.tags.i(class_="fa fa-circle-notch fa-spin text-primary")
-                else:
-                    icon = ui.tags.i(class_="fa fa-clock text-warning")
-                
-                # Create the step indicator using Bootstrap list group
-                step_indicator = ui.tags.li(
-                    ui.tags.div(
-                        icon,
-                        ui.tags.strong(f" {role}: "),
-                        ui.tags.span(message),
-                        class_="d-flex align-items-center"
+            if not progress_data or 'total_steps' not in progress_data or 'current_step' not in progress_data:
+                # Default state or before the first progress update
+                return ui.div(
+                    ui.tags.h5("Workflow Progress"),
+                    ui.div(
+                        ui.tags.div(
+                            class_="progress-bar",
+                            role="progressbar",
+                            style="width: 0%;",
+                            aria_valuenow="0",
+                            aria_valuemin="0",
+                            aria_valuemax="100"
+                        ),
+                        class_="progress mb-2",
+                        style="height: 20px;" # Make the bar a bit thicker
                     ),
-                    class_="list-group-item"
+                    ui.div("Waiting for workflow to start...")
                 )
-                
-                step_indicators.append(step_indicator)
-            
-            # Combine everything into a single UI element
-            return ui.tags.div(
-                ui.tags.h5("Step Details", class_="mb-3"),
-                ui.tags.ul(
-                    *step_indicators,
-                    class_="list-group list-group-flush"
-                ),
-                class_="progress-tracker"
+
+            current_step = progress_data.get('current_step', 1)
+            status = progress_data.get('status', 'running')
+
+            # Ensure total_steps is at least 1
+            total_steps = 101
+            # Ensure current_step doesn't exceed total_steps for calculation
+            current_step = min(current_step, total_steps)
+
+            progress_percent = int((current_step / total_steps) * 100) if total_steps > 0 else 1
+
+            # Determine progress bar color based on status
+            bar_class = "progress-bar"
+            if status == "completed":
+                bar_class += " bg-success"
+                progress_percent = 99 # Ensure completed shows 100%
+            elif status == "error":
+                bar_class += " bg-danger"
+            elif status == "started" or status == "running":
+                 bar_class += " progress-bar-striped progress-bar-animated" # Animate while running
+
+            return ui.div(
+                ui.tags.h5("Workflow Progress"),
+                ui.div(
+                    ui.tags.div(
+                        class_=bar_class,
+                        role="progressbar",
+                        style=f"width: {int(progress_percent)}%;",
+                    ),
+                    class_="progress mb-2",
+                    style="height: 20px;" # Make the bar a bit thicker
+                )
             )
 
 

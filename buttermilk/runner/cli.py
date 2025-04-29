@@ -21,14 +21,11 @@ import hydra
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
-# TODO: Consider removing StepRequest if only RunRequest is actively used here.
-# from buttermilk._core.contract import StepRequest
+from buttermilk.api.flow import create_app
+import uvicorn
 from buttermilk._core.contract import RunRequest
-from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 
-# TODO: FetchRecord seems unused directly in this script, consider removing if not needed for type hints elsewhere initialized via this entry point.
-# from buttermilk.agents.fetch import FetchRecord
-from buttermilk.bm import BM
+from buttermilk.bm import  BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.selector import Selector
@@ -42,7 +39,6 @@ ORCHESTRATOR_CLASSES = {
 }
 # TODO: The mapping keys ("simple", "selector") might be better represented as enums or constants for clarity and type safety.
 # TODO: This mapping is currently hardcoded. Consider if it should be dynamically discoverable or configurable.
-
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -67,11 +63,7 @@ def main(cfg: DictConfig) -> None:
     # This might involve loading credentials, setting up logging, initializing API clients, etc.
     bm.setup_instance()
     
-    # Increase the slow callback duration for the asyncio event loop.
-    # This helps prevent warnings if certain setup or flow steps take longer than the default threshold.
-    loop = asyncio.get_event_loop()
-    loop.slow_callback_duration = 10.0  # Default is 0.1 seconds
-
+    logger.info(f"Starting UI: {flow_runner.ui}...")
     # Branch execution based on the configured UI mode.
     match flow_runner.ui:
         case "console":
@@ -100,23 +92,29 @@ def main(cfg: DictConfig) -> None:
             #       for larger applications.
 
             # Create the FastAPI app with dependencies
-            from buttermilk.api.flow import create_app
-            import uvicorn
+            bm.logger.info("Attempting to create FastAPI app...")
             app = create_app(
                 bm=bm,
                 flows=flow_runner,
             )
+            # --- WORKAROUND for potential bm async init timing ---
+            # If bm.setup_instance starts background tasks, give them time.
+            # This is fragile; a better fix involves awaiting readiness.
+            import time
+            time.sleep(2)
+            bm.logger.info("Configuring API server...")
             # Configure Uvicorn server
             config = uvicorn.Config(
                 app=app,
                 host="0.0.0.0",
                 port=8000,
-                reload=False,  # Set to True if you want hot reloading
+                reload=True,  # Set to True if you want hot reloading
                 log_level="info",
                 access_log=True,
                 workers=1
             )
 
+            bm.logger.info("Creating server instance...")
             # Create and run the server
             server = uvicorn.Server(config)
             bm.logger.info("Starting API server...")

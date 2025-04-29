@@ -15,33 +15,24 @@ from buttermilk._core.contract import ErrorEvent, ManagerResponse, RunRequest
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 import json
-import logging
 import os
 from typing import Any, Awaitable, Callable, Optional
 
-import aiofiles
-import yaml
-from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
-from autogen_agentchat.base import TaskResult
-from autogen_agentchat.messages import TextMessage, UserInputRequestedEvent
-from autogen_agentchat.teams import RoundRobinGroupChat
-from autogen_core import CancellationToken
-from autogen_core.models import ChatCompletionClient
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from .runs import get_recent_runs
 
 INPUT_SOURCE = "api"
 
 def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     """Create and configure the FastAPI application."""
+    logger.info("Starting create_app function...")
     app = FastAPI()
+    logger.info("FastAPI() instance created.")
     
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
+    logger.info("App state configured.")
 
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
@@ -54,6 +45,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
 
 
+    logger.info("Defining exception handler.")
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
@@ -61,6 +53,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             content={"detail": str(exc)},
         )
 
+    logger.info("Defining API routes.")
 
     @app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
     async def run_flow_json(
@@ -223,12 +216,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
 
 
-
+    logger.info("Importing Shiny app")
     # --- Import Shiny App object ---
     from buttermilk.web.shiny import get_shiny_app
 
     # --- Mount the Shiny App ---
+    logger.info("Getting Shiny app.")
     shiny_app_asgi = get_shiny_app(flows=flows)
+    logger.info("Mounting Shiny app.")
     app.mount("/ui", shiny_app_asgi, name="shiny_app")
 
     return app

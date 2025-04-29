@@ -535,6 +535,7 @@ class HostAgent(Agent):
             return
             
         try:
+            progress = int(100*progress)
             # Get the current step if it exists in the sequence
             if self._current_step_name and self._current_step_name in self._step_sequence:
                 current_step_idx = self._step_sequence.index(self._current_step_name) + 1
@@ -554,9 +555,8 @@ class HostAgent(Agent):
                 step_name=self._current_step_name or role,
                 status=status,
                 message=message,
-                progress=progress,
-                total_steps=self._total_steps,
-                current_step=current_step_idx
+                total_steps=100,
+                current_step=progress
             )
             
             # Send to the UI agent via the input callback
