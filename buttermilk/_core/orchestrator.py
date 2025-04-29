@@ -9,8 +9,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any, AsyncGenerator, Literal, Self
-
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from opentelemetry.trace import Span, get_tracer
 import weave  # For tracing
 from promptflow.tracing import trace
@@ -192,11 +191,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
 
     # --- Public Execution Method ---
+    @observe()
     async def run(self, request: RunRequest | None = None):
         """
         Public entry point to start the orchestrator's flow execution.
 
-        Sets up Weave tracing context for the run and calls the internal `_run` method.
+        Sets up tracing context for the run and calls the internal `_run` method.
 
         Args:
             request: An optional RunRequest containing initial data (records, record_id, uri, prompt)
@@ -206,7 +206,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Define attributes for Weave tracing.
         tracing_attributes = {
             **self.parameters,
-            "session_id": self.session_id,
             "orchestrator": self.__class__.__name__,  # Use class name
             "flow_name": self.name,
             "flow_description": self.description,
@@ -219,11 +218,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
 
-            tracer = get_tracer(bm.run_info.name)
+            langfuse_context.update_current_trace(
+                session_id=self.session_id,
+                metadata=tracing_attributes
+            )
+
             with weave.attributes(tracing_attributes):
-                with tracer.start_as_current_span(display_name) as current_span:
-                    current_span.set_attributes(tracing_attributes)
-                    await self._run(request=request, __weave={"display_name": display_name}) 
+                await self._run(request=request, __weave={"display_name": display_name}) 
 
                 logger.info(f"Orchestrator '{self.name}' run finished successfully.")
 
@@ -258,7 +259,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
     @observe()
     @weave.op
-    @trace
     @abstractmethod
     async def _run(self, request: RunRequest | None = None):
         """

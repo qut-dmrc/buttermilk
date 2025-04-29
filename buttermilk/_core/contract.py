@@ -108,7 +108,7 @@ class FlowMessage(BaseModel):
     def __str__(self) -> str:
         return self.model_dump_json()
 class TracingDetails(BaseModel):
-    """Holds tracing identifiers, primarily the Weave call ID."""
+    """Holds tracing identifiers."""
 
     # Default factory attempts to get current Weave call ID when an AgentOutput is created.
     # This might happen outside a Weave trace context if AgentOutput is created manually.

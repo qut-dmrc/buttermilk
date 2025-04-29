@@ -223,21 +223,19 @@ class BM(Singleton, Project):
                     disable_batch=True,
                     api_key=self.tracing.api_key,
                 )
-            # langchain
-            from langfuse import Langfuse
 
             langfuse = Langfuse(
-            secret_key=os.getenv("LANGFUSE_API_KEY"), 
-            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), 
-            host=os.getenv("LANGFUSE_HOST")
-            )
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"), 
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), 
+                host=os.getenv("LANGFUSE_HOST")
+                )
             # elif self.tracing.provider == "promptflow":
-            from promptflow.tracing import start_trace
+            # from promptflow.tracing import start_trace
 
-            start_trace(
-                resource_attributes={"run_id": self.run_info.run_id},
-                collection=collection,
-            )
+            # start_trace(
+            #     resource_attributes={"run_id": self.run_info.run_id},
+            #     collection=collection,
+            # )
 
             pass
 

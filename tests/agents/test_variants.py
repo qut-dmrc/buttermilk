@@ -303,7 +303,7 @@ def test_step_config_get_configs_structure_and_ids(
     
     """
     Verify that .get_configs returns tuples (AgentClass, AgentConfig)
-    and that AgentConfig.id differs from AgentConfig.unique_identifier.
+    and that IDs are unique across all returned configs
     """
     all_config_ids = []
     

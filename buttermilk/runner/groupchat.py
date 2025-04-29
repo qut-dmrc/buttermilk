@@ -11,8 +11,7 @@ import asyncio
 from collections.abc import Callable
 import itertools
 from typing import Any, Awaitable, Mapping, Self  # Added type hints for clarity
-
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 import shortuuid
 import weave 
 from promptflow.tracing import trace
@@ -201,7 +200,6 @@ class AutogenOrchestrator(Orchestrator):
 
     @observe()
     @weave.op
-    @trace
     async def _run(self, request: RunRequest | None = None) -> None:
         """
         Simplified main execution loop for the orchestrator.

@@ -215,6 +215,7 @@ class AgentConfig(BaseModel):
 
     # Core Identification
     id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
+
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
         default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
@@ -256,7 +257,7 @@ class AgentConfig(BaseModel):
     unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
     base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=False)
     # Defines which attributes are combined to create the human-friendly 'name'.
-    _name_components: list[str] = ["base_name", "id"]
+    _name_components: list[str] = ["base_name", "unique_identifier"]
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.

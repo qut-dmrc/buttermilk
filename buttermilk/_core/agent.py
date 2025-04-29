@@ -8,7 +8,8 @@ from collections import Counter
 from collections.abc import Callable
 from functools import wraps  # Import wraps for decorator
 from typing import Any, Callable, Sequence
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
+from langfuse.openai import openai # OpenAI integration  # noqa
 from promptflow.tracing import trace
 import jmespath  # For resolving input mappings
 import weave  # For tracing
@@ -163,8 +164,7 @@ class Agent(AgentConfig):
                 break
         pass  # Allow subclasses to add more reset logic.
 
-    @weave.op()  # Mark the primary execution method for Weave tracing.
-    @trace
+    @weave.op()  # Mark the primary execution method for tracing.
     @observe()
     async def __call__(
         self,
@@ -211,9 +211,14 @@ class Agent(AgentConfig):
         else:
             logger.warning(f"Agent {self.id} __call__ executing outside Weave trace context.")
 
+        # --- Langfuse tracing ---
+        from langfuse.decorators import langfuse_context, observe
+        langfuse_context.update_current_observation(name=self.name,
+            metadata=self.parameters,
+        )
+    
         # --- Execute Core Logic ---
         try:
-
             await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
 
             result = await self._process(message=final_input, cancellation_token=cancellation_token,
@@ -506,6 +511,6 @@ class Agent(AgentConfig):
                     logger.warning(f"Agent {self.id}: Error applying JMESPath mapping '{mapping}' for key '{key}': {e}")
             else:
                 # Handle non-string or empty mappings if necessary. Currently warns.
-                logger.warning(f"Agent {self.id}: Invalid or complex input mapping for key '{key}': {mapping}. Skipping.")
+                logger.error(f"Agent {self.id}: Invalid or complex input mapping for key '{key}': {mapping}. Skipping.")
         logger.debug(f"Agent {self.id}: Finished extracting vars. Keys extracted: {list(extracted.keys())}")
         return extracted

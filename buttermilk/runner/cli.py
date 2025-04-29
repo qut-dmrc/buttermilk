@@ -70,7 +70,7 @@ def main(cfg: DictConfig) -> None:
     # Increase the slow callback duration for the asyncio event loop.
     # This helps prevent warnings if certain setup or flow steps take longer than the default threshold.
     loop = asyncio.get_event_loop()
-    loop.slow_callback_duration = 1.0  # Default is 0.1 seconds
+    loop.slow_callback_duration = 10.0  # Default is 0.1 seconds
 
     # Branch execution based on the configured UI mode.
     match flow_runner.ui:
@@ -165,7 +165,6 @@ def main(cfg: DictConfig) -> None:
             from buttermilk.runner.slackbot import initialize_slack_bot
 
             loop = asyncio.get_event_loop()
-            # loop.slow_callback_duration = 1.0 # Already set above
 
             # Queue for managing background tasks initiated by Slack events.
             orchestrator_tasks: asyncio.Queue[asyncio.Task] = asyncio.Queue()
