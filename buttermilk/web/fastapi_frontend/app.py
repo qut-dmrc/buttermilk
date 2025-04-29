@@ -99,17 +99,30 @@ class DashboardApp:
                 {"request": request, "criteria": criteria},
             )
 
-        @self.app.get("/api/records/{flow_name}", response_class=HTMLResponse)
-        async def get_records(request: Request, flow_name: str):
+        @self.app.get("/api/records/", response_class=HTMLResponse)
+        async def get_records(request: Request):
             """Get record IDs for a specific flow"""
+            flow_name = request.query_params.get("flow")  # Assuming original select has name="flow"
+
             record_ids = []
+            if not flow_name:
+                logger.warning("Request to /api/records/ missing 'flow' query parameter.")
+                return self.templates.TemplateResponse(
+                    "partials/record_options.html",
+                    {"request": request, "record_ids": []},
+                )
+
             try:
                 if flow_name in self.flows.flows:
                     flow_obj = self.flows.flows.get(flow_name)
                     if flow_obj:
                         # Try to use get_record_ids method if it exists
                         if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
-                            df = await flow_obj.get_record_ids()
+                            # If get_record_ids is async, await it
+                            if asyncio.iscoroutinefunction(flow_obj.get_record_ids):
+                                df = await flow_obj.get_record_ids()
+                            else:  # If it's sync, call it directly (or use to_thread if blocking)
+                                df = flow_obj.get_record_ids()
                             record_ids = df.index.tolist()
                         # Otherwise try to use the data directly
                         elif hasattr(flow_obj, "data") and flow_obj.data:
