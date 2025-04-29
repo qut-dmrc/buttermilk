@@ -8,6 +8,5 @@ judge:
     template: judge
   variants:
     model: ${llms.judgers}
-    criteria: ${....parameters.criteria}
   inputs:
     records: "[FETCH]||*.records[]||*.records[]"

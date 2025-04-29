@@ -11,7 +11,6 @@ synthesiser:
       Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.
   variants:
     model: ${llms.synthesisers}
-    criteria: ${....parameters.criteria}
   inputs:
     records: "[FETCH]||*.records[]||*.records[]"
     answers: "[JUDGE][].{agent_id: agent_info.id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"
