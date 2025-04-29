@@ -1,0 +1,17 @@
+<select 
+    id="criteria" 
+    name="criteria" 
+    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+    x-model="selectedCriteria"
+    hx-get="/api/records/{selectedFlow}"
+    hx-target="#record-container"
+    hx-trigger="change"
+    hx-indicator=".record-loader">
+    <option value="">Select criteria</option>
+    {% for criterion in criteria %}
+    <option value="{{ criterion }}">{{ criterion }}</option>
+    {% endfor %}
+</select>
+<div class="criteria-loader htmx-indicator">
+    <div class="w-full h-4 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
+</div>

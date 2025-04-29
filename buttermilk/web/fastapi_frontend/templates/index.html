@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Qualitative Data Science Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row gap-4" x-data="{
+    sessionId: '{{ session_id }}',
+    websocket: null,
+    messages: [],
+    userInput: '',
+    progress: { current_step: 0, total_steps: 100, status: 'waiting' },
+    requiresConfirmation: false,
+    isConnected: false,
+    selectedFlow: '',
+    selectedCriteria: '',
+    selectedRecordId: '',
+    isRunning: false,
+    error: null
+}">
+    <!-- Sidebar controls -->
+    <div class="w-full md:w-1/4 bg-white shadow rounded-lg p-4">
+        <h2 class="text-lg font-semibold mb-4">Configuration</h2>
+        
+        <div class="mb-4">
+            <label for="flow" class="block text-sm font-medium text-gray-700">Choose Flow</label>
+            <select 
+                id="flow" 
+                name="flow" 
+                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                x-model="selectedFlow"
+                hx-get="/api/criteria/{selectedFlow}"
+                hx-target="#criteria-container"
+                hx-trigger="change"
+                hx-indicator=".criteria-loader"
+                @change="selectedCriteria = ''; selectedRecordId = ''">
+                <option value="">Select a flow</option>
+                {% for flow in flow_choices %}
+                <option value="{{ flow }}">{{ flow }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-4">
+            <label for="criteria" class="block text-sm font-medium text-gray-700">Choose Criteria</label>
+            <div id="criteria-container">
+                <select 
+                    id="criteria" 
+                    name="criteria" 
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    x-model="selectedCriteria"
+                    disabled
+                    x-bind:disabled="!selectedFlow">
+                    <option value="">Select criteria</option>
+                </select>
+                <div class="criteria-loader htmx-indicator">
+                    <div class="w-full h-4 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <label for="record_id" class="block text-sm font-medium text-gray-700">Record ID</label>
+            <div id="record-container">
+                <select 
+                    id="record_id" 
+                    name="record_id" 
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    x-model="selectedRecordId"
+                    disabled
+                    x-bind:disabled="!selectedFlow"
+                    hx-get="/api/records/{selectedFlow}"
+                    hx-target="#record-container"
+                    hx-trigger="load delay:500ms, change from:#flow"
+                    hx-indicator=".record-loader">
+                    <option value="">Select record ID</option>
+                </select>
+                <div class="record-loader htmx-indicator">
+                    <div class="w-full h-4 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <button 
+                class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                x-bind:disabled="!selectedFlow || !selectedRecordId || isRunning"
+                @click="startFlow()">
+                Start Flow
+            </button>
+        </div>
+        
+        <div x-show="requiresConfirmation" class="mt-4">
+            <button 
+                class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                @click="confirmFlow()">
+                Confirm
+            </button>
+        </div>
+        
+        <div class="mt-6">
+            <button 
+                class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                x-bind:disabled="!selectedFlow || !selectedCriteria || !selectedRecordId"
+                hx-get="/api/history/{selectedFlow}/{selectedCriteria}/{selectedRecordId}"
+                hx-target="#history-container"
+                hx-indicator=".history-loader">
+                Load Run History
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main content area -->
+    <div class="w-full md:w-3/4 flex flex-col gap-4">
+        <!-- Chat interface -->
+        <div class="bg-white shadow rounded-lg p-4 flex-grow max-h-[70vh] flex flex-col">
+            <h2 class="text-lg font-semibold mb-4">Agent Chat</h2>
+            
+            <!-- Messages container -->
+            <div class="flex-grow overflow-y-auto p-2 mb-4 bg-gray-50 rounded-md" id="messages-container">
+                <template x-if="messages.length === 0">
+                    <div class="text-center text-gray-500 py-8">
+                        <p>No messages yet. Start a flow to begin the conversation.</p>
+                    </div>
+                </template>
+                <template x-for="(msg, index) in messages" :key="index">
+                    <div x-html="msg.content" class="my-2"></div>
+                </template>
+            </div>
+            
+            <!-- Input area -->
+            <div class="flex space-x-2">
+                <input 
+                    type="text" 
+                    x-model="userInput" 
+                    class="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Type your message here..."
+                    x-bind:disabled="!isConnected || !isRunning"
+                    @keyup.enter="sendMessage()">
+                <button 
+                    class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    x-bind:disabled="!isConnected || !isRunning || userInput.trim() === ''"
+                    @click="sendMessage()">
+                    Send
+                </button>
+            </div>
+        </div>
+        
+        <!-- Progress tracker -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h2 class="text-lg font-semibold mb-4">Workflow Progress</h2>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+                <div 
+                    class="bg-indigo-600 h-4 rounded-full transition-all duration-500 progress-bar" 
+                    x-bind:class="{
+                        'bg-green-600': progress.status === 'completed',
+                        'bg-red-600': progress.status === 'error',
+                        'bg-indigo-600': progress.status !== 'completed' && progress.status !== 'error'
+                    }"
+                    x-bind:style="'width: ' + (progress.current_step / progress.total_steps * 100) + '%'">
+                </div>
+            </div>
+            <div class="mt-2 text-sm text-gray-600">
+                <span x-text="progress.status === 'waiting' ? 'Waiting to start' : progress.status"></span>
+                <span x-show="progress.step_name"> - <span x-text="progress.step_name"></span></span>
+                <span x-show="progress.role"> (<span x-text="progress.role"></span>)</span>
+            </div>
+        </div>
+        
+        <!-- Run history -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h2 class="text-lg font-semibold mb-4">Run History</h2>
+            <div id="history-container">
+                <div class="text-center text-gray-500 py-4">
+                    <p>No history loaded. Use the "Load Run History" button to view previous runs.</p>
+                </div>
+                <div class="history-loader htmx-indicator">
+                    <div class="w-full h-20 bg-gray-200 rounded-sm animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        window.startFlow = function() {
+            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
+            
+            // Initialize WebSocket if not already connected
+            if (!app.isConnected) {
+                connectWebSocket(app);
+            }
+            
+            // Start the flow
+            app.isRunning = true;
+            app.messages = [];
+            app.error = null;
+            app.requiresConfirmation = false;
+            app.progress = { current_step: 0, total_steps: 100, status: 'starting' };
+            
+            // Send flow run command
+            app.websocket.send(JSON.stringify({
+                type: 'run_flow',
+                flow: app.selectedFlow,
+                record_id: app.selectedRecordId,
+                criteria: app.selectedCriteria
+            }));
+            
+            // Scroll to messages
+            setTimeout(() => {
+                document.getElementById('messages-container').scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        };
+        
+        window.sendMessage = function() {
+            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
+            
+            if (!app.isConnected || !app.userInput.trim()) {
+                return;
+            }
+            
+            // Send user message
+            app.websocket.send(JSON.stringify({
+                type: 'user_input',
+                message: app.userInput
+            }));
+            
+            // Clear input
+            app.userInput = '';
+        };
+        
+        window.confirmFlow = function() {
+            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
+            
+            if (!app.isConnected) {
+                return;
+            }
+            
+            // Send confirm message
+            app.websocket.send(JSON.stringify({
+                type: 'confirm'
+            }));
+            
+            // Update UI
+            app.requiresConfirmation = false;
+        };
+        
+        function connectWebSocket(app) {
+            // Create WebSocket connection
+            app.websocket = new WebSocket(`ws://${window.location.host}/ws/${app.sessionId}`);
+            
+            // Connection opened
+            app.websocket.addEventListener('open', function(event) {
+                app.isConnected = true;
+                console.log('WebSocket connected');
+            });
+            
+            // Connection closed
+            app.websocket.addEventListener('close', function(event) {
+                app.isConnected = false;
+                app.isRunning = false;
+                console.log('WebSocket disconnected');
+            });
+            
+            // Listen for messages
+            app.websocket.addEventListener('message', function(event) {
+                const data = JSON.parse(event.data);
+                
+                console.log('Message from server:', data);
+                
+                // Handle different message types
+                switch (data.type) {
+                    case 'chat_message':
+                        app.messages.push({
+                            content: data.content,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        // Auto-scroll to bottom
+                        setTimeout(() => {
+                            const container = document.getElementById('messages-container');
+                            container.scrollTop = container.scrollHeight;
+                        }, 10);
+                        break;
+                        
+                    case 'progress_update':
+                        app.progress = data.progress;
+                        break;
+                        
+                    case 'requires_confirmation':
+                        app.requiresConfirmation = true;
+                        break;
+                        
+                    case 'flow_started':
+                        console.log(`Flow ${data.flow} started for record ${data.record_id}`);
+                        break;
+                        
+                    case 'flow_state_change':
+                        if (data.state === 'TaskProcessingComplete') {
+                            app.isRunning = false;
+                            app.progress.status = 'completed';
+                        } else if (data.state === 'ErrorEvent') {
+                            app.isRunning = false;
+                            app.progress.status = 'error';
+                        }
+                        break;
+                        
+                    case 'error':
+                        app.error = data.message;
+                        app.isRunning = false;
+                        console.error('Error:', data.message);
+                        break;
+                }
+            });
+            
+            // Handle errors
+            app.websocket.addEventListener('error', function(event) {
+                console.error('WebSocket error:', event);
+                app.isConnected = false;
+                app.isRunning = false;
+            });
+        }
+    });
+</script>
+
+<script>
+    // Custom htmx event handlers
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        // Re-init Alpine components after htmx swaps content
+        if (window.Alpine) {
+            window.Alpine.initTree(event.detail.target);
+        }
+    });
+</script>
+{% endblock %}

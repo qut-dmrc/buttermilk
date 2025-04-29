@@ -1,34 +1,25 @@
 import asyncio
-from collections.abc import AsyncGenerator, Sequence
-import uuid 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+import json
+import uuid
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
 import pydantic
-import uvicorn
-import asyncio
-import random
-from buttermilk._core.contract import ErrorEvent, ManagerResponse, RunRequest
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from buttermilk._core.contract import ErrorEvent, RunRequest
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
-import json
-import os
-from typing import Any, Awaitable, Callable, Optional
-
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 
 INPUT_SOURCE = "api"
+
 
 def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     """Create and configure the FastAPI application."""
     logger.info("Starting create_app function...")
     app = FastAPI()
     logger.info("FastAPI() instance created.")
-    
+
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
@@ -44,8 +35,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
 
-
     logger.info("Defining exception handler.")
+
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
@@ -59,51 +50,32 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     async def run_flow_json(
         flow_name: str,
         request: Request,
-        run_request: RunRequest | None = "",
+        run_request: RunRequest | None = None,
     ) -> StreamingResponse:
         """Run a flow with provided inputs."""
-
         # Access state via request.app.state
-        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.flow_runner.flows:
+        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
             raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
-        
-        # Use flow_stream with the new flow_runner
+
+        # Use stream method with the flow runner
         return StreamingResponse(
-            request.app.flow_runner.stream(run_request),
+            request.app.state.flow_runner.stream(run_request),
             media_type="application/json",
         )
 
+    # Note: The following route is kept for backward compatibility but may be removed in future versions
     @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
     @app.api_route("/html/flow", methods=["GET", "POST"])
     async def run_route_html(
         request: Request,
         flow: str = "",
-        flow_request: RunRequest | None = "",
-    ) -> StreamingResponse:
-        if flow not in flow:
-            raise HTTPException(status_code=403, detail="Flow not valid")
-
-        async def result_generator() -> AsyncGenerator[str, None]:
-            logger.debug(
-                f"Received request for HTML flow {flow} and flow_request {flow_request}",
-            )
-            try:
-                async for data in flow_stream(
-                    flows[flow],
-                    flow_request=flow_request,
-                    return_json=False,
-                ):
-                    # Render the template with the response data
-                    rendered_result = templates.TemplateResponse(
-                        "flow_html.html",
-                        {"request": request, "data": data},
-                    )
-                    yield rendered_result.body.decode("utf-8")
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        return StreamingResponse(result_generator(), media_type="text/html")
-
+        flow_request: RunRequest | None = None,
+    ) -> JSONResponse:
+        """This endpoint is deprecated - please use the main API or WebSocket endpoints"""
+        return JSONResponse(
+            content={"message": "HTML flow rendering is deprecated. Please use the main API or WebSocket endpoints."},
+            status_code=200,
+        )
 
     # Set up CORS
     origins = [
@@ -124,7 +96,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         allow_headers=["*"],  # Allow all headers
     )
 
-
     # Custom middleware to log CORS failures
     @app.middleware("http")
     async def log_cors_failures(request: Request, call_next):
@@ -137,14 +108,13 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
     @app.websocket("/ws/{session_id}")
     async def agent_websocket(websocket: WebSocket, session_id: str):
-        """
-        WebSocket endpoint for client communication with the WebUIAgent.
+        """WebSocket endpoint for client communication with the WebUIAgent.
         
         Args:
             websocket: WebSocket connection
             session_id: Unique identifier for this client session
-        """
 
+        """
         # Accept the connection first
         await websocket.accept()
         client_listener_task = None
@@ -155,27 +125,27 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 client_message = await websocket.receive_json()
                 try:
                     run_request = RunRequest.model_validate(client_message)
-                    run_request.client_callback=websocket
-                    run_request.session_id=session_id
+                    run_request.client_callback = websocket
+                    run_request.session_id = session_id
                     break
                 except (pydantic.ValidationError, json.JSONDecodeError):
                     await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start."))
-                
+
             agent_callback = await app.state.flow_runner.run_flow(run_request)
-            
+
             async def listen_client():
                 """Task to listen for incoming messages from the client."""
                 while True:
                     try:
                         incoming_data = await websocket.receive_json()
                         # Forward data to the running flow via the handler
-                        await agent_callback(incoming_data) 
+                        await agent_callback(incoming_data)
                     except WebSocketDisconnect:
                         logger.info(f"Client {session_id} disconnected.")
                         # Optionally signal the flow task to stop if needed
                         # if flow_task_handle:
                         #     flow_task_handle.cancel()
-                        break # Exit loop on disconnect
+                        break  # Exit loop on disconnect
                     except Exception as e:
                         logger.error(f"Error receiving/processing client message for {session_id}: {e}")
                         # Decide if you want to break or continue
@@ -188,12 +158,12 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         except WebSocketDisconnect:
             logger.info("Client disconnected")
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error: {e!s}")
             try:
                 await websocket.send_json({
                     "type": "error",
-                    "content": f"Unexpected error: {str(e)}",
-                    "source": "system"
+                    "content": f"Unexpected error: {e!s}",
+                    "source": "system",
                 })
             except:
                 pass
@@ -201,30 +171,25 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             if client_listener_task and not client_listener_task.done():
                 client_listener_task.cancel()
 
-    
     # Helper route to generate session IDs for clients
     @app.get("/api/session")
     async def create_session():
-        """
-        Generates a unique session ID for new web clients.
+        """Generates a unique session ID for new web clients.
         
         Returns:
             Dict with new session ID
+
         """
         return {"session_id": str(uuid.uuid4())}
-    
 
+    logger.info("Importing Dashboard app")
+    # --- Import Dashboard App object ---
+    from buttermilk.web.fastapi_frontend.app import create_dashboard_app
 
-
-    logger.info("Importing Shiny app")
-    # --- Import Shiny App object ---
-    from buttermilk.web.shiny import get_shiny_app
-
-    # --- Mount the Shiny App ---
-    logger.info("Getting Shiny app.")
-    shiny_app_asgi = get_shiny_app(flows=flows)
-    logger.info("Mounting Shiny app.")
-    app.mount("/ui", shiny_app_asgi, name="shiny_app")
+    # --- Mount the Dashboard App ---
+    logger.info("Getting Dashboard app.")
+    dashboard_app = create_dashboard_app(flows=flows)
+    logger.info("Mounting Dashboard app.")
+    app.mount("/", dashboard_app, name="dashboard_app")
 
     return app
-
