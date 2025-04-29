@@ -1,6 +1,7 @@
 from unittest.mock import patch
-import shortuuid
+
 import pytest
+import shortuuid
 from omegaconf import OmegaConf
 
 # Assuming AgentConfig and Agent are importable for type hinting/instance checks
@@ -173,9 +174,9 @@ def test_num_runs_greater_than_one(base_variant_config):
         ids.add(config.id)
     assert len(ids) == 3  # Ensure unique IDs across runs
 
+
 def test_id_generation_uniqueness(base_variant_config):
     """Test ID generation includes hash for uniqueness when needed."""
-
     # Case 1: Multiple parallel variants (needs hash)
     config_data_p = {
         **base_variant_config,
@@ -204,9 +205,11 @@ def test_id_generation_uniqueness(base_variant_config):
     assert len(configs_s) == 1
     assert configs_s[0][1].id == "TEST_AGENT"  # Original ID, no hash
 
+
 @pytest.fixture
 def variant_factory():
-    yield AgentVariants(**config_data)
+    return AgentVariants(**config_data)
+
 
 def test_parameter_overwriting(base_variant_config):
     """Test that parallel variants overwrite base parameters."""
@@ -270,26 +273,28 @@ def test_agent_not_found(base_variant_config):
     with pytest.raises(ValueError, match="Agent class 'NonExistentAgent' not found"):
         variant_factory.get_configs()
 
+
 import json
+
 import pytest
 from pydantic import BaseModel, Field
-from typing import Type, Any, List, Tuple
 
-# Assuming RunRequest is defined in buttermilk._core.contract
-from buttermilk._core.contract import RunRequest
+from buttermilk._core.types import RunRequest
+
 
 # --- Mocking necessary classes ---
 # Mock AgentConfig as the structure seems to be the focus
 class MockAgentConfig(BaseModel):
     id: str = Field(default="should be replaced")
-    unique_identifier: str = Field(default_factory=lambda: f"instance_{shortuuid.uuid()}") # Simulate unique instance ID
+    unique_identifier: str = Field(default_factory=lambda: f"instance_{shortuuid.uuid()}")  # Simulate unique instance ID
     # Add other fields potentially needed by get_configs logic if any
     parameters: dict = {}
-    agent_class: str = "MockAgent" # Placeholder
+    agent_class: str = "MockAgent"  # Placeholder
 
 
 # --- Test Data ---
 PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
+
 
 @pytest.fixture
 def run_request_params() -> RunRequest:
@@ -298,15 +303,13 @@ def run_request_params() -> RunRequest:
 
 
 def test_step_config_get_configs_structure_and_ids(
-    run_request_params: RunRequest, base_variant_config
+    run_request_params: RunRequest, base_variant_config,
 ):
-    
-    """
-    Verify that .get_configs returns tuples (AgentClass, AgentConfig)
+    """Verify that .get_configs returns tuples (AgentClass, AgentConfig)
     and that IDs are unique across all returned configs
     """
     all_config_ids = []
-    
+
     # 1. Call the method under test
     variant_factory = AgentVariants(**base_variant_config)
     configs = variant_factory.get_configs(params=run_request_params)
@@ -323,12 +326,12 @@ def test_step_config_get_configs_structure_and_ids(
 
         # Check types
         assert isinstance(agent_cls, type), "First element should be a class type"
-        assert isinstance(agent_config, (AgentConfig,MockAgentConfig)), \
+        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), \
             "Second element should be an AgentConfig instance (or mock)"
 
         # Check attributes exist
-        assert hasattr(agent_config, 'id'), "AgentConfig should have an 'id' attribute"
-        assert hasattr(agent_config, 'unique_identifier'), \
+        assert hasattr(agent_config, "id"), "AgentConfig should have an 'id' attribute"
+        assert hasattr(agent_config, "unique_identifier"), \
             "AgentConfig should have a 'unique_identifier' attribute"
 
         # Check attribute types
@@ -342,4 +345,3 @@ def test_step_config_get_configs_structure_and_ids(
     # Check the core requirement: IDs must be unique across all returned configs
     assert len(all_config_ids) == len(set(all_config_ids)), \
         f"AgentConfig.id values are not unique across returned configs. Found IDs: {all_config_ids}"
-        

@@ -1,5 +1,4 @@
-"""
-Defines the Pydantic models and constants used for data contracts and communication
+"""Defines the Pydantic models and constants used for data contracts and communication
 within the Buttermilk agent framework.
 
 This includes message types for agent inputs, outputs, control flow, status updates,
@@ -7,17 +6,16 @@ and interactions with manager/conductor roles.
 """
 
 import datetime
-from collections.abc import Mapping
-from typing import Any, Dict, Optional, Sequence, Union
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
-from omegaconf import DictConfig, ListConfig, OmegaConf
 import shortuuid  # For generating unique IDs
 
 # Import Autogen types used as base or components
 from autogen_core.models import FunctionExecutionResult, LLMMessage
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -26,11 +24,14 @@ from pydantic import (
 )
 
 from buttermilk._core.job import SessionInfo
-from buttermilk.utils.validators import convert_omegaconf_objects, convert_omegaconf_objects_recursive, make_list_validator  # Pydantic validators
+from buttermilk.utils.validators import (  # Pydantic validators
+    convert_omegaconf_objects,
+    make_list_validator,
+)
 
-from .config import AgentConfig, AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
+from .config import AgentConfig  # Core configuration models
 from .log import logger
-from .types import Record, _global_run_id, RunRequest  # Core data types
+from .types import Record, _global_run_id  # Core data types
 
 # --- Constants ---
 
@@ -41,7 +42,7 @@ CLOSURE = "COLLECTOR"  # Role name (Collector?) - Usage context unclear from sur
 CONFIRM = "CONFIRM"  # Special agent/topic name used by AutogenOrchestrator for handling ManagerResponse.
 
 # Special Symbols / States
-COMMAND_SYMBOL = "!"  # Prefix potentially used to identify command messages 
+COMMAND_SYMBOL = "!"  # Prefix potentially used to identify command messages
 END = "END"  # Special role/signal used by Conductor/Host to indicate the flow should terminate.
 WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/waiting.
 
@@ -56,18 +57,19 @@ class FlowEvent(BaseModel):
 
     def __str__(self) -> str:
         return self.content
+
+
 class ErrorEvent(FlowEvent):
     """Specific event type for broadcasting errors."""
 
     # Inherits source and content, content typically holds the error message string.
-    
+
     def __str__(self) -> str:
         return "ERROR: " + self.content
 
 
 class FlowMessage(BaseModel):
-    """
-    Base class for most messages exchanged between agents and orchestrators.
+    """Base class for most messages exchanged between agents and orchestrators.
     Includes common fields like error tracking and metadata.
     """
 
@@ -107,6 +109,8 @@ class FlowMessage(BaseModel):
 
     def __str__(self) -> str:
         return self.model_dump_json()
+
+
 class TracingDetails(BaseModel):
     """Holds tracing identifiers."""
 
@@ -126,9 +130,8 @@ class TracingDetails(BaseModel):
                 call = weave.get_current_call()
                 if call and hasattr(call, "ref") and hasattr(call.ref, "id"):
                     return call.ref.id
-                else:
-                    logger.debug("Weave call or ref.id not found.")
-                    return ""
+                logger.debug("Weave call or ref.id not found.")
+                return ""
             except ImportError:
                 logger.warning("Weave library not installed. Cannot capture Weave trace ID.")
                 return ""
@@ -145,12 +148,10 @@ def _get_run_info() -> SessionInfo:
     return bm.run_info
 
 
-
 # --- Core Step Execution ---
 
 class AgentInput(FlowMessage):
-    """
-    Standard input structure for triggering an agent's primary processing logic (`_process`).
+    """Standard input structure for triggering an agent's primary processing logic (`_process`).
 
     Carries the necessary data, parameters, context (history), and records needed by the agent.
     The `Orchestrator` or another `Agent` typically constructs this before calling an agent.
@@ -182,13 +183,13 @@ class AgentInput(FlowMessage):
 
 
 class StepRequest(AgentInput):
-    """
-    Represents a request, typically from a Conductor agent, to execute a specific step in the flow.
+    """Represents a request, typically from a Conductor agent, to execute a specific step in the flow.
     Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
 
     Attributes:
         role: The uppercase role name of the agent(s) that should execute this step.
         description: Human-readable description of why this step is being executed.
+
     """
 
     role: str = Field(..., description="The ROLE name (uppercase) of the agent to execute.")
@@ -204,16 +205,17 @@ class StepRequest(AgentInput):
 
     def __str__(self) -> str:
         return self.content
+
+
 class AgentOutput(FlowMessage):
-    """
-    Standard output structure returned by an agent after processing an `AgentInput`.
+    """Standard output structure returned by an agent after processing an `AgentInput`.
 
     Contains the agent's results (`outputs`), along with metadata, original inputs,
     messages exchanged with LLMs, errors, and tracing information.
     """
 
     session_id: str = Field(default=_global_run_id, description="Session identifier.")
-    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
     agent_info: Optional["AgentConfig"] = Field(None, description="Configuration info from the agent")
     call_id: str = Field(
@@ -283,7 +285,7 @@ class AgentOutput(FlowMessage):
         try:
             if self.outputs:
                 return type(self.outputs).__name__
-        except Exception as e:
+        except Exception:
             pass
         return "null"
 
@@ -294,22 +296,22 @@ class AgentOutput(FlowMessage):
         try:
             if self.outputs:
                 return str(self.outputs)
-        except Exception as e:
+        except Exception:
             pass
-        
+
         return ""
-    
+
     def __str__(self) -> str:
         return self.content
-    
+
     # def model_dump(self, **kwargs):
     #     """Custom serialization to handle Pydantic models and OmegaConf objects recursively."""
     #     data = super().model_dump(**kwargs)
-        
+
     #     # Handle Pydantic models in 'outputs'
     #     if isinstance(self.outputs, BaseModel):
     #         data["outputs"] = self.outputs.model_dump()
-        
+
     #     # Recursively convert OmegaConf objects in the output data
     #     data = convert_omegaconf_objects_recursive(data)
     #     return data
@@ -320,8 +322,7 @@ class AgentOutput(FlowMessage):
 
 
 class ManagerMessage(FlowMessage):
-    """
-    A generic message intended for the MANAGER (UI/User).
+    """A generic message intended for the MANAGER (UI/User).
     Can be used for status updates, displaying results, or asking simple questions.
     """
 
@@ -332,35 +333,34 @@ class ManagerMessage(FlowMessage):
 
     def __str__(self) -> str:
         return self.content
+
+
 class ConductorRequest(AgentInput):
-    """
-    A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
+    """A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
     Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
     """
-    participants: Mapping[str,str] = Field(..., description="Chat participant roles and descriptions of their purposes")
-    
+
+    participants: Mapping[str, str] = Field(..., description="Chat participant roles and descriptions of their purposes")
+
     # No additional fields specific to ConductorRequest currently defined.
-    pass
 
 
 class ConductorResponse(ManagerMessage, AgentOutput):
-    """
-    A response sent *from* a CONDUCTOR agent.
+    """A response sent *from* a CONDUCTOR agent.
     Inherits fields from `ManagerMessage` (content?) and `AgentOutput` (outputs, metadata, etc.).
     The `outputs` field often contains a `StepRequest` object or special instructions (e.g., question for user).
     """
 
     # No additional fields specific to ConductorResponse currently defined.
-    pass
 
 
 class ManagerRequest(ManagerMessage, StepRequest):
-    """
-    A request sent *to* the MANAGER (UI/User), typically asking for confirmation,
+    """A request sent *to* the MANAGER (UI/User), typically asking for confirmation,
     feedback, or selection.
     Inherits content/outputs from `ManagerMessage` and role/prompt/description from `StepRequest`.
     """
 
+    role: str = Field(default=MANAGER)
     # Override description from StepRequest for Manager context.
     description: str = Field(default="Requesting input or confirmation from the user.")
     # Options for multiple-choice questions presented to the user.
@@ -377,24 +377,24 @@ class ManagerRequest(ManagerMessage, StepRequest):
 
 
 class ManagerResponse(FlowMessage):
-    """
-    A response sent *from* the MANAGER (UI/User) back to the orchestrator/system.
+    """A response sent *from* the MANAGER (UI/User) back to the orchestrator/system.
     Communicates user decisions like confirmation, feedback, or selections.
     """
+
     confirm: bool = Field(default=False, description="Indicates user confirmation (True) or rejection (False).")
     halt: bool = Field(default=False, description="If True, signals the user wants to stop the entire flow.")
     interrupt: bool = Field(default=False, description="If True, signals the user wants to pause for conductor review of feedback.")
-    prompt: Optional[str] = Field(default=None, description="Free-text feedback or instructions provided by the user.")
-    selection: Optional[str] = Field(default=None, description="The option selected by the user (e.g., a specific variant ID).")
-    params: Optional[Mapping[str, Any]] = Field(default=None)
+    prompt: str | None = Field(default=None, description="Free-text feedback or instructions provided by the user.")
+    selection: str | None = Field(default=None, description="The option selected by the user (e.g., a specific variant ID).")
+    params: Mapping[str, Any] | None = Field(default=None)
 
 
 # --- Task Progress Message ---
 class TaskProgressUpdate(FlowMessage):
-    """
-    A message sent to provide information about the progress of a task or step in the workflow.
+    """A message sent to provide information about the progress of a task or step in the workflow.
     This is primarily used to update the UI about the workflow's progress.
     """
+
     source: str = Field(..., description="The agent ID that is sending the progress update")
     role: str = Field(..., description="The role associated with this task")
     step_name: str = Field(..., description="Name of the current step")
@@ -402,8 +402,8 @@ class TaskProgressUpdate(FlowMessage):
     message: str = Field(default="", description="Human-readable message explaining the current progress")
     total_steps: int = Field(default=0, description="Total number of steps in the workflow")
     current_step: int = Field(default=0, description="Current step number")
-    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
-    
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
+
     def __str__(self) -> str:
         return f"[{self.status.upper()}] {self.message} ({self.current_step:.0%})"
 
@@ -412,8 +412,7 @@ class TaskProgressUpdate(FlowMessage):
 
 
 class ToolOutput(FunctionExecutionResult):
-    """
-    Represents the result of a tool (function) execution by an agent.
+    """Represents the result of a tool (function) execution by an agent.
     Inherits fields from Autogen's `FunctionExecutionResult` (like `call_id`, `function_name`, `content`).
     Adds Buttermilk-specific context.
     """
@@ -481,7 +480,7 @@ OOBMessages = Union[
     TaskProgressUpdate,
     ConductorResponse,
     ConductorRequest,
-    ErrorEvent, StepRequest,ProceedToNextTaskSignal, HeartBeat
+    ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat,
 ]
 
 # Group Chat messages: Standard outputs shared among participating agents.
@@ -493,4 +492,4 @@ GroupchatMessageTypes = Union[
 ]
 
 # All possible message types used within the system.
-AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput, ]
+AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput]

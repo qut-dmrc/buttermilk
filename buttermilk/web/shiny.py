@@ -13,12 +13,11 @@ from buttermilk._core.contract import (
     HeartBeat,
     ManagerResponse,
     ProceedToNextTaskSignal,
-    RunRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
     TaskProgressUpdate,
 )
-from buttermilk._core.types import Record
+from buttermilk._core.types import Record, RunRequest
 from buttermilk.bm import logger
 from buttermilk.runner.flowrunner import FlowRunner
 

@@ -31,10 +31,10 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowMessage,
     ManagerMessage,
-    RunRequest,  # Response received from the MANAGER.
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
 

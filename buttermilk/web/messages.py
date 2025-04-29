@@ -241,8 +241,7 @@ def _format_message_for_client(message) -> str | None:
         content = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span><br/>{content}'
 
     elif isinstance(message, ManagerRequest):
-        msg_type = "instructions"
-        content = message.prompt or ""
+        content = message.content
 
     else:
         # Unhandled message type

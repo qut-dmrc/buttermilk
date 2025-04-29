@@ -19,7 +19,7 @@ import hydra
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
-from buttermilk._core.contract import RunRequest
+from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import create_app
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner

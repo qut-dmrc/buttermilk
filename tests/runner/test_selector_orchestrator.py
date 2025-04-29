@@ -1,5 +1,4 @@
-"""
-Tests for the Selector class.
+"""Tests for the Selector class.
 """
 
 import asyncio
@@ -7,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest, RunRequest
+from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest
+from buttermilk._core.types import RunRequest
 from buttermilk.runner.selector import Selector
 
 
@@ -79,7 +79,7 @@ async def test_get_host_action_success(orchestrator):
                     agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
-                )
+                ),
             ],
             # Second call (after handling the message) - return the step
             [
@@ -87,11 +87,11 @@ async def test_get_host_action_success(orchestrator):
                     agent_id="test",
                     content="Next step",
                     outputs=mock_step_dict,
-                )
+                ),
             ],
             # Third call - empty response to return a wait step
             empty_response,
-        ]
+        ],
     )
 
     # Fix the mock response - use a proper StepRequest object directly
@@ -107,11 +107,11 @@ async def test_get_host_action_success(orchestrator):
                     agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
-                )
+                ),
             ],
             # Second call returns proper step
             [mock_step_response],
-        ]
+        ],
     )
 
     # Set up handle_host_message as a simple mock - we won't check if it was called
@@ -332,7 +332,7 @@ async def test_in_the_loop_multiple_variants(orchestrator):
 
     # Multiple variants
     orchestrator._active_variants = {
-        "test_agent": [("agent_type1", MagicMock(id="variant1", role="Agent1")), ("agent_type2", MagicMock(id="variant2", role="Agent2"))]
+        "test_agent": [("agent_type1", MagicMock(id="variant1", role="Agent1")), ("agent_type2", MagicMock(id="variant2", role="Agent2"))],
     }
 
     orchestrator._send_ui_message = AsyncMock()
@@ -363,7 +363,7 @@ async def test_run_with_records(orchestrator):
             StepRequest(role=WAIT, description="Waiting", prompt="Please wait..."),
             StepRequest(role="test_agent", description="Step 2", prompt="Prompt 2"),
             Exception("StopAsyncIteration"),  # Simulate end of flow
-        ]
+        ],
     )
     orchestrator._in_the_loop = AsyncMock(return_value=True)
     orchestrator._prepare_step = AsyncMock(return_value=AgentInput())

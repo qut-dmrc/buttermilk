@@ -1,21 +1,21 @@
-"""
-Defines the abstract base class for Orchestrators in Buttermilk.
+"""Defines the abstract base class for Orchestrators in Buttermilk.
 
 Orchestrators are responsible for managing the setup, execution, and cleanup
 of agent-based workflows (flows).
 """
 
 from abc import ABC, abstractmethod
-import asyncio
-from collections.abc import Mapping, Sequence
-from typing import Any, AsyncGenerator, Literal, Self
-from langfuse.decorators import langfuse_context, observe
-from opentelemetry.trace import Span, get_tracer
+from collections.abc import Mapping
+from typing import Any, Self
+
+import shortuuid  # For generating unique IDs
 import weave  # For tracing
-from promptflow.tracing import trace
+from langfuse.decorators import langfuse_context, observe
+from opentelemetry.trace import Span
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     PrivateAttr,
     field_validator,
     model_validator,
@@ -27,34 +27,22 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Agent variant configuration
     DataSourceConfig,
 )
-from buttermilk._core.contract import AgentInput, AgentOutput, ManagerResponse, RunRequest, StepRequest  # Core message types
-from buttermilk._core.types import Record  # Data types
-from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
-from buttermilk.bm import bm, logger # Global instance and logger
-from buttermilk.utils.templating import KeyValueCollector   # State management utility
-
-from collections.abc import Mapping
-from typing import Any, Dict, Optional, Sequence, Union
-
-import shortuuid  # For generating unique IDs
-
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    computed_field,
-    field_validator,
+from buttermilk._core.types import (
+    Record,  # Data types
+    RunRequest,
 )
+from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
+from buttermilk.bm import bm, logger  # Global instance and logger
+from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects
 
-from .config import AgentConfig, AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
+from .config import AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
 from .log import logger
-from .types import Record # Core data types
+from .types import Record  # Core data types
 
 
 class OrchestratorProtocol(BaseModel):
-    """
-    Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
+    """Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
     Used to initialise a new orchestrated flow.
 
     Attributes:
@@ -67,6 +55,7 @@ class OrchestratorProtocol(BaseModel):
         parameters (dict): Flow-level parameters accessible by agents.
         _flow_data (KeyValueCollector): Internal state collector for the flow.
         _records (list[Record]): List of data records currently loaded/used in the flow.
+
     """
 
     # --- Configuration Fields ---
@@ -93,9 +82,9 @@ class OrchestratorProtocol(BaseModel):
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
     ui: Any = Field(default=None)
-    
+
     observers: Mapping[str, AgentVariants] = Field(
-        default_factory=dict,        description="Agents that will not be called upon but are still present in a discussion.",
+        default_factory=dict, description="Agents that will not be called upon but are still present in a discussion.",
     )
     parameters: Mapping[str, Any] = Field(
         default_factory=dict,
@@ -107,11 +96,12 @@ class OrchestratorProtocol(BaseModel):
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
-        extra="ignore", 
+        extra="ignore",
     )
+
+
 class Orchestrator(OrchestratorProtocol, ABC):
-    """
-    Abstract Base Class for orchestrators that manage agent-based flows.
+    """Abstract Base Class for orchestrators that manage agent-based flows.
 
     Orchestrators handle:
     - Loading flow configurations (data sources, agents, parameters).
@@ -169,32 +159,29 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Initialize the KeyValueCollector with the known agent roles.
         self._flow_data.init(agent_roles)
         return self
-    
+
     # --- Tracing ---
     @model_validator(mode="after")
     def setup_tracing(self) -> Self:
-        from opentelemetry import trace
         tracing_attributes = {
             **self.parameters,
             "session_id": self.session_id,
             "flow_description": self.description,
         }
 
-        
         return self
-
 
     # --- Public Execution Method ---
     @observe()
     async def run(self, request: RunRequest | None = None):
-        """
-        Public entry point to start the orchestrator's flow execution.
+        """Public entry point to start the orchestrator's flow execution.
 
         Sets up tracing context for the run and calls the internal `_run` method.
 
         Args:
             request: An optional RunRequest containing initial data (records, record_id, uri, prompt)
                      or parameters for the flow.
+
         """
         logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
         # Define attributes for Weave tracing.
@@ -205,7 +192,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_description": self.description,
             "record": request.record_id if request else None,
             "uri": request.uri if request else None,
-            "prompt": request.prompt if request else None
+            "prompt": request.prompt if request else None,
         }
         try:
             assert bm.weave
@@ -220,9 +207,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 metadata=tracing_attributes,
                 session_id=self.session_id,
             )
-    
+
             with weave.attributes(tracing_attributes):
-                await self._run(request=request, __weave={"display_name": display_name}) 
+                await self._run(request=request, __weave={"display_name": display_name})
 
                 logger.info(f"Orchestrator '{self.name}' run finished successfully.")
 
@@ -234,9 +221,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # --- Abstract & Core Internal Methods ---
 
     @abstractmethod
-    async def _setup(self, request: RunRequest ) -> None:
-        """
-        Abstract method for orchestrator-specific setup.
+    async def _setup(self, request: RunRequest) -> None:
+        """Abstract method for orchestrator-specific setup.
 
         Implementations should initialize resources like communication runtimes
         (e.g., Autogen runtime), database connections, or pre-load essential components.
@@ -246,8 +232,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
     @abstractmethod
     async def _cleanup(self) -> None:
-        """
-        Abstract method for orchestrator-specific cleanup.
+        """Abstract method for orchestrator-specific cleanup.
 
         Implementations should release resources acquired during `_setup` or
         execution (e.g., stop runtimes, close connections). Called in a `finally`
@@ -258,8 +243,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     @weave.op
     @abstractmethod
     async def _run(self, request: RunRequest | None = None):
-        """
-        Abstract method containing the main execution logic/control loop for the flow.
+        """Abstract method containing the main execution logic/control loop for the flow.
 
         Called by the public `run` method after Weave tracing setup. Subclasses
         must implement this to define how steps are determined (e.g., fixed sequence,
@@ -268,6 +252,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         Args:
             request: Optional `RunRequest` containing initial data/parameters.
+
         """
         # Base implementation handles initial setup, data fetching (if needed), and cleanup.
         # Subclasses MUST override this to provide the actual step execution loop.
@@ -319,4 +304,3 @@ class Orchestrator(OrchestratorProtocol, ABC):
             self._records = request.records  # Use records provided in request if available
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")
-

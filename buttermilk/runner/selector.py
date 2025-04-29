@@ -1,9 +1,8 @@
-"""
-Selector Orchestrator: Enables interactive, user-guided exploration of agent workflows.
+"""Selector Orchestrator: Enables interactive, user-guided exploration of agent workflows.
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 import shortuuid
 from pydantic import BaseModel, PrivateAttr
@@ -22,26 +21,26 @@ from buttermilk._core.contract import (
     ManagerMessage,  # Message *to* the user/manager
     ManagerRequest,  # Request *to* the user/manager (for confirmation/input)
     ManagerResponse,
-    RunRequest,  # Response *from* the user/manager
     StepRequest,  # Request defining the next step to execute
     ToolOutput,
-    )
+)
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger  # Buttermilk logger
 
 # Base orchestrator class
 from buttermilk.runner.groupchat import AutogenOrchestrator
 
+
 ####
 ####
 ####
-#### THIS NEESD A REWRITE TO MOVE LOGIC TO CONDUCTOR AGENT
+# THIS NEESD A REWRITE TO MOVE LOGIC TO CONDUCTOR AGENT
 #####
 ####
 ####
 ####
 class Selector(AutogenOrchestrator):
-    """
-    An orchestrator facilitating interactive exploration of multi-agent workflows.
+    """An orchestrator facilitating interactive exploration of multi-agent workflows.
 
     Extends `AutogenOrchestrator` to incorporate direct user guidance, feedback,
     and the ability to select between different agent variants at each step.
@@ -58,21 +57,20 @@ class Selector(AutogenOrchestrator):
 
     # --- Internal State Tracking ---
     # Stores available agent variants for each role. Maps RoleName -> List[(AgentType, AgentConfig)]
-    _active_variants: Dict[str, List[tuple]] = PrivateAttr(default_factory=dict)
+    _active_variants: dict[str, list[tuple]] = PrivateAttr(default_factory=dict)
     # Records the sequence of executed steps (including variant choice). List[step_id]
-    _exploration_path: List[str] = PrivateAttr(default_factory=list)
+    _exploration_path: list[str] = PrivateAttr(default_factory=list)
     # Stores results of executed steps. Maps step_id -> result_data_dict
-    _exploration_results: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
+    _exploration_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
     # Collects free-text feedback provided by the user during interactions. List[str]
-    _user_feedback: List[str] = PrivateAttr(default_factory=list)
+    _user_feedback: list[str] = PrivateAttr(default_factory=list)
     # Stores the last variant ID selected by the user. Optional[str]
-    _last_user_selection: Optional[str] = PrivateAttr(default=None)
+    _last_user_selection: str | None = PrivateAttr(default=None)
     # Maps variant ID (AgentConfig.id) to its index within the role's variant list. Dict[str, int]
-    _variant_mapping: Dict[str, int] = PrivateAttr(default_factory=dict)
+    _variant_mapping: dict[str, int] = PrivateAttr(default_factory=dict)
 
     async def _setup(self, request: RunRequest | None = None) -> None:
-        """
-        Initializes the Selector orchestrator.
+        """Initializes the Selector orchestrator.
 
         Calls the base class setup, initializes exploration tracking structures,
         builds the variant mapping, and sends an initial welcome message to the user.
@@ -121,8 +119,7 @@ class Selector(AutogenOrchestrator):
         )
 
     async def _wait_for_human(self, timeout: int = 300) -> ManagerResponse:  # Increased default timeout
-        """
-        Waits for a response from the user via the confirmation queue.
+        """Waits for a response from the user via the confirmation queue.
 
         Overrides the base class potentially to handle timeouts or specific feedback structures.
 
@@ -134,13 +131,14 @@ class Selector(AutogenOrchestrator):
 
         Raises:
             StopAsyncIteration: If the user response indicates a desire to halt.
+
         """
         logger.debug(f"Waiting for user confirmation/input (timeout: {timeout}s)...")
         try:
             # Wait for a message on the queue filled by the manager interface agent.
             response: ManagerResponse = await asyncio.wait_for(self._user_confirmation.get(), timeout=timeout)
             logger.debug(
-                f"Received user response: Confirm={response.confirm}, Halt={response.halt}, Selection='{response.selection}', Prompt='{str(response.prompt)[:50]}...'"
+                f"Received user response: Confirm={response.confirm}, Halt={response.halt}, Selection='{response.selection}', Prompt='{str(response.prompt)[:50]}...'",
             )
 
             # Check if user wants to stop the entire flow.
@@ -166,7 +164,7 @@ class Selector(AutogenOrchestrator):
             self._user_confirmation.task_done()  # Important for queue management
             return response
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Timeout waiting for user response after {timeout} seconds.")
             # Return a specific response indicating timeout.
             return ManagerResponse(error=[f"Timeout: No response within {timeout} seconds."], confirm=False, halt=False)
@@ -177,9 +175,8 @@ class Selector(AutogenOrchestrator):
             # Return an error response
             return ManagerResponse(error=[f"Error processing user input: {e}"], confirm=False, halt=False)
 
-    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse|ErrorEvent:
-        """
-        Sends a request to the user (MANAGER) for confirmation, feedback, or selection,
+    async def _in_the_loop(self, step: StepRequest | None = None, prompt: str = "") -> ManagerResponse | ErrorEvent:
+        """Sends a request to the user (MANAGER) for confirmation, feedback, or selection,
         and waits for their response.
 
         Overrides the base method to provide richer context, including available agent variants.
@@ -190,6 +187,7 @@ class Selector(AutogenOrchestrator):
 
         Returns:
             The `ManagerResponse` from the user.
+
         """
         if step:
             logger.debug(f"Requesting user confirmation for step: {step.role}")
@@ -238,14 +236,14 @@ class Selector(AutogenOrchestrator):
         return response
 
     async def _get_host_suggestion(self) -> StepRequest:
-        """
-        Asks the CONDUCTOR agent for the next step suggestion.
+        """Asks the CONDUCTOR agent for the next step suggestion.
 
         Overrides the base method to provide richer context to the CONDUCTOR,
         including exploration history, user feedback, and available variants.
 
         Returns:
             The `StepRequest` suggested by the CONDUCTOR, or a WAIT step if none is provided.
+
         """
         logger.debug("Asking CONDUCTOR for next step suggestion with selector context...")
         # Prepare enhanced context for the CONDUCTOR.
@@ -291,7 +289,7 @@ class Selector(AutogenOrchestrator):
             err_details = agent_output.content
             logger.error(f"Conductor returned an error: {err_details}")
             return StepRequest(role=WAIT, content=f"Error from conductor: {err_details}")
-        elif isinstance(agent_output, AgentOutput) and agent_output.is_error:
+        if isinstance(agent_output, AgentOutput) and agent_output.is_error:
             err_details = agent_output.outputs if agent_output else "No response object"
             logger.error(f"Conductor returned an error or invalid output: {err_details}")
             # Maybe ask user what to do? For now, just wait.
@@ -335,12 +333,12 @@ class Selector(AutogenOrchestrator):
         return next_step
 
     async def _handle_host_message(self, message: ConductorResponse) -> None:
-        """
-        Processes special message types potentially returned by the CONDUCTOR agent.
+        """Processes special message types potentially returned by the CONDUCTOR agent.
         (Currently seems less used if _get_host_suggestion expects StepRequest).
 
         Args:
             message: The `ConductorResponse` message from the host/conductor.
+
         """
         # This method might be called if _ask_agents returned ConductorResponse directly,
         # or potentially if the conductor publishes these messages instead of returning StepRequest.
@@ -371,7 +369,7 @@ class Selector(AutogenOrchestrator):
             #       to the conductor or used to influence the next _get_host_suggestion call.
             #       Currently, it's just received and stored in _user_feedback/_last_user_selection.
             logger.debug(
-                f"Received user answer to host question: Confirm={user_response.confirm}, Selection='{user_response.selection}', Prompt='{user_response.prompt}'"
+                f"Received user answer to host question: Confirm={user_response.confirm}, Selection='{user_response.selection}', Prompt='{user_response.prompt}'",
             )
 
         elif msg_type == "comparison":
@@ -385,12 +383,12 @@ class Selector(AutogenOrchestrator):
             await self._send_ui_message(ManagerMessage(content=message.content or "(Host sent message with unknown type)"))
 
     async def _handle_comparison(self, message: ConductorResponse) -> None:
-        """
-        Formats and displays a comparison message from the host to the user.
+        """Formats and displays a comparison message from the host to the user.
 
         Args:
             message: The `ConductorResponse` containing comparison data in its `outputs` dict.
                      Expected keys: 'variants' (list of IDs), 'results' (dict mapping ID to results).
+
         """
         outputs = message.outputs
         if not isinstance(outputs, dict):
@@ -423,8 +421,7 @@ class Selector(AutogenOrchestrator):
         step: StepRequest,
         variant_index: int = 0,  # Allow specifying which variant to use
     ) -> AgentOutput | None:
-        """
-        Executes a specific variant of an agent for the given step.
+        """Executes a specific variant of an agent for the given step.
 
         Overrides the base method to handle variant selection based on `variant_index`
         and stores the execution result in `_exploration_results`.
@@ -435,6 +432,7 @@ class Selector(AutogenOrchestrator):
 
         Returns:
             The `AgentOutput` from the executed agent, or None if an error occurred.
+
         """
         role_upper = step.role.upper()
         if role_upper not in self._agent_types:
@@ -513,11 +511,10 @@ class Selector(AutogenOrchestrator):
 
         # The Autogen runtime implicitly handles publishing TaskProcessingComplete.
         # The adapter publishes the AgentOutput `response` itself if needed based on its logic.
-        return cast(Optional[AgentOutput], response)  # Return the result (or None if execution failed)
+        return cast("AgentOutput | None", response)  # Return the result (or None if execution failed)
 
-    async def _run(self, request: Optional[RunRequest] = None) -> None:
-        """
-        Main execution loop for the Selector orchestrator.
+    async def _run(self, request: RunRequest | None = None) -> None:
+        """Main execution loop for the Selector orchestrator.
 
         Handles setup, initial data loading, and the interactive loop involving
         conductor suggestions, user feedback/selection, and step execution.
@@ -582,11 +579,11 @@ class Selector(AutogenOrchestrator):
                         if self._last_user_selection in self._variant_mapping:
                             selected_variant_index = self._variant_mapping[self._last_user_selection]
                             logger.debug(
-                                f"Executing step with user-selected variant: '{self._last_user_selection}' (Index: {selected_variant_index})"
+                                f"Executing step with user-selected variant: '{self._last_user_selection}' (Index: {selected_variant_index})",
                             )
                         else:
                             logger.warning(
-                                f"User selected variant '{self._last_user_selection}' not found for role '{suggested_step.role}'. Using default variant 0."
+                                f"User selected variant '{self._last_user_selection}' not found for role '{suggested_step.role}'. Using default variant 0.",
                             )
                         self._last_user_selection = None  # Clear selection after use
 
@@ -624,11 +621,11 @@ class Selector(AutogenOrchestrator):
             await self._cleanup()  # Ensure base class cleanup runs
 
     async def _fetch_record(self, request: RunRequest) -> ToolOutput | None:
-        """
-        Utility to fetch initial record(s) based on RunRequest.
+        """Utility to fetch initial record(s) based on RunRequest.
 
         Args:
             request: The RunRequest containing record_id or uri.
+
         """
         # TODO: This seems like application-specific logic that might belong elsewhere
         #       or be handled by a dedicated 'fetch' agent called at the start of the run.
@@ -649,8 +646,7 @@ class Selector(AutogenOrchestrator):
                 self._records = fetch_output.results
                 logger.debug(f"Successfully fetched {len(self._records)} initial record(s).")
                 return fetch_output
-            else:
-                logger.warning("Fetch agent did not return any results.")
+            logger.warning("Fetch agent did not return any results.")
         except ImportError:
             logger.error("Could not import FetchRecord agent for initial fetch.")
         except Exception as e:

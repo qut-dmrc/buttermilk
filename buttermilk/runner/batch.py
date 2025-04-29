@@ -1,18 +1,18 @@
 import asyncio
-from typing import Optional
 
-from pydantic import Field, PrivateAttr
 import weave
+from pydantic import Field, PrivateAttr
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, FatalError
-from buttermilk._core.contract import ErrorEvent, OOBMessages, StepRequest, ToolOutput, RunRequest  # Added ToolOutput, OOBMessages
+from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+from buttermilk._core.contract import ErrorEvent, OOBMessages, StepRequest, ToolOutput
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
 
 
 class BatchOrchestrator(Orchestrator):
-    """
-    Orchestrator for running flows in batch mode without user interaction.
+    """Orchestrator for running flows in batch mode without user interaction.
 
     Executes steps based on a predefined sequence or simple logic,
     handling multiple variants according to configuration. Requires the
@@ -27,8 +27,7 @@ class BatchOrchestrator(Orchestrator):
     _agent_instances: dict[str, Agent] = PrivateAttr(default_factory=dict)  # Store agent instances by ID
 
     async def _setup(self, request: RunRequest | None = None):
-        """
-        Set up resources for batch execution.
+        """Set up resources for batch execution.
 
         This involves instantiating all agent variants defined in the configuration
         and storing them for later execution.
@@ -65,8 +64,7 @@ class BatchOrchestrator(Orchestrator):
         self,
         step: StepRequest,
     ) -> AgentOutput | ErrorEvent:
-        """
-        Executes a single step of the flow for the given agent role.
+        """Executes a single step of the flow for the given agent role.
 
         Handles variant selection based on internal logic (currently basic: uses first variant).
 
@@ -76,6 +74,7 @@ class BatchOrchestrator(Orchestrator):
         Returns:
             The AgentOutput from the agent, or None if execution failed,
             or an AgentOutput with error info if execution raised an exception.
+
         """
         # --- Variant Selection Logic (Placeholder: Use first variant) ---
         variants_config = self.agents.get(step.role.lower())
@@ -94,7 +93,7 @@ class BatchOrchestrator(Orchestrator):
                 message = AgentInput(prompt=step.prompt)
                 # Assuming agent is callable via __call__ which calls _process
                 # Agent._process is already traced by weave
-                raw_output = await agent(message=message, **{})  # Pass empty kwargs for now
+                raw_output = await agent(message=message)  # Pass empty kwargs for now
 
                 # Handle different output types
                 if isinstance(raw_output, AgentOutput):
@@ -108,18 +107,17 @@ class BatchOrchestrator(Orchestrator):
                     #     logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")
                     logger.debug(f"Step '{step.role}' variant '{first_variant_config.id}' completed.")
                     return output  # Return AgentOutput
-                elif isinstance(raw_output, (ToolOutput, OOBMessages)):
+                if isinstance(raw_output, (ToolOutput, OOBMessages)):
                     logger.warning(
-                        f"Step '{step.role}' variant '{first_variant_config.id}' returned unexpected type {type(raw_output)} in batch mode. Ignoring."
+                        f"Step '{step.role}' variant '{first_variant_config.id}' returned unexpected type {type(raw_output)} in batch mode. Ignoring.",
                     )
                     return None  # Don't propagate ToolOutput/OOB in simple batch mode
-                elif raw_output is None:
+                if raw_output is None:
                     logger.warning(f"Step '{step.role}' variant '{first_variant_config.id}' returned None.")
                     return None
-                else:
-                    msg = f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}."
-                    logger.error(msg)
-                    return ErrorEvent(source=self.name, content=msg)
+                msg = f"Step '{step.role}' variant '{first_variant_config.id}' returned unknown type {type(raw_output)}."
+                logger.error(msg)
+                return ErrorEvent(source=self.name, content=msg)
 
             except Exception as e:
                 msg = f"Error executing step '{step.role}' variant '{first_variant_config.id}': {e}"
@@ -130,11 +128,10 @@ class BatchOrchestrator(Orchestrator):
         msg = f"Error executing step '{step.role}' variant '{first_variant_config.id}': No agent found."
         logger.error(msg)
         return ErrorEvent(source=self.name, content=msg)
-    
+
     @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
-        """
-        Main execution method for batch processing.
+        """Main execution method for batch processing.
 
         This method should implement the core logic for determining the sequence
         of steps to run and how to handle the configured agent variants based on
@@ -156,15 +153,15 @@ class BatchOrchestrator(Orchestrator):
             await self._cleanup()
 
     # Implemented helper method
-    def _get_agent_instance(self, agent_id: str) -> Optional[Agent]:
-        """
-        Retrieve an instantiated agent instance by its unique configuration ID.
+    def _get_agent_instance(self, agent_id: str) -> Agent | None:
+        """Retrieve an instantiated agent instance by its unique configuration ID.
 
         Args:
             agent_id: The unique ID of the agent variant configuration.
 
         Returns:
             The instantiated Agent object or None if not found.
+
         """
         instance = self._agent_instances.get(agent_id)
         if not instance:

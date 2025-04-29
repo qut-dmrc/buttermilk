@@ -15,10 +15,10 @@ from buttermilk._core.agent import (
 from buttermilk._core.contract import (
     ErrorEvent,
     ManagerResponse,
-    RunRequest,
     TaskProcessingComplete,
     TaskProgressUpdate,
 )
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.web.messages import _format_message_for_client

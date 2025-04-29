@@ -1,5 +1,4 @@
-"""
-Tests for the base Orchestrator concepts and potentially specific implementations like BatchOrchestrator.
+"""Tests for the base Orchestrator concepts and potentially specific implementations like BatchOrchestrator.
 """
 
 from unittest.mock import AsyncMock
@@ -7,8 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 # Buttermilk core imports
+from buttermilk._core.types import RunRequest
 
-from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest, RunRequest
 # Specific orchestrator implementation being tested here
 from buttermilk.runner.batch import BatchOrchestrator
 

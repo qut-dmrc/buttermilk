@@ -7,7 +7,8 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from buttermilk._core.contract import ErrorEvent, RunRequest
+from buttermilk._core.contract import ErrorEvent
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 
@@ -181,7 +182,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         """
         return {"session_id": str(uuid.uuid4())}
-    
+
     # --- Import Shiny App object ---
     from buttermilk.web.shiny import get_shiny_app
 
@@ -190,7 +191,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     app.mount("/ui", shiny_app_asgi, name="shiny_app")
 
     logger.info("Importing Dashboard app")
-    
+
     # --- Import Dashboard App object ---
     from buttermilk.web.fastapi_frontend.app import create_dashboard_app
 
