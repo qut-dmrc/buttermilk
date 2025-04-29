@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Dict, List
 import uuid
 import json
 
@@ -8,7 +8,11 @@ from shiny import App, reactive, render, ui, Session, req
 import pandas as pd
 
 from buttermilk._core.agent import AgentInput, AgentOutput, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
-from buttermilk._core.contract import ConductorRequest, ConductorResponse, ErrorEvent, HeartBeat, ProceedToNextTaskSignal, RunRequest, ManagerResponse, TaskProcessingComplete, TaskProcessingStarted
+from buttermilk._core.contract import (
+    ConductorRequest, ConductorResponse, ErrorEvent, HeartBeat, 
+    ProceedToNextTaskSignal, RunRequest, ManagerResponse, 
+    TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate
+)
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunner
 
@@ -64,17 +68,27 @@ def get_shiny_app(flows: FlowRunner):
             ui.input_action_button("load_history", "Load Run History", class_="btn btn-info")
         ),
         ui.layout_columns(
-            ui.card(
-                ui.card_header("autogen chat"),
-                ui.chat_ui("chat", width="100%"),
-                style="width:100%",
+            ui.column(
+                6,
+                ui.card(
+                    ui.card_header("autogen chat"),
+                    ui.chat_ui("chat", width="100%"),
+                    style="width:100%",
+                ),
             ),
-            ui.card(
-                ui.card_header("Judge & Synth Run History"),
-                ui.output_data_frame("run_history_table"),
-                style="width:100%",
+            ui.column(
+                6,
+                ui.card(
+                    ui.card_header("Judge & Synth Run History"),
+                    ui.output_data_frame("run_history_table"),
+                    style="width:100%",
+                ),
+                ui.card(
+                    ui.card_header("Workflow Progress"),
+                    ui.output_ui("progress_tracker_ui"),
+                    style="width:100%",
+                ),
             ),
-            col_widths=[6, 6],  # Equal width columns
             fill=True,
             height="800px"
         )
@@ -91,6 +105,10 @@ def get_shiny_app(flows: FlowRunner):
         confirm_button_state = reactive.Value("neutral")
         # New reactive value to store run history from BigQuery
         run_history_df = reactive.Value(pd.DataFrame())
+        
+        # Progress tracking
+        workflow_steps = reactive.Value([])
+        current_progress = reactive.Value({})
 
         # This effect loads data when the flow selection changes and updates the record_id dropdown and criteria dropdown
         @reactive.Effect
@@ -197,8 +215,37 @@ def get_shiny_app(flows: FlowRunner):
             if isinstance(message, ManagerRequest):
                 confirm_button_state.set("ready")
             # Re-enable the 'Go' button when the flow completes or needs confirmation or errors out
+            if isinstance(message, TaskProgressUpdate):
+                # Update the progress tracking
+                progress_data = {
+                    "role": message.role,
+                    "step_name": message.step_name,
+                    "status": message.status,
+                    "message": message.message,
+                    "progress": message.progress,
+                    "total_steps": message.total_steps,
+                    "current_step": message.current_step,
+                    "timestamp": message.timestamp
+                }
+                
+                # Update progress tracker
+                current_progress.set(progress_data)
+                
+                # If this is the first time seeing this step, add it to workflow_steps
+                steps = workflow_steps.get()
+                if message.step_name not in [s.get("step_name") for s in steps]:
+                    steps.append(progress_data)
+                    workflow_steps.set(steps)
+                else:
+                    # Update existing step
+                    for i, step in enumerate(steps):
+                        if step.get("step_name") == message.step_name:
+                            steps[i] = progress_data
+                            workflow_steps.set(steps)
+                            break
+                
             if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)):
-                 ui.update_action_button("go", label="Rate", disabled=False)
+                ui.update_action_button("go", label="Rate", disabled=False)
 
 
         @reactive.effect
@@ -282,6 +329,74 @@ def get_shiny_app(flows: FlowRunner):
                     )
             
             return display_df
+        
+        @output
+        @render.ui
+        def progress_tracker_ui():
+            """Render the progress tracker UI with current steps and their statuses"""
+            steps = workflow_steps.get()
+            
+            if not steps:
+                return ui.div(ui.h5("No workflow steps recorded yet."))
+            
+            # Create a progress bar for overall progress
+            latest_progress = current_progress.get()
+            if latest_progress:
+                progress_pct = int(latest_progress.get("progress", 0) * 100)
+                current_step = latest_progress.get("current_step", 0)
+                total_steps = latest_progress.get("total_steps", 0)
+                
+                progress_bar = ui.progress(
+                    value=progress_pct,
+                    color="success" if progress_pct == 100 else "info",
+                    striped=True,
+                    animated=progress_pct < 100
+                )
+                
+                step_count = ui.p(f"Step {current_step}/{total_steps}" if total_steps > 0 else "")
+            else:
+                progress_bar = ui.progress(value=0)
+                step_count = ui.p("")
+            
+            # Create step indicators
+            step_indicators = []
+            for step in steps:
+                status = step.get("status", "")
+                role = step.get("role", "")
+                message = step.get("message", "")
+                
+                # Icon based on status
+                if status == "completed":
+                    icon = ui.tags.i(class_="fa fa-check-circle text-success")
+                elif status == "error":
+                    icon = ui.tags.i(class_="fa fa-times-circle text-danger")
+                elif status == "started":
+                    icon = ui.tags.i(class_="fa fa-circle-notch fa-spin text-primary")
+                else:
+                    icon = ui.tags.i(class_="fa fa-clock text-warning")
+                
+                # Create the step indicator
+                step_indicator = ui.div(
+                    ui.div(
+                        icon,
+                        ui.strong(f" {role}: "),
+                        ui.span(message),
+                        class_="d-flex align-items-center"
+                    ),
+                    class_="mb-2 p-2 border-bottom"
+                )
+                
+                step_indicators.append(step_indicator)
+            
+            # Combine everything into a single UI element
+            return ui.div(
+                ui.h5("Overall Progress"),
+                progress_bar,
+                step_count,
+                ui.h5("Step Details"),
+                *step_indicators,
+                class_="progress-tracker mt-3"
+            )
 
 
     app = App(app_ui, server)

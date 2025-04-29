@@ -389,6 +389,26 @@ class ManagerResponse(FlowMessage):
     params: Optional[Mapping[str, Any]] = Field(default=None)
 
 
+# --- Task Progress Message ---
+class TaskProgressUpdate(FlowMessage):
+    """
+    A message sent to provide information about the progress of a task or step in the workflow.
+    This is primarily used to update the UI about the workflow's progress.
+    """
+    source: str = Field(..., description="The agent ID that is sending the progress update")
+    role: str = Field(..., description="The role associated with this task")
+    step_name: str = Field(..., description="Name of the current step")
+    status: str = Field(..., description="Current status (e.g., 'started', 'in_progress', 'completed', 'error')")
+    message: str = Field(default="", description="Human-readable message explaining the current progress")
+    progress: float = Field(default=0.0, description="Numeric progress indicator (0.0 to 1.0)")
+    total_steps: int = Field(default=0, description="Total number of steps in the workflow")
+    current_step: int = Field(default=0, description="Current step number")
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    def __str__(self) -> str:
+        return f"[{self.status.upper()}] {self.message} ({self.progress:.0%})"
+
+
 # --- Tool / Function Call Messages ---
 
 
@@ -459,6 +479,7 @@ OOBMessages = Union[
     ManagerResponse,
     TaskProcessingComplete,
     TaskProcessingStarted,
+    TaskProgressUpdate,
     ConductorResponse,
     ConductorRequest,
     ErrorEvent, StepRequest,ProceedToNextTaskSignal, HeartBeat

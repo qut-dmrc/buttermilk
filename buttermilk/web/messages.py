@@ -4,7 +4,14 @@ import json
 from typing import Any, Dict, Optional
 
 from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
-from buttermilk._core.contract import ConductorResponse, ManagerResponse, StepRequest, TaskProcessingComplete, TaskProcessingStarted
+from buttermilk._core.contract import (
+    ConductorResponse, 
+    ManagerResponse, 
+    StepRequest, 
+    TaskProcessingComplete, 
+    TaskProcessingStarted,
+    TaskProgressUpdate
+)
 from buttermilk._core.types import Record
 
 
@@ -23,7 +30,7 @@ def _format_message_for_client( message) -> str|None:
     content = None
     
     # Ignore certain message types
-    if isinstance(message, (TaskProcessingComplete, TaskProcessingStarted, StepRequest)):
+    if isinstance(message, (StepRequest)):
         return None
     # Format based on message type
     if isinstance(message, AgentOutput):
@@ -47,6 +54,27 @@ def _format_message_for_client( message) -> str|None:
     elif isinstance(message, TaskProcessingComplete):
         msg_type = "status"
         content = "Task completed" if not message.is_error else "Task failed"
+    
+    elif isinstance(message, TaskProcessingStarted):
+        msg_type = "status"
+        content = f"Task started: {message.role}"
+    
+    elif isinstance(message, TaskProgressUpdate):
+        msg_type = "progress"
+        # Format progress updates in a detailed, user-friendly way
+        if message.progress == 1.0:
+            status_display = "✅"
+        elif message.status == "error":
+            status_display = "❌"
+        elif message.status == "started":
+            status_display = "🔄"
+        else:
+            status_display = "⏳"
+            
+        step_display = f"Step {message.current_step}/{message.total_steps}" if message.total_steps > 0 else ""
+        percent = f" ({message.progress:.0%})" if message.progress > 0 else ""
+        
+        content = f"{status_display} **{message.role}**: {message.message} {step_display}{percent}"
         
     elif isinstance(message, ToolOutput):
         msg_type = "tool_output"
@@ -70,5 +98,4 @@ def _format_message_for_client( message) -> str|None:
     else:
         # Unhandled message type
         return str(message)
-    return content    
-    
+    return content

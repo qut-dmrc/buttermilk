@@ -26,6 +26,7 @@ from buttermilk._core.contract import (
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
+    TaskProgressUpdate,
 )
 from buttermilk.agents.llm import LLMAgent
 
@@ -74,6 +75,11 @@ class HostAgent(Agent):
     _exploration_path: List[str] = PrivateAttr(default_factory=list)
     _exploration_results: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
     _user_feedback: List[str] = PrivateAttr(default_factory=list)
+    
+    # Progress tracking
+    _total_steps: int = PrivateAttr(default=0)
+    _current_step: int = PrivateAttr(default=0)
+    _step_sequence: List[str] = PrivateAttr(default_factory=list)
 
     async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the agent"""
@@ -84,6 +90,9 @@ class HostAgent(Agent):
         self._exploration_results = {}
         self._user_feedback = []
         self._outstanding_tasks_per_role = {}
+        self._total_steps = len(self._participants) if hasattr(self, '_participants') else 0
+        self._current_step = 0
+        self._step_sequence = list(self._participants.keys()) if hasattr(self, '_participants') else []
         await super().initialize(**kwargs)  # Call parent initialize if needed
 
     async def _listen(
@@ -165,6 +174,15 @@ class HostAgent(Agent):
                 if role == self._current_step_name and self._outstanding_tasks_per_role[role] == 0:
                     logger.info(f"All tasks completed for current step '{self._current_step_name}'. Setting completion event.")
                     self._step_completion_event.set()
+                    
+                    # Send a progress update that this step is complete
+                    await self._send_progress_update(
+                        role=role,
+                        status="completed",
+                        message=f"All tasks for step {role} completed",
+                        progress=1.0 if self._current_step == self._total_steps else 
+                            (self._current_step / self._total_steps if self._total_steps > 0 else 0.5)
+                    )
             else:
                 # Log if an unexpected completion is received
                 logger.warning(f"Host received TaskComplete from agent {message.agent_id} for step '{role}', but no outstanding tasks were tracked.")
@@ -184,6 +202,14 @@ class HostAgent(Agent):
             # If this is the current step, make sure the completion event is cleared
             if role == self._current_step_name:
                 self._step_completion_event.clear()
+                
+            # Send a progress update that a task has started
+            await self._send_progress_update(
+                role=role,
+                status="started",
+                message=f"Task started by agent {message.agent_id}",
+                progress=0.0 if self._total_steps == 0 else (self._current_step / self._total_steps)
+            )
         
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
@@ -467,6 +493,52 @@ class HostAgent(Agent):
             return StepRequest(role=END, content="Sequence completed.")
 
 
+    async def _send_progress_update(self, role: str, status: str, message: str, progress: float = 0.0) -> None:
+        """
+        Send a progress update to the UI agent.
+        
+        Args:
+            role: The role associated with this task
+            status: Current status (e.g., 'started', 'in_progress', 'completed', 'error')
+            message: Human-readable message explaining the current progress
+            progress: Numeric progress indicator (0.0 to 1.0)
+        """
+        if not self._input_callback:
+            logger.warning(f"Cannot send progress update: input_callback is not set.")
+            return
+            
+        try:
+            # Get the current step if it exists in the sequence
+            if self._current_step_name and self._current_step_name in self._step_sequence:
+                current_step_idx = self._step_sequence.index(self._current_step_name) + 1
+            else:
+                # If not found or not set, use the tracked current step or default to 0
+                current_step_idx = self._current_step
+                
+            # Update total steps count if needed
+            if not self._total_steps and self._participants:
+                self._total_steps = len(self._participants)
+                self._step_sequence = list(self._participants.keys())
+            
+            # Create progress update message
+            progress_update = TaskProgressUpdate(
+                source=self.id,
+                role=role,
+                step_name=self._current_step_name or role,
+                status=status,
+                message=message,
+                progress=progress,
+                total_steps=self._total_steps,
+                current_step=current_step_idx
+            )
+            
+            # Send to the UI agent via the input callback
+            await self._input_callback(progress_update)
+            logger.debug(f"Sent progress update for {role}: {status} - {message}")
+            
+        except Exception as e:
+            logger.error(f"Error sending progress update: {e}")
+    
     async def on_reset(self, cancellation_token=None) -> None:
         """Resets the HostAgent's internal state."""
         logger.info(f"Resetting Host agent {self.id}...")
