@@ -279,8 +279,20 @@ class HostAgent(Agent):
         """
         while not self._participants:
             await asyncio.sleep(0.1)
-        for step_name, cfg in self._participants.items():
+            
+        # Store the sequence and total steps for progress tracking
+        self._step_sequence = list(self._participants.keys())
+        self._total_steps = len(self._step_sequence)
+        logger.info(f"Host {self.id} initialized sequence with {self._total_steps} steps: {self._step_sequence}")
+        
+        # Generate steps in order
+        for i, (step_name, cfg) in enumerate(self._participants.items()):
+            self._current_step = i + 1  # 1-based step index
+            logger.info(f"Host {self.id} generating step {self._current_step}/{self._total_steps}: {step_name}")
             yield StepRequest(role=step_name, content=f"Sequence host calling {step_name}.")
+            
+        # Always yield the END step at the end
+        logger.info(f"Host {self.id} sequence completed, generating END step")
         yield StepRequest(role=END, content="Sequence wrapping up.")
 
 
@@ -500,12 +512,12 @@ class HostAgent(Agent):
         try:
             # Manual implementation to avoid using anext directly
             step = await self._step_generator.__anext__()
-            logger.debug(f"Host {self.id} suggests next step: {step.role}.")
+            logger.info(f"Host {self.id} chose next step: {step.role} (step {self._current_step}/{self._total_steps})")
             return step
         except StopAsyncIteration:
-            # If the generator is exhausted, return END step
-            logger.debug(f"Host {self.id} step generator exhausted, returning END step.")
-            return StepRequest(role=END, content="Sequence completed.")
+            # If the generator is exhausted, ensure we return the END step
+            logger.info(f"Host {self.id} step generator exhausted, explicitly returning END step")
+            return StepRequest(role=END, content="Sequence completed. All steps have been processed.")
 
 
     async def _send_progress_update(self, role: str, status: str, message: str, progress: float = 0.0) -> None:
