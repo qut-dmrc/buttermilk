@@ -19,9 +19,9 @@ orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
   criteria:
-    # - trans_simplified
+    - trans_simplified
     - cte
-    # - tja
-    # - glaad
-    # - hrc
-    # - trans_factored
+    - tja
+    - glaad
+    - hrc
+    - trans_factored

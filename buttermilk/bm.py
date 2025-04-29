@@ -28,6 +28,8 @@ import pandas as pd
 import pydantic
 import shortuuid
 import weave
+from langfuse import Langfuse
+from weave.trace.weave_client import WeaveClient
 from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
@@ -36,7 +38,6 @@ from pydantic import (
     PrivateAttr,
     model_validator,
 )
-from weave.trace.weave_client import WeaveClient
 
 from ._core.config import Project
 from ._core.llms import LLMs
@@ -222,15 +223,23 @@ class BM(Singleton, Project):
                     disable_batch=True,
                     api_key=self.tracing.api_key,
                 )
-            elif self.tracing.provider == "promptflow":
-                from promptflow.tracing import start_trace
+            # langchain
+            from langfuse import Langfuse
 
-                start_trace(
-                    resource_attributes={"run_id": self.run_info.run_id},
-                    collection=collection,
-                )
+            langfuse = Langfuse(
+            secret_key=os.getenv("LANGFUSE_API_KEY"), 
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), 
+            host=os.getenv("LANGFUSE_HOST")
+            )
+            # elif self.tracing.provider == "promptflow":
+            from promptflow.tracing import start_trace
 
-        # return self # No longer returning Self from this method
+            start_trace(
+                resource_attributes={"run_id": self.run_info.run_id},
+                collection=collection,
+            )
+
+            pass
 
     @property
     def save_dir(self) -> str:

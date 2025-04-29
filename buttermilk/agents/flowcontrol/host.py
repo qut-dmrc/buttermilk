@@ -140,8 +140,9 @@ class HostAgent(Agent):
                 self._user_confirmation.put_nowait(message)
                 return None
             except asyncio.QueueFull:
-                logger.error(f"Discarding user input because earlier input still hasn't been handled.")
-                return message
+                msg = f"Discarding user input because earlier input still hasn't been handled: {message}"
+                logger.error(msg)
+                return ErrorEvent(source=self.id, content=msg)
             
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):

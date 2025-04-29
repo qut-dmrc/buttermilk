@@ -8,7 +8,8 @@ from collections import Counter
 from collections.abc import Callable
 from functools import wraps  # Import wraps for decorator
 from typing import Any, Callable, Sequence
-
+from langfuse.decorators import observe
+from promptflow.tracing import trace
 import jmespath  # For resolving input mappings
 import weave  # For tracing
 
@@ -163,6 +164,8 @@ class Agent(AgentConfig):
         pass  # Allow subclasses to add more reset logic.
 
     @weave.op()  # Mark the primary execution method for Weave tracing.
+    @trace
+    @observe()
     async def __call__(
         self,
         message: AgentInput,

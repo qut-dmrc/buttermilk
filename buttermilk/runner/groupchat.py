@@ -12,8 +12,10 @@ from collections.abc import Callable
 import itertools
 from typing import Any, Awaitable, Mapping, Self  # Added type hints for clarity
 
+from langfuse.decorators import observe
 import shortuuid
-import weave  # weave is likely used for experiment tracking/logging.
+import weave 
+from promptflow.tracing import trace
 from autogen_core import (
     AgentType,  # Represents a registered type of agent in the runtime.
     ClosureAgent,  # An agent defined by simple Python functions (closures).
@@ -197,7 +199,9 @@ class AutogenOrchestrator(Orchestrator):
         finally:
             await asyncio.sleep(2)  # Give it some time to properly shut down
 
+    @observe()
     @weave.op
+    @trace
     async def _run(self, request: RunRequest | None = None) -> None:
         """
         Simplified main execution loop for the orchestrator.

@@ -212,7 +212,7 @@ class LLMScorer(LLMAgent):
             score_output.outputs = score
 
             # Publish the score back to the system using the provided callback.
-            await public_callback(score)
+            await public_callback(score_output)
 
             # add feedback to Weave call
             if weave_call:

@@ -10,7 +10,10 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any, AsyncGenerator, Literal, Self
 
+from langfuse.decorators import observe
+from opentelemetry.trace import Span
 import weave  # For tracing
+from promptflow.tracing import trace
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -130,6 +133,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # Holds the primary data records being processed by the flow.
     _records: list[Record] = PrivateAttr(default_factory=list)
 
+    _otel_span: Span = PrivateAttr()
+
     # Pydantic Model Configuration
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields in config unless explicitly handled by subclasses.
@@ -165,6 +170,26 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Initialize the KeyValueCollector with the known agent roles.
         self._flow_data.init(agent_roles)
         return self
+    
+    # --- Tracing ---
+    @model_validator(mode="after")
+    def setup_tracing(self) -> Self:
+        from opentelemetry import trace
+        tracing_attributes = {
+            **self.parameters,
+            "session_id": self.session_id,
+            "flow_description": self.description,
+        }
+
+        # tracer = trace.get_tracer(bm.run_info.name)
+        # # Create a root span
+        # self._otel_span = tracer.start_span(bm.run_info.job)
+        # self._otel_span.set_attributes(tracing_attributes)
+            
+        # set something here to force us to end the span before exit
+        
+        return self
+
 
     # --- Public Execution Method ---
     async def run(self, request: RunRequest | None = None):
@@ -227,8 +252,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
 
-
+    @observe()
     @weave.op
+    @trace
     @abstractmethod
     async def _run(self, request: RunRequest | None = None):
         """

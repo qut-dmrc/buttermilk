@@ -125,31 +125,7 @@ def main(cfg: DictConfig) -> None:
                 server.run()
             except KeyboardInterrupt:
                 bm.logger.info("Shutting down API server...")
-        case "shiny":
-            from buttermilk.shiny.app import get_shiny_app
-            import uvicorn
-            app = get_shiny_app(
-                flows=flow_runner,
-            )
-            # Configure Uvicorn server
-            config = uvicorn.Config(
-                app=app,
-                host="0.0.0.0",
-                port=8000,
-                reload=False,  # Set to True if you want hot reloading
-                log_level="info",
-                access_log=True,
-                workers=1
-            )
 
-            # Create and run the server
-            server = uvicorn.Server(config)
-            bm.logger.info("Starting Shiny server...")
-            
-            try:
-                server.run()
-            except KeyboardInterrupt:
-                bm.logger.info("Shutting down Shiny server...")
         case "pub/sub":
             # Start a listener for Google Cloud Pub/Sub messages.
             # TODO: Implementation details of start_pubsub_listener are missing here.

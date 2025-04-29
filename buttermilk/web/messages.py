@@ -4,7 +4,7 @@ import json
 from typing import Any, Dict, Optional
 
 from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
-from buttermilk._core.contract import ConductorResponse, ManagerResponse, TaskProcessingComplete
+from buttermilk._core.contract import ConductorResponse, ManagerResponse, StepRequest, TaskProcessingComplete, TaskProcessingStarted
 from buttermilk._core.types import Record
 
 
@@ -22,6 +22,9 @@ def _format_message_for_client( message) -> str|None:
     msg_type = "message"
     content = None
     
+    # Ignore certain message types
+    if isinstance(message, (TaskProcessingComplete, TaskProcessingStarted, StepRequest)):
+        return None
     # Format based on message type
     if isinstance(message, AgentOutput):
         msg_type = "agent_output"

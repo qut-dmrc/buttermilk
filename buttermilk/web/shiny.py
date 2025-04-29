@@ -48,7 +48,9 @@ def get_shiny_app(flows: FlowRunner):
             ui.input_select(
                 "criteria",
                 "Choose criteria",
-                choices=["cte", "tja"], # Keep this static for now, or update if needed
+                choices=[],
+                selected=None
+
             ),
             ui.input_select(
                 "record_id",
@@ -90,14 +92,23 @@ def get_shiny_app(flows: FlowRunner):
         # New reactive value to store run history from BigQuery
         run_history_df = reactive.Value(pd.DataFrame())
 
-        # This effect loads data when the flow selection changes and updates the record_id dropdown
+        # This effect loads data when the flow selection changes and updates the record_id dropdown and criteria dropdown
         @reactive.Effect
         @reactive.event(input.flow) # Trigger when flow selection changes
         async def _load_and_update_record_ids():
             selected_flow = input.flow()
             record_ids = []
+            criteria = []
             df = None
-
+            try:
+                criteria = flows.flows[selected_flow].parameters['criteria']
+                ui.update_select(
+                    "criteria",
+                    choices=criteria,
+                    selected=criteria[0] if criteria else None
+                )
+            except:
+                pass
             if selected_flow:
                 if selected_flow not in loaded_flow_data:
                     try:
