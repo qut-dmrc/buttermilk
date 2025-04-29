@@ -109,6 +109,7 @@ def get_shiny_app(flows: FlowRunner):
         # Progress tracking
         workflow_steps = reactive.Value([])
         current_progress = reactive.Value({})
+        progress_obj = reactive.Value(None)  # Store the Progress object
 
         # This effect loads data when the flow selection changes and updates the record_id dropdown and criteria dropdown
         @reactive.Effect
@@ -246,6 +247,27 @@ def get_shiny_app(flows: FlowRunner):
                             steps[i] = progress_data
                             workflow_steps.set(steps)
                             break
+                
+                # Update the native Shiny progress bar if it exists
+                p = progress_obj.get()
+                if p and message.total_steps > 0:
+                    # Calculate the current progress value (1-based for Progress component)
+                    current = max(1, int(message.current_step))
+                    total = max(1, int(message.total_steps))
+                    
+                    # Set the progress
+                    try:
+                        p.set(
+                            value=current,
+                            message=f"Step {current}/{total}: {message.role}",
+                            detail=message.message
+                        )
+                        
+                        # If we're at the end, close the progress indicator
+                        if message.status == "completed" and message.progress >= 0.99:
+                            p.close()
+                    except Exception as e:
+                        logger.error(f"Error updating progress: {e}")
                             
                 # Don't continue processing this message for the chat UI
                 return
@@ -336,6 +358,35 @@ def get_shiny_app(flows: FlowRunner):
             
             return display_df
         
+        @reactive.effect
+        @reactive.event(input.go)
+        async def create_progress_indicator():
+            """Create a new progress indicator when the flow starts running"""
+            # Get information about the current flow
+            selected_flow = input.flow()
+            selected_record_id = input.record_id()
+            
+            # Get the flow details to determine steps if possible
+            max_steps = 1  # Default to 1 if we can't determine
+            if selected_flow and selected_flow in flows.flows:
+                try:
+                    # Try to get the number of participant roles as the max steps
+                    flow_obj = flows.flows[selected_flow]
+                    if hasattr(flow_obj, 'participants') and flow_obj.participants:
+                        max_steps = len(flow_obj.participants)
+                except Exception as e:
+                    logger.error(f"Error determining steps for flow {selected_flow}: {e}")
+            
+            # Create the Progress object
+            try:
+                # Use a higher max value to allow for fractional progress
+                p = ui.Progress(min=1, max=max_steps)
+                p.set(message=f"Starting flow: {selected_flow}", detail=f"Record ID: {selected_record_id}")
+                progress_obj.set(p)
+                logger.info(f"Created progress indicator with max_steps={max_steps}")
+            except Exception as e:
+                logger.error(f"Error creating progress indicator: {e}")
+
         @output
         @render.ui
         def progress_tracker_ui():
@@ -344,43 +395,6 @@ def get_shiny_app(flows: FlowRunner):
             
             if not steps:
                 return ui.div(ui.h5("No workflow steps recorded yet."))
-            
-            # Create a progress bar for overall progress
-            latest_progress = current_progress.get()
-            if latest_progress:
-                progress_pct = int(latest_progress.get("progress", 0) * 100)
-                current_step = latest_progress.get("current_step", 0)
-                total_steps = latest_progress.get("total_steps", 0)
-                
-                # Create a proper Bootstrap progress bar using Shiny's HTML helpers
-                # This is a more "Shiny way" to create UI components
-                bar_class = "bg-success" if progress_pct == 100 else "bg-info progress-bar-striped progress-bar-animated"
-                
-                progress_bar = ui.tags.div(
-                    ui.tags.div(
-                        f"{progress_pct}%",
-                        class_=f"progress-bar {bar_class}",
-                        role="progressbar",
-                        style=f"width: {progress_pct}%",
-                        **{"aria-valuenow": str(progress_pct), "aria-valuemin": "0", "aria-valuemax": "100"}
-                    ),
-                    class_="progress mb-3"
-                )
-                
-                step_count = ui.p(f"Step {current_step}/{total_steps}" if total_steps > 0 else "")
-            else:
-                # Empty progress bar
-                progress_bar = ui.tags.div(
-                    ui.tags.div(
-                        "0%",
-                        class_="progress-bar",
-                        role="progressbar",
-                        style="width: 0%",
-                        **{"aria-valuenow": "0", "aria-valuemin": "0", "aria-valuemax": "100"}
-                    ),
-                    class_="progress mb-3"
-                )
-                step_count = ui.p("")
             
             # Create step indicators
             step_indicators = []
@@ -412,21 +426,12 @@ def get_shiny_app(flows: FlowRunner):
                 
                 step_indicators.append(step_indicator)
             
-            # Combine everything into a single UI element using Bootstrap card components
+            # Combine everything into a single UI element
             return ui.tags.div(
-                ui.tags.div(
-                    ui.tags.h5("Overall Progress", class_="card-title"),
-                    progress_bar,
-                    step_count,
-                    class_="card-body"
-                ),
-                ui.tags.div(
-                    ui.tags.h5("Step Details", class_="card-title"),
-                    ui.tags.ul(
-                        *step_indicators,
-                        class_="list-group list-group-flush"
-                    ),
-                    class_="card-body"
+                ui.tags.h5("Step Details", class_="mb-3"),
+                ui.tags.ul(
+                    *step_indicators,
+                    class_="list-group list-group-flush"
                 ),
                 class_="progress-tracker"
             )
