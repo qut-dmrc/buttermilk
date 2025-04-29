@@ -10,9 +10,11 @@
   },
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.defaultInterpreterPath": "/workspaces/buttermilk/.venv/bin/python",
   "python.terminal.activateEnvironment": true,
-  "ruff.interpreter": [".venv/bin/python"],
+  "ruff.interpreter": [
+    "/workspaces/buttermilk/.venv/bin/python"
+  ],
   "editor.defaultFormatter": "charliermarsh.ruff",
   "ruff.lineLength": 120,
   "python.analysis.typeCheckingMode": "standard",
