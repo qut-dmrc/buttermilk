@@ -51,7 +51,7 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "args": ["run", "buttermilk/runner/cli.py",
+      "args": ["run", "buttermilk/web/interface.py",
         "hydra.verbose=false",
         "+flows=trans",
         "ui=streamlit",

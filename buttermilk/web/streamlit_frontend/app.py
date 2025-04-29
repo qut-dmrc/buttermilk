@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import pandas as pd
@@ -19,7 +20,7 @@ from buttermilk.web.messages import _format_message_for_client
 
 
 class StreamlitDashboardApp:
-    """Qualitative Data Science Dashboard with LLM Chatbots - Streamlit version"""
+    """Qualitative Data Science Dashboard with LLM Chatbots - Streamlit version (Async)"""
 
     def __init__(self, flows):
         """Initialize the dashboard application
@@ -29,14 +30,14 @@ class StreamlitDashboardApp:
 
         """
         self.flows = flows
-        self.session_callbacks = {}
+        # Use st.session_state to store callbacks per session
+        if "session_callbacks" not in st.session_state:
+            st.session_state.session_callbacks = {}
 
     def _initialize_session_state(self):
         """Initialize the session state variables if they don't exist"""
         if "session_id" not in st.session_state:
             st.session_state.session_id = str(uuid.uuid4())
-
-        # Initialize flow state
         if "messages" not in st.session_state:
             st.session_state.messages = []
         if "progress" not in st.session_state:
@@ -47,6 +48,8 @@ class StreamlitDashboardApp:
             st.session_state.flow_running = False
         if "error" not in st.session_state:
             st.session_state.error = None
+        if "history" not in st.session_state:
+            st.session_state.history = None  # Initialize history
 
     def _get_flow_choices(self):
         """Get available flow choices from the flow runner"""
@@ -58,96 +61,108 @@ class StreamlitDashboardApp:
         if flow_name:
             try:
                 criteria = self.flows.flows[flow_name].parameters.get("criteria", [])
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Could not get criteria for {flow_name}: {e}")
+                # Keep criteria empty if error
         return criteria
 
-    def _get_record_ids(self, flow_name):
-        """Get record IDs for a specific flow"""
+    async def _get_record_ids(self, flow_name):
+        """Get record IDs for a specific flow (async version)"""
         record_ids = []
+        # Ensure flow_name is valid before proceeding
+        if not flow_name or flow_name not in self.flows.flows:
+            return record_ids
 
         try:
-            if flow_name in self.flows.flows:
-                flow_obj = self.flows.flows.get(flow_name)
-                if flow_obj:
-                    # Try to use get_record_ids method if it exists
-                    if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
-                        df = flow_obj.get_record_ids()
-                        if hasattr(df, "index"):
-                            record_ids = df.index.tolist()
-                        else:
-                            logger.error("get_record_ids did not return an object with an index attribute")
-                    # Otherwise try to use the data directly
-                    elif hasattr(flow_obj, "data") and flow_obj.data:
-                        # Check if we have mock data first (simpler approach)
-                        if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
-                            record_ids = flow_obj.data["mock_data"]["record_ids"]
-                        # Otherwise, try prepare_step_df as non-async
-                        else:
-                            try:
-                                df_dict = prepare_step_df(flow_obj.data)
-                                if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
-                                    df = list(df_dict.values())[-1]
+            flow_obj = self.flows.flows.get(flow_name)
+            if flow_obj:
+                # Try to use get_record_ids method if it exists and is async
+                if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
+                    # Assuming get_record_ids is potentially async
+                    df = await asyncio.to_thread(flow_obj.get_record_ids)  # Use to_thread if get_record_ids is sync but blocking
+                    if hasattr(df, "index"):
+                        record_ids = df.index.tolist()
+                    else:
+                        logger.error("get_record_ids did not return an object with an index attribute")
+                # Otherwise try to use the data directly
+                elif hasattr(flow_obj, "data") and flow_obj.data:
+                    # Check if we have mock data first (simpler approach)
+                    if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
+                        record_ids = flow_obj.data["mock_data"]["record_ids"]
+                    # Otherwise, try prepare_step_df potentially in a thread
+                    else:
+                        try:
+                            # Run synchronous prepare_step_df in a thread to avoid blocking
+                            df_dict = await asyncio.to_thread(prepare_step_df, flow_obj.data)
+                            if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
+                                # Assuming the last df in the dict is the relevant one
+                                df = list(df_dict.values())[-1]
+                                if hasattr(df, "index"):
                                     record_ids = df.index.values.tolist()
-                            except Exception as e:
-                                logger.error(f"Error preparing data: {e}")
+                                else:
+                                    logger.warning("Prepared DataFrame lacks an index.")
+                        except Exception as e:
+                            logger.error(f"Error preparing data asynchronously: {e}")
         except Exception as e:
             logger.error(f"Error loading data for flow '{flow_name}': {e}")
 
         return record_ids
 
-    def _get_run_history(self, flow_name, criteria, record_id):
-        """Get run history for a specific flow, criteria, and record"""
+    async def _get_run_history(self, flow_name, criteria, record_id):
+        """Get run history for a specific flow, criteria, and record (async)"""
+        # Ensure required parameters are present
+        if not flow_name or not criteria or not record_id:
+            logger.warning("Attempted to load history with missing parameters.")
+            return []
         try:
             # Format of the SQL query to get judge and synth runs
-            sql = """
+            sql = f"""
             SELECT
                 *
             FROM
                 `prosocial-443205.testing.flow_score_results`
-            """
-            # Execute the query
-            results_df = self.flows.bm.run_query(sql)
+            WHERE flow = '{flow_name}' 
+              AND criteria = '{criteria}' 
+              AND record_id = '{record_id}' 
+            ORDER BY timestamp DESC 
+            LIMIT 100 
+            """  # Added filtering and limit
+            # Execute the query asynchronously using to_thread
+            results_df = await asyncio.to_thread(self.flows.bm.run_query, sql)
 
-            # If the results are empty
+            # If the results are empty or not a DataFrame
             if not isinstance(results_df, pd.DataFrame) or results_df.empty:
+                logger.info(f"No run history found for {flow_name}/{criteria}/{record_id}")
                 return []
 
             return results_df.to_dict("records")
         except Exception as e:
             logger.error(f"Error loading run history: {e}")
+            st.error(f"Failed to load run history: {e}")  # Show error in UI
             return []
 
     def callback_to_ui(self, session_id):
-        """Create a callback function for the flow to send messages back to the UI
-        
-        Args:
-            session_id: The session ID
-            
-        Returns:
-            Callable: The callback function
-
+        """Create a callback function for the flow to send messages back to the UI.
+        This callback itself remains async, but triggers Streamlit updates.
         """
         async def callback(message):
-            """Handle messages from the flow
-            
-            Args:
-                message: The message from the flow
-
-            """
-            # Format the message for the client
+            """Handle messages from the flow (async)"""
+            logger.debug(f"Callback received message: {type(message).__name__} for session {session_id}")
             content = _format_message_for_client(message)
+            needs_rerun = False
 
-            # If we have a formatted message, add it to the session state
             if content:
+                # Ensure messages list exists for the session
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
                 st.session_state.messages.append({
                     "content": content,
                     "type": type(message).__name__,
                 })
+                needs_rerun = True
 
-            # Handle progress updates
             if isinstance(message, TaskProgressUpdate):
-                progress_data = {
+                st.session_state.progress = {
                     "role": message.role,
                     "step_name": message.step_name,
                     "status": message.status,
@@ -155,120 +170,131 @@ class StreamlitDashboardApp:
                     "total_steps": message.total_steps,
                     "current_step": message.current_step,
                 }
+                needs_rerun = True
 
-                # Update session state
-                st.session_state.progress = progress_data
-
-            # Handle completion and interaction states
-            if isinstance(message, TaskProcessingComplete):
+            elif isinstance(message, TaskProcessingComplete):
                 st.session_state.flow_running = False
                 st.session_state.progress["status"] = "completed"
+                needs_rerun = True
 
             elif isinstance(message, ErrorEvent):
                 st.session_state.flow_running = False
                 st.session_state.progress["status"] = "error"
                 st.session_state.error = str(message)
+                needs_rerun = True
 
             elif isinstance(message, ManagerRequest):
                 st.session_state.requires_confirmation = True
+                needs_rerun = True
+
+            # If any state changed that requires UI update, trigger a rerun
+            if needs_rerun:
+                st.rerun()
 
         return callback
 
     async def start_flow(self, flow_name, record_id, criteria=None):
-        """Start a flow run
-        
-        Args:
-            flow_name: The name of the flow to run
-            record_id: The record ID to use
-            criteria: The criteria to use (optional)
-
-        """
+        """Start a flow run (async)"""
         if not flow_name or not record_id:
             st.error("Missing required fields: flow and record_id")
-            return None
+            return False  # Indicate failure
 
-        # Create run request
+        session_id = st.session_state.session_id
+        # Create run request with the session-specific callback
         run_request = RunRequest(
             flow=flow_name,
             record_id=record_id,
             parameters=dict(criteria=criteria) if criteria else {},
-            client_callback=self.callback_to_ui(st.session_state.session_id),
-            session_id=st.session_state.session_id,
+            client_callback=self.callback_to_ui(session_id),
+            session_id=session_id,
         )
 
-        # Start the flow
         try:
-            # Reset session state
+            # Reset session state for the new run
             st.session_state.messages = []
             st.session_state.progress = {"current_step": 0, "total_steps": 100, "status": "started"}
             st.session_state.requires_confirmation = False
             st.session_state.flow_running = True
             st.session_state.error = None
+            st.session_state.history = None  # Clear previous history
 
-            # Store the callback
-            callback = await self.flows.run_flow(
+            logger.info(f"Starting flow '{flow_name}' for record '{record_id}' with criteria '{criteria}'")
+            # Start the flow asynchronously
+            callback_from_flow = await self.flows.run_flow(
                 flow_name=flow_name,
                 run_request=run_request,
             )
 
-            # Store the callback in a dictionary keyed by session ID
-            self.session_callbacks[st.session_state.session_id] = callback
-
-            return True
+            # Store the callback returned by run_flow (for sending user input)
+            st.session_state.session_callbacks[session_id] = callback_from_flow
+            logger.info(f"Flow '{flow_name}' started successfully for session {session_id}.")
+            return True  # Indicate success
         except Exception as e:
-            logger.error(f"Error starting flow: {e}")
+            logger.error(f"Error starting flow '{flow_name}': {e}", exc_info=True)
             st.error(f"Error starting flow: {e!s}")
             st.session_state.flow_running = False
-            return False
+            st.session_state.error = f"Failed to start flow: {e!s}"
+            return False  # Indicate failure
 
     async def send_user_input(self, user_input):
-        """Send user input to the flow
-        
-        Args:
-            user_input: The user input to send
+        """Send user input to the flow (async)"""
+        if not user_input or not user_input.strip():
+            logger.warning("Attempted to send empty user input.")
+            return False
 
-        """
-        if not user_input.strip():
-            return None
+        session_id = st.session_state.session_id
+        callback = st.session_state.session_callbacks.get(session_id)
 
-        callback = self.session_callbacks.get(st.session_state.session_id)
-
-        if callback:
-            await callback(user_input)
-            return True
-        st.error("No active flow to send message to")
-        return False
+        if callback and st.session_state.flow_running:
+            try:
+                logger.info(f"Sending user input to flow for session {session_id}")
+                # Add user message to chat immediately for responsiveness
+                st.session_state.messages.append({"content": f"**You:** {user_input}", "type": "UserInput"})
+                # Send the input via the stored callback
+                await callback(user_input)
+                logger.info(f"User input sent successfully for session {session_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Error sending user input for session {session_id}: {e}", exc_info=True)
+                st.error(f"Error sending message: {e!s}")
+                return False
+        else:
+            logger.warning(f"No active flow or callback found for session {session_id} to send message.")
+            st.error("No active flow to send message to, or flow is not running.")
+            return False
 
     async def confirm_flow(self):
-        """Send confirmation to the flow"""
-        callback = self.session_callbacks.get(st.session_state.session_id)
+        """Send confirmation to the flow (async)"""
+        session_id = st.session_state.session_id
+        callback = st.session_state.session_callbacks.get(session_id)
 
-        if callback:
-            message = ManagerResponse(confirm=True)
-            await callback(message)
+        if callback and st.session_state.flow_running:
+            try:
+                logger.info(f"Sending confirmation to flow for session {session_id}")
+                message = ManagerResponse(confirm=True)
+                await callback(message)
+                # Update session state immediately
+                st.session_state.requires_confirmation = False
+                logger.info(f"Confirmation sent successfully for session {session_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Error sending confirmation for session {session_id}: {e}", exc_info=True)
+                st.error(f"Error sending confirmation: {e!s}")
+                return False
+        else:
+            logger.warning(f"No active flow or callback found for session {session_id} to confirm.")
+            st.error("No active flow to confirm, or flow is not running.")
+            return False
 
-            # Update session state
-            st.session_state.requires_confirmation = False
-            return True
-        st.error("No active flow to confirm")
-        return False
-
-    def run(self):
-        """Run the Streamlit application"""
+    async def run(self):
+        """Run the Streamlit application (async)"""
         # Initialize session state
         self._initialize_session_state()
-
-        # Set up the page
-        st.set_page_config(
-            page_title="Buttermilk Dashboard",
-            page_icon="🥛",
-            layout="wide",
-        )
 
         # Title
         st.title("Qualitative Data Science Dashboard")
 
-        # Create sidebar and main content in a 2-column layout
+        # Create sidebar and main content
         col1, col2 = st.columns([1, 3])
 
         # Sidebar controls
@@ -280,136 +306,125 @@ class StreamlitDashboardApp:
             selected_flow = st.selectbox(
                 "Choose Flow",
                 [""] + flow_choices,
-                index=0,
-                key="flow_selectbox",
+                index=flow_choices.index(st.session_state.get("selected_flow", "")) + 1 if st.session_state.get("selected_flow") in flow_choices else 0,
+                key="selected_flow",
             )
 
-            # Criteria selection (only available if flow is selected)
+            # Criteria selection
             criteria_options = self._get_criteria_options(selected_flow) if selected_flow else []
             selected_criteria = st.selectbox(
                 "Choose Criteria",
                 [""] + criteria_options,
-                index=0,
+                index=criteria_options.index(st.session_state.get("selected_criteria", "")) + 1 if st.session_state.get("selected_criteria") in criteria_options else 0,
                 disabled=not selected_flow,
-                key="criteria_selectbox",
+                key="selected_criteria",
             )
 
-            # Record ID selection (only available if flow is selected)
-            record_ids = self._get_record_ids(selected_flow) if selected_flow else []
+            # Record ID selection
+            record_ids = await self._get_record_ids(selected_flow) if selected_flow else []
             selected_record_id = st.selectbox(
                 "Record ID",
                 [""] + record_ids,
-                index=0,
+                index=record_ids.index(st.session_state.get("selected_record_id", "")) + 1 if st.session_state.get("selected_record_id") in record_ids else 0,
                 disabled=not selected_flow,
-                key="record_id_selectbox",
+                key="selected_record_id",
             )
 
             # Start flow button
-            start_disabled = not selected_flow or not selected_record_id or st.session_state.flow_running
-            if st.button("Start Flow", disabled=start_disabled, key="start_flow_button"):
-                # Use asyncio to run the async function
-                import asyncio
-                asyncio.run(self.start_flow(selected_flow, selected_record_id, selected_criteria))
-                st.rerun()
-
-            # Confirmation button (only shown when confirmation is required)
-            if st.session_state.requires_confirmation:
-                if st.button("Confirm", key="confirm_button"):
-                    # Use asyncio to run the async function
-                    import asyncio
-                    asyncio.run(self.confirm_flow())
+            start_button_pressed = st.button(
+                "Start Flow",
+                disabled=not selected_flow or not selected_record_id or st.session_state.flow_running,
+                key="start_flow_button",
+            )
+            if start_button_pressed:
+                success = await self.start_flow(selected_flow, selected_record_id, selected_criteria)
+                if success:
                     st.rerun()
 
+            # Confirmation button
+            if st.session_state.requires_confirmation:
+                confirm_button_pressed = st.button("Confirm", key="confirm_button")
+                if confirm_button_pressed:
+                    success = await self.confirm_flow()
+                    if success:
+                        st.rerun()
+
             # Load history button
-            history_disabled = not selected_flow or not selected_criteria or not selected_record_id
-            if st.button("Load Run History", disabled=history_disabled, key="load_history_button"):
-                st.session_state.history = self._get_run_history(selected_flow, selected_criteria, selected_record_id)
+            history_button_pressed = st.button(
+                "Load Run History",
+                disabled=not selected_flow or not selected_criteria or not selected_record_id,
+                key="load_history_button",
+            )
+            if history_button_pressed:
+                history_data = await self._get_run_history(selected_flow, selected_criteria, selected_record_id)
+                st.session_state.history = history_data
                 st.rerun()
 
         # Main content area
         with col2:
             # Chat interface
             st.header("Agent Chat")
-
-            # Display messages
             chat_container = st.container()
             with chat_container:
                 if not st.session_state.messages:
                     st.info("No messages yet. Start a flow to begin the conversation.")
                 else:
                     for msg in st.session_state.messages:
-                        # The content is already HTML formatted by _format_message_for_client
-                        # We'll need to display it as markdown to preserve formatting
                         st.markdown(msg["content"], unsafe_allow_html=True)
 
             # Progress tracker
             st.header("Workflow Progress")
-
-            # Display progress bar
-            progress_status = st.session_state.progress["status"]
-            progress_color = "blue"
-            if progress_status == "completed":
-                progress_color = "green"
-            elif progress_status == "error":
-                progress_color = "red"
-
-            progress_value = (st.session_state.progress["current_step"] /
-                             st.session_state.progress["total_steps"])
+            progress_status = st.session_state.progress.get("status", "waiting")
+            current_step = st.session_state.progress.get("current_step", 0)
+            total_steps = st.session_state.progress.get("total_steps", 1)
+            progress_value = min(1.0, current_step / total_steps if total_steps > 0 else 0)
 
             st.progress(progress_value)
 
             # Display progress details
-            if progress_status == "waiting":
-                st.text("Waiting to start")
-            else:
-                progress_text = f"Status: {progress_status}"
-                if st.session_state.progress.get("step_name"):
-                    progress_text += f" - {st.session_state.progress['step_name']}"
-                if st.session_state.progress.get("role"):
-                    progress_text += f" ({st.session_state.progress['role']})"
-                st.text(progress_text)
+            progress_text = f"Status: {progress_status}"
+            if st.session_state.progress.get("step_name"):
+                progress_text += f" - Step: {st.session_state.progress['step_name']}"
+            if st.session_state.progress.get("role"):
+                progress_text += f" ({st.session_state.progress['role']})"
+            if st.session_state.progress.get("message"):
+                progress_text += f" - {st.session_state.progress['message']}"
+            st.text(progress_text)
 
-            # User input
-            st.text_input(
-                "Type your message here...",
-                key="user_input",
-                disabled=not st.session_state.flow_running,
-                on_change=self._handle_user_input,
+            # Display error if any
+            if st.session_state.error:
+                st.error(f"Error: {st.session_state.error}")
+
+            # User input text area
+            user_input = st.text_area(
+                "Your message:",
+                key="user_input_area",
+                disabled=not st.session_state.flow_running or st.session_state.requires_confirmation,
+                height=100,
+            )
+            send_button_pressed = st.button(
+                "Send Message",
+                key="send_message_button",
+                disabled=not st.session_state.flow_running or st.session_state.requires_confirmation or not user_input.strip(),
             )
 
-            # Run history
+            if send_button_pressed and user_input.strip():
+                success = await self.send_user_input(user_input)
+                if success:
+                    st.rerun()
+
+            # Run history display
             st.header("Run History")
-
-            if "history" in st.session_state and st.session_state.history:
-                # Display history as a table
-                st.dataframe(st.session_state.history)
+            if st.session_state.history is not None:
+                if st.session_state.history:
+                    st.dataframe(st.session_state.history)
+                else:
+                    st.info("No run history found for the selected parameters.")
             else:
-                st.info("No history loaded. Use the 'Load Run History' button to view previous runs.")
-
-    def _handle_user_input(self):
-        """Handle user input submission"""
-        user_input = st.session_state.user_input
-        if user_input and st.session_state.flow_running:
-            # Use asyncio to run the async function
-            import asyncio
-            asyncio.run(self.send_user_input(user_input))
-
-            # Clear the input field
-            st.session_state.user_input = ""
-
-            # Force a rerun to update the UI
-            st.rerun()
+                st.info("Use the 'Load Run History' button to view previous runs.")
 
 
 def create_dashboard_app(flows):
-    """Create and configure the dashboard application
-    
-    Args:
-        flows: FlowRunner or mock runner instance with workflow configurations
-        
-    Returns:
-        StreamlitDashboardApp: The Streamlit dashboard application
-
-    """
+    """Create and configure the dashboard application"""
     dashboard = StreamlitDashboardApp(flows)
     return dashboard
