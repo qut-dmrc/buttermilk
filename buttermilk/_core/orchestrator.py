@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, AsyncGenerator, Literal, Self
 
 from langfuse.decorators import observe
-from opentelemetry.trace import Span
+from opentelemetry.trace import Span, get_tracer
 import weave  # For tracing
 from promptflow.tracing import trace
 from pydantic import (
@@ -218,8 +218,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 display_name = f"{display_name} {self.parameters['criteria'][0]}"
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
+
+            tracer = get_tracer(bm.run_info.name)
             with weave.attributes(tracing_attributes):
-                await self._run(request=request, __weave={"display_name": display_name}) 
+                with tracer.start_as_current_span(display_name) as current_span:
+                    current_span.set_attributes(tracing_attributes)
+                    await self._run(request=request, __weave={"display_name": display_name}) 
 
                 logger.info(f"Orchestrator '{self.name}' run finished successfully.")
 

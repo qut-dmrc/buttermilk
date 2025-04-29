@@ -124,6 +124,8 @@ class HostAgent(Agent):
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
+        public_callback: Callable | None = None,  # Callback provided by adapter
+        message_callback: Callable | None = None,  # Callback provided by adapter 
         **kwargs,
     ) -> OOBMessages | None:
         """
@@ -138,11 +140,12 @@ class HostAgent(Agent):
         if isinstance(message, ManagerResponse):
             try:
                 self._user_confirmation.put_nowait(message)
-                return None
+                return
             except asyncio.QueueFull:
                 msg = f"Discarding user input because earlier input still hasn't been handled: {message}"
                 logger.error(msg)
-                return ErrorEvent(source=self.id, content=msg)
+                await public_callback(ErrorEvent(source=self.id, content=msg))
+                return
             
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
@@ -204,7 +207,7 @@ class HostAgent(Agent):
                  logger.warning(f"Host {self.id} received ConductorRequest but task is already running.")
 
             
-        return None
+        return
 
     async def _wait_for_user(self) -> ManagerResponse:
         try: 
