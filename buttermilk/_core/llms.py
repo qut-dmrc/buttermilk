@@ -19,6 +19,8 @@ from autogen_ext.models.openai import (
 from autogen_ext.models.openai._transformation.registry import (
     _find_model_family,
 )
+from langfuse.decorators import observe
+from langfuse.openai import openai # OpenAI integration # noqa
 from autogen_openaiext_client import GeminiChatCompletionClient
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -117,6 +119,7 @@ class AutoGenWrapper(RetryWrapper):
     client: ChatCompletionClient
     model_info: ModelInfo
 
+    @observe(as_type="generation")
     async def create(
         self,
         messages: Sequence[LLMMessage],
