@@ -1,29 +1,25 @@
-"""
-Defines the core Agent base class, configuration, and handler decorator for Buttermilk.
+"""Defines the core Agent base class, configuration, and handler decorator for Buttermilk.
 """
 
 import asyncio
 from abc import abstractmethod
-from collections import Counter
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
-from typing import Any, Callable, Sequence
-from langfuse.decorators import langfuse_context, observe
-from langfuse.openai import openai # OpenAI integration  # noqa
-from promptflow.tracing import trace
-import jmespath  # For resolving input mappings
+from typing import Any
+
 import weave  # For tracing
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
+from autogen_core.models import AssistantMessage, UserMessage
+from langfuse.decorators import langfuse_context, observe
+from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
-    BaseModel,
     PrivateAttr,
     computed_field,
 )
 
-from autogen_core.models import AssistantMessage, UserMessage
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -32,30 +28,26 @@ from buttermilk._core.contract import (
     AgentInput,  # Standard input message structure
     AgentOutput,
     ErrorEvent,
-    FlowEvent,
-    FlowMessage,  # Standard output message structure
     GroupchatMessageTypes,  # Union of types expected in group chat listening
-    OOBMessages,  # Union of Out-Of-Band control messages
     ManagerMessage,  # Messages for display to the user
     ManagerRequest,  # Request sent to the manager
+    OOBMessages,  # Union of Out-Of-Band control messages
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,  # Request to execute a specific step
     ToolOutput,  # The result of a tool execution
 )
-from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
-from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
+from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
+from buttermilk._core.message_data import extract_message_data, extract_records_from_data
 from buttermilk._core.types import Record  # Data record structure
-from buttermilk.agents.evaluators.message_data import extract_message_data, extract_records_from_data
-from typing import Awaitable
+from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
 # --- Buttermilk Handler Decorator ---
 
 
 def buttermilk_handler(message_types: type):
-    """
-    Decorator to mark methods within a Buttermilk `Agent` subclass as handlers
+    """Decorator to mark methods within a Buttermilk `Agent` subclass as handlers
     for specific message types (typically originating from Autogen via `AutogenAgentAdapter`).
 
     The `AutogenAgentAdapter` inspects agent methods for the `_is_buttermilk_handler`
@@ -65,13 +57,14 @@ def buttermilk_handler(message_types: type):
     Args:
         message_types: The specific message type (or tuple of types) that the
                        decorated method is intended to handle.
+
     """
 
     def decorator(func: Callable) -> Callable:
         # Attach metadata attributes to the original function object.
         # The adapter will look for these attributes.
-        setattr(func, "_buttermilk_handler_message_type", message_types)
-        setattr(func, "_is_buttermilk_handler", True)  # Marker attribute
+        func._buttermilk_handler_message_type = message_types
+        func._is_buttermilk_handler = True  # Marker attribute
 
         # Use functools.wraps to preserve the original function's metadata (name, docstring, etc.)
         # The wrapper itself currently doesn't add extra logic, but provides the structure.
@@ -93,8 +86,7 @@ def buttermilk_handler(message_types: type):
 
 
 class Agent(AgentConfig):
-    """
-    Abstract Base Class for all Buttermilk agents.
+    """Abstract Base Class for all Buttermilk agents.
 
     Inherits configuration from `AgentConfig` and defines the core execution
     interface and state management logic. Subclasses must implement the
@@ -105,29 +97,26 @@ class Agent(AgentConfig):
     _records: list[Record] = PrivateAttr(default_factory=list)  # Stores data records relevant to the agent.
     _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)  # Stores conversation history.
     _data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)  # Stores key-value data extracted/passed via inputs mapping.
-    # TODO: _message_types_handled seems unused. Confirm purpose or remove.
-    # _message_types_handled: type[FlowMessage] = PrivateAttr(default=AgentInput)
-    # Heartbeat queue, potentially used by orchestrator/adapter for liveness checks.
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
 
     model_config = {    # Pydantic Model Configuration
-        "extra": "forbid",  
+        "extra": "forbid",
         "arbitrary_types_allowed": False,  # Disallow arbitrary types unless explicitly handled.
         "populate_by_name": True,  # Allow population by field name.
-        "validate_assignment": True
+        "validate_assignment": True,
     }
-    
+
     @computed_field()
     @property
     def _cfg(self) -> AgentConfig:
-        """
-        Extract AgentConfig parameters by creating a new AgentConfig from an Agent instance.
+        """Extract AgentConfig parameters by creating a new AgentConfig from an Agent instance.
 
         Args:
             agent: An instance of Agent or a subclass
 
         Returns:
             AgentConfig: A clean AgentConfig object with only the config fields
+
         """
         # Get all field names from AgentConfig
         agent_config_fields = set(AgentConfig.model_fields.keys())
@@ -141,16 +130,14 @@ class Agent(AgentConfig):
     # --- Core Methods (Lifecycle & Interaction) ---
 
     async def initialize(self, **kwargs) -> None:
-        """
-        Initialize the agent state or resources. Called once by the orchestrator.
+        """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """
         logger.debug(f"Agent {self.id}: Base initialize.")
-        pass  # Default implementation does nothing.
+        # Default implementation does nothing.
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """
-        Reset the agent's internal state to its initial condition.
+        """Reset the agent's internal state to its initial condition.
         Called by the orchestrator, e.g., between different runs using the same agent instance.
         """
         logger.info(f"Agent {self.id}: Resetting state.")
@@ -163,7 +150,7 @@ class Agent(AgentConfig):
                 self._heartbeat.get_nowait()
             except asyncio.QueueEmpty:
                 break
-        pass  # Allow subclasses to add more reset logic.
+        # Allow subclasses to add more reset logic.
 
     @weave.op()  # Mark the primary execution method for tracing.
     @observe()
@@ -174,9 +161,8 @@ class Agent(AgentConfig):
         message_callback: Callable[[Any], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent|None:
-        """
-        Primary entry point for agent execution, called by the orchestrator/adapter.
+    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent | None:
+        """Primary entry point for agent execution, called by the orchestrator/adapter.
 
         Handles preparing input with agent state, tracing via Weave, calling the
         subclass's core `_process` logic, and returning the result.
@@ -190,6 +176,7 @@ class Agent(AgentConfig):
             Either an AgentOutput for standard agent results, 
             or a direct message type (StepRequest, ManagerRequest, ManagerMessage)
             for flow control agents, or an ErrorEvent if there were errors.
+
         """
         result = None
         logger.debug(f"Agent {self.id} received input via __call__.")
@@ -213,18 +200,17 @@ class Agent(AgentConfig):
             logger.warning(f"Agent {self.id} __call__ executing outside Weave trace context.")
 
         # --- Langfuse tracing ---
-        from langfuse.decorators import langfuse_context, observe
         langfuse_context.update_current_observation(name=self.name,
             metadata=self.parameters,
         )
-    
+
         # --- Execute Core Logic ---
         try:
             await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
 
             result = await self._process(message=final_input, cancellation_token=cancellation_token,
         public_callback=public_callback,  # Callback provided by adapter
-        message_callback=message_callback,  # Callback provided by adapter 
+        message_callback=message_callback,  # Callback provided by adapter
           **kwargs)
 
         except Exception as e:
@@ -236,7 +222,7 @@ class Agent(AgentConfig):
         finally:
             # Publish status update: Task Complete (Error)
             await public_callback(
-                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False)
+                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False),
             )
         # Ensure we always return an AgentOutput, even if _process somehow returned None.
         if result:
@@ -247,12 +233,11 @@ class Agent(AgentConfig):
         return None
 
     @abstractmethod
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, 
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,  # Callback provided by adapter
         message_callback: Callable | None = None,  # Callback provided by adapter,
         **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
-        """
-        Abstract method for core agent logic. Subclasses MUST implement this.
+        """Abstract method for core agent logic. Subclasses MUST implement this.
 
         This method receives the `AgentInput` (potentially augmented with internal state
         by `_add_state_to_input`) and should perform the agent's primary task.
@@ -269,6 +254,7 @@ class Agent(AgentConfig):
 
         Returns:
             An AgentOutput, StepRequest, ManagerRequest, ManagerMessage or ErrorEvent
+
         """
         raise NotImplementedError("Subclasses must implement the _process method.")
 
@@ -279,11 +265,10 @@ class Agent(AgentConfig):
         cancellation_token: CancellationToken | None = None,
         source: str = "",  # ID/Name of the sending agent
         public_callback: Callable | None = None,  # Callback provided by adapter
-        message_callback: Callable | None = None,  # Callback provided by adapter 
+        message_callback: Callable | None = None,  # Callback provided by adapter
         **kwargs,
     ) -> None:
-        """
-        Handles passively received messages from other agents in the group chat.
+        """Handles passively received messages from other agents in the group chat.
 
         Updates internal state (`_data`, `_records`, `_model_context`) based on the
         message content and the agent's `inputs` mapping configuration. Does not
@@ -296,16 +281,17 @@ class Agent(AgentConfig):
             public_callback: Callback to publish messages to the default topic.
             message_callback: Callback to publish messages to the incoming message's topic.
             **kwargs: Additional arguments.
+
         """
         logger.debug(f"Agent {self.id} received message from {source} via _listen.")
-        
+
         # Extract data from the message using the utility function
         extracted = extract_message_data(
             message=message,
             source=source,
-            input_mappings=self.inputs
+            input_mappings=self.inputs,
         )
-        
+
         # Update internal state (_data, _records)
         found = []
         for key, value in extracted.items():
@@ -321,7 +307,7 @@ class Agent(AgentConfig):
                     # Add other extracted data to the KeyValueCollector
                     self._data.add(key, value)
                     found.append(key)
-        
+
         if found:
             logger.debug(f"Agent {self.id} extracted keys [{found}] from {source}.")
 
@@ -333,7 +319,7 @@ class Agent(AgentConfig):
             content_to_add = getattr(message, "contents", None)
             if content_to_add:
                 await self._model_context.add_message(
-                    AssistantMessage(content=str(content_to_add), source=source)
+                    AssistantMessage(content=str(content_to_add), source=source),
                 )  # Assume Assistant role for outputs
         elif isinstance(message, ManagerMessage) and message.content:
             # ManagerMessage and subclasses have content field
@@ -343,18 +329,16 @@ class Agent(AgentConfig):
         else:
             # don't log other types of messages to history by default
             logger.debug(f"Agent {self.id} ignored message type {type(message)} for context history.")
-            pass
 
     async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,  # Callback provided by adapter
-        message_callback: Callable | None = None,  # Callback provided by adapter 
+        message_callback: Callable | None = None,  # Callback provided by adapter
         **kwargs,
     ) -> OOBMessages | None:
-        """
-        Handles Out-Of-Band (OOB) control messages.
+        """Handles Out-Of-Band (OOB) control messages.
 
         Subclasses can override this to react to specific control signals
         (e.g., reset requests, status queries) outside the main processing flow.
@@ -367,6 +351,7 @@ class Agent(AgentConfig):
 
         Returns:
             An OOB message as a response, or None if no direct response is needed.
+
         """
         # logger.debug(f"Agent {self.id} received OOB event: {type(message).__name__}. Default handler dropping.")
         # Example: Handle a specific reset request
@@ -378,8 +363,7 @@ class Agent(AgentConfig):
     # --- Helper Methods ---
 
     async def _check_heartbeat(self, timeout=240) -> bool:
-        """
-        Waits for a heartbeat signal on the internal queue.
+        """Waits for a heartbeat signal on the internal queue.
 
         Potentially used by orchestrators to check agent responsiveness or readiness.
 
@@ -388,6 +372,7 @@ class Agent(AgentConfig):
 
         Returns:
             True if a heartbeat was received within the timeout, False otherwise.
+
         """
         try:
             logger.debug(f"Agent {self.id} waiting for heartbeat (timeout: {timeout}s)...")
@@ -395,7 +380,7 @@ class Agent(AgentConfig):
             logger.debug(f"Agent {self.id} received heartbeat.")
             self._heartbeat.task_done()  # Mark as processed
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Agent {self.id} timed out waiting for heartbeat.")
             return False
         except Exception as e:
@@ -403,8 +388,7 @@ class Agent(AgentConfig):
             return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
-        """
-        Augments the incoming `AgentInput` message with the agent's internal state.
+        """Augments the incoming `AgentInput` message with the agent's internal state.
 
         Merges configured parameters, resolved input mappings from `_data`,
         conversation history from `_model_context`, and stored `_records`.
@@ -414,6 +398,7 @@ class Agent(AgentConfig):
 
         Returns:
             A new `AgentInput` instance with state merged into its fields.
+
         """
         # Create a copy to avoid modifying the original message directly.
         updated_inputs = inputs.model_copy(deep=True)
@@ -465,7 +450,7 @@ class Agent(AgentConfig):
         updated_inputs.records.extend(self._records)
 
         logger.debug(
-            f"Agent {self.id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}"
+            f"Agent {self.id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
         )
         return updated_inputs
 

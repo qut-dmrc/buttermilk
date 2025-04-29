@@ -1,5 +1,4 @@
-"""
-Implements an Orchestrator using the autogen-core library for managing multi-agent interactions.
+"""Implements an Orchestrator using the autogen-core library for managing multi-agent interactions.
 
 This module defines `AutogenOrchestrator`, which leverages Autogen's agent registration,
 message routing (via topics and subscriptions), and runtime management to execute
@@ -8,56 +7,40 @@ and integrates with the Buttermilk agent and contract system.
 """
 
 import asyncio
-from collections.abc import Callable
 import itertools
-from typing import Any, Awaitable, Mapping, Self  # Added type hints for clarity
-from langfuse.decorators import langfuse_context, observe
+from collections.abc import Awaitable, Callable  # Added type hints for clarity
+from typing import Any
+
 import shortuuid
-import weave 
-from promptflow.tracing import trace
+import weave
 from autogen_core import (
     AgentType,  # Represents a registered type of agent in the runtime.
-    ClosureAgent,  # An agent defined by simple Python functions (closures).
-    ClosureContext,  # Context provided to closure agent functions.
     DefaultTopicId,  # A standard implementation for topic identifiers.
-    MessageContext,
-    RoutedAgent,  # Context associated with a message during processing.
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
-    )
-from pydantic import PrivateAttr, model_validator
+)
+from pydantic import PrivateAttr
 
-# TODO: TaskProcessingComplete seems unused in this file. Consider removal.
-# from buttermilk._core import TaskProcessingComplete
-from buttermilk._core.agent import Agent, FatalError, ProcessingError  # Added Agent
+from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
     CONDUCTOR,
     # Added QualScore
-    CONFIRM,
-    END,
     MANAGER,
     AgentInput,
-    AgentOutput,
     ConductorRequest,
     FlowMessage,
     ManagerMessage,
-    ManagerRequest,  # Request sent to the MANAGER (UI/Human).
-    ManagerResponse,
     RunRequest,  # Response received from the MANAGER.
-    StepRequest,  # Defines a request for a specific step/agent execution.
-    )
-
+)
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
-from buttermilk.agents.fetch import FetchRecord  # Agent for fetching data records.
-from buttermilk.agents.ui.web import WebUIAgent
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
 
 
 class AutogenOrchestrator(Orchestrator):
-    """
-    Orchestrates multi-agent workflows using the autogen-core library.
+    """Orchestrates multi-agent workflows using the autogen-core library.
 
     This orchestrator manages a `SingleThreadedAgentRuntime` to host and coordinate
     Buttermilk agents adapted for Autogen. It uses Autogen's topic-based pub/sub
@@ -72,6 +55,7 @@ class AutogenOrchestrator(Orchestrator):
         _runtime: The underlying Autogen runtime instance.
         _agent_types: Maps role names (UPPERCASE) to lists of registered Autogen AgentTypes and variant configs.
         _topic: The main topic ID for this specific group chat instance, generated uniquely per run.
+
     """
 
     # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
@@ -82,12 +66,12 @@ class AutogenOrchestrator(Orchestrator):
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
     _topic: TopicId = PrivateAttr(
-        default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}")
+        default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}"),
     )
 
     async def _setup(self, request: RunRequest) -> None:
         """Initializes the Autogen runtime and registers all configured agents."""
-        msg =f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
+        msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
         self._runtime = SingleThreadedAgentRuntime()
 
@@ -97,20 +81,18 @@ class AutogenOrchestrator(Orchestrator):
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
 
-        self._participants = { k: v.description for k, v in self.agents.items() }
+        self._participants = {k: v.description for k, v in self.agents.items()}
         logger.debug("Autogen runtime started.")
 
         # does it need a second to spin up?
         await asyncio.sleep(1)
-        
+
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
 
-
-    async def _register_agents(self,params: RunRequest ) -> None:
-        """
-        Registers Buttermilk agents (via Adapters) with the Autogen runtime.
+    async def _register_agents(self, params: RunRequest) -> None:
+        """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
 
         Iterates through the `self.agents` configuration, creating AutogenAgentAdapter
         instances for each agent variant and registering them with the runtime.
@@ -134,7 +116,7 @@ class AutogenOrchestrator(Orchestrator):
                             agent_cls=cls,
                             topic_type=topic_type,  # Pass the main topic type
                         )
-                        
+
                     # Register the adapter factory with the runtime.
                     # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
                     agent_type: AgentType = await AutogenAgentAdapter.register(
@@ -200,8 +182,7 @@ class AutogenOrchestrator(Orchestrator):
 
     @weave.op
     async def _run(self, request: RunRequest | None = None) -> None:
-        """
-        Simplified main execution loop for the orchestrator.
+        """Simplified main execution loop for the orchestrator.
         
         This version delegates most of the substantive flow control to the
         host (CONDUCTOR) agent. The orchestrator now acts mainly as a message
@@ -217,17 +198,17 @@ class AutogenOrchestrator(Orchestrator):
 
         Args:
             request: An optional RunRequest containing initial data.
+
         """
         try:
             # 1. Setup the runtime and agents
             await self._setup(request or RunRequest())
-            
+
             # 2. Load initial data if provided
             if request and (request.record_id or request.uri or request.prompt):
                 # Get the record from the fetch agent. Need to clean this up eventually.
                 msg = AgentInput(inputs=request.model_dump())
                 await self._runtime.publish_message(msg, topic_id=DefaultTopicId(type="FETCH"))
-
 
             # 3. Enter the main loop - now much simpler
             while True:
@@ -237,8 +218,7 @@ class AutogenOrchestrator(Orchestrator):
                     # if step.role == END:
                     #     logger.info("Host agent signaled flow completion")
                     #     break
-                        
-                    
+
                 except ProcessingError as e:
                     # Non-fatal error - let the host agent decide how to recover
                     logger.error(f"Error in execution: {e}")
@@ -259,21 +239,21 @@ class AutogenOrchestrator(Orchestrator):
             logger.exception(f"Unhandled exception: {e}")
         finally:
             await self._cleanup()
-            
+
             # Log completion - use try/except to handle possible None cases
             try:
                 call = weave.get_current_call()
-                if call and hasattr(call, 'ui_url'):
+                if call and hasattr(call, "ui_url"):
                     logger.info(f"Tracing link: 🍩 {call.ui_url}")
             except Exception:
                 pass
 
     def _make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
-        """
-        Creates an asynchronous callback function for the UI to use.
+        """Creates an asynchronous callback function for the UI to use.
 
         Returns:
             An async callback function that takes a `FlowMessage` and publishes it.
+
         """
         async def publish_callback(message: FlowMessage) -> None:
             await self._runtime.publish_message(

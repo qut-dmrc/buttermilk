@@ -18,7 +18,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,  # Type hint union for listen
     )
 from buttermilk._core.types import Record
-from buttermilk.agents.evaluators.message_data import extract_message_data, extract_records_from_data
+from buttermilk._core.message_data import extract_message_data, extract_records_from_data
 from buttermilk.agents.judge import AgentReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
