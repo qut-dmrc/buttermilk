@@ -181,8 +181,16 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         """
         return {"session_id": str(uuid.uuid4())}
+    
+    # --- Import Shiny App object ---
+    from buttermilk.web.shiny import get_shiny_app
+
+    # --- Mount the Shiny App ---
+    shiny_app_asgi = get_shiny_app(flows=flows)
+    app.mount("/ui", shiny_app_asgi, name="shiny_app")
 
     logger.info("Importing Dashboard app")
+    
     # --- Import Dashboard App object ---
     from buttermilk.web.fastapi_frontend.app import create_dashboard_app
 
@@ -190,6 +198,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     logger.info("Getting Dashboard app.")
     dashboard_app = create_dashboard_app(flows=flows)
     logger.info("Mounting Dashboard app.")
-    app.mount("/", dashboard_app, name="dashboard_app")
+    app.mount("/dash", dashboard_app, name="dashboard_app")
 
     return app

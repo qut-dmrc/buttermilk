@@ -62,7 +62,7 @@
       ],
     },
     {
-      "name": "api web",
+      "name": "shiny",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -74,7 +74,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=trans",
-        "ui=streamlit",
+        "ui=api",
         "llms=lite",
         "name=bmdevelopment",
         "job=api",

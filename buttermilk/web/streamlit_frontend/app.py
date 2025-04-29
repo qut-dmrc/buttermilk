@@ -79,7 +79,7 @@ class StreamlitDashboardApp:
                 # Try to use get_record_ids method if it exists and is async
                 if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
                     # Assuming get_record_ids is potentially async
-                    df = await asyncio.to_thread(flow_obj.get_record_ids)  # Use to_thread if get_record_ids is sync but blocking
+                    df = await flow_obj.get_record_ids()
                     if hasattr(df, "index"):
                         record_ids = df.index.tolist()
                     else:
@@ -93,7 +93,7 @@ class StreamlitDashboardApp:
                     else:
                         try:
                             # Run synchronous prepare_step_df in a thread to avoid blocking
-                            df_dict = await asyncio.to_thread(prepare_step_df, flow_obj.data)
+                            df_dict = await prepare_step_df(flow_obj.data)
                             if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
                                 # Assuming the last df in the dict is the relevant one
                                 df = list(df_dict.values())[-1]
