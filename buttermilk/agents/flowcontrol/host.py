@@ -353,8 +353,23 @@ class HostAgent(Agent):
             # Pass only the step, participants dict is internal state now
             await self._execute_step(step) 
 
+        # Send a final progress update for the complete workflow
+        await self._send_progress_update(
+            role="WORKFLOW",
+            status="completed",
+            message="Workflow completed successfully",
+            progress=1.0
+        )
+        
+        # Create the END step message
+        end_step = StepRequest(role=END, content="Flow completed.")
+        
+        # Also send the end step to the agents
+        if self._input_callback:
+            await self._input_callback(end_step)
+        
         logger.info(f"Host {self.id} flow execution finished.")
-        return StepRequest(role=END, content="Flow completed.")
+        return end_step
 
 
     async def _execute_step(self, step: StepRequest) -> None:
