@@ -9,6 +9,7 @@
 
 from __future__ import annotations  # Enable postponed annotations
 
+import base64
 import datetime
 import json
 import logging
@@ -21,6 +22,8 @@ from typing import (
     TypeVar,
 )
 
+from opentelemetry import trace
+import openlit
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
@@ -39,6 +42,9 @@ from pydantic import (
     model_validator,
 )
 
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from ._core.config import Project
 from ._core.llms import LLMs
 from ._core.log import logger
@@ -109,6 +115,7 @@ class BM(Singleton, Project):
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(default=None)  # Allow None initially
     _weave: WeaveClient = PrivateAttr()
 
+    _tracer: trace.Tracer = PrivateAttr()
     @property
     def weave(self) -> WeaveClient:
         if not hasattr(self, "_weave"):
@@ -216,28 +223,41 @@ class BM(Singleton, Project):
         # Ensure run_info exists before setting up tracing
         if self.tracing and self.run_info and self.tracing.enabled:
             collection = f"{self.run_info.name}-{self.run_info.job}"
-            if self.tracing.provider == "traceloop":
-                from traceloop.sdk import Traceloop
+            # if self.tracing.provider == "traceloop":
+            #     from traceloop.sdk import Traceloop
 
-                Traceloop.init(
-                    disable_batch=True,
-                    api_key=self.tracing.api_key,
-                )
+            #     Traceloop.init(
+            #         disable_batch=True,
+            #         api_key=self.tracing.api_key,
+            #     )
 
             langfuse = Langfuse(
                 secret_key=os.getenv("LANGFUSE_SECRET_KEY"), 
                 public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), 
                 host=os.getenv("LANGFUSE_HOST")
                 )
-            # elif self.tracing.provider == "promptflow":
-            # from promptflow.tracing import start_trace
+            
+            LANGFUSE_AUTH = base64.b64encode(
+                f"{os.environ.get('LANGFUSE_PUBLIC_KEY')}:{os.environ.get('LANGFUSE_SECRET_KEY')}".encode()
+            ).decode()
+            
+            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = os.environ.get("LANGFUSE_HOST") + "/api/public/otel"
+            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
+            
+            # trace_provider = TracerProvider()
+            # trace_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter()))
+            
+            # # Sets the global default tracer provider
+            # trace.set_tracer_provider(trace_provider)
+            
+            # # Creates a tracer from the global tracer provider
+            # self._tracer = trace.get_tracer(self.run_info.name)
+            
+            # # Initialize OpenLIT instrumentation. 
+            # # # The disable_batch flag controls wheter to process traces immediately.
+            # openlit.init(tracer=self._tracer, disable_batch=False)
 
-            # start_trace(
-            #     resource_attributes={"run_id": self.run_info.run_id},
-            #     collection=collection,
-            # )
-
-            pass
+            # pass
 
     @property
     def save_dir(self) -> str:

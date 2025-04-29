@@ -180,18 +180,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_description": self.description,
         }
 
-        # tracer = trace.get_tracer(bm.run_info.name)
-        # # Create a root span
-        # self._otel_span = tracer.start_span(bm.run_info.job)
-        # self._otel_span.set_attributes(tracing_attributes)
-            
-        # set something here to force us to end the span before exit
         
         return self
 
 
     # --- Public Execution Method ---
-    @observe()
+    observe()
     async def run(self, request: RunRequest | None = None):
         """
         Public entry point to start the orchestrator's flow execution.
@@ -209,6 +203,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "orchestrator": self.__class__.__name__,  # Use class name
             "flow_name": self.name,
             "flow_description": self.description,
+            "record": request.record_id if request else None,
+            "uri": request.uri if request else None,
+            "prompt": request.prompt if request else None
         }
         try:
             assert bm.weave
@@ -217,12 +214,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 display_name = f"{display_name} {self.parameters['criteria'][0]}"
             if request and request.record_id:
                 display_name = f"{display_name}: {request.record_id}"
+            display_name = f"{display_name} {bm.run_info.run_id}"
 
-            langfuse_context.update_current_trace(
+            langfuse_context.update_current_trace(name=display_name,
+                metadata=tracing_attributes,
                 session_id=self.session_id,
-                metadata=tracing_attributes
             )
-
+    
             with weave.attributes(tracing_attributes):
                 await self._run(request=request, __weave={"display_name": display_name}) 
 
