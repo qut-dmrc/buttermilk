@@ -47,6 +47,7 @@ from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom ex
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.types import Record  # Data record structure
+from buttermilk.agents.evaluators.message_data import extract_message_data, extract_records_from_data
 from typing import Awaitable
 
 # --- Buttermilk Handler Decorator ---
@@ -169,8 +170,8 @@ class Agent(AgentConfig):
     async def __call__(
         self,
         message: AgentInput,
-        public_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
-        message_callback: Callable[[FlowMessage|FlowEvent], Awaitable[None]],
+        public_callback: Callable[[Any], Awaitable[None]],
+        message_callback: Callable[[Any], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
     ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent|None:
@@ -297,28 +298,30 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments.
         """
         logger.debug(f"Agent {self.id} received message from {source} via _listen.")
-        # Map incoming message data to internal state (_data) using JMESPath defined in self.inputs.
-        # TODO: Consider adding error handling for _extract_vars.
-        datadict = {source.split("-", maxsplit=1)[0]: message.model_dump()}  # Simple source mapping
-        extracted = await self._extract_vars(message=message, datadict=datadict)
-        found = []
+        
+        # Extract data from the message using the utility function
+        extracted = extract_message_data(
+            message=message,
+            source=source,
+            input_mappings=self.inputs
+        )
+        
         # Update internal state (_data, _records)
+        found = []
         for key, value in extracted.items():
             if value and value != [] and value != {}:
                 if key == "records":
-                    # Special handling for records: append to internal list.
-                    if not isinstance(value, Sequence) or isinstance(value, str):
-                        value = [value]
-                    for rec in value:
-                        if isinstance(rec, Record):
-                            self._records.append(rec)
-                        else:
-                            self._records.append(Record(**rec))
+                    # Extract records from the data
+                    records_data = {"records": value}
+                    new_records = extract_records_from_data(records_data)
+                    # Add to internal records list
+                    self._records.extend(new_records)
                     found.append(key)
                 else:
-                    # Add other extracted data to the KeyValueCollector.
+                    # Add other extracted data to the KeyValueCollector
                     self._data.add(key, value)
                     found.append(key)
+        
         if found:
             logger.debug(f"Agent {self.id} extracted keys [{found}] from {source}.")
 
@@ -334,8 +337,9 @@ class Agent(AgentConfig):
                 )  # Assume Assistant role for outputs
         elif isinstance(message, ManagerMessage) and message.content:
             # ManagerMessage and subclasses have content field
-            if not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content), source=source))
+            content_str = str(message.content) if message.content else ""
+            if not content_str.startswith(COMMAND_SYMBOL):
+                await self._model_context.add_message(UserMessage(content=content_str, source=source))
         else:
             # don't log other types of messages to history by default
             logger.debug(f"Agent {self.id} ignored message type {type(message)} for context history.")
@@ -465,52 +469,4 @@ class Agent(AgentConfig):
         )
         return updated_inputs
 
-    async def _extract_vars(self, message: GroupchatMessageTypes, datadict: dict) -> dict[str, Any]:
-        """
-        Extracts data from an incoming message based on the agent's `inputs` mapping configuration.
-
-        Uses JMESPath expressions defined in `self.inputs` to query data from the
-        `datadict` (which typically contains the message's model dump keyed by source).
-
-        Args:
-            message: The incoming message (used for context, potentially).
-            datadict: A dictionary containing the message data, usually keyed by source agent role.
-
-        Returns:
-            A dictionary containing the extracted key-value pairs based on the mappings.
-        """
-        extracted = {}
-        if not isinstance(self.inputs, dict):
-            msg = f"Agent {self.id} 'inputs' configuration is not a dict: {type(self.inputs)}. Cannot extract vars."
-            raise FatalError(msg)
-
-        # Iterate through the input mappings defined in the agent's config.
-        for key, mapping in self.inputs.items():
-            if mapping and isinstance(mapping, str):
-                try:
-                    # Use JMESPath to search the datadict based on the mapping expression.
-                    # Example: mapping = "judge.outputs.prediction" -> search datadict["judge"]["outputs"]["prediction"]
-                    search_result = jmespath.search(mapping, datadict)
-                    if search_result and isinstance(search_result, Sequence) and not isinstance(search_result, str):
-                        # Remove None or empty results
-                        search_result = [x for x in search_result if x is not None and x != [] and x != {}]
-                            
-                    if search_result is not None and search_result != [] and search_result != {}:
-                        # Store if JMESPath found something (could be False, 0, etc.)
-                        extracted[key] = search_result
-                    else:
-                        logger.debug(f"Agent {self.id}: Mapping '{mapping}' for key '{key}' yielded None.")
-
-                except jmespath.exceptions.ParseError:
-                    # If the mapping is just a plain string, not a JMESPath expression,
-                    # potentially treat it as a default value or log a warning.
-                    # Current behavior: Ignore non-JMESPath strings silently in this context.
-                    # logger.debug(f"Mapping '{mapping}' for key '{key}' is not a valid JMESPath expression. Skipping.")
-                    continue
-                except Exception as e:
-                    logger.warning(f"Agent {self.id}: Error applying JMESPath mapping '{mapping}' for key '{key}': {e}")
-            else:
-                # Handle non-string or empty mappings if necessary. Currently warns.
-                logger.error(f"Agent {self.id}: Invalid or complex input mapping for key '{key}': {mapping}. Skipping.")
-        logger.debug(f"Agent {self.id}: Finished extracting vars. Keys extracted: {list(extracted.keys())}")
-        return extracted
+    # The _extract_vars method is no longer needed as we're using the utility functions

@@ -4,9 +4,6 @@ synthesiser:
   agent_obj: Judge
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
   num_runs: 1
-  tasks:
-    criteria:
-      - trans_simplified
   parameters:
     template: synthesise
     formatting: json_rules

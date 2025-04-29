@@ -18,6 +18,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,  # Type hint union for listen
     )
 from buttermilk._core.types import Record
+from buttermilk.agents.evaluators.message_data import extract_message_data, extract_records_from_data
 from buttermilk.agents.judge import AgentReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
@@ -47,7 +48,6 @@ class QualResults(QualScore):
     assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments, one for each criterion evaluated.")
 
-    @computed_field
     @property
     def correctness(self) -> float | None:
         """
@@ -91,7 +91,7 @@ class LLMScorer(LLMAgent):
 
     async def _listen(
         self,
-        message: AgentOutput,  # Specifically listen for AgentOutput
+        message: GroupchatMessageTypes,  # Use the base type for compatibility
         *,
         cancellation_token: CancellationToken | None = None,
         source: str = "",  # ID of the agent that sent the message
@@ -108,7 +108,7 @@ class LLMScorer(LLMAgent):
         original message's trace. The score result (AgentOutput containing QualScore)
         is published back using the `public_callback`.
         """
-        # First, use the superclass to process messages for inputs we might need.
+        # First, use the superclass to process messages for inputs we might need
         await super()._listen(
             message=message,
             cancellation_token=cancellation_token,
@@ -117,25 +117,41 @@ class LLMScorer(LLMAgent):
             message_callback=message_callback,
             **kwargs,
         )
+        
         # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs 
-        if not isinstance(message, AgentOutput) or not isinstance(message.outputs, AgentReasons):
+        if not isinstance(message, AgentOutput) or not hasattr(message, "outputs") or not isinstance(message.outputs, AgentReasons):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
         logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
-
-        # Prepare the scoring input from internal agent state.
-        try:
-            scorer_agent_input = await self._add_state_to_input(AgentInput())
-        except Exception as e:
-            logger.error(f"Agent {self.id}: Error preparing input state: {e}")
-            error_output = ErrorEvent(source=self.id, content=f"Failed to prepare input state: {e}")
-            await public_callback(error_output)
-            return
+        
+        # Extract data from the current message
+        extracted_data = extract_message_data(
+            message=message,
+            source=source,
+            input_mappings=self.inputs
+        )
+        
+        # Extract records if present in the extracted data
+        current_records = extract_records_from_data(extracted_data)
+        
+        # Create an AgentInput with minimal state
+        scorer_agent_input = AgentInput()
+        
+        # Add records if found in the current message
+        if current_records:
+            scorer_agent_input.records = current_records
         
         # Prepare the input for the scorer's own LLM call (_process)
         # 'inputs' should match what the scorer's prompt template expects.
         # It needs the judge's output (message.outputs) and the ground_truth.
+        scorer_agent_input.inputs = {}
+        
+        # Add any extracted data to the inputs
+        for key, value in extracted_data.items():
+            if key != "records":  # Records are handled separately
+                scorer_agent_input.inputs[key] = value
+                
         scorer_agent_input.inputs["assessor"] = self.id
 
         # Define the scoring function (our own __call__ method)
@@ -155,9 +171,15 @@ class LLMScorer(LLMAgent):
             logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer; trying to score without tracing instead.")
 
         # Call the LLMScorer._process method with the prepared input.
-        score_output: AgentOutput = await score_fn(message=scorer_agent_input,
-            public_callback=public_callback,
-            message_callback=message_callback,)
+        if public_callback is not None and message_callback is not None:
+            score_output: AgentOutput = await score_fn(
+                message=scorer_agent_input,
+                public_callback=public_callback,
+                message_callback=message_callback
+            )
+        else:
+            logger.error(f"Scorer {self.id}: Missing required callbacks, cannot proceed with scoring")
+            return
 
         # Process the score for logging
         if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
@@ -172,7 +194,10 @@ class LLMScorer(LLMAgent):
             score_output.outputs = score
 
             # Publish the score back to the system using the provided callback.
-            await public_callback(score_output)
+            if public_callback is not None:
+                await public_callback(score_output)
+            else:
+                logger.error(f"Scorer {self.id}: Cannot publish score, public_callback is None")
 
             # add feedback to Weave call
             if weave_call:
