@@ -21,7 +21,7 @@ from typing import (
     ClassVar,
     TypeVar,
 )
-
+from rich import print
 from opentelemetry import trace
 import openlit
 import coloredlogs

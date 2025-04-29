@@ -215,6 +215,7 @@ def get_shiny_app(flows: FlowRunner):
             if isinstance(message, ManagerRequest):
                 confirm_button_state.set("ready")
             # Re-enable the 'Go' button when the flow completes or needs confirmation or errors out
+            # Handle task progress updates without sending to chat
             if isinstance(message, TaskProgressUpdate):
                 # Update the progress tracking
                 progress_data = {
@@ -232,8 +233,10 @@ def get_shiny_app(flows: FlowRunner):
                 current_progress.set(progress_data)
                 
                 # If this is the first time seeing this step, add it to workflow_steps
-                steps = workflow_steps.get()
-                if message.step_name not in [s.get("step_name") for s in steps]:
+                steps = workflow_steps.get().copy()  # Make a copy to trigger reactivity
+                step_names = [s.get("step_name") for s in steps]
+                
+                if message.step_name not in step_names:
                     steps.append(progress_data)
                     workflow_steps.set(steps)
                 else:
@@ -243,6 +246,9 @@ def get_shiny_app(flows: FlowRunner):
                             steps[i] = progress_data
                             workflow_steps.set(steps)
                             break
+                            
+                # Don't continue processing this message for the chat UI
+                return
                 
             if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)):
                 ui.update_action_button("go", label="Rate", disabled=False)
@@ -346,16 +352,34 @@ def get_shiny_app(flows: FlowRunner):
                 current_step = latest_progress.get("current_step", 0)
                 total_steps = latest_progress.get("total_steps", 0)
                 
-                progress_bar = ui.progress(
-                    value=progress_pct,
-                    color="success" if progress_pct == 100 else "info",
-                    striped=True,
-                    animated=progress_pct < 100
+                # Create a proper Bootstrap progress bar using Shiny's HTML helpers
+                # This is a more "Shiny way" to create UI components
+                bar_class = "bg-success" if progress_pct == 100 else "bg-info progress-bar-striped progress-bar-animated"
+                
+                progress_bar = ui.tags.div(
+                    ui.tags.div(
+                        f"{progress_pct}%",
+                        class_=f"progress-bar {bar_class}",
+                        role="progressbar",
+                        style=f"width: {progress_pct}%",
+                        **{"aria-valuenow": str(progress_pct), "aria-valuemin": "0", "aria-valuemax": "100"}
+                    ),
+                    class_="progress mb-3"
                 )
                 
                 step_count = ui.p(f"Step {current_step}/{total_steps}" if total_steps > 0 else "")
             else:
-                progress_bar = ui.progress(value=0)
+                # Empty progress bar
+                progress_bar = ui.tags.div(
+                    ui.tags.div(
+                        "0%",
+                        class_="progress-bar",
+                        role="progressbar",
+                        style="width: 0%",
+                        **{"aria-valuenow": "0", "aria-valuemin": "0", "aria-valuemax": "100"}
+                    ),
+                    class_="progress mb-3"
+                )
                 step_count = ui.p("")
             
             # Create step indicators
@@ -375,27 +399,36 @@ def get_shiny_app(flows: FlowRunner):
                 else:
                     icon = ui.tags.i(class_="fa fa-clock text-warning")
                 
-                # Create the step indicator
-                step_indicator = ui.div(
-                    ui.div(
+                # Create the step indicator using Bootstrap list group
+                step_indicator = ui.tags.li(
+                    ui.tags.div(
                         icon,
-                        ui.strong(f" {role}: "),
-                        ui.span(message),
+                        ui.tags.strong(f" {role}: "),
+                        ui.tags.span(message),
                         class_="d-flex align-items-center"
                     ),
-                    class_="mb-2 p-2 border-bottom"
+                    class_="list-group-item"
                 )
                 
                 step_indicators.append(step_indicator)
             
-            # Combine everything into a single UI element
-            return ui.div(
-                ui.h5("Overall Progress"),
-                progress_bar,
-                step_count,
-                ui.h5("Step Details"),
-                *step_indicators,
-                class_="progress-tracker mt-3"
+            # Combine everything into a single UI element using Bootstrap card components
+            return ui.tags.div(
+                ui.tags.div(
+                    ui.tags.h5("Overall Progress", class_="card-title"),
+                    progress_bar,
+                    step_count,
+                    class_="card-body"
+                ),
+                ui.tags.div(
+                    ui.tags.h5("Step Details", class_="card-title"),
+                    ui.tags.ul(
+                        *step_indicators,
+                        class_="list-group list-group-flush"
+                    ),
+                    class_="card-body"
+                ),
+                class_="progress-tracker"
             )
 
 

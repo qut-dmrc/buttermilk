@@ -29,8 +29,8 @@ def _format_message_for_client( message) -> str|None:
     msg_type = "message"
     content = None
     
-    # Ignore certain message types
-    if isinstance(message, (StepRequest)):
+    # Ignore certain message types (don't display in chat)
+    if isinstance(message, (StepRequest, TaskProgressUpdate)):
         return None
     # Format based on message type
     if isinstance(message, AgentOutput):
