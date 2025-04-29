@@ -146,11 +146,9 @@ class DashboardApp:
                             # Check if we have mock data first (simpler approach)
                             if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
                                 record_ids = flow_obj.data["mock_data"]["record_ids"]
-                            # Otherwise, try prepare_step_df as non-async
                             else:
                                 try:
-                                    # Import already happened at module level, so we don't need to await
-                                    df_dict = prepare_step_df(flow_obj.data)
+                                    df_dict = await prepare_step_df(flow_obj.data)
                                     if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
                                         df = list(df_dict.values())[-1]
                                         # Check if df has index attribute

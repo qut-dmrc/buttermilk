@@ -15,7 +15,141 @@
     selectedCriteria: '',
     selectedRecordId: '',
     isRunning: false,
-    error: null
+    error: null,
+
+    // --- WebSocket Connection Logic ---
+    connectWebSocket() {
+        // Prevent multiple connections
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            console.log('WebSocket already connected.');
+            return;
+        }
+        
+        // Create WebSocket connection
+        this.websocket = new WebSocket(`ws://${window.location.host}/dash/ws/${this.sessionId}`); 
+
+        // Connection opened
+        this.websocket.addEventListener('open', (event) => {
+            this.isConnected = true;
+            console.log('WebSocket connected');
+        });
+
+        // Connection closed
+        this.websocket.addEventListener('close', (event) => {
+            this.isConnected = false;
+            this.isRunning = false; // Stop flow if connection drops
+            console.log('WebSocket disconnected');
+        });
+
+        // Listen for messages
+        this.websocket.addEventListener('message', (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Message from server:', data);
+
+            // Handle different message types
+            switch (data.type) {
+                case 'chat_message':
+                    this.messages.push({
+                        content: data.content,
+                        timestamp: new Date().toISOString()
+                    });
+                    this.$nextTick(() => {
+                        const container = document.getElementById('messages-container');
+                        container.scrollTop = container.scrollHeight;
+                    });
+                    break;
+                case 'progress_update':
+                    this.progress = data.progress;
+                    break;
+                case 'requires_confirmation':
+                    this.requiresConfirmation = true;
+                    break;
+                case 'flow_started':
+                    console.log(`Flow ${data.flow} started for record ${data.record_id}`);
+                    break;
+                case 'flow_state_change':
+                    if (data.state === 'TaskProcessingComplete') {
+                        this.isRunning = false;
+                        this.progress.status = 'completed';
+                    } else if (data.state === 'ErrorEvent') {
+                        this.isRunning = false;
+                        this.progress.status = 'error';
+                        this.error = data.details || 'An unspecified error occurred.';
+                    }
+                    break;
+                case 'error':
+                    this.error = data.message;
+                    this.isRunning = false;
+                    this.progress.status = 'error';
+                    console.error('Error:', data.message);
+                    break;
+            }
+        });
+
+        // Handle errors
+        this.websocket.addEventListener('error', (event) => {
+            console.error('WebSocket error:', event);
+            this.isConnected = false;
+            this.isRunning = false;
+            this.error = 'WebSocket connection error.';
+        });
+    },
+
+    // --- Flow Control Functions ---
+    startFlow() {
+        if (!this.isConnected) {
+            this.connectWebSocket();
+        }
+
+        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket not ready, delaying startFlow slightly.');
+            setTimeout(() => this.startFlow(), 500);
+            return;
+        }
+
+        this.isRunning = true;
+        this.messages = [];
+        this.error = null;
+        this.requiresConfirmation = false;
+        this.progress = { current_step: 0, total_steps: 100, status: 'starting' };
+
+        this.websocket.send(JSON.stringify({
+            type: 'run_flow',
+            flow: this.selectedFlow,
+            record_id: this.selectedRecordId,
+            criteria: this.selectedCriteria
+        }));
+
+        this.$nextTick(() => {
+            document.getElementById('messages-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    },
+
+    sendMessage() {
+        if (!this.isConnected || !this.userInput.trim() || !this.isRunning) {
+            return;
+        }
+
+        this.websocket.send(JSON.stringify({
+            type: 'user_input',
+            message: this.userInput
+        }));
+
+        this.userInput = '';
+    },
+
+    confirmFlow() {
+        if (!this.isConnected || !this.requiresConfirmation) {
+            return;
+        }
+
+        this.websocket.send(JSON.stringify({
+            type: 'confirm'
+        }));
+
+        this.requiresConfirmation = false;
+    }
+
 }">
     <!-- Sidebar controls -->
     <div class="w-full md:w-1/4 bg-white shadow rounded-lg p-4">
@@ -187,151 +321,8 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        window.startFlow = function() {
-            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
-            
-            // Initialize WebSocket if not already connected
-            if (!app.isConnected) {
-                connectWebSocket(app);
-            }
-            
-            // Start the flow
-            app.isRunning = true;
-            app.messages = [];
-            app.error = null;
-            app.requiresConfirmation = false;
-            app.progress = { current_step: 0, total_steps: 100, status: 'starting' };
-            
-            // Send flow run command
-            app.websocket.send(JSON.stringify({
-                type: 'run_flow',
-                flow: app.selectedFlow,
-                record_id: app.selectedRecordId,
-                criteria: app.selectedCriteria
-            }));
-            
-            // Scroll to messages
-            setTimeout(() => {
-                document.getElementById('messages-container').scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-        };
-        
-        window.sendMessage = function() {
-            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
-            
-            if (!app.isConnected || !app.userInput.trim()) {
-                return;
-            }
-            
-            // Send user message
-            app.websocket.send(JSON.stringify({
-                type: 'user_input',
-                message: app.userInput
-            }));
-            
-            // Clear input
-            app.userInput = '';
-        };
-        
-        window.confirmFlow = function() {
-            const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
-            
-            if (!app.isConnected) {
-                return;
-            }
-            
-            // Send confirm message
-            app.websocket.send(JSON.stringify({
-                type: 'confirm'
-            }));
-            
-            // Update UI
-            app.requiresConfirmation = false;
-        };
-        
-        function connectWebSocket(app) {
-            // Create WebSocket connection
-            app.websocket = new WebSocket(`ws://${window.location.host}/ws/${app.sessionId}`);
-            
-            // Connection opened
-            app.websocket.addEventListener('open', function(event) {
-                app.isConnected = true;
-                console.log('WebSocket connected');
-            });
-            
-            // Connection closed
-            app.websocket.addEventListener('close', function(event) {
-                app.isConnected = false;
-                app.isRunning = false;
-                console.log('WebSocket disconnected');
-            });
-            
-            // Listen for messages
-            app.websocket.addEventListener('message', function(event) {
-                const data = JSON.parse(event.data);
-                
-                console.log('Message from server:', data);
-                
-                // Handle different message types
-                switch (data.type) {
-                    case 'chat_message':
-                        app.messages.push({
-                            content: data.content,
-                            timestamp: new Date().toISOString()
-                        });
-                        
-                        // Auto-scroll to bottom
-                        setTimeout(() => {
-                            const container = document.getElementById('messages-container');
-                            container.scrollTop = container.scrollHeight;
-                        }, 10);
-                        break;
-                        
-                    case 'progress_update':
-                        app.progress = data.progress;
-                        break;
-                        
-                    case 'requires_confirmation':
-                        app.requiresConfirmation = true;
-                        break;
-                        
-                    case 'flow_started':
-                        console.log(`Flow ${data.flow} started for record ${data.record_id}`);
-                        break;
-                        
-                    case 'flow_state_change':
-                        if (data.state === 'TaskProcessingComplete') {
-                            app.isRunning = false;
-                            app.progress.status = 'completed';
-                        } else if (data.state === 'ErrorEvent') {
-                            app.isRunning = false;
-                            app.progress.status = 'error';
-                        }
-                        break;
-                        
-                    case 'error':
-                        app.error = data.message;
-                        app.isRunning = false;
-                        console.error('Error:', data.message);
-                        break;
-                }
-            });
-            
-            // Handle errors
-            app.websocket.addEventListener('error', function(event) {
-                console.error('WebSocket error:', event);
-                app.isConnected = false;
-                app.isRunning = false;
-            });
-        }
-    });
-</script>
-
-<script>
     // Custom htmx event handlers
     document.body.addEventListener('htmx:afterSwap', function(event) {
-        // Re-init Alpine components after htmx swaps content
         if (window.Alpine) {
             window.Alpine.initTree(event.detail.target);
         }
