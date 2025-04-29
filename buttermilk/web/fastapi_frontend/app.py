@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import Path
 from typing import Any
@@ -85,14 +86,23 @@ class DashboardApp:
                 {"request": request, "flow_choices": flow_choices},
             )
 
-        @self.app.get("/api/criteria/{flow_name}", response_class=HTMLResponse)
-        async def get_criteria(request: Request, flow_name: str):
-            """Get criteria options for a specific flow"""
+        @self.app.get("/api/criteria/", response_class=HTMLResponse)
+        async def get_criteria(request: Request):
+            """Get criteria options for a specific flow using query parameter"""
+            flow_name = request.query_params.get("flow")  # Get flow from query parameter
             criteria = []
+
+            if not flow_name:
+                logger.warning("Request to /api/criteria/ missing 'flow' query parameter.")
+                return self.templates.TemplateResponse(
+                    "partials/criteria_options.html",
+                    {"request": request, "criteria": []},
+                )
+
             try:
                 criteria = self.flows.flows[flow_name].parameters["criteria"]
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Error loading criteria for flow '{flow_name}': {e}")
 
             return self.templates.TemplateResponse(
                 "partials/criteria_options.html",
@@ -123,7 +133,14 @@ class DashboardApp:
                                 df = await flow_obj.get_record_ids()
                             else:  # If it's sync, call it directly (or use to_thread if blocking)
                                 df = flow_obj.get_record_ids()
-                            record_ids = df.index.tolist()
+
+                            # Make sure df has an index attribute before using it
+                            if hasattr(df, "index"):
+                                record_ids = df.index.tolist()
+                            elif isinstance(df, list):
+                                record_ids = df
+                            else:
+                                logger.warning(f"Unexpected return type from get_record_ids: {type(df)}")
                         # Otherwise try to use the data directly
                         elif hasattr(flow_obj, "data") and flow_obj.data:
                             # Check if we have mock data first (simpler approach)
@@ -136,7 +153,20 @@ class DashboardApp:
                                     df_dict = prepare_step_df(flow_obj.data)
                                     if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
                                         df = list(df_dict.values())[-1]
-                                        record_ids = df.index.values.tolist()
+                                        # Check if df has index attribute
+                                        if hasattr(df, "index"):
+                                            if hasattr(df.index, "values"):
+                                                record_ids = df.index.values.tolist()
+                                            else:
+                                                record_ids = df.index.tolist()
+                                        elif isinstance(df, list):
+                                            record_ids = df
+                                        elif hasattr(df, "to_dict"):
+                                            # For pandas DataFrame-like objects
+                                            records_dict = df.to_dict("records")
+                                            record_ids = [str(r.get("id", i)) for i, r in enumerate(records_dict)]
+                                        else:
+                                            logger.warning(f"Unable to extract record_ids from data: {type(df)}")
                                 except Exception as e:
                                     logger.error(f"Error preparing data: {e}")
             except Exception as e:
@@ -147,8 +177,19 @@ class DashboardApp:
                 {"request": request, "record_ids": record_ids},
             )
 
-        @self.app.get("/api/history/{flow_name}/{criteria}/{record_id}", response_class=HTMLResponse)
-        async def get_run_history(request: Request, flow_name: str, criteria: str, record_id: str):
+        @self.app.get("/api/history/", response_class=HTMLResponse)
+        async def get_run_history(request: Request):
+            """Get run history for a specific flow, criteria, and record using query parameters"""
+            flow_name = request.query_params.get("flow")
+            criteria = request.query_params.get("criteria")
+            record_id = request.query_params.get("record_id")
+
+            if not flow_name or not criteria or not record_id:
+                logger.warning("Request to /api/history/ missing required query parameters.")
+                return self.templates.TemplateResponse(
+                    "partials/error.html",
+                    {"request": request, "error": "Missing required parameters: flow, criteria, and record_id"},
+                )
             """Get run history for a specific flow, criteria, and record"""
             try:
                 # Format of the SQL query to get judge and synth runs
