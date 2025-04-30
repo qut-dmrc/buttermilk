@@ -247,13 +247,13 @@
     </div>
     
     <!-- Main content area -->
-    <div class="w-full md:w-3/4 flex flex-col gap-4">
+    <div class="w-full md:w-2/3 flex flex-col gap-4">
         <!-- Chat interface -->
         <div class="bg-white shadow rounded-lg p-4 flex-grow max-h-[70vh] flex flex-col">
             <h2 class="text-lg font-semibold mb-4">Agent Chat</h2>
             
             <!-- Messages container -->
-            <div class="flex-grow overflow-y-auto p-2 mb-4 bg-gray-50 rounded-md" id="messages-container">
+            <div class="flex-grow overflow-y-auto p-2 mb-4 bg-gray-50 rounded-md" id="messages-container" x-data="{ scores: {} }">
                 <template x-if="messages.length === 0">
                     <div class="text-center text-gray-500 py-8">
                         <p>No messages yet. Start a flow to begin the conversation.</p>
@@ -316,7 +316,56 @@
             </div>
         </div>
     </div>
+    
+    <!-- Scores panel -->
+    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2">
+        <h2 class="text-sm font-semibold mb-2">Scores</h2>
+        <div id="scores-container" class="overflow-y-auto max-h-[70vh]">
+            <template x-if="Object.keys(scores).length === 0">
+                <div class="text-center text-gray-500 py-4 text-xs">
+                    <p>No scores yet.</p>
+                </div>
+            </template>
+            <template x-for="(agentScores, agentId) in scores" :key="agentId">
+                <div class="mb-4 border-b pb-2">
+                    <div class="text-xs font-medium text-gray-700 mb-1" x-text="agentId"></div>
+                    <div class="flex flex-wrap gap-1">
+                        <template x-for="(score, assessorId) in agentScores" :key="assessorId">
+                            <div class="tooltip" :title="'Score: ' + score.score_text + ' by ' + score.assessor">
+                                <div class="flex items-center">
+                                    <span x-text="assessorId.slice(0, 2)" class="text-xs text-gray-500 mr-1"></span>
+                                    <span class="w-4 h-4 rounded-full" :style="'background-color:' + score.color"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
 </div>
+
+<style>
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 1;
+    background-color: #555;
+    color: white;
+    text-align: center;
+    padding: 5px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -349,5 +398,24 @@
             window.Alpine.initTree(event.detail.target);
         }
     });
+    
+    // Global object to store all scores by agent and assessor
+    window.scoreData = {
+        scores: {},
+        addScore: function(agentId, assessorId, scoreData) {
+            if (!this.scores[agentId]) {
+                this.scores[agentId] = {};
+            }
+            this.scores[agentId][assessorId] = scoreData;
+            
+            // Update Alpine.js data
+            if (window.Alpine) {
+                const messagesContainer = document.getElementById('messages-container');
+                if (messagesContainer && messagesContainer.__x) {
+                    messagesContainer.__x.setData('scores', JSON.parse(JSON.stringify(this.scores)));
+                }
+            }
+        }
+    };
 </script>
 {% endblock %}

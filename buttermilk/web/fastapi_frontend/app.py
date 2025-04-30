@@ -1,4 +1,5 @@
 import asyncio
+import random
 import uuid
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,7 @@ class DashboardApp:
 
             try:
                 criteria = self.flows.flows[flow_name].parameters["criteria"]
+                random.shuffle(criteria)
             except Exception as e:
                 logger.error(f"Error loading criteria for flow '{flow_name}': {e}")
 

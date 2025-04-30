@@ -206,20 +206,57 @@ def _get_message_hash(message_id: str) -> str:
     return COLOR_PALETTE[hash_val % len(COLOR_PALETTE)]
 
 
+def _get_score_color(score: float) -> str:
+    """Get color for a score value."""
+    if score > 0.8:
+        return "#28a745"  # Strong green
+    if score > 0.6:
+        return "#5cb85c"  # Light green
+    if score > 0.4:
+        return "#ffc107"  # Yellow
+    if score > 0.2:
+        return "#ff9800"  # Orange
+    return "#dc3545"  # Red
+
+
+def _handle_score_message(score_value: float, assessor_id: str, agent_id: str, qual_data: dict[str, Any] | None = None) -> str:
+    """Generate JavaScript to update the score sidebar for a score message.
+    
+    Args:
+        score_value: The score value (0-1)
+        assessor_id: ID of the assessor agent
+        agent_id: ID of the agent being assessed
+        qual_data: Optional detailed score data
+        
+    Returns:
+        JavaScript code to update the score panel
+
+    """
+    if not qual_data:
+        # Create minimal score data for simple scores
+        qual_data = {
+            "score": score_value,
+            "score_text": f"{int(score_value * 100)}%",
+            "color": _get_score_color(score_value),
+            "assessor": assessor_id,
+        }
+
+    # Return JavaScript that will update the Alpine.js score data
+    return f"""
+    <script>
+        window.scoreData.addScore(
+            "{agent_id}", 
+            "{assessor_id}", 
+            {json.dumps(qual_data)}
+        );
+    </script>
+    """
+
+
 def _format_score_indicator(score, simple=False) -> str:
     """Format a score as a colored indicator."""
     if isinstance(score, (int, float)):
-        # Choose color based on score value
-        if score > 0.8:
-            color = "#28a745"  # Strong green
-        elif score > 0.6:
-            color = "#5cb85c"  # Light green
-        elif score > 0.4:
-            color = "#ffc107"  # Yellow
-        elif score > 0.2:
-            color = "#ff9800"  # Orange
-        else:
-            color = "#dc3545"  # Red
+        color = _get_score_color(score)
 
         if simple:
             return f'<span style="display:inline-block; width:10px; height:10px; background-color:{color}; border-radius:2px; margin-right:3px;"></span>'
@@ -301,12 +338,16 @@ def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
 
     score_text = f"{int(score * 100)}%"
 
+    # convert from pydantic model
+    if assessments := getattr(qual_results, "assessments", []):
+        assessments = [x.model_dump() for x in assessments]
+
     return {
         "answer_id": answer_id,
         "score": score,
         "score_text": score_text,
         "color": color,
-        "assessments": getattr(qual_results, "assessments", []),
+        "assessments": assessments,
     }
 
 
@@ -420,58 +461,44 @@ def _format_message_for_client(message) -> str | None:
             qual_data = _format_qual_results(score_obj)
             if qual_data:
                 answer_id = qual_data.get("answer_id", "")
+                agent_id = qual_data.get("agent_id", "unknown")
+                assessor_id = getattr(score_obj, "assessor", "scorer")
 
-                # Store the score data and link it to the original message if possible
+                # Store the score data in the traditional way too (for backward compatibility)
                 if answer_id in scored_messages:
                     original_message_id = scored_messages[answer_id]
-                    # Cast the dictionary to the ScoreData type
-                    message_scores[original_message_id] = ScoreData(**qual_data)
+                    message_scores[original_message_id] = ScoreData(**qual_data)  # type: ignore[typeddict-item]
 
-                # Create a compact score display
-                assessments_html = ""
-                if qual_data.get("assessments", []):
-                    assessment_items = []
-                    for idx, assessment in enumerate(qual_data["assessments"]):
-                        icon = "✓" if assessment.correct else "✗"
-                        color = "#28a745" if assessment.correct else "#dc3545"
-                        assessment_items.append(f'<li style="margin-bottom:4px;"><span style="color:{color};font-weight:bold;">{icon}</span> {assessment.feedback}</li>')
+                # Return JavaScript to update scores panel - convert TypedDict to regular dict
+                return _handle_score_message(
+                    score_value=qual_data.get("score", 0.0),
+                    assessor_id=str(assessor_id),
+                    agent_id=str(agent_id),
+                    qual_data=dict(qual_data),  # Convert TypedDict to regular dict
+                )
 
-                    assessments_html = f"""
-                    <div style="margin-top:8px; font-size:0.9em;">
-                        <details>
-                            <summary style="cursor:pointer; color:#495057;">Assessment Details</summary>
-                            <ul style="margin-top:8px; padding-left:20px;">
-                                {"".join(assessment_items)}
-                            </ul>
-                        </details>
-                    </div>
-                    """
-
-                # Return a compact score card
-                agent_name = qual_data.get("agent_name", "Agent")
-                return f"""
-                <div style="display:flex; justify-content:flex-end;">
-                    <div style="background:#f8f9fa; padding:8px 12px; border-radius:8px; border:1px solid #dee2e6; max-width:250px; margin-left:auto; font-size:0.9em;">
-                        <div style="display:flex; align-items:center; margin-bottom:4px;">
-                            <span style="margin-right:8px;">📊</span>
-                            <span style="font-weight:bold;">Score: {qual_data.get('score_text', '?%')}</span>
-                            <span style="display:inline-block; width:12px; height:12px; background-color:{qual_data.get('color', '#777777')}; margin-left:8px; border-radius:2px;"></span>
-                        </div>
-                        {assessments_html}
-                    </div>
-                </div>
-                """
-
-            # If we couldn't process the QualResults, just return a simple score indicator
+            # If we couldn't process the QualResults but have a score value, use that
             if score_value is not None:
-                return _format_score_indicator(score_value)
+                # Get agent info for agent IDs
+                agent_info = _get_agent_info(message)
+                agent_id = agent_info.get("id", "unknown")
+
+                # Use a generic assessor ID
+                assessor_id = getattr(message, "role", "scorer")
+
+                # Return JavaScript to update scores panel
+                return _handle_score_message(score_value, str(assessor_id), str(agent_id))
 
             # Don't show anything for this message
             return None
 
         if score_value is not None:
-            # Simple score display
-            return _format_score_indicator(score_value)
+            # Simple score - just update scores panel
+            agent_info = _get_agent_info(message)
+            agent_id = str(agent_info.get("id", "unknown"))
+            assessor_id = str(getattr(message, "role", "scorer"))
+
+            return _handle_score_message(score_value, assessor_id, agent_id)
 
         # Don't render other scorer messages
         return None
@@ -495,9 +522,9 @@ def _format_message_for_client(message) -> str | None:
         else:
             # For complex outputs, serialize to JSON
             try:
-                content = json.dumps(message.outputs, indent=2) if message.outputs else ""
+                content = message.outputs.model_dump_json() if message.outputs else ""
             except:
-                content = str(message.outputs)
+                content = json.dumps(message.outputs) 
 
     elif isinstance(message, Record):
         content = message.text
