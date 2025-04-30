@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Qualitative Data Science Dashboard{% endblock %}
+{% block title %}Automod qualitative data science dashboard{% endblock %}
 
 {% block content %}
 <div class="flex flex-col md:flex-row gap-4" x-data="{
@@ -321,6 +321,28 @@
 
 {% block scripts %}
 <script>
+    // Configure marked.js with secure defaults
+    marked.setOptions({
+        breaks: true,  // Add line breaks as <br> elements
+        gfm: true,     // Enable GitHub Flavored Markdown
+        headerIds: false, // Disable automatic generation of header IDs
+        mangle: false,   // Don't mangle email addresses
+        sanitize: false, // Modern versions of marked don't support sanitize option
+        silent: false,   // Don't ignore errors
+        smartLists: true, // Use smarter list behavior
+        smartypants: false, // Don't use "smart" typographic punctuation
+        xhtml: false     // Don't use XHTML closing tags
+    });
+
+    // Use DOMPurify to sanitize HTML if available
+    if (typeof DOMPurify !== 'undefined') {
+        const originalParse = marked.parse;
+        marked.parse = function(src, options) {
+            const html = originalParse.call(this, src, options);
+            return DOMPurify.sanitize(html);
+        };
+    }
+
     // Custom htmx event handlers
     document.body.addEventListener('htmx:afterSwap', function(event) {
         if (window.Alpine) {

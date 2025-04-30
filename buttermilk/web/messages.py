@@ -244,10 +244,60 @@ def _format_message_for_client(message) -> str | None:
         # Unhandled message type
         return None
 
+    # Convert markdown to HTML in message content
+    # The content may already have some HTML, so we need to handle it carefully
+    # First check if content exists and is a string
+    if content and isinstance(content, str):
+        # Process code blocks with triple backticks
+        import re
+
+        # Process code blocks
+        code_pattern = r"```(.*?)\n(.*?)```"
+
+        def code_replace(match):
+            language = match.group(1).strip() or ""
+            code = match.group(2)
+            return f'<pre><code class="language-{language}">{code}</code></pre>'
+
+        content = re.sub(code_pattern, code_replace, content, flags=re.DOTALL)
+
+        # Process inline code
+        inline_code_pattern = r"`([^`]+)`"
+        content = re.sub(inline_code_pattern, r"<code>\1</code>", content)
+
+        # Process headers (# Header)
+        for i in range(6, 0, -1):
+            pattern = r"^{} (.+)$".format("#" * i)
+            content = re.sub(pattern, rf"<h{i}>\1</h{i}>", content, flags=re.MULTILINE)
+
+        # Process lists
+        list_pattern = r"^[\*\-] (.+)$"
+        content = re.sub(list_pattern, r"<li>\1</li>", content, flags=re.MULTILINE)
+
+        # Wrap list items in ul tags (simplistic but effective for most cases)
+        content = re.sub(r"(<li>.*?</li>)", r"<ul>\1</ul>", content, flags=re.DOTALL)
+
+        # Process links [text](url)
+        link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
+        content = re.sub(link_pattern, r'<a href="\2" target="_blank">\1</a>', content)
+
+        # Process bold **text**
+        bold_pattern = r"\*\*([^*]+)\*\*"
+        content = re.sub(bold_pattern, r"<strong>\1</strong>", content)
+
+        # Process italic *text*
+        italic_pattern = r"\*([^*]+)\*"
+        content = re.sub(italic_pattern, r"<em>\1</em>", content)
+
+        # Convert newlines to <br> tags
+        content = content.replace("\n", "<br>")
+
     # Get the style for this agent/message type
     agent_style = AGENT_STYLES.get(agent_role, AGENT_STYLES["default"])
 
-    # Apply styling to the message
+    # Apply styling to the message (ensure content is not None)
+    if content is None:
+        content = ""  # Convert None to empty string to avoid type errors
     styled_content = _format_message_with_style(content, agent_style)
 
     # If it's a scorer message, don't show the content, just the score indicator

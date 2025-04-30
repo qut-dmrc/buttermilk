@@ -292,7 +292,7 @@ class StreamlitDashboardApp:
         self._initialize_session_state()
 
         # Title
-        st.title("Qualitative Data Science Dashboard")
+        st.title("Automod qualitative data science dashboard")
 
         # Create sidebar and main content
         col1, col2 = st.columns([1, 3])
