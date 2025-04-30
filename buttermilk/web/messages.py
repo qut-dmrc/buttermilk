@@ -222,75 +222,7 @@ def _get_score_color(score: float) -> str:
     return "#dc3545"  # Red
 
 
-def _handle_score_message(score_value: float, assessor_id: str, agent_id: str, qual_data: dict[str, Any] | None = None) -> str:
-    logger.debug(f"Handling score message: agent_id={agent_id}, assessor_id={assessor_id}, score={score_value}")
-    """Generate JavaScript to update the score sidebar for a score message, waiting for Alpine.js."""
-    if not qual_data:
-        # Create minimal score data if none provided
-        qual_data = {
-            "score": score_value,
-            "score_text": f"{int(score_value * 100)}%",
-            "color": _get_score_color(score_value),
-            "assessor": assessor_id,
-            # Add defaults for other ScoreData fields if needed by JS
-            "answer_id": "",
-            "agent_id": agent_id,
-            "assessments": [],
-        }
-
-    # Safely embed data into the JavaScript string
-    safe_agent_id = json.dumps(agent_id)
-    safe_assessor_id = json.dumps(assessor_id)
-    safe_qual_data = json.dumps(qual_data)
-
-    # Generate JavaScript that waits for Alpine.js (or DOMContentLoaded)
-    # before trying to access window.scoreData
-    script = f"""
-    <script>
-        function addScoreWhenReady() {{
-            if (window.scoreData && typeof window.scoreData.addScore === 'function') {{
-                console.log('Alpine component found. Adding score for agent:', {safe_agent_id});
-                try {{
-                    window.scoreData.addScore(
-                        {safe_agent_id},
-                        {safe_assessor_id},
-                        {safe_qual_data}
-                    );
-                }} catch (e) {{
-                    console.error('Error calling window.scoreData.addScore:', e);
-                }}
-            }} else {{
-                console.warn('Alpine component (window.scoreData) not ready yet. Score update deferred.');
-                // Optionally add a timeout or retry mechanism if needed,
-                // but alpine:initialized or DOMContentLoaded should cover most cases.
-            }}
-        }}
-
-        // Check if Alpine is already initialized
-        if (window.Alpine && window.Alpine.initialized) {{
-             // Use requestAnimationFrame to ensure this runs after the current JS execution cycle
-             requestAnimationFrame(addScoreWhenReady);
-        }} else {{
-             // Wait for Alpine to initialize
-            document.addEventListener('alpine:initialized', addScoreWhenReady, {{ once: true }});
-            // Fallback: Wait for the whole DOM to be ready if alpine:initialized doesn't fire
-            document.addEventListener('DOMContentLoaded', () => {{
-                // Check again in case alpine:initialized didn't fire but the component is now ready
-                 if (!window.scoreData || typeof window.scoreData.addScore !== 'function') {{
-                    console.warn('Alpine component still not found after DOMContentLoaded. Trying score update anyway or logging error.');
-                    // Attempt one last time or log a final error
-                    if (window.scoreData && typeof window.scoreData.addScore === 'function') {{
-                       addScoreWhenReady();
-                    }} else {{
-                       console.error('Failed to find window.scoreData.addScore after multiple attempts.');
-                    }}
-                 }}
-            }}, {{ once: true }});
-        }}
-    </script>
-    """
-    logger.debug(f"Generated score script (length: {len(script)}): waits for Alpine/DOM")
-    return script
+# Function removed: _handle_score_message is no longer needed as we use direct structured data
 
 
 def _format_score_indicator(score, simple=False) -> str:
@@ -508,57 +440,41 @@ def _format_message_for_client(message) -> dict | str | None:
                     "type": "score_update",
                     "agent_id": score_obj.agent_id,
                     "assessor_id": score_obj.assessor,
-                    "score_data": score_obj.to_frontend_data()
+                    "score_data": score_obj.to_frontend_data(),
                 }
-                
-                # Also generate legacy script for the fallback code path in the frontend
+
+                # Store the score data for backward compatibility
                 qual_data = _format_qual_results(score_obj)
                 if qual_data:
-                    # Store the score data for backward compatibility
                     answer_id = qual_data.get("answer_id", "")
                     if answer_id and answer_id in scored_messages:
                         original_message_id = scored_messages[answer_id]
                         message_scores[original_message_id] = qual_data
-                    
-                    # Generate legacy script
-                    agent_id = qual_data.get("agent_id", "unknown")
-                    assessor_id = qual_data.get("assessor", "scorer")
-                    legacy_script = _handle_score_message(
-                        score_value=qual_data.get("score", 0.0),
-                        assessor_id=str(assessor_id),
-                        agent_id=str(agent_id),
-                        qual_data=dict(qual_data)
-                    )
-                    
-                    # Add content field with legacy script for fallback path
-                    frontend_data["content"] = legacy_script
-                
+
                 logger.debug(f"Sending score update with agent={score_obj.agent_id}, assessor={score_obj.assessor}")
                 return frontend_data
             except Exception as e:
                 logger.error(f"Error generating score update data: {e}")
-                # Ultimate fallback - return a pure legacy format if everything else fails
-                qual_data = _format_qual_results(score_obj)
-                if qual_data:
-                    agent_id = qual_data.get("agent_id", "unknown")
-                    assessor_id = qual_data.get("assessor", "scorer")
-                    result = _handle_score_message(
-                        score_value=qual_data.get("score", 0.0),
-                        assessor_id=str(assessor_id),
-                        agent_id=str(agent_id),
-                        qual_data=dict(qual_data)
-                    )
-                    return {
-                        "type": "score_update",
-                        "content": result
-                    }
+                # Simple fallback - return just the basic score update structure
+                # Fixed version without any legacy references
+                return {
+                    "type": "score_update",
+                    "agent_id": getattr(score_obj, "agent_id", "unknown"),
+                    "assessor_id": getattr(score_obj, "assessor", "scorer"),
+                    "score_data": {
+                        "score": getattr(score_obj, "correctness", 0.0),
+                        "score_text": f"{int(getattr(score_obj, 'correctness', 0.0) * 100)}%",
+                        "color": _get_score_color(getattr(score_obj, "correctness", 0.0)),
+                        "assessments": [],
+                    },
+                }
 
         # Handle simpler score messages with standardized format
         if score_value is not None:
             agent_info = _get_agent_info(message)
             agent_id = str(agent_info.get("id", "unknown"))
             assessor_id = str(getattr(message, "role", "scorer"))
-            
+
             # Return standardized data structure
             return {
                 "type": "score_update",
@@ -568,8 +484,8 @@ def _format_message_for_client(message) -> dict | str | None:
                     "score": score_value,
                     "score_text": f"{int(score_value * 100)}%",
                     "color": _get_score_color(score_value),
-                    "assessments": []
-                }
+                    "assessments": [],
+                },
             }
 
         # Don't render other scorer messages
@@ -671,6 +587,6 @@ def _format_message_for_client(message) -> dict | str | None:
             "role": agent_info.get("role", "default"),
             "name": agent_info.get("name", "Unknown"),
             "id": agent_info.get("id", ""),
-            "message_id": message_id
-        }
+            "message_id": message_id,
+        },
     }

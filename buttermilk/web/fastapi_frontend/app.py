@@ -427,24 +427,13 @@ class DashboardApp:
                 logger.debug(f"Sending structured message of type: {formatted_output.get('type', 'unknown')}")
                 await websocket.send_json(formatted_output)
 
-            # Legacy handling for string output (HTML/script content)
+            # Handle regular string content (usually HTML)
             elif isinstance(formatted_output, str):
-                # Check if this is a score script (starts with <script> tag)
-                is_score_script = formatted_output.strip().startswith("<script>")
-
-                if is_score_script:
-                    # Send the script directly as a special message type
-                    logger.debug("Detected score script, sending directly")
-                    await websocket.send_json({
-                        "type": "script_content",
-                        "content": formatted_output,
-                    })
-                else:
-                    # Regular message - send as chat message
-                    await websocket.send_json({
-                        "type": "chat_message",
-                        "content": formatted_output,
-                    })
+                # Regular message - send as chat message
+                await websocket.send_json({
+                    "type": "chat_message",
+                    "content": formatted_output,
+                })
             else:
                 logger.warning(f"Unexpected output type from _format_message_for_client: {type(formatted_output)}")
 
