@@ -277,8 +277,8 @@ def _format_message_with_style(content: str, agent_info: dict, message_id: str |
     <div id="{message_id}" style="display:flex; margin-bottom:15px; position:relative;">
         <div style="flex-shrink:0; margin-right:10px; font-size:1.5em;">{avatar}</div>
         <div style="flex-grow:1;">
-            <div style="font-weight:bold; margin-bottom:4px; color:{agent_color};">{name}</div>
-            <div style="padding:10px; background:{background}; color:{color}; border-radius:8px; border:{border}; position:relative;">
+            <div style="font-weight:bold; margin-bottom:1px; color:{agent_color};">{name}</div>
+            <div style="padding:1px; background:{background}; color:{color}; border-radius:2px; border:{border}; position:relative;">
                 {content}
                 {score_html}
             </div>
@@ -335,18 +335,18 @@ def _format_agent_reasons(reasons: AgentReasons) -> str:
     # Format prediction nicely
     prediction_color = "#28a745" if not prediction else "#dc3545"
     prediction_text = "No" if not prediction else "Yes"
-    
+
     # Format confidence level
     confidence_color = "#28a745" if confidence == "High" else "#ffc107" if confidence == "Medium" else "#dc3545"
-    
+
     # Create compact visual badges for violates/confidence
     badges_html = f"""
     <div style="display:flex; gap:8px; margin:3px 0 8px 0;">
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({prediction_color.replace('#', '')}, 0.1); border:1px solid {prediction_color}; border-radius:12px; font-size:0.75rem;">
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({prediction_color.replace('#', '')}, 0.1); border:1px solid {prediction_color}; border-radius:12px; font-size:0.65rem;">
             <span style="font-weight:600;">Violates:</span> 
             <span style="margin-left:3px; font-weight:bold; color:{prediction_color};">{prediction_text}</span>
         </span>
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({confidence_color.replace('#', '')}, 0.1); border:1px solid {confidence_color}; border-radius:12px; font-size:0.75rem;">
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({confidence_color.replace('#', '')}, 0.1); border:1px solid {confidence_color}; border-radius:12px; font-size:0.65rem;">
             <span style="font-weight:600;">Confidence:</span>
             <span style="margin-left:3px; font-weight:bold; color:{confidence_color};">{confidence}</span>
         </span>
@@ -360,14 +360,14 @@ def _format_agent_reasons(reasons: AgentReasons) -> str:
         reasons_html = f"""
         <div style="margin-top:5px;">
             <strong>Reasoning:</strong>
-            <ul style="margin-top:3px; margin-bottom:0; padding-left:20px;">
+            <ul style="margin-top:3px; margin-bottom:0; padding-top:5px; padding-left:20px;">
                 {"".join(reasons_items)}
             </ul>
         </div>
         """
 
     return f"""
-    <div style="font-size:0.9rem;">
+    <div style="font-size:0.8rem;">
         <div style="margin-bottom:3px;"><strong>Conclusion:</strong> {conclusion}</div>
         {badges_html}
         {reasons_html}
@@ -584,7 +584,7 @@ def _format_message_for_client(message) -> dict | str | None:
         content = re.sub(italic_pattern, r"<em>\1</em>", content)
 
         # Convert newlines to <br> tags
-        content = content.replace("\n", "<br>")
+        # content = content.replace("\n", "<br>")
 
     # Apply styling to the message
     if content is None:

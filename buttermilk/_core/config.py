@@ -3,9 +3,7 @@ from pathlib import Path
 from typing import (
     Annotated,
     Any,
-    List,
     Literal,
-    Optional,
     Self,
 )
 
@@ -32,7 +30,7 @@ from buttermilk.utils.validators import (
 )
 
 from .defaults import BQ_SCHEMA_DIR
-from .types import SessionInfo, RunRequest
+from .types import RunRequest, SessionInfo
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -69,7 +67,7 @@ class SaveInfo(CloudProviderCfg):
     db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
 
-    _loaded_schema: List[SchemaField] = PrivateAttr(default=[])
+    _loaded_schema: list[SchemaField] = PrivateAttr(default=[])
 
     # model_config = ConfigDict(
     #     json_encoders={
@@ -106,7 +104,7 @@ class SaveInfo(CloudProviderCfg):
 
     @computed_field
     @property
-    def bq_schema(self) -> List[SchemaField]:
+    def bq_schema(self) -> list[SchemaField]:
         if not self._loaded_schema:
             from buttermilk.bm import bm
 
@@ -168,10 +166,10 @@ class ToolConfig(BaseModel):
 
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def _run(self, **kwargs) -> list[Any] | None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class Tracing(BaseModel):
@@ -189,7 +187,7 @@ class Project(BaseModel):
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
-    run_info: Optional[SessionInfo] = Field(
+    run_info: SessionInfo | None = Field(
         default=None,
         description="Information about the context in which this project runs",
     )
@@ -206,8 +204,7 @@ class Project(BaseModel):
 
 # --- Agent Configuration ---
 class AgentConfig(BaseModel):
-    """
-    Base Pydantic model defining the configuration structure for all Buttermilk agents.
+    """Base Pydantic model defining the configuration structure for all Buttermilk agents.
 
     Loaded and instantiated by Hydra based on YAML configuration files. Includes
     core identification, behavior parameters, and connections to data/tools.
@@ -265,8 +262,7 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="after")
     def _generate_name_and_id(self) -> Self:
-        """
-        Generates the unique `id` and formatted `name` for the agent instance after validation.
+        """Generates the unique `id` and formatted `name` for the agent instance after validation.
         Designed to be idempotent to work with validate_assignment=True.
 
         - Sets `id` based on `role` and `unique_identifier`.
@@ -277,9 +273,9 @@ class AgentConfig(BaseModel):
         # 'self.name' here holds the value provided *before* this validator potentially modifies it.
         intended_base_name = self.base_name
         if intended_base_name is None:
-            if not self.name: # Check if initial name was provided
+            if not self.name:  # Check if initial name was provided
                 raise ValueError("AgentConfig requires an initial human-friendly 'name' field in configuration.")
-            intended_base_name = self.name # Intend to use the initial name as base
+            intended_base_name = self.name  # Intend to use the initial name as base
 
         # 2. Calculate the intended final ID
         intended_id = f"{self.role}-{self.unique_identifier}"
@@ -296,7 +292,7 @@ class AgentConfig(BaseModel):
                 # Get other components like unique_identifier, role etc.
                 part = getattr(self, comp, None)
 
-            if part is not None and str(part): # Ensure part is not None and not empty string
+            if part is not None and str(part):  # Ensure part is not None and not empty string
                 name_parts.append(str(part))
 
         intended_name = " ".join(name_parts)
@@ -318,10 +314,8 @@ class AgentConfig(BaseModel):
         return self
 
 
-
 class AgentVariants(AgentConfig):
-    """
-    A factory for creating Agent instance variants based on parameter combinations.
+    """A factory for creating Agent instance variants based on parameter combinations.
 
     Defines two types of variants:
     1. `parallel_variants`: Parameters whose combinations create distinct agent instances
@@ -341,13 +335,17 @@ class AgentVariants(AgentConfig):
         criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
         temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent
                                         # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
-      parameters:
+
+    Parameters
+    ----------
         template: analyst               # parameter sets shared for each task
       inputs:
         results: othertask.outputs.results  # dynamic inputs mapped from other data
     ```
+
     """
-    #--- Variant configuration: fields used to generate AgentConfig objects ---
+
+    # --- Variant configuration: fields used to generate AgentConfig objects ---
     agent_obj: str = Field(  # Class name used by Hydra for instantiation.
         default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
@@ -356,22 +354,21 @@ class AgentVariants(AgentConfig):
     tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
     num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
     extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
-    #--- Variant configuration: fields used to generate AgentConfig objects ---
+    # --- Variant configuration: fields used to generate AgentConfig objects ---
 
-    def get_configs(self, params: RunRequest|None = None) -> list[tuple[type, AgentConfig]]:
-        """
-        Generates agent configurations based on parallel and sequential variants.
+    def get_configs(self, params: RunRequest | None = None) -> list[tuple[type, AgentConfig]]:
+        """Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
         static_config = self.model_dump(
             exclude={
                 "parallel_variants",
-                "id","unique_identifier",
+                "id", "unique_identifier",
                 "sequential_variants",
                 "num_runs",
                 "parameters",
                 "tasks",
-            }
+            },
         )
         base_parameters = self.parameters.copy()  # Base parameters common to all
 
@@ -381,6 +378,9 @@ class AgentVariants(AgentConfig):
                 if key not in params.model_fields_set:
                     raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
                 base_parameters[key] = getattr(params, key)
+
+        # And parameters passed in the request by the user
+        request_params = params.parameters if params else {}
 
         # Get agent class
         from buttermilk._core.variants import AgentRegistry
@@ -404,9 +404,9 @@ class AgentVariants(AgentConfig):
                     # Start with static config
                     cfg_dict = static_config.copy()
 
-                    # Combine base parameters, parallel variant parameters, and sequential task parameters
+                    # Combine base parameters, parallel variant parameters, sequential task parameters, and parameters passed in from the UI in the request
                     # Order matters: task parameters overwrite parallel, parallel overwrite base
-                    combined_params = {**base_parameters, **parallel_params, **task_params}
+                    combined_params = {**base_parameters, **parallel_params, **task_params, **request_params}
                     cfg_dict["parameters"] = combined_params
 
                     # Create and add the AgentConfig instance

@@ -100,7 +100,7 @@ class Agent(AgentConfig):
     _heartbeat: asyncio.Queue = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
 
     model_config = {    # Pydantic Model Configuration
-        "extra": "forbid",
+        "extra": "ignore",
         "arbitrary_types_allowed": False,  # Disallow arbitrary types unless explicitly handled.
         "populate_by_name": True,  # Allow population by field name.
         "validate_assignment": True,

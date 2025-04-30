@@ -18,7 +18,7 @@ class SpyAgent(RoutedAgent):
 
     def __init__(
         self,
-        save_dest: SaveInfo,
+        save_dest: SaveInfo, **kwargs,
     ) -> None:
         super().__init__(description="Save results to BQ")
         self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE, save_dest=save_dest)
