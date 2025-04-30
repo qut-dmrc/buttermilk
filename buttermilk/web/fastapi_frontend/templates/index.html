@@ -51,7 +51,8 @@
                 case 'chat_message':
                     this.messages.push({
                         content: data.content,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        agent_info: data.agent_info || {}
                     });
                     this.$nextTick(() => {
                         const container = document.getElementById('messages-container');
@@ -66,7 +67,12 @@
                     break;
                 case 'score_update':
                     console.log('Received score update:', data);
-                    window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
+                    // More reliable score handling with standardized data structure
+                    if (data.agent_id && data.assessor_id && data.score_data) {
+                        window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
+                    } else {
+                        console.error('Invalid score update format:', data);
+                    }
                     break;
                 case 'progress_update':
                     this.progress = data.progress;

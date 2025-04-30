@@ -61,6 +61,28 @@ class QualResults(QualScore):
             return None
         return sum(cra.correct for cra in self.assessments) / len(self.assessments)
 
+    def to_frontend_data(self) -> dict:
+        """Returns a standardized dict for frontend consumption"""
+        return {
+            "agent_id": self.agent_id,
+            "assessor_id": self.assessor,
+            "score": self.correctness,
+            "score_text": f"{int(self.correctness * 100 if self.correctness is not None else 0)}%",
+            "color": self._get_score_color(),
+            "assessments": [a.model_dump() for a in self.assessments]
+        }
+    
+    def _get_score_color(self) -> str:
+        """Get color for the score value."""
+        score = self.correctness
+        if score is None:
+            return "#777777"  # Gray for no score
+        if score > 0.8: return "#28a745"  # Strong green
+        if score > 0.6: return "#5cb85c"  # Light green  
+        if score > 0.4: return "#ffc107"  # Yellow
+        if score > 0.2: return "#ff9800"  # Orange
+        return "#dc3545"  # Red
+
     def __str__(self) -> str:
         """Provides a human-readable markdown representation of the score."""
         if self.correctness is None:

@@ -473,14 +473,16 @@ def _extract_score(message) -> tuple[float | None, QualResults | None]:
     return None, None
 
 
-def _format_message_for_client(message) -> str | None:
+def _format_message_for_client(message) -> dict | str | None:
     """Format different message types for web client consumption with improved styling.
     
     Args:
         message: The message to format
         
     Returns:
-        Formatted message string or None if message shouldn't be sent
+        dict: Structured message data for the client
+        str: Legacy formatted HTML content (for backward compatibility)
+        None: If message shouldn't be sent
 
     """
     # Get agent info and generate a unique message ID
@@ -497,54 +499,56 @@ def _format_message_for_client(message) -> str | None:
         score_value, score_obj = _extract_score(message)
         logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
 
-        # If it's a QualResults object, process it specially
+        # If it's a QualResults object, use its to_frontend_data method
         if score_obj and isinstance(score_obj, QualResults):
-            qual_data = _format_qual_results(score_obj)
-            if qual_data:
-                # agent_id is now correctly included in qual_data
-                agent_id = qual_data.get("agent_id", "unknown")  # Should now get the correct ID
-                assessor_id = qual_data.get("assessor", "scorer")  # Get assessor from qual_data
+            # Use the standardized to_frontend_data method
+            try:
+                return {
+                    "type": "score_update",
+                    "agent_id": score_obj.agent_id,
+                    "assessor_id": score_obj.assessor,
+                    "score_data": score_obj.to_frontend_data()
+                }
+            except Exception as e:
+                logger.error(f"Error generating score update data: {e}")
+                # Fall back to legacy approach if there's an error
+                qual_data = _format_qual_results(score_obj)
+                if qual_data:
+                    # Store the score data for backward compatibility
+                    answer_id = qual_data.get("answer_id", "")
+                    if answer_id and answer_id in scored_messages:
+                        original_message_id = scored_messages[answer_id]
+                        message_scores[original_message_id] = qual_data
+                    
+                    # Return legacy script format
+                    agent_id = qual_data.get("agent_id", "unknown")
+                    assessor_id = qual_data.get("assessor", "scorer")
+                    result = _handle_score_message(
+                        score_value=qual_data.get("score", 0.0),
+                        assessor_id=str(assessor_id),
+                        agent_id=str(agent_id),
+                        qual_data=dict(qual_data)
+                    )
+                    return result
 
-                # Store the score data in the traditional way too (for backward compatibility)
-                answer_id = qual_data.get("answer_id", "")
-                if answer_id and answer_id in scored_messages:
-                    original_message_id = scored_messages[answer_id]
-                    # Ensure the structure matches the updated ScoreData
-                    message_scores[original_message_id] = qual_data
-
-                # Return JavaScript to update scores panel - convert TypedDict to regular dict
-                logger.debug(f"Processing QualResults with answer_id={answer_id}, agent_id={agent_id}")
-                result = _handle_score_message(
-                    score_value=qual_data.get("score", 0.0),
-                    assessor_id=str(assessor_id),
-                    agent_id=str(agent_id),
-                    qual_data=dict(qual_data),  # Convert TypedDict to regular dict
-                )
-                logger.debug(f"Generated score script for QualResults: length={len(result)}")
-                return result
-
-            # If we couldn't process the QualResults but have a score value, use that
-            if score_value is not None:
-                # Get agent info for agent IDs
-                agent_info = _get_agent_info(message)
-                agent_id = agent_info.get("id", "unknown")
-
-                # Use a generic assessor ID
-                assessor_id = getattr(message, "role", "scorer")
-
-                # Return JavaScript to update scores panel
-                return _handle_score_message(score_value, str(assessor_id), str(agent_id))
-
-            # Don't show anything for this message
-            return None
-
+        # Handle simpler score messages with standardized format
         if score_value is not None:
-            # Simple score - just update scores panel
             agent_info = _get_agent_info(message)
             agent_id = str(agent_info.get("id", "unknown"))
             assessor_id = str(getattr(message, "role", "scorer"))
-
-            return _handle_score_message(score_value, assessor_id, agent_id)
+            
+            # Return standardized data structure
+            return {
+                "type": "score_update",
+                "agent_id": agent_id,
+                "assessor_id": assessor_id,
+                "score_data": {
+                    "score": score_value,
+                    "score_text": f"{int(score_value * 100)}%",
+                    "color": _get_score_color(score_value),
+                    "assessments": []
+                }
+            }
 
         # Don't render other scorer messages
         return None
@@ -637,4 +641,14 @@ def _format_message_for_client(message) -> str | None:
 
     styled_content = _format_message_with_style(content, agent_info, message_id)
 
-    return styled_content
+    # Return standardized chat message format
+    return {
+        "type": "chat_message",
+        "content": styled_content,
+        "agent_info": {
+            "role": agent_info.get("role", "default"),
+            "name": agent_info.get("name", "Unknown"),
+            "id": agent_info.get("id", ""),
+            "message_id": message_id
+        }
+    }

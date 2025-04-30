@@ -1,4 +1,3 @@
-import json
 import random
 import uuid
 from pathlib import Path
@@ -129,15 +128,66 @@ class DashboardApp:
                     flow_obj = self.flows.flows.get(flow_name)
                     # Try to use get_record_ids method if it exists
                     if flow_obj and hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
-                        df = await flow_obj.get_record_ids()
+                        try:
+                            # Try to safely call get_record_ids
+                            import inspect
+                            if inspect.iscoroutinefunction(flow_obj.get_record_ids):
+                                # It's an async function
+                                df = await flow_obj.get_record_ids()
+                            else:
+                                # It's a regular function
+                                df = flow_obj.get_record_ids()
 
-                        # Make sure df has an index attribute before using it
-                        if hasattr(df, "index"):
-                            record_ids = df.index.tolist()
-                        elif isinstance(df, list):
-                            record_ids = df
-                        else:
-                            logger.warning(f"Unexpected return type from get_record_ids: {type(df)}")
+                            # Process the result with extreme defensive coding
+                            # to avoid any possible type checking issues
+                            try:
+                                # Try directly casting to list first
+                                if df is None:
+                                    logger.warning("get_record_ids returned None")
+                                elif isinstance(df, list):
+                                    record_ids = df
+                                elif isinstance(df, pd.DataFrame):
+                                    # Handle pandas DataFrame
+                                    record_ids = df.index.tolist()
+                                else:
+                                    # For any other type, try various approaches
+                                    try:
+                                        # Try accessing .index attribute if it exists
+                                        if hasattr(df, "index"):
+                                            # Suppress type checking warnings with cast
+                                            from typing import cast
+                                            df_with_index = cast("pd.DataFrame", df)
+                                            record_ids = df_with_index.index.tolist()
+                                        # Try to_dict if it's a dataframe-like object
+                                        elif hasattr(df, "to_dict") and callable(df.to_dict):
+                                            # Suppress type checking warnings with cast
+                                            from typing import Any, cast
+                                            df_with_dict = cast("pd.DataFrame", df)
+                                            records: list[dict[str, Any]] = df_with_dict.to_dict("records")
+                                            record_ids = [str(r.get("id", i)) for i, r in enumerate(records)]
+                                        # Try direct iteration
+                                        elif hasattr(df, "__iter__"):
+                                            record_ids = list(df)
+                                        # Last resort: convert to string and use as single ID
+                                        else:
+                                            str_val = str(df)
+                                            if str_val:
+                                                record_ids = [str_val]
+                                            else:
+                                                logger.warning(f"Could not extract record IDs from: {type(df)}")
+                                    except Exception as e:
+                                        logger.error(f"Error extracting record IDs: {e}")
+                                        # Try one last approach - convert to string
+                                        try:
+                                            str_val = str(df)
+                                            if str_val:
+                                                record_ids = [str_val]
+                                        except:
+                                            pass
+                            except Exception as e:
+                                logger.error(f"Unhandled error processing get_record_ids result: {e}")
+                        except Exception as e:
+                            logger.error(f"Error calling get_record_ids: {e}")
                     # Otherwise try to use the data directly
                     elif hasattr(flow_obj, "data") and flow_obj.data:
                         # Check if we have mock data first (simpler approach)
@@ -364,37 +414,47 @@ class DashboardApp:
             })
 
     async def send_message_to_client(self, websocket: WebSocket, message: Any):
-        """Process and send a message to the client with improved error handling for scripts."""
+        """Process and send a message to the client with standardized format handling."""
         formatted_output = _format_message_for_client(message)
-        
+
         if not formatted_output:
             return  # Skip empty messages
-        
-        # Check if this is a score script (starts with <script> tag)
-        is_score_script = formatted_output.strip().startswith("<script>")
-        
+
         try:
-            if is_score_script:
-                # Send the script directly as a special message type
-                logger.debug("Detected score script, sending directly")
-                await websocket.send_json({
-                    "type": "script_content",
-                    "content": formatted_output
-                })
+            # Check if the formatted output is already a structured message (dict)
+            if isinstance(formatted_output, dict):
+                # Send the structured message directly
+                logger.debug(f"Sending structured message of type: {formatted_output.get('type', 'unknown')}")
+                await websocket.send_json(formatted_output)
+
+            # Legacy handling for string output (HTML/script content)
+            elif isinstance(formatted_output, str):
+                # Check if this is a score script (starts with <script> tag)
+                is_score_script = formatted_output.strip().startswith("<script>")
+
+                if is_score_script:
+                    # Send the script directly as a special message type
+                    logger.debug("Detected score script, sending directly")
+                    await websocket.send_json({
+                        "type": "script_content",
+                        "content": formatted_output,
+                    })
+                else:
+                    # Regular message - send as chat message
+                    await websocket.send_json({
+                        "type": "chat_message",
+                        "content": formatted_output,
+                    })
             else:
-                # Regular message - send as chat message
-                await websocket.send_json({
-                    "type": "chat_message", 
-                    "html": formatted_output
-                })
-                
+                logger.warning(f"Unexpected output type from _format_message_for_client: {type(formatted_output)}")
+
         except Exception as e:
             logger.error(f"Error sending message to client: {e}")
             # Attempt to send error notification
             try:
                 await websocket.send_json({
                     "type": "error",
-                    "message": f"Failed to process message: {str(e)}"
+                    "message": f"Failed to process message: {e!s}",
                 })
             except:
                 logger.error("Failed to send error message to client")
