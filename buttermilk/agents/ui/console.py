@@ -1,10 +1,10 @@
-"""
-Defines the CLIUserAgent for interacting with the user via the command line console.
+"""Defines the CLIUserAgent for interacting with the user via the command line console.
 """
 
 import asyncio
 import json
-from typing import Awaitable, Callable, Optional, Union  # Added List, Union, Optional
+from collections.abc import Awaitable, Callable  # Added List, Union, Optional
+from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
@@ -31,7 +31,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
-from buttermilk.agents.judge import AgentReasons  # Specific format for judge reasons
+from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
 # Initialize a global console instance with JSON highlighting
@@ -48,15 +48,14 @@ FormattableMessages = Union[
     AgentInput,
     Record,
     QualScore,
-    AgentReasons,
+    JudgeReasons,
     FlowMessage,
 ]
 # TODO: Add other relevant FlowMessage subtypes if needed for formatting.
 
 
 class CLIUserAgent(UIAgent):
-    """
-    Represents the human user interacting via the Command Line Interface (CLI).
+    """Represents the human user interacting via the Command Line Interface (CLI).
 
     Inherits from `UIAgent`. It uses `rich` to display formatted messages received
     by the agent (`_listen`, `_handle_events`) and `aioconsole` to asynchronously
@@ -70,11 +69,10 @@ class CLIUserAgent(UIAgent):
     # Rich console instance for formatted output.
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
-    _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)
+    _input_task: asyncio.Task | None = PrivateAttr(default=None)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
-        """
-        Handles direct AgentInput messages, typically displaying them as requests to the user.
+        """Handles direct AgentInput messages, typically displaying them as requests to the user.
 
         Args:
             message: The AgentInput message received.
@@ -84,6 +82,7 @@ class CLIUserAgent(UIAgent):
         Returns:
             None. UI agents typically don't return direct outputs in the main flow via _process.
                    They interact via callbacks or listening methods.
+
         """
         logger.debug(f"{self.id}: Received direct input request via _process.")
         # Format and display the incoming message.
@@ -97,8 +96,7 @@ class CLIUserAgent(UIAgent):
         return None
 
     def _fmt_msg(self, message: FormattableMessages, source: str) -> Markdown | None:
-        """
-        Formats various message types into Rich Markdown for console display.
+        """Formats various message types into Rich Markdown for console display.
 
         Args:
             message: The message object to format.
@@ -106,6 +104,7 @@ class CLIUserAgent(UIAgent):
 
         Returns:
             A Rich Markdown object ready for printing, or None if the message is not formatted.
+
         """
         # TODO: This function is complex. Refactor into smaller helpers for maintainability.
         #       Consider using a dictionary dispatch pattern based on message type.
@@ -128,7 +127,7 @@ class CLIUserAgent(UIAgent):
                 # Display specific structured outputs
                 if isinstance(outputs, QualResults):
                     output_lines.append(str(outputs))  # Use QualResults's __str__
-                elif isinstance(outputs, AgentReasons):
+                elif isinstance(outputs, JudgeReasons):
                     output_lines.append("### Conclusion")
                     output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.confidence}")
                     output_lines.append(f"**Conclusion**: {outputs.conclusion}")
@@ -177,7 +176,7 @@ class CLIUserAgent(UIAgent):
 
                 # Display metadata (like token usage)
                 if metadata:
-                    output_lines.append(f"### Metadata:\n\n{str(metadata)}")
+                    output_lines.append(f"### Metadata:\n\n{metadata!s}")
                     # syntax = Syntax(str(metadata), "python", theme="default", line_numbers=False, word_wrap=False)
 
             elif isinstance(message, AgentInput):
@@ -221,9 +220,8 @@ class CLIUserAgent(UIAgent):
         filtered_output = [line for line in output_lines if isinstance(line, str) and line.strip()]
         if len(filtered_output) > 1:  # Check if more than just the header was added
             return Markdown("\n".join(filtered_output))
-        else:
-            logger.debug(f"Skipping display for message type {type(message)} from {source} - no formatted content.")
-            return None  # Don't print if only header remains or content was empty
+        logger.debug(f"Skipping display for message type {type(message)} from {source} - no formatted content.")
+        return None  # Don't print if only header remains or content was empty
 
     async def _listen(
         self,

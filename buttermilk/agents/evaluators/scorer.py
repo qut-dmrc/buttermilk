@@ -1,25 +1,20 @@
-"""
-Defines agents and models for evaluating/scoring LLM outputs, often against ground truth.
+"""Defines agents and models for evaluating/scoring LLM outputs, often against ground truth.
 """
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 
-import weave  # For logging, tracing, and potentially defining scorers.
 from autogen_core import CancellationToken
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 # Buttermilk core imports
 from buttermilk import logger
-from buttermilk._core.agent import ProcessingError  # Decorator for message handlers
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    ErrorEvent,
     GroupchatMessageTypes,  # Type hint union for listen
     )
-from buttermilk._core.types import Record
 from buttermilk._core.message_data import extract_message_data, extract_records_from_data
-from buttermilk.agents.judge import AgentReasons  # Input model type (likely from Judge agent)
+from buttermilk.agents.judge import JudgeReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 from buttermilk.bm import bm  # Global Buttermilk instance
 
@@ -50,12 +45,12 @@ class QualResults(QualScore):
 
     @property
     def correctness(self) -> float | None:
-        """
-        Calculates the overall correctness score (simple average).
+        """Calculates the overall correctness score (simple average).
 
         Returns:
             The fraction of criteria marked as 'correct', or None if no assessments.
             Note: This is an unweighted average.
+
         """
         if not self.assessments:
             return None
@@ -69,16 +64,16 @@ class QualResults(QualScore):
             "score": self.correctness,
             "score_text": f"{int(self.correctness * 100 if self.correctness is not None else 0)}%",
             "color": self._get_score_color(),
-            "assessments": [a.model_dump() for a in self.assessments]
+            "assessments": [a.model_dump() for a in self.assessments],
         }
-    
+
     def _get_score_color(self) -> str:
         """Get color for the score value."""
         score = self.correctness
         if score is None:
             return "#777777"  # Gray for no score
         if score > 0.8: return "#28a745"  # Strong green
-        if score > 0.6: return "#5cb85c"  # Light green  
+        if score > 0.6: return "#5cb85c"  # Light green
         if score > 0.4: return "#ffc107"  # Yellow
         if score > 0.2: return "#ff9800"  # Orange
         return "#dc3545"  # Red
@@ -96,8 +91,7 @@ class QualResults(QualScore):
 
 # --- LLM Scorer Agent ---
 class LLMScorer(LLMAgent):
-    """
-    An LLM agent that qualitatively scores another agent's output against criteria and ground truth.
+    """An LLM agent that qualitatively scores another agent's output against criteria and ground truth.
 
     Inherits from `LLMAgent`. It typically listens for `AgentOutput` messages containing
     `AgentReasons` (likely from a `Judge` agent). When such a message is received, and
@@ -109,7 +103,7 @@ class LLMScorer(LLMAgent):
     """
 
     # Sets the expected output structure for the LLM call made by _process.
-    _output_model: Optional[type[BaseModel]] = QualScore
+    _output_model: type[BaseModel] | None = QualScore
 
     async def _listen(
         self,
@@ -121,8 +115,7 @@ class LLMScorer(LLMAgent):
         message_callback: Callable | None = None,  # Callback (likely unused here)
         **kwargs,
     ) -> None:
-        """
-        Listens for relevant AgentOutput messages (e.g., from a Judge) and triggers scoring.
+        """Listens for relevant AgentOutput messages (e.g., from a Judge) and triggers scoring.
 
         Checks if the message contains `AgentReasons` and if ground truth is available.
         If conditions are met, it prepares an `AgentInput` for its own `_process` method
@@ -139,41 +132,41 @@ class LLMScorer(LLMAgent):
             message_callback=message_callback,
             **kwargs,
         )
-        
-        # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs 
-        if not isinstance(message, AgentOutput) or not hasattr(message, "outputs") or not isinstance(message.outputs, AgentReasons):
+
+        # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs
+        if not isinstance(message, AgentOutput) or not hasattr(message, "outputs") or not isinstance(message.outputs, JudgeReasons):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
         logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
-        
+
         # Extract data from the current message
         extracted_data = extract_message_data(
             message=message,
             source=source,
-            input_mappings=self.inputs
+            input_mappings=self.inputs,
         )
-        
+
         # Extract records if present in the extracted data
         current_records = extract_records_from_data(extracted_data)
-        
+
         # Create an AgentInput with minimal state
         scorer_agent_input = AgentInput()
-        
+
         # Add records if found in the current message
         if current_records:
             scorer_agent_input.records = current_records
-        
+
         # Prepare the input for the scorer's own LLM call (_process)
         # 'inputs' should match what the scorer's prompt template expects.
         # It needs the judge's output (message.outputs) and the ground_truth.
         scorer_agent_input.inputs = {}
-        
+
         # Add any extracted data to the inputs
         for key, value in extracted_data.items():
             if key != "records":  # Records are handled separately
                 scorer_agent_input.inputs[key] = value
-                
+
         scorer_agent_input.inputs["assessor"] = self.id
 
         # Define the scoring function (our own __call__ method)
@@ -197,7 +190,7 @@ class LLMScorer(LLMAgent):
             score_output: AgentOutput = await score_fn(
                 message=scorer_agent_input,
                 public_callback=public_callback,
-                message_callback=message_callback
+                message_callback=message_callback,
             )
         else:
             logger.error(f"Scorer {self.id}: Missing required callbacks, cannot proceed with scoring")
@@ -226,7 +219,7 @@ class LLMScorer(LLMAgent):
                 try:
                     # overall 'correctness' score
                     logger.debug(f"Scorer {self.id}: Applying scorer result to weave call {weave_call.ref}")
-                    weave_call.feedback.add("correctness", { "value": score.correctness, "assessor": score.assessor})
+                    weave_call.feedback.add("correctness", {"value": score.correctness, "assessor": score.assessor})
                     # individual assessments (qualitative feedback)
                     for assessment in score.assessments:
                         weave_call.feedback.add("feedback", assessment.model_dump())

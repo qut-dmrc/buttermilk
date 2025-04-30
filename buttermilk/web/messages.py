@@ -12,7 +12,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults
-from buttermilk.agents.judge import AgentReasons
+from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
 
@@ -322,7 +322,7 @@ def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
     return score_data
 
 
-def _format_agent_reasons(reasons: AgentReasons) -> str:
+def _format_agent_reasons(reasons: JudgeReasons) -> str:
     """Format AgentReasons output in a friendly way."""
     if not reasons:
         return ""
@@ -440,7 +440,7 @@ def _format_message_for_client(message) -> dict | str | None:
 
     # Handle score messages
     if _is_score_message(message):
-        logger.debug(f"Detected score message from: {getattr(message, 'role', 'unknown')}")
+        logger.debug(f"Detected score message from: {agent_info.get('name', "unknown")}")
         score_value, score_obj = _extract_score(message)
         logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
 
@@ -516,7 +516,7 @@ def _format_message_for_client(message) -> dict | str | None:
                 scored_messages[answer_id] = message_id
 
         # Special handling for AgentReasons
-        if hasattr(message, "outputs") and isinstance(message.outputs, AgentReasons):
+        if hasattr(message, "outputs") and isinstance(message.outputs, JudgeReasons):
             content = _format_agent_reasons(message.outputs)
         elif isinstance(message.outputs, str):
             content = message.outputs

@@ -58,6 +58,11 @@ class FlowEvent(BaseModel):
     def __str__(self) -> str:
         return self.content
 
+    @computed_field
+    @property
+    def is_error(self) -> bool:
+        return False
+
 
 class ErrorEvent(FlowEvent):
     """Specific event type for broadcasting errors."""
@@ -66,6 +71,11 @@ class ErrorEvent(FlowEvent):
 
     def __str__(self) -> str:
         return "ERROR: " + self.content
+
+    @computed_field
+    @property
+    def is_error(self) -> bool:
+        return True
 
 
 class FlowMessage(BaseModel):
