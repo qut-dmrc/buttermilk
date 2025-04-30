@@ -1,6 +1,7 @@
-
-
+import hashlib
 import json
+import re
+from typing import Any, TypedDict
 
 from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
 from buttermilk._core.contract import (
@@ -10,9 +11,26 @@ from buttermilk._core.contract import (
     TaskProgressUpdate,
 )
 from buttermilk._core.types import Record
+from buttermilk.agents.evaluators.scorer import QualResults
+from buttermilk.agents.judge import AgentReasons
 
-# Store the scores for aggregation
-score_messages: list[float] = []
+
+# Define score data structure with required fields
+class ScoreData(TypedDict):
+    answer_id: str
+    score: float
+    score_text: str
+    color: str
+    assessments: list[Any]
+
+
+# Map to track which messages have been scored
+# Key: answer_id, Value: message_id (used to link scores to messages)
+scored_messages: dict[str, str] = {}
+
+# Map to track message IDs and their scores
+# Key: message_id, Value: score info with specific fields
+message_scores: dict[str, ScoreData] = {}
 
 # Define agent styling
 AGENT_STYLES = {
@@ -76,6 +94,12 @@ AGENT_STYLES = {
         "background": "#e2e3e5",
         "border": "1px solid #c9cccf",
     },
+    "synthesiser": {
+        "avatar": "🔄",
+        "color": "#0c4128",
+        "background": "#d0f0e0",
+        "border": "1px solid #a0d0b0",
+    },
     "tool": {
         "avatar": "🔧",
         "color": "#198754",
@@ -90,102 +114,283 @@ AGENT_STYLES = {
     },
 }
 
+# Generate a few more vibrant colors for agents that don't have specific styles
+COLOR_PALETTE = [
+    "#4285F4", "#EA4335", "#FBBC05", "#34A853",  # Google colors
+    "#1877F2", "#E4405F", "#5865F2", "#FF9900",  # Social media blues/reds
+    "#00ACC1", "#8BC34A", "#FF5722", "#7E57C2",  # Material design
+    "#26A69A", "#EC407A", "#AB47BC", "#42A5F5",  # More material
+]
+
+
+def _get_agent_info(message) -> dict:
+    """Extract agent information from the message."""
+    agent_info = {
+        "role": "default",
+        "name": "Unknown",
+        "id": "",
+        "color": None,
+        "message_id": None,
+    }
+
+    if isinstance(message, AgentOutput):
+        # Generate a stable message ID
+        agent_info["message_id"] = message.call_id if hasattr(message, "call_id") else ""
+
+        # Extract role if available
+        if hasattr(message, "role"):
+            agent_info["role"] = getattr(message, "role", "default").lower()
+
+        # Try to get agent_info object
+        if hasattr(message, "agent_info") and message.agent_info:
+            info = message.agent_info
+            agent_info["name"] = getattr(info, "name", "Agent")
+            agent_info["id"] = getattr(info, "id", "")
+
+            # If the message has a custom color in agent_info, use it
+            if hasattr(info, "parameters") and isinstance(info.parameters, dict) and "color" in info.parameters:
+                agent_info["color"] = info.parameters["color"]
+
+        # For answer tracking with scores
+        if hasattr(message, "call_id"):
+            agent_info["answer_id"] = message.call_id
+
+    elif isinstance(message, ToolOutput):
+        agent_info["role"] = "tool"
+        agent_info["name"] = getattr(message, "name", "Tool")
+        agent_info["message_id"] = getattr(message, "call_id", "")
+
+    elif isinstance(message, ManagerRequest):
+        agent_info["role"] = "instructions"
+        agent_info["name"] = "Instructions"
+
+    elif isinstance(message, Record):
+        # Try to extract role information if available
+        if hasattr(message, "role"):
+            agent_info["role"] = getattr(message, "role", "default").lower()
+        agent_info["name"] = "Record"
+
+    return agent_info
+
 
 def _get_agent_role(message) -> str:
     """Extract the agent role from the message."""
-    if isinstance(message, AgentOutput):
-        # Safely get role attribute if it exists
-        if hasattr(message, "role"):
-            return getattr(message, "role", "default").lower()
-    if isinstance(message, ToolOutput):
-        return "tool"
-    if isinstance(message, ManagerRequest):
-        return "instructions"
-    if isinstance(message, Record):
-        # Try to extract role information if available
-        if hasattr(message, "role"):
-            return getattr(message, "role", "default").lower()
-    return "default"
+    return _get_agent_info(message)["role"]
 
 
 def _is_score_message(message) -> bool:
     """Check if the message is a scoring message."""
-    if isinstance(message, AgentOutput) and hasattr(message, "role"):
+    if not isinstance(message, AgentOutput):
+        return False
+
+    # Check role first
+    if hasattr(message, "role"):
         role = getattr(message, "role", "").lower()
-        return role == "scorer"
+        if role == "scorer":
+            return True
+
+    # Check if outputs is QualResults
+    if hasattr(message, "outputs") and isinstance(message.outputs, QualResults):
+        return True
+
     return False
 
 
-def _format_score_indicator(score) -> str:
-    """Format a score as a colored square."""
+def _get_message_hash(message_id: str) -> str:
+    """Generate a consistent color from a message ID"""
+    if not message_id:
+        return "#777777"  # Default gray
+
+    # Generate a hash of the ID and use it to select a color
+    hash_val = int(hashlib.md5(message_id.encode()).hexdigest(), 16)
+    return COLOR_PALETTE[hash_val % len(COLOR_PALETTE)]
+
+
+def _format_score_indicator(score, simple=False) -> str:
+    """Format a score as a colored indicator."""
     if isinstance(score, (int, float)):
-        color = "#28a745" if score > 0.5 else "#dc3545"  # Green for high scores, red for low
-        return f'<span class="score-indicator" style="display:inline-block; width:12px; height:12px; background-color:{color}; margin-left:5px;"></span>'
+        # Choose color based on score value
+        if score > 0.8:
+            color = "#28a745"  # Strong green
+        elif score > 0.6:
+            color = "#5cb85c"  # Light green
+        elif score > 0.4:
+            color = "#ffc107"  # Yellow
+        elif score > 0.2:
+            color = "#ff9800"  # Orange
+        else:
+            color = "#dc3545"  # Red
+
+        if simple:
+            return f'<span style="display:inline-block; width:10px; height:10px; background-color:{color}; border-radius:2px; margin-right:3px;"></span>'
+        score_percent = f"{int(score * 100)}%"
+        return f"""
+            <div style="display:inline-flex; align-items:center; background:#f8f9fa; padding:2px 8px; border-radius:12px; margin-left:5px; font-size:0.85em;">
+                <span style="display:inline-block; width:8px; height:8px; background-color:{color}; border-radius:50%; margin-right:4px;"></span>
+                <span style="font-weight:bold;">{score_percent}</span>
+            </div>
+            """
     return ""
 
 
-def _format_message_with_style(content: str, agent_style: dict[str, str]) -> str:
-    """Apply styling to a message based on agent type."""
+def _format_message_with_style(content: str, agent_info: dict, message_id: str | None = None) -> str:
+    """Apply styling to a message based on agent info."""
+    # Get the predefined style for this agent role
+    role = agent_info.get("role", "default")
+    agent_style = AGENT_STYLES.get(role, AGENT_STYLES["default"])
+
+    # Extract styling elements
     avatar = agent_style.get("avatar", "👤")
-    color = agent_style.get("color", "#6c757d")
     background = agent_style.get("background", "#f8f9fa")
     border = agent_style.get("border", "1px solid #dee2e6")
 
+    # Prefer custom color from agent_info if available, otherwise use role-based color
+    color = agent_info.get("color") or agent_style.get("color", "#6c757d")
+
+    # Get agent name - use provided name or generate from role
+    name = agent_info.get("name", role.capitalize())
+
+    # Calculate agent color for the header
+    agent_color = _get_message_hash(agent_info.get("id", ""))
+
+    # Check if there's a score for this message
+    score_html = ""
+    if message_id and message_id in message_scores:
+        score_data = message_scores[message_id]
+        score_html = f"""
+        <div class="score-badge" style="position:absolute; top:-8px; right:-8px; background:#f8f9fa; padding:2px 8px; border-radius:12px; border:1px solid #dee2e6; font-size:0.85em;">
+            <span style="display:inline-block; width:8px; height:8px; background-color:{score_data.get('color', '#777777')}; border-radius:50%; margin-right:4px;"></span>
+            <span style="font-weight:bold;">{score_data.get('score_text', '?%')}</span>
+        </div>
+        """
+
     return f"""
-    <div style="display:flex; margin-bottom:10px;">
+    <div id="{message_id}" style="display:flex; margin-bottom:15px; position:relative;">
         <div style="flex-shrink:0; margin-right:10px; font-size:1.5em;">{avatar}</div>
-        <div style="flex-grow:1; padding:10px; background:{background}; color:{color}; border-radius:8px; border:{border};">
-            {content}
+        <div style="flex-grow:1;">
+            <div style="font-weight:bold; margin-bottom:4px; color:{agent_color};">{name}</div>
+            <div style="padding:10px; background:{background}; color:{color}; border-radius:8px; border:{border}; position:relative;">
+                {content}
+                {score_html}
+            </div>
         </div>
     </div>
     """
 
 
-def _format_scores_summary() -> str:
-    """Format the aggregated scores as a series of colored squares."""
-    if not score_messages:
+def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
+    """Process QualResults for display."""
+    answer_id = getattr(qual_results, "answer_id", "")
+
+    if not answer_id:
+        return None
+
+    score = getattr(qual_results, "correctness", 0)
+
+    # Choose color based on score value
+    if score > 0.8:
+        color = "#28a745"  # Strong green
+    elif score > 0.6:
+        color = "#5cb85c"  # Light green
+    elif score > 0.4:
+        color = "#ffc107"  # Yellow
+    elif score > 0.2:
+        color = "#ff9800"  # Orange
+    else:
+        color = "#dc3545"  # Red
+
+    score_text = f"{int(score * 100)}%"
+
+    return {
+        "answer_id": answer_id,
+        "score": score,
+        "score_text": score_text,
+        "color": color,
+        "assessments": getattr(qual_results, "assessments", []),
+    }
+
+
+def _format_agent_reasons(reasons: AgentReasons) -> str:
+    """Format AgentReasons output in a friendly way."""
+    if not reasons:
         return ""
 
-    score_indicators = ""
-    for score in score_messages:
-        try:
-            # Try to extract numeric score value
-            score_value = float(score) if isinstance(score, (int, float, str)) else 0.5
-            color = "#28a745" if score_value > 0.5 else "#dc3545"
-            score_indicators += f'<span style="display:inline-block; width:12px; height:12px; background-color:{color}; margin-right:3px;"></span>'
-        except:
-            # If we can't extract a numeric value, use a neutral color
-            score_indicators += '<span style="display:inline-block; width:12px; height:12px; background-color:#6c757d; margin-right:3px;"></span>'
+    conclusion = getattr(reasons, "conclusion", "")
+    prediction = getattr(reasons, "prediction", False)
+    confidence = getattr(reasons, "confidence", "medium").capitalize()
+    reason_list = getattr(reasons, "reasons", [])
+
+    # Format prediction nicely
+    prediction_color = "#28a745" if not prediction else "#dc3545"
+    prediction_text = "No" if not prediction else "Yes"
+    prediction_html = f'<span style="color:{prediction_color}; font-weight:bold;">{prediction_text}</span>'
+
+    # Format confidence level
+    confidence_color = "#28a745" if confidence == "High" else "#ffc107" if confidence == "Medium" else "#dc3545"
+    confidence_html = f'<span style="color:{confidence_color}; font-weight:bold;">{confidence}</span>'
+
+    # Format reasons as a list
+    reasons_html = ""
+    if reason_list:
+        reasons_items = [f"<li>{reason}</li>" for reason in reason_list]
+        reasons_html = f"""
+        <div style="margin-top:10px;">
+            <strong>Reasoning:</strong>
+            <ul style="margin-top:5px;">
+                {"".join(reasons_items)}
+            </ul>
+        </div>
+        """
 
     return f"""
-    <div style="display:flex; justify-content:flex-end; margin-top:5px;">
-        <div style="padding:5px; background:#f8f9fa; border-radius:4px; border:1px solid #dee2e6;">
-            {score_indicators}
-        </div>
-    </div>
+    <div style="margin-bottom:5px;"><strong>Conclusion:</strong> {conclusion}</div>
+    <div style="margin-bottom:5px;"><strong>Violates Policy:</strong> {prediction_html}</div>
+    <div style="margin-bottom:5px;"><strong>Confidence:</strong> {confidence_html}</div>
+    {reasons_html}
     """
 
 
-def _extract_score(message) -> float | None:
-    """Extract a numeric score from a message if possible."""
-    if isinstance(message, AgentOutput):
-        if isinstance(message.outputs, dict) and "score" in message.outputs:
-            return message.outputs["score"]
-        if isinstance(message.outputs, (int, float)):
-            return float(message.outputs)
-        if isinstance(message.outputs, str):
+def _extract_score(message) -> tuple[float | None, QualResults | None]:
+    """Extract and process score information from a message.
+    
+    Returns:
+        tuple: (score value, score object)
+
+    """
+    if not isinstance(message, AgentOutput):
+        return None, None
+
+    # Extract QualResults if available
+    if hasattr(message, "outputs") and isinstance(message.outputs, QualResults):
+        score_value = getattr(message.outputs, "correctness", None)
+        return score_value, message.outputs
+
+    # Try standard extraction methods
+    if hasattr(message, "outputs"):
+        outputs = message.outputs
+
+        # Check if outputs is a dict with 'score'
+        if isinstance(outputs, dict) and "score" in outputs:
+            return outputs["score"], None
+
+        # Check if outputs is a numeric value
+        if isinstance(outputs, (int, float)):
+            return float(outputs), None
+
+        # Try to parse JSON string
+        if isinstance(outputs, str):
             try:
-                # Try to parse JSON string
-                data = json.loads(message.outputs)
+                data = json.loads(outputs)
                 if isinstance(data, dict) and "score" in data:
-                    return data["score"]
+                    return data["score"], None
             except:
                 # If it's not JSON, try to convert the string to a float
                 try:
-                    return float(message.outputs)
+                    return float(outputs), None
                 except:
                     pass
-    return None
+
+    return None, None
 
 
 def _format_message_for_client(message) -> str | None:
@@ -198,25 +403,94 @@ def _format_message_for_client(message) -> str | None:
         Formatted message string or None if message shouldn't be sent
 
     """
-    # Default values
-    msg_type = "message"
-    content = None
-    agent_role = _get_agent_role(message)
+    # Get agent info and generate a unique message ID
+    agent_info = _get_agent_info(message)
+    message_id = agent_info.get("message_id", "")
 
     # Ignore certain message types (don't display in chat)
     if isinstance(message, (TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse)):
         return None
 
-    # Check for scoring message and add to aggregation
+    # Handle score messages
     if _is_score_message(message):
-        score = _extract_score(message)
-        if score is not None:
-            score_messages.append(score)
+        score_value, score_obj = _extract_score(message)
+
+        # If it's a QualResults object, process it specially
+        if score_obj and isinstance(score_obj, QualResults):
+            qual_data = _format_qual_results(score_obj)
+            if qual_data:
+                answer_id = qual_data.get("answer_id", "")
+
+                # Store the score data and link it to the original message if possible
+                if answer_id in scored_messages:
+                    original_message_id = scored_messages[answer_id]
+                    # Cast the dictionary to the ScoreData type
+                    message_scores[original_message_id] = ScoreData(**qual_data)
+
+                # Create a compact score display
+                assessments_html = ""
+                if qual_data.get("assessments", []):
+                    assessment_items = []
+                    for idx, assessment in enumerate(qual_data["assessments"]):
+                        icon = "✓" if assessment.correct else "✗"
+                        color = "#28a745" if assessment.correct else "#dc3545"
+                        assessment_items.append(f'<li style="margin-bottom:4px;"><span style="color:{color};font-weight:bold;">{icon}</span> {assessment.feedback}</li>')
+
+                    assessments_html = f"""
+                    <div style="margin-top:8px; font-size:0.9em;">
+                        <details>
+                            <summary style="cursor:pointer; color:#495057;">Assessment Details</summary>
+                            <ul style="margin-top:8px; padding-left:20px;">
+                                {"".join(assessment_items)}
+                            </ul>
+                        </details>
+                    </div>
+                    """
+
+                # Return a compact score card
+                agent_name = qual_data.get("agent_name", "Agent")
+                return f"""
+                <div style="display:flex; justify-content:flex-end;">
+                    <div style="background:#f8f9fa; padding:8px 12px; border-radius:8px; border:1px solid #dee2e6; max-width:250px; margin-left:auto; font-size:0.9em;">
+                        <div style="display:flex; align-items:center; margin-bottom:4px;">
+                            <span style="margin-right:8px;">📊</span>
+                            <span style="font-weight:bold;">Score: {qual_data.get('score_text', '?%')}</span>
+                            <span style="display:inline-block; width:12px; height:12px; background-color:{qual_data.get('color', '#777777')}; margin-left:8px; border-radius:2px;"></span>
+                        </div>
+                        {assessments_html}
+                    </div>
+                </div>
+                """
+
+            # If we couldn't process the QualResults, just return a simple score indicator
+            if score_value is not None:
+                return _format_score_indicator(score_value)
+
+            # Don't show anything for this message
+            return None
+
+        if score_value is not None:
+            # Simple score display
+            return _format_score_indicator(score_value)
+
+        # Don't render other scorer messages
+        return None
+
+    # Default values for normal (non-score) messages
+    content = None
 
     # Format based on message type
     if isinstance(message, AgentOutput):
-        msg_type = "agent_output"
-        if isinstance(message.outputs, str):
+        # Store this message ID for future score references
+        if hasattr(message, "call_id"):
+            answer_id = message.call_id
+            if answer_id:
+                scored_messages[answer_id] = message_id
+
+        # Special handling for AgentReasons
+        if hasattr(message, "outputs") and isinstance(message.outputs, AgentReasons):
+            content = _format_agent_reasons(message.outputs)
+        elif isinstance(message.outputs, str):
             content = message.outputs
         else:
             # For complex outputs, serialize to JSON
@@ -225,16 +499,13 @@ def _format_message_for_client(message) -> str | None:
             except:
                 content = str(message.outputs)
 
-    elif isinstance(message, Record):  # Add handling for Record
+    elif isinstance(message, Record):
         content = message.text
 
     elif isinstance(message, ToolOutput):
-        msg_type = "tool_output"
         content = message.content
-        # Additional info
-        tool_name = getattr(message, "name", "unknown_tool")
-
         # Add tool name as a badge
+        tool_name = getattr(message, "name", "unknown_tool")
         content = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span><br/>{content}'
 
     elif isinstance(message, ManagerRequest):
@@ -245,13 +516,8 @@ def _format_message_for_client(message) -> str | None:
         return None
 
     # Convert markdown to HTML in message content
-    # The content may already have some HTML, so we need to handle it carefully
-    # First check if content exists and is a string
     if content and isinstance(content, str):
         # Process code blocks with triple backticks
-        import re
-
-        # Process code blocks
         code_pattern = r"```(.*?)\n(.*?)```"
 
         def code_replace(match):
@@ -292,24 +558,10 @@ def _format_message_for_client(message) -> str | None:
         # Convert newlines to <br> tags
         content = content.replace("\n", "<br>")
 
-    # Get the style for this agent/message type
-    agent_style = AGENT_STYLES.get(agent_role, AGENT_STYLES["default"])
-
-    # Apply styling to the message (ensure content is not None)
+    # Apply styling to the message
     if content is None:
         content = ""  # Convert None to empty string to avoid type errors
-    styled_content = _format_message_with_style(content, agent_style)
 
-    # If it's a scorer message, don't show the content, just the score indicator
-    if _is_score_message(message):
-        score = _extract_score(message)
-        if score is not None:
-            return _format_score_indicator(score)
-
-    # Add scores summary if we have accumulated scores
-    if score_messages and not _is_score_message(message):
-        styled_content += _format_scores_summary()
-        # Clear scores after showing summary
-        score_messages.clear()
+    styled_content = _format_message_with_style(content, agent_info, message_id)
 
     return styled_content

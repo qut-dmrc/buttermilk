@@ -62,7 +62,7 @@
       ],
     },
     {
-      "name": "shiny",
+      "name": "fastapi web ui",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -81,7 +81,7 @@
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
+      "justMyCode": false,
       "console": "integratedTerminal"
     },
     {
