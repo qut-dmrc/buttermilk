@@ -479,7 +479,7 @@ class HostAgent(Agent):
             f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
             )
         logger.debug(f"Requesting info from user about proposed step {step.role}.")
-        return StepRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
+        return ManagerRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
 
     async def _choose(self, message: ConductorRequest | None) -> StepRequest:
         """Choose the next step in the conversation.

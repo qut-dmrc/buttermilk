@@ -5,9 +5,6 @@ import json
 from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
 from buttermilk._core.contract import (
     ConductorResponse,
-    ManagerMessage,
-    ManagerResponse,
-    StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
     TaskProgressUpdate,
@@ -207,7 +204,7 @@ def _format_message_for_client(message) -> str | None:
     agent_role = _get_agent_role(message)
 
     # Ignore certain message types (don't display in chat)
-    if isinstance(message, (StepRequest, TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse, ManagerResponse, ManagerMessage)):
+    if isinstance(message, (TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse)):
         return None
 
     # Check for scoring message and add to aggregation

@@ -190,7 +190,7 @@ class Selector(AutogenOrchestrator):
 
         """
         if step:
-            logger.debug(f"Requesting user confirmation for step: {step.role}")
+            logger.info(f"Requesting user confirmation for step: {step.role}")
             # Prepare context about available variants for the proposed step.
             variant_info = ""
             options_list = []  # For ManagerRequest options
@@ -219,7 +219,7 @@ class Selector(AutogenOrchestrator):
                 options=options_list,  # Pass variant IDs as options
             )
         elif prompt:
-            logger.debug("Sending general prompt to user.")
+            logger.info("Sending general prompt to user.")
             # Send a simple prompt if no step is provided.
             manager_request = ManagerRequest(prompt=prompt, content=prompt)  # Content=prompt for simple display
         else:
