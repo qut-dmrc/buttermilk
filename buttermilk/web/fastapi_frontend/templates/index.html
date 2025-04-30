@@ -58,6 +58,12 @@
                         container.scrollTop = container.scrollHeight;
                     });
                     break;
+                case 'script_content':
+                    const scriptContent = data.content;
+                    const scriptElement = document.createElement('div');
+                    scriptElement.innerHTML = scriptContent;
+                    document.body.appendChild(scriptElement);
+                    break;
                 case 'score_update':
                     console.log('Received score update:', data);
                     window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
@@ -322,8 +328,15 @@
     </div>
     
     <!-- Scores panel -->
-    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2" x-data="{ scores: window.scoreData.scores }">
-        <h2 class="text-sm font-semibold mb-2">Scores</h2>
+    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2" 
+         x-data="{ 
+           scores: window.scoreData.scores,
+           updateScores() {
+             console.log('Current scores:', this.scores);
+           } 
+         }"
+         x-init="$watch('scores', () => { updateScores(); })">
+        <h2 class="text-sm font-semibold mb-2">Scores <button @click="updateScores()" class="text-xs bg-gray-200 px-1 rounded">Debug</button></h2>
         <div id="scores-container" class="overflow-y-auto max-h-[70vh]">
             <template x-if="Object.keys(scores).length === 0">
                 <div class="text-center text-gray-500 py-4 text-xs">
@@ -431,8 +444,16 @@
         }
     };
     
+    // Debug WebSocket messages
+    const originalSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function(data) {
+        console.log('WS SEND:', data);
+        return originalSend.call(this, data);
+    };
+    
     // Listen for custom event to handle score updates
     document.addEventListener('score-update', function(e) {
+        console.log('Received score-update event with data:', e.detail);
         // Notify Alpine that data has changed
         if (window.Alpine) {
             Alpine.nextTick(() => {
@@ -440,6 +461,9 @@
                 const scoresPanel = document.querySelector('#scores-container').parentElement;
                 if (scoresPanel && scoresPanel.__x) {
                     scoresPanel.__x.updateData('scores', e.detail.scores);
+                    console.log('Updated Alpine data with scores:', e.detail.scores);
+                } else {
+                    console.error('Could not find scores panel or Alpine component');
                 }
             });
         }

@@ -13,11 +13,14 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import AgentReasons
+from buttermilk.bm import logger
 
 
 # Define score data structure with required fields
 class ScoreData(TypedDict):
     answer_id: str
+    agent_id: str  # Add agent_id
+    assessor: str  # Add assessor
     score: float
     score_text: str
     color: str
@@ -220,37 +223,74 @@ def _get_score_color(score: float) -> str:
 
 
 def _handle_score_message(score_value: float, assessor_id: str, agent_id: str, qual_data: dict[str, Any] | None = None) -> str:
-    """Generate JavaScript to update the score sidebar for a score message.
-    
-    Args:
-        score_value: The score value (0-1)
-        assessor_id: ID of the assessor agent
-        agent_id: ID of the agent being assessed
-        qual_data: Optional detailed score data
-        
-    Returns:
-        JavaScript code to update the score panel
-
-    """
+    logger.debug(f"Handling score message: agent_id={agent_id}, assessor_id={assessor_id}, score={score_value}")
+    """Generate JavaScript to update the score sidebar for a score message, waiting for Alpine.js."""
     if not qual_data:
-        # Create minimal score data for simple scores
+        # Create minimal score data if none provided
         qual_data = {
             "score": score_value,
             "score_text": f"{int(score_value * 100)}%",
             "color": _get_score_color(score_value),
             "assessor": assessor_id,
+            # Add defaults for other ScoreData fields if needed by JS
+            "answer_id": "",
+            "agent_id": agent_id,
+            "assessments": [],
         }
 
-    # Return JavaScript that will update the Alpine.js score data
-    return f"""
+    # Safely embed data into the JavaScript string
+    safe_agent_id = json.dumps(agent_id)
+    safe_assessor_id = json.dumps(assessor_id)
+    safe_qual_data = json.dumps(qual_data)
+
+    # Generate JavaScript that waits for Alpine.js (or DOMContentLoaded)
+    # before trying to access window.scoreData
+    script = f"""
     <script>
-        window.scoreData.addScore(
-            "{agent_id}", 
-            "{assessor_id}", 
-            {json.dumps(qual_data)}
-        );
+        function addScoreWhenReady() {{
+            if (window.scoreData && typeof window.scoreData.addScore === 'function') {{
+                console.log('Alpine component found. Adding score for agent:', {safe_agent_id});
+                try {{
+                    window.scoreData.addScore(
+                        {safe_agent_id},
+                        {safe_assessor_id},
+                        {safe_qual_data}
+                    );
+                }} catch (e) {{
+                    console.error('Error calling window.scoreData.addScore:', e);
+                }}
+            }} else {{
+                console.warn('Alpine component (window.scoreData) not ready yet. Score update deferred.');
+                // Optionally add a timeout or retry mechanism if needed,
+                // but alpine:initialized or DOMContentLoaded should cover most cases.
+            }}
+        }}
+
+        // Check if Alpine is already initialized
+        if (window.Alpine && window.Alpine.initialized) {{
+             // Use requestAnimationFrame to ensure this runs after the current JS execution cycle
+             requestAnimationFrame(addScoreWhenReady);
+        }} else {{
+             // Wait for Alpine to initialize
+            document.addEventListener('alpine:initialized', addScoreWhenReady, {{ once: true }});
+            // Fallback: Wait for the whole DOM to be ready if alpine:initialized doesn't fire
+            document.addEventListener('DOMContentLoaded', () => {{
+                // Check again in case alpine:initialized didn't fire but the component is now ready
+                 if (!window.scoreData || typeof window.scoreData.addScore !== 'function') {{
+                    console.warn('Alpine component still not found after DOMContentLoaded. Trying score update anyway or logging error.');
+                    // Attempt one last time or log a final error
+                    if (window.scoreData && typeof window.scoreData.addScore === 'function') {{
+                       addScoreWhenReady();
+                    }} else {{
+                       console.error('Failed to find window.scoreData.addScore after multiple attempts.');
+                    }}
+                 }}
+            }}, {{ once: true }});
+        }}
     </script>
     """
+    logger.debug(f"Generated score script (length: {len(script)}): waits for Alpine/DOM")
+    return script
 
 
 def _format_score_indicator(score, simple=False) -> str:
@@ -318,37 +358,36 @@ def _format_message_with_style(content: str, agent_info: dict, message_id: str |
 def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
     """Process QualResults for display."""
     answer_id = getattr(qual_results, "answer_id", "")
+    agent_id = getattr(qual_results, "agent_id", "")  # Extract agent_id
 
-    if not answer_id:
+    if not answer_id or not agent_id:  # Ensure agent_id is also present
+        logger.warning(f"QualResults missing answer_id ('{answer_id}') or agent_id ('{agent_id}'). Cannot format score.")
         return None
 
-    score = getattr(qual_results, "correctness", 0)
+    score = getattr(qual_results, "correctness", 0.0)  # Default to 0.0 if missing
 
     # Choose color based on score value
-    if score > 0.8:
-        color = "#28a745"  # Strong green
-    elif score > 0.6:
-        color = "#5cb85c"  # Light green
-    elif score > 0.4:
-        color = "#ffc107"  # Yellow
-    elif score > 0.2:
-        color = "#ff9800"  # Orange
-    else:
-        color = "#dc3545"  # Red
+    color = _get_score_color(score)  # Use helper function
 
     score_text = f"{int(score * 100)}%"
 
     # convert from pydantic model
+    assessments_data = []
     if assessments := getattr(qual_results, "assessments", []):
-        assessments = [x.model_dump() for x in assessments]
+        assessments_data = [x.model_dump() for x in assessments]
 
-    return {
+    # Ensure the returned dictionary matches the ScoreData TypedDict structure
+    # and includes agent_id
+    score_data: ScoreData = {
         "answer_id": answer_id,
+        "agent_id": agent_id,  # Add agent_id here
         "score": score,
         "score_text": score_text,
         "color": color,
-        "assessments": assessments,
+        "assessments": assessments_data,
+        "assessor": getattr(qual_results, "assessor", "scorer"),  # Add assessor
     }
+    return score_data
 
 
 def _format_agent_reasons(reasons: AgentReasons) -> str:
@@ -454,28 +493,35 @@ def _format_message_for_client(message) -> str | None:
 
     # Handle score messages
     if _is_score_message(message):
+        logger.debug(f"Detected score message from: {getattr(message, 'role', 'unknown')}")
         score_value, score_obj = _extract_score(message)
+        logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
 
         # If it's a QualResults object, process it specially
         if score_obj and isinstance(score_obj, QualResults):
             qual_data = _format_qual_results(score_obj)
             if qual_data:
-                answer_id = qual_data.get("answer_id", "")
-                agent_id = qual_data.get("agent_id", "unknown")
-                assessor_id = getattr(score_obj, "assessor", "scorer")
+                # agent_id is now correctly included in qual_data
+                agent_id = qual_data.get("agent_id", "unknown")  # Should now get the correct ID
+                assessor_id = qual_data.get("assessor", "scorer")  # Get assessor from qual_data
 
                 # Store the score data in the traditional way too (for backward compatibility)
-                if answer_id in scored_messages:
+                answer_id = qual_data.get("answer_id", "")
+                if answer_id and answer_id in scored_messages:
                     original_message_id = scored_messages[answer_id]
-                    message_scores[original_message_id] = ScoreData(**qual_data)  # type: ignore[typeddict-item]
+                    # Ensure the structure matches the updated ScoreData
+                    message_scores[original_message_id] = qual_data
 
                 # Return JavaScript to update scores panel - convert TypedDict to regular dict
-                return _handle_score_message(
+                logger.debug(f"Processing QualResults with answer_id={answer_id}, agent_id={agent_id}")
+                result = _handle_score_message(
                     score_value=qual_data.get("score", 0.0),
                     assessor_id=str(assessor_id),
                     agent_id=str(agent_id),
                     qual_data=dict(qual_data),  # Convert TypedDict to regular dict
                 )
+                logger.debug(f"Generated score script for QualResults: length={len(result)}")
+                return result
 
             # If we couldn't process the QualResults but have a score value, use that
             if score_value is not None:
@@ -524,7 +570,7 @@ def _format_message_for_client(message) -> str | None:
             try:
                 content = message.outputs.model_dump_json() if message.outputs else ""
             except:
-                content = json.dumps(message.outputs) 
+                content = json.dumps(message.outputs)
 
     elif isinstance(message, Record):
         content = message.text

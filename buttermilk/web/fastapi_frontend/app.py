@@ -1,4 +1,3 @@
-import asyncio
 import json
 import random
 import uuid
@@ -128,48 +127,46 @@ class DashboardApp:
             try:
                 if flow_name in self.flows.flows:
                     flow_obj = self.flows.flows.get(flow_name)
-                    if flow_obj:
-                        # Try to use get_record_ids method if it exists
-                        if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
-                            # If get_record_ids is async, await it
-                            if asyncio.iscoroutinefunction(flow_obj.get_record_ids):
-                                df = await flow_obj.get_record_ids()
-                            else:  # If it's sync, call it directly (or use to_thread if blocking)
-                                df = flow_obj.get_record_ids()
+                    # Try to use get_record_ids method if it exists
+                    if flow_obj and hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
+                        df = await flow_obj.get_record_ids()
 
-                            # Make sure df has an index attribute before using it
-                            if hasattr(df, "index"):
-                                record_ids = df.index.tolist()
-                            elif isinstance(df, list):
-                                record_ids = df
-                            else:
-                                logger.warning(f"Unexpected return type from get_record_ids: {type(df)}")
-                        # Otherwise try to use the data directly
-                        elif hasattr(flow_obj, "data") and flow_obj.data:
-                            # Check if we have mock data first (simpler approach)
-                            if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
-                                record_ids = flow_obj.data["mock_data"]["record_ids"]
-                            else:
-                                try:
-                                    df_dict = await prepare_step_df(flow_obj.data)
-                                    if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
-                                        df = list(df_dict.values())[-1]
-                                        # Check if df has index attribute
-                                        if hasattr(df, "index"):
-                                            if hasattr(df.index, "values"):
-                                                record_ids = df.index.values.tolist()
-                                            else:
-                                                record_ids = df.index.tolist()
-                                        elif isinstance(df, list):
-                                            record_ids = df
-                                        elif hasattr(df, "to_dict"):
-                                            # For pandas DataFrame-like objects
-                                            records_dict = df.to_dict("records")
-                                            record_ids = [str(r.get("id", i)) for i, r in enumerate(records_dict)]
+                        # Make sure df has an index attribute before using it
+                        if hasattr(df, "index"):
+                            record_ids = df.index.tolist()
+                        elif isinstance(df, list):
+                            record_ids = df
+                        else:
+                            logger.warning(f"Unexpected return type from get_record_ids: {type(df)}")
+                    # Otherwise try to use the data directly
+                    elif hasattr(flow_obj, "data") and flow_obj.data:
+                        # Check if we have mock data first (simpler approach)
+                        if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
+                            record_ids = flow_obj.data["mock_data"]["record_ids"]
+                        else:
+                            try:
+                                logger.debug(f"Loading data for flow: {flow_name}")
+                                df_dict = await prepare_step_df(flow_obj.data)
+                                if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
+                                    df = list(df_dict.values())[-1]
+                                    logger.debug(f"Got DataFrame of type: {type(df)}")
+                                    # Check if df has index attribute
+                                    if hasattr(df, "index"):
+                                        logger.debug(f"DataFrame has index of type: {type(df.index)}")
+                                        if hasattr(df.index, "values"):
+                                            record_ids = df.index.values.tolist()
                                         else:
-                                            logger.warning(f"Unable to extract record_ids from data: {type(df)}")
-                                except Exception as e:
-                                    logger.error(f"Error preparing data: {e}")
+                                            record_ids = df.index.tolist()
+                                    elif isinstance(df, list):
+                                        record_ids = df
+                                    elif hasattr(df, "to_dict"):
+                                        # For pandas DataFrame-like objects
+                                        records_dict = df.to_dict("records")
+                                        record_ids = [str(r.get("id", i)) for i, r in enumerate(records_dict)]
+                                    else:
+                                        logger.warning(f"Unable to extract record_ids from data: {type(df)}")
+                            except Exception as e:
+                                logger.error(f"Error preparing data: {e}")
             except Exception as e:
                 logger.error(f"Error loading data for flow '{flow_name}': {e}")
 
@@ -366,6 +363,42 @@ class DashboardApp:
                 "message": "No active flow to confirm",
             })
 
+    async def send_message_to_client(self, websocket: WebSocket, message: Any):
+        """Process and send a message to the client with improved error handling for scripts."""
+        formatted_output = _format_message_for_client(message)
+        
+        if not formatted_output:
+            return  # Skip empty messages
+        
+        # Check if this is a score script (starts with <script> tag)
+        is_score_script = formatted_output.strip().startswith("<script>")
+        
+        try:
+            if is_score_script:
+                # Send the script directly as a special message type
+                logger.debug("Detected score script, sending directly")
+                await websocket.send_json({
+                    "type": "script_content",
+                    "content": formatted_output
+                })
+            else:
+                # Regular message - send as chat message
+                await websocket.send_json({
+                    "type": "chat_message", 
+                    "html": formatted_output
+                })
+                
+        except Exception as e:
+            logger.error(f"Error sending message to client: {e}")
+            # Attempt to send error notification
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Failed to process message: {str(e)}"
+                })
+            except:
+                logger.error("Failed to send error message to client")
+
     def callback_to_ui(self, session_id: str):
         """Create a callback function for the flow to send messages back to the UI
         
@@ -388,38 +421,14 @@ class DashboardApp:
 
             # If we have a formatted message, send it
             if content and session_id in self.active_connections:
-                # Check if this is a score update message (contains script tag)
-                if isinstance(content, str) and "<script>" in content and "scoreData.addScore" in content:
-                    # Extract the score data from the script
-                    import re
-                    match = re.search(r'scoreData\.addScore\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*({.*?})\s*\)', content)
-                    if match:
-                        agent_id, assessor_id, score_data_str = match.groups()
-                        try:
-                            score_data = json.loads(score_data_str)
-                            # Send as a score update message instead of chat message
-                            await self.active_connections[session_id].send_json({
-                                "type": "score_update",
-                                "agent_id": agent_id,
-                                "assessor_id": assessor_id,
-                                "score_data": score_data,
-                            })
-                        except Exception as e:
-                            logger.error(f"Error parsing score data: {e}")
-                    # Don't send script tags as chat messages
-                else:
-                    # Regular chat message
-                    await self.active_connections[session_id].send_json({
-                        "type": "chat_message",
-                        "content": content,
-                    })
+                await self.send_message_to_client(self.active_connections[session_id], message)
 
-                    # Store in session data
-                    if session_id in self.session_data:
-                        self.session_data[session_id]["messages"].append({
-                            "content": content,
-                            "type": type(message).__name__,
-                        })
+                # Store in session data
+                if session_id in self.session_data:
+                    self.session_data[session_id]["messages"].append({
+                        "content": content,
+                        "type": type(message).__name__,
+                    })
 
             # Handle progress updates
             if isinstance(message, TaskProgressUpdate) and session_id in self.active_connections:
