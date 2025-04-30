@@ -204,7 +204,9 @@ class StepRequest(AgentInput):
         return v
 
     def __str__(self) -> str:
-        return self.content
+        if self.content:
+            return f"{self.role}: {self.content}"
+        return "StepRequest()"
 
 
 class AgentOutput(FlowMessage):

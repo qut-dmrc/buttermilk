@@ -58,6 +58,10 @@
                         container.scrollTop = container.scrollHeight;
                     });
                     break;
+                case 'score_update':
+                    console.log('Received score update:', data);
+                    window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
+                    break;
                 case 'progress_update':
                     this.progress = data.progress;
                     break;
@@ -253,7 +257,7 @@
             <h2 class="text-lg font-semibold mb-4">Agent Chat</h2>
             
             <!-- Messages container -->
-            <div class="flex-grow overflow-y-auto p-2 mb-4 bg-gray-50 rounded-md" id="messages-container" x-data="{ scores: {} }">
+            <div class="flex-grow overflow-y-auto p-2 mb-4 bg-gray-50 rounded-md" id="messages-container">
                 <template x-if="messages.length === 0">
                     <div class="text-center text-gray-500 py-8">
                         <p>No messages yet. Start a flow to begin the conversation.</p>
@@ -318,7 +322,7 @@
     </div>
     
     <!-- Scores panel -->
-    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2">
+    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2" x-data="{ scores: window.scoreData.scores }">
         <h2 class="text-sm font-semibold mb-2">Scores</h2>
         <div id="scores-container" class="overflow-y-auto max-h-[70vh]">
             <template x-if="Object.keys(scores).length === 0">
@@ -410,12 +414,35 @@
             
             // Update Alpine.js data
             if (window.Alpine) {
-                const messagesContainer = document.getElementById('messages-container');
-                if (messagesContainer && messagesContainer.__x) {
-                    messagesContainer.__x.setData('scores', JSON.parse(JSON.stringify(this.scores)));
+                // Trigger Alpine reactivity by creating a custom event
+                document.dispatchEvent(new CustomEvent('score-update', { 
+                    detail: { scores: this.scores } 
+                }));
+                
+                // Ensure the scores panel is properly updated
+                const scoresPanel = document.querySelector('#scores-container').parentElement;
+                if (scoresPanel && scoresPanel.__x) {
+                    scoresPanel.__x.updateData('scores', this.scores);
                 }
             }
+            
+            console.log('Score added:', agentId, assessorId, scoreData);
+            console.log('Current scores:', this.scores);
         }
     };
+    
+    // Listen for custom event to handle score updates
+    document.addEventListener('score-update', function(e) {
+        // Notify Alpine that data has changed
+        if (window.Alpine) {
+            Alpine.nextTick(() => {
+                // Force update on the scores panel
+                const scoresPanel = document.querySelector('#scores-container').parentElement;
+                if (scoresPanel && scoresPanel.__x) {
+                    scoresPanel.__x.updateData('scores', e.detail.scores);
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

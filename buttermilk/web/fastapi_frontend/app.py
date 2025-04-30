@@ -1,4 +1,5 @@
 import asyncio
+import json
 import random
 import uuid
 from pathlib import Path
@@ -387,17 +388,38 @@ class DashboardApp:
 
             # If we have a formatted message, send it
             if content and session_id in self.active_connections:
-                await self.active_connections[session_id].send_json({
-                    "type": "chat_message",
-                    "content": content,
-                })
-
-                # Store in session data
-                if session_id in self.session_data:
-                    self.session_data[session_id]["messages"].append({
+                # Check if this is a score update message (contains script tag)
+                if isinstance(content, str) and "<script>" in content and "scoreData.addScore" in content:
+                    # Extract the score data from the script
+                    import re
+                    match = re.search(r'scoreData\.addScore\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*({.*?})\s*\)', content)
+                    if match:
+                        agent_id, assessor_id, score_data_str = match.groups()
+                        try:
+                            score_data = json.loads(score_data_str)
+                            # Send as a score update message instead of chat message
+                            await self.active_connections[session_id].send_json({
+                                "type": "score_update",
+                                "agent_id": agent_id,
+                                "assessor_id": assessor_id,
+                                "score_data": score_data,
+                            })
+                        except Exception as e:
+                            logger.error(f"Error parsing score data: {e}")
+                    # Don't send script tags as chat messages
+                else:
+                    # Regular chat message
+                    await self.active_connections[session_id].send_json({
+                        "type": "chat_message",
                         "content": content,
-                        "type": type(message).__name__,
                     })
+
+                    # Store in session data
+                    if session_id in self.session_data:
+                        self.session_data[session_id]["messages"].append({
+                            "content": content,
+                            "type": type(message).__name__,
+                        })
 
             # Handle progress updates
             if isinstance(message, TaskProgressUpdate) and session_id in self.active_connections:
