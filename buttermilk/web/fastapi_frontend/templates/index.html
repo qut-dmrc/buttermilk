@@ -70,7 +70,16 @@
                     // More reliable score handling with standardized data structure
                     if (data.agent_id && data.assessor_id && data.score_data) {
                         window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
-                    } else {
+                    }
+                    // Fall back to legacy format (direct content from script injection)
+                    else if (data.content && data.content.includes('<script>')) {
+                        // Execute the script directly to ensure score updates
+                        const scriptContent = data.content;
+                        const scriptElement = document.createElement('div');
+                        scriptElement.innerHTML = scriptContent;
+                        document.body.appendChild(scriptElement);
+                    } 
+                    else {
                         console.error('Invalid score update format:', data);
                     }
                     break;

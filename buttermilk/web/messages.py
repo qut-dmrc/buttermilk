@@ -501,17 +501,17 @@ def _format_message_for_client(message) -> dict | str | None:
 
         # If it's a QualResults object, use its to_frontend_data method
         if score_obj and isinstance(score_obj, QualResults):
-            # Use the standardized to_frontend_data method
+            # Try both standardized and legacy approaches for maximum compatibility
             try:
-                return {
+                # First, create the standardized data structure
+                frontend_data = {
                     "type": "score_update",
                     "agent_id": score_obj.agent_id,
                     "assessor_id": score_obj.assessor,
                     "score_data": score_obj.to_frontend_data()
                 }
-            except Exception as e:
-                logger.error(f"Error generating score update data: {e}")
-                # Fall back to legacy approach if there's an error
+                
+                # Also generate legacy script for the fallback code path in the frontend
                 qual_data = _format_qual_results(score_obj)
                 if qual_data:
                     # Store the score data for backward compatibility
@@ -520,7 +520,26 @@ def _format_message_for_client(message) -> dict | str | None:
                         original_message_id = scored_messages[answer_id]
                         message_scores[original_message_id] = qual_data
                     
-                    # Return legacy script format
+                    # Generate legacy script
+                    agent_id = qual_data.get("agent_id", "unknown")
+                    assessor_id = qual_data.get("assessor", "scorer")
+                    legacy_script = _handle_score_message(
+                        score_value=qual_data.get("score", 0.0),
+                        assessor_id=str(assessor_id),
+                        agent_id=str(agent_id),
+                        qual_data=dict(qual_data)
+                    )
+                    
+                    # Add content field with legacy script for fallback path
+                    frontend_data["content"] = legacy_script
+                
+                logger.debug(f"Sending score update with agent={score_obj.agent_id}, assessor={score_obj.assessor}")
+                return frontend_data
+            except Exception as e:
+                logger.error(f"Error generating score update data: {e}")
+                # Ultimate fallback - return a pure legacy format if everything else fails
+                qual_data = _format_qual_results(score_obj)
+                if qual_data:
                     agent_id = qual_data.get("agent_id", "unknown")
                     assessor_id = qual_data.get("assessor", "scorer")
                     result = _handle_score_message(
@@ -529,7 +548,10 @@ def _format_message_for_client(message) -> dict | str | None:
                         agent_id=str(agent_id),
                         qual_data=dict(qual_data)
                     )
-                    return result
+                    return {
+                        "type": "score_update",
+                        "content": result
+                    }
 
         # Handle simpler score messages with standardized format
         if score_value is not None:
