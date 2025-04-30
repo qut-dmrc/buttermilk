@@ -334,14 +334,18 @@
     </div>
     
     <!-- Scores panel -->
-    <div class="hidden md:block md:w-1/12 bg-white shadow rounded-lg p-2" 
+    <div class="md:block md:w-1/12 bg-white shadow rounded-lg p-2" 
          x-data="{ 
-           scores: window.scoreData.scores,
+            get scores() { return $store.scores.data; },
+       version: 0,
            updateScores() {
              console.log('Current scores:', this.scores);
            } 
          }"
-         x-init="$watch('scores', () => { updateScores(); })">
+         x-init="$watch('$store.scores.version', (val) => { 
+            version = val;
+            updateScores(); 
+          })">
         <h2 class="text-sm font-semibold mb-2">Scores <button @click="updateScores()" class="text-xs bg-gray-200 px-1 rounded">Debug</button></h2>
         <div id="scores-container" class="overflow-y-auto max-h-[70vh]">
             <template x-if="Object.keys(scores).length === 0">
@@ -421,8 +425,15 @@
             window.Alpine.initTree(event.detail.target);
         }
     });
-    
-    // Global object to store all scores by agent and assessor
+
+    document.addEventListener('alpine:init', () => {
+        Alpine.store('scores', {
+            data: {},
+            version: 0 
+        });
+    });
+
+    // Replace your existing window.scoreData.addScore function
     window.scoreData = {
         scores: {},
         addScore: function(agentId, assessorId, scoreData) {
@@ -432,21 +443,11 @@
             this.scores[agentId][assessorId] = scoreData;
             
             // Update Alpine.js data
-            if (window.Alpine) {
-                // Trigger Alpine reactivity by creating a custom event
-                document.dispatchEvent(new CustomEvent('score-update', { 
-                    detail: { scores: this.scores } 
-                }));
-                
-                // Ensure the scores panel is properly updated
-                const scoresPanel = document.querySelector('#scores-container').parentElement;
-                if (scoresPanel && scoresPanel.__x) {
-                    scoresPanel.__x.updateData('scores', this.scores);
-                }
-            }
-            
-            console.log('Score added:', agentId, assessorId, scoreData);
-            console.log('Current scores:', this.scores);
+            Alpine.nextTick(() => {
+                Alpine.store('scores').data = {...this.scores};
+                Alpine.store('scores').version++; // Increment to trigger reactivity
+                console.log('Updated Alpine store with scores:', this.scores);
+            });
         }
     };
     
@@ -457,22 +458,6 @@
         return originalSend.call(this, data);
     };
     
-    // Listen for custom event to handle score updates
-    document.addEventListener('score-update', function(e) {
-        console.log('Received score-update event with data:', e.detail);
-        // Notify Alpine that data has changed
-        if (window.Alpine) {
-            Alpine.nextTick(() => {
-                // Force update on the scores panel
-                const scoresPanel = document.querySelector('#scores-container').parentElement;
-                if (scoresPanel && scoresPanel.__x) {
-                    scoresPanel.__x.updateData('scores', e.detail.scores);
-                    console.log('Updated Alpine data with scores:', e.detail.scores);
-                } else {
-                    console.error('Could not find scores panel or Alpine component');
-                }
-            });
-        }
-    });
+  
 </script>
 {% endblock %}
