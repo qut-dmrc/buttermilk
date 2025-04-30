@@ -335,30 +335,43 @@ def _format_agent_reasons(reasons: AgentReasons) -> str:
     # Format prediction nicely
     prediction_color = "#28a745" if not prediction else "#dc3545"
     prediction_text = "No" if not prediction else "Yes"
-    prediction_html = f'<span style="color:{prediction_color}; font-weight:bold;">{prediction_text}</span>'
-
+    
     # Format confidence level
     confidence_color = "#28a745" if confidence == "High" else "#ffc107" if confidence == "Medium" else "#dc3545"
-    confidence_html = f'<span style="color:{confidence_color}; font-weight:bold;">{confidence}</span>'
+    
+    # Create compact visual badges for violates/confidence
+    badges_html = f"""
+    <div style="display:flex; gap:8px; margin:3px 0 8px 0;">
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({prediction_color.replace('#', '')}, 0.1); border:1px solid {prediction_color}; border-radius:12px; font-size:0.75rem;">
+            <span style="font-weight:600;">Violates:</span> 
+            <span style="margin-left:3px; font-weight:bold; color:{prediction_color};">{prediction_text}</span>
+        </span>
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({confidence_color.replace('#', '')}, 0.1); border:1px solid {confidence_color}; border-radius:12px; font-size:0.75rem;">
+            <span style="font-weight:600;">Confidence:</span>
+            <span style="margin-left:3px; font-weight:bold; color:{confidence_color};">{confidence}</span>
+        </span>
+    </div>
+    """
 
-    # Format reasons as a list
+    # Format reasons as a bullet point list
     reasons_html = ""
     if reason_list:
         reasons_items = [f"<li>{reason}</li>" for reason in reason_list]
         reasons_html = f"""
-        <div style="margin-top:10px;">
+        <div style="margin-top:5px;">
             <strong>Reasoning:</strong>
-            <ul style="margin-top:5px;">
+            <ul style="margin-top:3px; margin-bottom:0; padding-left:20px;">
                 {"".join(reasons_items)}
             </ul>
         </div>
         """
 
     return f"""
-    <div style="margin-bottom:5px;"><strong>Conclusion:</strong> {conclusion}</div>
-    <div style="margin-bottom:5px;"><strong>Violates Policy:</strong> {prediction_html}</div>
-    <div style="margin-bottom:5px;"><strong>Confidence:</strong> {confidence_html}</div>
-    {reasons_html}
+    <div style="font-size:0.9rem;">
+        <div style="margin-bottom:3px;"><strong>Conclusion:</strong> {conclusion}</div>
+        {badges_html}
+        {reasons_html}
+    </div>
     """
 
 
