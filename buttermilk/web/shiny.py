@@ -5,17 +5,20 @@ from typing import Union
 import pandas as pd
 from shiny import App, Session, reactive, render, ui
 
-from buttermilk._core.agent import AgentInput, AgentTrace, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
+from buttermilk._core.agent import AgentInput, AgentTrace, ManagerMessage
 from buttermilk._core.contract import (
     ConductorRequest,
     ConductorResponse,
     ErrorEvent,
     HeartBeat,
+    ManagerRequest,
     ManagerResponse,
     ProceedToNextTaskSignal,
+    StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
     TaskProgressUpdate,
+    ToolOutput,
 )
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.bm import logger

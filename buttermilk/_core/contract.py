@@ -7,7 +7,7 @@ and interactions with manager/conductor roles.
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
@@ -29,25 +29,22 @@ from buttermilk.utils.validators import (  # Pydantic validators
     make_list_validator,
 )
 
-from .config import AgentConfig  # Core configuration models
+# Import constants first to avoid circular dependencies
+from .constants import (
+    MANAGER,
+)
+
+# Use TYPE_CHECKING to avoid circular imports for type hints
+if TYPE_CHECKING:
+    from .config import AgentConfig  # Core configuration models
+else:
+    from .config import AgentConfig  # Required at runtime for now, will be refactored later
+
 from .log import logger
 from .types import Record, _global_run_id  # Core data types
 
-# --- Constants ---
-
-# Standard Agent Roles
-CONDUCTOR = "HOST"  # Role name often used for the agent directing the flow (e.g., LLMHostAgent). Configurable?
-MANAGER = "MANAGER"  # Role name often used for the user interface or human-in-the-loop agent.
-CLOSURE = "COLLECTOR"  # Role name (Collector?) - Usage context unclear from surrounding files. TODO: Verify usage.
-CONFIRM = "CONFIRM"  # Special agent/topic name used by AutogenOrchestrator for handling ManagerResponse.
-
-# Special Symbols / States
-COMMAND_SYMBOL = "!"  # Prefix potentially used to identify command messages
-END = "END"  # Special role/signal used by Conductor/Host to indicate the flow should terminate.
-WAIT = "WAIT"  # Special role/signal used by Conductor/Host to indicate pausing/waiting.
-
-
 # --- General Communication & Base Messages ---
+
 
 class FlowEvent(BaseModel):
     """Base model for simple event messages within the flow (potentially OOB)."""
@@ -273,10 +270,10 @@ class AgentTrace(FlowMessage):
     )
 
     # Validator to ensure context and records are always lists.
-    _ensure_input_list = field_validator("messages", "records", mode="before")(make_list_validator())
+    _ensure_input_list = field_validator("messages", mode="before")(make_list_validator())
 
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
-    _validate_parameters = field_validator("parameters", "inputs", mode="before")(convert_omegaconf_objects())
+    _validate_parameters = field_validator("inputs", mode="before")(convert_omegaconf_objects())
 
     # Validator inherited from FlowMessage handles 'error' field.
 

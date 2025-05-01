@@ -20,7 +20,7 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core.agent import Agent, StepRequest  # Buttermilk base agent and config.
+from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     AgentInput,  # Standard input message for Buttermilk agents.
@@ -29,7 +29,8 @@ from buttermilk._core.contract import (
     FlowMessage,
     GroupchatMessageTypes,
     HeartBeat,
-    OOBMessages,  # Union type for Out-Of-Band control messages.
+    OOBMessages,
+    StepRequest,  # Union type for Out-Of-Band control messages.
 )
 from buttermilk.bm import logger  # Buttermilk logger instance.
 
