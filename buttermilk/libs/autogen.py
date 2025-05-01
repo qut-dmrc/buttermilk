@@ -1,5 +1,4 @@
-"""
-Provides the adapter layer to integrate Buttermilk agents with the autogen-core runtime.
+"""Provides the adapter layer to integrate Buttermilk agents with the autogen-core runtime.
 
 This module defines `AutogenAgentAdapter`, which wraps a standard Buttermilk `Agent`
 and exposes it to the Autogen ecosystem as an `autogen_core.RoutedAgent`. It handles
@@ -8,8 +7,10 @@ runtime.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from typing import Sequence, Union  # Added Union for type hints
+from collections.abc import (
+    Awaitable,
+    Callable,  # Added Union for type hints
+)
 
 from autogen_core import (
     DefaultTopicId,
@@ -21,27 +22,20 @@ from autogen_core import (
 
 from buttermilk._core.agent import Agent, StepRequest  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import (AllMessages, ToolOutput,
+from buttermilk._core.contract import (
     AgentInput,  # Standard input message for Buttermilk agents.
-    AgentOutput,
-    ConductorRequest,
-    ConductorResponse,
+    AllMessages,
     ErrorEvent,
     FlowMessage,
     GroupchatMessageTypes,
     HeartBeat,
     OOBMessages,  # Union type for Out-Of-Band control messages.
-    TaskProcessingComplete,  # Status message indicating task completion.
-    TaskProcessingStarted,  # Status message indicating task start.
-    )
-
+)
 from buttermilk.bm import logger  # Buttermilk logger instance.
 
 
-
 class AutogenAgentAdapter(RoutedAgent):
-    """
-    Wraps a Buttermilk `Agent` to function as an `autogen_core.RoutedAgent`.
+    """Wraps a Buttermilk `Agent` to function as an `autogen_core.RoutedAgent`.
 
     This class acts as a bridge, translating messages and method calls between
     the Autogen runtime and a standard Buttermilk agent. It uses Autogen's
@@ -54,6 +48,7 @@ class AutogenAgentAdapter(RoutedAgent):
     Attributes:
         agent (Agent): The instance of the Buttermilk agent being wrapped.
         topic_id (TopicId): The default Autogen topic this agent primarily interacts with.
+
     """
 
     agent: Agent  # The wrapped Buttermilk agent instance.
@@ -66,8 +61,7 @@ class AutogenAgentAdapter(RoutedAgent):
         agent_cls: type[Agent] | None = None,  # Optional Buttermilk agent class.
         agent_cfg: AgentConfig | None = None,  # Optional config if instantiating from class.
     ) -> None:
-        """
-        Initializes the AutogenAgentAdapter.
+        """Initializes the AutogenAgentAdapter.
 
         Requires either a pre-instantiated `agent` or both `agent_cls` and `agent_cfg`
         to instantiate a new agent. Sets up the agent, topic ID, and Autogen base class.
@@ -80,6 +74,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         Raises:
             ValueError: If insufficient arguments are provided to determine the agent instance.
+
         """
         if agent:
             # Use the provided agent instance.
@@ -109,8 +104,7 @@ class AutogenAgentAdapter(RoutedAgent):
         logger.debug(f"Scheduled initialization for agent {self.agent.id} with callback.")
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
-        """
-        Creates an asynchronous callback function that the wrapped Buttermilk agent can use
+        """Creates an asynchronous callback function that the wrapped Buttermilk agent can use
         to publish messages back into the Autogen system via this adapter.
 
         This is crucial for agents (like UI agents or managers) that need to send messages
@@ -122,6 +116,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         Returns:
             An async callback function that takes a `FlowMessage` and publishes it.
+
         """
         # Determine the target topic ID, defaulting to the adapter's main topic.
         target_topic_id = topic_id or self.topic_id
@@ -154,8 +149,7 @@ class AutogenAgentAdapter(RoutedAgent):
         message: GroupchatMessageTypes,  # Handles messages intended for general group chat consumption.
         ctx: MessageContext,
     ) -> None:
-        """
-        Handles broadcast/group chat messages by delegating to the agent's `_listen` method.
+        """Handles broadcast/group chat messages by delegating to the agent's `_listen` method.
 
         This allows agents to react to general messages published on the topic, even if not
         directly addressed to them. Typically used for information sharing or awareness.
@@ -163,6 +157,7 @@ class AutogenAgentAdapter(RoutedAgent):
         Args:
             message: The group chat message (can be various types).
             ctx: The Autogen message context.
+
         """
         logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
 
@@ -180,15 +175,13 @@ class AutogenAgentAdapter(RoutedAgent):
             logger.error(msg, exc_info=True)
             await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
 
-
     @message_handler
     async def handle_control_message(
         self,
         message: OOBMessages,  # Handles out-of-band control messages.
         ctx: MessageContext,
     ) -> AllMessages | None:
-        """
-        Handles Out-Of-Band (OOB) control messages.
+        """Handles Out-Of-Band (OOB) control messages.
 
         Delegates to the agent's `_handle_events` method. These messages are for
         control signals outside the main data flow (e.g., reset, status requests).
@@ -201,7 +194,7 @@ class AutogenAgentAdapter(RoutedAgent):
         Returns:
             
         """
-        response: AllMessages|None = None
+        response: AllMessages | None = None
 
         try:
             if isinstance(message, StepRequest) and message.role == self.agent.role:
@@ -221,12 +214,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
                 message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
-            if response:
-                try:
-                    logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__}")
-                    await self.publish_message(response, topic_id=self.topic_id)
-                except Exception as e:
-                    breakpoint()
+            logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__ if response else 'N/A'}")
 
             return response  # Return response directly for OOB messages.
         except Exception as e:
@@ -238,11 +226,10 @@ class AutogenAgentAdapter(RoutedAgent):
     @message_handler
     async def handle_invocation(
         self,
-        message: AgentInput|StepRequest,  # Handles the standard Buttermilk agent input message.
+        message: AgentInput | StepRequest,  # Handles the standard Buttermilk agent input message.
         ctx: MessageContext,  # Provides context like sender, topic, cancellation token.
     ) -> AllMessages:
-        """
-        Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
+        """Handles direct invocation requests (`AgentInput`) for the agent to perform its primary task.
 
         This typically corresponds to the Buttermilk agent's `__call__` method.
         It publishes TaskProcessingStarted/Complete messages and the agent's output
@@ -256,9 +243,10 @@ class AutogenAgentAdapter(RoutedAgent):
             The direct output from the agent's execution, which might be None, a single
             response object (AgentOutput, ToolOutput, etc.), or a sequence of them.
             Autogen uses this return value as the response to the `send_message` call.
+
         """
         logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
-        output: AllMessages|None = None
+        output: AllMessages | None = None
 
         try:
             # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
@@ -272,7 +260,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
             logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
-                
+
             return output  # Return the direct output to the caller in Autogen.
 
         except Exception as e:

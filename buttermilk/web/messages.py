@@ -240,25 +240,27 @@ JUDGE_AVATARS = [
     "⚖️",  # Traditional scales of justice (fallback)
 ]
 
+
 def _get_judge_avatar(agent_id: str) -> str:
     """Generate a consistent but random judge avatar based on agent ID."""
     if not agent_id:
         return "⚖️"  # Default fallback
-    
+
     # Create a hash from the agent ID to ensure the same agent always gets the same avatar
     hash_val = int(hashlib.md5(agent_id.encode()).hexdigest(), 16)
     return JUDGE_AVATARS[hash_val % len(JUDGE_AVATARS)]
+
 
 def _format_message_with_style(content: str, agent_info: dict, message_id: str | None = None) -> str:
     """Apply styling to a message based on agent info."""
     # Get the predefined style for this agent role
     role = agent_info.get("role", "default")
     agent_style = AGENT_STYLES.get(role, AGENT_STYLES["default"])
-    
+
     # Extract styling elements
     background = agent_style.get("background", "#f8f9fa")
     border = agent_style.get("border", "1px solid #dee2e6")
-    
+
     # Get avatar with special handling for judge role
     if role == "judge":
         avatar = _get_judge_avatar(agent_info.get("id", ""))
@@ -360,6 +362,11 @@ def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
             template = params.get("template", "")
             criteria = params.get("criteria", "")
 
+            # Define styles outside the conditionals
+            style_outer = "display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;"
+            style_label = "font-weight:600;"
+            style_value = "margin-left:3px;"
+
             if model or template or criteria:
                 model_template_html = """
                 <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:0.65rem;">
@@ -367,38 +374,41 @@ def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
 
                 if model:
                     model_template_html += f"""
-                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
-                        <span style="font-weight:600;">Model:</span> 
-                        <span style="margin-left:3px;">{model}</span>
+                    <span style="{style_outer}">
+                        <span style="{style_label}">Model:</span> 
+                        <span style="{style_value}">{model}</span>
                     </span>
                     """
 
                 if template:
                     model_template_html += f"""
-                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
-                        <span style="font-weight:600;">Template:</span> 
-                        <span style="margin-left:3px;">{template}</span>
+                    <span style="{style_outer}">
+                        <span style="{style_label}">Template:</span> 
+                        <span style="{style_value}">{template}</span>
                     </span>
                     """
 
                 if criteria:
                     model_template_html += f"""
-                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
-                        <span style="font-weight:600;">Criteria:</span> 
-                        <span style="margin-left:3px;">{criteria}</span>
+                    <span style="{style_outer}">
+                        <span style="{style_label}">Criteria:</span> 
+                        <span style="{style_value}">{criteria}</span>
                     </span>
                     """
 
                 model_template_html += "</div>"
 
     # Create compact visual badges for violates/confidence
+    prediction_bg = "rgba(0,0,0,0.1)"
+    confidence_bg = "rgba(0,0,0,0.1)"
+
     badges_html = f"""
     <div style="display:flex; gap:8px; margin:3px 0 8px 0;">
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({prediction_color.replace('#', '')}, 0.1); border:1px solid {prediction_color}; border-radius:12px; font-size:0.65rem;">
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:{prediction_bg}; border:1px solid {prediction_color}; border-radius:12px; font-size:0.65rem;">
             <span style="font-weight:600;">Violates:</span> 
             <span style="margin-left:3px; font-weight:bold; color:{prediction_color};">{prediction_text}</span>
         </span>
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba({confidence_color.replace('#', '')}, 0.1); border:1px solid {confidence_color}; border-radius:12px; font-size:0.65rem;">
+        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:{confidence_bg}; border:1px solid {confidence_color}; border-radius:12px; font-size:0.65rem;">
             <span style="font-weight:600;">Confidence:</span>
             <span style="margin-left:3px; font-weight:bold; color:{confidence_color};">{confidence}</span>
         </span>
@@ -411,17 +421,21 @@ def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
         reasons_content = "\n".join(reasons_items)
 
         # Create a tooltip with detailed reasons using Tailwind-style approach
+        button_style = "background-color:#f8f9fa; border:1px solid #dee2e6; border-radius:12px; padding:2px 10px; font-size:0.7rem; display:inline-flex; align-items:center; margin-top:5px; color:#495057; cursor:pointer;"
+        tooltip_style = "background-color:white; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:10px; font-size:0.8rem; margin-top:8px; width:300px; position:absolute; z-index:10; transition:opacity 0.2s ease;"
+        ul_style = "margin-top:6px; padding-left:20px;"
+
         tooltip_html = f"""
         <div class="group relative inline-block">
             <div class="cursor-pointer flex items-center">
-                <button style="background-color:#f8f9fa; border:1px solid #dee2e6; border-radius:12px; padding:2px 10px; font-size:0.7rem; display:inline-flex; align-items:center; margin-top:5px; color:#495057; cursor:pointer;">
+                <button style="{button_style}">
                     <span>View Detailed Reasoning</span>
                 </button>
             </div>
-            <div class="invisible group-hover:visible absolute z-10 w-64 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm mt-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="background-color:white; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:10px; font-size:0.8rem; margin-top:8px; width:300px; position:absolute; z-index:10; transition:opacity 0.2s ease;">
+            <div class="invisible group-hover:visible absolute z-10 w-64 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm mt-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="{tooltip_style}">
                 <div>
                     <strong>Detailed Reasoning:</strong>
-                    <ul style="margin-top:6px; padding-left:20px;">
+                    <ul style="{ul_style}">
                         {reasons_content}
                     </ul>
                 </div>
@@ -597,13 +611,47 @@ def _format_message_for_client(message) -> dict | str | None:
                 content = json.dumps(message.outputs)
 
     elif isinstance(message, Record):
-        content = message.text
+        # Create a snippet version for display
+        if isinstance(message.content, str):
+            snippet = message.content[:200] + "..." if len(message.content) > 200 else message.content
+        else:
+            snippet = message.alt_text[:200] + "..." if message.alt_text and len(message.alt_text) > 200 else message.alt_text or ""
+
+        # Format metadata
+        metadata_parts = []
+        if message.metadata:
+            if message.title:
+                metadata_parts.append(f"<h3 class='text-lg font-semibold'>{message.title}</h3>")
+            metadata_parts.append(f"<span class='text-xs text-gray-500'>ID: {message.record_id}</span>")
+
+            metadata_html = []
+            for k, v in message.metadata.items():
+                if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
+                    metadata_html.append(f"<div><span class='font-medium'>{k}:</span> {v}</div>")
+
+            if metadata_html:
+                metadata_parts.append(f"<div class='text-sm mt-1 space-y-1'>{''.join(metadata_html)}</div>")
+
+        # Create HTML with the full content in a tooltip
+        content = f"""
+        <div class="group relative">
+            <div class="p-3 bg-white rounded-md border border-gray-200">
+                {''.join(metadata_parts)}
+                <div class="mt-2 text-sm text-gray-700">{snippet}</div>
+            </div>
+            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
+                <div class="mb-2 font-bold">{message.title or 'Record Content'}</div>
+                <div>{message.text.replace('\n', '<br>')}</div>
+            </div>
+        </div>
+        """
 
     elif isinstance(message, ToolOutput):
-        content = message.content
         # Add tool name as a badge
         tool_name = getattr(message, "name", "unknown_tool")
-        content = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span><br/>{content}'
+        # Avoid f-string with backslash by concatenating strings
+        badge = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span>'
+        content = badge + "<br/>" + message.content
 
     elif isinstance(message, ManagerRequest):
         if message.content:
@@ -633,45 +681,7 @@ def _format_message_for_client(message) -> dict | str | None:
 
         # Process headers (# Header)
         for i in range(6, 0, -1):
-            pattern = r"^{} (.+)$".format("#" * i)
-            content = re.sub(pattern, rf"<h{i}>\1</h{i}>", content, flags=re.MULTILINE)
-
-        # Process lists
-        list_pattern = r"^[\*\-] (.+)$"
-        content = re.sub(list_pattern, r"<li>\1</li>", content, flags=re.MULTILINE)
-
-        # Wrap list items in ul tags (simplistic but effective for most cases)
-        content = re.sub(r"(<li>.*?</li>)", r"<ul>\1</ul>", content, flags=re.DOTALL)
-
-        # Process links [text](url)
-        link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
-        content = re.sub(link_pattern, r'<a href="\2" target="_blank">\1</a>', content)
-
-        # Process bold **text**
-        bold_pattern = r"\*\*([^*]+)\*\*"
-        content = re.sub(bold_pattern, r"<strong>\1</strong>", content)
-
-        # Process italic *text*
-        italic_pattern = r"\*([^*]+)\*"
-        content = re.sub(italic_pattern, r"<em>\1</em>", content)
-
-        # Convert newlines to <br> tags
-        # content = content.replace("\n", "<br>")
-
-    # Apply styling to the message
-    if content is None:
-        content = ""  # Convert None to empty string to avoid type errors
-
-    styled_content = _format_message_with_style(content, agent_info, message_id)
-
-    # Return standardized chat message format
-    return {
-        "type": "chat_message",
-        "content": styled_content,
-        "agent_info": {
-            "role": agent_info.get("role", "default"),
-            "name": agent_info.get("name", "Unknown"),
-            "id": agent_info.get("id", ""),
-            "message_id": message_id,
-        },
-    }
+            hashtags = "#" * i
+            pattern = rf"^{hashtags} (.+)$"
+            replacement = f"<h{i}>\\1</h{i}>"
+            content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
