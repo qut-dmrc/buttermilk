@@ -20,7 +20,7 @@ from buttermilk import logger
 # Import base agent and specific message types used
 from buttermilk._core.agent import AgentInput, OOBMessages
 from buttermilk._core.contract import (
-    AgentOutput,
+    AgentTrace,
     ConductorResponse,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
@@ -40,7 +40,7 @@ console = Console(highlighter=JSONHighlighter())
 
 # Define a Union for types _fmt_msg can handle, improving type safety for the formatter.
 FormattableMessages = Union[
-    AgentOutput,
+    AgentTrace,
     ConductorResponse,
     TaskProcessingComplete,
     ManagerRequest,
@@ -71,7 +71,7 @@ class CLIUserAgent(UIAgent):
     # Background task for polling user input.
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
 
         Args:
@@ -119,7 +119,7 @@ class CLIUserAgent(UIAgent):
             output_lines.append(header)
 
             # --- Specific Type Formatting ---
-            if isinstance(message, (AgentOutput, ConductorResponse)):
+            if isinstance(message, (AgentTrace, ConductorResponse)):
                 outputs = getattr(message, "outputs", None)
                 inputs = getattr(message, "inputs", None)  # Original inputs triggering this output
                 metadata = getattr(message, "metadata", {})
@@ -249,8 +249,8 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        # AgentOutput isn't technically OOB, but might arrive here in some flows? Included defensively.
-        displayable_types = (AgentOutput, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
+        # AgentTrace isn't technically OOB, but might arrive here in some flows? Included defensively.
+        displayable_types = (AgentTrace, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
         if isinstance(message, displayable_types):
             if msg_markdown := self._fmt_msg(message, source=source):
                 self._console.print(msg_markdown)

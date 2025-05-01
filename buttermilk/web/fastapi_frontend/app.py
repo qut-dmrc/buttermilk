@@ -20,25 +20,21 @@ def create_dashboard_app(flows) -> FastAPI:
         
     Returns:
         FastAPI: The FastAPI application
+
     """
     # Create the FastAPI app
     app = FastAPI()
-    
+
     # Set up templates
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    
+
     # Set up static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    
+
     # Initialize routes
     dashboard_routes = DashboardRoutes(templates, flows)
-    
+
     # Include the API routes
     app.include_router(dashboard_routes.get_router())
-    
-    # # Redirect root to dashboard
-    # @app.get("/")
-    # async def redirect_to_dashboard():
-    #     return {"url": "/dash/"}
-    
+
     return app

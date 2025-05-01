@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler  # Base types and decorator
+from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 from buttermilk.agents.reasoning import Reasons
 from buttermilk.bm import logger  # Global Buttermilk instance and logger
@@ -81,14 +81,14 @@ class Judge(LLMAgent):
     async def evaluate_content(
         self,
         message: AgentInput,
-    ) -> AgentOutput:
+    ) -> AgentTrace:
         """Handles an AgentInput request to evaluate content based on the agent's configured criteria.
 
         Args:
             message: The AgentInput message containing the content/prompt to evaluate.
 
         Returns:
-            An AgentOutput message containing the structured evaluation (AgentReasons)
+            An AgentTrace message containing the structured evaluation (AgentReasons)
             or an error if processing fails.
 
         """
@@ -98,7 +98,7 @@ class Judge(LLMAgent):
 
         # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
         # This method handles template rendering, API calls, retries, and parsing into _output_model.
-        result: AgentOutput = await self._process(message=message)
+        result: AgentTrace = await self._process(message=message)
 
         return result
 

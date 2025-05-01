@@ -5,7 +5,7 @@ from typing import Union
 import pandas as pd
 from shiny import App, Session, reactive, render, ui
 
-from buttermilk._core.agent import AgentInput, AgentOutput, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
+from buttermilk._core.agent import AgentInput, AgentTrace, ManagerMessage, ManagerRequest, StepRequest, ToolOutput
 from buttermilk._core.contract import (
     ConductorRequest,
     ConductorResponse,
@@ -34,7 +34,7 @@ ALL_MESSAGES = Union[
     ConductorResponse,
     ConductorRequest,
     ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat,
-    AgentOutput,
+    AgentTrace,
     ToolOutput,
     AgentInput,
     Record]

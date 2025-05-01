@@ -13,7 +13,7 @@ from buttermilk._core.config import ToolConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
@@ -132,7 +132,7 @@ class FetchAgent(FetchRecord, Agent):
         if result and isinstance(result, Record):
             await public_callback(result)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         result = None
         if isinstance(message, AgentInput):
             uri = message.inputs.get("uri")

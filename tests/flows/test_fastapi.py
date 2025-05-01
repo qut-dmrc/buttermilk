@@ -5,12 +5,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentTrace
 
 
 class TestAgent:
-    async def process(self, *, agent_input: AgentInput) -> AgentOutput:
-        return AgentOutput(
+    async def process(self, *, agent_input: AgentInput) -> AgentTrace:
+        return AgentTrace(
             agent_id="test",
             source="test_agent",
             role="TestAgent",
@@ -25,7 +25,7 @@ app = FastAPI()
 
 
 @app.post("/flow")
-async def run_flow(agent_input: AgentInput) -> AgentOutput:
+async def run_flow(agent_input: AgentInput) -> AgentTrace:
     result = await agent.process(agent_input=agent_input)
     return result
 

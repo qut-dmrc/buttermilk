@@ -4,7 +4,7 @@ import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
@@ -143,7 +143,7 @@ class TestFetch:
         mock_extract_url.assert_called_once_with(agent_input.inputs)
         mock_download.assert_called_once_with(uri="https://example.com")
         fetch.publish.assert_called_once()
-        assert isinstance(result, AgentOutput)
+        assert isinstance(result, AgentTrace)
         assert result.content == mock_record.fulltext
         assert result.outputs["step"] == "test_step"
 
@@ -178,7 +178,7 @@ class TestFetch:
         mock_re_match.assert_called_once_with(r"`#([\s\w]+)`", agent_input.inputs)
         fetch.get_record.assert_called_once_with("record123")
         fetch.publish.assert_called_once()
-        assert isinstance(result, AgentOutput)
+        assert isinstance(result, AgentTrace)
         assert result.content == mock_record.fulltext
         assert result.outputs["step"] == "test_step"
 
@@ -239,7 +239,7 @@ class TestFetch:
             mock_extract_url.assert_called_once_with(agent_input.inputs)
             mock_download.assert_called_once_with(uri="https://example.com")
             fetch.publish.assert_called_once()
-            assert isinstance(result, AgentOutput)
+            assert isinstance(result, AgentTrace)
 
     @pytest.mark.anyio
     @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from autogen_core.models import AssistantMessage, UserMessage
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
+    BaseModel,
     PrivateAttr,
     computed_field,
 )
@@ -26,7 +27,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,  # Constant for command messages,
     AgentInput,  # Standard input message structure
-    AgentOutput,
+    AgentTrace,
     ErrorEvent,
     GroupchatMessageTypes,  # Union of types expected in group chat listening
     ManagerMessage,  # Messages for display to the user
@@ -81,6 +82,10 @@ def buttermilk_handler(message_types: type):
 
     return decorator
 
+
+class AgentResponse(BaseModel):
+    metadata: dict[str, Any]
+    outputs: Any
 
 # --- Base Agent Class ---
 
@@ -161,7 +166,7 @@ class Agent(AgentConfig):
         message_callback: Callable[[Any], Awaitable[None]],
         cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent | None:
+    ) -> AgentTrace:
         """Primary entry point for agent execution, called by the orchestrator/adapter.
 
         Handles preparing input with agent state, tracing via Weave, calling the
@@ -173,7 +178,7 @@ class Agent(AgentConfig):
             **kwargs: Additional keyword arguments (e.g., callbacks from adapter).
 
         Returns:
-            Either an AgentOutput for standard agent results, 
+            Either an AgentTrace for standard agent results, 
             or a direct message type (StepRequest, ManagerRequest, ManagerMessage)
             for flow control agents, or an ErrorEvent if there were errors.
 
@@ -204,6 +209,8 @@ class Agent(AgentConfig):
             metadata=self.parameters,
         )
 
+        trace = AgentTrace() # create the trace here -- misisng values
+        is_error = False
         # --- Execute Core Logic ---
         try:
             await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
@@ -212,37 +219,39 @@ class Agent(AgentConfig):
         public_callback=public_callback,  # Callback provided by adapter
         message_callback=message_callback,  # Callback provided by adapter
           **kwargs)
+            trace.outputs = result.outputs
+            trace.metadata = result.metadata
 
         except Exception as e:
             # Catch unexpected errors during _process.
             error_msg = f"Agent {self.id} error during _process: {e}"
             logger.error(error_msg)
             result = ErrorEvent(source=self.id, content=error_msg)
+            is_error = True
 
         finally:
-            # Publish status update: Task Complete (Error)
+            # Publish status update: Task Complete (including error if error)
             await public_callback(
-                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=False),
+                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error)
             )
-        # Ensure we always return an AgentOutput, even if _process somehow returned None.
-        if result:
-            await public_callback(result)
-            return result
+            
+            # Send a full trace off for logging and further processing.
+            await public_callback(trace)
 
         logger.debug(f"Agent {self.id} finished __call__.")
-        return None
+        return trace
 
     @abstractmethod
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,  # Callback provided by adapter
         message_callback: Callable | None = None,  # Callback provided by adapter,
-        **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+        **kwargs) -> AgentResponse:
         """Abstract method for core agent logic. Subclasses MUST implement this.
 
         This method receives the `AgentInput` (potentially augmented with internal state
         by `_add_state_to_input`) and should perform the agent's primary task.
         
-        LLM agent implementations will typically return AgentOutput.
+        LLM agent implementations will typically return AgentTrace.
         Flow control agents (like host agents) will typically return StepRequest directly.
         Interface agents may return ManagerRequest or ManagerMessage.
         Tool agents typically return ToolOutput.
@@ -253,7 +262,7 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments passed from `__call__`.
 
         Returns:
-            An AgentOutput, StepRequest, ManagerRequest, ManagerMessage or ErrorEvent
+            An AgentResponse object
 
         """
         raise NotImplementedError("Subclasses must implement the _process method.")
@@ -314,7 +323,7 @@ class Agent(AgentConfig):
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
         # TODO: Refine logic for which message types/content get added to history.
-        if isinstance(message, AgentOutput):
+        if isinstance(message, AgentTrace):
             # Use 'contents' if available (likely parsed output)
             content_to_add = getattr(message, "contents", None)
             if content_to_add:
@@ -451,6 +460,10 @@ class Agent(AgentConfig):
 
         logger.debug(
             f"Agent {self.id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
+        )
+        return updated_inputs
+
+    # The _extract_vars method is no longer needed as we're using the utility functions
         )
         return updated_inputs
 

@@ -14,13 +14,13 @@ SAMPLE_REASONS_DATA = {
 # --- Pytest Tests ---
 
 try:
-    from buttermilk._core.contract import AgentOutput as ActualAgentOutput
+    from buttermilk._core.contract import AgentTrace as ActualAgentTrace
     from buttermilk.agents.judge import AgentReasons as ActualAgentReasons
 
     ACTUAL_MODELS_AVAILABLE = True
 except ImportError:
     ACTUAL_MODELS_AVAILABLE = False
-    ActualAgentOutput = None  # Define as None if import fails
+    ActualAgentTrace = None  # Define as None if import fails
     ActualAgentReasons = None  # Define as None if import fails
 
 
@@ -38,8 +38,7 @@ def test_actual_agent_reasons_direct_dump():
 
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
 def test_actual_agent_output_full_dump_includes_nested_outputs():
-    """
-    Test the ACTUAL AgentOutput full dump to see if it includes nested outputs.
+    """Test the ACTUAL AgentTrace full dump to see if it includes nested outputs.
     This directly tests the problematic scenario with your real code.
     """
     try:
@@ -47,12 +46,12 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
     except ValidationError as e:
         pytest.fail(f"ActualAgentReasons validation failed during instantiation: {e}")
 
-    # Instantiate ActualAgentOutput - provide minimal required fields if any
-    # Adjust instantiation based on ActualAgentOutput's actual fields/defaults
-    output_obj = ActualAgentOutput(
+    # Instantiate ActualAgentTrace - provide minimal required fields if any
+    # Adjust instantiation based on ActualAgentTrace's actual fields/defaults
+    output_obj = ActualAgentTrace(
         agent_info="test",
         call_id="actual_test_id",
-        # Add other necessary fields for ActualAgentOutput if they lack defaults
+        # Add other necessary fields for ActualAgentTrace if they lack defaults
     )
     output_obj.outputs = reasons_obj  # Assign the nested actual model
 
@@ -70,14 +69,14 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
 
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
 def test_actual_agent_output_full_dump_with_default_outputs():
-    """Test dumping the actual AgentOutput when 'outputs' is the default."""
-    output_obj = ActualAgentOutput(
+    """Test dumping the actual AgentTrace when 'outputs' is the default."""
+    output_obj = ActualAgentTrace(
         agent_id="test",
     )  # Instantiate with defaults
 
     full_dump = output_obj.model_dump()
 
     assert "outputs" in full_dump
-    # Check against the actual default value defined in AgentOutput
+    # Check against the actual default value defined in AgentTrace
     # Assuming it defaults to {} based on the definition shown earlier
     assert full_dump["outputs"] == {}

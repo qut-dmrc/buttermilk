@@ -15,7 +15,7 @@ from buttermilk._core.contract import (
     END,  # Special role indicating flow completion
     WAIT,  # Special role indicating the orchestrator should wait
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,  # Request sent *to* the conductor
     ConductorResponse,  # Response *from* the conductor (can contain special types)
     ManagerMessage,  # Message *to* the user/manager
@@ -275,7 +275,7 @@ class Selector(AutogenOrchestrator):
         # Define a default WAIT step if conductor fails.
         wait_step = StepRequest(role=WAIT, content="Waiting for conductor instructions.", prompt="")
 
-        # Process the response(s). Expecting a single AgentOutput.
+        # Process the response(s). Expecting a single AgentTrace.
         if not responses:
             logger.warning("Conductor did not provide a response.")
             return wait_step
@@ -289,7 +289,7 @@ class Selector(AutogenOrchestrator):
             err_details = agent_output.content
             logger.error(f"Conductor returned an error: {err_details}")
             return StepRequest(role=WAIT, content=f"Error from conductor: {err_details}")
-        if isinstance(agent_output, AgentOutput) and agent_output.is_error:
+        if isinstance(agent_output, AgentTrace) and agent_output.is_error:
             err_details = agent_output.outputs if agent_output else "No response object"
             logger.error(f"Conductor returned an error or invalid output: {err_details}")
             # Maybe ask user what to do? For now, just wait.
@@ -420,7 +420,7 @@ class Selector(AutogenOrchestrator):
         self,
         step: StepRequest,
         variant_index: int = 0,  # Allow specifying which variant to use
-    ) -> AgentOutput | None:
+    ) -> AgentTrace | None:
         """Executes a specific variant of an agent for the given step.
 
         Overrides the base method to handle variant selection based on `variant_index`
@@ -431,7 +431,7 @@ class Selector(AutogenOrchestrator):
             variant_index: The index of the agent variant to execute for the specified role.
 
         Returns:
-            The `AgentOutput` from the executed agent, or None if an error occurred.
+            The `AgentTrace` from the executed agent, or None if an error occurred.
 
         """
         role_upper = step.role.upper()
@@ -458,7 +458,7 @@ class Selector(AutogenOrchestrator):
         logger.debug(f"Added step execution to path: {execution_id}")
 
         # --- Execute the agent using the runtime ---
-        response: AgentOutput | None = None
+        response: AgentTrace | None = None
         try:
             # Get the specific agent instance ID from the runtime.
             agent_instance_id = await self._runtime.get(agent_type)
@@ -467,19 +467,14 @@ class Selector(AutogenOrchestrator):
             logger.debug(f"Received response from agent instance {agent_instance_id} for execution {execution_id}.")
 
             # Validate the response type.
-            if response and not isinstance(response, AgentOutput):
-                logger.warning(f"Agent {variant_id} returned unexpected type {type(response)}. Expected AgentOutput.")
+            if response and not isinstance(response, AgentTrace):
+                logger.warning(f"Agent {variant_id} returned unexpected type {type(response)}. Expected AgentTrace.")
                 # Attempt to wrap it? Or discard? For now, store raw if possible.
                 raw_output = response
-                # response = AgentOutput(agent_id=variant_id, inputs=message.inputs)
-                # response.set_error(f"Agent returned unexpected type: {type(raw_output)}")
-                # response.outputs = {"raw_output": raw_output}
 
         except Exception as e:
             logger.error(f"Error sending message to agent {variant_id} for execution {execution_id}: {e}")
             # Create an error response
-            # response = AgentOutput(agent_id=variant_id, inputs=message.inputs)
-            # response.set_error(f"Failed to execute agent: {e}")
 
         # --- Store results ---
         if response:
@@ -510,8 +505,8 @@ class Selector(AutogenOrchestrator):
             }
 
         # The Autogen runtime implicitly handles publishing TaskProcessingComplete.
-        # The adapter publishes the AgentOutput `response` itself if needed based on its logic.
-        return cast("AgentOutput | None", response)  # Return the result (or None if execution failed)
+        # The adapter publishes the AgentTrace `response` itself if needed based on its logic.
+        return cast("AgentTrace | None", response)  # Return the result (or None if execution failed)
 
     async def _run(self, request: RunRequest | None = None) -> None:
         """Main execution loop for the Selector orchestrator.

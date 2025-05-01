@@ -1,9 +1,7 @@
 
 import pytest
 
-from buttermilk._core.contract import END, AgentInput, AgentOutput, ConductorRequest, StepRequest
-from buttermilk.agents.flowcontrol.host import HostAgent
-from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
+from buttermilk._core.contract import END, AgentInput, AgentTrace, ConductorRequest, StepRequest
 
 
 @pytest.mark.anyio
@@ -18,7 +16,7 @@ async def test_sequencer_initialization():
     # Process a basic input to test initialization and the _process path
     test_input = AgentInput(prompt="Hello", inputs={"task": "Test task"})  # Add task as _process checks it
     result = await agent._process(message=test_input)  # Pass as 'message' kwarg
-    assert isinstance(result, AgentOutput)
+    assert isinstance(result, AgentTrace)
     assert result.outputs is not None
     assert isinstance(result.outputs, dict)
     assert "status" in result.outputs
@@ -44,7 +42,7 @@ async def test_sequencer_round_robin():
 
     # Get the first step
     step1_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg
-    assert isinstance(step1_response, AgentOutput), "Response should be AgentOutput"
+    assert isinstance(step1_response, AgentTrace), "Response should be AgentTrace"
     assert isinstance(step1_response.outputs, StepRequest), "outputs should contain StepRequest"
 
     # Store the first agent selected - ensure we're working with StepRequest

@@ -1,109 +1,150 @@
 {% if outcomes or scores or pending_agents %}
-    <div>
+    <div class="space-y-3">
         <!-- Pending Agents Section -->
         {% if pending_agents %}
-            <div class="mb-4">
-                <h3 class="text-sm font-medium text-gray-700 mb-2">Pending Input</h3>
-                <div class="flex flex-wrap gap-2">
-                    {% for agent in pending_agents %}
-                        <div class="flex items-center">
-                            <div class="w-4 h-4 rounded-full bg-orange-500 mr-1"></div>
-                            <span class="text-xs text-gray-600">{{ agent }}</span>
-                        </div>
-                    {% endfor %}
+            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
+                <input type="checkbox" checked /> 
+                <div class="collapse-title text-sm font-medium py-2">
+                    Pending Input
+                </div>
+                <div class="collapse-content pt-0">
+                    <div class="flex flex-wrap gap-2">
+                        {% for agent in pending_agents %}
+                            <div class="badge badge-warning gap-1">
+                                <div class="w-2 h-2 rounded-full bg-warning-content"></div>
+                                <span class="text-xs">{{ agent }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         {% endif %}
+        
         <!-- Predictions Section -->
         {% if outcomes %}
-            <div class="mb-4">
-                <h3 class="text-sm font-medium text-gray-700 mb-2">Predictions</h3>
-                <div class="space-y-3">
-                    {% for prediction in outcomes %}
-                        <div class="border border-gray-200 rounded-md p-2 relative transition-all duration-200 hover:shadow-sm group">
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs font-medium">{{ prediction.agent_name }}</span>
-                                <div class="flex items-center gap-1">
-                                    {% if prediction.confidence %}
-                                        <span class="px-1.5 py-0.5 text-xs rounded-full {% if prediction.confidence == 'high' %}bg-green-100 text-green-800{% elif prediction.confidence == 'medium' %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
-                                            {{ prediction.confidence|capitalize }}
-                                        </span>
-                                    {% endif %}
-                                    <span class="px-1.5 py-0.5 text-xs rounded-full {% if prediction.violates %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}">
-                                        {{ "Violates" if prediction.violates else "Valid" }}
-                                    </span>
+            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
+                <input type="checkbox" checked /> 
+                <div class="collapse-title text-sm font-medium py-2">
+                    Predictions
+                </div>
+                <div class="collapse-content pt-0">
+                    <div class="space-y-2">
+                        {% for prediction in outcomes %}
+                            <div class="card bg-base-100 compact shadow-sm hover:shadow-md transition-shadow duration-200">
+                                <div class="card-body p-2">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs font-medium">{{ prediction.agent_name }}</span>
+                                        <div class="flex items-center gap-1">
+                                            {% if prediction.confidence %}
+                                                <span class="badge badge-sm {% if prediction.confidence == 'high' %}badge-success{% elif prediction.confidence == 'medium' %}badge-warning{% else %}badge-error{% endif %}">
+                                                    {{ prediction.confidence|capitalize }}
+                                                </span>
+                                            {% endif %}
+                                            <span class="badge badge-sm {% if prediction.violates %}badge-error{% else %}badge-success{% endif %}">
+                                                {{ "Violates" if prediction.violates else "Valid" }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="tooltip tooltip-bottom tooltip-primary" data-tip="{{ prediction.conclusion }}">
+                                        <div class="text-xs opacity-70 mt-1 truncate">
+                                            {{ prediction.conclusion|truncate(80) }}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- DaisyUI collapse for detailed view -->
+                                    <div class="collapse collapse-plus bg-base-200 mt-1 rounded-sm">
+                                        <input type="checkbox" /> 
+                                        <div class="collapse-title text-xs font-medium py-1">
+                                            Details
+                                        </div>
+                                        <div class="collapse-content">
+                                            <div class="text-xs">
+                                                <div class="font-bold mb-1">{{ prediction.agent_name }}</div>
+                                                <div class="mb-2">{{ prediction.conclusion }}</div>
+                                                
+                                                {% if prediction.reasons %}
+                                                    <div class="mt-1">
+                                                        <strong>Reasoning:</strong>
+                                                        <ul class="mt-1 pl-2 list-disc">
+                                                            {% for reason in prediction.reasons %}
+                                                                <li class="mb-1">{{ reason }}</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <div class="text-xs text-gray-600 mt-1 truncate" title="{{ prediction.conclusion }}">
-                                {{ prediction.conclusion|truncate(80) }}
-                            </div>
-                            
-                            <!-- Detailed tooltip that appears on hover - with proper z-index and positioned within the panel -->
-                            <div class="hidden group-hover:block absolute left-0 top-full z-50 w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg max-w-full" style="max-height: 300px; overflow-y: auto;">
-                                <div class="font-bold mb-2">{{ prediction.agent_name }}</div>
-                                <div class="mb-2">{{ prediction.conclusion }}</div>
-                                
-                                {% if prediction.reasons %}
-                                    <div class="mt-1">
-                                        <strong>Reasoning:</strong>
-                                        <ul class="mt-1 pl-2">
-                                            {% for reason in prediction.reasons %}
-                                                <li class="mb-1">{{ reason }}</li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% endfor %}
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         {% endif %}
         
         <!-- Scores Section -->
         {% if scores %}
-            <div class="mb-3 border-t pt-3">
-                <h3 class="text-sm font-medium text-gray-700 mb-2">Scores</h3>
-                {% for agent_id, agent_scores in scores.items() %}
-                    <div class="mb-3">
-                        <div class="text-xs font-medium text-gray-700 mb-1">{{ agent_id }}</div>
-                        <div class="flex flex-wrap gap-1">
-                            {% for assessor_id, score_data in agent_scores.items() %}
-                                <div class="relative group" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
-                                    <div class="flex items-center gap-1 cursor-pointer">
-                                        <span class="text-xs text-gray-500">{{ assessor_id[:5] }}</span>
-                                        <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background-color:{{ score_data.color }}">
-                                            <span class="text-xs text-white font-medium">{{ score_data.score_text }}</span>
+            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
+                <input type="checkbox" checked /> 
+                <div class="collapse-title text-sm font-medium py-2">
+                    Scores
+                </div>
+                <div class="collapse-content pt-0">
+                    {% for agent_id, agent_scores in scores.items() %}
+                        <div class="mb-3">
+                            <div class="text-xs font-medium mb-1">{{ agent_id }}</div>
+                            <div class="flex flex-wrap gap-1">
+                                {% for assessor_id, score_data in agent_scores.items() %}
+                                    <div class="tooltip tooltip-bottom" data-tip="Score: {{ score_data.score_text }} by {{ assessor_id }}" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
+                                        <div class="badge gap-1">
+                                            <span class="text-xs opacity-70">{{ assessor_id[:5] }}</span>
+                                            <div class="badge badge-sm" style="background-color:{{ score_data.color }}; color:white;">
+                                                {{ score_data.score_text }}
+                                            </div>
                                         </div>
                                     </div>
-                                    <!-- Detailed tooltip that appears on hover - with proper z-index and positioned within the panel -->
-                                    <div class="hidden group-hover:block absolute left-0 top-full z-50 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg max-w-full" style="max-height: 300px; overflow-y: auto;">
-                                        <div class="font-bold mb-1">Score: {{ score_data.score_text }} by {{ assessor_id }}</div>
-                                        {% if score_data.assessments %}
-                                            <div class="mt-1">
-                                                <strong>Assessments:</strong>
-                                                <ul class="mt-1 pl-2">
-                                                    {% for assessment in score_data.assessments %}
-                                                        <li class="mb-1">
-                                                            <span class="inline-block w-4">{{ "✓" if assessment.correct else "✗" }}</span>
-                                                            <span>{{ assessment.feedback }}</span>
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
+                                    
+                                    <!-- DaisyUI modal for detailed score view -->
+                                    <dialog id="score_details_{{ loop.index0 }}_{{ loop.parent.loop.index0 }}" class="modal modal-bottom sm:modal-middle">
+                                        <div class="modal-box">
+                                            <h3 class="font-bold">Score: {{ score_data.score_text }} by {{ assessor_id }}</h3>
+                                            {% if score_data.assessments %}
+                                                <div class="py-2">
+                                                    <strong>Assessments:</strong>
+                                                    <ul class="mt-1 pl-2">
+                                                        {% for assessment in score_data.assessments %}
+                                                            <li class="mb-1">
+                                                                <span class="badge {% if assessment.correct %}badge-success{% else %}badge-error{% endif %} badge-sm">
+                                                                    {{ "✓" if assessment.correct else "✗" }}
+                                                                </span>
+                                                                <span>{{ assessment.feedback }}</span>
+                                                            </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            {% endif %}
+                                            <div class="modal-action">
+                                                <form method="dialog">
+                                                    <button class="btn btn-sm">Close</button>
+                                                </form>
                                             </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endfor %}
+                                        </div>
+                                    </dialog>
+                                {% endfor %}
+                            </div>
                         </div>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             </div>
         {% endif %}
     </div>
 {% else %}
-    <div class="text-center text-gray-500 py-4 text-xs">
-        <p>No outcomes available yet.</p>
+    <div class="alert alert-info">
+        <div>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-xs">No outcomes available yet.</span>
+        </div>
     </div>
 {% endif %}

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     GroupchatMessageTypes,  # Type hint union for listen
     )
 from buttermilk._core.message_data import extract_message_data, extract_records_from_data
@@ -76,7 +76,7 @@ class QualResults(QualScore):
 class LLMScorer(LLMAgent):
     """An LLM agent that qualitatively scores another agent's output against criteria and ground truth.
 
-    Inherits from `LLMAgent`. It typically listens for `AgentOutput` messages containing
+    Inherits from `LLMAgent`. It typically listens for `AgentTrace` messages containing
     `AgentReasons` (likely from a `Judge` agent). When such a message is received, and
     ground truth is available (either attached or in the message context), it triggers
     its own LLM evaluation process (`_process`) using a scoring-specific prompt template.
@@ -98,12 +98,12 @@ class LLMScorer(LLMAgent):
         message_callback: Callable | None = None,  # Callback (likely unused here)
         **kwargs,
     ) -> None:
-        """Listens for relevant AgentOutput messages (e.g., from a Judge) and triggers scoring.
+        """Listens for relevant AgentTrace messages (e.g., from a Judge) and triggers scoring.
 
         Checks if the message contains `AgentReasons` and if ground truth is available.
         If conditions are met, it prepares an `AgentInput` for its own `_process` method
         and uses `weave` to apply the scoring logic as a `weave.Scorer` to the
-        original message's trace. The score result (AgentOutput containing QualScore)
+        original message's trace. The score result (AgentTrace containing QualScore)
         is published back using the `public_callback`.
         """
         # First, use the superclass to process messages for inputs we might need
@@ -116,8 +116,8 @@ class LLMScorer(LLMAgent):
             **kwargs,
         )
 
-        # Ignore messages that are not AgentOutput, or don't have AgentReasons in outputs
-        if not isinstance(message, AgentOutput) or not hasattr(message, "outputs") or not isinstance(message.outputs, JudgeReasons):
+        # Ignore messages that are not AgentTrace, or don't have AgentReasons in outputs
+        if not isinstance(message, AgentTrace) or not hasattr(message, "outputs") or not isinstance(message.outputs, JudgeReasons):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
@@ -153,24 +153,24 @@ class LLMScorer(LLMAgent):
         scorer_agent_input.inputs["assessor"] = self.id
 
         # Define the scoring function (our own __call__ method)
-        score_fn = self
+        score_fn = self.__call__
 
         # Get the weave call object associated with the message we are scoring.
         # This uses the tracing information attached by the Buttermilk framework.
         weave_call = None
-        if hasattr(message, "tracing") and message.tracing.weave:
+        if hasattr(message, "tracing") and message.call_info.weave:
             try:
-                weave_call = bm.weave.get_call(message.tracing.weave)
-                logger.debug(f"Scorer {self.id}: Found weave call {message.tracing.weave} to apply scorer.")
+                weave_call = bm.weave.get_call(message.call_info.weave)
+                logger.debug(f"Scorer {self.id}: Found weave call {message.call_info.weave} to apply scorer.")
             except Exception as e:
-                logger.warning(f"Scorer {self.id}: Failed to get weave call for trace ID {message.tracing.weave}: {e}")
+                logger.warning(f"Scorer {self.id}: Failed to get weave call for trace ID {message.call_info.weave}: {e}")
         else:
             # Proceed with scoring anyway
             logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer; trying to score without tracing instead.")
 
         # Call the LLMScorer._process method with the prepared input.
         if public_callback is not None and message_callback is not None:
-            score_output: AgentOutput = await score_fn(
+            score_output: AgentTrace = await score_fn(
                 message=scorer_agent_input,
                 public_callback=public_callback,
                 message_callback=message_callback,

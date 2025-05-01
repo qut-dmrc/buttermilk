@@ -10,7 +10,7 @@ These components form the foundation of Buttermilk and are designed to be runtim
     *   **Purpose:** The fundamental processing unit in a Buttermilk flow. Each agent encapsulates specific logic, potentially interacting with LLMs, tools, or data sources.
     *   **Interface:**
         *   Inherits from `AgentConfig` for configuration loading (YAML).
-        *   `_process(input_data: AgentInput, cancellation_token: CancellationToken | None) -> AsyncGenerator[AgentOutput | None, None]`: The core abstract method. It receives input (`AgentInput`), performs its logic, and asynchronously yields zero or more `AgentOutput` messages.
+        *   `_process(input_data: AgentInput, cancellation_token: CancellationToken | None) -> AsyncGenerator[AgentTrace | None, None]`: The core abstract method. It receives input (`AgentInput`), performs its logic, and asynchronously yields zero or more `AgentTrace` messages.
         *   `__call__(...)`: Makes the agent callable, typically invoking `_process`. Used by orchestrators.
         *   `initialize(**kwargs)`: Optional async method for setup (e.g., loading resources, models). Called once when the agent is created.
         *   `on_reset(...)`: Optional async method to clear internal state.
@@ -30,7 +30,7 @@ These components form the foundation of Buttermilk and are designed to be runtim
     *   **Key Models:**
         *   `FlowMessage`: Base class for all messages.
         *   `AgentInput`: Standard input to an agent's `_process` method. Contains `content`, `context`, `inputs`, `records`, etc.
-        *   `AgentOutput`: Standard output yielded by an agent's `_process` method. Contains `content`, `outputs`, `metadata`, `error`, etc.
+        *   `AgentTrace`: Standard output yielded by an agent's `_process` method. Contains `content`, `outputs`, `metadata`, `error`, etc.
         *   `ManagerRequest`, `ManagerResponse`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
         *   `StepRequest`: Used by some orchestrators (`Selector`) to define the next agent to run and its parameters.
 
@@ -44,7 +44,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         *   Wraps a Buttermilk `Agent` instance.
         *   Implements Autogen message handlers (`@message_handler`).
         *   `handle_request(message: AgentInput, ...)`: Receives Autogen messages, translates them if necessary, and calls the wrapped Buttermilk agent's `__call__` method via `_process_request`.
-        *   `_process_request(...)`: Iterates through the `AgentOutput` messages yielded by the Buttermilk agent and uses `publish_message` to send them back into the Autogen runtime.
+        *   `_process_request(...)`: Iterates through the `AgentTrace` messages yielded by the Buttermilk agent and uses `publish_message` to send them back into the Autogen runtime.
         *   `handle_oob(...)`: Routes control messages to the Buttermilk agent's `handle_control_message`.
         *   `handle_input()`: Provides a callback mechanism for UI agents to publish user input into the Autogen runtime.
 
@@ -80,13 +80,13 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
     *   The Autogen runtime routes the `AgentInput` message to the appropriate `AutogenAgentAdapter` subscribed to that topic.
     *   The adapter's `handle_request` calls `_process_request`.
     *   `_process_request` calls the wrapped Buttermilk `Agent`'s `__call__` method (which invokes `_process`).
-    *   The Buttermilk `Agent` executes its logic, potentially calling LLMs or tools, and `yield`s `AgentOutput` messages.
+    *   The Buttermilk `Agent` executes its logic, potentially calling LLMs or tools, and `yield`s `AgentTrace` messages.
 8.  **Output Handling:**
-    *   `_process_request` receives the yielded `AgentOutput`.
-    *   It publishes the `AgentOutput` back into the Autogen runtime on the main topic (`self._topic`).
+    *   `_process_request` receives the yielded `AgentTrace`.
+    *   It publishes the `AgentTrace` back into the Autogen runtime on the main topic (`self._topic`).
 9.  **Message Collection/Display:**
-    *   The `CLOSURE` agent receives the `AgentOutput` and updates the orchestrator's internal state (`_flow_data`, `_context`, `_records`).
-    *   UI agents subscribed to the main topic receive the `AgentOutput` via their adapter's `handle_request` (if they implement it) or potentially a dedicated handler, and display it to the user.
+    *   The `CLOSURE` agent receives the `AgentTrace` and updates the orchestrator's internal state (`_flow_data`, `_context`, `_records`).
+    *   UI agents subscribed to the main topic receive the `AgentTrace` via their adapter's `handle_request` (if they implement it) or potentially a dedicated handler, and display it to the user.
 10. **Loop/Termination:** The orchestrator continues the loop (steps 6-9) based on its logic until a termination condition is met.
 11. **Cleanup:** `_cleanup()` stops the Autogen runtime.
 
@@ -100,7 +100,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         # filepath: /path/to/your/custom_agent.py
         from typing import AsyncGenerator
         from autogen_core import CancellationToken
-        from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+        from buttermilk._core.agent import Agent, AgentInput, AgentTrace
         from buttermilk import logger
 
         class MyCustomAgent(Agent):
@@ -113,7 +113,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
 
         async def _process(self, *, message: AgentInput, 
                 cancellation_token: CancellationToken = None, **kwargs
-                ) -> AgentOutput | ToolOutput | None:
+                ) -> AgentTrace | ToolOutput | None:
                 logger.info(f"{self.id} received content: {input_data.content}")
                 # Access context: input_data.context
                 # Access specific inputs: input_data.inputs.get("my_param")
@@ -124,7 +124,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 result_outputs = {"processed_length": len(input_data.content)}
 
                 # Yield one or more outputs
-                yield AgentOutput(
+                yield AgentTrace(
                     source=self.id,
                     content=result_content,
                     outputs=result_outputs,
@@ -137,7 +137,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 # Clear internal state if necessary
                 pass
         ```
-2.  **Implement `_process`:** This is the core logic. It must be an `async def` that returns an `AsyncGenerator[AgentOutput | None, None]`. Use `yield` to return results.
+2.  **Implement `_process`:** This is the core logic. It must be an `async def` that returns an `AsyncGenerator[AgentTrace | None, None]`. Use `yield` to return results.
 3.  **Implement `initialize` (Optional):** Perform setup tasks here.
 4.  **Implement `on_reset` (Optional):** Clear any internal state if the agent needs to be reset.
 5.  **Configure in YAML:**
@@ -230,7 +230,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
             #     # 1. Instantiate agents (e.g., self.agents["MY_STEP_NAME"].get_configs()[0]...)
             #     # 2. Manage message loop (e.g., asyncio tasks, queues)
             #     # 3. Call agent.__call__(agent_input) directly
-            #     # 4. Handle agent output (yielded AgentOutput)
+            #     # 4. Handle agent output (yielded AgentTrace)
             #     # 5. Manage state and context
             #     pass
         ```

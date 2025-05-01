@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Qualitative Data Science Dashboard{% endblock %}</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS with DaisyUI -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.min.css" rel="stylesheet" type="text/css" />
     
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
@@ -20,7 +21,7 @@
     <!-- DOMPurify for HTML sanitization -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
-    <!-- Tailwind Config with Typography Plugin Setup -->
+    <!-- Tailwind Config with DaisyUI and Typography Plugin Setup -->
     <script>
       tailwind.config = {
         theme: {
@@ -126,7 +127,7 @@
             }
           }
         },
-        plugins: []
+        plugins: [require("daisyui")]
       }
     </script>
     
@@ -151,14 +152,14 @@
     
     {% block head %}{% endblock %}
 </head>
-<body class="min-h-screen bg-gray-100">
-    <header class="bg-white shadow">
+<body class="min-h-screen bg-base-200" data-theme="light">
+    <header class="bg-base-100 shadow">
         <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-gray-900">Qualitative Data Science Dashboard</h1>
+                <h1 class="text-2xl font-bold">Qualitative Data Science Dashboard</h1>
                 <nav class="flex space-x-4">
-                    <a href="/" class="text-gray-600 hover:text-gray-900">Home</a>
-                    <a href="/dashboard" class="text-gray-600 hover:text-gray-900">Dashboard</a>
+                    <a href="/" class="link">Home</a>
+                    <a href="/dashboard" class="link">Dashboard</a>
                 </nav>
             </div>
         </div>
@@ -168,9 +169,9 @@
         {% block content %}{% endblock %}
     </main>
     
-    <footer class="bg-white shadow mt-8 py-4">
+    <footer class="bg-base-100 shadow mt-8 py-4">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p class="text-center text-gray-500"><a href="https://nic.suzor.net/">nic suzor</a></p>
+            <p class="text-center text-base-content/70"><a href="https://nic.suzor.net/" class="link">nic suzor</a></p>
         </div>
     </footer>
     

@@ -1,7 +1,7 @@
 <select 
     id="criteria" 
     name="criteria" 
-    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+    class="select select-bordered w-full"
     x-model="selectedCriteria"
     hx-get="/dash/api/records/" 
     hx-include="[name='flow']" 
@@ -13,6 +13,16 @@
     <option value="{{ criterion }}">{{ criterion }}</option>
     {% endfor %}
 </select>
-<div class="criteria-loader htmx-indicator">
-    <div class="w-full h-4 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
+<div class="criteria-loader htmx-indicator mt-2">
+    <span class="loading loading-dots loading-sm"></span>
 </div>
+
+<script>
+// Force Alpine.js to initialize this component
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.Alpine) {
+        console.log('Re-initializing Alpine.js on criteria container');
+        window.Alpine.initTree(document.getElementById('criteria-container'));
+    }
+});
+</script>

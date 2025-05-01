@@ -5,7 +5,7 @@ from typing import Any
 import regex as re
 from pydantic import BaseModel
 
-from buttermilk._core.contract import AgentOutput
+from buttermilk._core.contract import AgentTrace
 from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk.agents.evaluators.scorer import QualScore
 
@@ -81,7 +81,7 @@ def create_context_blocks(elements_list, max_elements_per_block=10):
             {
                 "type": "context",
                 "elements": chunk,
-            }
+            },
         )
 
     return blocks
@@ -118,9 +118,8 @@ def dict_to_blocks(input) -> list[dict]:
     return create_context_blocks(elements_list=elements)
 
 
-def format_slack_message(result: AgentOutput) -> dict:
+def format_slack_message(result: AgentTrace) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
-
     blocks = []
 
     result_copy = result.model_copy(deep=True)
@@ -139,7 +138,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                 "text": header_text,
                 "emoji": True,
             },
-        }
+        },
     )
 
     # Handle error case
@@ -151,7 +150,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     "type": "mrkdwn",
                     "text": "*Error!*\n" + "\n".join(format_response(result.error)),
                 },
-            }
+            },
         )
 
     elif isinstance(result_copy.outputs, QualScore):
@@ -162,7 +161,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     "type": "mrkdwn",
                     "text": str(result_copy.outputs),
                 },
-            }
+            },
         )
     else:
         icontext = blocks_with_icon(
@@ -203,7 +202,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                             "type": "mrkdwn",
                             "text": label_text,
                         },
-                    }
+                    },
                 )
 
         # Extract reasons for special handling
@@ -217,7 +216,7 @@ def format_slack_message(result: AgentOutput) -> dict:
             blocks.append(
                 {
                     "type": "divider",
-                }
+                },
             )
 
             # Add each reason as its own contextual block for better readability
@@ -260,7 +259,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                         {
                             "type": "mrkdwn",
                             "text": chunk,
-                        }
+                        },
                     )
                 blocks.extend(create_context_blocks(elements))
 
@@ -276,7 +275,7 @@ def format_slack_message(result: AgentOutput) -> dict:
                     "type": "mrkdwn",
                     "text": result_copy.content,
                 },
-            }
+            },
         )
     return {
         "blocks": blocks,
@@ -343,7 +342,7 @@ def confirm_options(
                     },
                 ],
             },
-        ]
+        ],
     )
     return {
         "blocks": blocks,

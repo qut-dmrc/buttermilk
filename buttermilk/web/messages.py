@@ -3,7 +3,7 @@ import json
 import re
 from typing import Any
 
-from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
+from buttermilk._core.agent import AgentTrace, ManagerRequest, ToolOutput
 from buttermilk._core.contract import (
     ConductorResponse,
     TaskProcessingComplete,
@@ -125,7 +125,7 @@ def _get_agent_info(message) -> dict:
         "model": None,
     }
 
-    if isinstance(message, AgentOutput):
+    if isinstance(message, AgentTrace):
         # Generate a stable message ID
         agent_info["message_id"] = message.call_id if hasattr(message, "call_id") else ""
 
@@ -176,7 +176,7 @@ def _get_agent_role(message) -> str:
 
 def _is_score_message(message) -> bool:
     """Check if the message is a scoring message."""
-    if not isinstance(message, AgentOutput):
+    if not isinstance(message, AgentTrace):
         return False
 
     # Check role first
@@ -462,7 +462,7 @@ def _extract_score(message) -> tuple[float | None, QualResults | None]:
         tuple: (score value, score object)
 
     """
-    if not isinstance(message, AgentOutput):
+    if not isinstance(message, AgentTrace):
         return None, None
 
     # Extract QualResults if available
@@ -591,7 +591,7 @@ def _format_message_for_client(message) -> dict | str | None:
     content = None
 
     # Format based on message type
-    if isinstance(message, AgentOutput):
+    if isinstance(message, AgentTrace):
         # Store this message ID for future score references
         if hasattr(message, "call_id"):
             answer_id = message.call_id

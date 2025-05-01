@@ -4,64 +4,39 @@ import pytest
 
 from buttermilk._core import StepRequest
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.contract import AgentOutput
+from buttermilk._core.contract import AgentTrace
 from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA
 from buttermilk.agents.judge import AgentReasons
 from buttermilk.utils.uploader import AsyncDataUploader
 
+
 # Sample data based on provided examples
 @pytest.fixture(autouse=True)
-def sample_outputs() -> list[AgentOutput]:
-    return [AgentOutput(
-        **{
-            "error": [],
-            "metadata": {},
-            "agent_info": {
+def sample_outputs() -> list[AgentTrace]:
+    return [AgentTrace(
+        error=[], metadata={}, agent_info={
                 "agent_id": "host-Yc8ekP",
-            },
-            "session_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            "call_id": "Bc8scgvzT3vycJrrJUMhov",
-            "run_info": {
+            }, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="Bc8scgvzT3vycJrrJUMhov", run_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
                 "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
                 "save_dir": "gs://prosocial-dev/runs/batch/debugging/20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            },
-            "outputs": StepRequest(**{"role": "WAIT", "prompt": ""}),
-            "is_error": False,
-        }
+            }, outputs=StepRequest(role="WAIT", prompt=""), is_error=False,
     ),
-    AgentOutput(
-        **{
-            "error": [],
-            "metadata": {"finish_reason": "stop", "role": "judge", "name": "⚖️ Judge WRESDb"},
-            "agent_info": {
+    AgentTrace(
+        error=[], metadata={"finish_reason": "stop", "role": "judge", "name": "⚖️ Judge WRESDb"}, agent_info={
                 "agent_id": "judge-WRESDb",
-            },
-            "session_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            "call_id": "8MPyjSZt6PikCEMocsPFr6",
-            "run_info": {
+            }, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="8MPyjSZt6PikCEMocsPFr6", run_info={
                 "platform": "local",
                 "name": "batch",
                 "job": "debugging",
                 "run_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            },
-            "outputs": QualResults(**{"conclusion": "The content adheres to the guidelines.", "prediction": False, "confidence": "high"}),
-            "is_error": False,
-        }
+            }, outputs=QualResults(conclusion="The content adheres to the guidelines.", prediction=False, confidence="high"), is_error=False,
     ),
-    AgentOutput(
-        **{
-            "error": [],
-            "metadata": {"role": "scorers", "name": "📊 Scorer MyVLKi"},
-            "agent_info": {"agent_id": "scorers-MyVLKi"},
-            "session_id": "20250424T0122Z-Rvon-c218d8dfd611-vscode",
-            "call_id": "7R7w4Un76TDJaSzgp36gUW",
-            "outputs": AgentReasons(assessments=QualScoreCRA(**{"correct": True, "feedback": "Feedback text"})),
-            "is_error": False,
-        }
-    )
+    AgentTrace(
+        error=[], metadata={"role": "scorers", "name": "📊 Scorer MyVLKi"}, agent_info={"agent_id": "scorers-MyVLKi"}, session_id="20250424T0122Z-Rvon-c218d8dfd611-vscode", call_id="7R7w4Un76TDJaSzgp36gUW", outputs=AgentReasons(assessments=QualScoreCRA(correct=True, feedback="Feedback text")), is_error=False,
+    ),
 ]
 
 
@@ -80,7 +55,6 @@ def uploader(save_info):
 @pytest.mark.anyio
 async def test_init(save_info):
     """Test that the uploader initializes correctly."""
-
     uploader = AsyncDataUploader(buffer_size=5, save_dest=save_info)
 
     assert uploader.buffer_size == 5
@@ -136,7 +110,6 @@ async def test_empty_flush(uploader):
 @pytest.mark.anyio
 async def test_flush_mechanics(save_info):
     """Test the actual flush mechanism with mocked upload function."""
-
     uploader = AsyncDataUploader(buffer_size=3, save_dest=save_info)
 
     with patch("buttermilk.utils.save.upload_rows_async", AsyncMock()) as mock_upload:
@@ -210,7 +183,6 @@ async def test_multiple_flushes(uploader):
 @pytest.mark.anyio
 async def test_error_handling_during_flush(save_info):
     """Test error handling during flush operation."""
-
     uploader = AsyncDataUploader(buffer_size=2, save_dest=save_info)
 
     # Mock upload_rows_async to raise an exception
@@ -237,5 +209,4 @@ async def test_integration_with_fixture_save(save_info):
     await uploader.add(sample_outputs[0])
     await uploader.add(sample_outputs[1])  # This should trigger a flush
 
-    # todo: check the rows were actually inserted
-    pass
+    # TODO: check the rows were actually inserted

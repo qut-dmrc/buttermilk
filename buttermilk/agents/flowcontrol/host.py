@@ -14,7 +14,7 @@ from buttermilk._core.contract import (
     MANAGER,
     WAIT,
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,
     ConductorResponse,
     ErrorEvent,
@@ -110,7 +110,7 @@ class HostAgent(Agent):
         better context for future decision making.
         """
         # Log messages to our local context cache, but truncate them
-        if isinstance(message, (AgentOutput, ConductorResponse)):
+        if isinstance(message, (AgentTrace, ConductorResponse)):
             await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
         elif isinstance(message, StepRequest):
             # StepRequest has content field but it might be empty
@@ -434,12 +434,12 @@ class HostAgent(Agent):
                 self._outstanding_tasks_per_role[step.role] = 0
             self._step_completion_event.set()  # Set here to prevent deadlock on exception
 
-    def _store_exploration_result(self, execution_id: str, output: AgentOutput) -> None:
+    def _store_exploration_result(self, execution_id: str, output: AgentTrace) -> None:
         """Store the result of an agent execution in the exploration history.
         
         Args:
             execution_id: A unique identifier for this execution
-            output: The AgentOutput from the agent execution
+            output: The AgentTrace from the agent execution
 
         """
         # Add to exploration path if not already there
@@ -584,7 +584,7 @@ class HostAgent(Agent):
 
         logger.info(f"Host agent {self.id} reset complete.")
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
         # This host does nothing when directly called
         # Return an empty error event as a placeholder since None is not an acceptable return type
         return ErrorEvent(source=self.id, content="")

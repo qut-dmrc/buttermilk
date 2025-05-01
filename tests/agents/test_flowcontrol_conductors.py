@@ -1,5 +1,4 @@
-"""
-Tests for conductor agents' _get_next_step method.
+"""Tests for conductor agents' _get_next_step method.
 """
 
 import asyncio
@@ -8,11 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Buttermilk core types
-from buttermilk._core.agent import AgentInput, AgentOutput
+from buttermilk._core.agent import AgentInput, AgentTrace
 from buttermilk._core.contract import END, ConductorRequest, StepRequest
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
-
-from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
@@ -29,8 +26,7 @@ def conductor_request() -> ConductorRequest:
 
 @pytest.mark.anyio
 async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
-    """
-    Test Sequencer._get_next_step returns the next step from its generator.
+    """Test Sequencer._get_next_step returns the next step from its generator.
     """
     # Arrange
     sequencer = Sequencer(role="SEQUENCER", name="Test Seq", description="test")
@@ -53,7 +49,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     result1 = await sequencer._get_next_step(message=conductor_request)
 
     # Assert first step
-    assert isinstance(result1, AgentOutput)
+    assert isinstance(result1, AgentTrace)
     assert isinstance(result1.outputs, StepRequest)
     assert result1.outputs.role == "AGENT1"
     assert sequencer._participants == conductor_request.inputs.get("participants")
@@ -65,7 +61,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     result2 = await sequencer._get_next_step(message=conductor_request)
 
     # Assert second step
-    assert isinstance(result2, AgentOutput)
+    assert isinstance(result2, AgentTrace)
     assert isinstance(result2.outputs, StepRequest)
     assert result2.outputs.role == "AGENT2"
     assert sequencer._current_step_name == "AGENT2"
@@ -75,7 +71,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     result3 = await sequencer._get_next_step(message=conductor_request)
 
     # Assert END step
-    assert isinstance(result3, AgentOutput)
+    assert isinstance(result3, AgentTrace)
     assert isinstance(result3.outputs, StepRequest)
     assert result3.outputs.role == END
     assert sequencer._current_step_name == END
@@ -106,12 +102,11 @@ def mock_llm_host_agent() -> LLMHostAgent:
 
 @pytest.mark.anyio
 async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
-    """
-    Test LLMHostAgent._get_next_step calls _process to determine the next step.
+    """Test LLMHostAgent._get_next_step calls _process to determine the next step.
     """
     # Arrange
     expected_step = StepRequest(role="NEXT_AGENT", prompt="Do something", description="Next action")
-    mock_output_from_process = AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=expected_step)
+    mock_output_from_process = AgentTrace(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=expected_step)
     mock_llm_host_agent._process.return_value = mock_output_from_process
     mock_llm_host_agent._step_completion_event.set()  # Assume previous step completed
 
@@ -137,8 +132,7 @@ async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: L
 
 @pytest.mark.anyio
 async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LLMHostAgent, conductor_request: ConductorRequest):
-    """
-    Test that LLMHostAgent._get_next_step avoids calling itself or MANAGER.
+    """Test that LLMHostAgent._get_next_step avoids calling itself or MANAGER.
     """
     # Arrange
     mock_llm_host_agent.role = "host"  # Set agent's own role
@@ -148,9 +142,9 @@ async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LL
 
     # Simulate _process returning HOST, then MANAGER, then OTHER_AGENT
     mock_llm_host_agent._process.side_effect = [
-        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_self),
-        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_manager),
-        AgentOutput(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_other),
+        AgentTrace(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_self),
+        AgentTrace(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_manager),
+        AgentTrace(agent_info=mock_llm_host_agent.id, role=mock_llm_host_agent.role, outputs=step_other),
     ]
     mock_llm_host_agent._step_completion_event.set()  # Start ready
 
@@ -164,7 +158,7 @@ async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LL
     # Verify _process was called three times
     assert mock_llm_host_agent._process.call_count == 3
     # Verify the final result is the OTHER_AGENT step
-    assert isinstance(result3, AgentOutput)
+    assert isinstance(result3, AgentTrace)
     assert isinstance(result3.outputs, StepRequest)
     assert result3.outputs.role == "OTHER_AGENT"
     # Verify current step is updated

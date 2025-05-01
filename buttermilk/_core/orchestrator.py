@@ -192,7 +192,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_description": self.description,
             "record": request.record_id if request else None,
             "uri": request.uri if request else None,
-            "prompt": request.prompt if request else None,
         }
         try:
             assert bm.weave

@@ -3,7 +3,7 @@ import asyncio
 import weave
 from pydantic import Field, PrivateAttr
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput
+from buttermilk._core.agent import Agent, AgentInput, AgentTrace
 from buttermilk._core.contract import ErrorEvent, OOBMessages, StepRequest, ToolOutput
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
@@ -63,7 +63,7 @@ class BatchOrchestrator(Orchestrator):
     async def _execute_step(
         self,
         step: StepRequest,
-    ) -> AgentOutput | ErrorEvent:
+    ) -> AgentTrace | ErrorEvent:
         """Executes a single step of the flow for the given agent role.
 
         Handles variant selection based on internal logic (currently basic: uses first variant).
@@ -72,8 +72,8 @@ class BatchOrchestrator(Orchestrator):
             step: StepRequest with details about the step to run.
 
         Returns:
-            The AgentOutput from the agent, or None if execution failed,
-            or an AgentOutput with error info if execution raised an exception.
+            The AgentTrace from the agent, or None if execution failed,
+            or an AgentTrace with error info if execution raised an exception.
 
         """
         # --- Variant Selection Logic (Placeholder: Use first variant) ---
@@ -96,7 +96,7 @@ class BatchOrchestrator(Orchestrator):
                 raw_output = await agent(message=message)  # Pass empty kwargs for now
 
                 # Handle different output types
-                if isinstance(raw_output, AgentOutput):
+                if isinstance(raw_output, AgentTrace):
                     output = raw_output  # Assign to output if it's the expected type
                     # if not output.is_error:
                     #     # Call evaluation if possible
@@ -106,7 +106,7 @@ class BatchOrchestrator(Orchestrator):
                     #     # await self._evaluate_step(output, ground_truth_record, criteria, None) # Pass None for weave_call
                     #     logger.warning("_evaluate_step not implemented for BatchOrchestrator yet.")
                     logger.debug(f"Step '{step.role}' variant '{first_variant_config.id}' completed.")
-                    return output  # Return AgentOutput
+                    return output  # Return AgentTrace
                 if isinstance(raw_output, (ToolOutput, OOBMessages)):
                     logger.warning(
                         f"Step '{step.role}' variant '{first_variant_config.id}' returned unexpected type {type(raw_output)} in batch mode. Ignoring.",

@@ -7,7 +7,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     CONDUCTOR,
     AgentInput,
-    AgentOutput,
+    AgentTrace,
 )
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
@@ -19,10 +19,10 @@ def mock_agent():
     agent.id = "test_agent"
     agent.description = "Test agent description"
     agent.__call__ = AsyncMock(
-        return_value=AgentOutput(
+        return_value=AgentTrace(
             agent_id="test",
             content="Test output",
-        )
+        ),
     )
     agent.initialize = AsyncMock()
     agent.receive_output = AsyncMock(return_value=None)
@@ -98,10 +98,10 @@ async def test_agent_adapter_process_request_conductor():
     agent.id = f"{CONDUCTOR}-test"
     agent.description = "Test conductor"
     agent.__call__ = AsyncMock(
-        return_value=AgentOutput(
+        return_value=AgentTrace(
             agent_id="test",
             content="Test output",
-        )
+        ),
     )
     agent.initialize = AsyncMock()
 
@@ -132,7 +132,7 @@ async def test_agent_adapter_handle_output(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = "different_agent"
 
-    message = AgentOutput(agent_info="test", content="test output")
+    message = AgentTrace(agent_info="test", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 
@@ -147,7 +147,7 @@ async def test_agent_adapter_handle_output_from_self(agent_adapter):
     ctx = MagicMock()
     ctx.sender.type = agent_adapter.id
 
-    message = AgentOutput(agent_info="test", content="test output")
+    message = AgentTrace(agent_info="test", content="test output")
 
     await agent_adapter.handle_output(message, ctx)
 

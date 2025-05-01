@@ -2,13 +2,14 @@
 import pytest
 
 # Buttermilk core imports
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.llms import CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
 from buttermilk.agents.judge import AgentReasons, Judge  # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
+
 
 @pytest.fixture
 def request_paris() -> AgentInput:
@@ -29,7 +30,7 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 
     response = await agent(message=request_paris)  # Use __call__
 
-    assert isinstance(response, AgentOutput)
+    assert isinstance(response, AgentTrace)
     assert not response.is_error, f"Agent returned error: {response.error}"
     assert response.outputs, "Agent should produce output"
     # Check if output is string and contains 'Paris' (case-insensitive)
@@ -46,10 +47,10 @@ async def test_llm_agent_direct_call(model_name: str, request_paris: AgentInput)
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
-    # Templates 
+    # Templates
     judge_params = {
         "model": model_name,
-        "template": "judge", 
+        "template": "judge",
         "criteria": "is this content safe or toxic?",  # Example criteria
     }
     agent = Judge(role="testing", name="Test Judge", description="Test judge agent", parameters=judge_params)
@@ -58,7 +59,7 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     # Correctly call _process with 'message' keyword arg
     result = await agent._process(message=request_chief)
 
-    assert isinstance(result, AgentOutput), "Result should be AgentOutput"
+    assert isinstance(result, AgentTrace), "Result should be AgentTrace"
     assert not result.is_error, f"Judge agent returned error: {result.error}"
     assert result.outputs is not None, "Judge agent should produce outputs"
 
@@ -91,7 +92,7 @@ async def test_scorer(model_name: str, request_paris: AgentInput):
 
     # response = await agent(message=request_paris)  # Use __call__
 
-    # assert isinstance(response, AgentOutput)
+    # assert isinstance(response, AgentTrace)
     # assert not response.is_error, f"Agent returned error: {response.error}"
     # assert response.outputs, "Agent should produce output"
     # # Check if output is string and contains 'Paris' (case-insensitive)

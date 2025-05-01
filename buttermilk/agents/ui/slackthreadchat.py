@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pydantic
 from autogen_core import CancellationToken
@@ -10,7 +11,7 @@ from slack_bolt.async_app import AsyncApp
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     GroupchatMessageTypes,
     ManagerMessage,
     ManagerRequest,
@@ -32,7 +33,7 @@ from buttermilk.libs.slack import (
 _active_thread_registry = {}
 
 
-def _fn_debug_blocks(message: AgentOutput):
+def _fn_debug_blocks(message: AgentTrace):
     try:
         console = Console(highlight=True)
         console.print(Markdown("## -----DEBUG BLOCKS------"))
@@ -60,7 +61,7 @@ class SlackUIAgent(UIAgent):
 
     async def _send_to_user(self, message: GroupchatMessageTypes) -> None:
         try:
-            if isinstance(message, AgentOutput):
+            if isinstance(message, AgentTrace):
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
             elif message.params:
@@ -89,7 +90,7 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Send output to the Slack thread"""
-        if isinstance(message, AgentOutput | AgentInput):
+        if isinstance(message, AgentTrace | AgentInput):
             await self._send_to_user(message)
 
     async def _request_input(
@@ -100,7 +101,7 @@ class SlackUIAgent(UIAgent):
         """Ask for user input from the UI."""
         if isinstance(message, ManagerResponse):
             return
-        elif isinstance(message, (AgentInput, ManagerRequest)):
+        if isinstance(message, (AgentInput, ManagerRequest)):
             extra_blocks = dict_to_blocks(message.outputs)
             if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
@@ -152,7 +153,7 @@ class SlackUIAgent(UIAgent):
             )
             self._current_input_message = None
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentTrace | None:
         """Tell the user we're expecting some data, but don't wait around"""
         if isinstance(inputs, (AgentInput, ManagerRequest)):
             await self._request_input(inputs)
@@ -299,7 +300,6 @@ class SlackUIAgent(UIAgent):
         **kwargs,
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
-
         # Ask for input if we need to
         if isinstance(message, ManagerRequest):
             await self._request_input(message)

@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from buttermilk._core.contract import (
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,
     StepRequest,
 )
@@ -40,7 +40,7 @@ class TestConductorRequestRouting:
         with patch("buttermilk.agents.flowcontrol.host.HostAgent._get_next_step") as mock_get_next_step:
             with patch("buttermilk.agents.flowcontrol.host.HostAgent._check_completions"):
                 # Set up mock response
-                mock_response = AgentOutput(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+                mock_response = AgentTrace(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
 
                 # Call the method under test directly with mocked input and output
@@ -60,7 +60,7 @@ class TestConductorRequestRouting:
         with patch("buttermilk.agents.flowcontrol.host.LLMHostAgent._get_next_step") as mock_get_next_step:
             with patch("buttermilk.agents.flowcontrol.host.LLMHostAgent._check_completions"):
                 # Set up mock response
-                mock_response = AgentOutput(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+                mock_response = AgentTrace(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
 
                 # Call the method under test directly with mocked input and output
@@ -80,7 +80,7 @@ class TestConductorRequestRouting:
         with patch("buttermilk.agents.flowcontrol.explorer.ExplorerHost._get_next_step") as mock_get_next_step:
             with patch("buttermilk.agents.flowcontrol.host.LLMHostAgent._check_completions"):
                 # Set up mock response
-                mock_response = AgentOutput(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
+                mock_response = AgentTrace(agent_info="test", outputs=StepRequest(role="AGENT1", prompt="", description="Test step"))
                 mock_get_next_step.return_value = mock_response
 
                 # Call the method under test directly with mocked input and output

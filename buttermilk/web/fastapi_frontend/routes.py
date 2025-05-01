@@ -1,4 +1,3 @@
-from typing import Any
 
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -63,10 +62,21 @@ class DashboardRoutes:
                 {"request": request, "flow_choices": flow_choices},
             )
 
+        @self.router.get("/api/debug/", response_class=HTMLResponse)
+        async def get_debug(request: Request):
+            """Debug endpoint to test template rendering"""
+            import datetime
+            return self.templates.TemplateResponse(
+                "partials/debug.html",
+                {"request": request, "now": datetime.datetime.now()},
+            )
+
         @self.router.get("/api/criteria/", response_class=HTMLResponse)
         async def get_criteria(request: Request):
             """Get criteria options for a specific flow using query parameter"""
             flow_name = request.query_params.get("flow")  # Get flow from query parameter
+            
+            logger.info(f"Criteria request received for flow: {flow_name}")
 
             if not flow_name:
                 logger.warning("Request to /api/criteria/ missing 'flow' query parameter.")
@@ -75,16 +85,31 @@ class DashboardRoutes:
                     {"request": request, "criteria": []},
                 )
 
-            criteria = await DataService.get_criteria_for_flow(flow_name, self.flows)
-
-            # Optional: randomize the order
-            import random
-            random.shuffle(criteria)
-
-            return self.templates.TemplateResponse(
-                "partials/criteria_options.html",
-                {"request": request, "criteria": criteria},
-            )
+            try:
+                criteria = await DataService.get_criteria_for_flow(flow_name, self.flows)
+                
+                # randomize the order
+                import random
+                random.shuffle(criteria)
+                
+                logger.info(f"Returning {len(criteria)} criteria options")
+                
+                return self.templates.TemplateResponse(
+                    "partials/criteria_options.html",
+                    {"request": request, "criteria": criteria},
+                )
+            except Exception as e:
+                logger.error(f"Error getting criteria for flow {flow_name}: {e}")
+                # Return debug template on error
+                import datetime
+                return self.templates.TemplateResponse(
+                    "partials/debug.html",
+                    {
+                        "request": request, 
+                        "now": datetime.datetime.now(),
+                        "error": str(e)
+                    },
+                )
 
         @self.router.get("/api/records/", response_class=HTMLResponse)
         async def get_records(request: Request):
@@ -113,38 +138,33 @@ class DashboardRoutes:
             # Get client version to support conditional responses
             client_version = request.query_params.get("version", "0")
 
+            # Use DataService to safely get session data with default values
+            session_data = DataService.safely_get_session_data(self.websocket_manager, session_id or "")
+
             # Initialize containers
-            scores: dict[str, dict[str, Any]] = {}
-            outcomes: list[dict[str, Any]] = []
-            pending_agents: list[str] = []  # Agents that are expected to provide input
+            scores = {}
+            outcomes = []
+            pending_agents = session_data.get("pending_agents", [])
             current_version = "0"
 
+            # Check if we have a valid session with an outcomes version
             if session_id and session_id in self.websocket_manager.session_data:
                 # Get or create outcomes version
-                current_version = self.websocket_manager.session_data[session_id].outcomes_version or "0"
+                current_version = getattr(self.websocket_manager.session_data[session_id], "outcomes_version", "0") or "0"
 
                 # If client already has latest version, return 304 Not Modified
                 if client_version == current_version:
                     return Response(status_code=304)
 
-            # Get pending agents from progress data
-            if session_id in self.websocket_manager.session_data and "pending_agents" in self.websocket_manager.session_data[session_id].progress:
-                pending_agents = self.websocket_manager.session_data[session_id].progress["pending_agents"]
+                # Extract data from session messages if we have a valid session
+                if hasattr(self.websocket_manager.session_data[session_id], "messages"):
+                    messages = self.websocket_manager.session_data[session_id].messages
 
-            # Extract data from session messages
-            if session_id in self.websocket_manager.session_data:
-                messages = self.websocket_manager.session_data[session_id].messages
-                
-                # Get scores and predictions using message service
-                scores = MessageService.extract_scores_from_messages(messages)
-                outcomes = MessageService.extract_predictions_from_messages(messages)
-                
-                # Get pending agents from progress data
-                if "pending_agents" in self.websocket_manager.session_data[session_id].progress:
-                    pending_agents = MessageService.get_pending_agents_from_progress(
-                        self.websocket_manager.session_data[session_id].progress
-                    )
+                    # Get scores and predictions using message service
+                    scores = MessageService.extract_scores_from_messages(messages)
+                    outcomes = MessageService.extract_predictions_from_messages(messages)
 
+            # Return the template response with sanitized data
             return self.templates.TemplateResponse(
                 "partials/outcomes_panel.html",
                 {"request": request, "scores": scores, "outcomes": outcomes, "pending_agents": pending_agents},

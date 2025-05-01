@@ -52,7 +52,7 @@ class Job(BaseModel):
 
     # These fields will be fully filled once the record is processed
     agent_info: dict | None = Field(default=None)
-    outputs: "AgentOutput | None" = Field(default=None)
+    outputs: "AgentTrace | None" = Field(default=None)
     error: dict[str, Any] = Field(default={})
     metadata: dict | None = Field(default={})
 

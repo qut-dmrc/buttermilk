@@ -1,5 +1,4 @@
-"""
-Tests for the interactive features of SelectorOrchestrator.
+"""Tests for the interactive features of SelectorOrchestrator.
 """
 
 import asyncio
@@ -7,8 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from buttermilk._core.config import AgentVariants
 from buttermilk._core.contract import (
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,
     ConductorResponse,
     ManagerMessage,
@@ -17,7 +17,6 @@ from buttermilk._core.contract import (
     StepRequest,
 )
 from buttermilk._core.types import Record
-from buttermilk._core.config import AgentVariants
 from buttermilk.runner.selector import Selector
 
 
@@ -69,9 +68,9 @@ async def test_interactive_user_feedback(selector_config):
 
     orchestrator._ask_agents = AsyncMock(
         side_effect=[
-            [AgentOutput(agent_info="test", outputs=step1)],  # First call returns step1
-            [AgentOutput(agent_info="test", outputs=step2)],  # Second call returns step2
-        ]
+            [AgentTrace(agent_info="test", outputs=step1)],  # First call returns step1
+            [AgentTrace(agent_info="test", outputs=step2)],  # Second call returns step2
+        ],
     )
 
     # First iteration: get step, receive confirmation with feedback

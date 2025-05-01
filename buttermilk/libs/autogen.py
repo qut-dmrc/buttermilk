@@ -241,7 +241,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         Returns:
             The direct output from the agent's execution, which might be None, a single
-            response object (AgentOutput, ToolOutput, etc.), or a sequence of them.
+            response object (AgentTrace, ToolOutput, etc.), or a sequence of them.
             Autogen uses this return value as the response to the `send_message` call.
 
         """
