@@ -32,7 +32,7 @@ AGENT_STYLES = {
         "border": "1px solid #dee2e6",
     },
     "judge": {
-        "avatar": "⚖️",
+        "avatar": "👨‍⚖️",  # Changed to a more distinctive judge icon
         "color": "#495057",
         "background": "#e9ecef",
         "border": "1px solid #ced4da",
@@ -311,7 +311,7 @@ def _format_qual_results(qual_results: QualResults) -> dict[str, Any] | None:
     return score_data
 
 
-def _format_agent_reasons(reasons: JudgeReasons) -> str:
+def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
     """Format AgentReasons output in a friendly way."""
     if not reasons:
         return ""
@@ -328,6 +328,47 @@ def _format_agent_reasons(reasons: JudgeReasons) -> str:
     # Format confidence level
     confidence_color = "#28a745" if confidence == "High" else "#ffc107" if confidence == "Medium" else "#dc3545"
 
+    # Extract agent parameters for display
+    model_template_html = ""
+    if message and hasattr(message, "agent_info") and message.agent_info:
+        info = message.agent_info
+        if hasattr(info, "parameters") and isinstance(info.parameters, dict):
+            params = info.parameters
+            model = params.get("model", "")
+            template = params.get("template", "")
+            criteria = params.get("criteria", "")
+
+            if model or template or criteria:
+                model_template_html = """
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:0.65rem;">
+                """
+
+                if model:
+                    model_template_html += f"""
+                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
+                        <span style="font-weight:600;">Model:</span> 
+                        <span style="margin-left:3px;">{model}</span>
+                    </span>
+                    """
+
+                if template:
+                    model_template_html += f"""
+                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
+                        <span style="font-weight:600;">Template:</span> 
+                        <span style="margin-left:3px;">{template}</span>
+                    </span>
+                    """
+
+                if criteria:
+                    model_template_html += f"""
+                    <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;">
+                        <span style="font-weight:600;">Criteria:</span> 
+                        <span style="margin-left:3px;">{criteria}</span>
+                    </span>
+                    """
+
+                model_template_html += "</div>"
+
     # Create compact visual badges for violates/confidence
     badges_html = f"""
     <div style="display:flex; gap:8px; margin:3px 0 8px 0;">
@@ -342,24 +383,38 @@ def _format_agent_reasons(reasons: JudgeReasons) -> str:
     </div>
     """
 
-    # Format reasons as a bullet point list
-    reasons_html = ""
+    # Format reasons as a tooltip
     if reason_list:
         reasons_items = [f"<li>{reason}</li>" for reason in reason_list]
-        reasons_html = f"""
-        <div style="margin-top:5px;">
-            <strong>Reasoning:</strong>
-            <ul style="margin-top:3px; margin-bottom:0; padding-top:5px; padding-left:20px;">
-                {"".join(reasons_items)}
-            </ul>
+        reasons_content = "\n".join(reasons_items)
+
+        # Create a tooltip with detailed reasons using Tailwind-style approach
+        tooltip_html = f"""
+        <div class="group relative inline-block">
+            <div class="cursor-pointer flex items-center">
+                <button style="background-color:#f8f9fa; border:1px solid #dee2e6; border-radius:12px; padding:2px 10px; font-size:0.7rem; display:inline-flex; align-items:center; margin-top:5px; color:#495057; cursor:pointer;">
+                    <span>View Detailed Reasoning</span>
+                </button>
+            </div>
+            <div class="invisible group-hover:visible absolute z-10 w-64 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm mt-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="background-color:white; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:10px; font-size:0.8rem; margin-top:8px; width:300px; position:absolute; z-index:10; transition:opacity 0.2s ease;">
+                <div>
+                    <strong>Detailed Reasoning:</strong>
+                    <ul style="margin-top:6px; padding-left:20px;">
+                        {reasons_content}
+                    </ul>
+                </div>
+            </div>
         </div>
         """
+    else:
+        tooltip_html = ""
 
     return f"""
     <div style="font-size:0.8rem;">
         <div style="margin-bottom:3px;"><strong>Conclusion:</strong> {conclusion}</div>
         {badges_html}
-        {reasons_html}
+        {model_template_html}
+        {tooltip_html}
     </div>
     """
 
@@ -509,7 +564,7 @@ def _format_message_for_client(message) -> dict | str | None:
 
         # Special handling for AgentReasons
         if hasattr(message, "outputs") and isinstance(message.outputs, JudgeReasons):
-            content = _format_agent_reasons(message.outputs)
+            content = _format_agent_reasons(message.outputs, message)
         elif isinstance(message.outputs, str):
             content = message.outputs
         else:
