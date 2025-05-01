@@ -1,0 +1,108 @@
+{% if outcomes or scores %}
+    <div>
+        <!-- Predictions Section -->
+        {% if outcomes %}
+            <div class="mb-4">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Predictions</h3>
+                <div class="space-y-3">
+                    {% for prediction in outcomes %}
+                        <div class="prediction-item border border-gray-200 rounded-md p-2 relative">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-medium">{{ prediction.agent_name }}</span>
+                                <div class="flex items-center gap-1">
+                                    {% if prediction.confidence %}
+                                        <span class="px-1.5 py-0.5 text-xs rounded-full {% if prediction.confidence == 'high' %}bg-green-100 text-green-800{% elif prediction.confidence == 'medium' %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                            {{ prediction.confidence|capitalize }}
+                                        </span>
+                                    {% endif %}
+                                    <span class="px-1.5 py-0.5 text-xs rounded-full {% if prediction.violates %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}">
+                                        {{ "Violates" if prediction.violates else "Valid" }}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="text-xs text-gray-600 mt-1 truncate" title="{{ prediction.conclusion }}">
+                                {{ prediction.conclusion|truncate(80) }}
+                            </div>
+                            
+                            <!-- Detailed tooltip that appears on hover -->
+                            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg">
+                                <div class="font-bold mb-2">{{ prediction.agent_name }}</div>
+                                <div class="mb-2">{{ prediction.conclusion }}</div>
+                                
+                                {% if prediction.reasons %}
+                                    <div class="mt-1">
+                                        <strong>Reasoning:</strong>
+                                        <ul class="mt-1 pl-2">
+                                            {% for reason in prediction.reasons %}
+                                                <li class="mb-1">{{ reason }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        
+        <!-- Scores Section -->
+        {% if scores %}
+            <div class="mb-3 border-t pt-3">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Scores</h3>
+                {% for agent_id, agent_scores in scores.items() %}
+                    <div class="mb-3">
+                        <div class="text-xs font-medium text-gray-700 mb-1">{{ agent_id }}</div>
+                        <div class="flex flex-wrap gap-1">
+                            {% for assessor_id, score_data in agent_scores.items() %}
+                                <div class="score-badge relative group" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
+                                    <div class="flex items-center gap-1 cursor-pointer">
+                                        <span class="text-xs text-gray-500">{{ assessor_id[:5] }}</span>
+                                        <div class="w-5 h-5 rounded-full flex items-center justify-center" style="background-color:{{ score_data.color }}">
+                                            <span class="text-xs text-white font-medium">{{ score_data.score_text }}</span>
+                                        </div>
+                                    </div>
+                                    <!-- Detailed tooltip that appears on hover -->
+                                    <div class="hidden group-hover:block absolute left-0 top-full z-10 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg">
+                                        <div class="font-bold mb-1">Score: {{ score_data.score_text }} by {{ assessor_id }}</div>
+                                        {% if score_data.assessments %}
+                                            <div class="mt-1">
+                                                <strong>Assessments:</strong>
+                                                <ul class="mt-1 pl-2">
+                                                    {% for assessment in score_data.assessments %}
+                                                        <li class="mb-1">
+                                                            <span class="inline-block w-4">{{ "✓" if assessment.correct else "✗" }}</span>
+                                                            <span>{{ assessment.feedback }}</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% else %}
+    <div class="text-center text-gray-500 py-4 text-xs">
+        <p>No outcomes available yet.</p>
+    </div>
+{% endif %}
+
+<style>
+.prediction-item {
+    transition: all 0.2s ease;
+}
+.prediction-item:hover {
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.score-badge .group-hover\:block,
+.prediction-item:hover .group-hover\:block {
+    display: block;
+}
+</style>

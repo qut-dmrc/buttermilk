@@ -225,30 +225,84 @@ class DashboardApp:
                 {"request": request, "record_ids": record_ids},
             )
 
-        @self.app.get("/api/scores/", response_class=HTMLResponse)
-        async def get_scores(request: Request):
-            """Get scores data for HTMX replacement"""
+        @self.app.get("/api/outcomes/", response_class=HTMLResponse)
+        async def get_outcomes(request: Request):
+            """Get outcomes data (predictions and scores) for HTMX replacement"""
             session_id = request.query_params.get("session_id")
 
-            # Get scores from session data if available
+            # Initialize containers
             scores = {}
+            outcomes = []
+
             if session_id and session_id in self.session_data:
-                # Extract scores from message data if available
+                # Extract data from session messages
                 for message in self.session_data[session_id].get("messages", []):
-                    # Check if this is a score update message
-                    if isinstance(message.get("content"), dict) and message["content"].get("type") == "score_update":
-                        score_data = message["content"].get("score_data", {})
-                        agent_id = message["content"].get("agent_id", "unknown")
-                        assessor_id = message["content"].get("assessor_id", "scorer")
+                    content = message.get("content", {})
+
+                    # Process score updates
+                    if isinstance(content, dict) and content.get("type") == "score_update":
+                        score_data = content.get("score_data", {})
+                        agent_id = content.get("agent_id", "unknown")
+                        assessor_id = content.get("assessor_id", "scorer")
 
                         if agent_id and assessor_id:
                             if agent_id not in scores:
                                 scores[agent_id] = {}
                             scores[agent_id][assessor_id] = score_data
 
+                    # Process judge/synthesizer predictions
+                    if isinstance(content, dict) and content.get("type") == "chat_message":
+                        agent_info = content.get("agent_info", {})
+                        role = agent_info.get("role", "").lower()
+
+                        # Check if this is a judge or synthesizer message with reasons
+                        if role in ["judge", "synthesiser"] and "JudgeReasons" in str(content):
+                            # Try to extract prediction data from the message
+                            try:
+                                # Extract conclusion and prediction info
+                                html_content = content.get("content", "")
+
+                                # Basic prediction extraction using string matching
+                                # (This is simplified and would be more robust with proper parsing)
+                                prediction_data = {
+                                    "agent_id": agent_info.get("id", ""),
+                                    "agent_name": agent_info.get("name", role.capitalize()),
+                                    "violates": "Violates: Yes" in html_content,
+                                    "confidence": "medium",  # Default
+                                    "conclusion": "",
+                                    "reasons": [],
+                                }
+
+                                # Extract confidence
+                                if "Confidence: High" in html_content:
+                                    prediction_data["confidence"] = "high"
+                                elif "Confidence: Medium" in html_content:
+                                    prediction_data["confidence"] = "medium"
+                                elif "Confidence: Low" in html_content:
+                                    prediction_data["confidence"] = "low"
+
+                                # Extract conclusion (simplified approach)
+                                if "<strong>Conclusion:</strong>" in html_content:
+                                    conclusion_part = html_content.split("<strong>Conclusion:</strong>")[1].split("</div>")[0].strip()
+                                    prediction_data["conclusion"] = conclusion_part
+
+                                # Extract reasons
+                                if "<strong>Reasoning:</strong>" in html_content:
+                                    reasons_part = html_content.split("<strong>Reasoning:</strong>")[1]
+                                    if "<li>" in reasons_part:
+                                        reason_items = reasons_part.split("<li>")[1:]
+                                        prediction_data["reasons"] = [r.split("</li>")[0].strip() for r in reason_items]
+
+                                # Add to outcomes if we have a conclusion
+                                if prediction_data["conclusion"]:
+                                    outcomes.append(prediction_data)
+
+                            except Exception as e:
+                                logger.warning(f"Error extracting prediction data: {e}")
+
             return self.templates.TemplateResponse(
-                "partials/scores_panel.html",
-                {"request": request, "scores": scores},
+                "partials/outcomes_panel.html",
+                {"request": request, "scores": scores, "outcomes": outcomes},
             )
 
         @self.app.get("/api/history/", response_class=HTMLResponse)

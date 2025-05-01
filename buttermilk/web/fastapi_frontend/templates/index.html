@@ -321,19 +321,19 @@
         
     </div>
     
-    <!-- Scores panel -->
-    <div class="md:block md:w-2/12 bg-white shadow rounded-lg p-2">
-        <h2 class="text-sm font-semibold mb-2">Scores</h2>
-        <div id="scores-container" class="overflow-y-auto max-h-[70vh]"
-             hx-get="/dash/api/scores/?session_id={{ session_id }}"
+    <!-- Outcomes panel (predictions and scores) -->
+    <div class="md:block md:w-3/12 bg-white shadow rounded-lg p-2">
+        <h2 class="text-sm font-semibold mb-2">Outcomes</h2>
+        <div id="outcomes-container" class="overflow-y-auto max-h-[70vh]"
+             hx-get="/dash/api/outcomes/?session_id={{ session_id }}"
              hx-trigger="load, every 3s"
-             hx-indicator=".scores-loader">
+             hx-indicator=".outcomes-loader">
             <div class="text-center text-gray-500 py-4 text-xs">
-                <p>Loading scores...</p>
+                <p>Loading outcomes...</p>
             </div>
-            <!-- HTMX will replace this with the actual scores panel content -->
+            <!-- HTMX will replace this with the combined outcomes panel content -->
         </div>
-        <div class="scores-loader htmx-indicator">
+        <div class="outcomes-loader htmx-indicator">
             <div class="w-full h-3 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
         </div>
     </div>
