@@ -1,0 +1,42 @@
+{% if scores %}
+    <div>
+        {% for agent_id, agent_scores in scores.items() %}
+            <div class="mb-3 border-b pb-2">
+                <h3 class="text-xs font-medium text-gray-700 mb-1">{{ agent_id }}</h3>
+                <div class="flex flex-wrap gap-1">
+                    {% for assessor_id, score_data in agent_scores.items() %}
+                        <div class="score-badge relative group" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
+                            <div class="flex items-center gap-1 cursor-pointer">
+                                <span class="text-xs text-gray-500">{{ assessor_id[:5] }}</span>
+                                <div class="w-5 h-5 rounded-full flex items-center justify-center" style="background-color:{{ score_data.color }}">
+                                    <span class="text-xs text-white font-medium">{{ score_data.score_text }}</span>
+                                </div>
+                            </div>
+                            <!-- Detailed tooltip that appears on hover -->
+                            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg">
+                                <div class="font-bold mb-1">Score: {{ score_data.score_text }} by {{ assessor_id }}</div>
+                                {% if score_data.assessments %}
+                                    <div class="mt-1">
+                                        <strong>Assessments:</strong>
+                                        <ul class="mt-1 pl-2">
+                                            {% for assessment in score_data.assessments %}
+                                                <li class="mb-1">
+                                                    <span class="inline-block w-4">{{ "✓" if assessment.correct else "✗" }}</span>
+                                                    <span>{{ assessment.feedback }}</span>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center text-gray-500 py-4 text-xs">
+        <p>No scores available yet.</p>
+    </div>
+{% endif %}

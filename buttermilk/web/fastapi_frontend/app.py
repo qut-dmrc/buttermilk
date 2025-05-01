@@ -225,6 +225,32 @@ class DashboardApp:
                 {"request": request, "record_ids": record_ids},
             )
 
+        @self.app.get("/api/scores/", response_class=HTMLResponse)
+        async def get_scores(request: Request):
+            """Get scores data for HTMX replacement"""
+            session_id = request.query_params.get("session_id")
+
+            # Get scores from session data if available
+            scores = {}
+            if session_id and session_id in self.session_data:
+                # Extract scores from message data if available
+                for message in self.session_data[session_id].get("messages", []):
+                    # Check if this is a score update message
+                    if isinstance(message.get("content"), dict) and message["content"].get("type") == "score_update":
+                        score_data = message["content"].get("score_data", {})
+                        agent_id = message["content"].get("agent_id", "unknown")
+                        assessor_id = message["content"].get("assessor_id", "scorer")
+
+                        if agent_id and assessor_id:
+                            if agent_id not in scores:
+                                scores[agent_id] = {}
+                            scores[agent_id][assessor_id] = score_data
+
+            return self.templates.TemplateResponse(
+                "partials/scores_panel.html",
+                {"request": request, "scores": scores},
+            )
+
         @self.app.get("/api/history/", response_class=HTMLResponse)
         async def get_run_history(request: Request):
             """Get run history for a specific flow, criteria, and record using query parameters"""

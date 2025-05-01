@@ -1,7 +1,7 @@
 import hashlib
 import json
 import re
-from typing import Any, TypedDict
+from typing import Any
 
 from buttermilk._core.agent import AgentOutput, ManagerRequest, ToolOutput
 from buttermilk._core.contract import (
@@ -15,25 +15,13 @@ from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
-
-# Define score data structure with required fields
-class ScoreData(TypedDict):
-    answer_id: str
-    agent_id: str  # Add agent_id
-    assessor: str  # Add assessor
-    score: float
-    score_text: str
-    color: str
-    assessments: list[Any]
-
-
 # Map to track which messages have been scored
 # Key: answer_id, Value: message_id (used to link scores to messages)
 scored_messages: dict[str, str] = {}
 
 # Map to track message IDs and their scores
-# Key: message_id, Value: score info with specific fields
-message_scores: dict[str, ScoreData] = {}
+# Key: message_id, Value: dict with score info
+message_scores: dict[str, dict[str, Any]] = {}
 
 # Define agent styling
 AGENT_STYLES = {
@@ -227,9 +215,6 @@ def _get_score_color(score: float) -> str:
     return "#dc3545"  # Red
 
 
-# Function removed: _handle_score_message is no longer needed as we use direct structured data
-
-
 def _format_score_indicator(score, simple=False) -> str:
     """Format a score as a colored indicator."""
     if isinstance(score, (int, float)):
@@ -292,7 +277,7 @@ def _format_message_with_style(content: str, agent_info: dict, message_id: str |
     """
 
 
-def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
+def _format_qual_results(qual_results: QualResults) -> dict[str, Any] | None:
     """Process QualResults for display."""
     answer_id = getattr(qual_results, "answer_id", "")
     agent_id = getattr(qual_results, "agent_id", "")  # Extract agent_id
@@ -313,16 +298,15 @@ def _format_qual_results(qual_results: QualResults) -> ScoreData | None:
     if assessments := getattr(qual_results, "assessments", []):
         assessments_data = [x.model_dump() for x in assessments]
 
-    # Ensure the returned dictionary matches the ScoreData TypedDict structure
-    # and includes agent_id
-    score_data: ScoreData = {
+    # Return a dictionary with the score data
+    score_data = {
         "answer_id": answer_id,
-        "agent_id": agent_id,  # Add agent_id here
+        "agent_id": agent_id,
         "score": score,
         "score_text": score_text,
         "color": color,
         "assessments": assessments_data,
-        "assessor": getattr(qual_results, "assessor", "scorer"),  # Add assessor
+        "assessor": getattr(qual_results, "assessor", "scorer"),
     }
     return score_data
 
@@ -449,32 +433,35 @@ def _format_message_for_client(message) -> dict | str | None:
         score_value, score_obj = _extract_score(message)
         logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
 
-        # If it's a QualResults object, use its to_frontend_data method
+        # If it's a QualResults object, use it directly for standardized format
         if score_obj and isinstance(score_obj, QualResults):
-            # Try both standardized and legacy approaches for maximum compatibility
             try:
-                # First, create the standardized data structure
+                # Create the standardized data structure using QualResults directly
+                score_data = {
+                    "score": getattr(score_obj, "correctness", 0.0),
+                    "score_text": f"{int(getattr(score_obj, 'correctness', 0.0) * 100)}%",
+                    "color": _get_score_color(getattr(score_obj, "correctness", 0.0)),
+                    "assessments": [a.model_dump() for a in getattr(score_obj, "assessments", [])],
+                }
+
                 frontend_data = {
                     "type": "score_update",
                     "agent_id": score_obj.agent_id,
                     "assessor_id": score_obj.assessor,
-                    "score_data": score_obj.to_frontend_data(),
+                    "score_data": score_data,
                 }
 
-                # Store the score data for backward compatibility
-                qual_data = _format_qual_results(score_obj)
-                if qual_data:
-                    answer_id = qual_data.get("answer_id", "")
-                    if answer_id and answer_id in scored_messages:
+                # Store the score data for display in messages
+                if answer_id := getattr(score_obj, "answer_id", ""):
+                    if answer_id in scored_messages:
                         original_message_id = scored_messages[answer_id]
-                        message_scores[original_message_id] = qual_data
+                        message_scores[original_message_id] = score_data
 
                 logger.debug(f"Sending score update with agent={score_obj.agent_id}, assessor={score_obj.assessor}")
                 return frontend_data
             except Exception as e:
                 logger.error(f"Error generating score update data: {e}")
-                # Simple fallback - return just the basic score update structure
-                # Fixed version without any legacy references
+                # Simple fallback for error cases
                 return {
                     "type": "score_update",
                     "agent_id": getattr(score_obj, "agent_id", "unknown"),

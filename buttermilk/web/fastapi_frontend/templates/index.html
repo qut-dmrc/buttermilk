@@ -322,40 +322,19 @@
     </div>
     
     <!-- Scores panel -->
-    <div class="md:block md:w-2/12 bg-white shadow rounded-lg p-2" 
-         x-data="{ 
-            get scores() { return $store.scores.data; },
-       version: 0,
-           updateScores() {
-             console.log('Current scores:', this.scores);
-           } 
-         }"
-         x-init="$watch('$store.scores.version', (val) => { 
-            version = val;
-            updateScores(); 
-          })">
-        <h2 class="text-sm font-semibold mb-2">Scores <button @click="updateScores()" class="text-xs bg-gray-200 px-1 rounded">Debug</button></h2>
-        <div id="scores-container" class="overflow-y-auto max-h-[70vh]">
-            <template x-if="Object.keys(scores).length === 0">
-                <div class="text-center text-gray-500 py-4 text-xs">
-                    <p>No scores yet.</p>
-                </div>
-            </template>
-            <template x-for="(agentScores, agentId) in scores" :key="agentId">
-                <div class="mb-4 border-b pb-2">
-                    <div class="text-xs font-medium text-gray-700 mb-1" x-text="agentId"></div>
-                    <div class="flex flex-wrap gap-1">
-                        <template x-for="(score, assessorId) in agentScores" :key="assessorId">
-                            <div class="tooltip" :title="'Score: ' + score.score_text + ' by ' + score.assessor">
-                                <div class="flex items-center">
-                                    <span x-text="assessorId.slice(0, 2)" class="text-xs text-gray-500 mr-1"></span>
-                                    <span class="w-4 h-4 rounded-full" :style="'background-color:' + score.color"></span>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </template>
+    <div class="md:block md:w-2/12 bg-white shadow rounded-lg p-2">
+        <h2 class="text-sm font-semibold mb-2">Scores</h2>
+        <div id="scores-container" class="overflow-y-auto max-h-[70vh]"
+             hx-get="/dash/api/scores/?session_id={{ session_id }}"
+             hx-trigger="load, every 3s"
+             hx-indicator=".scores-loader">
+            <div class="text-center text-gray-500 py-4 text-xs">
+                <p>Loading scores...</p>
+            </div>
+            <!-- HTMX will replace this with the actual scores panel content -->
+        </div>
+        <div class="scores-loader htmx-indicator">
+            <div class="w-full h-3 bg-gray-200 rounded-sm mt-2 animate-pulse"></div>
         </div>
     </div>
 </div>
