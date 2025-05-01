@@ -38,14 +38,8 @@ class DataService:
 
         """
         try:
-            if not flow_name or not hasattr(flow_runner, "data_store") or not flow_runner.data_store:
-                return []
-
-            if not hasattr(flow_runner.data_store, "get_record_ids"):
-                return []
-
-            # Use data_store to get record IDs
-            record_ids: list[str] = flow_runner.data_store.get_record_ids()
+            record_mappings = flow_runner.flows[flow_name].get_record_ids()
+            record_ids: list[str] = [r["record_id"] for r in record_mappings]
 
             return record_ids
         except Exception as e:

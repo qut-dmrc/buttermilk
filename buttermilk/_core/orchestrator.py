@@ -179,9 +179,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     async def load_data(self):
         self._data_sources = await prepare_step_df(self.data)
 
-    async def get_record(self, record_id: str) -> Record | None:
-        record = await self._get_record_dataset(record_id)
-
     # --- Public Execution Method ---
     @observe()
     async def run(self, request: RunRequest | None = None):
@@ -296,7 +293,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 try:
                     rec = None
                     if request.record_id:
-                        rec = await self._get_record_dataset(request.record_id)
+                        rec = await self.get_record_dataset(request.record_id)
                         rec.metadata["fetch_source_id"] = request.record_id
                     elif request.uri:
                         # Fetch record by URL
@@ -319,7 +316,17 @@ class Orchestrator(OrchestratorProtocol, ABC):
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")
 
-    async def _get_record_dataset(self, record_id: str) -> Record:
+    async def get_record_ids(self) -> list[dict[str, str]]:
+        if not self._data_sources:
+            await self.load_data()
+        record_ids = []
+
+        for dataset in self._data_sources.values():
+            record_ids.extend(dataset.reset_index()["record_id", "name"].tolist())
+
+        return record_ids
+
+    async def get_record_dataset(self, record_id: str) -> Record:
         if not self._data_sources:
             await self.load_data()
 

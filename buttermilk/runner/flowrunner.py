@@ -3,10 +3,10 @@ import importlib
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.orchestrator import OrchestratorProtocol
+from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import BM, logger
 
@@ -19,11 +19,36 @@ class FlowRunner(BaseModel):
     """
 
     bm: BM
-    flows: Mapping[str, OrchestratorProtocol]  # Dictionary of unconfigured flow orchestrators.
+    flows: Mapping[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
+    flow_objects: dict[str, Orchestrator] = Field(default_factory=dict)  # Original flow configurations
+
     save: SaveInfo
     tasks: list = Field(default=[])
     ui: str
     model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="after")
+    def instantiate_orchestrators(self) -> "FlowRunner":
+        """Initialize orchestrator instances from their configuration."""
+        initialized_flows = {}
+
+        for flow_name, flow_config in self.flows.items():
+            if isinstance(flow_config, Orchestrator):
+                # Already an instantiated orchestrator
+                initialized_flows[flow_name] = flow_config
+            else:
+                # Extract orchestrator class path
+                orchestrator_path = flow_config.orchestrator
+                module_name, class_name = orchestrator_path.rsplit(".", 1)
+                module = importlib.import_module(module_name)
+                orchestrator_cls = getattr(module, class_name)
+
+                # Create orchestrator instance with config
+                config = flow_config if isinstance(flow_config, dict) else flow_config.model_dump()
+                initialized_flows[flow_name] = orchestrator_cls(**config)
+
+        self.flow_objects = initialized_flows
+        return self
 
     async def run_flow(self,
                         run_request: RunRequest,
@@ -42,13 +67,7 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
-        module_name, class_name = self.flows[run_request.flow].orchestrator.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-        orchestrator_cls = getattr(module, class_name)
-
-        config = self.flows[run_request.flow].model_dump()
-        # Create orchestrator instance
-        orchestrator = orchestrator_cls(**config)
+        orchestrator = self.flows[run_request.flow].orchestrator
 
         callback = orchestrator._make_publish_callback()
 
