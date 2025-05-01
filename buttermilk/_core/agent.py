@@ -25,8 +25,8 @@ from pydantic import (
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
+from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages,
 from buttermilk._core.contract import (
-    COMMAND_SYMBOL,  # Constant for command messages,
     AgentInput,  # Standard input message structure
     AgentTrace,
     ErrorEvent,
@@ -35,7 +35,7 @@ from buttermilk._core.contract import (
     OOBMessages,  # Union of Out-Of-Band control messages
     TaskProcessingComplete,
     TaskProcessingStarted,  # Request to execute a specific step
-    )
+)
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data, extract_records_from_data

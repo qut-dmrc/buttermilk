@@ -20,7 +20,7 @@ class DataService:
 
         """
         try:
-            return list(flow_runner.flows[flow_name].parameters.get("criteria", []).keys())
+            return list(flow_runner.flows[flow_name].parameters.get("criteria", []))
         except Exception as e:
             logger.warning(f"Error getting criteria for flow {flow_name}: {e}")
             return []

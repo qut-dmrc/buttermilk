@@ -4,8 +4,13 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from buttermilk._core.agent import ManagerRequest
-from buttermilk._core.contract import ErrorEvent, ManagerResponse, TaskProcessingComplete, TaskProgressUpdate
+from buttermilk._core.contract import (
+    ErrorEvent,
+    ManagerRequest,
+    ManagerResponse,
+    TaskProcessingComplete,
+    TaskProgressUpdate,
+)
 from buttermilk.bm import logger
 from buttermilk.web.fastapi_frontend.schemas import (
     ErrorEvent as SchemaErrorEvent,
@@ -260,7 +265,6 @@ class WebSocketManager:
             message: The message to send
 
         """
-        from buttermilk.web.fastapi_frontend.services.message_service import MessageService
         formatted_output = MessageService.format_message_for_client(message)
 
         if not formatted_output:

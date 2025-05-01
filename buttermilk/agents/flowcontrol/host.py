@@ -8,11 +8,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent, AgentResponse
+from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
 from buttermilk._core.contract import (
-    COMMAND_SYMBOL,
-    END,
-    MANAGER,
-    WAIT,
     AgentInput,
     AgentTrace,
     ConductorRequest,

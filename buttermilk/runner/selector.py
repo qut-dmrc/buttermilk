@@ -10,10 +10,8 @@ from rich.pretty import pretty_repr  # For formatted output of complex objects
 
 # Buttermilk core imports
 from buttermilk._core.agent import ErrorEvent, ProcessingError
+from buttermilk._core.constants import CONDUCTOR, END, WAIT
 from buttermilk._core.contract import (
-    CONDUCTOR,  # Role constant for the conductor/host agent
-    END,  # Special role indicating flow completion
-    WAIT,  # Special role indicating the orchestrator should wait
     AgentInput,
     AgentTrace,
     ConductorRequest,  # Request sent *to* the conductor

@@ -23,10 +23,8 @@ from autogen_core import (
 from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
+from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
-    CONDUCTOR,
-    # Added QualScore
-    MANAGER,
     AgentInput,
     ConductorRequest,
     FlowMessage,

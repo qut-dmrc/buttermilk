@@ -3,12 +3,14 @@ import json
 import re
 from typing import Any
 
-from buttermilk._core.agent import AgentTrace, ManagerRequest, ToolOutput
+from buttermilk._core.agent import AgentTrace
 from buttermilk._core.contract import (
     ConductorResponse,
+    ManagerRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
     TaskProgressUpdate,
+    ToolOutput,
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults

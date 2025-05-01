@@ -10,8 +10,8 @@ from shortuuid import uuid
 
 from buttermilk._core.agent import Agent, CancellationToken
 from buttermilk._core.config import ToolConfig
+from buttermilk._core.constants import COMMAND_SYMBOL
 from buttermilk._core.contract import (
-    COMMAND_SYMBOL,
     AgentInput,
     AgentTrace,
     ErrorEvent,
