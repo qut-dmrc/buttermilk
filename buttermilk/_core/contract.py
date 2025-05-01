@@ -7,7 +7,7 @@ and interactions with manager/conductor roles.
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
@@ -153,7 +153,22 @@ class TracingDetails(BaseModel):
 
 
 def _get_run_info() -> SessionInfo:
+    """Get the current session info from the global bm instance.
+    
+    Returns:
+        A SessionInfo object with the current run information.
+
+    """
     from buttermilk.bm import bm
+
+    if not hasattr(bm, "run_info") or bm.run_info is None:
+        # Create a default SessionInfo if none exists
+        from buttermilk._core.job import SessionInfo
+        return SessionInfo(
+            name="default_session",
+            job="default_job",
+            _get_ip_task=lambda: "127.0.0.1",
+        )
 
     return bm.run_info
 
@@ -229,7 +244,7 @@ class AgentTrace(FlowMessage):
     session_id: str = Field(default=_global_run_id, description="Session identifier.")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
-    agent_info: Optional["AgentConfig"] = Field(None, description="Configuration info from the agent")
+    agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent (required)")
 
     # Tracing information and call metadata.
     call_info: TracingDetails = Field(default_factory=TracingDetails, exclude=True)

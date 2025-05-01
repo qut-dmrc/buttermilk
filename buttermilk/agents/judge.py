@@ -98,9 +98,17 @@ class Judge(LLMAgent):
 
         # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
         # This method handles template rendering, API calls, retries, and parsing into _output_model.
-        result: AgentTrace = await self._process(message=message)
-
-        return result
+        response = await self._process(message=message)
+        
+        # Create a new AgentTrace from the response
+        trace = AgentTrace(
+            agent_info=self._cfg,
+            inputs=message,
+            outputs=response.outputs,
+            metadata=response.metadata
+        )
+        
+        return trace
 
     # Note: Other handlers (like _listen, _handle_events) can be added here if the Judge
     # needs to react to other message types or perform background tasks, inheriting or

@@ -1,6 +1,7 @@
 """Defines the LLMAgent, a base class for Buttermilk agents that interact with Language Models.
 """
 
+from collections.abc import Callable
 from typing import Any, Self  # Added Type for Pydantic model hinting
 
 import pydantic
@@ -14,16 +15,12 @@ from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from pydantic import BaseModel, Field, PrivateAttr
 
 # Buttermilk core imports
-from buttermilk._core.agent import Agent, AgentInput, AgentTrace  # Base agent and message types
+from buttermilk._core.agent import Agent, AgentInput, AgentResponse, AgentTrace  # Base agent and message types
 from buttermilk._core.contract import (
     # TODO: Review necessary contract types for this base class
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
-    ManagerMessage,
-    ManagerRequest,
-    StepRequest,
-    ToolOutput,
-)
+    )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
 from buttermilk._core.types import Record  # Data record type
@@ -276,7 +273,10 @@ class LLMAgent(Agent):
         return output
 
     # This is the primary method subclasses should call in their handlers.
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
+        public_callback: Callable | None = None,  # Callback provided by adapter
+        message_callback: Callable | None = None,  # Callback provided by adapter,
+        **kwargs) -> AgentResponse:
         """Core processing logic: fills template, calls LLM, makes AgentTrace.
 
         Args:
@@ -304,7 +304,11 @@ class LLMAgent(Agent):
             logger.error(msg)
             # Create an error output
             error_output = ErrorEvent(source=self.id, content=msg)
-            return error_output
+            # Wrap in AgentResponse
+            return AgentResponse(
+                metadata={"error": True, "source": self.id},
+                outputs=error_output,
+            )
             # Re-raising might be desired depending on orchestrator's error handling
             # raise template_error
 
@@ -324,22 +328,32 @@ class LLMAgent(Agent):
             msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
             error_output = ErrorEvent(source=self.id, content=msg)
-            return error_output
+            # Wrap in AgentResponse
+            return AgentResponse(
+                metadata={"error": True, "source": self.id},
+                outputs=error_output,
+            )
             # Depending on severity, might want to raise
             # raise ProcessingError(f"LLM call failed for agent {self.id}") from llm_error
 
         # 3. Create the standardized AgentTrace
-        output = self.make_trace(
+        trace = self.make_trace(
             chat_result=llm_result,
             inputs=message,  # Pass AgentInput
             messages=llm_messages,  # Pass messages sent
             schema=self._output_model,  # Pass schema used for validation attempt
         )
         # Add agent role/name for context in logs/outputs
-        output.metadata.update({"role": self.role, "name": self.name})
+        trace.metadata.update({"role": self.role, "name": self.name})
+
+        # 4. Wrap the trace in an AgentResponse
+        response = AgentResponse(
+            metadata=trace.metadata,
+            outputs=trace.outputs,
+        )
 
         logger.debug(f"Agent {self.id} finished _process.")
-        return output
+        return response
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Resets agent state (e.g., task index, last input)."""

@@ -7,7 +7,7 @@ from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.agent import Agent, ToolOutput
+from buttermilk._core.agent import Agent, AgentResponse
 from buttermilk._core.contract import (
     COMMAND_SYMBOL,
     END,
@@ -584,7 +584,14 @@ class HostAgent(Agent):
 
         logger.info(f"Host agent {self.id} reset complete.")
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
-        # This host does nothing when directly called
-        # Return an empty error event as a placeholder since None is not an acceptable return type
-        return ErrorEvent(source=self.id, content="")
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
+        """Host _process implementation - returns an empty response as a placeholder.
+        
+        This is not generally used directly as the host operates via _handle_events
+        """
+        # Create placeholder response with an error event
+        placeholder = ErrorEvent(source=self.id, content="Host agent has no direct processing behavior")
+        return AgentResponse(
+            metadata={"source": self.id},
+            outputs=placeholder,
+        )

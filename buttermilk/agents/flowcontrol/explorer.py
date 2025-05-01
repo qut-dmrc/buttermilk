@@ -8,13 +8,8 @@ from buttermilk._core.contract import (
     END,
     WAIT,
     AgentInput,
-    AgentTrace,
     ConductorRequest,
-    ErrorEvent,
-    ManagerMessage,
-    ManagerRequest,
     StepRequest,
-    ToolOutput,
 )
 
 from .llmhost import LLMHostAgent
@@ -33,11 +28,22 @@ class ExplorerHost(LLMHostAgent):
 
     _output_model: type[BaseModel] | None = StepRequest
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs):
         """Process a message for the Explorer agent - calls _choose to determine the next step"""
+        from buttermilk._core.agent import AgentResponse  # Import locally to avoid being removed
+
         if isinstance(message, ConductorRequest):
-            return await self._choose(message=message)
-        return StepRequest(role=WAIT, content="Waiting for conductor request")
+            step = await self._choose(message=message)
+            return AgentResponse(
+                metadata={"source": self.id, "role": self.role},
+                outputs=step,
+            )
+
+        step = StepRequest(role=WAIT, content="Waiting for conductor request")
+        return AgentResponse(
+            metadata={"source": self.id, "role": self.role},
+            outputs=step,
+        )
 
     # Explorer-specific configuration
     exploration_mode: str = Field(
@@ -57,7 +63,7 @@ class ExplorerHost(LLMHostAgent):
         description="Whether to prioritize unexplored agents over previously used ones",
     )
 
-    async def _choose(self, message: ConductorRequest) -> StepRequest:
+    async def _choose(self, message: ConductorRequest | None) -> StepRequest:
         """Choose the next step based on exploration context.
         
         This method analyzes the conversation history, user feedback,
@@ -77,19 +83,25 @@ class ExplorerHost(LLMHostAgent):
             logger.info(f"Reached maximum exploration steps ({self.max_exploration_steps}), suggesting END")
             return StepRequest(role=END, content="Reached maximum exploration steps")
 
+        # Handle the None case
+        if message is None:
+            logger.warning("Explorer received None message in _choose, using fallback")
+            return StepRequest(role=WAIT, content="Waiting for valid conductor request")
+            
         # Enhance message context with exploration-specific information
         enhanced_message = await self._enhance_message_for_exploration(message)
 
         # Use LLM to determine the next step
         result = await self._process(message=enhanced_message)
 
-        # Process the result - since we've updated our type system, result should now be directly a StepRequest
-        # But keep the fallback logic for backward compatibility
+        # Process the result
         if isinstance(result, StepRequest):
             step = result
-        elif isinstance(result, AgentTrace) and hasattr(result, "outputs") and isinstance(result.outputs, StepRequest):
-            # Legacy code path - the LLM returned a StepRequest wrapped in AgentTrace
-            # In the future, this branch can be removed as agents are updated
+        # Check more specific types that we know have outputs
+        elif (hasattr(result, "outputs") and
+              hasattr(result, "metadata") and
+              isinstance(result.outputs, StepRequest)):
+            # Handle AgentResponse or similar structures that contain a StepRequest
             step = result.outputs
         else:
             # Fallback for invalid or unexpected return types
