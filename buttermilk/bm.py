@@ -23,7 +23,6 @@ from typing import (
 )
 from rich import print
 from opentelemetry import trace
-import openlit
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
@@ -89,7 +88,10 @@ T = TypeVar("T")
 
 def _convert_to_hashable_type(element: Any) -> Any:
     if isinstance(element, dict):
-        return tuple((_convert_to_hashable_type(k), _convert_to_hashable_type(v)) for k, v in element.items())
+        return tuple(
+            (_convert_to_hashable_type(k), _convert_to_hashable_type(v))
+            for k, v in element.items()
+        )
     if isinstance(element, list):
         return tuple(map(_convert_to_hashable_type, element))
     return element
@@ -112,28 +114,43 @@ class Singleton:
 
 class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr(default="")
-    _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(default=None)  # Allow None initially
+    _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(
+        default=None
+    )  # Allow None initially
     _weave: WeaveClient = PrivateAttr()
 
     _tracer: trace.Tracer = PrivateAttr()
+
     @property
     def weave(self) -> WeaveClient:
         if not hasattr(self, "_weave"):
             # Ensure run_info is available before accessing name/job
-            if self.tracing and self.run_info and self.tracing.enabled and self.tracing.provider == "weave":
+            if (
+                self.tracing
+                and self.run_info
+                and self.tracing.enabled
+                and self.tracing.provider == "weave"
+            ):
                 collection = f"{self.run_info.name}-{self.run_info.job}"
                 self._weave = weave.init(collection)
             else:
-                raise RuntimeError("run_info/tracing details not set, cannot initialize Weave.")
+                raise RuntimeError(
+                    "run_info/tracing details not set, cannot initialize Weave."
+                )
         return self._weave
 
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
         from google.auth import default
-        from google.auth.transport.requests import Request  # Correct import needed here too
+        from google.auth.transport.requests import (
+            Request,
+        )  # Correct import needed here too
 
         if self._gcp_credentials_cached is None:
-            billing_project = os.environ.get("google_billing_project", os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project))
+            billing_project = os.environ.get(
+                "google_billing_project",
+                os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
+            )
             if not billing_project:
                 self._gcp_credentials_cached, self._gcp_project = default()
                 billing_project = self._gcp_project
@@ -178,7 +195,9 @@ class BM(Singleton, Project):
             # Try to get it from environment or raise error
             # This depends on how run_info is expected to be populated
             # For now, let's raise an error if it's critical
-            raise ValueError("BM instance created without run_info, which is required for setup.")
+            raise ValueError(
+                "BM instance created without run_info, which is required for setup."
+            )
 
         for cloud in self.clouds:
             if cloud.type == "gcp":
@@ -187,7 +206,9 @@ class BM(Singleton, Project):
                     "GOOGLE_CLOUD_PROJECT",
                     cloud.project,  # type: ignore[attr-defined]
                 )
-                if hasattr(cloud, "quota_project_id"):  # Check attribute existence for safety
+                if hasattr(
+                    cloud, "quota_project_id"
+                ):  # Check attribute existence for safety
                     os.environ["google_billing_project"] = cloud.quota_project_id  # type: ignore[attr-defined]
 
                 # authenticate here (triggers property getter)
@@ -232,33 +253,39 @@ class BM(Singleton, Project):
             #     )
 
             langfuse = Langfuse(
-                secret_key=os.getenv("LANGFUSE_SECRET_KEY"), 
-                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), 
-                host=os.getenv("LANGFUSE_HOST")
-                )
-            
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                host=os.getenv("LANGFUSE_HOST"),
+            )
+
             LANGFUSE_AUTH = base64.b64encode(
                 f"{os.environ.get('LANGFUSE_PUBLIC_KEY')}:{os.environ.get('LANGFUSE_SECRET_KEY')}".encode()
             ).decode()
-            
-            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = os.environ.get("LANGFUSE_HOST") + "/api/public/otel"
-            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
-            
+
+            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
+                os.environ.get("LANGFUSE_HOST") + "/api/public/otel"
+            )
+            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = (
+                f"Authorization=Basic {LANGFUSE_AUTH}"
+            )
+
             # trace_provider = TracerProvider()
             # trace_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter()))
-            
+
             # # Sets the global default tracer provider
             # trace.set_tracer_provider(trace_provider)
-            
+
             # # Creates a tracer from the global tracer provider
             # self._tracer = trace.get_tracer(self.run_info.name)
-            
-            # # Initialize OpenLIT instrumentation. 
+
+            # # Initialize OpenLIT instrumentation.
             # # # The disable_batch flag controls wheter to process traces immediately.
             # openlit.init(tracer=self._tracer, disable_batch=False)
 
             # pass
-            logger.info(f"Tracing set up, tracing to {os.environ.get('LANGFUSE_HOST')}.")
+            logger.info(
+                f"Tracing set up, tracing to {os.environ.get('LANGFUSE_HOST')}."
+            )
 
     @property
     def save_dir(self) -> str:
@@ -273,7 +300,9 @@ class BM(Singleton, Project):
         save_dir = save_dir or self.save_dir
         # Provide default extension if None
         effective_extension = extension if extension is not None else ".json"
-        result = save.save(data=data, save_dir=save_dir, extension=effective_extension, **kwargs)
+        result = save.save(
+            data=data, save_dir=save_dir, extension=effective_extension, **kwargs
+        )
         logger.info(
             dict(
                 message=f"Saved data to: {result}",
@@ -290,7 +319,9 @@ class BM(Singleton, Project):
         # Ensure run_info is available before setting up GCP logging
         if self.logger_cfg and self.logger_cfg.type == "gcp":
             if not self.run_info:
-                raise RuntimeError("run_info must be set before configuring GCP logging.")
+                raise RuntimeError(
+                    "run_info must be set before configuring GCP logging."
+                )
             if not hasattr(self.logger_cfg, "project"):
                 raise RuntimeError("GCP logger config missing 'project' attribute.")
             if not hasattr(self.logger_cfg, "location"):
@@ -312,7 +343,7 @@ class BM(Singleton, Project):
             fmt=console_format,
             isatty=True,
             stream=sys.stderr,
-            level=logging.DEBUG if verbose else logging.INFO
+            level=logging.DEBUG if verbose else logging.INFO,
         )
 
         resource = None
@@ -356,12 +387,16 @@ class BM(Singleton, Project):
         else:
             bm_logger.setLevel(logging.INFO)
 
-        message = f"Logging set up for: {self.run_info}. Ready. Save dir: {self.save_dir}"
+        message = (
+            f"Logging set up for: {self.run_info}. Ready. Save dir: {self.save_dir}"
+        )
 
         if resource:
             message = f"{message} {resource}"  # Append resource info if available
 
-        bm_logger.info(message, extra=dict(run=self.run_info.model_dump() if self.run_info else {}))
+        bm_logger.info(
+            message, extra=dict(run=self.run_info.model_dump() if self.run_info else {})
+        )
 
         try:
             from importlib.metadata import version
@@ -374,7 +409,9 @@ class BM(Singleton, Project):
     def gcs_log_client(self) -> google.cloud.logging.Client:
         # Ensure logger_cfg and project exist before creating client
         if not self.logger_cfg or not hasattr(self.logger_cfg, "project"):
-            raise RuntimeError("Logger config with GCP project needed for GCS Log Client.")
+            raise RuntimeError(
+                "Logger config with GCP project needed for GCS Log Client."
+            )
 
         if _REGISTRY.get("gcslogging") is None:
             _REGISTRY["gcslogging"] = google.cloud.logging.Client(
@@ -389,10 +426,14 @@ class BM(Singleton, Project):
         if not hasattr(self, "_gcp_project"):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
             if not hasattr(self, "_gcp_project"):  # Check again
-                raise RuntimeError("GCP project not determined. Ensure GCP cloud config is present.")
+                raise RuntimeError(
+                    "GCP project not determined. Ensure GCP cloud config is present."
+                )
 
         if _REGISTRY.get("gcs") is None:
-            _REGISTRY["gcs"] = storage.Client(project=self._gcp_project, credentials=self._gcp_credentials_cached)  # Pass credentials
+            _REGISTRY["gcs"] = storage.Client(
+                project=self._gcp_project, credentials=self._gcp_credentials_cached
+            )  # Pass credentials
         return _REGISTRY["gcs"]
 
     @property
@@ -417,7 +458,9 @@ class BM(Singleton, Project):
             )
             # Ensure the returned value is a dictionary
             if not isinstance(creds, dict):
-                raise TypeError(f"Expected credentials secret to be a dict, got {type(creds)}")
+                raise TypeError(
+                    f"Expected credentials secret to be a dict, got {type(creds)}"
+                )
             _REGISTRY["credentials"] = creds
         # Return type assertion for clarity
         return _REGISTRY["credentials"]
@@ -450,7 +493,9 @@ class BM(Singleton, Project):
 
             # Ensure connections is a dictionary before passing to LLMs
             if not isinstance(connections, dict):
-                raise TypeError(f"LLM connections loaded from secret/cache is not a dict: {type(connections)}")
+                raise TypeError(
+                    f"LLM connections loaded from secret/cache is not a dict: {type(connections)}"
+                )
 
             _REGISTRY["llms"] = LLMs(connections=connections)
         # Return type assertion for clarity
@@ -462,10 +507,14 @@ class BM(Singleton, Project):
         if not hasattr(self, "_gcp_project"):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
             if not hasattr(self, "_gcp_project"):  # Check again
-                raise RuntimeError("GCP project not determined. Ensure GCP cloud config is present.")
+                raise RuntimeError(
+                    "GCP project not determined. Ensure GCP cloud config is present."
+                )
 
         if _REGISTRY.get("bq") is None:
-            _REGISTRY["bq"] = bigquery.Client(project=self._gcp_project, credentials=self._gcp_credentials_cached)  # Pass credentials
+            _REGISTRY["bq"] = bigquery.Client(
+                project=self._gcp_project, credentials=self._gcp_credentials_cached
+            )  # Pass credentials
         return _REGISTRY["bq"]
 
     def run_query(
@@ -476,7 +525,9 @@ class BM(Singleton, Project):
         do_not_return_results=False,
         save_to_gcs=False,
         return_df=True,
-    ) -> pd.DataFrame | Any | bool:  # Allow Any for non-df results, bool for do_not_return
+    ) -> (
+        pd.DataFrame | Any | bool
+    ):  # Allow Any for non-df results, bool for do_not_return
         t0 = datetime.datetime.now()
 
         job_config_dict = {
@@ -507,7 +558,9 @@ class BM(Singleton, Project):
         if destination:
             job_config.destination = destination
             job_config.allow_large_results = True
-            job_config.write_disposition = "WRITE_TRUNCATE" if overwrite else "WRITE_APPEND"
+            job_config.write_disposition = (
+                "WRITE_TRUNCATE" if overwrite else "WRITE_APPEND"
+            )
 
         job = self.bq.query(sql, job_config=job_config)
 
@@ -516,8 +569,12 @@ class BM(Singleton, Project):
 
         if bytes_billed:
             approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
-            bytes_billed_str = humanfriendly.format_size(bytes_billed)  # Use different var name
-            approx_cost_str = humanfriendly.format_number(approx_cost)  # Use different var name
+            bytes_billed_str = humanfriendly.format_size(
+                bytes_billed
+            )  # Use different var name
+            approx_cost_str = humanfriendly.format_number(
+                approx_cost
+            )  # Use different var name
         else:
             bytes_billed_str = "N/A"  # Assign to string var
             approx_cost_str = "unknown"  # Assign to string var

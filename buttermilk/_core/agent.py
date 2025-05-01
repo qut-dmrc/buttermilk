@@ -153,7 +153,7 @@ class Agent(AgentConfig):
         # Allow subclasses to add more reset logic.
 
     @weave.op()  # Mark the primary execution method for tracing.
-    @observe()
+    @observe(as_type="generation")
     async def __call__(
         self,
         message: AgentInput,

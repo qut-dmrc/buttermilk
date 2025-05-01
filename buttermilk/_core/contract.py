@@ -316,6 +316,23 @@ class AgentOutput(FlowMessage):
     def __str__(self) -> str:
         return self.content
 
+    def model_dump(self, **kwargs):
+        """Override model_dump to exclude empty collections."""
+        exclude_keys = set(kwargs.get("exclude", set()))
+
+        # Find keys with empty values
+        for key, value in self.__dict__.items():
+            if isinstance(value, (list, dict, set)) and len(value) == 0:
+                exclude_keys.add(key)
+
+        # Update exclude with our extended set
+        kwargs["exclude"] = exclude_keys
+        return super().model_dump(**kwargs)
+
+    def model_dump_json(self, **kwargs):
+        """Override model_dump_json to exclude empty collections."""
+        return super().model_dump_json(**kwargs, exclude_none=True, exclude_unset=True)
+
     # def model_dump(self, **kwargs):
     #     """Custom serialization to handle Pydantic models and OmegaConf objects recursively."""
     #     data = super().model_dump(**kwargs)
