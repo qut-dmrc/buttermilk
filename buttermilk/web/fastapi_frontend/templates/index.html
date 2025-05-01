@@ -58,6 +58,15 @@
                         const container = document.getElementById('messages-container');
                         container.scrollTop = container.scrollHeight;
                     });
+                    
+                    // Trigger outcome updates for judge/synthesizer messages
+                    if (data.agent_info && (data.agent_info.role === 'judge' || data.agent_info.role === 'synthesiser')) {
+                        // Trigger HTMX to refresh outcomes
+                        console.log('Dispatching outcomes-updated event for judge/synthesizer message');
+                        document.dispatchEvent(new CustomEvent('outcomes-updated'));
+                        // Force a refresh of the outcomes panel
+                        htmx.trigger('#outcomes-container', 'outcomes-updated');
+                    }
                     break;
                 case 'script_content':
                     const scriptContent = data.content;
@@ -70,6 +79,11 @@
                     // Modern structured score handling
                     if (data.agent_id && data.assessor_id && data.score_data) {
                         window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
+                        // Trigger HTMX to refresh outcomes
+                        console.log('Dispatching outcomes-updated event for score update');
+                        document.dispatchEvent(new CustomEvent('outcomes-updated'));
+                        // Force a refresh of the outcomes panel
+                        htmx.trigger('#outcomes-container', 'outcomes-updated');
                     } else {
                         console.error('Invalid score update format:', data);
                     }

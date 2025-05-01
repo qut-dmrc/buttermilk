@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -230,11 +230,22 @@ class DashboardApp:
             """Get outcomes data (predictions and scores) for HTMX replacement"""
             session_id = request.query_params.get("session_id")
 
+            # Get client version to support conditional responses
+            client_version = request.query_params.get("version", "0")
+
             # Initialize containers
-            scores = {}
-            outcomes = []
+            scores: dict[str, dict[str, Any]] = {}
+            outcomes: list[dict[str, Any]] = []
+            current_version = "0"
 
             if session_id and session_id in self.session_data:
+                # Get or create outcomes version
+                current_version = self.session_data[session_id].get("outcomes_version", "0")
+
+                # If client already has latest version, return 304 Not Modified
+                if client_version == current_version:
+                    return Response(status_code=304)
+
                 # Extract data from session messages
                 for message in self.session_data[session_id].get("messages", []):
                     content = message.get("content", {})
@@ -554,10 +565,21 @@ class DashboardApp:
 
                 # Store in session data
                 if session_id in self.session_data:
+                    # Add message to history
                     self.session_data[session_id]["messages"].append({
                         "content": content,
                         "type": type(message).__name__,
                     })
+
+                    # Update outcomes version if this is a score or prediction message
+                    if isinstance(content, dict) and (
+                        content.get("type") == "score_update" or
+                        (content.get("type") == "chat_message" and
+                         content.get("agent_info", {}).get("role", "").lower() in ["judge", "synthesiser"])
+                    ):
+                        # Generate a new version number (timestamp-based for uniqueness)
+                        import time
+                        self.session_data[session_id]["outcomes_version"] = str(int(time.time() * 1000))
 
             # Handle progress updates
             if isinstance(message, TaskProgressUpdate) and session_id in self.active_connections:
