@@ -82,27 +82,6 @@ class FetchRecord(ToolConfig):
         # Return an ErrorEvent
         return ErrorEvent(source="fetch tool", content="No result found")
 
-    async def _get_record_dataset(self, record_id: str) -> Record | None:
-        if not self._data_sources:
-            await self.load_data()
-
-        for dataset in self._data_sources.values():
-            rec = dataset.query("record_id==@record_id")
-            if rec.shape[0] == 1:
-                data = rec.iloc[0].to_dict()
-                if "components" in data:
-                    content = "\n".join([d["content"] for d in data["components"]])
-                    return Record(
-                        content=content, metadata=data.get("metadata"), ground_truth=data.get("ground_truth"), uri=data.get("metadata").get("url"),
-                    )
-                return Record(**data)
-            if rec.shape[0] > 1:
-                raise ValueError(
-                    f"More than one record found for query record_id == {record_id}",
-                )
-
-        return None
-
 
 class FetchAgent(FetchRecord, Agent):
     id: str = pydantic.Field(default_factory=lambda: f"fetch_record_{uuid()[:4]}")

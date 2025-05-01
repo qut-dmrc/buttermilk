@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
@@ -71,64 +70,50 @@ class DashboardRoutes:
                 {"request": request, "now": datetime.datetime.now()},
             )
 
-        @self.router.get("/api/criteria/", response_class=HTMLResponse)
-        async def get_criteria(request: Request):
-            """Get criteria options for a specific flow using query parameter"""
+        @self.router.get("/api/flowdata/", response_class=HTMLResponse)
+        async def get_flowinfo(request: Request):
+            """Get criteria options and records for a specific flow using query parameter"""
             flow_name = request.query_params.get("flow")  # Get flow from query parameter
-            
-            logger.info(f"Criteria request received for flow: {flow_name}")
+
+            logger.info(f"Flow data request received for flow: {flow_name}")
 
             if not flow_name:
-                logger.warning("Request to /api/criteria/ missing 'flow' query parameter.")
+                logger.warning("Request to /api/flowdata/ missing 'flow' query parameter.")
                 return self.templates.TemplateResponse(
-                    "partials/criteria_options.html",
-                    {"request": request, "criteria": []},
+                    "partials/flow_dependent_data.html",
+                    {"request": request, "criteria": [], "record_ids": []},
                 )
 
             try:
                 criteria = await DataService.get_criteria_for_flow(flow_name, self.flows)
-                
+                record_ids = await DataService.get_records_for_flow(flow_name, self.flows)
+
                 # randomize the order
                 import random
                 random.shuffle(criteria)
-                
-                logger.info(f"Returning {len(criteria)} criteria options")
-                
+
+                logger.debug(f"Returning {len(criteria)} criteria options and {len(record_ids)} record options")
+
                 return self.templates.TemplateResponse(
-                    "partials/criteria_options.html",
-                    {"request": request, "criteria": criteria},
+                    "partials/flow_dependent_data.html",
+                    {
+                        "request": request,
+                        "criteria": criteria,
+                        "record_ids": record_ids,
+                    },
                 )
             except Exception as e:
-                logger.error(f"Error getting criteria for flow {flow_name}: {e}")
+                logger.error(f"Error getting data for flow {flow_name}: {e}")
                 # Return debug template on error
                 import datetime
                 return self.templates.TemplateResponse(
                     "partials/debug.html",
                     {
-                        "request": request, 
+                        "request": request,
                         "now": datetime.datetime.now(),
-                        "error": str(e)
+                        "error": str(e),
                     },
                 )
-
-        @self.router.get("/api/records/", response_class=HTMLResponse)
-        async def get_records(request: Request):
-            """Get record IDs for a specific flow"""
-            flow_name = request.query_params.get("flow")
-
-            if not flow_name:
-                logger.warning("Request to /api/records/ missing 'flow' query parameter.")
-                return self.templates.TemplateResponse(
-                    "partials/record_options.html",
-                    {"request": request, "record_ids": []},
-                )
-
-            record_ids = await DataService.get_records_for_flow(flow_name, self.flows)
-
-            return self.templates.TemplateResponse(
-                "partials/record_options.html",
-                {"request": request, "record_ids": record_ids},
-            )
 
         @self.router.get("/api/outcomes/", response_class=HTMLResponse)
         async def get_outcomes(request: Request):

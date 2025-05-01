@@ -47,8 +47,7 @@ class DataService:
             # Use data_store to get record IDs
             record_ids: list[str] = flow_runner.data_store.get_record_ids()
 
-            # For demonstration, limit to 10 records
-            return record_ids[:10]
+            return record_ids
         except Exception as e:
             logger.warning(f"Error getting records for flow {flow_name}: {e}")
             return []

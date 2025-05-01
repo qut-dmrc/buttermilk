@@ -6,6 +6,7 @@ of agent-based workflows (flows).
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any, Self
 
 import shortuuid  # For generating unique IDs
@@ -27,12 +28,14 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Agent variant configuration
     DataSourceConfig,
 )
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.agents.fetch import FetchRecord  # Agent for data fetching
 from buttermilk.bm import bm, logger  # Global instance and logger
+from buttermilk.runner.helpers import prepare_step_df
+from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects
 
@@ -119,6 +122,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # --- Internal State ---
     # Collects data passed between steps or used for templating.
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
+    _data_sources: dict[str, Any] = PrivateAttr(default={})
     # Holds the primary data records being processed by the flow.
     _records: list[Record] = PrivateAttr(default_factory=list)
 
@@ -170,6 +174,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
         }
 
         return self
+
+    # --- Records ---
+    async def load_data(self):
+        self._data_sources = await prepare_step_df(self.data)
+
+    async def get_record(self, record_id: str) -> Record | None:
+        record = await self._get_record_dataset(record_id)
 
     # --- Public Execution Method ---
     @observe()
@@ -280,26 +291,51 @@ class Orchestrator(OrchestratorProtocol, ABC):
     async def _fetch_initial_records(self, request: RunRequest) -> None:
         """Helper method to fetch records based on RunRequest if needed."""
         if not self._records and not request.records:  # Only fetch if no records exist yet
-            if request.uri or request.record_id:
-                logger.debug(f"Fetching initial records for request (ID: {request.record_id}, URI: {request.uri})...")
+            if request.record_id or request.uri:
+                logger.debug("Fetching initial record(s) based on request.")
                 try:
-                    # Use the FetchRecord agent directly (consider if this should be part of the flow instead)
-                    fetch_agent = FetchRecord(data=self.data)
-                    fetch_output = await fetch_agent._run(uri=request.uri, record_id=request.record_id, prompt=request.prompt)
-                    if fetch_output and fetch_output.results:
-                        self._records = fetch_output.results
-                        logger.debug(f"Successfully fetched {len(self._records)} initial record(s).")
-                    else:
-                        logger.warning("Initial fetch did not return any results.")
-                except ImportError:
-                    logger.error("Could not import FetchRecord agent for initial fetch.")
+                    rec = None
+                    if request.record_id:
+                        rec = await self._get_record_dataset(request.record_id)
+                        rec.metadata["fetch_source_id"] = request.record_id
+                    elif request.uri:
+                        # Fetch record by URL
+                        rec = await download_and_convert(request.uri)
+                        rec.metadata["fetch_source_id"] = request.uri
+                    if rec:
+                        logger.debug(f"Initial record found: {rec.record_id} from {rec.metadata['fetch_source_id']}")
+                        rec.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
+                        rec.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
+                        self._records = [rec]
+
                 except Exception as e:
-                    logger.error(f"Error fetching initial record: {e}")
-                    # Decide if fetch failure is fatal
+                    msg = f"Error fetching initial record: {e}"
+                    raise FatalError(msg)
             else:
-                logger.debug("No initial records, record_id, or uri provided in request.")
+                logger.warning("No initial records, record_id, or uri provided in request.")
         elif request.records:
             logger.debug(f"Using {len(request.records)} records provided directly in RunRequest.")
             self._records = request.records  # Use records provided in request if available
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")
+
+    async def _get_record_dataset(self, record_id: str) -> Record:
+        if not self._data_sources:
+            await self.load_data()
+
+        for dataset in self._data_sources.values():
+            rec = dataset.query("record_id==@record_id")
+            if rec.shape[0] == 1:
+                data = rec.iloc[0].to_dict()
+                if "components" in data:
+                    content = "\n".join([d["content"] for d in data["components"]])
+                    return Record(
+                        content=content, metadata=data.get("metadata"), ground_truth=data.get("ground_truth"), uri=data.get("metadata").get("url"),
+                    )
+                return Record(**data)
+            if rec.shape[0] > 1:
+                raise ValueError(
+                    f"More than one record found for query record_id == {record_id}",
+                )
+
+        raise ProcessingError(f"Unable to find requested record: {record_id}")

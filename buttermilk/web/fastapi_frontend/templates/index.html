@@ -208,11 +208,11 @@
                         name="flow" 
                         class="select select-bordered w-full"
                         x-model="selectedFlow"
-                        hx-get="/dash/api/criteria/"
+                        hx-get="/dash/api/flowdata/"
                         hx-include="[name='flow']"
-                        hx-target="#criteria-container"
+                        hx-target="#flow-dependent-data"
                         hx-trigger="change delay:100ms"
-                        hx-indicator=".criteria-loader"
+                        hx-indicator=".criteria-loader, .record-loader"
                         @change="selectedCriteria = ''; selectedRecordId = ''">
                         <option value="">Select a flow</option>
                         {% for flow in flow_choices %}
@@ -221,10 +221,7 @@
                     </select>
                 </div>
                 
-                <div class="form-control mb-2">
-                    <label for="criteria" class="label">
-                        <span class="label-text">Choose Criteria</span>
-                    </label>
+                <div id="flow-dependent-data">
                     <div id="criteria-container">
                         <select 
                             id="criteria" 
@@ -239,12 +236,6 @@
                             <span class="loading loading-dots loading-sm mt-2"></span>
                         </div>
                     </div>
-                </div>
-                
-                <div class="form-control mb-2">
-                    <label for="record_id" class="label">
-                        <span class="label-text">Record ID</span>
-                    </label>
                     <div id="record-container">
                         <select 
                             id="record_id" 
@@ -253,11 +244,6 @@
                             x-model="selectedRecordId"
                             disabled
                             x-bind:disabled="!selectedFlow"
-                            hx-get="/dash/api/records/"
-                            hx-include="[name='flow']"
-                            hx-target="#record-container"
-                            hx-trigger="load delay:500ms, change from:#flow"
-                            hx-indicator=".record-loader">
                             <option value="">Select record ID</option>
                         </select>
                         <div class="record-loader htmx-indicator">

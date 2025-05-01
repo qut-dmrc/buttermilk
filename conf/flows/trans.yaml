@@ -7,7 +7,6 @@ defaults:
     - synth
     - differences
   - /agents@observers:
-    - fetch
     - spy
     - owl
     - scorer
