@@ -542,7 +542,10 @@ def _format_message_for_client(message) -> dict | str | None:
         content = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span><br/>{content}'
 
     elif isinstance(message, ManagerRequest):
-        content = message.content
+        if message.content:
+            content = message.content
+        else:
+            return None
 
     else:
         # Unhandled message type

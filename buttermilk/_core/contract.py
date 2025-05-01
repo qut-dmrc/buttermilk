@@ -344,6 +344,8 @@ class ManagerMessage(FlowMessage):
     )
 
     def __str__(self) -> str:
+        if self.content is None:
+            return "ManagerMessage()"
         return self.content
 
 
