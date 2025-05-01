@@ -67,7 +67,7 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
-        orchestrator = self.flows[run_request.flow].orchestrator
+        orchestrator = self.flows[run_request.flow]
 
         callback = orchestrator._make_publish_callback()
 
