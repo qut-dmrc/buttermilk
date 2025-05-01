@@ -106,6 +106,7 @@ def main(cfg: DictConfig) -> None:
                 bm=bm,
                 flows=flow_runner,
             )
+
             # --- WORKAROUND for potential bm async init timing ---
             # If bm.setup_instance starts background tasks, give them time.
             # This is fragile; a better fix involves awaiting readiness.
