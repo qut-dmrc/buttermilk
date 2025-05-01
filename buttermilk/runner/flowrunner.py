@@ -1,6 +1,5 @@
 import asyncio
 import importlib
-from collections.abc import Mapping
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,8 +18,8 @@ class FlowRunner(BaseModel):
     """
 
     bm: BM
-    flows: Mapping[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
-    flow_objects: dict[str, Orchestrator] = Field(default_factory=dict)  # Original flow configurations
+    flows: dict[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
+    flow_configs: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Original flow configurations
 
     save: SaveInfo
     tasks: list = Field(default=[])
@@ -47,7 +46,8 @@ class FlowRunner(BaseModel):
                 config = flow_config if isinstance(flow_config, dict) else flow_config.model_dump()
                 initialized_flows[flow_name] = orchestrator_cls(**config)
 
-        self.flow_objects = initialized_flows
+        self.flow_configs = self.flows
+        self.flows = initialized_flows
         return self
 
     async def run_flow(self,

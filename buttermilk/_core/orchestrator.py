@@ -322,7 +322,11 @@ class Orchestrator(OrchestratorProtocol, ABC):
         record_ids = []
 
         for dataset in self._data_sources.values():
-            record_ids.extend(dataset.reset_index()["record_id", "name"].tolist())
+            df = dataset.reset_index()
+            if "name" not in df.columns:
+                df["name"] = df["record_id"]
+
+            record_ids.extend(df[["record_id", "name"]].to_dict(orient="records"))
 
         return record_ids
 

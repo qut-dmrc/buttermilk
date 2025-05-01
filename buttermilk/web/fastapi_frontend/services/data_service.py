@@ -38,7 +38,7 @@ class DataService:
 
         """
         try:
-            record_mappings = flow_runner.flows[flow_name].get_record_ids()
+            record_mappings = await flow_runner.flows[flow_name].get_record_ids()
             record_ids: list[str] = [r["record_id"] for r in record_mappings]
 
             return record_ids
