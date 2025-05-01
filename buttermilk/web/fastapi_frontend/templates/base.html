@@ -20,173 +20,133 @@
     <!-- DOMPurify for HTML sanitization -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
-    <!-- Custom styling -->
+    <!-- Tailwind Config with Typography Plugin Setup -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            typography: {
+              DEFAULT: {
+                css: {
+                  maxWidth: 'none',
+                  color: '#374151',
+                  lineHeight: '1.6',
+                  p: {
+                    marginBottom: '1rem'
+                  },
+                  h1: {
+                    fontSize: '1.8rem',
+                    fontWeight: '700',
+                    marginTop: '1.5rem',
+                    marginBottom: '0.75rem'
+                  },
+                  h2: {
+                    fontSize: '1.5rem',
+                    fontWeight: '600',
+                    marginTop: '1.25rem',
+                    marginBottom: '0.75rem'
+                  },
+                  h3: {
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    marginTop: '1rem',
+                    marginBottom: '0.5rem'
+                  },
+                  'h4, h5, h6': {
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    marginTop: '0.75rem',
+                    marginBottom: '0.5rem'
+                  },
+                  ul: {
+                    listStyleType: 'disc',
+                    marginBottom: '1rem',
+                    paddingLeft: '1.5rem'
+                  },
+                  ol: {
+                    listStyleType: 'decimal',
+                    marginBottom: '1rem',
+                    paddingLeft: '1.5rem'
+                  },
+                  li: {
+                    marginBottom: '0.25rem'
+                  },
+                  blockquote: {
+                    borderLeftWidth: '4px',
+                    borderLeftColor: '#e5e7eb',
+                    paddingLeft: '1rem',
+                    marginLeft: '0',
+                    marginRight: '0',
+                    marginBottom: '1rem',
+                    color: '#6b7280'
+                  },
+                  pre: {
+                    backgroundColor: '#f3f4f6',
+                    borderRadius: '0.375rem',
+                    padding: '1rem',
+                    overflowX: 'auto',
+                    marginBottom: '1rem'
+                  },
+                  code: {
+                    backgroundColor: '#f3f4f6',
+                    padding: '0.15rem 0.3rem',
+                    borderRadius: '0.25rem',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    fontSize: '0.9em'
+                  },
+                  'pre code': {
+                    backgroundColor: 'transparent',
+                    padding: '0',
+                    borderRadius: '0',
+                    fontSize: '0.9em',
+                    display: 'block'
+                  },
+                  a: {
+                    color: '#3b82f6',
+                    textDecoration: 'underline'
+                  },
+                  'a:hover': {
+                    textDecoration: 'none'
+                  },
+                  table: {
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    marginBottom: '1rem'
+                  },
+                  'th, td': {
+                    border: '1px solid #e5e7eb',
+                    padding: '0.5rem'
+                  },
+                  th: {
+                    backgroundColor: '#f9fafb',
+                    fontWeight: '600'
+                  }
+                }
+              }
+            }
+          }
+        },
+        plugins: []
+      }
+    </script>
+    
     <style>
-        .chat-message {
-            margin-bottom: 1rem;
-            padding: 1rem;
-            border-radius: 0.5rem;
-        }
-        
-        .score-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            margin-left: 5px;
-        }
-        
+        /* Minimal custom styling that's hard to achieve with just Tailwind */
         .progress-bar {
             transition: width 0.3s ease;
         }
         
-        /* Agent styling based on roles */
-        .agent-default {
-            background-color: #f8f9fa;
-            color: #6c757d;
-            border: 1px solid #dee2e6;
-        }
+        /* Use Tailwind classes for these in HTML:
+           agent-default: bg-gray-50 text-gray-600 border border-gray-200
+           agent-judge: bg-gray-100 text-gray-700 border border-gray-300
+           agent-scorer: bg-gray-50 text-gray-900 border border-gray-400
+           agent-assistant: bg-blue-50 text-blue-600 border border-blue-200
+           agent-instructions: bg-cyan-50 text-cyan-600 border border-cyan-200
+           agent-tool: bg-green-50 text-green-700 border border-green-200
+        */
         
-        .agent-judge {
-            background-color: #e9ecef;
-            color: #495057;
-            border: 1px solid #ced4da;
-        }
-        
-        .agent-scorer {
-            background-color: #f8f9fa;
-            color: #212529;
-            border: 1px solid #adb5bd;
-        }
-        
-        .agent-assistant {
-            background-color: #e7f1ff;
-            color: #0d6efd;
-            border: 1px solid #b6d4fe;
-        }
-        
-        .agent-instructions {
-            background-color: #cff4fc;
-            color: #0dcaf0;
-            border: 1px solid #9eeaf9;
-        }
-        
-        .agent-tool {
-            background-color: #d1e7dd;
-            color: #198754;
-            border: 1px solid #badbcc;
-        }
-        
-        /* Markdown content styling */
-        .markdown-content {
-            line-height: 1.6;
-        }
-        
-        .markdown-content h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-        }
-        
-        .markdown-content h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-top: 1.25rem;
-            margin-bottom: 0.75rem;
-        }
-        
-        .markdown-content h3 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .markdown-content h4, .markdown-content h5, .markdown-content h6 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-top: 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .markdown-content p {
-            margin-bottom: 1rem;
-        }
-        
-        .markdown-content ul, .markdown-content ol {
-            margin-bottom: 1rem;
-            padding-left: 1.5rem;
-        }
-        
-        .markdown-content ul {
-            list-style-type: disc;
-        }
-        
-        .markdown-content ol {
-            list-style-type: decimal;
-        }
-        
-        .markdown-content li {
-            margin-bottom: 0.25rem;
-        }
-        
-        .markdown-content blockquote {
-            border-left: 4px solid #e5e7eb;
-            padding-left: 1rem;
-            margin-left: 0;
-            margin-right: 0;
-            margin-bottom: 1rem;
-            color: #6b7280;
-        }
-        
-        .markdown-content pre {
-            background-color: #f3f4f6;
-            border-radius: 0.375rem;
-            padding: 1rem;
-            overflow-x: auto;
-            margin-bottom: 1rem;
-        }
-        
-        .markdown-content code {
-            background-color: #f3f4f6;
-            padding: 0.15rem 0.3rem;
-            border-radius: 0.25rem;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 0.9em;
-        }
-        
-        .markdown-content pre > code {
-            background-color: transparent;
-            padding: 0;
-            border-radius: 0;
-            font-size: 0.9em;
-            display: block;
-        }
-        
-        .markdown-content a {
-            color: #3b82f6;
-            text-decoration: underline;
-        }
-        
-        .markdown-content a:hover {
-            text-decoration: none;
-        }
-        
-        .markdown-content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1rem;
-        }
-        
-        .markdown-content table th, .markdown-content table td {
-            border: 1px solid #e5e7eb;
-            padding: 0.5rem;
-        }
-        
-        .markdown-content table th {
-            background-color: #f9fafb;
-            font-weight: 600;
-        }
+        /* Replace .markdown-content class with prose class from @tailwindcss/typography */
+        /* Example usage: <div class="prose"> instead of <div class="markdown-content"> */
     </style>
     
     {% block head %}{% endblock %}
