@@ -341,8 +341,6 @@ class AgentOutput(FlowMessage):
     #     if isinstance(self.outputs, BaseModel):
     #         data["outputs"] = self.outputs.model_dump()
 
-    #     # Recursively convert OmegaConf objects in the output data
-    #     data = convert_omegaconf_objects_recursive(data)
     #     return data
 
 # --- Manager / Conductor / UI Interaction Messages ---

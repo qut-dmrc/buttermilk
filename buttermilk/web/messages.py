@@ -641,7 +641,7 @@ def _format_message_for_client(message) -> dict | str | None:
             </div>
             <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
                 <div class="mb-2 font-bold">{message.title or 'Record Content'}</div>
-                <div>{message.text.replace('\n', '<br>')}</div>
+                <div>{message.text}</div>
             </div>
         </div>
         """
@@ -685,3 +685,21 @@ def _format_message_for_client(message) -> dict | str | None:
             pattern = rf"^{hashtags} (.+)$"
             replacement = f"<h{i}>\\1</h{i}>"
             content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+
+    # Apply styling to the message
+    if content is None:
+        content = ""  # Convert None to empty string to avoid type errors
+
+    styled_content = _format_message_with_style(content, agent_info, message_id)
+
+    # Return standardized chat message format
+    return {
+        "type": "chat_message",
+        "content": styled_content,
+        "agent_info": {
+            "role": agent_info.get("role", "default"),
+            "name": agent_info.get("name", "Unknown"),
+            "id": agent_info.get("id", ""),
+            "message_id": message_id,
+        },
+    }
