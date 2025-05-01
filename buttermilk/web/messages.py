@@ -32,7 +32,7 @@ AGENT_STYLES = {
         "border": "1px solid #dee2e6",
     },
     "judge": {
-        "avatar": "👨‍⚖️",  # Changed to a more distinctive judge icon
+        "avatar": "⚖️",  # Default fallback, but will be dynamically assigned
         "color": "#495057",
         "background": "#e9ecef",
         "border": "1px solid #ced4da",
@@ -232,16 +232,38 @@ def _format_score_indicator(score, simple=False) -> str:
     return ""
 
 
+# Judge emojis with different skin tones and variations
+JUDGE_AVATARS = [
+    "👨‍⚖️", "👨🏻‍⚖️", "👨🏼‍⚖️", "👨🏽‍⚖️", "👨🏾‍⚖️", "👨🏿‍⚖️",  # Male judge with different skin tones
+    "👩‍⚖️", "👩🏻‍⚖️", "👩🏼‍⚖️", "👩🏽‍⚖️", "👩🏾‍⚖️", "👩🏿‍⚖️",  # Female judge with different skin tones
+    "🧑‍⚖️", "🧑🏻‍⚖️", "🧑🏼‍⚖️", "🧑🏽‍⚖️", "🧑🏾‍⚖️", "🧑🏿‍⚖️",  # Gender-neutral judge with different skin tones
+    "⚖️",  # Traditional scales of justice (fallback)
+]
+
+def _get_judge_avatar(agent_id: str) -> str:
+    """Generate a consistent but random judge avatar based on agent ID."""
+    if not agent_id:
+        return "⚖️"  # Default fallback
+    
+    # Create a hash from the agent ID to ensure the same agent always gets the same avatar
+    hash_val = int(hashlib.md5(agent_id.encode()).hexdigest(), 16)
+    return JUDGE_AVATARS[hash_val % len(JUDGE_AVATARS)]
+
 def _format_message_with_style(content: str, agent_info: dict, message_id: str | None = None) -> str:
     """Apply styling to a message based on agent info."""
     # Get the predefined style for this agent role
     role = agent_info.get("role", "default")
     agent_style = AGENT_STYLES.get(role, AGENT_STYLES["default"])
-
+    
     # Extract styling elements
-    avatar = agent_style.get("avatar", "👤")
     background = agent_style.get("background", "#f8f9fa")
     border = agent_style.get("border", "1px solid #dee2e6")
+    
+    # Get avatar with special handling for judge role
+    if role == "judge":
+        avatar = _get_judge_avatar(agent_info.get("id", ""))
+    else:
+        avatar = agent_style.get("avatar", "👤")
 
     # Prefer custom color from agent_info if available, otherwise use role-based color
     color = agent_info.get("color") or agent_style.get("color", "#6c757d")
