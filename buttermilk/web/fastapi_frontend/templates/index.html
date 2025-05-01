@@ -56,7 +56,19 @@
                     });
                     this.$nextTick(() => {
                         const container = document.getElementById('messages-container');
-                        container.scrollTop = container.scrollHeight;
+                        // Calculate proper scroll position to keep the latest message visible
+                        // but not scroll unnecessarily far
+                        const lastMessage = container.lastElementChild;
+                        if (lastMessage) {
+                            // Scroll to make the last message fully visible
+                            const lastMessageHeight = lastMessage.offsetHeight;
+                            const containerHeight = container.clientHeight;
+                            // Scroll enough to show the message with some padding
+                            container.scrollTop = container.scrollHeight - containerHeight + Math.min(lastMessageHeight, 100);
+                        } else {
+                            // If no last message element found (template based rendering), use default
+                            container.scrollTop = container.scrollHeight;
+                        }
                     });
                     
                     // Trigger outcome updates for judge/synthesizer messages
@@ -312,26 +324,7 @@
             </div>
         </div>
         
-        <!-- Progress tracker -->
-        <div class="bg-white shadow rounded-lg p-4">
-            <h2 class="text-lg font-semibold mb-4">Workflow Progress</h2>
-            <div class="w-full bg-gray-200 rounded-full h-4">
-                <div 
-                    class="bg-indigo-600 h-4 rounded-full transition-all duration-500 progress-bar" 
-                    x-bind:class="{
-                        'bg-green-600': progress.status === 'completed',
-                        'bg-red-600': progress.status === 'error',
-                        'bg-indigo-600': progress.status !== 'completed' && progress.status !== 'error'
-                    }"
-                    x-bind:style="'width: ' + (progress.current_step / progress.total_steps * 100) + '%'">
-                </div>
-            </div>
-            <div class="mt-2 text-sm text-gray-600">
-                <span x-text="progress.status === 'waiting' ? 'Waiting to start' : progress.status"></span>
-                <span x-show="progress.step_name"> - <span x-text="progress.step_name"></span></span>
-                <span x-show="progress.role"> (<span x-text="progress.role"></span>)</span>
-            </div>
-        </div>
+        <!-- Progress information is now shown in the outcomes panel -->
         
     </div>
     

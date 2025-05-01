@@ -163,11 +163,21 @@ class DashboardApp:
                                             # Suppress type checking warnings with cast
                                             from typing import Any, cast
                                             df_with_dict = cast("pd.DataFrame", df)
-                                            records: list[dict[str, Any]] = df_with_dict.to_dict("records")
+                                            # Using intermediate variable to handle typing issues
+                                            raw_records = df_with_dict.to_dict("records")
+                                            records: list[dict[str, Any]] = []
+                                            for r in raw_records:
+                                                # Convert all keys to strings
+                                                records.append({str(k): v for k, v in r.items()})
                                             record_ids = [str(r.get("id", i)) for i, r in enumerate(records)]
                                         # Try direct iteration
                                         elif hasattr(df, "__iter__"):
-                                            record_ids = list(df)
+                                            try:
+                                                # Convert to list only if it's truly iterable
+                                                record_ids = list(df)
+                                            except TypeError:
+                                                # Fall back to string representation if iteration fails
+                                                record_ids = [str(df)]
                                         # Last resort: convert to string and use as single ID
                                         else:
                                             str_val = str(df)
@@ -236,6 +246,7 @@ class DashboardApp:
             # Initialize containers
             scores: dict[str, dict[str, Any]] = {}
             outcomes: list[dict[str, Any]] = []
+            pending_agents: list[str] = []  # Agents that are expected to provide input
             current_version = "0"
 
             if session_id and session_id in self.session_data:
@@ -246,7 +257,14 @@ class DashboardApp:
                 if client_version == current_version:
                     return Response(status_code=304)
 
-                # Extract data from session messages
+            # Get pending agents from progress data
+            if session_id in self.session_data and "progress" in self.session_data[session_id]:
+                progress_data = self.session_data[session_id]["progress"]
+                if isinstance(progress_data, dict) and "pending_agents" in progress_data:
+                    pending_agents = progress_data["pending_agents"]
+
+            # Extract data from session messages
+            if session_id in self.session_data:
                 for message in self.session_data[session_id].get("messages", []):
                     content = message.get("content", {})
 
@@ -313,7 +331,7 @@ class DashboardApp:
 
             return self.templates.TemplateResponse(
                 "partials/outcomes_panel.html",
-                {"request": request, "scores": scores, "outcomes": outcomes},
+                {"request": request, "scores": scores, "outcomes": outcomes, "pending_agents": pending_agents},
             )
 
         @self.app.get("/api/history/", response_class=HTMLResponse)
@@ -592,8 +610,20 @@ class DashboardApp:
                     "current_step": message.current_step,
                 }
 
-                # Update session data
+                # Update session data - add pending agents to the progress data
                 if session_id in self.session_data:
+                    # Initialize pending agents list if it doesn't exist
+                    if "pending_agents" not in progress_data:
+                        progress_data["pending_agents"] = []
+
+                    # Save pending_agents if a new agent starts working
+                    if message.status == "started" and message.role not in progress_data["pending_agents"]:
+                        progress_data["pending_agents"].append(message.role)
+
+                    # Remove from pending list if the agent is the same as the current agent
+                    if message.status == "completed" and message.role in progress_data["pending_agents"]:
+                        progress_data["pending_agents"].remove(message.role)
+
                     self.session_data[session_id]["progress"] = progress_data
 
                 # Send to client

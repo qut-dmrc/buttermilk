@@ -1,5 +1,19 @@
-{% if outcomes or scores %}
+{% if outcomes or scores or pending_agents %}
     <div>
+        <!-- Pending Agents Section -->
+        {% if pending_agents %}
+            <div class="mb-4">
+                <h3 class="text-sm font-medium text-gray-700 mb-2">Pending Input</h3>
+                <div class="flex flex-wrap gap-2">
+                    {% for agent in pending_agents %}
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 rounded-full bg-orange-500 mr-1"></div>
+                            <span class="text-xs text-gray-600">{{ agent }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
         <!-- Predictions Section -->
         {% if outcomes %}
             <div class="mb-4">
@@ -25,8 +39,8 @@
                                 {{ prediction.conclusion|truncate(80) }}
                             </div>
                             
-                            <!-- Detailed tooltip that appears on hover -->
-                            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg">
+                            <!-- Detailed tooltip that appears on hover - with proper z-index and positioned within the panel -->
+                            <div class="hidden group-hover:block absolute left-0 top-full z-50 w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg max-w-full" style="max-height: 300px; overflow-y: auto;">
                                 <div class="font-bold mb-2">{{ prediction.agent_name }}</div>
                                 <div class="mb-2">{{ prediction.conclusion }}</div>
                                 
@@ -59,12 +73,12 @@
                                 <div class="relative group" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
                                     <div class="flex items-center gap-1 cursor-pointer">
                                         <span class="text-xs text-gray-500">{{ assessor_id[:5] }}</span>
-                                        <div class="w-5 h-5 rounded-full flex items-center justify-center" style="background-color:{{ score_data.color }}">
+                                        <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background-color:{{ score_data.color }}">
                                             <span class="text-xs text-white font-medium">{{ score_data.score_text }}</span>
                                         </div>
                                     </div>
-                                    <!-- Detailed tooltip that appears on hover -->
-                                    <div class="hidden group-hover:block absolute left-0 top-full z-10 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg">
+                                    <!-- Detailed tooltip that appears on hover - with proper z-index and positioned within the panel -->
+                                    <div class="hidden group-hover:block absolute left-0 top-full z-50 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg max-w-full" style="max-height: 300px; overflow-y: auto;">
                                         <div class="font-bold mb-1">Score: {{ score_data.score_text }} by {{ assessor_id }}</div>
                                         {% if score_data.assessments %}
                                             <div class="mt-1">
