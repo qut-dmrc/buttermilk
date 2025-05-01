@@ -134,6 +134,7 @@ def _get_agent_info(message) -> dict:
         "id": "",
         "color": None,
         "message_id": None,
+        "model": None,
     }
 
     if isinstance(message, AgentOutput):
@@ -153,6 +154,10 @@ def _get_agent_info(message) -> dict:
             # If the message has a custom color in agent_info, use it
             if hasattr(info, "parameters") and isinstance(info.parameters, dict) and "color" in info.parameters:
                 agent_info["color"] = info.parameters["color"]
+
+            # Try to get model info
+            if hasattr(info, "parameters") and isinstance(info.parameters, dict) and "model" in info.parameters:
+                agent_info["model"] = info.parameters["model"]
 
         # For answer tracking with scores
         if hasattr(message, "call_id"):
@@ -440,7 +445,7 @@ def _format_message_for_client(message) -> dict | str | None:
 
     # Handle score messages
     if _is_score_message(message):
-        logger.debug(f"Detected score message from: {agent_info.get('name', "unknown")}")
+        logger.debug(f"Detected score message from: {agent_info.get('name', 'unknown')}")
         score_value, score_obj = _extract_score(message)
         logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
 
