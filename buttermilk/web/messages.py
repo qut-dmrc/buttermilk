@@ -561,7 +561,7 @@ def _format_message_for_client(message) -> dict | str | None:
                     "assessor_id": getattr(score_obj, "assessor", "scorer"),
                     "score_data": {
                         "score": getattr(score_obj, "correctness", 0.0),
-                        "score_text": f"{int(getattr(score_obj, 'correctness', 0.0) * 100)}%",
+                        "score_text": "N/A",
                         "color": _get_score_color(getattr(score_obj, "correctness", 0.0)),
                         "assessments": [],
                     },

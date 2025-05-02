@@ -71,7 +71,7 @@ class FlowRunner(BaseModel):
 
         callback = orchestrator._make_publish_callback()
 
-        logger.info(f"Starting flow '{run_request.flow}' with orchestrator '{orchestrator_cls.__name__}'")
+        logger.info(f"Starting flow '{run_request.flow}'")
         self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))
 
         return callback
