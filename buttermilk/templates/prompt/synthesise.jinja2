@@ -5,7 +5,7 @@ Inputs:
   - instructions: The original task instructions given to the agents.
   - q: (Implied) The original question or topic being addressed.
   - content: (Implied) The original content being analyzed.
-  - answers: A list of draft answers, expected to be AgentOutputs from previous steps (e.g., Judge agents).
+  - answers: A list of draft answers, expected to be AgentTraces from previous steps (e.g., Judge agents).
              The template accesses `answer.outputs.reasons`.
   - feedback: (Optional) Additional feedback to incorporate.
   - criteria: The evaluation criteria to apply during synthesis.

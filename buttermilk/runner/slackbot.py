@@ -11,13 +11,13 @@ from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
 from autogen_core.models import AssistantMessage, UserMessage
-from buttermilk._core.contract import MANAGER, FlowProtocol
+from buttermilk._core.contract import MANAGER
+from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import BM, bm, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.selector import Selector
-
 orchestrators = [AutogenOrchestrator, Selector]
 
 BOTPATTERNS = re.compile(
@@ -62,7 +62,7 @@ def initialize_slack_bot(
 
 async def register_handlers(
     slack_app: AsyncApp,
-    flows: Mapping[str, FlowProtocol],
+    flows: Mapping[str, OrchestratorProtocol],
     orchestrator_tasks: asyncio.Queue,
 ):
     async def _flow_start_matcher(body):
@@ -233,7 +233,7 @@ async def start_flow_thread(
     bm: BM,
     context: SlackContext,
     slack_app: AsyncApp,
-    flow_cfg: FlowProtocol,
+    flow_cfg: OrchestratorProtocol,
     orchestrator_tasks: asyncio.Queue,
     init_text: str,
 ) -> None:

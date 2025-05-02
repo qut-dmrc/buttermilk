@@ -72,7 +72,7 @@ def toxic_record() -> Record:
     return rec
 
 
-@pytest.fixture(scope="session", parameters=TOXCLIENTS)
+@pytest.fixture(scope="session", params=TOXCLIENTS)
 def toxmodel(request):
     return request.param()
 

@@ -3,9 +3,7 @@ from pathlib import Path
 from typing import (
     Annotated,
     Any,
-    List,
     Literal,
-    Optional,
     Self,
 )
 
@@ -28,11 +26,11 @@ from buttermilk._core.log import logger
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,
-    lowercase_validator,  # Pydantic validators
+    uppercase_validator,  # Pydantic validators
 )
 
 from .defaults import BQ_SCHEMA_DIR
-from .types import SessionInfo
+from .types import RunRequest, SessionInfo
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -69,7 +67,7 @@ class SaveInfo(CloudProviderCfg):
     db_schema: str = Field(..., description="Local name or path for schema file")
     dataset: str | None = Field(default=None)
 
-    _loaded_schema: List[SchemaField] = PrivateAttr(default=[])
+    _loaded_schema: list[SchemaField] = PrivateAttr(default=[])
 
     # model_config = ConfigDict(
     #     json_encoders={
@@ -106,7 +104,7 @@ class SaveInfo(CloudProviderCfg):
 
     @computed_field
     @property
-    def bq_schema(self) -> List[SchemaField]:
+    def bq_schema(self) -> list[SchemaField]:
         if not self._loaded_schema:
             from buttermilk.bm import bm
 
@@ -115,7 +113,6 @@ class SaveInfo(CloudProviderCfg):
 
 
 class DataSourceConfig(BaseModel):
-    name: str
     max_records_per_group: int = -1
     type: Literal[
         "job",
@@ -159,21 +156,20 @@ class DataSouce(DataSourceConfig):
 
 
 class ToolConfig(BaseModel):
-    role: str = Field(default="")
     description: str = Field(default="")
     tool_obj: str = Field(default="")
 
-    data: list[DataSourceConfig] = Field(
+    data: Mapping[str, DataSourceConfig] = Field(
         default=[],
         description="Specifications for data that the Agent should load",
     )
 
     def get_functions(self) -> list[Any]:
         """Create function definitions for this tool."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
     async def _run(self, **kwargs) -> list[Any] | None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class Tracing(BaseModel):
@@ -191,7 +187,7 @@ class Project(BaseModel):
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
-    run_info: Optional[SessionInfo] = Field(
+    run_info: SessionInfo | None = Field(
         default=None,
         description="Information about the context in which this project runs",
     )
@@ -208,43 +204,34 @@ class Project(BaseModel):
 
 # --- Agent Configuration ---
 class AgentConfig(BaseModel):
-    """
-    Base Pydantic model defining the configuration structure for all Buttermilk agents.
+    """Base Pydantic model defining the configuration structure for all Buttermilk agents.
 
     Loaded and instantiated by Hydra based on YAML configuration files. Includes
     core identification, behavior parameters, and connections to data/tools.
     """
 
     # Core Identification
-    id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.")
-    role: Annotated[str, AfterValidator(lowercase_validator)] = Field(
-        ...,  # Role is required
-        description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor'). Must be lowercase.",
+    id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
+
+    role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
+        default="",
+        description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
     )
     name: str = Field(default="", description="A human-friendly name for the agent instance, often including the role and a unique ID.")
     description: str = Field(
-        ...,  # Description is required
+        default="",
         description="A brief explanation of the agent's purpose and capabilities.",
     )
-    agent_obj: str = Field(  # Class name used by Hydra for instantiation.
-        default="",
-        description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
-        exclude=True,  # Excluded from model serialization, as it's primarily for loading.
-    )
-
-    # Variant configuration
-    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
-    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
-    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
 
     # Behavior & Connections
     tools: list[ToolConfig] = Field(
         default_factory=list,  # Use factory for mutable default
         description="Configuration for tools (functions) that the agent can potentially use.",
     )
-    data: list[DataSourceConfig] = Field(
-        default_factory=list,  # Use factory for mutable default
+    data: Mapping[str, DataSourceConfig] = Field(
+        default_factory=dict,  # Use factory for mutable default
         description="Configuration for data sources the agent might need access to.",
+        serialization_alias="mapping_data",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -253,9 +240,11 @@ class AgentConfig(BaseModel):
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="Defines mappings for how incoming data should populate the agent's input context (using JMESPath).",
+        serialization_alias="mapping_inputs",
     )
     # TODO: 'outputs' field seems unused currently. Define its purpose or remove.
-    outputs: dict[str, Any] = Field(default_factory=dict)
+    outputs: dict[str, Any] = Field(default_factory=dict,
+        serialization_alias="mapping_outputs")
 
     # Pydantic Model Configuration
     model_config = {
@@ -265,10 +254,10 @@ class AgentConfig(BaseModel):
     }
 
     # Private Attributes (Internal state, often defaults or generated)
-    _id: str = PrivateAttr(default_factory=lambda: uuid()[:6])  # Short unique ID component.
+    unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
     base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=False)
     # Defines which attributes are combined to create the human-friendly 'name'.
-    _name_components: list[str] = ["base_name", "_id"]
+    _name_components: list[str] = ["base_name", "unique_identifier"]
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
@@ -276,30 +265,60 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="after")
     def _generate_name_and_id(self) -> Self:
+        """Generates the unique `id` and formatted `name` for the agent instance after validation.
+        Designed to be idempotent to work with validate_assignment=True.
+
+        - Sets `id` based on `role` and `unique_identifier`.
+        - Sets `base_name` from the initial `name` if not already set.
+        - Sets final `name` by combining components defined in `_name_components`.
         """
-        Generates the unique `id` and formatted `name` for the agent instance after validation.
+        # 1. Determine the intended base_name
+        # 'self.name' here holds the value provided *before* this validator potentially modifies it.
+        intended_base_name = self.base_name
+        if intended_base_name is None:
+            if not self.name:  # Check if initial name was provided
+                raise ValueError("AgentConfig requires an initial human-friendly 'name' field in configuration.")
+            intended_base_name = self.name  # Intend to use the initial name as base
 
-        - Sets `id` based on `role` and `_id`.
-        - Sets `name` by combining components defined in `_name_components`.
-        """
-        # Generate the full unique ID: e.g., "judge-a1b2c3"
-        self.id = f"{self.role}-{self._id}"
+        # 2. Calculate the intended final ID
+        intended_id = f"{self.role}-{self.unique_identifier}"
 
-        # Set the base_name from the initially provided 'name' if not already set.
-        if not self.base_name:
-            if not self.name:  # Ensure a base name was provided in the config.
-                raise ValueError("AgentConfig requires a human-friendly 'name' field in configuration.")
-            self.base_name = self.name  # Store the original human-friendly name part.
+        # 3. Calculate the intended final name based on components
+        name_parts = []
+        # Use the *intended* base_name for calculation, not necessarily the current self.base_name
+        current_base_name_for_calc = intended_base_name if intended_base_name is not None else ""
 
-        # Construct the final display 'name' from specified components.
-        name_parts = [getattr(self, comp, None) for comp in self._name_components]
-        self.name = " ".join([str(part) for part in name_parts if part])  # Join non-None parts.
+        for comp in self._name_components:
+            if comp == "base_name":
+                part = current_base_name_for_calc
+            else:
+                # Get other components like unique_identifier, role etc.
+                part = getattr(self, comp, None)
+
+            if part is not None and str(part):  # Ensure part is not None and not empty string
+                name_parts.append(str(part))
+
+        intended_name = " ".join(name_parts)
+
+        # 4. Assign values only if they differ from the calculated intended state
+        # This prevents infinite loops with validate_assignment=True
+        if self.base_name != intended_base_name:
+             # Only set base_name if it's currently None and we determined it from initial name
+             if self.base_name is None and intended_base_name is not None:
+                 self.base_name = intended_base_name
+
+        if self.id != intended_id:
+            self.id = intended_id
+
+        if self.name != intended_name:
+            # Update the 'name' field to the final composed name
+            self.name = intended_name
+
         return self
 
 
 class AgentVariants(AgentConfig):
-    """
-    A factory for creating Agent instance variants based on parameter combinations.
+    """A factory for creating Agent instance variants based on parameter combinations.
 
     Defines two types of variants:
     1. `parallel_variants`: Parameters whose combinations create distinct agent instances
@@ -319,29 +338,52 @@ class AgentVariants(AgentConfig):
         criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
         temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent
                                         # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
-      parameters:
+
+    Parameters
+    ----------
         template: analyst               # parameter sets shared for each task
       inputs:
         results: othertask.outputs.results  # dynamic inputs mapped from other data
     ```
+
     """
 
-    def get_configs(self) -> list[tuple[type, AgentConfig]]:
-        """
-        Generates agent configurations based on parallel and sequential variants.
+    # --- Variant configuration: fields used to generate AgentConfig objects ---
+    agent_obj: str = Field(  # Class name used by Hydra for instantiation.
+        default="",
+        description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
+    )
+    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
+    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
+    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
+    extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
+    # --- Variant configuration: fields used to generate AgentConfig objects ---
+
+    def get_configs(self, params: RunRequest | None = None) -> list[tuple[type, AgentConfig]]:
+        """Generates agent configurations based on parallel and sequential variants.
         """
         # Get static config (base attributes excluding variant fields)
         static_config = self.model_dump(
             exclude={
                 "parallel_variants",
-                "id",
+                "id", "unique_identifier",
                 "sequential_variants",
                 "num_runs",
                 "parameters",
                 "tasks",
-            }
+            },
         )
         base_parameters = self.parameters.copy()  # Base parameters common to all
+
+        # Get extra parameters passed in at runtime if requested
+        if params:
+            for key in self.extra_params:
+                if key not in params.model_fields_set:
+                    raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
+                base_parameters[key] = getattr(params, key)
+
+        # And parameters passed in the request by the user
+        request_params = params.parameters if params else {}
 
         # Get agent class
         from buttermilk._core.variants import AgentRegistry
@@ -365,15 +407,15 @@ class AgentVariants(AgentConfig):
                     # Start with static config
                     cfg_dict = static_config.copy()
 
-                    # Combine base parameters, parallel variant parameters, and sequential task parameters
+                    # Combine base parameters, parallel variant parameters, sequential task parameters, and parameters passed in from the UI in the request
                     # Order matters: task parameters overwrite parallel, parallel overwrite base
-                    combined_params = {**base_parameters, **parallel_params, **task_params}
+                    combined_params = {**base_parameters, **parallel_params, **task_params, **request_params}
                     cfg_dict["parameters"] = combined_params
 
                     # Create and add the AgentConfig instance
                     try:
-                        # Ensure AgentConfig allows extra fields if needed, or filter cfg_dict
-                        # AgentConfig currently has extra='allow', so unknown fields are okay
+                        # Filter dict so we only provide values that belong in the final AgentConfig instance
+                        cfg_dict = {k: v for k, v in cfg_dict.items() if k in AgentConfig.model_fields}
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:

@@ -1,5 +1,4 @@
-"""
-Tests for the Selector class.
+"""Tests for the Selector class.
 """
 
 import asyncio
@@ -7,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import WAIT, AgentInput, AgentOutput, ConductorResponse, StepRequest
+from buttermilk._core.contract import WAIT, AgentInput, AgentTrace, ConductorResponse, StepRequest
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.selector import Selector
 
@@ -76,43 +75,43 @@ async def test_get_host_action_success(orchestrator):
         side_effect=[
             # First call - return the conductor response
             [
-                AgentOutput(
+                AgentTrace(
                     agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
-                )
+                ),
             ],
             # Second call (after handling the message) - return the step
             [
-                AgentOutput(
+                AgentTrace(
                     agent_id="test",
                     content="Next step",
                     outputs=mock_step_dict,
-                )
+                ),
             ],
             # Third call - empty response to return a wait step
             empty_response,
-        ]
+        ],
     )
 
     # Fix the mock response - use a proper StepRequest object directly
     step_request = StepRequest(role="test_agent", description="test step", prompt="test prompt")
-    mock_step_response = AgentOutput(agent_info="test", content="Next step", outputs=step_request)
+    mock_step_response = AgentTrace(agent_info="test", content="Next step", outputs=step_request)
 
     # Reset the mock with proper responses
     orchestrator._ask_agents = AsyncMock(
         side_effect=[
             # First call returns conductor response
             [
-                AgentOutput(
+                AgentTrace(
                     agent_id="test",
                     content="Need more info",
                     outputs=conductor_response.model_dump(),
-                )
+                ),
             ],
             # Second call returns proper step
             [mock_step_response],
-        ]
+        ],
     )
 
     # Set up handle_host_message as a simple mock - we won't check if it was called
@@ -155,7 +154,7 @@ async def test_get_host_conductor_message(orchestrator):
         content="Need more info",
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
-    mock_output = AgentOutput(
+    mock_output = AgentTrace(
         agent_id="test",
         content="Need more info",
         outputs=conductor_response.model_dump(),  # Convert to dict
@@ -167,7 +166,7 @@ async def test_get_host_conductor_message(orchestrator):
     mock_step_dict = {"role": "test_agent", "description": "test step", "prompt": "test prompt"}
 
     # Make the response more explicit to avoid role "error" issue
-    mock_follow_up = AgentOutput(
+    mock_follow_up = AgentTrace(
         agent_id="test",
         content="Next step",
         outputs=mock_step,  # Use the StepRequest object directly
@@ -201,7 +200,7 @@ async def test_execute_step(orchestrator):
     orchestrator._agent_types = {"test_agent": [(mock_agent_type, mock_agent_config)]}
 
     mock_input = AgentInput(role="user", content="test input")
-    mock_response = AgentOutput(agent_info="test", role="assistant", content="test output", outputs={"key": "value"})
+    mock_response = AgentTrace(agent_info="test", role="assistant", content="test output", outputs={"key": "value"})
 
     # Mock runtime and get_agent
     orchestrator._runtime = AsyncMock()
@@ -333,7 +332,7 @@ async def test_in_the_loop_multiple_variants(orchestrator):
 
     # Multiple variants
     orchestrator._active_variants = {
-        "test_agent": [("agent_type1", MagicMock(id="variant1", role="Agent1")), ("agent_type2", MagicMock(id="variant2", role="Agent2"))]
+        "test_agent": [("agent_type1", MagicMock(id="variant1", role="Agent1")), ("agent_type2", MagicMock(id="variant2", role="Agent2"))],
     }
 
     orchestrator._send_ui_message = AsyncMock()
@@ -364,7 +363,7 @@ async def test_run_with_records(orchestrator):
             StepRequest(role=WAIT, description="Waiting", prompt="Please wait..."),
             StepRequest(role="test_agent", description="Step 2", prompt="Prompt 2"),
             Exception("StopAsyncIteration"),  # Simulate end of flow
-        ]
+        ],
     )
     orchestrator._in_the_loop = AsyncMock(return_value=True)
     orchestrator._prepare_step = AsyncMock(return_value=AgentInput())
@@ -374,7 +373,7 @@ async def test_run_with_records(orchestrator):
     # Mock sleep to speed up test
     with patch("asyncio.sleep", new=AsyncMock()):
         # Run with record
-        request = RunRequest(record_id="test_id")
+        request = RunRequest(flow="selector", record_id="test_id")
         orchestrator._records = ["test_record"]
 
         # Call the method

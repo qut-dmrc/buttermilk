@@ -1,11 +1,11 @@
 import pprint
 
-from buttermilk._core.contract import AgentOutput
+from buttermilk._core.contract import AgentTrace
 from buttermilk._core.defaults import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk.agents.ui.formatting.slackblock import format_response
 
 
-def format_slack_reasons(result: AgentOutput) -> dict:
+def format_slack_reasons(result: AgentTrace) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
     blocks = []
     result_copy = result.model_copy(deep=True)
@@ -20,7 +20,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                 "text": header_text,
                 "emoji": True,
             },
-        }
+        },
     )
     blocks.append(
         {
@@ -29,7 +29,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                 "type": "mrkdwn",
                 "text": ", ".join(result_copy.inputs.values()),
             },
-        }
+        },
     )
 
     # Handle error case
@@ -41,7 +41,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                     "type": "mrkdwn",
                     "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get("error"))),
                 },
-            }
+            },
         )
 
     else:
@@ -76,7 +76,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                                 "type": "mrkdwn",
                                 "text": special_text.strip(),
                             },
-                        }
+                        },
                     )
 
             # Add labels as chips if present
@@ -91,7 +91,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                                 "type": "mrkdwn",
                                 "text": label_text,
                             },
-                        }
+                        },
                     )
 
             # Handle any remaining fields in outputs
@@ -106,7 +106,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                                 "type": "mrkdwn",
                                 "text": text,
                             },
-                        }
+                        },
                     )
 
             # Add divider before reasons if there are any
@@ -114,7 +114,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                 blocks.append(
                     {
                         "type": "divider",
-                    }
+                    },
                 )
 
                 blocks.append(
@@ -124,7 +124,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                             "type": "mrkdwn",
                             "text": "*Reasoning:*",
                         },
-                    }
+                    },
                 )
 
                 # Add each reason as its own contextual block for better readability
@@ -138,7 +138,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                                     "text": f"{i + 1}. {reason}",
                                 },
                             ],
-                        }
+                        },
                     )
         else:
             # Handle case where outputs is not a dict
@@ -150,7 +150,7 @@ def format_slack_reasons(result: AgentOutput) -> dict:
                             "type": "mrkdwn",
                             "text": text,
                         },
-                    }
+                    },
                 )
 
     # Slack has a limit on blocks, so ensure we don't exceed it

@@ -1,16 +1,16 @@
-"""
-Defines the Judge agent, an LLM-based agent specialized for evaluating content
+"""Defines the Judge agent, an LLM-based agent specialized for evaluating content
 against predefined criteria.
 """
 
-from typing import Literal, Optional, Type
+from typing import Literal
 
 # Import Autogen core components needed for type hints and potential interaction (though handled by adapter)
 from pydantic import BaseModel, Field
 
 # Buttermilk core imports
-from buttermilk._core.agent import AgentInput, AgentOutput, buttermilk_handler  # Base types and decorator
+from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
+from buttermilk.agents.reasoning import Reasons
 from buttermilk.bm import logger  # Global Buttermilk instance and logger
 
 # Utility imports
@@ -20,9 +20,8 @@ from buttermilk.bm import logger  # Global Buttermilk instance and logger
 # --- Pydantic Models ---
 
 
-class AgentReasons(BaseModel):
-    """
-    Structured output model for the Judge agent's evaluation.
+class JudgeReasons(Reasons):
+    """Structured output model for the Judge agent's evaluation.
 
     Defines the expected JSON structure returned by the LLM after evaluating
     content against the provided criteria.
@@ -30,7 +29,7 @@ class AgentReasons(BaseModel):
 
     conclusion: str = Field(..., description="Your conclusion or final answer summarizing the evaluation.")
     prediction: bool = Field(
-        ...,  # Make field required
+        ...,
         description="Boolean flag indicating if the content violates the policy/guidelines. This should be derived logically from the reasoning and criteria application.",
     )
     reasons: list[str] = Field(
@@ -39,12 +38,12 @@ class AgentReasons(BaseModel):
     )
     confidence: Literal["high", "medium", "low"] = Field(
         ...,
-        description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction.",  # Make field required
+        description="The agent's confidence level (high, medium, or low) in its overall conclusion and prediction.",
     )
 
     def __str__(self):
-        """Returns a nicely formatted string representation of the evaluation."""
-        reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
+        """Returns a nicely formatted MarkDown representation of the evaluation."""
+        reasons_str = "\n\n".join(f"\t- {reason}" for reason in self.reasons)
         return (
             f"**Conclusion:** {self.conclusion}\n"
             f"**Violates Policy:** {'Yes' if self.prediction else 'No'}\n"
@@ -55,8 +54,7 @@ class AgentReasons(BaseModel):
 
 # --- Judge Agent ---
 class Judge(LLMAgent):
-    """
-    An LLM agent specialized in evaluating content based on provided criteria.
+    """An LLM agent specialized in evaluating content based on provided criteria.
 
     Inherits from `LLMAgent`, leveraging its capabilities for LLM interaction,
     prompt templating, and structured output parsing. The `Judge` agent is
@@ -69,7 +67,7 @@ class Judge(LLMAgent):
 
     # Specifies that the expected structured output from the LLM should conform to AgentReasons.
     # LLMAgent's _process method will attempt to parse the LLM response into this model.
-    _output_model: Optional[Type[BaseModel]] = AgentReasons
+    _output_model: type[BaseModel] | None = JudgeReasons
 
     # Initialization (`__init__`) is handled by the parent LLMAgent, which takes
     # configuration (like model, template, parameters) via its AgentConfig.
@@ -80,49 +78,37 @@ class Judge(LLMAgent):
     # When this agent (wrapped by AutogenAgentAdapter) receives an AgentInput message
     # via Autogen, the adapter will likely route it to this handler.
     @buttermilk_handler(AgentInput)
-    async def evaluate_content(  # Renamed for clarity from handle_agent_input
+    async def evaluate_content(
         self,
         message: AgentInput,
-    ) -> AgentOutput:
-        """
-        Handles an AgentInput request to evaluate content based on the agent's configured criteria.
+    ) -> AgentTrace:
+        """Handles an AgentInput request to evaluate content based on the agent's configured criteria.
 
         Args:
             message: The AgentInput message containing the content/prompt to evaluate.
 
         Returns:
-            An AgentOutput message containing the structured evaluation (AgentReasons)
+            An AgentTrace message containing the structured evaluation (AgentReasons)
             or an error if processing fails.
+
         """
         logger.debug(f"Judge agent '{self.id}' received evaluation request.")
-        try:
-            # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
-            # This method handles template rendering, API calls, retries, and parsing into _output_model.
-            result: AgentOutput = await self._process(message=message)
+        # Note that we don't do error handling here. If the call fails, the Autogen Adapter
+        # or whatever else called us has to deal with it.
 
-            # LLMAgent._process already creates and returns AgentOutput.
-            # We might want to add specific logging or post-processing here if needed.
-            if not result.is_error and isinstance(result.outputs, AgentReasons):
-                logger.debug(f"Judge '{self.id}' completed evaluation successfully.")
-            elif not result.is_error:
-                logger.warning(f"Judge '{self.id}' completed but output type is not AgentReasons: {type(result.outputs)}")
-            else:
-                logger.error(f"Judge '{self.id}' encountered an error during processing: {result.outputs}")
-
-            # LLMAgent._process returns the AgentOutput directly.
-            # The AutogenAgentAdapter is responsible for publishing this if needed.
-            # The commented-out publish line below seems redundant if the adapter handles it.
-            # TODO: Verify if explicit publishing is needed here or handled by the adapter/orchestrator.
-            # await self._runtime.publish_message(message=result, topic_id=ctx.topic_id, sender=self.id)
-
-            return result
-
-        except Exception as e:
-            logger.exception(f"Unexpected error in Judge.evaluate_content for agent '{self.id}': {e}")
-            # Create an AgentOutput indicating an error.
-            error_output = AgentOutput(agent_info=self._cfg)
-            error_output.set_error(f"Unexpected error in Judge agent: {e}")
-            return error_output
+        # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
+        # This method handles template rendering, API calls, retries, and parsing into _output_model.
+        response = await self._process(message=message)
+        
+        # Create a new AgentTrace from the response
+        trace = AgentTrace(
+            agent_info=self._cfg,
+            inputs=message,
+            outputs=response.outputs,
+            metadata=response.metadata
+        )
+        
+        return trace
 
     # Note: Other handlers (like _listen, _handle_events) can be added here if the Judge
     # needs to react to other message types or perform background tasks, inheriting or

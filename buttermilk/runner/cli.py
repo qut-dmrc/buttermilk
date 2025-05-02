@@ -1,5 +1,4 @@
-"""
-Main entry point for the Buttermilk application.
+"""Main entry point for the Buttermilk application.
 
 This script handles command-line arguments, loads configuration using Hydra,
 initializes the application components (including the Buttermilk instance 'bm'),
@@ -20,14 +19,10 @@ import hydra
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
-# TODO: Consider removing StepRequest if only RunRequest is actively used here.
-# from buttermilk._core.contract import StepRequest
-from buttermilk._core.contract import RunRequest
-from buttermilk._core.orchestrator import Orchestrator
-
-# TODO: FetchRecord seems unused directly in this script, consider removing if not needed for type hints elsewhere initialized via this entry point.
-# from buttermilk.agents.fetch import FetchRecord
-from buttermilk.bm import BM
+from buttermilk._core.types import RunRequest
+from buttermilk.api.flow import create_app
+from buttermilk.bm import BM, logger
+from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.groupchat import AutogenOrchestrator
 from buttermilk.runner.selector import Selector
 from buttermilk.runner.slackbot import register_handlers
@@ -35,8 +30,8 @@ from buttermilk.runner.slackbot import register_handlers
 # Maps orchestrator names (used in config) to their implementation classes.
 # Allows selecting the orchestration strategy (e.g., simple group chat vs. selector-based) via configuration.
 ORCHESTRATOR_CLASSES = {
-    "simple": AutogenOrchestrator,  # Likely uses a predefined sequence or basic group chat.
-    "selector": Selector,  # Likely allows more dynamic agent selection/routing.
+    "simple": AutogenOrchestrator,
+    "selector": Selector,
 }
 # TODO: The mapping keys ("simple", "selector") might be better represented as enums or constants for clarity and type safety.
 # TODO: This mapping is currently hardcoded. Consider if it should be dynamically discoverable or configurable.
@@ -44,8 +39,7 @@ ORCHESTRATOR_CLASSES = {
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    """
-    Main application function orchestrated by Hydra.
+    """Main application function orchestrated by Hydra.
 
     Args:
         cfg: The configuration object loaded and populated by Hydra.
@@ -54,59 +48,91 @@ def main(cfg: DictConfig) -> None:
              Note: While typed as DictConfig, Hydra instantiates objects within it.
              Using a more specific OmegaConf schema or a dataclass (like OrchestratorProtocol
              attempted before) could improve type safety if cfg structure is stable.
+
     """
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
-    # `objs` will contain the instantiated objects based on the structure in `conf/config.yaml`
-    # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flow=batch`).
-    objs: DictConfig = hydra.utils.instantiate(
-        cfg
-    )  # TODO: Typing `objs` accurately is hard due to Hydra's dynamic instantiation. Consider a helper or protocol.
-    bm: BM = objs.bm  # Access the instantiated Buttermilk core instance.
+    # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
+
+    flow_runner: FlowRunner = FlowRunner.model_validate(cfg)  # hydra.utils.instantiate(cfg)
+    bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
 
     # Perform essential setup for the Buttermilk instance *after* it's been instantiated by Hydra.
     # This might involve loading credentials, setting up logging, initializing API clients, etc.
     bm.setup_instance()
 
-    # Increase the slow callback duration for the asyncio event loop.
-    # This helps prevent warnings if certain setup or flow steps take longer than the default threshold.
-    loop = asyncio.get_event_loop()
-    loop.slow_callback_duration = 1.0  # Default is 0.1 seconds
-
+    logger.info(f"Starting UI: {flow_runner.ui}...")
     # Branch execution based on the configured UI mode.
-    match objs.ui:
+    match flow_runner.ui:
         case "console":
             # Run a flow directly in the console.
-            # The specific flow is determined by the 'flow' config key (e.g., 'batch', 'panel').
-            orchestrator: Orchestrator = objs.flows[cfg.flow]  # Get the instantiated orchestrator for the selected flow.
+            flow_name = cfg.flow
 
-            # Prepare the initial request data for the orchestrator.
-            # Uses command-line overrides or defaults from config for record_id, prompt, uri.
-            run_request = RunRequest(
+            # Prepare the RunRequest with command-line parameters
+            run_request = RunRequest(flow=cfg.get("flow"),
                 record_id=cfg.get("record_id", ""),
                 prompt=cfg.get("prompt", ""),
-                uri=cfg.get("uri", ""),  # Use .get for safer access
+                uri=cfg.get("uri", ""),
             )
-            # Execute the orchestrator's main run method.
+
+            # Run the flow synchronously
             bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
-            asyncio.run(orchestrator.run(request=run_request))
+            asyncio.run(flow_runner.run_flow(flow_name=flow_name, run_request=run_request))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
+        case "streamlit":
+            # Start the Streamlit interface
+
+            bm.logger.info("Starting Streamlit interface...")
+            try:
+                # This function provides guidance on how to run the app with streamlit CLI
+
+                from buttermilk.web.streamlit_frontend.app import create_dashboard_app
+                app = create_dashboard_app(flows=flow_runner)
+            except Exception as e:
+                bm.logger.error(f"Error starting Streamlit interface: {e}")
+            app.run()
+
         case "api":
-            # Start a FastAPI server to expose flows via an HTTP API.
-            from buttermilk.api.flow import app  # Import the FastAPI app instance.
 
             # Inject the instantiated flows and orchestrator classes into the FastAPI app's state
             # so that API endpoints can access them.
             # TODO: Using app.state is simple but can be considered a form of global state.
             #       Dependency injection frameworks (like FastAPI's Depends) might offer cleaner alternatives
             #       for larger applications.
-            app.state.bm = bm  # Make bm available to API endpoints
-            app.state.flows = objs.flows
-            app.state.orchestrators = ORCHESTRATOR_CLASSES  # Provide mapping for potential dynamic selection via API.
 
+            # Create the FastAPI app with dependencies
+            bm.logger.info("Attempting to create FastAPI app...")
+            app = create_app(
+                bm=bm,
+                flows=flow_runner,
+            )
+
+            # --- WORKAROUND for potential bm async init timing ---
+            # If bm.setup_instance starts background tasks, give them time.
+            # This is fragile; a better fix involves awaiting readiness.
+            import time
+            time.sleep(2)
+            bm.logger.info("Configuring API server...")
+            # Configure Uvicorn server
+            config = uvicorn.Config(
+                app=app,
+                host="0.0.0.0",
+                port=8000,
+                reload=True,  # Set to True if you want hot reloading
+                log_level="info",
+                access_log=True,
+                workers=1,
+            )
+
+            bm.logger.info("Creating server instance...")
+            # Create and run the server
+            server = uvicorn.Server(config)
             bm.logger.info("Starting API server...")
-            # Run the Uvicorn server.
-            uvicorn.run(app, host="0.0.0.0", port=8000)
+
+            try:
+                server.run()
+            except KeyboardInterrupt:
+                bm.logger.info("Shutting down API server...")
 
         case "pub/sub":
             # Start a listener for Google Cloud Pub/Sub messages.
@@ -147,7 +173,6 @@ def main(cfg: DictConfig) -> None:
             from buttermilk.runner.slackbot import initialize_slack_bot
 
             loop = asyncio.get_event_loop()
-            # loop.slow_callback_duration = 1.0 # Already set above
 
             # Queue for managing background tasks initiated by Slack events.
             orchestrator_tasks: asyncio.Queue[asyncio.Task] = asyncio.Queue()
@@ -164,7 +189,7 @@ def main(cfg: DictConfig) -> None:
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 await register_handlers(
                     slack_app=slack_app,
-                    flows=objs.flows,
+                    flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
                     bm=bm,  # Pass instantiated flows  # Pass bm instance
                 )
@@ -185,7 +210,7 @@ def main(cfg: DictConfig) -> None:
 
         case _:
             # Handle unexpected UI modes.
-            raise ValueError(f"Unsupported UI mode specified in configuration: {objs.ui}")
+            raise ValueError(f"Unsupported UI mode specified in configuration: {flow_runner.ui}")
 
 
 if __name__ == "__main__":

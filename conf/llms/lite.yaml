@@ -2,18 +2,20 @@ host: gemini2flashlite
 
 cheap:
   - gemini2flashlite
-  - gemini2flash
+  - o4mini
 
 general:
   - gemini2flashlite
-  - gemini2flash
+  - gpt41mini
+  - o4mini
 
 judgers:
   - gemini2flashlite
-  - gemini2flash
+  - o4mini
   
 
 synthesisers:
   - gemini2flashlite
+  - o4mini
   - gemini2flash
 

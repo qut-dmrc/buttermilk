@@ -1,7 +1,9 @@
 import asyncio
+import inspect
 import json
+from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from anthropic import (
     AnthropicVertex,
@@ -19,11 +21,14 @@ from autogen_ext.models.openai._transformation.registry import (
     _find_model_family,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
+from langfuse.decorators import langfuse_context
+from langfuse.openai import openai  # OpenAI integration # noqa
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk._core.log import logger
 from buttermilk._core.contract import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.log import logger
+
 from .retry import RetryWrapper
 
 _ = "ChatCompletionClient"
@@ -76,8 +81,9 @@ CHATMODELS = [
     "gemini2flash",
     "gemini2flashlite",
     "gemini2flashthinking",
-    "gpt4o",
-    "o3-mini-high",
+    "gpt41nano", "gpt41mini",
+    "gpt41",
+    "o4-mini",
     "llama31_8b",
     "llama32_90b",
     "llama33_70b",
@@ -87,12 +93,14 @@ CHATMODELS = [
 CHEAP_CHAT_MODELS = [
     "haiku",
     "gemini2flash",
-    "o3-mini-high",
+    "o4-mini",
+    "gpt41mini",
     "llama31_8b",
     "gemini2flashthinking",
     "gemini2flashlite",
+    "haiku",
 ]
-MULTIMODAL_MODELS = ["gemini15pro", "gpt4o", "llama32_90b", "gemini2pro"]
+MULTIMODAL_MODELS = ["gemini25pro", "gpt41", "llama32_90b", "gemini2pro"]
 
 
 class LLMClient(BaseModel):
@@ -120,20 +128,30 @@ class AutoGenWrapper(RetryWrapper):
         self,
         messages: Sequence[LLMMessage],
         tools: Sequence[Tool | ToolSchema] = [],
-        schema: Optional[type[BaseModel]] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        schema: type[BaseModel] | None = None,
+        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> CreateResult | list[ToolOutput]:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
-            if schema and self.model_info.get("structured_output", False):
+            is_valid_schema_type = (
+                schema is not None
+                and inspect.isclass(schema)
+                and issubclass(schema, BaseModel)
+                and schema is not BaseModel
+            )
+            if is_valid_schema_type and self.model_info.get("structured_output", False):
                 json_output = schema
+
             else:
                 # By preference, pass a pydantic schema for structured output
                 # Otherwise, set json_output to True if the model supports it
 
                 # TODO: check if the word 'json' is in the system message or add a quick direction.
                 json_output = self.model_info.get("json_output", False)
+
+            # --- Langfuse tracing ---
+            langfuse_context.update_current_observation(input=messages)
 
             # Use the retry logic
             create_result = await self._execute_with_retry(
@@ -161,7 +179,7 @@ class AutoGenWrapper(RetryWrapper):
         messages,
         cancellation_token,
         tools_list=[],
-        schema: Optional[type[BaseModel]] = None,
+        schema: type[BaseModel] | None = None,
     ) -> CreateResult:
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
@@ -260,6 +278,7 @@ class LLMs(BaseModel):
         # add in model parameters from the config dict
         client_params.update(**self.connections[name].configs)
         if self.connections[name].api_type == "azure":
+            client_params["azure_endpoint"] = client_params.pop("base_url")  # rename field
             client = AzureOpenAIChatCompletionClient(**client_params)
         elif self.connections[name].api_type == "google":
             client = OpenAIChatCompletionClient(  # GeminiChatCompletionClient(

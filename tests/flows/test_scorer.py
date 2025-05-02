@@ -1,5 +1,4 @@
-"""
-Tests the LLMScorer agent, potentially in a simulated flow context.
+"""Tests the LLMScorer agent, potentially in a simulated flow context.
 """
 
 import json
@@ -8,7 +7,7 @@ from typing import Any  # For fixture type hint
 import pytest
 
 # Buttermilk core types
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.llms import CHEAP_CHAT_MODELS  # Use cheaper models for testing
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA  # Scorer and its output models
 
@@ -39,8 +38,7 @@ def scorer_agent(request) -> LLMScorer:
 
 @pytest.fixture
 def judge_output_fixture() -> dict[str, Any]:
-    """
-    Fixture providing a sample dictionary representing a serialized AgentOutput
+    """Fixture providing a sample dictionary representing a serialized AgentTrace
     from a Judge agent, including ground truth in nested records.
     """
     # Note: Using a dictionary derived from JSON is okay for fixtures,
@@ -95,15 +93,14 @@ def judge_output_fixture() -> dict[str, Any]:
     # Also, Judge output might be directly AgentReasons, not nested under 'outputs'
     # Adjusting the fixture slightly based on documented Judge Agent
     data = json.loads(json_str)
-    # Simulate AgentOutput(outputs=AgentReasons(...)) structure more closely if needed
+    # Simulate AgentTrace(outputs=AgentReasons(...)) structure more closely if needed
     # For simplicity, keep using the dict structure, assuming the test extracts correctly
     return data
 
 
 @pytest.mark.anyio
 async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: dict[str, Any]):
-    """
-    Tests running the LLMScorer agent by providing input derived from a sample Judge output.
+    """Tests running the LLMScorer agent by providing input derived from a sample Judge output.
     Verifies that the scorer produces output conforming to the QualScore model.
     """
     # 1. Prepare Input for Scorer
@@ -143,7 +140,7 @@ async def test_run_scorer_agent(scorer_agent: LLMScorer, judge_output_fixture: d
     result = await scorer_agent(message=scorer_input_data)
 
     # 3. Assertions
-    assert isinstance(result, AgentOutput), "Scorer should return an AgentOutput object."
+    assert isinstance(result, AgentTrace), "Scorer should return an AgentTrace object."
     assert not result.is_error, f"Scorer returned an error: {result.error}"
     assert result.outputs is not None, "Scorer output should not be None."
 

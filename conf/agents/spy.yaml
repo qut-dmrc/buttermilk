@@ -1,0 +1,7 @@
+spy:
+  name: "🕵️spy"
+  description: Log agent outputs to Bigquery
+  role: spy
+  agent_obj: SpyAgent
+  parameters:
+    save_dest: ${save}

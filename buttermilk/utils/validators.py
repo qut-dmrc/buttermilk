@@ -1,7 +1,7 @@
 # validators.py
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import httpx
 import pydantic
@@ -20,8 +20,20 @@ def lowercase_validator(v: Any) -> str:
         return str(v).lower()
 
 
-def make_lowercase_validator() -> Callable[[Any], str]:
+def uppercase_validator(v: Any) -> str:
+    if isinstance(v, str):
+        return v.upper()
+    else:
+        return str(v).upper()
+
+def make_case_validator(style: Literal["upper","lower","sentence"] = "upper") -> Callable[[Any], str]:
     """Convert input to lowercase string if possible"""
+    if style == "upper":
+        return uppercase_validator
+    elif style == "lower":
+        return lowercase_validator
+    else:
+        raise NotImplementedError
     return lowercase_validator
 
 

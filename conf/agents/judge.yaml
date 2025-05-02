@@ -1,0 +1,12 @@
+judge:
+  role: judge
+  name: "⚖️ Judge"
+  description: Expert analysts, particularly suited to assess content with subject matter expertise. Call on them first to provide an initial assessment of the content provided. They will bring their own criteria and assess a record in its entirety. They are expensive, and they will not respond to directions -- they know their job and they do it well. So you should only ask them to judge a piece of content once, and don't ask follow up questions of them.
+  agent_obj: Judge
+  num_runs: 1
+  parameters:
+    template: judge
+  variants:
+    model: ${llms.judgers}
+  inputs:
+    records: "[FETCH]||*.records[]||*.records[]"

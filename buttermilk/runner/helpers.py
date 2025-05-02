@@ -245,24 +245,24 @@ def cache_data(uri: str) -> str:
     return dataset
 
 
-async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.DataFrame]:
+async def prepare_step_df(data_configs: Mapping[str, DataSourceConfig]) -> dict[str, pd.DataFrame]:
     # This works for small datasets that we can easily read and load.
     datasets = {}
     source_list = []
-    dataset_configs = []
 
     # data_cfg is not ordered. Loop through and load the static data first.
-    for src in data_configs:
+    for key, src in data_configs.items():
         if src.type == "job":
             # end of list (dynamic data)
-            dataset_configs.append(src)
+            source_list.append(key)
         else:
             # start of list
-            dataset_configs = [src] + dataset_configs
-        source_list.append(src.name)
+            source_list = [key] + source_list
+
 
     combined_df = pd.DataFrame()
-    for src in dataset_configs:
+    for key in source_list:
+        src =  data_configs[key]
         new_df = load_data(src)
         # Load and join prior job data
         new_df = group_and_filter_jobs(
@@ -280,7 +280,7 @@ async def prepare_step_df(data_configs: list[DataSourceConfig]) -> dict[str, pd.
         # Also hold the combined data for next iteration
         combined_df = new_df.copy()
 
-        datasets[src.name] = new_df
+        datasets[key] = new_df
     return datasets
 
 

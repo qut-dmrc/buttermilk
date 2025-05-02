@@ -6,7 +6,7 @@ import pytest
 # Autogen types (optional, for context if needed)
 # from autogen_core import MessageContext, DefaultTopicId
 # Buttermilk core types
-from buttermilk._core.contract import AgentInput, AgentOutput
+from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.types import Record
 
 # Agent classes and models being tested/used
@@ -22,6 +22,7 @@ def mock_global_weave():
         mock_call = MagicMock()
         mock_call.id = "mock_call_id_global"
         mock_call.apply_scorer = AsyncMock(name="apply_scorer_global")
+
         mock_weave.get_call.return_value = mock_call
         # Also mock the standalone `weave.apply_scorer` if it's used directly
         with patch("weave.apply_scorer", new_callable=AsyncMock) as mock_apply_scorer:
@@ -49,13 +50,13 @@ class TestLLMScorerListen:
         return Record(content="Original content", data={"ground_truth": "The expected ground truth answer."})
 
     @pytest.fixture
-    def judge_output_valid(self, ground_truth_record: Record) -> AgentOutput:
-        """Fixture for a valid AgentOutput from a Judge agent."""
+    def judge_output_valid(self, ground_truth_record: Record) -> AgentTrace:
+        """Fixture for a valid AgentTrace from a Judge agent."""
         judge_reasons = AgentReasons(conclusion="Judge conclusion", prediction=True, reasons=["Judge reason 1"], confidence="medium")
         # Ensure records format matches what _listen might expect if checking directly
         # Often list of lists: [[record1], [record2]] or just list: [record1, record2]
         # Using list[Record] based on documentation, adjust if needed.
-        return AgentOutput(
+        return AgentTrace(
             agent_info="judge-abc",
             role="judge",
             outputs=judge_reasons,
@@ -64,10 +65,9 @@ class TestLLMScorerListen:
         )
 
     async def test_listen_triggers_scoring_on_valid_input(
-        self, mock_scorer: LLMScorer, judge_output_valid: AgentOutput, ground_truth_record: Record, mock_global_weave
+        self, mock_scorer: LLMScorer, judge_output_valid: AgentTrace, ground_truth_record: Record, mock_global_weave,
     ):
-        """
-        Test that _listen correctly identifies a valid Judge output, extracts variables,
+        """Test that _listen correctly identifies a valid Judge output, extracts variables,
         calls _process via weave scorer, and invokes the public callback.
         """
         mock_weave_obj, mock_apply_scorer_func = mock_global_weave  # Get mocked weave objects
@@ -83,7 +83,7 @@ class TestLLMScorerListen:
 
         # Mock evaluation result that _process should produce
         mock_score_result = QualScore(assessments=[QualScoreCRA(correct=True, feedback="Looks correct.")])
-        mock_process_output = AgentOutput(agent_info=mock_scorer.id, role=mock_scorer.role, outputs=mock_score_result)
+        mock_process_output = AgentTrace(agent_info=mock_scorer.id, role=mock_scorer.role, outputs=mock_score_result)
         mock_scorer._process.return_value = mock_process_output
 
         # Mock callback
@@ -129,14 +129,14 @@ class TestLLMScorerListen:
         mock_public_callback.assert_called_once_with(mock_process_output)
 
     async def test_listen_ignores_irrelevant_messages(self, mock_scorer: LLMScorer, mock_global_weave):
-        """Test that _listen ignores messages that are not AgentOutput or lack AgentReasons."""
+        """Test that _listen ignores messages that are not AgentTrace or lack AgentReasons."""
         mock_weave_obj, mock_apply_scorer_func = mock_global_weave
         mock_public_callback = AsyncMock()
 
-        # Test with non-AgentOutput
+        # Test with non-AgentTrace
         not_agent_output = AgentInput(prompt="Just an input")
         # Need to pass correct type hint for message param in _listen
-        # Cast or adjust test if _listen signature is strictly AgentOutput
+        # Cast or adjust test if _listen signature is strictly AgentTrace
         try:
             await mock_scorer._listen(message=not_agent_output, source="other-agent", public_callback=mock_public_callback)  # type: ignore
         except TypeError:
@@ -154,8 +154,8 @@ class TestLLMScorerListen:
         mock_weave_obj.reset_mock()
         mock_apply_scorer_func.reset_mock()
 
-        # Test with AgentOutput but wrong output type
-        wrong_output = AgentOutput(agent_info="judge-xyz", role="judge", outputs={"some": "dict"}, tracing={"weave": "trace2"})
+        # Test with AgentTrace but wrong output type
+        wrong_output = AgentTrace(agent_info="judge-xyz", role="judge", outputs={"some": "dict"}, tracing={"weave": "trace2"})
         await mock_scorer._listen(message=wrong_output, source="judge-xyz", public_callback=mock_public_callback)
 
         mock_scorer._process.assert_not_called()
@@ -170,8 +170,8 @@ class TestLLMScorerListen:
         judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
         # Create record without 'ground_truth' in data
         record_no_gt = Record(content="Some content", data={"other": "info"})
-        judge_output_msg = AgentOutput(
-            agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"}
+        judge_output_msg = AgentTrace(
+            agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[record_no_gt], tracing={"weave": "trace3"},
         )
         # Configure mock _extract_vars to return no 'expected'
         mock_scorer._extract_vars.return_value = {"records": [record_no_gt]}  # No 'expected' key
@@ -190,7 +190,7 @@ class TestLLMScorerListen:
         mock_public_callback = AsyncMock()
         judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
         # Message *without* tracing info
-        judge_output_msg = AgentOutput(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[ground_truth_record])
+        judge_output_msg = AgentTrace(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[ground_truth_record])
         # Mock extract_vars to return ground truth (so it doesn't skip for that reason)
         mock_scorer._extract_vars.return_value = {"expected": "gt", "records": [ground_truth_record]}
 
@@ -203,5 +203,5 @@ class TestLLMScorerListen:
         mock_public_callback.assert_not_called()
 
     # TODO: Add test case for when _extract_vars raises an exception?
-    # TODO: Add test case for when _process (called inside Scorer) returns an error AgentOutput?
+    # TODO: Add test case for when _process (called inside Scorer) returns an error AgentTrace?
     # TODO: Add test case for when weave interactions (get_call, apply_scorer) raise exceptions?

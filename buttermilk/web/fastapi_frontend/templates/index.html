@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+
+{% block title %}Automod qualitative data science dashboard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row gap-4 mx-auto" x-data="{
+    sessionId: '{{ session_id }}',
+    websocket: null,
+    messages: [],
+    userInput: '',
+    progress: { current_step: 0, total_steps: 100, status: 'waiting' },
+    requiresConfirmation: false,
+    isConnected: false,
+    selectedFlow: '',
+    selectedCriteria: '',
+    selectedRecordId: '',
+    isRunning: false,
+    error: null,
+
+    // --- WebSocket Connection Logic ---
+    connectWebSocket() {
+        // Prevent multiple connections
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            console.log('WebSocket already connected.');
+            return;
+        }
+        
+        // Create WebSocket connection
+        this.websocket = new WebSocket(`ws://${window.location.host}/dash/ws/${this.sessionId}`); 
+
+        // Connection opened
+        this.websocket.addEventListener('open', (event) => {
+            this.isConnected = true;
+            console.log('WebSocket connected');
+        });
+
+        // Connection closed
+        this.websocket.addEventListener('close', (event) => {
+            this.isConnected = false;
+            this.isRunning = false; // Stop flow if connection drops
+            console.log('WebSocket disconnected');
+        });
+
+        // Listen for messages
+        this.websocket.addEventListener('message', (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Message from server:', data);
+
+            // Handle different message types
+            switch (data.type) {
+                case 'chat_message':
+                    this.messages.push({
+                        content: data.content,
+                        timestamp: new Date().toISOString(),
+                        agent_info: data.agent_info || {}
+                    });
+                    this.$nextTick(() => {
+                        const container = document.getElementById('messages-container');
+                        // Calculate proper scroll position to keep the latest message visible
+                        // but not scroll unnecessarily far
+                        const lastMessage = container.lastElementChild;
+                        if (lastMessage) {
+                            // Scroll to make the last message fully visible
+                            const lastMessageHeight = lastMessage.offsetHeight;
+                            const containerHeight = container.clientHeight;
+                            // Scroll enough to show the message with some padding
+                            container.scrollTop = container.scrollHeight - containerHeight + Math.min(lastMessageHeight, 100);
+                        } else {
+                            // If no last message element found (template based rendering), use default
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    });
+                    
+                    // Trigger outcome updates for judge/synthesizer messages
+                    if (data.agent_info && (data.agent_info.role === 'judge' || data.agent_info.role === 'synthesiser')) {
+                        // Trigger HTMX to refresh outcomes
+                        console.log('Dispatching outcomes-updated event for judge/synthesizer message');
+                        document.dispatchEvent(new CustomEvent('outcomes-updated'));
+                        // Force a refresh of the outcomes panel
+                        htmx.trigger('#outcomes-container', 'outcomes-updated');
+                    }
+                    break;
+                case 'script_content':
+                    const scriptContent = data.content;
+                    const scriptElement = document.createElement('div');
+                    scriptElement.innerHTML = scriptContent;
+                    document.body.appendChild(scriptElement);
+                    break;
+                case 'score_update':
+                    console.log('Received score update:', data);
+                    // Modern structured score handling
+                    if (data.agent_id && data.assessor_id && data.score_data) {
+                        window.scoreData.addScore(data.agent_id, data.assessor_id, data.score_data);
+                        // Trigger HTMX to refresh outcomes
+                        console.log('Dispatching outcomes-updated event for score update');
+                        document.dispatchEvent(new CustomEvent('outcomes-updated'));
+                        // Force a refresh of the outcomes panel
+                        htmx.trigger('#outcomes-container', 'outcomes-updated');
+                    } else {
+                        console.error('Invalid score update format:', data);
+                    }
+                    break;
+                case 'progress_update':
+                    this.progress = data.progress;
+                    break;
+                case 'requires_confirmation':
+                    this.requiresConfirmation = true;
+                    break;
+                case 'flow_started':
+                    console.log(`Flow ${data.flow} started for record ${data.record_id}`);
+                    break;
+                case 'flow_state_change':
+                    if (data.state === 'TaskProcessingComplete') {
+                        this.isRunning = false;
+                        this.progress.status = 'completed';
+                    } else if (data.state === 'ErrorEvent') {
+                        this.isRunning = false;
+                        this.progress.status = 'error';
+                        this.error = data.details || 'An unspecified error occurred.';
+                    }
+                    break;
+                case 'error':
+                    this.error = data.message;
+                    this.isRunning = false;
+                    this.progress.status = 'error';
+                    console.error('Error:', data.message);
+                    break;
+            }
+        });
+
+        // Handle errors
+        this.websocket.addEventListener('error', (event) => {
+            console.error('WebSocket error:', event);
+            this.isConnected = false;
+            this.isRunning = false;
+            this.error = 'WebSocket connection error.';
+        });
+    },
+
+    // --- Flow Control Functions ---
+    startFlow() {
+        if (!this.isConnected) {
+            this.connectWebSocket();
+        }
+
+        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket not ready, delaying startFlow slightly.');
+            setTimeout(() => this.startFlow(), 500);
+            return;
+        }
+
+        this.isRunning = true;
+        this.messages = [];
+        this.error = null;
+        this.requiresConfirmation = false;
+        this.progress = { current_step: 0, total_steps: 100, status: 'starting' };
+
+        this.websocket.send(JSON.stringify({
+            type: 'run_flow',
+            flow: this.selectedFlow,
+            record_id: this.selectedRecordId,
+            criteria: this.selectedCriteria
+        }));
+
+        this.$nextTick(() => {
+            document.getElementById('messages-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    },
+
+    sendMessage() {
+        if (!this.isConnected || !this.userInput.trim() || !this.isRunning) {
+            return;
+        }
+
+        this.websocket.send(JSON.stringify({
+            type: 'user_input',
+            message: this.userInput
+        }));
+
+        this.userInput = '';
+    },
+
+    confirmFlow() {
+        if (!this.isConnected || !this.requiresConfirmation) {
+            return;
+        }
+
+        this.websocket.send(JSON.stringify({
+            type: 'confirm'
+        }));
+
+        this.requiresConfirmation = false;
+    }
+
+}">
+    <!-- Sidebar controls -->
+    <div class="w-full md:w-1/4">
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body">
+                <h2 class="card-title text-lg">Configuration</h2>
+                
+                <div class="form-control mb-2">
+                    <label for="flow" class="label">
+                        <span class="label-text">Choose Flow</span>
+                    </label>
+                    <select 
+                        id="flow" 
+                        name="flow" 
+                        class="select select-bordered w-full"
+                        x-model="selectedFlow"
+                        hx-get="/dash/api/flowdata/"
+                        hx-include="[name='flow']"
+                        hx-target="#flow-dependent-data"
+                        hx-trigger="change delay:100ms"
+                        hx-indicator=".criteria-loader, .record-loader"
+                        @change="selectedCriteria = ''; selectedRecordId = ''">
+                        <option value="">Select a flow</option>
+                        {% for flow in flow_choices %}
+                        <option value="{{ flow }}">{{ flow }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div id="flow-dependent-data">
+                    <div id="criteria-container">
+                        <select 
+                            id="criteria" 
+                            name="criteria" 
+                            class="select select-bordered w-full"
+                            x-model="selectedCriteria"
+                            disabled
+                            x-bind:disabled="!selectedFlow">
+                            <option value="">Select criteria</option>
+                        </select>
+                        <div class="criteria-loader htmx-indicator">
+                            <span class="loading loading-dots loading-sm mt-2"></span>
+                        </div>
+                    </div>
+                    <div id="record-container">
+                        <select 
+                            id="record_id" 
+                            name="record_id" 
+                            class="select select-bordered w-full"
+                            x-model="selectedRecordId"
+                            disabled
+                            x-bind:disabled="!selectedFlow"
+                            <option value="">Select record ID</option>
+                        </select>
+                        <div class="record-loader htmx-indicator">
+                            <span class="loading loading-dots loading-sm mt-2"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-control mt-2">
+                    <button 
+                        class="btn btn-primary"
+                        x-bind:disabled="!selectedFlow || !selectedRecordId || isRunning"
+                        @click="startFlow()">
+                        Start Flow
+                    </button>
+                </div>
+                
+                <div x-show="requiresConfirmation" class="form-control mt-2">
+                    <button 
+                        class="btn btn-success"
+                        @click="confirmFlow()">
+                        Confirm
+                    </button>
+                </div>
+                
+                <div class="form-control mt-4">
+                    <button 
+                        class="btn btn-secondary"
+                        x-bind:disabled="!selectedFlow || !selectedCriteria || !selectedRecordId"
+                        hx-get="/dash/api/history/"
+                        hx-include="[name='flow'], [name='criteria'], [name='record_id']"
+                        hx-target="#history-container"
+                        hx-indicator=".history-loader">
+                        Load Run History
+                    </button>
+                </div>
+                
+                <div class="form-control mt-2">
+                    <button 
+                        class="btn btn-accent btn-sm"
+                        hx-get="/dash/api/debug/"
+                        hx-target="#criteria-container"
+                        hx-swap="innerHTML">
+                        Test HTMX
+                    </button>
+                </div>
+                
+                <!-- Debug section for HTMX -->
+                <div id="debug-info" class="mt-4 text-xs opacity-70">
+                    <div>Flow: <span x-text="selectedFlow || 'None'"></span></div>
+                    <div>Criteria: <span x-text="selectedCriteria || 'None'"></span></div>
+                    <div>Record: <span x-text="selectedRecordId || 'None'"></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main content area -->
+    <div class="w-full md:w-2/3 flex flex-col gap-4">
+        <!-- Chat interface -->
+        <div class="card bg-base-100 shadow-md h-full flex flex-col">
+            <div class="card-body p-4 flex-grow max-h-[70vh] flex flex-col">
+                <h2 class="card-title text-lg">Agent Chat</h2>
+                
+                <!-- Messages container -->
+                <div class="flex-grow overflow-y-auto p-2 mb-4 bg-base-200 rounded-md" id="messages-container">
+                    <template x-if="messages.length === 0">
+                        <div class="text-center py-8 opacity-70">
+                            <p>No messages yet. Start a flow to begin the conversation.</p>
+                        </div>
+                    </template>
+                    <template x-for="(msg, index) in messages" :key="index">
+                        <div x-html="msg.content" class="my-2"></div>
+                    </template>
+                </div>
+                
+                <!-- Input area -->
+                <div class="join w-full">
+                    <input 
+                        type="text" 
+                        x-model="userInput" 
+                        class="input input-bordered join-item flex-grow"
+                        placeholder="Type your message here..."
+                        x-bind:disabled="!isConnected || !isRunning"
+                        @keyup.enter="sendMessage()">
+                    <button 
+                        class="btn btn-primary join-item"
+                        x-bind:disabled="!isConnected || !isRunning || userInput.trim() === ''"
+                        @click="sendMessage()">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Outcomes panel (predictions and scores) -->
+    <div class="md:block md:w-3/12">
+        <div class="card bg-base-100 shadow-md">
+            <div class="card-body p-3">
+                <h2 class="card-title text-sm">Outcomes</h2>
+                <div id="outcomes-container" class="overflow-y-auto max-h-[70vh]"
+                     hx-get="/dash/api/outcomes/?session_id={{ session_id }}"
+                     hx-trigger="load, every 3s"
+                     hx-indicator=".outcomes-loader">
+                    <div class="text-center py-4 text-xs opacity-70">
+                        <p>Loading outcomes...</p>
+                    </div>
+                    <!-- HTMX will replace this with the combined outcomes panel content -->
+                </div>
+                <div class="outcomes-loader htmx-indicator">
+                    <span class="loading loading-dots loading-sm"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- No custom tooltip styles needed as we're using DaisyUI tooltips -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Configure marked.js with secure defaults
+    marked.setOptions({
+        breaks: false,  // Add line breaks as <br> elements
+        gfm: true,     // Enable GitHub Flavored Markdown
+        headerIds: false, // Disable automatic generation of header IDs
+        mangle: false,   // Don't mangle email addresses
+        sanitize: false, // Modern versions of marked don't support sanitize option
+        silent: false,   // Don't ignore errors
+        smartLists: true, // Use smarter list behavior
+        smartypants: false, // Don't use "smart" typographic punctuation
+        xhtml: false     // Don't use XHTML closing tags
+    });
+
+    // Use DOMPurify to sanitize HTML if available
+    if (typeof DOMPurify !== 'undefined') {
+        const originalParse = marked.parse;
+        marked.parse = function(src, options) {
+            const html = originalParse.call(this, src, options);
+            return DOMPurify.sanitize(html);
+        };
+    }
+
+    // Custom htmx event handlers
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        console.log('HTMX swap occurred on:', event.detail.target.id);
+        if (window.Alpine) {
+            window.Alpine.initTree(event.detail.target);
+        }
+        
+        // Initialize the score modals after HTMX content is swapped in
+        initScoreModals();
+    });
+    
+    // Debug HTMX requests
+    document.body.addEventListener('htmx:beforeRequest', function(event) {
+        console.log('HTMX request starting:', event.detail);
+    });
+    
+    document.body.addEventListener('htmx:responseError', function(event) {
+        console.error('HTMX response error:', event.detail);
+    });
+    
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        console.log('HTMX request completed:', event.detail);
+    });
+
+    function initScoreModals() {
+        // Add click handlers to open modals for score details
+        document.querySelectorAll('[data-agent][data-assessor]').forEach((badge, index) => {
+            badge.addEventListener('click', () => {
+                const dialogId = `score_details_${index % 100}_${Math.floor(index / 100)}`;
+                const dialog = document.getElementById(dialogId);
+                if (dialog) {
+                    dialog.showModal();
+                } else {
+                    console.warn(`Dialog with ID ${dialogId} not found`);
+                }
+            });
+        });
+    }
+
+    document.addEventListener('alpine:init', () => {
+        Alpine.store('scores', {
+            data: {},
+            version: 0 
+        });
+    });
+
+    // Replace your existing window.scoreData.addScore function
+    window.scoreData = {
+        scores: {},
+        addScore: function(agentId, assessorId, scoreData) {
+            if (!this.scores[agentId]) {
+                this.scores[agentId] = {};
+            }
+            this.scores[agentId][assessorId] = scoreData;
+            
+            // Update Alpine.js data
+            Alpine.nextTick(() => {
+                Alpine.store('scores').data = {...this.scores};
+                Alpine.store('scores').version++; // Increment to trigger reactivity
+                console.log('Updated Alpine store with scores:', this.scores);
+            });
+        }
+    };
+    
+    // Debug WebSocket messages
+    const originalSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function(data) {
+        console.log('WS SEND:', data);
+        return originalSend.call(this, data);
+    };
+    
+    // Initialize score modals on page load
+    document.addEventListener('DOMContentLoaded', initScoreModals);
+</script>
+{% endblock %}

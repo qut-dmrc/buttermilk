@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import AgentInput, AgentOutput, ManagerRequest
+from buttermilk._core.contract import AgentInput, AgentTrace, ManagerRequest
 from buttermilk.agents.ui.slackthreadchat import (
     SlackUIAgent,
 )
@@ -88,8 +88,8 @@ async def test_slack_ui_agent_send_to_thread(slack_ui_agent):
 
 @pytest.mark.anyio
 async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
-    """Test handling of AgentOutput messages."""
-    message = AgentOutput(
+    """Test handling of AgentTrace messages."""
+    message = AgentTrace(
         agent_id="test",
         content="Test output",
         outputs={"key": "value"},
@@ -113,7 +113,7 @@ async def test_slack_ui_agent_receive_output_agent_output(slack_ui_agent):
 @pytest.mark.anyio
 async def test_slack_ui_agent_receive_output_format_error(slack_ui_agent):
     """Test handling of formatting errors."""
-    message = AgentOutput(
+    message = AgentTrace(
         agent_id="test",
         content="Test output",
         outputs={"key": "value"},

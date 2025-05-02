@@ -14,7 +14,7 @@ from buttermilk._core.contract import (
     END,  # Import END constant
     WAIT,  # Import WAIT constant
     AgentInput,
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,
     StepRequest,
     TaskProcessingComplete,
@@ -23,8 +23,7 @@ from buttermilk._core.contract import (
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
 
-# Specific agent classes being wrapped
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+Sequencer
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -128,8 +127,8 @@ class TestAutogenAgentAdapter:
         """Test adapter routes ConductorRequest to the wrapped agent's __call__."""
         mock_agent = MagicMock(spec=Agent)
         mock_agent.__call__ = AsyncMock(name="__call__")
-        mock_response = AgentOutput(
-            agent_info="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc")
+        mock_response = AgentTrace(
+            agent_info="mock_agent_id", role="test", outputs=StepRequest(role="AGENT1", prompt="Next step", description="Desc"),
         )
         mock_agent.__call__.return_value = mock_response
         mock_agent.id = "mock_agent_id"
@@ -156,7 +155,7 @@ class TestAutogenAgentAdapter:
         """Test adapter sends TaskProcessingStarted/Complete during handle_invocation."""
         mock_agent = MagicMock(spec=Agent)
         mock_agent.__call__ = AsyncMock(name="__call__")
-        mock_response = AgentOutput(agent_info="mock_agent_id", role="test_role", outputs={"result": "done"})
+        mock_response = AgentTrace(agent_info="mock_agent_id", role="test_role", outputs={"result": "done"})
         mock_agent.__call__.return_value = mock_response
         mock_agent.id = "mock_agent_id"
         mock_agent.role = "test_role"
@@ -202,7 +201,7 @@ class TestAutogenAgentAdapter:
 
         response = await adapter.handle_conductor_request(conductor_request, mock_message_context)
 
-        assert isinstance(response, AgentOutput)
+        assert isinstance(response, AgentTrace)
         assert not response.is_error, f"Sequencer returned error: {response.error}"
         assert isinstance(response.outputs, StepRequest)
         participants = conductor_request.inputs["participants"]

@@ -1,13 +1,14 @@
 from unittest.mock import patch
 
 import pytest
+import shortuuid
 from omegaconf import OmegaConf
 
 # Assuming AgentConfig and Agent are importable for type hinting/instance checks
 # Adjust imports based on your actual project structure
 from buttermilk._core.agent import Agent
-from buttermilk._core.config import AgentConfig
-from buttermilk._core.variants import AgentRegistry, AgentVariants
+from buttermilk._core.config import AgentConfig, AgentVariants
+from buttermilk._core.variants import AgentRegistry
 
 
 # Dummy Agent class for testing
@@ -174,11 +175,8 @@ def test_num_runs_greater_than_one(base_variant_config):
     assert len(ids) == 3  # Ensure unique IDs across runs
 
 
-@patch("buttermilk._core.variants.shortuuid.uuid")
-def test_id_generation_uniqueness(mock_uuid, base_variant_config):
+def test_id_generation_uniqueness(base_variant_config):
     """Test ID generation includes hash for uniqueness when needed."""
-    mock_uuid.side_effect = ["abcd", "efgh", "ijkl", "mnop"]  # Provide unique suffixes
-
     # Case 1: Multiple parallel variants (needs hash)
     config_data_p = {
         **base_variant_config,
@@ -208,6 +206,11 @@ def test_id_generation_uniqueness(mock_uuid, base_variant_config):
     assert configs_s[0][1].id == "TEST_AGENT"  # Original ID, no hash
 
 
+@pytest.fixture
+def variant_factory():
+    return AgentVariants(**config_data)
+
+
 def test_parameter_overwriting(base_variant_config):
     """Test that parallel variants overwrite base parameters."""
     config_data = {
@@ -215,7 +218,6 @@ def test_parameter_overwriting(base_variant_config):
         "parameters": {"base_param": "original", "model": "base_model"},
         "parallel_variants": {"model": ["override_model"]},
     }
-    variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
     assert len(configs) == 1
@@ -270,3 +272,76 @@ def test_agent_not_found(base_variant_config):
     variant_factory = AgentVariants(**config_data)
     with pytest.raises(ValueError, match="Agent class 'NonExistentAgent' not found"):
         variant_factory.get_configs()
+
+
+import json
+
+import pytest
+from pydantic import BaseModel, Field
+
+from buttermilk._core.types import RunRequest
+
+
+# --- Mocking necessary classes ---
+# Mock AgentConfig as the structure seems to be the focus
+class MockAgentConfig(BaseModel):
+    id: str = Field(default="should be replaced")
+    unique_identifier: str = Field(default_factory=lambda: f"instance_{shortuuid.uuid()}")  # Simulate unique instance ID
+    # Add other fields potentially needed by get_configs logic if any
+    parameters: dict = {}
+    agent_class: str = "MockAgent"  # Placeholder
+
+
+# --- Test Data ---
+PARAMS_JSON = '{"flow":"trans","prompt":"","record_id":"jenner_criticises_khalif_dailymail","uri":"","records":[],"parameters":{"criteria":"cte"}}'
+
+
+@pytest.fixture
+def run_request_params() -> RunRequest:
+    """Provides RunRequest instance from test JSON."""
+    return RunRequest(**json.loads(PARAMS_JSON))
+
+
+def test_step_config_get_configs_structure_and_ids(
+    run_request_params: RunRequest, base_variant_config,
+):
+    """Verify that .get_configs returns tuples (AgentClass, AgentConfig)
+    and that IDs are unique across all returned configs
+    """
+    all_config_ids = []
+
+    # 1. Call the method under test
+    variant_factory = AgentVariants(**base_variant_config)
+    configs = variant_factory.get_configs(params=run_request_params)
+
+    # 2. Assertions
+    assert isinstance(configs, list), "get_configs should return a list"
+    assert len(configs) > 0, "get_configs should return at least one config tuple"
+
+    for item in configs:
+        assert isinstance(item, tuple), "Each item in the list should be a tuple"
+        assert len(item) == 2, "Each tuple should have exactly two elements"
+
+        agent_cls, agent_config = item
+
+        # Check types
+        assert isinstance(agent_cls, type), "First element should be a class type"
+        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), \
+            "Second element should be an AgentConfig instance (or mock)"
+
+        # Check attributes exist
+        assert hasattr(agent_config, "id"), "AgentConfig should have an 'id' attribute"
+        assert hasattr(agent_config, "unique_identifier"), \
+            "AgentConfig should have a 'unique_identifier' attribute"
+
+        # Check attribute types
+        assert isinstance(agent_config.id, str), "AgentConfig.id should be a string"
+        assert isinstance(agent_config.unique_identifier, str), \
+            "AgentConfig.unique_identifier should be a string"
+
+        # Collect IDs for uniqueness check across configs
+        all_config_ids.append(agent_config.id)
+
+    # Check the core requirement: IDs must be unique across all returned configs
+    assert len(all_config_ids) == len(set(all_config_ids)), \
+        f"AgentConfig.id values are not unique across returned configs. Found IDs: {all_config_ids}"

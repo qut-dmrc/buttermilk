@@ -1,22 +1,25 @@
 import asyncio
-from collections.abc import Awaitable
-from typing import Any, Callable, Optional  # Add Optional
+from collections.abc import (
+    Awaitable,
+    Callable,  # Add Optional
+)
+from typing import Any
 
 from autogen_core import CancellationToken
 from pydantic import PrivateAttr
 
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput, AgentOutput, OOBMessages
+from buttermilk._core.contract import AgentInput, AgentTrace, OOBMessages
 
 
 class UIAgent(Agent):
-    _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)  # Allow None and provide default
+    _input_task: asyncio.Task | None = PrivateAttr(default=None)  # Allow None and provide default
     _input_callback: Any = PrivateAttr(...)
     _trace_this = False
 
     async def _process(
-        self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
-    ) -> AgentOutput | None:  # Match base signature
+        self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs,
+    ) -> AgentTrace | None:  # Match base signature
         """Send or receive input from the UI."""
         raise NotImplementedError
 

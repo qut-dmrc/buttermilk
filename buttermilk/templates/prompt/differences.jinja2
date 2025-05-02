@@ -1,7 +1,7 @@
 {# --- Prompty Frontmatter ---
 Defines metadata and expected inputs for this prompt template.
 Inputs:
-  - answers: A list of answers (AgentOutputs) from previous steps (e.g., judge, synth) to compare.
+  - answers: A list of answers (AgentTraces) from previous steps (e.g., judge, synth) to compare.
              The template accesses `answer.agent_id` and `answer.outputs.reasons`.
   - criteria: (Optional) The criteria used in the previous steps, potentially for context.
   - records: (Placeholder) Likely contains the original data record(s).
@@ -52,24 +52,7 @@ You should work carefully step-by-step:
     - summarise the majority / minority positions and identify any outliers.
     - explain in detail the differences in reasoning or understanding that led experts to different conclusions.
 
-<REQUIRED FORMAT>
-{# Specifies the mandatory JSON output structure. #}
-You must reply only in a fully valid JSON format.
-
-{% raw %}
-```json
-{
-    "reasons": [ ARRAY of STRING: <Each element should represent ONE SINGLE STEP in logical reasoning detailing a point of disagreement and its basis. Each step should comprise one to five sentences of text presenting a clear logical analysis.>,
-    ..., <other STRING elements representing EACH remaining logical steps>, ...],
-    "error": <STRING, usually NULL: any error you encounter that prevents you from completing this task.>
-}
-```
-{% endraw %}
-
-Ensure the response follows JSON formatting rules precisely, as it will be validated and type-checked for compliance. Make sure you escape any double quotes in your response. Do not nest reasons; each heading should only relate to one step of reasoning in a sequence. Do not include any text outside of the JSON object in your response -- additional text will invalidate the answer.
-
 When referring to a draft answer, ALWAYS use the the full ID of the answer. The full ID is provided immediately before each answer, in the string: "<BEGIN DRAFT ANSWER #[ID]>"
-<END REQUIRED FORMAT>
 
 {# Optionally include the criteria if provided, for context. #}
 {% if criteria %}
@@ -78,19 +61,17 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 <END ORIGINAL INSTRUCTIONS>
 {% endif %}
 
-
 {# --- User Message Construction --- #}
-{# Placeholder for original records, likely for context. #}
+
 # Placeholder:
 {{records}}
 
 {% if answers %}
-{# This block formats the input when 'answers' are provided. #}
 # User:
 Analyse the underlying reasons behind differences among the answers below.
 {# Loop through the provided answers. #}
 {% for answer in answers %}
-<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:4]}}>
+<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:6]}}>
 {{ answer.result }}
 <END DRAFT ANSWER>
 {% endfor %}

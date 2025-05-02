@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Qualitative Data Science Dashboard{% endblock %}</title>
+    
+    <!-- Tailwind CSS with DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    
+    <!-- Alpine.js for UI state management -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.js"></script>
+    
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- DOMPurify for HTML sanitization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    
+    <!-- Tailwind Config with DaisyUI and Typography Plugin Setup -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            typography: {
+              DEFAULT: {
+                css: {
+                  maxWidth: 'none',
+                  color: '#374151',
+                  lineHeight: '1.6',
+                  p: {
+                    marginBottom: '1rem'
+                  },
+                  h1: {
+                    fontSize: '1.8rem',
+                    fontWeight: '700',
+                    marginTop: '1.5rem',
+                    marginBottom: '0.75rem'
+                  },
+                  h2: {
+                    fontSize: '1.5rem',
+                    fontWeight: '600',
+                    marginTop: '1.25rem',
+                    marginBottom: '0.75rem'
+                  },
+                  h3: {
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    marginTop: '1rem',
+                    marginBottom: '0.5rem'
+                  },
+                  'h4, h5, h6': {
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    marginTop: '0.75rem',
+                    marginBottom: '0.5rem'
+                  },
+                  ul: {
+                    listStyleType: 'disc',
+                    marginBottom: '1rem',
+                    paddingLeft: '1.5rem'
+                  },
+                  ol: {
+                    listStyleType: 'decimal',
+                    marginBottom: '1rem',
+                    paddingLeft: '1.5rem'
+                  },
+                  li: {
+                    marginBottom: '0.25rem'
+                  },
+                  blockquote: {
+                    borderLeftWidth: '4px',
+                    borderLeftColor: '#e5e7eb',
+                    paddingLeft: '1rem',
+                    marginLeft: '0',
+                    marginRight: '0',
+                    marginBottom: '1rem',
+                    color: '#6b7280'
+                  },
+                  pre: {
+                    backgroundColor: '#f3f4f6',
+                    borderRadius: '0.375rem',
+                    padding: '1rem',
+                    overflowX: 'auto',
+                    marginBottom: '1rem'
+                  },
+                  code: {
+                    backgroundColor: '#f3f4f6',
+                    padding: '0.15rem 0.3rem',
+                    borderRadius: '0.25rem',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    fontSize: '0.9em'
+                  },
+                  'pre code': {
+                    backgroundColor: 'transparent',
+                    padding: '0',
+                    borderRadius: '0',
+                    fontSize: '0.9em',
+                    display: 'block'
+                  },
+                  a: {
+                    color: '#3b82f6',
+                    textDecoration: 'underline'
+                  },
+                  'a:hover': {
+                    textDecoration: 'none'
+                  },
+                  table: {
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    marginBottom: '1rem'
+                  },
+                  'th, td': {
+                    border: '1px solid #e5e7eb',
+                    padding: '0.5rem'
+                  },
+                  th: {
+                    backgroundColor: '#f9fafb',
+                    fontWeight: '600'
+                  }
+                }
+              }
+            }
+          }
+        },
+        plugins: [require("daisyui")]
+      }
+    </script>
+    
+    <style>
+        /* Minimal custom styling that's hard to achieve with just Tailwind */
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        /* Use Tailwind classes for these in HTML:
+           agent-default: bg-gray-50 text-gray-600 border border-gray-200
+           agent-judge: bg-gray-100 text-gray-700 border border-gray-300
+           agent-scorer: bg-gray-50 text-gray-900 border border-gray-400
+           agent-assistant: bg-blue-50 text-blue-600 border border-blue-200
+           agent-instructions: bg-cyan-50 text-cyan-600 border border-cyan-200
+           agent-tool: bg-green-50 text-green-700 border border-green-200
+        */
+        
+        /* Replace .markdown-content class with prose class from @tailwindcss/typography */
+        /* Example usage: <div class="prose"> instead of <div class="markdown-content"> */
+    </style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-base-200" data-theme="light">
+    <header class="bg-base-100 shadow">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">Qualitative Data Science Dashboard</h1>
+                <nav class="flex space-x-4">
+                    <a href="/" class="link">Home</a>
+                    <a href="/dashboard" class="link">Dashboard</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+    
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="bg-base-100 shadow mt-8 py-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-base-content/70"><a href="https://nic.suzor.net/" class="link">nic suzor</a></p>
+        </div>
+    </footer>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

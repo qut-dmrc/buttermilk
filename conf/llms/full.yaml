@@ -2,16 +2,18 @@ host: gemini25pro
 
 general:
   - gemini25pro
-  - gpt4o
-  - gemini2flash
+  - gpt41
 
 judgers:
   - gemini2flash
-  - gemini2flashlite
-  - o3-mini-high
   - gemini25pro
+  - gpt41
+  - gpt41mini
+  - o4mini
 
 synthesisers:
   - gemini25pro
   - gemini2flash
-  - gpt4o
+  - gpt41
+  - gpt41mini
+  - o4mini

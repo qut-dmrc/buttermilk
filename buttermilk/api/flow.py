@@ -1,154 +1,204 @@
-from collections.abc import AsyncGenerator, Sequence
+import asyncio
+import json
+import uuid
 
-from fastapi import FastAPI, HTTPException, Request
+import pydantic
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from buttermilk.api.stream import FlowRequest, flow_stream
-from buttermilk.bm import logger
-
-from .runs import get_recent_runs
+from buttermilk._core.contract import ErrorEvent
+from buttermilk._core.types import RunRequest
+from buttermilk.bm import BM, logger
+from buttermilk.runner.flowrunner import FlowRunner
 
 INPUT_SOURCE = "api"
-app = FastAPI()
-flows = dict()
-
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://www.city-journal.org/article/what-are-we-doing-to-children"}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/osb' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Is it still hate speech if the targeted group is not explicitly named?"}'
-
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg"}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
-# curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
 
 
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
+def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
+    """Create and configure the FastAPI application."""
+    logger.info("Starting create_app function...")
+    app = FastAPI()
+    logger.info("FastAPI() instance created.")
 
+    # Set up state
+    app.state.bm = bm
+    app.state.flow_runner = flows
+    logger.info("App state configured.")
 
-@app.api_route("/runs/", methods=["GET", "POST"])
-async def get_runs_json(request: Request) -> Sequence:
-    runs = get_recent_runs()
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://www.city-journal.org/article/what-are-we-doing-to-children"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/osb' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Is it still hate speech if the targeted group is not explicitly named?"}'
 
-    results = [Job(**row) for _, row in runs.iterrows()]
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "criteria": "criteria_ordinary", "video": "gs://dmrc-platforms/test/fyp/tiktok-imane-01.mp4"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/hate' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"uri": "https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/judge' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"model": ["haiku", "gpt4o"], "template":"summarise_osb", "text": "gs://dmrc-platforms/data/osb/FB-UK2RUS24.md"}'
+    # curl -X 'POST' 'http://127.0.0.1:8000/flow/trans' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"record_id": "betoota_snape_trans"}'
 
-    return results
+    logger.info("Defining exception handler.")
 
-
-@app.api_route("/html/runs/", methods=["GET", "POST"])
-async def get_runs_html(request: Request) -> HTMLResponse:
-    data = get_recent_runs()
-
-    rendered_result = templates.TemplateResponse(
-        "runs_html.html",
-        {"request": request, "data": data},
-    )
-
-    return HTMLResponse(rendered_result.body.decode("utf-8"), status_code=200)
-
-
-@app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
-async def run_flow_json(
-    flow_name: str,
-    request: Request,
-    flow_request: FlowRequest | None = "",
-) -> StreamingResponse:
-    """Run a flow with provided inputs."""
-
-    # Access state via request.app.state
-    if not hasattr(request.app.state, "flows") or flow_name not in request.app.state.flows:
-        raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
-
-    if not hasattr(request.app.state, "bm"):
-        raise HTTPException(status_code=500, detail="BM instance not found in app state")
-
-    current_bm = request.app.state.bm
-    # Get a copy of the flow config to avoid modifying the state directly
-    flow_config = request.app.state.flows[flow_name].copy()
-    orchestrator_name = flow_config.get("orchestrator", None)
-
-    orchestrator = None
-    if orchestrator_name:
-        orchestrator_cls = request.app.state.orchestrators.get(orchestrator_name)
-        if orchestrator_cls:
-            orchestrator = orchestrator_cls(bm=current_bm, **flow_config)
-        else:
-            logger.error(f"Unknown orchestrator name specified: {orchestrator_name}")
-            raise HTTPException(status_code=500, detail=f"Invalid orchestrator configuration: {orchestrator_name}")
-    else:
-        raise HTTPException(status_code=500, detail="Orchestrator not specified in flow config")
-
-    return StreamingResponse(
-        flow_stream(orchestrator.run(), flow_request),
-        media_type="application/json",
-    )
-    raise HTTPException(status_code=403, detail="Flow not valid")
-
-
-@app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
-@app.api_route("/html/flow", methods=["GET", "POST"])
-async def run_route_html(
-    request: Request,
-    flow: str = "",
-    flow_request: FlowRequest | None = "",
-) -> StreamingResponse:
-    if flow not in flows:
-        raise HTTPException(status_code=403, detail="Flow not valid")
-
-    async def result_generator() -> AsyncGenerator[str, None]:
-        logger.debug(
-            f"Received request for HTML flow {flow} and flow_request {flow_request}",
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
         )
+
+    logger.info("Defining API routes.")
+
+    @app.api_route("/flow/{flow_name}", methods=["GET", "POST"])
+    async def run_flow_json(
+        flow_name: str,
+        request: Request,
+        run_request: RunRequest | None = None,
+    ) -> StreamingResponse:
+        """Run a flow with provided inputs."""
+        # Access state via request.app.state
+        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
+            raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
+
+        # Use stream method with the flow runner
+        return StreamingResponse(
+            request.app.state.flow_runner.stream(run_request),
+            media_type="application/json",
+        )
+
+    # Note: The following route is kept for backward compatibility but may be removed in future versions
+    @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
+    @app.api_route("/html/flow", methods=["GET", "POST"])
+    async def run_route_html(
+        request: Request,
+        flow: str = "",
+        flow_request: RunRequest | None = None,
+    ) -> JSONResponse:
+        """This endpoint is deprecated - please use the main API or WebSocket endpoints"""
+        return JSONResponse(
+            content={"message": "HTML flow rendering is deprecated. Please use the main API or WebSocket endpoints."},
+            status_code=200,
+        )
+
+    # Set up CORS
+    origins = [
+        "http://localhost:5000",  # Frontend running on localhost:5000
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:8080",  # Frontend running on localhost:8080
+        "http://localhost:8080",
+        "http://localhost:8000",  # Allow requests from localhost:8000
+        "http://127.0.0.1:8000",
+        "http://automod.cc",  # Allow requests from your domain
+    ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow specific origins
+        allow_credentials=True,
+        allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+        allow_headers=["*"],  # Allow all headers
+    )
+
+    # Custom middleware to log CORS failures
+    @app.middleware("http")
+    async def log_cors_failures(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if origin:
+            logger.debug(f"CORS check for {origin}")
+
+        response = await call_next(request)
+        return response
+
+    @app.websocket("/ws/{session_id}")
+    async def agent_websocket(websocket: WebSocket, session_id: str):
+        """WebSocket endpoint for client communication with the WebUIAgent.
+        
+        Args:
+            websocket: WebSocket connection
+            session_id: Unique identifier for this client session
+
+        """
+        # Accept the connection first
+        await websocket.accept()
+        client_listener_task = None
         try:
-            async for data in flow_stream(
-                flows[flow],
-                flow_request=flow_request,
-                return_json=False,
-            ):
-                # Render the template with the response data
-                rendered_result = templates.TemplateResponse(
-                    "flow_html.html",
-                    {"request": request, "data": data},
-                )
-                yield rendered_result.body.decode("utf-8")
+            # Start the flow, passing in our websocket and session_id
+            # Wait for client message
+            while True:
+                client_message = await websocket.receive_json()
+                try:
+                    run_request = RunRequest.model_validate(client_message)
+                    run_request.client_callback = websocket
+                    run_request.session_id = session_id
+                    break
+                except (pydantic.ValidationError, json.JSONDecodeError):
+                    await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start."))
+
+            agent_callback = await app.state.flow_runner.run_flow(run_request)
+
+            async def listen_client():
+                """Task to listen for incoming messages from the client."""
+                while True:
+                    try:
+                        incoming_data = await websocket.receive_json()
+                        # Forward data to the running flow via the handler
+                        await agent_callback(incoming_data)
+                    except WebSocketDisconnect:
+                        logger.info(f"Client {session_id} disconnected.")
+                        # Optionally signal the flow task to stop if needed
+                        # if flow_task_handle:
+                        #     flow_task_handle.cancel()
+                        break  # Exit loop on disconnect
+                    except Exception as e:
+                        logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+                        # Decide if you want to break or continue
+                        # break # Exit loop on other errors
+
+            client_listener_task = asyncio.create_task(listen_client())
+
+            await client_listener_task
+
+        except WebSocketDisconnect:
+            logger.info("Client disconnected")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error(f"Unexpected error: {e!s}")
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "content": f"Unexpected error: {e!s}",
+                    "source": "system",
+                })
+            except:
+                pass
+        finally:
+            if client_listener_task and not client_listener_task.done():
+                client_listener_task.cancel()
 
-    return StreamingResponse(result_generator(), media_type="text/html")
+    # Helper route to generate session IDs for clients
+    @app.get("/api/session")
+    async def create_session():
+        """Generates a unique session ID for new web clients.
+        
+        Returns:
+            Dict with new session ID
 
+        """
+        return {"session_id": str(uuid.uuid4())}
 
-# Set up CORS
-origins = [
-    "http://localhost:5000",  # Frontend running on localhost:5000
-    "http://127.0.0.1:5000",
-    "http://127.0.0.1:8080",  # Frontend running on localhost:8080
-    "http://localhost:8080",
-    "http://localhost:8000",  # Allow requests from localhost:8000
-    "http://127.0.0.1:8000",
-    "http://automod.cc",  # Allow requests from your domain
-]
+    # --- Import Shiny App object ---
+    from buttermilk.web.shiny import get_shiny_app
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow specific origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Allow all headers
-)
+    # --- Mount the Shiny App ---
+    shiny_app_asgi = get_shiny_app(flows=flows)
+    app.mount("/ui", shiny_app_asgi, name="shiny_app")
 
+    logger.info("Importing Dashboard app")
 
-# Custom middleware to log CORS failures
-@app.middleware("http")
-async def log_cors_failures(request: Request, call_next):
-    origin = request.headers.get("origin")
-    if origin:
-        logger.debug(f"CORS check for {origin}")
+    # --- Import Dashboard App object ---
+    from buttermilk.web.fastapi_frontend.app import create_dashboard_app
 
-    response = await call_next(request)
-    return response
+    # --- Mount the Dashboard App ---
+    logger.info("Getting Dashboard app.")
+    dashboard_app = create_dashboard_app(flows=flows)
+    logger.info("Mounting Dashboard app.")
+    app.mount("/dash", dashboard_app, name="dashboard_app")
+
+    return app

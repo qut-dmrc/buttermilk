@@ -80,6 +80,9 @@ dependencies = [
     "langchain-text-splitters>=0.3.7",
     "langchain>=0.3.21",
     "pytest-anyio>=0.0.0",
+    "shiny>=1.4.0",
+    "langfuse>=2.60.3",
+    "streamlit>=1.45.0",
 ]
 
 [dependency-groups]
@@ -123,6 +126,13 @@ dev = [
     "buttermilk",
     "pytest-anyio>=0.0.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["buttermilk"]
 
 [tool.mypy]
 python_version = "3.11"  # Specify your target Python version
@@ -172,6 +182,10 @@ known-first-party = ["buttermilk"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
+
+[project.scripts]
+bm-chat = "buttermilk.runner.cli:main"
+bm-test-agent = "buttermilk.runner.agent_tester:main"
 
 [tool.pytest.ini_options]
 markers = [

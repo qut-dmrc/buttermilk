@@ -1,5 +1,6 @@
 import json
-from typing import Any, Self, Sequence
+from collections.abc import Sequence
+from typing import Any, Self
 
 import pydantic
 from autogen_agentchat.agents import AssistantAgent
@@ -13,10 +14,10 @@ from autogen_core.models._types import UserMessage
 from autogen_core.tools import BaseTool
 from pydantic import PrivateAttr
 
-from buttermilk._core.agent import Agent, AgentInput, AgentOutput, ToolOutput
+from buttermilk._core.agent import Agent, AgentInput, AgentTrace, ToolOutput
 from buttermilk._core.contract import (
     ConductorRequest,
-    UserInstructions,
+    ErrorEvent,
 )
 
 # Restore original bm import
@@ -83,16 +84,15 @@ class AssistantAgentWrapper(Agent):
         return self
 
     async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs
-    ) -> AgentOutput | ToolOutput | None:
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs,
+    ) -> AgentTrace | ToolOutput | None:
         """Processes input using the wrapped AssistantAgent."""
-
         # --- Agent Decision Logic ---
         # Decide whether to process this incoming message.
 
         # Only process specific message types relevant to the assistant
-        # (e.g., UserInstructions, AgentOutput from others, or specific AgentInput)
-        if not isinstance(message, (UserInstructions, AgentOutput, AgentInput, ConductorRequest)):
+        # (e.g.,  AgentTrace from others, or specific AgentInput)
+        if not isinstance(message, (AgentTrace, AgentInput, ConductorRequest)):
             logger.debug(f"AssistantWrapper {self.role} ignoring message type {type(message)}")
             return None
 
@@ -131,12 +131,10 @@ class AssistantAgentWrapper(Agent):
         try:
             response = await self._assistant_agent.on_messages(messages=messages_to_send, cancellation_token=cancellation_token)
         except Exception as e:
-            logger.error(f"Agent {self.role} error during AssistantAgent.on_messages: {e}")
-            return AgentOutput(
-                agent_info=self._cfg,
-                content=f"Error processing request: {e}",
-                error=[str(e)],
-            )
+            msg = f"Agent {self.role} error during AssistantAgent.on_messages: {e}"
+            logger.error(msg)
+            result = ErrorEvent(source=self.id, content=msg)
+            return result
 
         # --- Translate Response ---
         output_content = ""
@@ -183,9 +181,8 @@ class AssistantAgentWrapper(Agent):
         # Add inner messages for debugging if needed
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
-        return AgentOutput(
+        return AgentTrace(
             agent_info=self._cfg,
-            content=output_content,
             outputs=output_data,
             metadata=final_metadata,
             error=[error_msg] if error_msg else [],
@@ -195,7 +192,6 @@ class AssistantAgentWrapper(Agent):
         """Initialize the agent (called by AutogenAgentAdapter)."""
         # Initialization logic is handled in the pydantic validator `init_assistant_agent`
         logger.debug(f"Agent {self.role} initialized.")
-        pass
 
     # Restore original on_reset signature
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:

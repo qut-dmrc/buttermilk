@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block head %}
+<!-- Chart.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8" x-data="{
+    selectedFlow: '',
+    scoreData: {
+        labels: [],
+        datasets: []
+    },
+    agentData: {
+        labels: [],
+        datasets: []
+    },
+    recordData: {
+        labels: [],
+        datasets: []
+    },
+    dateRangeStart: '',
+    dateRangeEnd: '',
+    isLoading: false
+}">
+    <div class="sm:flex sm:items-center mb-8">
+        <div class="sm:flex-auto">
+            <h1 class="text-xl font-semibold text-gray-900">Analytics Dashboard</h1>
+            <p class="mt-2 text-sm text-gray-700">
+                View aggregated scoring data across workflows, agents, and records
+            </p>
+        </div>
+    </div>
+    
+    <!-- Filter controls -->
+    <div class="bg-white p-4 rounded-lg shadow mb-8">
+        <h2 class="text-lg font-medium mb-4">Filters</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label for="dashboard-flow" class="block text-sm font-medium text-gray-700">Flow</label>
+                <select 
+                    id="dashboard-flow" 
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    x-model="selectedFlow"
+                    hx-get="/dash/api/dashboard/data"
+                    hx-trigger="change"
+                    hx-include="[name='date-start'], [name='date-end']"
+                    hx-target="#dashboard-data"
+                    hx-indicator=".dashboard-loader">
+                    <option value="">All Flows</option>
+                    <option value="judge">Judge Flow</option>
+                    <option value="synth">Synthesis Flow</option>
+                    <option value="panel">Panel Flow</option>
+                </select>
+            </div>
+            
+            <div>
+                <label for="date-start" class="block text-sm font-medium text-gray-700">Start Date</label>
+                <input 
+                    type="date" 
+                    id="date-start" 
+                    name="date-start"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    x-model="dateRangeStart">
+            </div>
+            
+            <div>
+                <label for="date-end" class="block text-sm font-medium text-gray-700">End Date</label>
+                <input 
+                    type="date" 
+                    id="date-end" 
+                    name="date-end"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    x-model="dateRangeEnd">
+            </div>
+            
+            <div class="flex items-end">
+                <button 
+                    class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    hx-get="/dash/api/dashboard/data"
+                    hx-include="[name='dashboard-flow'], [name='date-start'], [name='date-end']"
+                    hx-target="#dashboard-data"
+                    hx-indicator=".dashboard-loader"
+                    @click="isLoading = true">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading indicator -->
+    <div class="dashboard-loader htmx-indicator mb-8">
+        <div class="w-full h-64 bg-gray-200 rounded-md animate-pulse flex items-center justify-center">
+            <p class="text-gray-500">Loading dashboard data...</p>
+        </div>
+    </div>
+    
+    <!-- Dashboard content -->
+    <div id="dashboard-data" x-show="!isLoading">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Score distribution card -->
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-medium mb-4">Score Distribution</h3>
+                <div class="h-64">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Agent performance card -->
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-medium mb-4">Agent Performance</h3>
+                <div class="h-64">
+                    <canvas id="agentChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Record comparison card -->
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-medium mb-4">Record Comparison</h3>
+                <div class="h-64">
+                    <canvas id="recordChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Summary statistics -->
+        <div class="bg-white p-4 rounded-lg shadow mb-8">
+            <h3 class="text-lg font-medium mb-4">Summary Statistics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="border rounded-md p-4 text-center">
+                    <p class="text-sm text-gray-500">Total Runs</p>
+                    <p class="text-2xl font-bold text-indigo-600">123</p>
+                </div>
+                <div class="border rounded-md p-4 text-center">
+                    <p class="text-sm text-gray-500">Average Score</p>
+                    <p class="text-2xl font-bold text-indigo-600">0.78</p>
+                </div>
+                <div class="border rounded-md p-4 text-center">
+                    <p class="text-sm text-gray-500">Highest Score</p>
+                    <p class="text-2xl font-bold text-green-600">0.95</p>
+                </div>
+                <div class="border rounded-md p-4 text-center">
+                    <p class="text-sm text-gray-500">Lowest Score</p>
+                    <p class="text-2xl font-bold text-red-600">0.42</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Empty state -->
+    <div class="text-center py-8" x-show="isLoading">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No data loaded</h3>
+        <p class="mt-1 text-sm text-gray-500">Select filters and click "Apply" to load dashboard data.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize empty charts
+        const scoreCtx = document.getElementById('scoreChart').getContext('2d');
+        const agentCtx = document.getElementById('agentChart').getContext('2d');
+        const recordCtx = document.getElementById('recordChart').getContext('2d');
+        
+        const scoreChart = new Chart(scoreCtx, {
+            type: 'bar',
+            data: {
+                labels: ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'],
+                datasets: [{
+                    label: 'Score Distribution',
+                    data: [5, 10, 15, 30, 40],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.6)',
+                        'rgba(255, 159, 64, 0.6)',
+                        'rgba(255, 205, 86, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(54, 162, 235, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgb(255, 99, 132)',
+                        'rgb(255, 159, 64)',
+                        'rgb(255, 205, 86)',
+                        'rgb(75, 192, 192)',
+                        'rgb(54, 162, 235)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Count'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Score Range'
+                        }
+                    }
+                }
+            }
+        });
+        
+        const agentChart = new Chart(agentCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Judge', 'Scorer', 'Assistant', 'Describer'],
+                datasets: [{
+                    label: 'Average Score',
+                    data: [0.75, 0.68, 0.82, 0.73],
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    borderColor: 'rgb(75, 192, 192)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        title: {
+                            display: true,
+                            text: 'Average Score'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Agent'
+                        }
+                    }
+                }
+            }
+        });
+        
+        const recordChart = new Chart(recordCtx, {
+            type: 'line',
+            data: {
+                labels: ['Record 1', 'Record 2', 'Record 3', 'Record 4', 'Record 5'],
+                datasets: [{
+                    label: 'Score',
+                    data: [0.65, 0.72, 0.85, 0.78, 0.90],
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgb(54, 162, 235)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        title: {
+                            display: true,
+                            text: 'Score'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Record'
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Function to update charts with new data
+        window.updateCharts = function(data) {
+            if (!data) return;
+            
+            // Update score distribution chart
+            if (data.scoreDistribution) {
+                scoreChart.data.labels = data.scoreDistribution.labels;
+                scoreChart.data.datasets[0].data = data.scoreDistribution.values;
+                scoreChart.update();
+            }
+            
+            // Update agent performance chart
+            if (data.agentPerformance) {
+                agentChart.data.labels = data.agentPerformance.labels;
+                agentChart.data.datasets[0].data = data.agentPerformance.values;
+                agentChart.update();
+            }
+            
+            // Update record comparison chart
+            if (data.recordComparison) {
+                recordChart.data.labels = data.recordComparison.labels;
+                recordChart.data.datasets[0].data = data.recordComparison.values;
+                recordChart.update();
+            }
+        };
+    });
+</script>
+
+<script>
+    // Custom htmx event handlers for dashboard
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        // Check if the response is for dashboard data
+        if (event.detail.target.id === 'dashboard-data') {
+            // Parse the dashboard data
+            try {
+                const data = JSON.parse(event.detail.target.dataset.dashboardData || '{}');
+                
+                // Update charts
+                if (window.updateCharts) {
+                    window.updateCharts(data);
+                }
+                
+                // Reset loading state
+                const app = Alpine.evaluate(document.querySelector('[x-data]'), 'x-data');
+                if (app) {
+                    app.isLoading = false;
+                }
+            } catch (e) {
+                console.error('Failed to parse dashboard data:', e);
+            }
+        }
+    });
+</script>
+{% endblock %}

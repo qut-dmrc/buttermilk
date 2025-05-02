@@ -1,10 +1,10 @@
-"""
-Defines the CLIUserAgent for interacting with the user via the command line console.
+"""Defines the CLIUserAgent for interacting with the user via the command line console.
 """
 
 import asyncio
 import json
-from typing import Awaitable, Callable, Optional, Union  # Added List, Union, Optional
+from collections.abc import Awaitable, Callable  # Added List, Union, Optional
+from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
@@ -20,7 +20,7 @@ from buttermilk import logger
 # Import base agent and specific message types used
 from buttermilk._core.agent import AgentInput, OOBMessages
 from buttermilk._core.contract import (
-    AgentOutput,
+    AgentTrace,
     ConductorResponse,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
@@ -28,11 +28,10 @@ from buttermilk._core.contract import (
     ManagerResponse,  # Responses sent *from* the manager (this agent)
     TaskProcessingComplete,  # Status updates
     ToolOutput,  # Potentially displayable tool output
-    UserInstructions,  # Potentially displayable instructions
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
-from buttermilk.agents.judge import AgentReasons  # Specific format for judge reasons
+from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
 # Initialize a global console instance with JSON highlighting
@@ -41,24 +40,22 @@ console = Console(highlighter=JSONHighlighter())
 
 # Define a Union for types _fmt_msg can handle, improving type safety for the formatter.
 FormattableMessages = Union[
-    AgentOutput,
+    AgentTrace,
     ConductorResponse,
     TaskProcessingComplete,
-    UserInstructions,
     ManagerRequest,
     ToolOutput,
     AgentInput,
     Record,
     QualScore,
-    AgentReasons,
+    JudgeReasons,
     FlowMessage,
 ]
 # TODO: Add other relevant FlowMessage subtypes if needed for formatting.
 
 
 class CLIUserAgent(UIAgent):
-    """
-    Represents the human user interacting via the Command Line Interface (CLI).
+    """Represents the human user interacting via the Command Line Interface (CLI).
 
     Inherits from `UIAgent`. It uses `rich` to display formatted messages received
     by the agent (`_listen`, `_handle_events`) and `aioconsole` to asynchronously
@@ -72,11 +69,10 @@ class CLIUserAgent(UIAgent):
     # Rich console instance for formatted output.
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
-    _input_task: Optional[asyncio.Task] = PrivateAttr(default=None)
+    _input_task: asyncio.Task | None = PrivateAttr(default=None)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | None:
-        """
-        Handles direct AgentInput messages, typically displaying them as requests to the user.
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None:
+        """Handles direct AgentInput messages, typically displaying them as requests to the user.
 
         Args:
             message: The AgentInput message received.
@@ -86,6 +82,7 @@ class CLIUserAgent(UIAgent):
         Returns:
             None. UI agents typically don't return direct outputs in the main flow via _process.
                    They interact via callbacks or listening methods.
+
         """
         logger.debug(f"{self.id}: Received direct input request via _process.")
         # Format and display the incoming message.
@@ -99,8 +96,7 @@ class CLIUserAgent(UIAgent):
         return None
 
     def _fmt_msg(self, message: FormattableMessages, source: str) -> Markdown | None:
-        """
-        Formats various message types into Rich Markdown for console display.
+        """Formats various message types into Rich Markdown for console display.
 
         Args:
             message: The message object to format.
@@ -108,6 +104,7 @@ class CLIUserAgent(UIAgent):
 
         Returns:
             A Rich Markdown object ready for printing, or None if the message is not formatted.
+
         """
         # TODO: This function is complex. Refactor into smaller helpers for maintainability.
         #       Consider using a dictionary dispatch pattern based on message type.
@@ -117,12 +114,12 @@ class CLIUserAgent(UIAgent):
             # Add specific identifiers if available
             agent_id = getattr(message, "agent_id", "unknown")
             role = getattr(message, "role", None)
-            header = f"## Message from {role or 'agent'} {agent_id}"
+            header = f"## Message from {agent_id}"
 
             output_lines.append(header)
 
             # --- Specific Type Formatting ---
-            if isinstance(message, (AgentOutput, ConductorResponse)):
+            if isinstance(message, (AgentTrace, ConductorResponse)):
                 outputs = getattr(message, "outputs", None)
                 inputs = getattr(message, "inputs", None)  # Original inputs triggering this output
                 metadata = getattr(message, "metadata", {})
@@ -130,7 +127,7 @@ class CLIUserAgent(UIAgent):
                 # Display specific structured outputs
                 if isinstance(outputs, QualResults):
                     output_lines.append(str(outputs))  # Use QualResults's __str__
-                elif isinstance(outputs, AgentReasons):
+                elif isinstance(outputs, JudgeReasons):
                     output_lines.append("### Conclusion")
                     output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.confidence}")
                     output_lines.append(f"**Conclusion**: {outputs.conclusion}")
@@ -169,8 +166,8 @@ class CLIUserAgent(UIAgent):
                     output_lines.append(outputs)
 
                 # Display raw content if available and not handled above
-                elif hasattr(message, "contents") and message.contents and not outputs:
-                    output_lines.append(message.contents)
+                elif hasattr(message, "contents") and message.content and not outputs:
+                    output_lines.append(message.content)
 
                 # Optionally display inputs that led to this output
                 # if inputs:
@@ -179,7 +176,7 @@ class CLIUserAgent(UIAgent):
 
                 # Display metadata (like token usage)
                 if metadata:
-                    output_lines.append(f"### Metadata:\n\n{str(metadata)}")
+                    output_lines.append(f"### Metadata:\n\n{metadata!s}")
                     # syntax = Syntax(str(metadata), "python", theme="default", line_numbers=False, word_wrap=False)
 
             elif isinstance(message, AgentInput):
@@ -223,9 +220,8 @@ class CLIUserAgent(UIAgent):
         filtered_output = [line for line in output_lines if isinstance(line, str) and line.strip()]
         if len(filtered_output) > 1:  # Check if more than just the header was added
             return Markdown("\n".join(filtered_output))
-        else:
-            logger.debug(f"Skipping display for message type {type(message)} from {source} - no formatted content.")
-            return None  # Don't print if only header remains or content was empty
+        logger.debug(f"Skipping display for message type {type(message)} from {source} - no formatted content.")
+        return None  # Don't print if only header remains or content was empty
 
     async def _listen(
         self,
@@ -253,8 +249,8 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        # AgentOutput isn't technically OOB, but might arrive here in some flows? Included defensively.
-        displayable_types = (AgentOutput, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
+        # AgentTrace isn't technically OOB, but might arrive here in some flows? Included defensively.
+        displayable_types = (AgentTrace, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
         if isinstance(message, displayable_types):
             if msg_markdown := self._fmt_msg(message, source=source):
                 self._console.print(msg_markdown)

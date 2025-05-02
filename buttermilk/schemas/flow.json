@@ -10,6 +10,11 @@
         "mode": "REQUIRED"
     },
     {
+        "name": "parent_call_id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
         "name": "timestamp",
         "type": "TIMESTAMP",
         "mode": "REQUIRED",
@@ -26,9 +31,9 @@
         "mode": "REQUIRED"
     },
     {
-        "name": "records",
+        "name": "call_info",
         "type": "JSON",
-        "mode": "REPEATED"
+        "mode": "NULLABLE"
     },
     {
         "name": "messages",
@@ -36,17 +41,7 @@
         "mode": "REPEATED"
     },
     {
-        "name": "prompt",
-        "type": "STRING",
-        "mode": "REPEATED"
-    },
-    {
         "name": "parameters",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "inputs",
         "type": "JSON",
         "mode": "NULLABLE"
     },
@@ -56,17 +51,7 @@
         "mode": "NULLABLE"
     },
     {
-        "name": "object_type",
-        "type": "STRING",
-        "mode": "NULLABLE"
-    },
-    {
         "name": "error",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "metadata",
         "type": "JSON",
         "mode": "NULLABLE"
     }

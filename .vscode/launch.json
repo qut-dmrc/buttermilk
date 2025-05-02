@@ -42,7 +42,27 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "cli batch",
+      "name": "streamlit",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "args": ["run", "buttermilk/web/interface.py",
+        "hydra.verbose=false",
+        "+flows=trans",
+        "ui=streamlit",
+        "llms=lite",
+        "name=bmdevelopment",
+        "job=api",
+        //"+record_id=${input:query}" // Will prompt for query
+      ],
+    },
+    {
+      "name": "fastapi web ui",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -51,18 +71,17 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[batch]",
-        "flow=batch",
-        "record_id=NCAA_transgender_athletes",
-        "ui=console",
+        "+flows=trans",
+        "ui=api",
         "llms=full",
-        "++name=batch",
+        "name=bmdevelopment",
+        "job=api",
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
       "console": "integratedTerminal"
     },
     {
@@ -121,30 +140,6 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "automod: trans synth",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "examples.automod.mod",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": ["+experiments=synth"],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "automod: trans eval",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "examples.automod.mod",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": ["+experiments=eval_trans"],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
       "name": "batch automod: ots",
       "type": "debugpy",
       "request": "launch",
@@ -153,43 +148,6 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": ["+experiments=ots", "+data=drag_noalt", "+save=bq"],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "batch automod debug haiku: judge",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "examples.automod.mod",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": [
-        "+data=drag",
-        "+step=ordinary",
-        "+save=bq",
-        "job=test",
-        "source=debugger",
-        "step.0.agent.model=['haiku']",
-        "step.0.concurrent=1"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "tonepolice full run",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
-      "justMyCode": false,
-      "args": [
-        "+flows=[hate]",
-        "llm=full",
-        "+flow=hate",
-        "+q=${input:query}" // Will prompt for query
-      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },

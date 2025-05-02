@@ -1,5 +1,4 @@
-"""
-Tests the internal routing logic of conductor agents, ensuring ConductorRequest
+"""Tests the internal routing logic of conductor agents, ensuring ConductorRequest
 is handled correctly by delegating to step-choosing methods.
 """
 
@@ -9,15 +8,13 @@ import pytest
 
 # Buttermilk core types
 from buttermilk._core.contract import (
-    AgentOutput,
+    AgentTrace,
     ConductorRequest,
     StepRequest,
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
-
-# Conductor agent classes under test
-from buttermilk.agents.flowcontrol.sequencer import Sequencer
+from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
 
@@ -89,7 +86,7 @@ class TestConductorRouting:
         with patch.object(ExplorerHost, "__init__", return_value=None):
             explorer = ExplorerHost()
             explorer._process = AsyncMock(
-                name="_process", return_value=AgentOutput(agent_info="test", outputs=StepRequest(role="ANY", prompt="", description=""))
+                name="_process", return_value=AgentTrace(agent_info="test", outputs=StepRequest(role="ANY", prompt="", description="")),
             )
             # Add any attributes _choose might need
 
