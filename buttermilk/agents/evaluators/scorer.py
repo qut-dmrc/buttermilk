@@ -4,7 +4,7 @@
 from collections.abc import Callable
 
 from autogen_core import CancellationToken
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 # Buttermilk core imports
 from buttermilk import logger
@@ -42,6 +42,7 @@ class QualResults(QualScore):
     assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments, one for each criterion evaluated.")
 
+    @computed_field
     @property
     def correctness(self) -> float | None:
         """Calculates the overall correctness score (simple average).

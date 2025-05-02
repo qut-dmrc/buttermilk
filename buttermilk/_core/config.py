@@ -231,6 +231,7 @@ class AgentConfig(BaseModel):
     data: Mapping[str, DataSourceConfig] = Field(
         default_factory=dict,  # Use factory for mutable default
         description="Configuration for data sources the agent might need access to.",
+        serialization_alias="mapping_data",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -239,9 +240,11 @@ class AgentConfig(BaseModel):
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="Defines mappings for how incoming data should populate the agent's input context (using JMESPath).",
+        serialization_alias="mapping_inputs",
     )
     # TODO: 'outputs' field seems unused currently. Define its purpose or remove.
-    outputs: dict[str, Any] = Field(default_factory=dict)
+    outputs: dict[str, Any] = Field(default_factory=dict,
+        serialization_alias="mapping_outputs")
 
     # Pydantic Model Configuration
     model_config = {
