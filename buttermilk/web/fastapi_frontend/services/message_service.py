@@ -30,23 +30,39 @@ class MessageService:
         for message in messages:
             if isinstance(message, AgentTrace) and isinstance(message.outputs, JudgeReasons):
                 call_id = message.call_id
-                prediction = {}
-                prediction["agent"] = message.agent_info.name
-                prediction["prediction"] = message.outputs
-                results[call_id] = prediction
+                agent_name = message.agent_info.name
+
+                # Extract the actual fields needed by the template
+                prediction = {
+                    "agent": agent_name,
+                    "prediction": message.outputs.prediction if hasattr(message.outputs, "prediction") else False,
+                    "confidence": message.outputs.confidence if hasattr(message.outputs, "confidence") else None,
+                    "conclusion": message.outputs.conclusion if hasattr(message.outputs, "conclusion") else "",
+                    "reasons": message.outputs.reasons if hasattr(message.outputs, "reasons") else [],
+                }
+
+                # Use agent name as the dictionary key instead of call_id
+                # But keep call_id as a reference
+                results[agent_name] = {
+                    "call_id": call_id,
+                    **prediction,
+                }
 
         # loop through again and attach scores this time
         for message in messages:
             if isinstance(message, AgentTrace) and isinstance(message.outputs, QualResults):
-                if message.parent_call_id in results:
-                    score = {
-                        "assessor": message.outputs.assessor,
-                        "assessments": [assessment.model_dump() for assessment in message.outputs.assessments],
-                        "correctness": message.outputs.correctness,
-                        "score_text": message.outputs.score_text,
-                    }
-                    results[message.parent_call_id]["scores"] = results[message.parent_call_id].get("scores", {})
-                    results[message.parent_call_id]["scores"][message.call_id] = score
+                # Find the matching prediction by call_id
+                for agent_name, prediction_data in results.items():
+                    if prediction_data["call_id"] == message.parent_call_id:
+                        score = {
+                            "assessor": message.outputs.assessor,
+                            "assessments": [assessment.model_dump() for assessment in message.outputs.assessments],
+                            "correctness": message.outputs.correctness,
+                            "score_text": message.outputs.score_text,
+                        }
+                        results[agent_name]["scores"] = prediction_data.get("scores", {})
+                        results[agent_name]["scores"][message.call_id] = score
+                        break
 
         return results
 
