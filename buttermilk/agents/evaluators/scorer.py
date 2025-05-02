@@ -13,10 +13,9 @@ from buttermilk._core.contract import (
     AgentTrace,
     GroupchatMessageTypes,  # Type hint union for listen
     )
-from buttermilk._core.message_data import extract_message_data, extract_records_from_data
+from buttermilk._core.message_data import extract_message_data, extract_records_from_message
 from buttermilk.agents.judge import JudgeReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
-from buttermilk.bm import bm  # Global Buttermilk instance
 
 
 # --- Pydantic Models for Scoring ---
@@ -52,21 +51,25 @@ class QualResults(QualScore):
             Note: This is an unweighted average.
 
         """
-        if not self.assessments:
+        try:
+            return sum(cra.correct for cra in self.assessments) / len(self.assessments)
+        except:
             return None
-        return sum(cra.correct for cra in self.assessments) / len(self.assessments)
 
     @property
     def score_text(self) -> str:
         """Provides a human-readable string representation of the numerical score."""
-        return f"{int(self.correctness * 100 if self.correctness is not None else 'N/A')}%"
+        try:
+            return f"{int(self.correctness * 100)}%"
+        except:
+            return "N/A"
 
     def __str__(self) -> str:
         """Provides a human-readable markdown representation of the score."""
-        if self.correctness is None:
-            score_str = "N/A"
-        else:
+        try:
             score_str = f"{self.correctness:.2f}"  # Format score to 2 decimal places
+        except:
+            score_str = "N/A"
 
         assessment_lines = [f"**{'✔️' if cra.correct else '✘'}**: {cra.feedback}" for cra in self.assessments]
         return f"**Answer**: {self.answer_id}\t\t**Score**: {score_str}\n\n\t- " + "\n\n\t- ".join(assessment_lines)
@@ -123,6 +126,9 @@ class LLMScorer(LLMAgent):
 
         logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
 
+        # Extract records if present in the messsage first
+        self._records.extend(extract_records_from_message(message))
+
         # Extract data from the current message
         extracted_data = extract_message_data(
             message=message,
@@ -130,15 +136,8 @@ class LLMScorer(LLMAgent):
             input_mappings=self.inputs,
         )
 
-        # Extract records if present in the extracted data
-        current_records = extract_records_from_data(extracted_data)
-
         # Create an AgentInput with minimal state
         scorer_agent_input = AgentInput()
-
-        # Add records if found in the current message
-        if current_records:
-            scorer_agent_input.records = current_records
 
         # Prepare the input for the scorer's own LLM call (_process)
         # 'inputs' should match what the scorer's prompt template expects.
@@ -154,19 +153,6 @@ class LLMScorer(LLMAgent):
 
         # Define the scoring function (our own __call__ method)
         score_fn = self.__call__
-
-        # Get the weave call object associated with the message we are scoring.
-        # This uses the tracing information attached by the Buttermilk framework.
-        weave_call = None
-        if hasattr(message, "tracing") and message.call_info.weave:
-            try:
-                weave_call = bm.weave.get_call(message.call_info.weave)
-                logger.debug(f"Scorer {self.id}: Found weave call {message.call_info.weave} to apply scorer.")
-            except Exception as e:
-                logger.warning(f"Scorer {self.id}: Failed to get weave call for trace ID {message.call_info.weave}: {e}")
-        else:
-            # Proceed with scoring anyway
-            logger.warning(f"Scorer {self.id}: No weave trace ID found on message from {source}. Cannot apply weave scorer; trying to score without tracing instead.")
 
         # Call the LLMScorer._process method with the prepared input.
         if public_callback is not None and message_callback is not None:
@@ -196,15 +182,3 @@ class LLMScorer(LLMAgent):
                 await public_callback(score_output)
             else:
                 logger.error(f"Scorer {self.id}: Cannot publish score, public_callback is None")
-
-            # add feedback to Weave call
-            if weave_call:
-                try:
-                    # overall 'correctness' score
-                    logger.debug(f"Scorer {self.id}: Applying scorer result to weave call {weave_call.ref}")
-                    weave_call.feedback.add("correctness", {"value": score.correctness, "assessor": score.assessor})
-                    # individual assessments (qualitative feedback)
-                    for assessment in score.assessments:
-                        weave_call.feedback.add("feedback", assessment.model_dump())
-                except Exception as e:
-                    logger.error(f"Scorer {self.id}: Error applying weave scorer to call {weave_call.ref if weave_call else 'N/A'}: {e}")

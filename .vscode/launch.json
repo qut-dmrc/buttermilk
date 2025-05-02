@@ -75,7 +75,7 @@
         "hydra.verbose=false",
         "+flows=trans",
         "ui=api",
-        "llms=lite",
+        "llms=full",
         "name=bmdevelopment",
         "job=api",
         //"+record_id=${input:query}" // Will prompt for query

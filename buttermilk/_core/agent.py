@@ -38,7 +38,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
-from buttermilk._core.message_data import extract_message_data, extract_records_from_data
+from buttermilk._core.message_data import extract_message_data, extract_records_from_message
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -306,6 +306,8 @@ class Agent(AgentConfig):
 
         """
         logger.debug(f"Agent {self.id} received message from {source} via _listen.")
+        # Extract any records in the message first.
+        self._records.extend(extract_records_from_message(message))
 
         # Extract data from the message using the utility function
         extracted = extract_message_data(
@@ -321,7 +323,8 @@ class Agent(AgentConfig):
                 if key == "records":
                     # Extract records from the data
                     records_data = {"records": value}
-                    new_records = extract_records_from_data(records_data)
+                    # TODO: check if this is still needed.
+                    new_records = extract_records_from_message(records_data)
                     # Add to internal records list
                     self._records.extend(new_records)
                     found.append(key)

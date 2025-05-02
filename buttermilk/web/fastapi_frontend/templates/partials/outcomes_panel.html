@@ -1,150 +1,132 @@
-{% if outcomes or scores or pending_agents %}
-    <div class="space-y-3">
-        <!-- Pending Agents Section -->
-        {% if pending_agents %}
-            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
-                <input type="checkbox" checked /> 
-                <div class="collapse-title text-sm font-medium py-2">
-                    Pending Input
-                </div>
-                <div class="collapse-content pt-0">
-                    <div class="flex flex-wrap gap-2">
-                        {% for agent in pending_agents %}
-                            <div class="badge badge-warning gap-1">
-                                <div class="w-2 h-2 rounded-full bg-warning-content"></div>
-                                <span class="text-xs">{{ agent }}</span>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
+<div class="space-y-4">
+    <!-- Empty state -->
+    {% if not outcomes and not scores and not pending_agents %}
+        <div class="alert alert-info">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>No outcomes available yet.</span>
+        </div>
+    {% endif %}
+
+    <!-- Pending Agents -->
+    {% if pending_agents %}
+        <div class="alert alert-warning">
+            <div class="flex items-center gap-2">
+                <span class="loading loading-spinner loading-sm"></span>
+                <span>Waiting for: {{ pending_agents|join(", ") }}</span>
             </div>
-        {% endif %}
-        
-        <!-- Predictions Section -->
-        {% if outcomes %}
-            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
-                <input type="checkbox" checked /> 
-                <div class="collapse-title text-sm font-medium py-2">
-                    Predictions
-                </div>
-                <div class="collapse-content pt-0">
-                    <div class="space-y-2">
-                        {% for prediction in outcomes %}
-                            <div class="card bg-base-100 compact shadow-sm hover:shadow-md transition-shadow duration-200">
-                                <div class="card-body p-2">
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-xs font-medium">{{ prediction.agent_name }}</span>
-                                        <div class="flex items-center gap-1">
-                                            {% if prediction.confidence %}
-                                                <span class="badge badge-sm {% if prediction.confidence == 'high' %}badge-success{% elif prediction.confidence == 'medium' %}badge-warning{% else %}badge-error{% endif %}">
-                                                    {{ prediction.confidence|capitalize }}
-                                                </span>
-                                            {% endif %}
-                                            <span class="badge badge-sm {% if prediction.violates %}badge-error{% else %}badge-success{% endif %}">
-                                                {{ "Violates" if prediction.violates else "Valid" }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="tooltip tooltip-bottom tooltip-primary" data-tip="{{ prediction.conclusion }}">
-                                        <div class="text-xs opacity-70 mt-1 truncate">
-                                            {{ prediction.conclusion|truncate(80) }}
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- DaisyUI collapse for detailed view -->
-                                    <div class="collapse collapse-plus bg-base-200 mt-1 rounded-sm">
-                                        <input type="checkbox" /> 
-                                        <div class="collapse-title text-xs font-medium py-1">
-                                            Details
-                                        </div>
-                                        <div class="collapse-content">
-                                            <div class="text-xs">
-                                                <div class="font-bold mb-1">{{ prediction.agent_name }}</div>
-                                                <div class="mb-2">{{ prediction.conclusion }}</div>
-                                                
-                                                {% if prediction.reasons %}
-                                                    <div class="mt-1">
-                                                        <strong>Reasoning:</strong>
-                                                        <ul class="mt-1 pl-2 list-disc">
-                                                            {% for reason in prediction.reasons %}
-                                                                <li class="mb-1">{{ reason }}</li>
-                                                            {% endfor %}
-                                                        </ul>
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
+        </div>
+    {% endif %}
+    
+    <!-- Predictions Summary -->
+    {% if outcomes %}
+        <div class="card bg-base-200">
+            <div class="card-body p-3">
+                <h3 class="card-title text-base mb-2">Assessment Summary</h3>
+                
+                <div class="grid grid-cols-1 gap-2">
+                    {% for prediction in outcomes %}
+                        <div class="bg-base-100 rounded-lg p-2 flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <div class="badge {% if prediction.prediction %}badge-error{% else %}badge-success{% endif %}">
+                                    {{ "Violates" if prediction.prediction else "Valid" }}
                                 </div>
+                                <span class="font-medium text-sm">
+                                    {{ prediction.agent_name if 'agent_name' in prediction else 'Judge' }}
+                                </span>
                             </div>
-                        {% endfor %}
-                    </div>
+                            <div class="flex items-center">
+                                {% if prediction.confidence %}
+                                    <span class="badge badge-ghost badge-sm">{{ prediction.confidence|capitalize }}</span>
+                                {% endif %}
+                                <button class="btn btn-xs btn-ghost ml-1" 
+                                        onclick="toggleDetail('prediction-{{ loop.index }}')">
+                                    Details
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Hidden details section -->
+                        <div id="prediction-{{ loop.index }}" class="hidden bg-base-100 rounded-lg p-3 -mt-2 mb-1">
+                            <p class="text-sm mb-2">{{ prediction.conclusion }}</p>
+                            {% if prediction.reasons %}
+                                <div class="divider my-1 text-xs">Reasoning</div>
+                                <div class="text-xs space-y-1 overflow-auto max-h-40">
+                                    {% for reason in prediction.reasons %}
+                                        <p class="text-gray-600">{{ reason }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
                 </div>
             </div>
-        {% endif %}
-        
-        <!-- Scores Section -->
-        {% if scores %}
-            <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-2">
-                <input type="checkbox" checked /> 
-                <div class="collapse-title text-sm font-medium py-2">
-                    Scores
-                </div>
-                <div class="collapse-content pt-0">
-                    {% for agent_id, agent_scores in scores.items() %}
-                        <div class="mb-3">
-                            <div class="text-xs font-medium mb-1">{{ agent_id }}</div>
-                            <div class="flex flex-wrap gap-1">
-                                {% for assessor_id, score_data in agent_scores.items() %}
-                                    <div class="tooltip tooltip-bottom" data-tip="Score: {{ score_data.score_text }} by {{ assessor_id }}" data-agent="{{ agent_id }}" data-assessor="{{ assessor_id }}">
-                                        <div class="badge gap-1">
-                                            <span class="text-xs opacity-70">{{ assessor_id[:5] }}</span>
-                                            <div class="badge badge-sm" style="background-color:{{ score_data.color }}; color:white;">
-                                                {{ score_data.score_text }}
-                                            </div>
-                                        </div>
+        </div>
+    {% endif %}
+    
+    <!-- Scores Summary -->
+    {% if scores %}
+        <div class="card bg-base-200">
+            <div class="card-body p-3">
+                <h3 class="card-title text-base">Evaluation Scores</h3>
+                
+                <!-- Visual Score Summary -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {% for judge_id, judge_scores in scores.items() %}
+                        <div class="bg-base-100 rounded-lg p-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-medium text-sm">{{ judge_id }}</span>
+                                <button class="btn btn-xs btn-ghost" 
+                                        onclick="toggleDetail('score-{{ judge_id }}')">
+                                    Details
+                                </button>
+                            </div>
+                            
+                            <!-- Score bubbles -->
+                            <div class="flex flex-wrap gap-2">
+                                {% for scorer_id, score_data in judge_scores.items() %}
+                                    <div class="badge badge-lg gap-1 
+                                        {% if score_data.correctness >= 0.8 %}badge-success
+                                        {% elif score_data.correctness >= 0.5 %}badge-warning
+                                        {% else %}badge-error{% endif %}">
+                                        <span class="font-mono">{{ score_data.score_text }}</span>
+                                        <span class="text-xs">{{ scorer_id }}</span>
                                     </div>
-                                    
-                                    <!-- DaisyUI modal for detailed score view -->
-                                    <dialog id="score_details_{{ loop.index0 }}_{{ loop.parent.loop.index0 }}" class="modal modal-bottom sm:modal-middle">
-                                        <div class="modal-box">
-                                            <h3 class="font-bold">Score: {{ score_data.score_text }} by {{ assessor_id }}</h3>
-                                            {% if score_data.assessments %}
-                                                <div class="py-2">
-                                                    <strong>Assessments:</strong>
-                                                    <ul class="mt-1 pl-2">
-                                                        {% for assessment in score_data.assessments %}
-                                                            <li class="mb-1">
-                                                                <span class="badge {% if assessment.correct %}badge-success{% else %}badge-error{% endif %} badge-sm">
-                                                                    {{ "✓" if assessment.correct else "✗" }}
-                                                                </span>
-                                                                <span>{{ assessment.feedback }}</span>
-                                                            </li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                </div>
-                                            {% endif %}
-                                            <div class="modal-action">
-                                                <form method="dialog">
-                                                    <button class="btn btn-sm">Close</button>
-                                                </form>
-                                            </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <!-- Hidden details -->
+                            <div id="score-{{ judge_id }}" class="hidden mt-2 space-y-2">
+                                {% for scorer_id, score_data in judge_scores.items() %}
+                                    {% if score_data.assessments %}
+                                        <div class="bg-base-200 p-2 rounded-md text-xs">
+                                            <div class="font-medium mb-1">{{ scorer_id }} ({{ score_data.score_text }})</div>
+                                            <ul class="list-disc list-inside space-y-1">
+                                                {% for assessment in score_data.assessments %}
+                                                    <li class="flex items-start gap-1">
+                                                        <span class="inline-block mt-1 {% if assessment.correct %}text-success{% else %}text-error{% endif %}">
+                                                            {{ "✓" if assessment.correct else "✗" }}
+                                                        </span>
+                                                        <span class="text-gray-600">{{ assessment.feedback|truncate(70) }}</span>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
                                         </div>
-                                    </dialog>
+                                    {% endif %}
                                 {% endfor %}
                             </div>
                         </div>
                     {% endfor %}
                 </div>
             </div>
-        {% endif %}
-    </div>
-{% else %}
-    <div class="alert alert-info">
-        <div>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span class="text-xs">No outcomes available yet.</span>
         </div>
-    </div>
-{% endif %}
+    {% endif %}
+</div>
+
+<script>
+function toggleDetail(id) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.classList.toggle('hidden');
+    }
+}
+</script>

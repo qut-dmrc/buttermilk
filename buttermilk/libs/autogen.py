@@ -26,6 +26,7 @@ from buttermilk._core.contract import (
     AgentInput,  # Standard input message for Buttermilk agents.
     AllMessages,
     ErrorEvent,
+    FlowEvent,
     FlowMessage,
     GroupchatMessageTypes,
     HeartBeat,
@@ -122,7 +123,7 @@ class AutogenAgentAdapter(RoutedAgent):
         # Determine the target topic ID, defaulting to the adapter's main topic.
         target_topic_id = topic_id or self.topic_id
 
-        async def publish_callback(message: FlowMessage) -> None:
+        async def publish_callback(message: FlowMessage | FlowEvent) -> None:
             """The actual callback that publishes the message using the adapter."""
             logger.debug(f"Publish callback invoked by agent {self.agent.id}. Publishing {type(message).__name__} to topic {target_topic_id}")
             # Use the adapter's inherited publish_message method.
@@ -162,19 +163,21 @@ class AutogenAgentAdapter(RoutedAgent):
         """
         logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
 
+        public_callback = self._make_publish_callback(topic_id=self.topic_id)
+
         try:
             # Delegate to the agent's _listen method for processing.
             await self.agent._listen(
                 message=message,
                 cancellation_token=ctx.cancellation_token,
-                public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
+                public_callback=public_callback,  # Callback for default topic
                 message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
             msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
-            logger.error(msg, exc_info=True)
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
+            logger.error(msg, exc_info=False)
+            await public_callback(ErrorEvent(source=self.agent.id, content=msg))
 
     @message_handler
     async def handle_control_message(

@@ -148,7 +148,7 @@ class DashboardRoutes:
                     for msg_data in self.websocket_manager.session_data[session_id].messages:
                         if "original" in msg_data:
                             original_messages.append(msg_data["original"])
-                        
+
                     # Get scores and predictions using message service on the original objects
                     scores = MessageService.extract_scores_from_messages(original_messages)
                     outcomes = MessageService.extract_predictions_from_messages(original_messages)
@@ -162,7 +162,8 @@ class DashboardRoutes:
         @self.router.get("/api/history/", response_class=HTMLResponse)
         async def get_run_history(request: Request):
             """Get run history for a specific flow, criteria, and record using query parameters"""
-            flow_name = request.query_params.get("flow")            criteria = request.query_params.get("criteria")
+            flow_name = request.query_params.get("flow")
+            criteria = request.query_params.get("criteria")
             record_id = request.query_params.get("record_id")
 
             if not flow_name or not criteria or not record_id:

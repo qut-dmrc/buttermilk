@@ -5,7 +5,7 @@ scorer:
   num_runs: 1
   description: Checks and scores answers against our expected ground truth.
   variants:
-    model: ${llms.general}
+    model: ${llms.judgers}
   parameters:
     template: score
   inputs:
