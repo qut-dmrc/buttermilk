@@ -16,6 +16,20 @@ from .llmhost import LLMHostAgent
 
 TRUNCATE_LEN = 1000  # characters per history message
 
+###########
+####
+# TODO:
+#####
+# Key Features:
+        # - Step-by-step execution driven by `CONDUCTOR` agent suggestions.
+        # - User confirmation and feedback collection at each step via `_in_the_loop`.
+        # - Ability for the user to select specific agent variants for a step.
+        # - Tracking of the exploration path and results (`_exploration_path`, `_exploration_results`).
+        # - Handling of special messages from the `CONDUCTOR` (e.g., questions for the user, comparisons).
+####
+####
+#
+
 
 class ExplorerHost(LLMHostAgent):
     """An advanced host agent for interactive exploration workflows.
@@ -87,7 +101,7 @@ class ExplorerHost(LLMHostAgent):
         if message is None:
             logger.warning("Explorer received None message in _choose, using fallback")
             return StepRequest(role=WAIT, content="Waiting for valid conductor request")
-            
+
         # Enhance message context with exploration-specific information
         enhanced_message = await self._enhance_message_for_exploration(message)
 
@@ -158,6 +172,15 @@ class ExplorerHost(LLMHostAgent):
             "exploration_history": self._summarize_exploration_history(),
         }
 
+            # # add extra information about next step
+            # request_content = (
+            #     f"**Next Proposed Step:**\n"
+            #     f"- **Agent Role:** {step.role}\n"
+            #     f"- **Description:** {step.content or '(No description)'}\n"
+            #     f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}"
+            #     f"{variant_info}\n\n"
+            #     f"Confirm (Enter), provide feedback, select a variant ID, or reject ('n'/'q')."
+            # )
         # Update inputs with exploration context
         if "inputs" in enhanced.__dict__:
             if isinstance(enhanced.inputs, dict):

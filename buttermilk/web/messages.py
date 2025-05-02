@@ -1,14 +1,12 @@
-"""
-Message formatting utilities for displaying messages in the frontend UI.
+"""Message formatting utilities for displaying messages in the frontend UI.
 This module handles converting Pydantic model objects to appropriate HTML/UI representations.
 """
 
 import hashlib
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from buttermilk._core.agent import AgentTrace
-from buttermilk._core.config import AgentConfig  # Import AgentConfig for typing
 from buttermilk._core.contract import (
     ConductorResponse,
     ManagerRequest,
@@ -24,7 +22,7 @@ from buttermilk.bm import logger
 
 # Map to track message IDs and their scores
 # Key: message_id, Value: list of QualResults objects
-message_scores: Dict[str, List[QualResults]] = {}
+message_scores: dict[str, list[QualResults]] = {}
 
 # Agent styling configuration
 AGENT_STYLES = {
@@ -53,9 +51,9 @@ COLOR_PALETTE = [
 
 # Judge emojis with different skin tones and variations
 JUDGE_AVATARS = [
-    "👨‍⚖️", "👨🏻‍⚖️", "👨🏼‍⚖️", "👨🏽‍⚖️", "👨🏾‍⚖️", "👨🏿‍⚖️",  
-    "👩‍⚖️", "👩🏻‍⚖️", "👩🏼‍⚖️", "👩🏽‍⚖️", "👩🏾‍⚖️", "👩🏿‍⚖️",  
-    "🧑‍⚖️", "🧑🏻‍⚖️", "🧑🏼‍⚖️", "🧑🏽‍⚖️", "🧑🏾‍⚖️", "🧑🏿‍⚖️",  
+    "👨‍⚖️", "👨🏻‍⚖️", "👨🏼‍⚖️", "👨🏽‍⚖️", "👨🏾‍⚖️", "👨🏿‍⚖️",
+    "👩‍⚖️", "👩🏻‍⚖️", "👩🏼‍⚖️", "👩🏽‍⚖️", "👩🏾‍⚖️", "👩🏿‍⚖️",
+    "🧑‍⚖️", "🧑🏻‍⚖️", "🧑🏼‍⚖️", "🧑🏽‍⚖️", "🧑🏾‍⚖️", "🧑🏿‍⚖️",
     "⚖️",  # Traditional scales of justice (fallback)
 ]
 
@@ -64,7 +62,7 @@ def _get_message_hash(message_id: str) -> str:
     """Generate a consistent color from a message ID"""
     if not message_id:
         return "#777777"  # Default gray
-        
+
     hash_val = int(hashlib.md5(message_id.encode()).hexdigest(), 16)
     return COLOR_PALETTE[hash_val % len(COLOR_PALETTE)]
 
@@ -86,7 +84,7 @@ def _format_score_indicator(score: float) -> str:
     """Format a score as a colored indicator"""
     color = _get_score_color(score)
     score_percent = f"{int(score * 100)}%"
-    
+
     return f"""
     <div style="display:inline-flex; align-items:center; background:#f8f9fa; padding:2px 8px; border-radius:12px; margin-left:5px; font-size:0.85em;">
         <span style="display:inline-block; width:8px; height:8px; background-color:{color}; border-radius:50%; margin-right:4px;"></span>
@@ -99,7 +97,7 @@ def _get_judge_avatar(agent_id: str) -> str:
     """Generate a consistent judge avatar based on agent ID"""
     if not agent_id:
         return "⚖️"  # Default fallback
-        
+
     hash_val = int(hashlib.md5(agent_id.encode()).hexdigest(), 16)
     return JUDGE_AVATARS[hash_val % len(JUDGE_AVATARS)]
 
@@ -112,6 +110,7 @@ def _format_record(record: Record) -> str:
         
     Returns:
         str: HTML representation of the record
+
     """
     # Create a snippet version for display
     content_str = str(record.content) if record.content else ""
@@ -147,7 +146,7 @@ def _format_record(record: Record) -> str:
     """
 
 
-def _format_message_with_style(content: str, agent_info: Any, message_id: Optional[str] = None) -> str:
+def _format_message_with_style(content: str, agent_info: Any, message_id: str | None = None) -> str:
     """Apply styling to a message based on agent info
     
     Args:
@@ -157,6 +156,7 @@ def _format_message_with_style(content: str, agent_info: Any, message_id: Option
         
     Returns:
         str: HTML representation of the styled message
+
     """
     # Get the predefined style for this agent role
     role = agent_info.role.lower() if hasattr(agent_info, "role") else "default"
@@ -203,7 +203,7 @@ def _format_message_with_style(content: str, agent_info: Any, message_id: Option
     """
 
 
-def _format_agent_reasons(reasons: JudgeReasons, message: Optional[AgentTrace] = None) -> str:
+def _format_agent_reasons(reasons: JudgeReasons, message: AgentTrace | None = None) -> str:
     """Format JudgeReasons using the UIService formatter
     
     Args:
@@ -212,6 +212,7 @@ def _format_agent_reasons(reasons: JudgeReasons, message: Optional[AgentTrace] =
         
     Returns:
         str: HTML representation of the judge reasons
+
     """
     from buttermilk.web.fastapi_frontend.services.ui_service import UIService
     return UIService.format_judge_reasons_html(reasons)
@@ -225,10 +226,11 @@ def _markdown_to_html(content: str) -> str:
         
     Returns:
         str: HTML representation of the markdown
+
     """
     if not content:
         return ""
-        
+
     # Process code blocks with triple backticks
     code_pattern = r"```(.*?)\n(.*?)```"
 
@@ -249,11 +251,11 @@ def _markdown_to_html(content: str) -> str:
         pattern = rf"^{hashtags} (.+)$"
         replacement = f"<h{i}>\\1</h{i}>"
         content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
-        
+
     return content
 
 
-def _format_message_for_client(message: Any) -> Union[Dict[str, Any], str, None]:
+def _format_message_for_client(message: Any) -> dict[str, Any] | str | None:
     """Format different message types for web client consumption with improved styling.
     
     Args:
@@ -261,6 +263,7 @@ def _format_message_for_client(message: Any) -> Union[Dict[str, Any], str, None]
         
     Returns:
         Union[Dict[str, Any], str, None]: Formatted message data for the client
+
     """
     # Skip message types that shouldn't be displayed in the UI
     if isinstance(message, (TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse)):
@@ -273,9 +276,9 @@ def _format_message_for_client(message: Any) -> Union[Dict[str, Any], str, None]
     # Only process AgentTrace objects from here on
     if not isinstance(message, AgentTrace):
         return None
-    
+
     content = None
-    
+
     # Process based on the output type
     if isinstance(message.outputs, QualResults):
         logger.debug(f"Detected score message from: {message.agent_info.name}")
@@ -283,54 +286,51 @@ def _format_message_for_client(message: Any) -> Union[Dict[str, Any], str, None]
             logger.debug(f"Sending score update with agent={message.outputs.agent_id}, assessor={message.outputs.assessor}")
             # Store the QualResults directly
             message_scores[message.parent_call_id].append(message.outputs)
-            
+
             # Always use the direct structured format for frontend updates
             return {
                 "type": "score_update",
                 "agent_id": message.outputs.agent_id,
-                "assessor": message.outputs.assessor, 
+                "assessor": message.outputs.assessor,
                 "score_data": {
                     "correctness": message.outputs.correctness,
                     "score_text": message.outputs.score_text,
-                    "assessments": [assessment.model_dump() for assessment in message.outputs.assessments]
-                }
+                    "assessments": [assessment.model_dump() for assessment in message.outputs.assessments],
+                },
             }
-    
+
     elif isinstance(message.outputs, JudgeReasons):
         # Initialize score tracking for this message
         if message.call_id not in message_scores:
             message_scores[message.call_id] = []
         # Format the reasons
         content = _format_agent_reasons(message.outputs, message)
-    
+
     elif isinstance(message.outputs, ToolOutput):
         # Format tool output with badge
         tool_name = getattr(message.outputs, "function_name", "unknown_tool")
         badge = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span>'
         content = badge + "<br/>" + message.outputs.content
-    
+
     elif isinstance(message.outputs, ManagerRequest):
         # Use content from ManagerRequest if available
         content = message.outputs.content if hasattr(message.outputs, "content") and message.outputs.content else None
         if not content:
             return None
-    
+
     else:
-        # Use string representation for other output types
-        content = str(message.outputs) if message.outputs else None
-        if not content:
-            return None
-    
+        return None
+
     # Convert markdown in content to HTML if needed
     if content and isinstance(content, str):
         content = _markdown_to_html(content)
-    
+
     # Apply styling to the message
     if content is None:
         content = ""  # Convert None to empty string to avoid errors
-    
+
     styled_content = _format_message_with_style(content, message.agent_info, message.call_id)
-    
+
     # Return standardized chat message format
     return {
         "type": "chat_message",
