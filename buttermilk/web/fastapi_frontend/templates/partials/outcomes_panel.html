@@ -69,44 +69,57 @@
             <div class="card-body p-2">
                 <h3 class="card-title text-sm mb-1">Evaluation Scores</h3>
                 
-                <!-- Visual Score Summary -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-1">
+                <!-- Judges with their assessments -->
+                <div class="space-y-2">
                     {% for judge_id, judge_scores in scores.items() %}
-                        <div class="bg-base-100 rounded-lg p-2">
+                        <div class="bg-base-100 rounded-lg p-1.5">
+                            <!-- Judge header -->
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-medium text-xs">{{ judge_id }}</span>
-                                <button class="btn btn-xs btn-ghost h-6 min-h-0 px-2" 
-                                        onclick="toggleDetail('score-{{ judge_id }}')">
+                                <div class="flex items-center gap-1">
+                                    <span class="font-medium text-xs">{{ judge_id }}</span>
+                                    <!-- Show a sample of the conclusion if available -->
+                                    {% if outcomes and loop.index0 < outcomes|length %}
+                                        <span class="text-2xs text-gray-500 truncate max-w-[12rem]">
+                                            {{ outcomes[loop.index0].conclusion|truncate(30) }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <button class="btn btn-xs btn-ghost h-5 min-h-0 px-1 text-2xs" 
+                                        onclick="toggleDetail('score-detail-{{ judge_id }}')">
                                     Details
                                 </button>
                             </div>
                             
-                            <!-- Score bubbles -->
-                            <div class="flex flex-wrap gap-1">
+                            <!-- Compact score grid -->
+                            <div class="grid grid-cols-3 gap-0.5 text-center">
                                 {% for scorer_id, score_data in judge_scores.items() %}
-                                    <div class="badge badge-sm gap-1 text-xs
-                                        {% if score_data.correctness >= 0.8 %}badge-success
-                                        {% elif score_data.correctness >= 0.5 %}badge-warning
-                                        {% else %}badge-error{% endif %}">
-                                        <span class="font-mono text-xs">{{ score_data.score_text }}</span>
-                                        <span class="text-2xs">{{ scorer_id }}</span>
+                                    <div class="border rounded px-1 py-0.5 text-2xs
+                                        {% if score_data.correctness is defined and score_data.correctness is number %}
+                                            {% if score_data.correctness >= 0.8 %}bg-success/10 border-success/20
+                                            {% elif score_data.correctness >= 0.5 %}bg-warning/10 border-warning/20
+                                            {% else %}bg-error/10 border-error/20{% endif %}
+                                        {% else %}bg-base-200 border-base-300{% endif %}">
+                                        <div class="flex justify-between items-center">
+                                            <span class="truncate max-w-[70%]">{{ scorer_id.split('-')[0] }}</span>
+                                            <span class="font-medium">{{ score_data.score_text }}</span>
+                                        </div>
                                     </div>
                                 {% endfor %}
                             </div>
                             
-                            <!-- Hidden details -->
-                            <div id="score-{{ judge_id }}" class="hidden mt-1 space-y-1">
+                            <!-- Hidden details section -->
+                            <div id="score-detail-{{ judge_id }}" class="hidden mt-1 border-t border-base-200 pt-1">
                                 {% for scorer_id, score_data in judge_scores.items() %}
                                     {% if score_data.assessments %}
-                                        <div class="bg-base-200 p-1.5 rounded-md text-2xs">
-                                            <div class="font-medium mb-0.5">{{ scorer_id }} ({{ score_data.score_text }})</div>
-                                            <ul class="list-disc list-inside space-y-0.5 pl-1">
+                                        <div class="mb-1 last:mb-0">
+                                            <div class="font-medium text-2xs">{{ scorer_id }} ({{ score_data.score_text }})</div>
+                                            <ul class="text-2xs space-y-0.5">
                                                 {% for assessment in score_data.assessments %}
-                                                    <li class="flex items-start gap-1">
-                                                        <span class="inline-block mt-0.5 {% if assessment.correct %}text-success{% else %}text-error{% endif %}">
+                                                    <li class="flex gap-1">
+                                                        <span class="{% if assessment.correct %}text-success{% else %}text-error{% endif %}">
                                                             {{ "✓" if assessment.correct else "✗" }}
                                                         </span>
-                                                        <span class="text-gray-600">{{ assessment.feedback|truncate(80) }}</span>
+                                                        <span class="text-gray-600 line-clamp-1">{{ assessment.feedback }}</span>
                                                     </li>
                                                 {% endfor %}
                                             </ul>

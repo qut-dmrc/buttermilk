@@ -15,3 +15,7 @@ judgers:
 synthesisers:
   - gemini25pro
   - gemini2flash
+  - gpt41
+  - gpt41mini
+  - o4mini
+  - sonnet
