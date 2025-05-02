@@ -149,6 +149,8 @@ class LLMScorer(LLMAgent):
             if key != "records":  # Records are handled separately
                 scorer_agent_input.inputs[key] = value
 
+        scorer_agent_input.records = self._records
+
         scorer_agent_input.inputs["assessor"] = self.id
 
         # Define the scoring function (our own __call__ method)
@@ -164,6 +166,12 @@ class LLMScorer(LLMAgent):
         else:
             logger.error(f"Scorer {self.id}: Missing required callbacks, cannot proceed with scoring")
             return
+
+        # Tie the score to the original answer
+        score_output.parent_call_id = message.call_id
+
+        # Add the inputs to the trace output object
+        score_output.inputs = scorer_agent_input
 
         # Process the score for logging
         if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
