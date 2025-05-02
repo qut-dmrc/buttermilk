@@ -1,5 +1,4 @@
 import hashlib
-import json
 import re
 from typing import Any
 
@@ -17,13 +16,9 @@ from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
-# Map to track which messages have been scored
-# Key: answer_id, Value: message_id (used to link scores to messages)
-scored_messages: dict[str, str] = {}
-
 # Map to track message IDs and their scores
 # Key: message_id, Value: dict with score info
-message_scores: dict[str, dict[str, Any]] = {}
+message_scores: dict[str, list[dict[str, Any]]] = {}
 
 # Define agent styling
 AGENT_STYLES = {
@@ -116,84 +111,6 @@ COLOR_PALETTE = [
 ]
 
 
-def _get_agent_info(message) -> dict:
-    """Extract agent information from the message."""
-    agent_info = {
-        "role": "default",
-        "name": "Unknown",
-        "id": "",
-        "color": None,
-        "message_id": None,
-        "model": None,
-    }
-
-    if isinstance(message, AgentTrace):
-        # Generate a stable message ID
-        agent_info["message_id"] = message.call_id if hasattr(message, "call_id") else ""
-
-        # Extract role if available
-        if hasattr(message, "role"):
-            agent_info["role"] = getattr(message, "role", "default").lower()
-
-        # Try to get agent_info object
-        if hasattr(message, "agent_info") and message.agent_info:
-            info = message.agent_info
-            agent_info["name"] = getattr(info, "name", "Agent")
-            agent_info["id"] = getattr(info, "id", "")
-
-            # If the message has a custom color in agent_info, use it
-            if hasattr(info, "parameters") and isinstance(info.parameters, dict) and "color" in info.parameters:
-                agent_info["color"] = info.parameters["color"]
-
-            # Try to get model info
-            if hasattr(info, "parameters") and isinstance(info.parameters, dict) and "model" in info.parameters:
-                agent_info["model"] = info.parameters["model"]
-
-        # For answer tracking with scores
-        if hasattr(message, "call_id"):
-            agent_info["answer_id"] = message.call_id
-
-    elif isinstance(message, ToolOutput):
-        agent_info["role"] = "tool"
-        agent_info["name"] = getattr(message, "name", "Tool")
-        agent_info["message_id"] = getattr(message, "call_id", "")
-
-    elif isinstance(message, ManagerRequest):
-        agent_info["role"] = "instructions"
-        agent_info["name"] = "Instructions"
-
-    elif isinstance(message, Record):
-        # Try to extract role information if available
-        if hasattr(message, "role"):
-            agent_info["role"] = getattr(message, "role", "default").lower()
-        agent_info["name"] = "Record"
-
-    return agent_info
-
-
-def _get_agent_role(message) -> str:
-    """Extract the agent role from the message."""
-    return _get_agent_info(message)["role"]
-
-
-def _is_score_message(message) -> bool:
-    """Check if the message is a scoring message."""
-    if not isinstance(message, AgentTrace):
-        return False
-
-    # Check role first
-    if hasattr(message, "role"):
-        role = getattr(message, "role", "").lower()
-        if role == "scorer":
-            return True
-
-    # Check if outputs is QualResults
-    if hasattr(message, "outputs") and isinstance(message.outputs, QualResults):
-        return True
-
-    return False
-
-
 def _get_message_hash(message_id: str) -> str:
     """Generate a consistent color from a message ID"""
     if not message_id:
@@ -253,10 +170,46 @@ def _get_judge_avatar(agent_id: str) -> str:
     return JUDGE_AVATARS[hash_val % len(JUDGE_AVATARS)]
 
 
-def _format_message_with_style(content: str, agent_info: dict, message_id: str | None = None) -> str:
+def _format_record(record):
+
+        # Create a snippet version for display
+        snippet = record.content[:200] + "..." if len(record.content) > 200 else record.content
+
+        # Format metadata
+        metadata_parts = []
+        if record.metadata:
+            if record.title:
+                metadata_parts.append(f"<h3 class='text-lg font-semibold'>{record.title}</h3>")
+            metadata_parts.append(f"<span class='text-xs text-gray-500'>ID: {record.record_id}</span>")
+
+            metadata_html = []
+            for k, v in record.metadata.items():
+                if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
+                    metadata_html.append(f"<div><span class='font-medium'>{k}:</span> {v}</div>")
+
+            if metadata_html:
+                metadata_parts.append(f"<div class='text-sm mt-1 space-y-1'>{''.join(metadata_html)}</div>")
+
+        # Create HTML with the full content in a tooltip
+        content = f"""
+        <div class="group relative">
+            <div class="p-3 bg-white rounded-md border border-gray-200">
+                {''.join(metadata_parts)}
+                <div class="mt-2 text-sm text-gray-700">{snippet}</div>
+            </div>
+            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
+                <div class="mb-2 font-bold">{record.title or 'Record Content'}</div>
+                <div>{record.text}</div>
+            </div>
+        </div>
+        """
+        return content
+
+
+def _format_message_with_style(content: str, agent_info: "AgentInfo", message_id: str | None = None) -> str:
     """Apply styling to a message based on agent info."""
     # Get the predefined style for this agent role
-    role = agent_info.get("role", "default")
+    role = agent_info.role
     agent_style = AGENT_STYLES.get(role, AGENT_STYLES["default"])
 
     # Extract styling elements
@@ -264,30 +217,31 @@ def _format_message_with_style(content: str, agent_info: dict, message_id: str |
     border = agent_style.get("border", "1px solid #dee2e6")
 
     # Get avatar with special handling for judge role
-    if role == "judge":
-        avatar = _get_judge_avatar(agent_info.get("id", ""))
+    if role == "JUDGE":
+        avatar = _get_judge_avatar(agent_info.id)
     else:
         avatar = agent_style.get("avatar", "👤")
 
     # Prefer custom color from agent_info if available, otherwise use role-based color
-    color = agent_info.get("color") or agent_style.get("color", "#6c757d")
+    color = agent_style.get("color", "#6c757d")
 
     # Get agent name - use provided name or generate from role
-    name = agent_info.get("name", role.capitalize())
+    name = agent_info.name
 
     # Calculate agent color for the header
-    agent_color = _get_message_hash(agent_info.get("id", ""))
+    agent_color = _get_message_hash(agent_info.id)
 
     # Check if there's a score for this message
     score_html = ""
     if message_id and message_id in message_scores:
-        score_data = message_scores[message_id]
-        score_html = f"""
-        <div class="score-badge" style="position:absolute; top:-8px; right:-8px; background:#f8f9fa; padding:2px 8px; border-radius:12px; border:1px solid #dee2e6; font-size:0.85em;">
-            <span style="display:inline-block; width:8px; height:8px; background-color:{score_data.get('color', '#777777')}; border-radius:50%; margin-right:4px;"></span>
-            <span style="font-weight:bold;">{score_data.get('score_text', '?%')}</span>
-        </div>
-        """
+
+        for score_data in message_scores.get(message_id, []):
+            score_html += f"""
+            <div class="score-badge" style="position:absolute; top:-8px; right:-8px; background:#f8f9fa; padding:2px 8px; border-radius:12px; border:1px solid #dee2e6; font-size:0.85em;">
+                <span style="display:inline-block; width:8px; height:8px; background-color:{score_data.get('color', '#777777')}; border-radius:50%; margin-right:4px;"></span>
+                <span style="font-weight:bold;">{score_data.get('score_text', '?%')}</span>
+            </div>
+            """
 
     return f"""
     <div id="{message_id}" style="display:flex; margin-bottom:15px; position:relative;">
@@ -457,50 +411,7 @@ def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
     """
 
 
-def _extract_score(message) -> tuple[float | None, QualResults | None]:
-    """Extract and process score information from a message.
-    
-    Returns:
-        tuple: (score value, score object)
-
-    """
-    if not isinstance(message, AgentTrace):
-        return None, None
-
-    # Extract QualResults if available
-    if hasattr(message, "outputs") and isinstance(message.outputs, QualResults):
-        score_value = getattr(message.outputs, "correctness", None)
-        return score_value, message.outputs
-
-    # Try standard extraction methods
-    if hasattr(message, "outputs"):
-        outputs = message.outputs
-
-        # Check if outputs is a dict with 'score'
-        if isinstance(outputs, dict) and "score" in outputs:
-            return outputs["score"], None
-
-        # Check if outputs is a numeric value
-        if isinstance(outputs, (int, float)):
-            return float(outputs), None
-
-        # Try to parse JSON string
-        if isinstance(outputs, str):
-            try:
-                data = json.loads(outputs)
-                if isinstance(data, dict) and "score" in data:
-                    return data["score"], None
-            except:
-                # If it's not JSON, try to convert the string to a float
-                try:
-                    return float(outputs), None
-                except:
-                    pass
-
-    return None, None
-
-
-def _format_message_for_client(message) -> dict | str | None:
+def _format_message_for_client(message: AgentTrace) -> dict | str | None:
     """Format different message types for web client consumption with improved styling.
     
     Args:
@@ -512,152 +423,44 @@ def _format_message_for_client(message) -> dict | str | None:
         None: If message shouldn't be sent
 
     """
-    # Get agent info and generate a unique message ID
-    agent_info = _get_agent_info(message)
-    message_id = agent_info.get("message_id", "")
-
     # Ignore certain message types (don't display in chat)
     if isinstance(message, (TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse)):
         return None
 
-    # Handle score messages
-    if _is_score_message(message):
-        logger.debug(f"Detected score message from: {agent_info.get('name', 'unknown')}")
-        score_value, score_obj = _extract_score(message)
-        logger.debug(f"Extracted score: value={score_value}, has_obj={score_obj is not None}")
+    if isinstance(message, Record):
+        content = _format_record(message)
+        return content
 
-        # If it's a QualResults object, use it directly for standardized format
-        if score_obj and isinstance(score_obj, QualResults):
-            try:
-                # Create the standardized data structure using QualResults directly
-                score_data = {
-                    "score": getattr(score_obj, "correctness", 0.0),
-                    "score_text": f"{int(getattr(score_obj, 'correctness', 0.0) * 100)}%",
-                    "color": _get_score_color(getattr(score_obj, "correctness", 0.0)),
-                    "assessments": [a.model_dump() for a in getattr(score_obj, "assessments", [])],
-                }
-
-                frontend_data = {
-                    "type": "score_update",
-                    "agent_id": score_obj.agent_id,
-                    "assessor_id": score_obj.assessor,
-                    "score_data": score_data,
-                }
-
-                # Store the score data for display in messages
-                if answer_id := getattr(score_obj, "answer_id", ""):
-                    if answer_id in scored_messages:
-                        original_message_id = scored_messages[answer_id]
-                        message_scores[original_message_id] = score_data
-
-                logger.debug(f"Sending score update with agent={score_obj.agent_id}, assessor={score_obj.assessor}")
-                return frontend_data
-            except Exception as e:
-                logger.error(f"Error generating score update data: {e}")
-                # Simple fallback for error cases
-                return {
-                    "type": "score_update",
-                    "agent_id": getattr(score_obj, "agent_id", "unknown"),
-                    "assessor_id": getattr(score_obj, "assessor", "scorer"),
-                    "score_data": {
-                        "score": getattr(score_obj, "correctness", 0.0),
-                        "score_text": "N/A",
-                        "color": _get_score_color(getattr(score_obj, "correctness", 0.0)),
-                        "assessments": [],
-                    },
-                }
-
-        # Handle simpler score messages with standardized format
-        if score_value is not None:
-            agent_info = _get_agent_info(message)
-            agent_id = str(agent_info.get("id", "unknown"))
-            assessor_id = str(getattr(message, "role", "scorer"))
-
-            # Return standardized data structure
-            return {
-                "type": "score_update",
-                "agent_id": agent_id,
-                "assessor_id": assessor_id,
-                "score_data": {
-                    "score": score_value,
-                    "score_text": f"{int(score_value * 100)}%",
-                    "color": _get_score_color(score_value),
-                    "assessments": [],
-                },
-            }
-
-        # Don't render other scorer messages
+    if not isinstance(message, AgentTrace):
         return None
 
-    # Default values for normal (non-score) messages
     content = None
 
-    # Format based on message type
-    if isinstance(message, AgentTrace):
+    # Handle score messages
+    if isinstance(message.outputs, QualResults):
+        logger.debug(f"Detected score message from: {message.agent_info.name}")
+        if message.parent_call_id in message_scores:
+            logger.debug(f"Sending score update with agent={message.outputs.agent_id}, assessor={message.outputs.assessor}")
+            frontend_data = message.outputs.model_dump()
+            frontend_data["color"] = _get_score_color(message.outputs.correctness or 0)
+            message_scores[message.parent_call_id].append(frontend_data)
+            return frontend_data
+    elif isinstance(message.outputs, JudgeReasons):
         # Store this message ID for future score references
-        if hasattr(message, "call_id"):
-            answer_id = message.call_id
-            if answer_id:
-                scored_messages[answer_id] = message_id
+        if message.call_id not in message_scores:
+            message_scores[message.call_id] = []
+        content = _format_agent_reasons(message.outputs, message)
 
-        # Special handling for AgentReasons
-        if hasattr(message, "outputs") and isinstance(message.outputs, JudgeReasons):
-            content = _format_agent_reasons(message.outputs, message)
-        elif isinstance(message.outputs, str):
-            content = message.outputs
-        else:
-            # For complex outputs, serialize to JSON
-            try:
-                content = message.outputs.model_dump_json() if message.outputs else ""
-            except:
-                content = json.dumps(message.outputs)
-
-    elif isinstance(message, Record):
-        # Create a snippet version for display
-        if isinstance(message.content, str):
-            snippet = message.content[:200] + "..." if len(message.content) > 200 else message.content
-        else:
-            snippet = message.alt_text[:200] + "..." if message.alt_text and len(message.alt_text) > 200 else message.alt_text or ""
-
-        # Format metadata
-        metadata_parts = []
-        if message.metadata:
-            if message.title:
-                metadata_parts.append(f"<h3 class='text-lg font-semibold'>{message.title}</h3>")
-            metadata_parts.append(f"<span class='text-xs text-gray-500'>ID: {message.record_id}</span>")
-
-            metadata_html = []
-            for k, v in message.metadata.items():
-                if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
-                    metadata_html.append(f"<div><span class='font-medium'>{k}:</span> {v}</div>")
-
-            if metadata_html:
-                metadata_parts.append(f"<div class='text-sm mt-1 space-y-1'>{''.join(metadata_html)}</div>")
-
-        # Create HTML with the full content in a tooltip
-        content = f"""
-        <div class="group relative">
-            <div class="p-3 bg-white rounded-md border border-gray-200">
-                {''.join(metadata_parts)}
-                <div class="mt-2 text-sm text-gray-700">{snippet}</div>
-            </div>
-            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
-                <div class="mb-2 font-bold">{message.title or 'Record Content'}</div>
-                <div>{message.text}</div>
-            </div>
-        </div>
-        """
-
-    elif isinstance(message, ToolOutput):
+    elif isinstance(message.outputs, ToolOutput):
         # Add tool name as a badge
         tool_name = getattr(message, "name", "unknown_tool")
         # Avoid f-string with backslash by concatenating strings
         badge = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span>'
         content = badge + "<br/>" + message.content
 
-    elif isinstance(message, ManagerRequest):
-        if message.content:
-            content = message.content
+    elif isinstance(message.outputs, ManagerRequest):
+        if message.outputs.content:
+            content = message.outputs.content
         else:
             return None
 
@@ -692,16 +495,16 @@ def _format_message_for_client(message) -> dict | str | None:
     if content is None:
         content = ""  # Convert None to empty string to avoid type errors
 
-    styled_content = _format_message_with_style(content, agent_info, message_id)
+    styled_content = _format_message_with_style(content, message.agent_info, message.call_id)
 
     # Return standardized chat message format
     return {
         "type": "chat_message",
         "content": styled_content,
         "agent_info": {
-            "role": agent_info.get("role", "default"),
-            "name": agent_info.get("name", "Unknown"),
-            "id": agent_info.get("id", ""),
-            "message_id": message_id,
+            "role": message.agent_info.role,
+            "name": message.agent_info.name,
+            "id": message.agent_info.id,
+            "message_id": message.call_id,
         },
     }

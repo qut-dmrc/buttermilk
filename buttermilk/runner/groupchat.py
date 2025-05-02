@@ -25,7 +25,6 @@ from pydantic import PrivateAttr
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
-    AgentInput,
     ConductorRequest,
     FlowMessage,
     ManagerMessage,
@@ -203,10 +202,12 @@ class AutogenOrchestrator(Orchestrator):
             await self._setup(request or RunRequest())
 
             # 2. Load initial data if provided
-            if request and (request.record_id or request.uri or request.prompt):
-                # Get the record from the fetch agent. Need to clean this up eventually.
-                msg = AgentInput(inputs=request.model_dump())
-                await self._runtime.publish_message(msg, topic_id=DefaultTopicId(type="FETCH"))
+            if request:
+                await self._fetch_initial_records(request)  # Use helper for clarity
+                if self._records:
+                    for record in self._records:
+                        # send each record to all clients
+                        await self._runtime.publish_message(record, topic_id=self._topic)
 
             # 3. Enter the main loop - now much simpler
             while True:

@@ -235,6 +235,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         (e.g., Autogen runtime), database connections, or pre-load essential components.
         Called once at the beginning of the `_run` method.
         """
+        if request:
+            await self._fetch_initial_records(request)  # Use helper for clarity
         raise NotImplementedError("Orchestrator subclasses must implement _setup.")
 
     @abstractmethod
@@ -264,9 +266,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Base implementation handles initial setup, data fetching (if needed), and cleanup.
         # Subclasses MUST override this to provide the actual step execution loop.
         try:
-            await self._setup()
-            if request:
-                await self._fetch_initial_records(request)  # Use helper for clarity
+            await self._setup(request=request)
 
             # --- !!! Subclass implementation needed here !!! ---
             # Example placeholder - replace with actual loop logic:
