@@ -1,108 +1,110 @@
 from typing import Any, Dict, List, Optional, Union
 
+from buttermilk._core.agent import AgentTrace
+from buttermilk._core.contract import (
+    ConductorResponse,
+    ManagerRequest,
+    TaskProcessingComplete,
+    TaskProcessingStarted,
+    TaskProgressUpdate,
+    ToolOutput,
+)
+from buttermilk._core.types import Record
+from buttermilk.agents.evaluators.scorer import QualResults
+from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 from buttermilk.web.messages import _format_message_for_client as original_format_message
-from buttermilk.web.fastapi_frontend.services.ui_service import UIService
 
 
 class MessageService:
-    """Service for handling message formatting and processing"""
+    """Service for handling message formatting and processing with Pydantic objects"""
 
     @staticmethod
     def format_message_for_client(message: Any) -> Optional[Union[Dict[str, Any], str]]:
         """Format a message for client display
         
-        This is a wrapper around the original _format_message_for_client function from buttermilk.web.messages
-        to maintain backward compatibility while adapting to the new architecture.
-        
         Args:
-            message: The message to format
+            message: The message to format (Pydantic object)
             
         Returns:
-            Union[Dict[str, Any], str, None]: The formatted message, which could be a dictionary for structured 
-            messages, a string for HTML content, or None if the message shouldn't be displayed
+            Union[Dict[str, Any], str, None]: The formatted message
         """
         return original_format_message(message)
 
     @staticmethod
-    def extract_prediction_from_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Extract prediction data from a message
+    def get_judge_reasons(message: Any) -> Optional[JudgeReasons]:
+        """Get JudgeReasons directly from a message if available
         
         Args:
-            message: The message to extract prediction data from
+            message: The message (typically an AgentTrace)
             
         Returns:
-            Dict[str, Any]: The extracted prediction data, or None if extraction failed
+            Optional[JudgeReasons]: The JudgeReasons object if available
         """
-        try:
-            content = message.get("content", {})
-            
-            # Only process chat messages
-            if not isinstance(content, dict) or content.get("type") != "chat_message":
-                return None
-                
-            agent_info = content.get("agent_info", {})
-            role = agent_info.get("role", "").lower()
-            
-            # Check if this is a judge or synthesizer message
-            if role not in ["judge", "synthesiser"]:
-                return None
-                
-            # Check if it contains reasoning
-            html_content = content.get("content", "")
-            if "JudgeReasons" not in str(html_content):
-                return None
-                
-            return UIService.extract_prediction_data(html_content, agent_info)
-                
-        except Exception as e:
-            logger.warning(f"Error extracting prediction from message: {e}")
-            return None
+        if isinstance(message, AgentTrace) and isinstance(message.outputs, JudgeReasons):
+            return message.outputs
+        return None
 
     @staticmethod
-    def extract_scores_from_messages(messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
-        """Extract score data from messages
+    def get_qual_results(message: Any) -> Optional[QualResults]:
+        """Get QualResults directly from a message if available
         
         Args:
-            messages: The messages to extract score data from
+            message: The message (typically an AgentTrace)
             
         Returns:
-            Dict[str, Dict[str, Dict[str, Any]]]: A dictionary of scores, keyed by agent ID and then assessor ID
+            Optional[QualResults]: The QualResults object if available
+        """
+        if isinstance(message, AgentTrace) and isinstance(message.outputs, QualResults):
+            return message.outputs
+        return None
+
+    @staticmethod
+    def extract_scores_from_messages(messages: List[Any]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Extract score data from messages with direct access to QualResults objects
+        
+        Args:
+            messages: The original messages
+            
+        Returns:
+            Dict[str, Dict[str, Dict[str, Any]]]: Scores by agent ID and assessor ID
         """
         scores: Dict[str, Dict[str, Dict[str, Any]]] = {}
         
         for message in messages:
-            content = message.get("content", {})
-            
-            # Process score updates
-            if isinstance(content, dict) and content.get("type") == "score_update":
-                score_data = content.get("score_data", {})
-                agent_id = content.get("agent_id", "unknown")
-                assessor_id = content.get("assessor_id", "scorer")
+            qual_results = MessageService.get_qual_results(message)
+            if qual_results:
+                agent_id = qual_results.agent_id
+                assessor_id = qual_results.assessor
                 
                 if agent_id and assessor_id:
                     if agent_id not in scores:
                         scores[agent_id] = {}
-                    scores[agent_id][assessor_id] = score_data
+                        
+                    scores[agent_id][assessor_id] = {
+                        "correctness": qual_results.correctness,
+                        "score_text": qual_results.score_text,
+                        "assessments": [assessment.model_dump() for assessment in qual_results.assessments]
+                    }
                     
         return scores
 
     @staticmethod
-    def extract_predictions_from_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Extract prediction data from messages
+    def extract_predictions_from_messages(messages: List[Any]) -> List[JudgeReasons]:
+        """Extract JudgeReasons objects directly from messages
         
         Args:
-            messages: The messages to extract prediction data from
+            messages: The original messages
             
         Returns:
-            List[Dict[str, Any]]: The list of extracted predictions
+            List[JudgeReasons]: The extracted JudgeReasons objects
         """
-        predictions = []
+        predictions: List[JudgeReasons] = []
         
         for message in messages:
-            prediction = MessageService.extract_prediction_from_message(message)
-            if prediction:
-                predictions.append(prediction)
+            judge_reasons = MessageService.get_judge_reasons(message)
+            if judge_reasons:
+                predictions.append(judge_reasons)
                 
         return predictions
 
@@ -114,7 +116,7 @@ class MessageService:
             progress: The progress data
             
         Returns:
-            List[str]: The list of pending agents
+            List[str]: The pending agents
         """
         if isinstance(progress, dict) and "pending_agents" in progress:
             return progress["pending_agents"]

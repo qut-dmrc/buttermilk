@@ -143,11 +143,15 @@ class DashboardRoutes:
 
                 # Extract data from session messages if we have a valid session
                 if hasattr(self.websocket_manager.session_data[session_id], "messages"):
-                    messages = self.websocket_manager.session_data[session_id].messages
-
-                    # Get scores and predictions using message service
-                    scores = MessageService.extract_scores_from_messages(messages)
-                    outcomes = MessageService.extract_predictions_from_messages(messages)
+                    # Get original Pydantic objects directly from message data
+                    original_messages = []
+                    for msg_data in self.websocket_manager.session_data[session_id].messages:
+                        if "original" in msg_data:
+                            original_messages.append(msg_data["original"])
+                        
+                    # Get scores and predictions using message service on the original objects
+                    scores = MessageService.extract_scores_from_messages(original_messages)
+                    outcomes = MessageService.extract_predictions_from_messages(original_messages)
 
             # Return the template response with sanitized data
             return self.templates.TemplateResponse(
@@ -158,8 +162,7 @@ class DashboardRoutes:
         @self.router.get("/api/history/", response_class=HTMLResponse)
         async def get_run_history(request: Request):
             """Get run history for a specific flow, criteria, and record using query parameters"""
-            flow_name = request.query_params.get("flow")
-            criteria = request.query_params.get("criteria")
+            flow_name = request.query_params.get("flow")            criteria = request.query_params.get("criteria")
             record_id = request.query_params.get("record_id")
 
             if not flow_name or not criteria or not record_id:

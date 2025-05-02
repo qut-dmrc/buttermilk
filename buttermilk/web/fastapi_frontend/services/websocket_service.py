@@ -77,18 +77,18 @@ class WebSocketManager:
 
         try:
             # Convert to dict if it's a Pydantic model
-            data = None
             if not isinstance(message, dict):
                 if hasattr(message, "model_dump"):  # Pydantic v2
-                    data = message.model_dump()
+                    message_data = message.model_dump()
                 elif hasattr(message, "dict"):  # Pydantic v1 compatibility
-                    data = message.dict()
+                    message_data = message.dict()
                 else:
-                    data = message
+                    # Convert to dict for JSON serialization
+                    message_data = {"content": str(message), "type": "unknown"}
             else:
-                data = message
+                message_data = message
 
-            await self.active_connections[session_id].send_json(data)
+            await self.active_connections[session_id].send_json(message_data)
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             try:
@@ -262,50 +262,44 @@ class WebSocketManager:
         
         Args:
             session_id: The session ID
-            message: The message to send
-
+            message: The message from the flow (a Pydantic object)
         """
+        # Format the message for the client using the MessageService
         formatted_output = MessageService.format_message_for_client(message)
 
         if not formatted_output:
             return  # Skip empty messages
 
         try:
-            # Check if the formatted output is already a structured message (dict)
+            # Store message in session history - we store the original Pydantic object 
+            # and the formatted output for frontend display
+            if session_id in self.session_data:
+                # Create a message data entry
+                message_data = {
+                    "content": formatted_output,
+                    "type": type(message).__name__,
+                    "original": message,  # Store the original Pydantic object for direct access
+                }
+                self.session_data[session_id].messages.append(message_data)
+                
+                # Update outcomes version for judge messages and score updates
+                from buttermilk.agents.evaluators.scorer import QualResults
+                from buttermilk.agents.judge import JudgeReasons
+                
+                # Check the original message's outputs directly
+                if (hasattr(message, "outputs") and 
+                    (isinstance(message.outputs, JudgeReasons) or 
+                     isinstance(message.outputs, QualResults))):
+                    # Generate a new version number (timestamp-based for uniqueness)
+                    self.session_data[session_id].outcomes_version = str(int(time.time() * 1000))
+
+            # Send the message to the client
             if isinstance(formatted_output, dict):
-                # Store in session data
-                if session_id in self.session_data:
-                    # Add message to history
-                    message_data = {
-                        "content": formatted_output,
-                        "type": type(message).__name__,
-                    }
-                    self.session_data[session_id].messages.append(message_data)
-
-                    # Update outcomes version if this is a score or prediction message
-                    if formatted_output.get("type") == "score_update" or (
-                        formatted_output.get("type") == "chat_message" and
-                        formatted_output.get("agent_info", {}).get("role", "").lower() in ["judge", "synthesiser"]
-                    ):
-                        # Generate a new version number (timestamp-based for uniqueness)
-                        self.session_data[session_id].outcomes_version = str(int(time.time() * 1000))
-
-                # Send the structured message directly
+                # Structured message data can be sent directly
                 logger.debug(f"Sending structured message of type: {formatted_output.get('type', 'unknown')}")
                 await self.send_message(session_id, formatted_output)
-
-            # Handle regular string content (usually HTML)
             elif isinstance(formatted_output, str):
-                # Store in session data
-                if session_id in self.session_data:
-                    # Add message to history
-                    message_data = {
-                        "content": formatted_output,
-                        "type": type(message).__name__,
-                    }
-                    self.session_data[session_id].messages.append(message_data)
-
-                # Regular message - send as chat message
+                # Regular string content (usually HTML) needs to be wrapped as a chat message
                 await self.send_message(
                     session_id,
                     {

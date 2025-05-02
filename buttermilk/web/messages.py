@@ -1,8 +1,14 @@
+"""
+Message formatting utilities for displaying messages in the frontend UI.
+This module handles converting Pydantic model objects to appropriate HTML/UI representations.
+"""
+
 import hashlib
 import re
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
 from buttermilk._core.agent import AgentTrace
+from buttermilk._core.config import AgentConfig  # Import AgentConfig for typing
 from buttermilk._core.contract import (
     ConductorResponse,
     ManagerRequest,
@@ -17,92 +23,27 @@ from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
 # Map to track message IDs and their scores
-# Key: message_id, Value: dict with score info
-message_scores: dict[str, list[dict[str, Any]]] = {}
+# Key: message_id, Value: list of QualResults objects
+message_scores: Dict[str, List[QualResults]] = {}
 
-# Define agent styling
+# Agent styling configuration
 AGENT_STYLES = {
-    "default": {
-        "avatar": "👤",
-        "color": "#6c757d",
-        "background": "#f8f9fa",
-        "border": "1px solid #dee2e6",
-    },
-    "judge": {
-        "avatar": "⚖️",  # Default fallback, but will be dynamically assigned
-        "color": "#495057",
-        "background": "#e9ecef",
-        "border": "1px solid #ced4da",
-    },
-    "scorer": {
-        "avatar": "📊",
-        "color": "#212529",
-        "background": "#f8f9fa",
-        "border": "1px solid #adb5bd",
-    },
-    "assistant": {
-        "avatar": "🤖",
-        "color": "#0d6efd",
-        "background": "#e7f1ff",
-        "border": "1px solid #b6d4fe",
-    },
-    "describer": {
-        "avatar": "🔍",
-        "color": "#6610f2",
-        "background": "#eee6ff",
-        "border": "1px solid #d0bfff",
-    },
-    "fetch": {
-        "avatar": "🌐",
-        "color": "#fd7e14",
-        "background": "#fff3cd",
-        "border": "1px solid #ffecb5",
-    },
-    "imagegen": {
-        "avatar": "🎨",
-        "color": "#d63384",
-        "background": "#f7d6e6",
-        "border": "1px solid #efadce",
-    },
-    "reasoning": {
-        "avatar": "🧠",
-        "color": "#20c997",
-        "background": "#d1f2eb",
-        "border": "1px solid #a3e4d7",
-    },
-    "scraper": {
-        "avatar": "🕸️",
-        "color": "#6f42c1",
-        "background": "#e6d9f2",
-        "border": "1px solid #d2b5e8",
-    },
-    "spy": {
-        "avatar": "🕵️",
-        "color": "#212529",
-        "background": "#e2e3e5",
-        "border": "1px solid #c9cccf",
-    },
-    "synthesiser": {
-        "avatar": "🔄",
-        "color": "#0c4128",
-        "background": "#d0f0e0",
-        "border": "1px solid #a0d0b0",
-    },
-    "tool": {
-        "avatar": "🔧",
-        "color": "#198754",
-        "background": "#d1e7dd",
-        "border": "1px solid #badbcc",
-    },
-    "instructions": {
-        "avatar": "📝",
-        "color": "#0dcaf0",
-        "background": "#cff4fc",
-        "border": "1px solid #9eeaf9",
-    },
+    "default": {"avatar": "👤", "color": "#6c757d", "background": "#f8f9fa", "border": "1px solid #dee2e6"},
+    "judge": {"avatar": "⚖️", "color": "#495057", "background": "#e9ecef", "border": "1px solid #ced4da"},
+    "scorer": {"avatar": "📊", "color": "#212529", "background": "#f8f9fa", "border": "1px solid #adb5bd"},
+    "assistant": {"avatar": "🤖", "color": "#0d6efd", "background": "#e7f1ff", "border": "1px solid #b6d4fe"},
+    "describer": {"avatar": "🔍", "color": "#6610f2", "background": "#eee6ff", "border": "1px solid #d0bfff"},
+    "fetch": {"avatar": "🌐", "color": "#fd7e14", "background": "#fff3cd", "border": "1px solid #ffecb5"},
+    "imagegen": {"avatar": "🎨", "color": "#d63384", "background": "#f7d6e6", "border": "1px solid #efadce"},
+    "reasoning": {"avatar": "🧠", "color": "#20c997", "background": "#d1f2eb", "border": "1px solid #a3e4d7"},
+    "scraper": {"avatar": "🕸️", "color": "#6f42c1", "background": "#e6d9f2", "border": "1px solid #d2b5e8"},
+    "spy": {"avatar": "🕵️", "color": "#212529", "background": "#e2e3e5", "border": "1px solid #c9cccf"},
+    "synthesiser": {"avatar": "🔄", "color": "#0c4128", "background": "#d0f0e0", "border": "1px solid #a0d0b0"},
+    "tool": {"avatar": "🔧", "color": "#198754", "background": "#d1e7dd", "border": "1px solid #badbcc"},
+    "instructions": {"avatar": "📝", "color": "#0dcaf0", "background": "#cff4fc", "border": "1px solid #9eeaf9"},
 }
 
-# Generate a few more vibrant colors for agents that don't have specific styles
+# Color palette for agents without specific styles
 COLOR_PALETTE = [
     "#4285F4", "#EA4335", "#FBBC05", "#34A853",  # Google colors
     "#1877F2", "#E4405F", "#5865F2", "#FF9900",  # Social media blues/reds
@@ -110,19 +51,26 @@ COLOR_PALETTE = [
     "#26A69A", "#EC407A", "#AB47BC", "#42A5F5",  # More material
 ]
 
+# Judge emojis with different skin tones and variations
+JUDGE_AVATARS = [
+    "👨‍⚖️", "👨🏻‍⚖️", "👨🏼‍⚖️", "👨🏽‍⚖️", "👨🏾‍⚖️", "👨🏿‍⚖️",  # Male judge
+    "👩‍⚖️", "👩🏻‍⚖️", "👩🏼‍⚖️", "👩🏽‍⚖️", "👩🏾‍⚖️", "👩🏿‍⚖️",  # Female judge
+    "🧑‍⚖️", "🧑🏻‍⚖️", "🧑🏼‍⚖️", "🧑🏽‍⚖️", "🧑🏾‍⚖️", "🧑🏿‍⚖️",  # Gender-neutral judge
+    "⚖️",  # Traditional scales of justice (fallback)
+]
+
 
 def _get_message_hash(message_id: str) -> str:
     """Generate a consistent color from a message ID"""
     if not message_id:
         return "#777777"  # Default gray
-
-    # Generate a hash of the ID and use it to select a color
+        
     hash_val = int(hashlib.md5(message_id.encode()).hexdigest(), 16)
     return COLOR_PALETTE[hash_val % len(COLOR_PALETTE)]
 
 
 def _get_score_color(score: float) -> str:
-    """Get color for a score value."""
+    """Get color for a score value"""
     if score > 0.8:
         return "#28a745"  # Strong green
     if score > 0.6:
@@ -134,82 +82,84 @@ def _get_score_color(score: float) -> str:
     return "#dc3545"  # Red
 
 
-def _format_score_indicator(score, simple=False) -> str:
-    """Format a score as a colored indicator."""
-    if isinstance(score, (int, float)):
-        color = _get_score_color(score)
-
-        if simple:
-            return f'<span style="display:inline-block; width:10px; height:10px; background-color:{color}; border-radius:2px; margin-right:3px;"></span>'
-        score_percent = f"{int(score * 100)}%"
-        return f"""
-            <div style="display:inline-flex; align-items:center; background:#f8f9fa; padding:2px 8px; border-radius:12px; margin-left:5px; font-size:0.85em;">
-                <span style="display:inline-block; width:8px; height:8px; background-color:{color}; border-radius:50%; margin-right:4px;"></span>
-                <span style="font-weight:bold;">{score_percent}</span>
-            </div>
-            """
-    return ""
-
-
-# Judge emojis with different skin tones and variations
-JUDGE_AVATARS = [
-    "👨‍⚖️", "👨🏻‍⚖️", "👨🏼‍⚖️", "👨🏽‍⚖️", "👨🏾‍⚖️", "👨🏿‍⚖️",  # Male judge with different skin tones
-    "👩‍⚖️", "👩🏻‍⚖️", "👩🏼‍⚖️", "👩🏽‍⚖️", "👩🏾‍⚖️", "👩🏿‍⚖️",  # Female judge with different skin tones
-    "🧑‍⚖️", "🧑🏻‍⚖️", "🧑🏼‍⚖️", "🧑🏽‍⚖️", "🧑🏾‍⚖️", "🧑🏿‍⚖️",  # Gender-neutral judge with different skin tones
-    "⚖️",  # Traditional scales of justice (fallback)
-]
+def _format_score_indicator(score: float) -> str:
+    """Format a score as a colored indicator"""
+    color = _get_score_color(score)
+    score_percent = f"{int(score * 100)}%"
+    
+    return f"""
+    <div style="display:inline-flex; align-items:center; background:#f8f9fa; padding:2px 8px; border-radius:12px; margin-left:5px; font-size:0.85em;">
+        <span style="display:inline-block; width:8px; height:8px; background-color:{color}; border-radius:50%; margin-right:4px;"></span>
+        <span style="font-weight:bold;">{score_percent}</span>
+    </div>
+    """
 
 
 def _get_judge_avatar(agent_id: str) -> str:
-    """Generate a consistent but random judge avatar based on agent ID."""
+    """Generate a consistent judge avatar based on agent ID"""
     if not agent_id:
         return "⚖️"  # Default fallback
-
-    # Create a hash from the agent ID to ensure the same agent always gets the same avatar
+        
     hash_val = int(hashlib.md5(agent_id.encode()).hexdigest(), 16)
     return JUDGE_AVATARS[hash_val % len(JUDGE_AVATARS)]
 
 
-def _format_record(record):
+def _format_record(record: Record) -> str:
+    """Format a Record object for display
+    
+    Args:
+        record: The Record object to format
+        
+    Returns:
+        str: HTML representation of the record
+    """
+    # Create a snippet version for display
+    content_str = str(record.content) if record.content else ""
+    snippet = content_str[:200] + "..." if len(content_str) > 200 else content_str
 
-        # Create a snippet version for display
-        snippet = record.content[:200] + "..." if len(record.content) > 200 else record.content
+    # Format metadata
+    metadata_parts = []
+    if record.metadata:
+        if record.title:
+            metadata_parts.append(f"<h3 class='text-lg font-semibold'>{record.title}</h3>")
+        metadata_parts.append(f"<span class='text-xs text-gray-500'>ID: {record.record_id}</span>")
 
-        # Format metadata
-        metadata_parts = []
-        if record.metadata:
-            if record.title:
-                metadata_parts.append(f"<h3 class='text-lg font-semibold'>{record.title}</h3>")
-            metadata_parts.append(f"<span class='text-xs text-gray-500'>ID: {record.record_id}</span>")
+        metadata_html = []
+        for k, v in record.metadata.items():
+            if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
+                metadata_html.append(f"<div><span class='font-medium'>{k}:</span> {v}</div>")
 
-            metadata_html = []
-            for k, v in record.metadata.items():
-                if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
-                    metadata_html.append(f"<div><span class='font-medium'>{k}:</span> {v}</div>")
+        if metadata_html:
+            metadata_parts.append(f"<div class='text-sm mt-1 space-y-1'>{''.join(metadata_html)}</div>")
 
-            if metadata_html:
-                metadata_parts.append(f"<div class='text-sm mt-1 space-y-1'>{''.join(metadata_html)}</div>")
-
-        # Create HTML with the full content in a tooltip
-        content = f"""
-        <div class="group relative">
-            <div class="p-3 bg-white rounded-md border border-gray-200">
-                {''.join(metadata_parts)}
-                <div class="mt-2 text-sm text-gray-700">{snippet}</div>
-            </div>
-            <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
-                <div class="mb-2 font-bold">{record.title or 'Record Content'}</div>
-                <div>{record.text}</div>
-            </div>
+    # Create HTML with the full content in a tooltip
+    return f"""
+    <div class="group relative">
+        <div class="p-3 bg-white rounded-md border border-gray-200">
+            {''.join(metadata_parts)}
+            <div class="mt-2 text-sm text-gray-700">{snippet}</div>
         </div>
-        """
-        return content
+        <div class="hidden group-hover:block absolute left-0 top-full z-10 w-96 p-4 bg-gray-800 text-white text-sm rounded shadow-lg overflow-y-auto max-h-80">
+            <div class="mb-2 font-bold">{record.title or 'Record Content'}</div>
+            <div>{record.text}</div>
+        </div>
+    </div>
+    """
 
 
-def _format_message_with_style(content: str, agent_info: "AgentInfo", message_id: str | None = None) -> str:
-    """Apply styling to a message based on agent info."""
+def _format_message_with_style(content: str, agent_info: Any, message_id: Optional[str] = None) -> str:
+    """Apply styling to a message based on agent info
+    
+    Args:
+        content: The message content
+        agent_info: Information about the agent
+        message_id: Optional ID for the message
+        
+    Returns:
+        str: HTML representation of the styled message
+    """
     # Get the predefined style for this agent role
-    role = agent_info.role
+    role = agent_info.role.lower() if hasattr(agent_info, "role") else "default"
     agent_style = AGENT_STYLES.get(role, AGENT_STYLES["default"])
 
     # Extract styling elements
@@ -217,29 +167,25 @@ def _format_message_with_style(content: str, agent_info: "AgentInfo", message_id
     border = agent_style.get("border", "1px solid #dee2e6")
 
     # Get avatar with special handling for judge role
-    if role == "JUDGE":
+    if role == "judge":
         avatar = _get_judge_avatar(agent_info.id)
     else:
         avatar = agent_style.get("avatar", "👤")
 
-    # Prefer custom color from agent_info if available, otherwise use role-based color
     color = agent_style.get("color", "#6c757d")
-
-    # Get agent name - use provided name or generate from role
-    name = agent_info.name
-
-    # Calculate agent color for the header
-    agent_color = _get_message_hash(agent_info.id)
+    name = agent_info.name if hasattr(agent_info, "name") else role.capitalize()
+    agent_color = _get_message_hash(agent_info.id if hasattr(agent_info, "id") else "default")
 
     # Check if there's a score for this message
     score_html = ""
     if message_id and message_id in message_scores:
-
-        for score_data in message_scores.get(message_id, []):
+        for qual_result in message_scores.get(message_id, []):
+            score_color = _get_score_color(qual_result.correctness or 0)
+            score_text = qual_result.score_text
             score_html += f"""
             <div class="score-badge" style="position:absolute; top:-8px; right:-8px; background:#f8f9fa; padding:2px 8px; border-radius:12px; border:1px solid #dee2e6; font-size:0.85em;">
-                <span style="display:inline-block; width:8px; height:8px; background-color:{score_data.get('color', '#777777')}; border-radius:50%; margin-right:4px;"></span>
-                <span style="font-weight:bold;">{score_data.get('score_text', '?%')}</span>
+                <span style="display:inline-block; width:8px; height:8px; background-color:{score_color}; border-radius:50%; margin-right:4px;"></span>
+                <span style="font-weight:bold;">{score_text}</span>
             </div>
             """
 
@@ -257,246 +203,134 @@ def _format_message_with_style(content: str, agent_info: "AgentInfo", message_id
     """
 
 
-def _format_qual_results(qual_results: QualResults) -> dict[str, Any] | None:
-    """Process QualResults for display."""
-    answer_id = getattr(qual_results, "answer_id", "")
-    agent_id = getattr(qual_results, "agent_id", "")  # Extract agent_id
-
-    if not answer_id or not agent_id:  # Ensure agent_id is also present
-        logger.warning(f"QualResults missing answer_id ('{answer_id}') or agent_id ('{agent_id}'). Cannot format score.")
-        return None
-
-    score = getattr(qual_results, "correctness", 0.0)  # Default to 0.0 if missing
-
-    # Choose color based on score value
-    color = _get_score_color(score)  # Use helper function
-
-    score_text = f"{int(score * 100)}%"
-
-    # convert from pydantic model
-    assessments_data = []
-    if assessments := getattr(qual_results, "assessments", []):
-        assessments_data = [x.model_dump() for x in assessments]
-
-    # Return a dictionary with the score data
-    score_data = {
-        "answer_id": answer_id,
-        "agent_id": agent_id,
-        "score": score,
-        "score_text": score_text,
-        "color": color,
-        "assessments": assessments_data,
-        "assessor": getattr(qual_results, "assessor", "scorer"),
-    }
-    return score_data
+def _format_agent_reasons(reasons: JudgeReasons, message: Optional[AgentTrace] = None) -> str:
+    """Format JudgeReasons using the UIService formatter
+    
+    Args:
+        reasons: The JudgeReasons to format
+        message: Optional AgentTrace containing the original message
+        
+    Returns:
+        str: HTML representation of the judge reasons
+    """
+    from buttermilk.web.fastapi_frontend.services.ui_service import UIService
+    return UIService.format_judge_reasons_html(reasons)
 
 
-def _format_agent_reasons(reasons: JudgeReasons, message=None) -> str:
-    """Format AgentReasons output in a friendly way."""
-    if not reasons:
+def _markdown_to_html(content: str) -> str:
+    """Convert markdown content to HTML
+    
+    Args:
+        content: Markdown content to convert
+        
+    Returns:
+        str: HTML representation of the markdown
+    """
+    if not content:
         return ""
+        
+    # Process code blocks with triple backticks
+    code_pattern = r"```(.*?)\n(.*?)```"
 
-    conclusion = getattr(reasons, "conclusion", "")
-    prediction = getattr(reasons, "prediction", False)
-    confidence = getattr(reasons, "confidence", "medium").capitalize()
-    reason_list = getattr(reasons, "reasons", [])
+    def code_replace(match):
+        language = match.group(1).strip() or ""
+        code = match.group(2)
+        return f'<pre><code class="language-{language}">{code}</code></pre>'
 
-    # Format prediction nicely
-    prediction_color = "#28a745" if not prediction else "#dc3545"
-    prediction_text = "No" if not prediction else "Yes"
+    content = re.sub(code_pattern, code_replace, content, flags=re.DOTALL)
 
-    # Format confidence level
-    confidence_color = "#28a745" if confidence == "High" else "#ffc107" if confidence == "Medium" else "#dc3545"
+    # Process inline code
+    inline_code_pattern = r"`([^`]+)`"
+    content = re.sub(inline_code_pattern, r"<code>\1</code>", content)
 
-    # Extract agent parameters for display
-    model_template_html = ""
-    if message and hasattr(message, "agent_info") and message.agent_info:
-        info = message.agent_info
-        if hasattr(info, "parameters") and isinstance(info.parameters, dict):
-            params = info.parameters
-            model = params.get("model", "")
-            template = params.get("template", "")
-            criteria = params.get("criteria", "")
-
-            # Define styles outside the conditionals
-            style_outer = "display:inline-flex; align-items:center; padding:2px 8px; background-color:rgba(0,0,0,0.05); border:1px solid #dee2e6; border-radius:12px;"
-            style_label = "font-weight:600;"
-            style_value = "margin-left:3px;"
-
-            if model or template or criteria:
-                model_template_html = """
-                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:0.65rem;">
-                """
-
-                if model:
-                    model_template_html += f"""
-                    <span style="{style_outer}">
-                        <span style="{style_label}">Model:</span> 
-                        <span style="{style_value}">{model}</span>
-                    </span>
-                    """
-
-                if template:
-                    model_template_html += f"""
-                    <span style="{style_outer}">
-                        <span style="{style_label}">Template:</span> 
-                        <span style="{style_value}">{template}</span>
-                    </span>
-                    """
-
-                if criteria:
-                    model_template_html += f"""
-                    <span style="{style_outer}">
-                        <span style="{style_label}">Criteria:</span> 
-                        <span style="{style_value}">{criteria}</span>
-                    </span>
-                    """
-
-                model_template_html += "</div>"
-
-    # Create compact visual badges for violates/confidence
-    prediction_bg = "rgba(0,0,0,0.1)"
-    confidence_bg = "rgba(0,0,0,0.1)"
-
-    badges_html = f"""
-    <div style="display:flex; gap:8px; margin:3px 0 8px 0;">
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:{prediction_bg}; border:1px solid {prediction_color}; border-radius:12px; font-size:0.65rem;">
-            <span style="font-weight:600;">Violates:</span> 
-            <span style="margin-left:3px; font-weight:bold; color:{prediction_color};">{prediction_text}</span>
-        </span>
-        <span style="display:inline-flex; align-items:center; padding:2px 8px; background-color:{confidence_bg}; border:1px solid {confidence_color}; border-radius:12px; font-size:0.65rem;">
-            <span style="font-weight:600;">Confidence:</span>
-            <span style="margin-left:3px; font-weight:bold; color:{confidence_color};">{confidence}</span>
-        </span>
-    </div>
-    """
-
-    # Format reasons as a tooltip
-    if reason_list:
-        reasons_items = [f"<li>{reason}</li>" for reason in reason_list]
-        reasons_content = "\n".join(reasons_items)
-
-        # Create a tooltip with detailed reasons using Tailwind-style approach
-        button_style = "background-color:#f8f9fa; border:1px solid #dee2e6; border-radius:12px; padding:2px 10px; font-size:0.7rem; display:inline-flex; align-items:center; margin-top:5px; color:#495057; cursor:pointer;"
-        tooltip_style = "background-color:white; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:10px; font-size:0.8rem; margin-top:8px; width:300px; position:absolute; z-index:10; transition:opacity 0.2s ease;"
-        ul_style = "margin-top:6px; padding-left:20px;"
-
-        tooltip_html = f"""
-        <div class="group relative inline-block">
-            <div class="cursor-pointer flex items-center">
-                <button style="{button_style}">
-                    <span>View Detailed Reasoning</span>
-                </button>
-            </div>
-            <div class="invisible group-hover:visible absolute z-10 w-64 bg-white border border-gray-200 rounded-md shadow-lg p-3 text-sm mt-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="{tooltip_style}">
-                <div>
-                    <strong>Detailed Reasoning:</strong>
-                    <ul style="{ul_style}">
-                        {reasons_content}
-                    </ul>
-                </div>
-            </div>
-        </div>
-        """
-    else:
-        tooltip_html = ""
-
-    return f"""
-    <div style="font-size:0.8rem;">
-        <div style="margin-bottom:3px;"><strong>Conclusion:</strong> {conclusion}</div>
-        {badges_html}
-        {model_template_html}
-        {tooltip_html}
-    </div>
-    """
+    # Process headers (# Header)
+    for i in range(6, 0, -1):
+        hashtags = "#" * i
+        pattern = rf"^{hashtags} (.+)$"
+        replacement = f"<h{i}>\\1</h{i}>"
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+        
+    return content
 
 
-def _format_message_for_client(message: AgentTrace) -> dict | str | None:
+def _format_message_for_client(message: Any) -> Union[Dict[str, Any], str, None]:
     """Format different message types for web client consumption with improved styling.
     
     Args:
-        message: The message to format
+        message: The message to format, which should be a Pydantic object
         
     Returns:
-        dict: Structured message data for the client
-        str: Legacy formatted HTML content (for backward compatibility)
-        None: If message shouldn't be sent
-
+        Union[Dict[str, Any], str, None]: Formatted message data for the client
     """
-    # Ignore certain message types (don't display in chat)
+    # Skip message types that shouldn't be displayed in the UI
     if isinstance(message, (TaskProgressUpdate, TaskProcessingStarted, TaskProcessingComplete, ConductorResponse)):
         return None
 
+    # Handle Record objects
     if isinstance(message, Record):
-        content = _format_record(message)
-        return content
+        return _format_record(message)
 
+    # Only process AgentTrace objects from here on
     if not isinstance(message, AgentTrace):
         return None
-
+    
     content = None
-
-    # Handle score messages
+    
+    # Process based on the output type
     if isinstance(message.outputs, QualResults):
         logger.debug(f"Detected score message from: {message.agent_info.name}")
         if message.parent_call_id in message_scores:
             logger.debug(f"Sending score update with agent={message.outputs.agent_id}, assessor={message.outputs.assessor}")
-            frontend_data = message.outputs.model_dump()
-            frontend_data["color"] = _get_score_color(message.outputs.correctness or 0)
-            message_scores[message.parent_call_id].append(frontend_data)
-            return frontend_data
+            # Store the QualResults directly
+            message_scores[message.parent_call_id].append(message.outputs)
+            
+            # Always use the direct structured format for frontend updates
+            return {
+                "type": "score_update",
+                "agent_id": message.outputs.agent_id,
+                "assessor": message.outputs.assessor, 
+                "score_data": {
+                    "correctness": message.outputs.correctness,
+                    "score_text": message.outputs.score_text,
+                    "assessments": [assessment.model_dump() for assessment in message.outputs.assessments]
+                }
+            }
+    
     elif isinstance(message.outputs, JudgeReasons):
-        # Store this message ID for future score references
+        # Initialize score tracking for this message
         if message.call_id not in message_scores:
             message_scores[message.call_id] = []
+        # Format the reasons
         content = _format_agent_reasons(message.outputs, message)
-
+    
     elif isinstance(message.outputs, ToolOutput):
-        # Add tool name as a badge
-        tool_name = getattr(message, "name", "unknown_tool")
-        # Avoid f-string with backslash by concatenating strings
+        # Format tool output with badge
+        tool_name = getattr(message.outputs, "function_name", "unknown_tool")
         badge = f'<span style="display:inline-block; padding:2px 8px; background:#6c757d; color:white; border-radius:4px; margin-bottom:5px;">{tool_name}</span>'
-        content = badge + "<br/>" + message.content
-
+        content = badge + "<br/>" + message.outputs.content
+    
     elif isinstance(message.outputs, ManagerRequest):
-        if message.outputs.content:
-            content = message.outputs.content
-        else:
+        # Use content from ManagerRequest if available
+        content = message.outputs.content if hasattr(message.outputs, "content") and message.outputs.content else None
+        if not content:
             return None
-
+    
     else:
-        # Unhandled message type
-        return None
-
-    # Convert markdown to HTML in message content
+        # Use string representation for other output types
+        content = str(message.outputs) if message.outputs else None
+        if not content:
+            return None
+    
+    # Convert markdown in content to HTML if needed
     if content and isinstance(content, str):
-        # Process code blocks with triple backticks
-        code_pattern = r"```(.*?)\n(.*?)```"
-
-        def code_replace(match):
-            language = match.group(1).strip() or ""
-            code = match.group(2)
-            return f'<pre><code class="language-{language}">{code}</code></pre>'
-
-        content = re.sub(code_pattern, code_replace, content, flags=re.DOTALL)
-
-        # Process inline code
-        inline_code_pattern = r"`([^`]+)`"
-        content = re.sub(inline_code_pattern, r"<code>\1</code>", content)
-
-        # Process headers (# Header)
-        for i in range(6, 0, -1):
-            hashtags = "#" * i
-            pattern = rf"^{hashtags} (.+)$"
-            replacement = f"<h{i}>\\1</h{i}>"
-            content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
-
+        content = _markdown_to_html(content)
+    
     # Apply styling to the message
     if content is None:
-        content = ""  # Convert None to empty string to avoid type errors
-
+        content = ""  # Convert None to empty string to avoid errors
+    
     styled_content = _format_message_with_style(content, message.agent_info, message.call_id)
-
+    
     # Return standardized chat message format
     return {
         "type": "chat_message",
