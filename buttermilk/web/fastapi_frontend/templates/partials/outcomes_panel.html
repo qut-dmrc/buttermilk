@@ -17,81 +17,138 @@
         </div>
     {% endif %}
     
-    <!-- Predictions Summary -->
-    {% if outcomes %}
-        <div class="card bg-base-200 shadow-sm">
-            <div class="card-body p-2">
-                <h3 class="card-title text-sm mb-1">Assessment Summary</h3>
+    <!-- Combined Assessment & Scores Panel -->
+    {% if outcomes or scores %}
+        <div class="space-y-2">
+            <!-- For each judge/outcome, show both assessment and scores -->
+            {% for i in range(outcomes|length if outcomes else 0) %}
+                {% set prediction = outcomes[i] %}
+                {% set judge_id = prediction.agent_name if 'agent_name' in prediction else 'Judge-' ~ i %}
+                {% set judge_scores = scores[judge_id] if judge_id in scores else {} %}
                 
-                <div class="grid grid-cols-1 gap-1">
-                    {% for prediction in outcomes %}
-                        <div class="bg-base-100 rounded-lg p-1.5 flex justify-between items-center">
+                <div class="card bg-base-200 shadow-sm">
+                    <div class="card-body p-2">
+                        <!-- Judge header with assessment outcome -->
+                        <div class="flex justify-between items-center">
                             <div class="flex items-center gap-1">
-                                <div class="badge badge-sm {% if prediction.prediction %}badge-error{% else %}badge-success{% endif %} px-2 py-1">
+                                <div class="badge badge-sm {% if prediction.prediction %}badge-error{% else %}badge-success{% endif %} px-2 py-0.5">
                                     {{ "Violates" if prediction.prediction else "Valid" }}
                                 </div>
-                                <span class="font-medium text-xs">
-                                    {{ prediction.agent_name if 'agent_name' in prediction else 'Judge' }}
-                                </span>
-                            </div>
-                            <div class="flex items-center gap-1">
+                                <span class="font-medium text-xs">{{ judge_id }}</span>
                                 {% if prediction.confidence %}
                                     <span class="badge badge-ghost badge-xs">{{ prediction.confidence|capitalize }}</span>
                                 {% endif %}
-                                <button class="btn btn-xs btn-ghost h-6 min-h-0 px-2" 
-                                        onclick="toggleDetail('prediction-{{ loop.index }}')">
-                                    Details
-                                </button>
                             </div>
+                            <button class="btn btn-xs btn-ghost h-5 min-h-0 px-1 text-2xs" 
+                                    onclick="toggleDetail('judge-{{ i }}-details')">
+                                Details
+                            </button>
                         </div>
+
+                        <!-- Conclusion summary -->
+                        <p class="text-2xs text-gray-600 truncate mt-0.5">
+                            {{ prediction.conclusion|truncate(60) }}
+                        </p>
+                        
+                        <!-- Evaluation scores grid -->
+                        {% if judge_scores %}
+                            <div class="grid grid-cols-3 gap-0.5 text-center mt-1">
+                                {% for scorer_id, score_data in judge_scores.items() %}
+                                    <div class="border rounded px-1 py-0.5 text-2xs
+                                        {% if score_data.correctness is defined and score_data.correctness is number %}
+                                            {% if score_data.correctness >= 0.8 %}bg-success/10 border-success/20
+                                            {% elif score_data.correctness >= 0.5 %}bg-warning/10 border-warning/20
+                                            {% else %}bg-error/10 border-error/20{% endif %}
+                                        {% else %}bg-base-200 border-base-300{% endif %}">
+                                        <div class="flex justify-between items-center">
+                                            <span class="truncate max-w-[70%]">{{ scorer_id.split('-')[0] }}</span>
+                                            <span class="font-medium">{{ score_data.score_text }}</span>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
                         
                         <!-- Hidden details section -->
-                        <div id="prediction-{{ loop.index }}" class="hidden bg-base-100 rounded-lg p-2 -mt-1 text-xs">
-                            <p class="mb-1">{{ prediction.conclusion }}</p>
+                        <div id="judge-{{ i }}-details" class="hidden mt-1 border-t border-base-200 pt-1">
+                            <!-- Full conclusion -->
+                            <div class="mb-1">
+                                <div class="font-medium text-2xs">Conclusion</div>
+                                <p class="text-2xs">{{ prediction.conclusion }}</p>
+                            </div>
+                            
+                            <!-- Reasoning -->
                             {% if prediction.reasons %}
-                                <div class="divider my-1 text-xs">Reasoning</div>
-                                <div class="space-y-1 overflow-auto max-h-32 text-xs">
-                                    {% for reason in prediction.reasons %}
-                                        <p class="text-gray-600">{{ reason }}</p>
-                                    {% endfor %}
+                                <div class="mb-1">
+                                    <div class="font-medium text-2xs">Reasoning</div>
+                                    <div class="space-y-0.5 overflow-auto max-h-32 text-2xs">
+                                        {% for reason in prediction.reasons %}
+                                            <p class="text-gray-600">{{ reason }}</p>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Detailed scores -->
+                            {% if judge_scores %}
+                                <div class="mb-1">
+                                    <div class="font-medium text-2xs">Detailed Scores</div>
+                                    <div class="space-y-1">
+                                        {% for scorer_id, score_data in judge_scores.items() %}
+                                            {% if score_data.assessments %}
+                                                <div class="border-l-2 pl-1 mb-1 
+                                                    {% if score_data.correctness is defined and score_data.correctness is number %}
+                                                        {% if score_data.correctness >= 0.8 %}border-success/50
+                                                        {% elif score_data.correctness >= 0.5 %}border-warning/50
+                                                        {% else %}border-error/50{% endif %}
+                                                    {% else %}border-base-300{% endif %}">
+                                                    <div class="font-medium text-2xs">{{ scorer_id }} ({{ score_data.score_text }})</div>
+                                                    <ul class="text-2xs space-y-0.5">
+                                                        {% for assessment in score_data.assessments %}
+                                                            <li class="flex gap-1">
+                                                                <span class="{% if assessment.correct %}text-success{% else %}text-error{% endif %}">
+                                                                    {{ "✓" if assessment.correct else "✗" }}
+                                                                </span>
+                                                                <span class="text-gray-600 text-2xs">{{ assessment.feedback }}</span>
+                                                            </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
                                 </div>
                             {% endif %}
                         </div>
-                    {% endfor %}
+                    </div>
                 </div>
-            </div>
-        </div>
-    {% endif %}
-    
-    <!-- Scores Summary -->
-    {% if scores %}
-        <div class="card bg-base-200 shadow-sm">
-            <div class="card-body p-2">
-                <h3 class="card-title text-sm mb-1">Evaluation Scores</h3>
+            {% endfor %}
+            
+            <!-- Handle any scores without matching predictions -->
+            {% for judge_id, judge_scores in scores.items() %}
+                {% set already_shown = false %}
+                {% for i in range(outcomes|length if outcomes else 0) %}
+                    {% set prediction = outcomes[i] %}
+                    {% set pred_judge_id = prediction.agent_name if 'agent_name' in prediction else 'Judge-' ~ i %}
+                    {% if pred_judge_id == judge_id %}
+                        {% set already_shown = true %}
+                    {% endif %}
+                {% endfor %}
                 
-                <!-- Judges with their assessments -->
-                <div class="space-y-2">
-                    {% for judge_id, judge_scores in scores.items() %}
-                        <div class="bg-base-100 rounded-lg p-1.5">
-                            <!-- Judge header -->
-                            <div class="flex justify-between items-center mb-1">
-                                <div class="flex items-center gap-1">
-                                    <span class="font-medium text-xs">{{ judge_id }}</span>
-                                    <!-- Show a sample of the conclusion if available -->
-                                    {% if outcomes and loop.index0 < outcomes|length %}
-                                        <span class="text-2xs text-gray-500 truncate max-w-[12rem]">
-                                            {{ outcomes[loop.index0].conclusion|truncate(30) }}
-                                        </span>
-                                    {% endif %}
-                                </div>
+                {% if not already_shown %}
+                    <div class="card bg-base-200 shadow-sm">
+                        <div class="card-body p-2">
+                            <!-- Judge header without assessment outcome -->
+                            <div class="flex justify-between items-center">
+                                <span class="font-medium text-xs">{{ judge_id }}</span>
                                 <button class="btn btn-xs btn-ghost h-5 min-h-0 px-1 text-2xs" 
-                                        onclick="toggleDetail('score-detail-{{ judge_id }}')">
+                                        onclick="toggleDetail('judge-{{ judge_id }}-details')">
                                     Details
                                 </button>
                             </div>
                             
-                            <!-- Compact score grid -->
-                            <div class="grid grid-cols-3 gap-0.5 text-center">
+                            <!-- Evaluation scores grid -->
+                            <div class="grid grid-cols-3 gap-0.5 text-center mt-1">
                                 {% for scorer_id, score_data in judge_scores.items() %}
                                     <div class="border rounded px-1 py-0.5 text-2xs
                                         {% if score_data.correctness is defined and score_data.correctness is number %}
@@ -108,29 +165,40 @@
                             </div>
                             
                             <!-- Hidden details section -->
-                            <div id="score-detail-{{ judge_id }}" class="hidden mt-1 border-t border-base-200 pt-1">
-                                {% for scorer_id, score_data in judge_scores.items() %}
-                                    {% if score_data.assessments %}
-                                        <div class="mb-1 last:mb-0">
-                                            <div class="font-medium text-2xs">{{ scorer_id }} ({{ score_data.score_text }})</div>
-                                            <ul class="text-2xs space-y-0.5">
-                                                {% for assessment in score_data.assessments %}
-                                                    <li class="flex gap-1">
-                                                        <span class="{% if assessment.correct %}text-success{% else %}text-error{% endif %}">
-                                                            {{ "✓" if assessment.correct else "✗" }}
-                                                        </span>
-                                                        <span class="text-gray-600 line-clamp-1">{{ assessment.feedback }}</span>
-                                                    </li>
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
-                                    {% endif %}
-                                {% endfor %}
+                            <div id="judge-{{ judge_id }}-details" class="hidden mt-1 border-t border-base-200 pt-1">
+                                <!-- Detailed scores -->
+                                <div class="mb-1">
+                                    <div class="font-medium text-2xs">Detailed Scores</div>
+                                    <div class="space-y-1">
+                                        {% for scorer_id, score_data in judge_scores.items() %}
+                                            {% if score_data.assessments %}
+                                                <div class="border-l-2 pl-1 mb-1 
+                                                    {% if score_data.correctness is defined and score_data.correctness is number %}
+                                                        {% if score_data.correctness >= 0.8 %}border-success/50
+                                                        {% elif score_data.correctness >= 0.5 %}border-warning/50
+                                                        {% else %}border-error/50{% endif %}
+                                                    {% else %}border-base-300{% endif %}">
+                                                    <div class="font-medium text-2xs">{{ scorer_id }} ({{ score_data.score_text }})</div>
+                                                    <ul class="text-2xs space-y-0.5">
+                                                        {% for assessment in score_data.assessments %}
+                                                            <li class="flex gap-1">
+                                                                <span class="{% if assessment.correct %}text-success{% else %}text-error{% endif %}">
+                                                                    {{ "✓" if assessment.correct else "✗" }}
+                                                                </span>
+                                                                <span class="text-gray-600 text-2xs">{{ assessment.feedback }}</span>
+                                                            </li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    {% endfor %}
-                </div>
-            </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
         </div>
     {% endif %}
 </div>
