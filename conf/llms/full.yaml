@@ -10,7 +10,6 @@ judgers:
   - gpt41
   - gpt41mini
   - o4mini
-  - sonnet
 
 synthesisers:
   - gemini25pro
@@ -18,4 +17,3 @@ synthesisers:
   - gpt41
   - gpt41mini
   - o4mini
-  - sonnet

@@ -128,7 +128,6 @@ class DashboardRoutes:
 
             # Initialize containers
             scores = {}
-            outcomes = []
             pending_agents = session_data.get("pending_agents", [])
             current_version = "0"
 
@@ -151,12 +150,11 @@ class DashboardRoutes:
 
                     # Get scores and predictions using message service on the original objects
                     scores = MessageService.extract_scores_from_messages(original_messages)
-                    outcomes = MessageService.extract_predictions_from_messages(original_messages)
 
             # Return the template response with sanitized data
             return self.templates.TemplateResponse(
                 "partials/outcomes_panel.html",
-                {"request": request, "scores": scores, "outcomes": outcomes, "pending_agents": pending_agents},
+                {"request": request, "scores": scores, "pending_agents": pending_agents},
             )
 
         @self.router.get("/api/history/", response_class=HTMLResponse)
