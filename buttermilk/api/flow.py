@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.types import RunRequest
+from buttermilk.api.batch import create_batch_router
 from buttermilk.bm import BM, logger
+from buttermilk.runner.batchrunner import BatchRunner
 from buttermilk.runner.flowrunner import FlowRunner
 
 INPUT_SOURCE = "api"
@@ -24,7 +26,15 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
+    
+    # Initialize batch runner
+    app.state.batch_runner = BatchRunner(flow_runner=flows)
     logger.info("App state configured.")
+    
+    # Add batch router
+    batch_router = create_batch_router(app.state.batch_runner)
+    app.include_router(batch_router, prefix="/api")
+    logger.info("Batch router added.")
 
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'

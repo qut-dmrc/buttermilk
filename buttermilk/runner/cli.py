@@ -76,8 +76,16 @@ def main(cfg: DictConfig) -> None:
 
             # Run the flow synchronously
             bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
-            asyncio.run(flow_runner.run_flow(flow_name=flow_name, run_request=run_request))
+            asyncio.run(flow_runner.run_flow(run_request=run_request))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
+
+        case "batch":
+            # Run a batch job using the batch runner
+            from buttermilk.runner.batch_cli import main as batch_main
+
+            bm.logger.info("Running in batch mode...")
+            # We're already in the hydra context, so we can just call the main function
+            batch_main(cfg)
 
         case "streamlit":
             # Start the Streamlit interface
@@ -85,12 +93,12 @@ def main(cfg: DictConfig) -> None:
             bm.logger.info("Starting Streamlit interface...")
             try:
                 # This function provides guidance on how to run the app with streamlit CLI
-
                 from buttermilk.web.streamlit_frontend.app import create_dashboard_app
                 app = create_dashboard_app(flows=flow_runner)
+                # Run the app
+                asyncio.run(app.run())
             except Exception as e:
                 bm.logger.error(f"Error starting Streamlit interface: {e}")
-            app.run()
 
         case "api":
 
@@ -178,7 +186,7 @@ def main(cfg: DictConfig) -> None:
             orchestrator_tasks: asyncio.Queue[asyncio.Task] = asyncio.Queue()
 
             # Initialize the Slack Bolt app and its handler.
-            slack_app, handler = initialize_slack_bot(bot_token=bot_token, app_token=app_token, loop=loop, bm=bm)  # Pass bm instance
+            slack_app, handler = initialize_slack_bot(bot_token=bot_token, app_token=app_token, loop=loop)  # Pass tokens and loop
 
             # Start the Slack Bolt handler in the background.
             _ = loop.create_task(handler.start_async())  # Use underscore if task result isn't needed immediately.
@@ -191,7 +199,6 @@ def main(cfg: DictConfig) -> None:
                     slack_app=slack_app,
                     flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
-                    bm=bm,  # Pass instantiated flows  # Pass bm instance
                 )
                 bm.logger.info("Slack handlers registered. Bot is ready.")
                 # Keep the event loop running indefinitely for the bot.
