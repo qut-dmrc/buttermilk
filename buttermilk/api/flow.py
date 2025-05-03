@@ -1,40 +1,83 @@
 import asyncio
 import json
 import uuid
+from contextlib import asynccontextmanager
 
 import pydantic
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.types import RunRequest
-from buttermilk.api.batch import create_batch_router
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
-from buttermilk.runner.batchrunner import BatchRunner
 from buttermilk.runner.flowrunner import FlowRunner
+from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
 
 INPUT_SOURCE = "api"
+
+
+# Middleware to track API activity
+class ActivityTrackerMiddleware(BaseHTTPMiddleware):
+    """Middleware that tracks API requests for the ActivityTracker."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Record the API request in the activity tracker
+        activity_tracker = get_activity_tracker()
+        activity_tracker.record_api_request()
+
+        # Process the request as usual
+        response = await call_next(request)
+        return response
 
 
 def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     """Create and configure the FastAPI application."""
     logger.info("Starting create_app function...")
-    app = FastAPI()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan event handler for startup and shutdown events.
+        """
+        try:
+            # Startup event
+            worker = JobQueueClient(
+                flow_runner=flows,
+                max_concurrent_jobs=1,
+            )
+            app.state.job_worker = worker
+            logger.info("Started job worker in FastAPI application")
+            task = asyncio.create_task(worker.pull_tasks())
+            yield
+        except Exception as e:
+            logger.error(f"Failed to start job worker: {e}")
+        finally:
+            # Shutdown event
+            if hasattr(app.state, "job_worker"):
+                await app.state.job_worker.stop()
+                logger.info("Stopped job worker")
+
+    # Create the FastAPI app with the lifespan
+    app = FastAPI(lifespan=lifespan)
+
+    # Add the activity tracker middleware
+    app.add_middleware(ActivityTrackerMiddleware)
+
     logger.info("FastAPI() instance created.")
 
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
-    
+
     # Initialize batch runner
-    app.state.batch_runner = BatchRunner(flow_runner=flows)
     logger.info("App state configured.")
-    
+
     # Add batch router
-    batch_router = create_batch_router(app.state.batch_runner)
-    app.include_router(batch_router, prefix="/api")
-    logger.info("Batch router added.")
+#    batch_router = create_batch_router(app.state.batch_runner)
+    # app.include_router(batch_router, prefix="/api")
+    # logger.info("Batch router added.")
 
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"q": "Democrats are arseholes."}'
     # curl -X 'POST' 'http://127.0.0.1:8000/flow/simple' -H 'accept: application/json' -H 'Content-Type: application/json' -d '{"text": "Democrats are arseholes."}'
