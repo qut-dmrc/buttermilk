@@ -1,15 +1,14 @@
 import asyncio
 
-from fastapi import FastAPI
 from google.cloud import pubsub
 
-from buttermilk.api.stream import FlowRequest, flow_stream
+from buttermilk._core.types import RunRequest
+from buttermilk.api.stream import flow_stream
 from buttermilk.bm import bm, logger
 from buttermilk.utils.utils import load_json_flexi
 
-INPUT_SOURCE = "api"
-app = FastAPI()
-flows = dict()
+# Global flow registry
+flows = {}
 
 # gcloud pubsub topics publish TOPIC_ID --message='{"task": "summarise_osb", "uri": "gs://dmrc-platforms/data/osb/FB-515JVE4X.md", "record_id": "FB-515JVE4X"}
 
@@ -19,7 +18,9 @@ def callback(message):
     try:
         data = load_json_flexi(message.data)
         task = data.pop("task")
-        request = FlowRequest(**data)
+
+        # Create a RunRequest object directly
+        request = RunRequest(flow=task, **data)
         message.ack()
     except Exception as e:
         message.nack()

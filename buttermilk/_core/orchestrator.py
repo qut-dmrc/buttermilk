@@ -63,10 +63,6 @@ class OrchestratorProtocol(BaseModel):
 
     # --- Configuration Fields ---
     orchestrator: str = Field(..., description="Name of the orchestrator object to use.")
-    session_id: str = Field(
-        default_factory=lambda: shortuuid.uuid()[:8],
-        description="A unique session id for this specific flow execution.",
-    )
     name: str = Field(
         default="",
         description="Human-friendly name identifying this flow configuration.",
@@ -120,6 +116,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
     """
 
     # --- Internal State ---
+    session_id: str = Field(
+        default_factory=shortuuid.uuid,
+        description="A unique session id for this specific flow execution.",
+    )
     # Collects data passed between steps or used for templating.
     _flow_data: KeyValueCollector = PrivateAttr(default_factory=KeyValueCollector)
     _data_sources: dict[str, Any] = PrivateAttr(default={})

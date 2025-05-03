@@ -125,7 +125,7 @@ class LLMScorer(LLMAgent):
             # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
 
-        logger.debug(f"Scorer {self.id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
+        logger.debug(f"Scorer {self.agent_id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
 
         # Extract records if present in the messsage first
         self._records.extend(extract_records_from_message(message))
@@ -152,7 +152,7 @@ class LLMScorer(LLMAgent):
 
         scorer_agent_input.records = self._records
 
-        scorer_agent_input.inputs["assessor"] = self.id
+        scorer_agent_input.inputs["assessor"] = self.agent_id
 
         # Define the scoring function (our own __call__ method)
         score_fn = self.__call__
@@ -165,7 +165,7 @@ class LLMScorer(LLMAgent):
                 message_callback=message_callback,
             )
         else:
-            logger.error(f"Scorer {self.id}: Missing required callbacks, cannot proceed with scoring")
+            logger.error(f"Scorer {self.agent_id}: Missing required callbacks, cannot proceed with scoring")
             return
 
         # Tie the score to the original answer
@@ -190,4 +190,4 @@ class LLMScorer(LLMAgent):
             if public_callback is not None:
                 await public_callback(score_output)
             else:
-                logger.error(f"Scorer {self.id}: Cannot publish score, public_callback is None")
+                logger.error(f"Scorer {self.agent_id}: Cannot publish score, public_callback is None")

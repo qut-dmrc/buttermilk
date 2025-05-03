@@ -49,13 +49,13 @@ class ExplorerHost(LLMHostAgent):
         if isinstance(message, ConductorRequest):
             step = await self._choose(message=message)
             return AgentResponse(
-                metadata={"source": self.id, "role": self.role},
+                metadata={"source": self.agent_id, "role": self.role},
                 outputs=step,
             )
 
         step = StepRequest(role=WAIT, content="Waiting for conductor request")
         return AgentResponse(
-            metadata={"source": self.id, "role": self.role},
+            metadata={"source": self.agent_id, "role": self.role},
             outputs=step,
         )
 

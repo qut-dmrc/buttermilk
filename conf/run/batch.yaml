@@ -21,7 +21,7 @@ batch:
   error_policy: continue
   
   # Whether to wait for batch completion
-  wait: false
+  wait: true
   
   # Whether the batch requires interactive input
   interactive: false

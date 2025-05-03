@@ -2,9 +2,10 @@ import asyncio
 import base64
 import datetime
 import platform
+from collections.abc import Sequence
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Literal, Self, Sequence, Union
+from typing import Any, Literal, Self
 
 import psutil
 import pydantic
@@ -255,7 +256,7 @@ class Record(BaseModel):
         default=None,
     )
 
-    content: str | Sequence[Union[str, Image]] = Field()
+    content: str | Sequence[str | Image] = Field()
 
     mime: str | None = Field(
         default="text/plain",
@@ -289,7 +290,7 @@ class Record(BaseModel):
                 parts.append(f"### {self.title}")
             parts.append(f"**{self.record_id}**")
             for k, v in self.metadata.items():
-                if k not in ['title', 'fetch_timestamp_utc', 'fetch_source_id']:
+                if k not in ["title", "fetch_timestamp_utc", "fetch_source_id"]:
                     parts.append(f"**{k}**: {v}")
             parts.append("")  # Separator
 
@@ -359,22 +360,62 @@ class Record(BaseModel):
         return UserMessage(content=message_content, source=self.record_id)
 
 
-
 # --- Flow Protocol Start signal ---
 class RunRequest(BaseModel):
-    """Input object to initiate an orchestrator run."""
+    """Input object to initiate an orchestrator run.
+    
+    This is the unified request object for all entry points (CLI, API, batch jobs),
+    containing fields for both interactive and batch processing.
+    """
 
+    # Common flow execution fields
     flow: str = Field(..., description="The name of the flow to execute")
-    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt","q"))
+    prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt", "q"))
     record_id: str | None = Field(default="", description="Record to lookup")
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
-    parameters: dict = Field(default={})
+    parameters: dict = Field(default_factory=dict, description="Additional parameters for flow execution")
 
     # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
     client_callback: Any = Field(default=None, exclude=True)
     session_id: Any = Field(default=None, exclude=True)
-    
+
+    # Batch processing fields
+    batch_id: str | None = Field(default=None, description="ID of the parent batch, if this is a batch job")
+    status: str = Field(default="pending", description="Current status of this job (pending, running, completed, failed, cancelled)")
+    created_at: str = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC).isoformat(), description="Creation timestamp")
+    started_at: str | None = Field(default=None, description="Execution start timestamp")
+    completed_at: str | None = Field(default=None, description="Execution completion timestamp")
+    error: str | None = Field(default=None, description="Error message if job failed")
+    result_uri: str | None = Field(default=None, description="URI to job results if available")
+
+    # API-specific fields
+    source: list[str] = Field(default_factory=list, description="Source identifiers")
+    mime_type: str | None = Field(default=None, description="MIME type for input data")
+
+    # Data could be passed in different formats
+    data: bytes | None = Field(default=None, description="Binary data input")
+
     model_config = ConfigDict(
-        extra="forbid",  # Disallow extra fields for strict input
+        extra="allow",  # Allow extra fields for extensibility
+        populate_by_name=True,
     )
+
+    @field_validator("prompt", mode="before")
+    def sanitize_prompt(cls, v):
+        if v and isinstance(v, str):
+            v = v.strip()
+            # Could add additional sanitization here
+        return v
+
+    @property
+    def is_batch_job(self) -> bool:
+        """Check if this is a batch job request."""
+        return self.batch_id is not None
+
+    @property
+    def job_id(self) -> str:
+        """Generate a unique job ID."""
+        if self.batch_id and self.record_id:
+            return f"{self.batch_id}:{self.record_id}"
+        return shortuuid.uuid()

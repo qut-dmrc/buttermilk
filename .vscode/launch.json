@@ -30,14 +30,38 @@
       "args": []
     },
     {
-      "name": "moa debug",
+      "name": "batch run",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
-      "args": ["+flows=[trans,simple,hate,chat]", "llms=full"],
+      "args": [
+        "ui=batch",
+        "+run=batch",
+        "+flow=simple",
+        "llms=lite",
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "daemon",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": true,
+      "args": [
+        "ui=api",
+        "flows=[trans,simple]",
+        "llms=lite",
+      ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
