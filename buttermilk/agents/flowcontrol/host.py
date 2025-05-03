@@ -90,6 +90,7 @@ class HostAgent(Agent):
         self._current_step = 0
         self._step_sequence = list(self._participants.keys()) if hasattr(self, "_participants") else []
         await super().initialize(**kwargs)  # Call parent initialize if needed
+        self.human_in_loop = self.parameters.get("human_in_loop", True)
 
     async def _listen(
         self,
@@ -222,6 +223,9 @@ class HostAgent(Agent):
         return
 
     async def _wait_for_user(self) -> ManagerResponse:
+        if not self.human_in_loop:
+            logger.warning("_wait_for_user called but host config has human in the loop disabled. Simulating user confirmation.")
+            return ManagerResponse(prompt=None, confirm=True, halt=False, interrupt=False, selection=None)
         try:
             response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_wait_time)
             logger.debug(f"Received manager response: confirm = {response.confirm}, halt = {response.halt}, interrupt = {response.interrupt}, selection = {response.selection}")
