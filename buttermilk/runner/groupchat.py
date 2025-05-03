@@ -103,11 +103,14 @@ class AutogenOrchestrator(Orchestrator):
             for agent_cls, variant_config in step_config.get_configs(params=params):
                 # Define a factory function required by Autogen's registration.
                 if isinstance(agent_cls, type(Agent)):
+                    config_with_session = {**variant_config.model_dump(), "session_id": self.session_id}
+
                     # This function creates an instance of the AutogenAgentAdapter,
                     # wrapping the actual Buttermilk agent logic.
                     # It captures loop variables (variant_config, agent_cls, self._topic.type)
                     # to ensure the correct configuration is used when the factory is called.
-                    def agent_factory(cfg=variant_config, cls=agent_cls, topic_type=self._topic.type):
+
+                    def agent_factory(cfg=config_with_session, cls=agent_cls, topic_type=self._topic.type):
                         return AutogenAgentAdapter(
                             agent_cfg=cfg,
                             agent_cls=cls,
@@ -118,7 +121,7 @@ class AutogenOrchestrator(Orchestrator):
                     # `variant_config.id` should be a unique identifier for this specific agent instance/variant.
                     agent_type: AgentType = await AutogenAgentAdapter.register(
                         runtime=self._runtime,
-                        type=variant_config.id,  # Use the specific variant ID for registration
+                        type=variant_config.agent_id,  # Use the specific variant ID for registration
                         factory=agent_factory,
                     )
                 else:
@@ -126,11 +129,11 @@ class AutogenOrchestrator(Orchestrator):
                     # Register the adapter factory with the runtime.
                     agent_type: AgentType = await agent_cls.register(
                         runtime=self._runtime,
-                        type=variant_config.id,  # Use the specific variant ID for registration
+                        type=variant_config.agent_id,  # Use the specific variant ID for registration
                         factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
 
-                logger.debug(f"Registered agent adapter: ID='{variant_config.id}', Role='{role_name}', Type='{agent_type}'")
+                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_id}', Role='{role_name}', Type='{agent_type}'")
 
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.

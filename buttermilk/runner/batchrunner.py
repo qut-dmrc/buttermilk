@@ -3,7 +3,7 @@
 This module contains the BatchRunner class, which is responsible for:
 - Creating batch jobs from flow configurations
 - Extracting and shuffling record IDs 
-- Managing job execution and tracking
+- Managing job execution and tracking via Google Pub/Sub
 """
 
 import asyncio
@@ -14,6 +14,8 @@ from typing import Any
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.batch import BatchErrorPolicy, BatchJobDefinition, BatchJobStatus, BatchMetadata, BatchRequest
+from buttermilk._core.exceptions import FatalError
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import logger
 from buttermilk.runner.batch_helper import BatchRunnerHelper
 from buttermilk.runner.flowrunner import FlowRunner
@@ -25,16 +27,30 @@ class BatchRunner(BaseModel):
     BatchRunner is responsible for:
     - Creating batch jobs from flow configurations
     - Extracting and shuffling record IDs
-    - Managing job execution and tracking
+    - Publishing jobs to the Pub/Sub queue
+    - Maintaining batch metadata
     """
 
     flow_runner: FlowRunner
+    job_queue: JobQueueClient | None = None
     _active_batches: dict[str, BatchMetadata] = PrivateAttr(default_factory=dict)
     _pending_jobs: dict[str, list[BatchJobDefinition]] = PrivateAttr(default_factory=dict)
     _running_jobs: set[str] = PrivateAttr(default_factory=set)
     _job_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
     _running: bool = PrivateAttr(default=False)
     _worker_task: asyncio.Task | None = PrivateAttr(default=None)
+
+    def __init__(self, **data):
+        """Initialize the BatchRunner."""
+        super().__init__(**data)
+
+        # Initialize job queue if not provided
+        if self.job_queue is None:
+            try:
+                self.job_queue = JobQueueClient()
+                logger.info("Initialized job queue client")
+            except Exception as e:
+                logger.warning(f"Failed to create job queue client: {e}. Jobs will be processed locally.")
 
     async def create_batch(self, batch_request: BatchRequest) -> BatchMetadata:
         """Create a new batch job from the given request.
@@ -57,9 +73,9 @@ class BatchRunner(BaseModel):
         try:
             # Use our helper class to get the record IDs
             record_ids = await BatchRunnerHelper.get_record_ids_for_flow(
-                self.flow_runner, batch_request.flow
+                self.flow_runner, batch_request.flow,
             )
-            
+
             logger.info(f"Extracted {len(record_ids)} record IDs for flow '{batch_request.flow}'")
         except Exception as e:
             logger.error(f"Failed to extract record IDs for flow '{batch_request.flow}': {e}")
@@ -83,8 +99,13 @@ class BatchRunner(BaseModel):
             interactive=batch_request.interactive,
         )
 
-        # Create job definitions
+        # Create job definitions and publish to queue if available
         job_definitions = []
+        published_to_queue = False
+
+        # Check if we can use the job queue
+        use_queue = self.job_queue is not None
+
         for record in record_ids:
             job = BatchJobDefinition(
                 batch_id=batch_metadata.id,
@@ -94,16 +115,20 @@ class BatchRunner(BaseModel):
             )
             job_definitions.append(job)
 
-        # Store batch and jobs
+            # Publish to queue if available
+            if use_queue and self.job_queue is not None:
+                try:
+                    self.job_queue.publish_job(job)
+                    published_to_queue = True
+                except Exception as e:
+                    msg = f"Failed to publish job to queue: {e}"
+                    use_queue = False  # Fall back to local processing
+                    raise FatalError(msg) from e
+
+        # Store batch metadata
         self._active_batches[batch_metadata.id] = batch_metadata
-        self._pending_jobs[batch_metadata.id] = job_definitions
-        self._job_results[batch_metadata.id] = {}
 
-        logger.info(f"Created batch '{batch_metadata.id}' with {len(job_definitions)} jobs")
-
-        # Start worker if not already running
-        if not self._running:
-            await self.start()
+        logger.info(f"Created batch '{batch_metadata.id}' with {len(job_definitions)} jobs (published to queue)")
 
         return batch_metadata
 

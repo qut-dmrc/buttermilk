@@ -82,20 +82,20 @@ class LLMAgent(Agent):
         self._model = self.parameters.get("model")
         if not self._model:
             # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
-            raise ValueError(f"Agent {self.id}: LLM model name must be provided in agent parameters.")
+            raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
 
-        logger.debug(f"Agent {self.id}: Initializing model client for '{self._model}'.")
+        logger.debug(f"Agent {self.agent_id}: Initializing model client for '{self._model}'.")
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             self._model_client = bm.llms.get_autogen_chat_client(self._model)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to initialize model client for '{self._model}': {e}")
+            logger.error(f"Agent {self.agent_id}: Failed to initialize model client for '{self._model}': {e}")
             # Raise a more informative error or handle appropriately.
             raise ValueError(f"Failed to get model client for '{self._model}'") from e
 
         if not hasattr(self, "_model_client") or not self._model_client:
             # This check is likely redundant due to the exception handling above, but belts and suspenders.
-            raise ValueError(f"Agent {self.id}: Model client initialization failed for '{self._model}'.")
+            raise ValueError(f"Agent {self.agent_id}: Model client initialization failed for '{self._model}'.")
 
         return self
 
@@ -104,11 +104,11 @@ class LLMAgent(Agent):
         """Loads and prepares tools defined in the agent configuration."""
         # `self.tools` is likely inherited or populated by AgentConfig based on Hydra config.
         if self.tools:
-            logger.debug(f"Agent {self.id}: Loading tools: {list(self.tools.keys())}")
+            logger.debug(f"Agent {self.agent_id}: Loading tools: {list(self.tools.keys())}")
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
             self._tools_list = create_tool_functions(self.tools)
         else:
-            logger.debug(f"Agent {self.id}: No tools configured.")
+            logger.debug(f"Agent {self.agent_id}: No tools configured.")
             self._tools_list = []
         return self
 
@@ -139,8 +139,8 @@ class LLMAgent(Agent):
         # Determine the template name from parameters (task-specific, agent default, or input override).
         template_name = self.parameters.get("template", task_params.get("template", inputs.get("template")))
         if not template_name:
-            raise ProcessingError(f"Agent {self.id}: No template name provided in parameters or inputs.")
-        logger.debug(f"Agent {self.id}: Using template '{template_name}'.")
+            raise ProcessingError(f"Agent {self.agent_id}: No template name provided in parameters or inputs.")
+        logger.debug(f"Agent {self.agent_id}: Using template '{template_name}'.")
 
         # Combine agent default parameters and task-specific parameters. Task parameters override defaults.
         combined_params = {**self.parameters, **task_params}
@@ -158,7 +158,7 @@ class LLMAgent(Agent):
         try:
             prompty_structure = _parse_prompty(rendered_template)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to parse rendered template '{template_name}' as Prompty: {e}")
+            logger.error(f"Agent {self.agent_id}: Failed to parse rendered template '{template_name}' as Prompty: {e}")
             raise ProcessingError(f"Failed to parse template '{template_name}'") from e
 
         # Convert the Prompty structure into a list of Autogen message objects (System, User, etc.).
@@ -166,20 +166,20 @@ class LLMAgent(Agent):
         try:
             messages: list[LLMMessage] = make_messages(local_template=prompty_structure, context=context, records=records)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Failed to create messages from Prompty structure for template '{template_name}': {e}")
+            logger.error(f"Agent {self.agent_id}: Failed to create messages from Prompty structure for template '{template_name}': {e}")
             raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
         # Check for any variables that were expected by the template but not provided in `inputs`.
         # Ignore 'records' and 'context' as they are handled separately by `make_messages`.
         missing_vars = set(unfilled_vars) - {"records", "context"}
         if missing_vars:
-            err = f"Agent {self.id} template '{template_name}' has unfilled parameters: {', '.join(missing_vars)}"
+            err = f"Agent {self.agent_id} template '{template_name}' has unfilled parameters: {', '.join(missing_vars)}"
             if self.fail_on_unfilled_parameters:
                 logger.error(err)
                 raise ProcessingError(err)
             logger.warning(err + ". Proceeding anyway.")
 
-        logger.debug(f"Agent {self.id}: Template '{template_name}' rendered into {len(messages)} messages.")
+        logger.debug(f"Agent {self.agent_id}: Template '{template_name}' rendered into {len(messages)} messages.")
         return messages
 
     def make_trace(
@@ -224,34 +224,34 @@ class LLMAgent(Agent):
                 parsed_object = chat_result.object
             elif isinstance(chat_result.content, str):
                 # If content is a string, try to parse/validate it against the schema
-                logger.debug(f"Agent {self.id}: Attempting to parse LLM content into schema {schema.__name__}.")
+                logger.debug(f"Agent {self.agent_id}: Attempting to parse LLM content into schema {schema.__name__}.")
                 try:
                     # Use Pydantic's model_validate_json for robust parsing from JSON string.
                     parsed_object = schema.model_validate_json(chat_result.content)
-                    logger.debug(f"Agent {self.id}: Successfully parsed content into schema {schema.__name__}.")
+                    logger.debug(f"Agent {self.agent_id}: Successfully parsed content into schema {schema.__name__}.")
                 except Exception as e:
                     # Log schema validation/parsing error
                     parse_error = f"Error parsing LLM response into {schema.__name__}: {e}"
-                    logger.warning(f"Agent {self.id}: {parse_error}")
+                    logger.warning(f"Agent {self.agent_id}: {parse_error}")
                     # Keep the error, we'll add it to output later.
             else:
                 # Content is not string and not pre-parsed object, schema validation fails.
                 parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
-                logger.warning(f"Agent {self.id}: {parse_error}")
+                logger.warning(f"Agent {self.agent_id}: {parse_error}")
 
         # 2. Store the result in output.outputs
         if parsed_object is not None:
             output.outputs = parsed_object  # Store the validated Pydantic object
         elif isinstance(chat_result.content, str):
             # If no schema or schema validation failed, try parsing as generic JSON
-            logger.debug(f"Agent {self.id}: Attempting generic JSON parsing of LLM content.")
+            logger.debug(f"Agent {self.agent_id}: Attempting generic JSON parsing of LLM content.")
             try:
                 output.outputs = self._json_parser.parse(chat_result.content)
-                logger.debug(f"Agent {self.id}: Successfully parsed content as generic JSON.")
+                logger.debug(f"Agent {self.agent_id}: Successfully parsed content as generic JSON.")
             except Exception as json_e:
                 # If generic JSON parsing also fails, store raw content
                 raw_content_error = f"Failed to parse LLM response as JSON: {json_e}. Storing raw content."
-                logger.warning(f"Agent {self.id}: {raw_content_error}")
+                logger.warning(f"Agent {self.agent_id}: {raw_content_error}")
                 output.outputs = chat_result.content  # Store raw string
                 # Add both schema error (if any) and JSON parsing error
                 if parse_error:
@@ -259,13 +259,13 @@ class LLMAgent(Agent):
                 output.set_error(raw_content_error)
         elif chat_result.content is not None:
             # Content is not None, not string - store as is.
-            logger.warning(f"Agent {self.id}: LLM response content is not a string ({type(chat_result.content)}). Storing as is.")
+            logger.warning(f"Agent {self.agent_id}: LLM response content is not a string ({type(chat_result.content)}). Storing as is.")
             output.outputs = chat_result.content
             if parse_error:  # Add schema error if validation failed
                 output.set_error(parse_error)
         else:
             # Content is None
-            logger.warning(f"Agent {self.id}: LLM response content is None.")
+            logger.warning(f"Agent {self.agent_id}: LLM response content is None.")
             output.outputs = None
             if parse_error:  # Add schema error if validation failed
                 output.set_error(parse_error)
@@ -292,7 +292,7 @@ class LLMAgent(Agent):
             Exception: If the LLM call itself fails unexpectedly.
 
         """
-        logger.debug(f"Agent {self.id} starting _process.")
+        logger.debug(f"Agent {self.agent_id} starting _process.")
         try:
             # 1. Prepare messages for the LLM using the template
             llm_messages = await self._fill_template(
@@ -300,20 +300,20 @@ class LLMAgent(Agent):
             )
         except ProcessingError as template_error:
             # Log template errors clearly as they prevent LLM call
-            msg = f"Agent {self.id}: Critical error during template processing: {template_error}"
+            msg = f"Agent {self.agent_id}: Critical error during template processing: {template_error}"
             logger.error(msg)
             # Create an error output
-            error_output = ErrorEvent(source=self.id, content=msg)
+            error_output = ErrorEvent(source=self.agent_id, content=msg)
             # Wrap in AgentResponse
             return AgentResponse(
-                metadata={"error": True, "source": self.id},
+                metadata={"error": True, "source": self.agent_id},
                 outputs=error_output,
             )
             # Re-raising might be desired depending on orchestrator's error handling
             # raise template_error
 
         # 2. Call the LLM
-        logger.debug(f"Agent {self.id}: Sending {len(llm_messages)} messages to model '{self._model}'.")
+        logger.debug(f"Agent {self.agent_id}: Sending {len(llm_messages)} messages to model '{self._model}'.")
         try:
             llm_result: CreateResult = await self._model_client.call_chat(
                 messages=llm_messages,
@@ -321,16 +321,16 @@ class LLMAgent(Agent):
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected schema to client if supported
             )
-            llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.id))
-            logger.debug(f"Agent {self.id}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
+            llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.agent_id))
+            logger.debug(f"Agent {self.agent_id}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call
-            msg = f"Agent {self.id}: Error during LLM call to '{self._model}': {llm_error}"
+            msg = f"Agent {self.agent_id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
-            error_output = ErrorEvent(source=self.id, content=msg)
+            error_output = ErrorEvent(source=self.agent_id, content=msg)
             # Wrap in AgentResponse
             return AgentResponse(
-                metadata={"error": True, "source": self.id},
+                metadata={"error": True, "source": self.agent_id},
                 outputs=error_output,
             )
             # Depending on severity, might want to raise
@@ -352,7 +352,7 @@ class LLMAgent(Agent):
             outputs=trace.outputs,
         )
 
-        logger.debug(f"Agent {self.id} finished _process.")
+        logger.debug(f"Agent {self.agent_id} finished _process.")
         return response
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
@@ -362,4 +362,4 @@ class LLMAgent(Agent):
         # TODO: Review if _current_task_index and _last_input are used consistently or needed here.
         # self._current_task_index = 0
         # self._last_input = None
-        logger.debug(f"LLMAgent {self.id} state reset.")
+        logger.debug(f"LLMAgent {self.agent_id} state reset.")

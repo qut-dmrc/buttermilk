@@ -81,14 +81,14 @@ class AutogenAgentAdapter(RoutedAgent):
         if agent:
             # Use the provided agent instance.
             self.agent = agent
-            logger.debug(f"Adapter initialized with pre-instantiated agent: {self.agent.id} ({type(self.agent).__name__})")
+            logger.debug(f"Adapter initialized with pre-instantiated agent: {self.agent.agent_id} ({type(self.agent).__name__})")
         elif agent_cls and agent_cfg:
             # Instantiate the agent using the provided class and config.
             try:
                 self.agent = agent_cls(**agent_cfg.model_dump())
-                logger.debug(f"Adapter instantiated agent: {self.agent.id} ({agent_cls.__name__})")
+                logger.debug(f"Adapter instantiated agent: {self.agent.agent_id} ({agent_cls.__name__})")
             except Exception as e:
-                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.id}: {e}")
+                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.agent_id}: {e}")
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e
         else:
             # Insufficient information provided.
@@ -103,7 +103,7 @@ class AutogenAgentAdapter(RoutedAgent):
         # This allows UI agents, for example, to send user input back into the Autogen flow.
         init_task = self.agent.initialize(input_callback=self._make_publish_callback())
         asyncio.create_task(init_task)
-        logger.debug(f"Scheduled initialization for agent {self.agent.id} with callback.")
+        logger.debug(f"Scheduled initialization for agent {self.agent.agent_id} with callback.")
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function that the wrapped Buttermilk agent can use
@@ -125,7 +125,7 @@ class AutogenAgentAdapter(RoutedAgent):
 
         async def publish_callback(message: FlowMessage | FlowEvent) -> None:
             """The actual callback that publishes the message using the adapter."""
-            logger.debug(f"Publish callback invoked by agent {self.agent.id}. Publishing {type(message).__name__} to topic {target_topic_id}")
+            logger.debug(f"Publish callback invoked by agent {self.agent.agent_id}. Publishing {type(message).__name__} to topic {target_topic_id}")
             # Use the adapter's inherited publish_message method.
             await self.publish_message(
                 message,
@@ -143,7 +143,7 @@ class AutogenAgentAdapter(RoutedAgent):
             self.agent._heartbeat.put_nowait(message.go_next)
         except asyncio.QueueFull:
             # If the agent isn't processing heartbeats quickly enough.
-            logger.debug(f"Heartbeat queue full for agent {self.agent.id}. Agent may be busy or stuck.")
+            logger.debug(f"Heartbeat queue full for agent {self.agent.agent_id}. Agent may be busy or stuck.")
 
     @message_handler
     async def handle_groupchat_message(
@@ -161,7 +161,7 @@ class AutogenAgentAdapter(RoutedAgent):
             ctx: The Autogen message context.
 
         """
-        logger.debug(f"Agent {self.agent.id} received group chat message: {type(message).__name__}")
+        logger.debug(f"Agent {self.agent.agent_id} received group chat message: {type(message).__name__}")
 
         public_callback = self._make_publish_callback(topic_id=self.topic_id)
 
@@ -175,9 +175,9 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
-            msg = f"Error during agent {self.agent.id} listening to group chat message: {e}"
+            msg = f"Error during agent {self.agent.agent_id} listening to group chat message: {e}"
             logger.error(msg, exc_info=False)
-            await public_callback(ErrorEvent(source=self.agent.id, content=msg))
+            await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
 
     @message_handler
     async def handle_control_message(
@@ -218,13 +218,13 @@ class AutogenAgentAdapter(RoutedAgent):
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
                 message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for specific incoming topic
                 )
-            logger.debug(f"Agent {self.agent.id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__ if response else 'N/A'}")
+            logger.debug(f"Agent {self.agent.agent_id} completed handling control message: {type(message).__name__}. Response type: {type(response).__name__ if response else 'N/A'}")
 
             return response  # Return response directly for OOB messages.
         except Exception as e:
-            msg = f"Error during agent {self.agent.id} handling control message {type(message).__name__}: {e}"
+            msg = f"Error during agent {self.agent.agent_id} handling control message {type(message).__name__}: {e}"
             logger.error(msg, exc_info=True)
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=msg), topic_id=self.topic_id)
+            await self.publish_message(ErrorEvent(source=self.agent.agent_id, content=msg), topic_id=self.topic_id)
             return None
 
     @message_handler
@@ -249,7 +249,7 @@ class AutogenAgentAdapter(RoutedAgent):
             Autogen uses this return value as the response to the `send_message` call.
 
         """
-        logger.debug(f"Agent {self.agent.id} received AgentInput invocation.")
+        logger.debug(f"Agent {self.agent.agent_id} received AgentInput invocation.")
         output: AllMessages | None = None
 
         try:
@@ -263,13 +263,13 @@ class AutogenAgentAdapter(RoutedAgent):
                 message_callback=self._make_publish_callback(topic_id=ctx.topic_id),  # Callback for topic of incoming message
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
-            logger.debug(f"Agent {self.agent.id} completed invocation. Output type: {type(output).__name__}")
+            logger.debug(f"Agent {self.agent.agent_id} completed invocation. Output type: {type(output).__name__}")
 
             return output  # Return the direct output to the caller in Autogen.
 
         except Exception as e:
-            logger.error(f"Error during agent {self.agent.id} invocation: {e}")
+            logger.error(f"Error during agent {self.agent.agent_id} invocation: {e}")
             # Publish an ErrorEvent message for listeners.
-            await self.publish_message(ErrorEvent(source=self.agent.id, content=str(e)), topic_id=self.topic_id)
+            await self.publish_message(ErrorEvent(source=self.agent.agent_id, content=str(e)), topic_id=self.topic_id)
             # Do not return the exception itself, let Autogen handle failed `send_message`.
             return None

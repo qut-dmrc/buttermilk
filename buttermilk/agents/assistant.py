@@ -133,7 +133,7 @@ class AssistantAgentWrapper(Agent):
         except Exception as e:
             msg = f"Agent {self.role} error during AssistantAgent.on_messages: {e}"
             logger.error(msg)
-            result = ErrorEvent(source=self.id, content=msg)
+            result = ErrorEvent(source=self.agent_id, content=msg)
             return result
 
         # --- Translate Response ---

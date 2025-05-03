@@ -84,7 +84,7 @@ class CLIUserAgent(UIAgent):
                    They interact via callbacks or listening methods.
 
         """
-        logger.debug(f"{self.id}: Received direct input request via _process.")
+        logger.debug(f"{self.agent_id}: Received direct input request via _process.")
         # Format and display the incoming message.
         if msg_markdown := self._fmt_msg(message, source="controller"):  # Use := walrus operator
             self._console.print(msg_markdown)
@@ -234,7 +234,7 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Displays messages received from other agents on the console."""
-        logger.debug(f"{self.id} received message from {source} via _listen.")
+        logger.debug(f"{self.agent_id} received message from {source} via _listen.")
         # Format and display the message using the helper function.
         if msg_markdown := self._fmt_msg(message, source=source):
             self._console.print(msg_markdown)
@@ -247,7 +247,7 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band messages, displaying relevant ones."""
-        logger.debug(f"{self.id} received OOB message from {source}: {type(message).__name__}")
+        logger.debug(f"{self.agent_id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
         # AgentTrace isn't technically OOB, but might arrive here in some flows? Included defensively.
         displayable_types = (AgentTrace, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
@@ -263,7 +263,7 @@ class CLIUserAgent(UIAgent):
 
     async def _poll_input(self) -> None:
         """Continuously polls for user input from the console in a background task."""
-        logger.info(f"{self.id}: Starting console input polling...")
+        logger.info(f"{self.agent_id}: Starting console input polling...")
         current_prompt_lines: list[str] = []
         while True:
             try:
@@ -320,11 +320,11 @@ class CLIUserAgent(UIAgent):
                 await asyncio.sleep(0.1)  # Small sleep to prevent tight loop if needed
 
             except asyncio.CancelledError:
-                logger.info(f"{self.id}: Input polling task cancelled.")
+                logger.info(f"{self.agent_id}: Input polling task cancelled.")
                 break  # Exit loop cleanly on cancellation
             except Exception as e:
                 # Log errors during input polling but try to continue
-                logger.error(f"{self.id}: Error polling console input: {e}")
+                logger.error(f"{self.agent_id}: Error polling console input: {e}")
                 # Consider adding a delay before retrying after an error
                 await asyncio.sleep(1)
                 # Re-raise if it's KeyboardInterrupt to allow stopping the application
@@ -342,7 +342,7 @@ class CLIUserAgent(UIAgent):
                             Expected signature: `async def callback(response: ManagerResponse)`
             **kwargs: Additional keyword arguments passed to the base class initializer.
         """
-        logger.debug(f"Initializing {self.id}...")
+        logger.debug(f"Initializing {self.agent_id}...")
         self._input_callback = input_callback
         # Ensure any existing task is cancelled before starting a new one (e.g., on reset)
         if self._input_task and not self._input_task.done():
@@ -355,26 +355,26 @@ class CLIUserAgent(UIAgent):
         if self._input_callback:
             # Start the background task to poll for console input.
             self._input_task = asyncio.create_task(self._poll_input())
-            logger.debug(f"{self.id}: Input polling task created.")
+            logger.debug(f"{self.agent_id}: Input polling task created.")
         else:
             # If no callback, input polling is disabled.
-            logger.warning(f"{self.id}: Initialized without input_callback. Console input polling disabled.")
+            logger.warning(f"{self.agent_id}: Initialized without input_callback. Console input polling disabled.")
             self._input_task = None
 
     async def cleanup(self) -> None:
         """Cleans up resources, primarily by cancelling the input polling task."""
-        logger.debug(f"Cleaning up {self.id}...")
+        logger.debug(f"Cleaning up {self.agent_id}...")
         if self._input_task and not self._input_task.done():
             self._input_task.cancel()
             try:
                 # Wait for the task to acknowledge cancellation
                 await self._input_task
             except asyncio.CancelledError:
-                logger.info(f"{self.id}: Console input task successfully cancelled.")
+                logger.info(f"{self.agent_id}: Console input task successfully cancelled.")
             except Exception as e:
                 # Log if waiting for cancellation fails unexpectedly
-                logger.error(f"{self.id}: Error during input task cleanup: {e}")
+                logger.error(f"{self.agent_id}: Error during input task cleanup: {e}")
         else:
-            logger.debug(f"{self.id}: No active input task to cancel.")
+            logger.debug(f"{self.agent_id}: No active input task to cancel.")
         # Call base class cleanup if needed
         # await super().cleanup()

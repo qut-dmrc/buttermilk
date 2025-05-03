@@ -147,14 +147,14 @@ class Agent(AgentConfig):
         """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """
-        logger.debug(f"Agent {self.id}: Base initialize.")
+        logger.debug(f"Agent {self.agent_id}: Base initialize.")
         # Default implementation does nothing.
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state to its initial condition.
         Called by the orchestrator, e.g., between different runs using the same agent instance.
         """
-        logger.info(f"Agent {self.id}: Resetting state.")
+        logger.info(f"Agent {self.agent_id}: Resetting state.")
         self._records = []
         self._model_context = UnboundedChatCompletionContext()
         self._data = KeyValueCollector()
@@ -193,14 +193,14 @@ class Agent(AgentConfig):
 
         """
         result = None
-        logger.debug(f"Agent {self.id} received input via __call__.")
+        logger.debug(f"Agent {self.agent_id} received input via __call__.")
 
         # Prepare the final input by merging message data with internal agent state.
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error preparing input state: {e}")
-            error_output = ErrorEvent(source=self.id, content=f"Failed to prepare input state: {e}")
+            logger.error(f"Agent {self.agent_id}: Error preparing input state: {e}")
+            error_output = ErrorEvent(source=self.agent_id, content=f"Failed to prepare input state: {e}")
             return error_output
 
         # --- Weave Tracing ---
@@ -209,9 +209,9 @@ class Agent(AgentConfig):
         if call:
             call.set_display_name(self.name)  # Set trace display name
             # TODO: Log inputs? Be careful about large data/PII.
-            logger.debug(f"Agent {self.id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
+            logger.debug(f"Agent {self.agent_id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
         else:
-            logger.warning(f"Agent {self.id} __call__ executing outside Weave trace context.")
+            logger.warning(f"Agent {self.agent_id} __call__ executing outside Weave trace context.")
 
         # --- Langfuse tracing ---
         langfuse_context.update_current_observation(name=self.name,
@@ -226,7 +226,7 @@ class Agent(AgentConfig):
         is_error = False
         # --- Execute Core Logic ---
         try:
-            await public_callback(TaskProcessingStarted(agent_id=self.id, role=self.role, task_index=0))
+            await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
 
             result = await self._process(message=final_input, cancellation_token=cancellation_token,
         public_callback=public_callback,  # Callback provided by adapter
@@ -237,21 +237,21 @@ class Agent(AgentConfig):
 
         except Exception as e:
             # Catch unexpected errors during _process.
-            error_msg = f"Agent {self.id} error during _process: {e}"
+            error_msg = f"Agent {self.agent_id} error during _process: {e}"
             logger.error(error_msg)
-            result = ErrorEvent(source=self.id, content=error_msg)
+            result = ErrorEvent(source=self.agent_id, content=error_msg)
             is_error = True
 
         finally:
             # Publish status update: Task Complete (including error if error)
             await public_callback(
-                TaskProcessingComplete(agent_id=self.id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
+                TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
             )
 
             # Send a full trace off for logging and further processing.
             await public_callback(trace)
 
-        logger.debug(f"Agent {self.id} finished __call__.")
+        logger.debug(f"Agent {self.agent_id} finished __call__.")
         return trace
 
     @abstractmethod
@@ -305,7 +305,7 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments.
 
         """
-        logger.debug(f"Agent {self.id} received message from {source} via _listen.")
+        logger.debug(f"Agent {self.agent_id} received message from {source} via _listen.")
         # Extract any records in the message first.
         self._records.extend(extract_records_from_message(message))
 
@@ -334,7 +334,7 @@ class Agent(AgentConfig):
                     found.append(key)
 
         if found:
-            logger.debug(f"Agent {self.id} extracted keys [{found}] from {source}.")
+            logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -353,7 +353,7 @@ class Agent(AgentConfig):
                 await self._model_context.add_message(UserMessage(content=content_str, source=source))
         else:
             # don't log other types of messages to history by default
-            logger.debug(f"Agent {self.id} ignored message type {type(message)} for context history.")
+            logger.debug(f"Agent {self.agent_id} ignored message type {type(message)} for context history.")
 
     async def _handle_events(
         self,
@@ -400,16 +400,16 @@ class Agent(AgentConfig):
 
         """
         try:
-            logger.debug(f"Agent {self.id} waiting for heartbeat (timeout: {timeout}s)...")
+            logger.debug(f"Agent {self.agent_id} waiting for heartbeat (timeout: {timeout}s)...")
             await asyncio.wait_for(self._heartbeat.get(), timeout=timeout)
-            logger.debug(f"Agent {self.id} received heartbeat.")
+            logger.debug(f"Agent {self.agent_id} received heartbeat.")
             self._heartbeat.task_done()  # Mark as processed
             return True
         except TimeoutError:
-            logger.warning(f"Agent {self.id} timed out waiting for heartbeat.")
+            logger.warning(f"Agent {self.agent_id} timed out waiting for heartbeat.")
             return False
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error checking heartbeat: {e}")
+            logger.error(f"Agent {self.agent_id}: Error checking heartbeat: {e}")
             return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
@@ -452,9 +452,9 @@ class Agent(AgentConfig):
             merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error resolving input mappings: {e}")
+            logger.error(f"Agent {self.agent_id}: Error resolving input mappings: {e}")
             # Continue without resolved mappings? Or raise? Raising for clarity.
-            raise ProcessingError(f"Error resolving input mappings for agent {self.id}") from e
+            raise ProcessingError(f"Error resolving input mappings for agent {self.agent_id}") from e
 
         # Prepend conversation history from agent's context.
         # Ensure context list exists.
@@ -465,7 +465,7 @@ class Agent(AgentConfig):
             # Prepend history so message.context comes after agent's context
             updated_inputs.context = history + updated_inputs.context
         except Exception as e:
-            logger.error(f"Agent {self.id}: Error retrieving model context: {e}")
+            logger.error(f"Agent {self.agent_id}: Error retrieving model context: {e}")
             # Decide how to handle context retrieval failure. Continue without history?
 
         # Append stored records.
@@ -475,7 +475,7 @@ class Agent(AgentConfig):
         updated_inputs.records.extend(self._records)
 
         logger.debug(
-            f"Agent {self.id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
+            f"Agent {self.agent_id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
         )
         return updated_inputs
 

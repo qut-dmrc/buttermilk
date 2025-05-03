@@ -41,7 +41,7 @@ else:
     from .config import AgentConfig  # Required at runtime for now, will be refactored later
 
 from .log import logger
-from .types import Record, _global_run_id  # Core data types
+from .types import Record  # Core data types
 
 # --- General Communication & Base Messages ---
 
@@ -238,7 +238,6 @@ class AgentTrace(FlowMessage):
     messages exchanged with LLMs, errors, and tracing information.
     """
 
-    session_id: str = Field(default=_global_run_id, description="Session identifier.")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
     agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent (required)")

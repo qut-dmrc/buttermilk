@@ -21,7 +21,7 @@ class Citator(BaseModel):
     @pydantic.model_validator(mode="after")
     def _init_agent(self) -> Self:
         self._agent = LLMAgent(
-            id="citator",
+            agent_id="citator",
             name="Citator",
             description="Gets citation information from the first page or two.",
             parameters={"template": "citator", "model": self.model},

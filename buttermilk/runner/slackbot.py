@@ -6,19 +6,16 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
+from autogen_core.models import AssistantMessage, UserMessage
 from omegaconf import OmegaConf
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
-from autogen_core.models import AssistantMessage, UserMessage
 from buttermilk._core.contract import MANAGER
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import BM, bm, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.runner.groupchat import AutogenOrchestrator
-from buttermilk.runner.selector import Selector
-orchestrators = [AutogenOrchestrator, Selector]
 
 BOTPATTERNS = re.compile(
     r"^!?[<@>\w\d]*\s+(\w+)(.*)",

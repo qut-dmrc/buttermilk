@@ -338,7 +338,7 @@ def _format_message_for_client(message: Any) -> dict[str, Any] | str | None:
         "agent_info": {
             "role": message.agent_info.role,
             "name": message.agent_info.name,
-            "id": message.agent_info.id,
+            "id": message.agent_info.agent_id,
             "message_id": message.call_id,
         },
     }

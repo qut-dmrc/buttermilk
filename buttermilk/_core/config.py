@@ -211,8 +211,11 @@ class AgentConfig(BaseModel):
     """
 
     # Core Identification
-    id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
+    agent_id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
 
+    session_id: str = Field(...,
+        description="A unique session id for this specific flow execution.",
+    )
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
         default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
@@ -307,8 +310,8 @@ class AgentConfig(BaseModel):
              if self.base_name is None and intended_base_name is not None:
                  self.base_name = intended_base_name
 
-        if self.id != intended_id:
-            self.id = intended_id
+        if self.agent_id != intended_id:
+            self.agent_id = intended_id
 
         if self.name != intended_name:
             # Update the 'name' field to the final composed name
@@ -353,6 +356,9 @@ class AgentVariants(AgentConfig):
         default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
     )
+    session_id: str = Field(default="",
+        description="Leave unset, will be overwritten on initialisation by the Agent class",
+    )
     variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
     tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
     num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
@@ -379,7 +385,7 @@ class AgentVariants(AgentConfig):
         if params:
             for key in self.extra_params:
                 if key not in params.model_fields_set:
-                    raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.id}.")
+                    raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.agent_id}.")
                 base_parameters[key] = getattr(params, key)
 
         # And parameters passed in the request by the user

@@ -138,7 +138,7 @@ class HostAgent(Agent):
         conductor requests, and user feedback. It's a central hub for managing the
         conversation flow state.
         """
-        logger.debug(f"Host {self.id} handling event: {type(message).__name__}")
+        logger.debug(f"Host {self.agent_id} handling event: {type(message).__name__}")
 
         if isinstance(message, ManagerResponse):
             try:
@@ -148,7 +148,7 @@ class HostAgent(Agent):
                 msg = f"Discarding user input because earlier input still hasn't been handled: {message}"
                 logger.error(msg)
                 if public_callback:
-                    await public_callback(ErrorEvent(source=self.id, content=msg))
+                    await public_callback(ErrorEvent(source=self.agent_id, content=msg))
                 return
 
         # Handle task completion signals from worker agents.
@@ -214,10 +214,10 @@ class HostAgent(Agent):
                         self._conductor_task.result()
                     except Exception as e:
                         logger.error(f"Previous conductor task ended with exception: {e}")
-                logger.info(f"Host {self.id} starting new conductor task.")
+                logger.info(f"Host {self.agent_id} starting new conductor task.")
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
             else:
-                 logger.warning(f"Host {self.id} received ConductorRequest but task is already running.")
+                 logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
 
         return
 
@@ -227,7 +227,7 @@ class HostAgent(Agent):
             logger.debug(f"Received manager response: confirm = {response.confirm}, halt = {response.halt}, interrupt = {response.interrupt}, selection = {response.selection}")
             return response
         except TimeoutError:
-            logger.warning(f"{self.id} hit timeout waiting for manager response after {self.max_wait_time} seconds.")
+            logger.warning(f"{self.agent_id} hit timeout waiting for manager response after {self.max_wait_time} seconds.")
             return await self._wait_for_user()
 
     async def _wait_for_completions(self) -> None:
@@ -271,16 +271,16 @@ class HostAgent(Agent):
         # Store the sequence and total steps for progress tracking
         self._step_sequence = list(self._participants.keys())
         self._total_steps = len(self._step_sequence)
-        logger.info(f"Host {self.id} initialized sequence with {self._total_steps} steps: {self._step_sequence}")
+        logger.info(f"Host {self.agent_id} initialized sequence with {self._total_steps} steps: {self._step_sequence}")
 
         # Generate steps in order
         for i, (step_name, cfg) in enumerate(self._participants.items()):
             self._current_step = i + 1  # 1-based step index
-            logger.info(f"Host {self.id} generating step {self._current_step}/{self._total_steps}: {step_name}")
+            logger.info(f"Host {self.agent_id} generating step {self._current_step}/{self._total_steps}: {step_name}")
             yield StepRequest(role=step_name, content=f"Sequence host calling {step_name}.")
 
         # Always yield the END step at the end
-        logger.info(f"Host {self.id} sequence completed, generating END step")
+        logger.info(f"Host {self.agent_id} sequence completed, generating END step")
         yield StepRequest(role=END, content="Sequence wrapping up.")
 
     async def _run_flow(self, message: ConductorRequest) -> StepRequest:
@@ -364,7 +364,7 @@ class HostAgent(Agent):
         if self._input_callback:
             await self._input_callback(end_step)
 
-        logger.info(f"Host {self.id} flow execution finished.")
+        logger.info(f"Host {self.agent_id} flow execution finished.")
         return end_step
 
     async def _execute_step(self, step: StepRequest) -> None:
@@ -411,7 +411,7 @@ class HostAgent(Agent):
 
         # Publish the message using the _input_callback
         if not hasattr(self, "_input_callback") or not callable(self._input_callback):
-            logger.error(f"Host {self.id} cannot publish StepRequest for role {step.role}: _input_callback is not set or not callable.")
+            logger.error(f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: _input_callback is not set or not callable.")
             # If the step can't be sent, reset state and ensure event is set to unblock
             self._current_step_name = None
             if step.role in self._outstanding_tasks_per_role:
@@ -420,11 +420,11 @@ class HostAgent(Agent):
             return
 
         try:
-            logger.debug(f"Host {self.id} attempting to publish StepRequest for role {step.role}...")
+            logger.debug(f"Host {self.agent_id} attempting to publish StepRequest for role {step.role}...")
             await self._input_callback(message)
-            logger.debug(f"Host {self.id} successfully published StepRequest for role {step.role}")
+            logger.debug(f"Host {self.agent_id} successfully published StepRequest for role {step.role}")
         except Exception as e:
-            logger.exception(f"Host {self.id} encountered an error calling _input_callback for role {step.role}: {e}")
+            logger.exception(f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}")
             # Reset state and ensure event is set to prevent deadlock
             self._current_step_name = None
             if step.role in self._outstanding_tasks_per_role:
@@ -494,11 +494,11 @@ class HostAgent(Agent):
         try:
             # Manual implementation to avoid using anext directly
             step = await self._step_generator.__anext__()
-            logger.info(f"Host {self.id} chose next step: {step.role} (step {self._current_step}/{self._total_steps})")
+            logger.info(f"Host {self.agent_id} chose next step: {step.role} (step {self._current_step}/{self._total_steps})")
             return step
         except StopAsyncIteration:
             # If the generator is exhausted, ensure we return the END step
-            logger.info(f"Host {self.id} step generator exhausted, explicitly returning END step")
+            logger.info(f"Host {self.agent_id} step generator exhausted, explicitly returning END step")
             return StepRequest(role=END, content="Sequence completed. All steps have been processed.")
 
     async def _send_progress_update(self, role: str, status: str, message: str, progress: float = 0.0) -> None:
@@ -531,7 +531,7 @@ class HostAgent(Agent):
 
             # Create progress update message
             progress_update = TaskProgressUpdate(
-                source=self.id,
+                source=self.agent_id,
                 role=role,
                 step_name=self._current_step_name or role,
                 status=status,
@@ -549,7 +549,7 @@ class HostAgent(Agent):
 
     async def on_reset(self, cancellation_token=None) -> None:
         """Resets the HostAgent's internal state."""
-        logger.info(f"Resetting Host agent {self.id}...")
+        logger.info(f"Resetting Host agent {self.agent_id}...")
         await super().on_reset(cancellation_token)
         self._current_step_name = None
         self._outstanding_tasks_per_role.clear()  # Reset task counters
@@ -579,7 +579,7 @@ class HostAgent(Agent):
                  logger.error(f"Error retrieving result from cancelled conductor task during reset: {e}")
         self._conductor_task = None
 
-        logger.info(f"Host agent {self.id} reset complete.")
+        logger.info(f"Host agent {self.agent_id} reset complete.")
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
         """Host _process implementation - returns an empty response as a placeholder.
@@ -587,8 +587,8 @@ class HostAgent(Agent):
         This is not generally used directly as the host operates via _handle_events
         """
         # Create placeholder response with an error event
-        placeholder = ErrorEvent(source=self.id, content="Host agent has no direct processing behavior")
+        placeholder = ErrorEvent(source=self.agent_id, content="Host agent has no direct processing behavior")
         return AgentResponse(
-            metadata={"source": self.id},
+            metadata={"source": self.agent_id},
             outputs=placeholder,
         )

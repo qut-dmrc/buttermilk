@@ -23,18 +23,7 @@ from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import create_app
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
-from buttermilk.runner.groupchat import AutogenOrchestrator
-from buttermilk.runner.selector import Selector
 from buttermilk.runner.slackbot import register_handlers
-
-# Maps orchestrator names (used in config) to their implementation classes.
-# Allows selecting the orchestration strategy (e.g., simple group chat vs. selector-based) via configuration.
-ORCHESTRATOR_CLASSES = {
-    "simple": AutogenOrchestrator,
-    "selector": Selector,
-}
-# TODO: The mapping keys ("simple", "selector") might be better represented as enums or constants for clarity and type safety.
-# TODO: This mapping is currently hardcoded. Consider if it should be dynamically discoverable or configurable.
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -64,7 +53,7 @@ def main(cfg: DictConfig) -> None:
     # Branch execution based on the configured UI mode.
     match flow_runner.ui:
         case "console":
-            # Run a flow directly in the console.
+            # Run a flow directly in the console
             flow_name = cfg.flow
 
             # Prepare the RunRequest with command-line parameters

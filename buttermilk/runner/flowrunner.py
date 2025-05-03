@@ -61,7 +61,7 @@ class FlowRunner(BaseModel):
             **kwargs: Additional keyword arguments for orchestrator instantiation
             
         Returns:
-            Task object if running asynchronously in background, otherwise None
+            
         
         Raises:
             ValueError: If orchestrator isn't specified or unknown
