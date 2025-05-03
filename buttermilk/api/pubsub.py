@@ -10,8 +10,6 @@ from buttermilk.utils.utils import load_json_flexi
 # Global flow registry
 flows = {}
 
-# gcloud pubsub topics publish TOPIC_ID --message='{"task": "summarise_osb", "uri": "gs://dmrc-platforms/data/osb/FB-515JVE4X.md", "record_id": "FB-515JVE4X"}
-
 
 def callback(message):
     results = None
@@ -57,6 +55,14 @@ def start_pubsub_listener():
     )
     topic_path = subscriber.topic_path(bm.cfg.pubsub.project, bm.cfg.pubsub.topic)
 
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
+    logger.info(f"Listening for messages on {subscription_path} topic {topic_path}...")
+
+    try:
+        streaming_pull_future.result()
+    except KeyboardInterrupt:
+        streaming_pull_future.cancel()
+
     # if "dead_letter_topic_id" in bm.cfg.pubsub:
     #     dead_letter_topic_path = publisher.topic_path(
     #         bm.cfg.pubsub.project,
@@ -85,11 +91,3 @@ def start_pubsub_listener():
     #     logger.error(
     #         f"Unable to create pub/sub subscription {subscription_path}: {e}, {e.args=}",
     #     )
-
-    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
-    logger.info(f"Listening for messages on {subscription_path} topic {topic_path}...")
-
-    try:
-        streaming_pull_future.result()
-    except KeyboardInterrupt:
-        streaming_pull_future.cancel()

@@ -178,10 +178,10 @@ class LLMScorer(LLMAgent):
         if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
             score = QualResults(
                 assessments=score_output.outputs.assessments,
-                agent_id=scorer_agent_input.inputs["answers"][0]["agent_id"],
-                agent_name=scorer_agent_input.inputs["answers"][0]["agent_name"],
-                answer_id=scorer_agent_input.inputs["answers"][0]["answer_id"],
-                assessor=scorer_agent_input.inputs["assessor"],
+                agent_id=message.agent_info.agent_id,
+                agent_name=message.agent_info.name,
+                answer_id=message.call_id,
+                assessor=self.name,
             )
             # replace the outputs object
             score_output.outputs = score

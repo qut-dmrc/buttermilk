@@ -12,8 +12,6 @@ import pydantic
 import shortuuid
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk._core.types import RunRequest
-
 
 class BatchJobStatus(str, Enum):
     """Status of a batch job."""
@@ -54,29 +52,6 @@ class BatchRequest(BaseModel):
         if isinstance(value, str) and value.lower() == "stop":
             return BatchErrorPolicy.STOP
         return value
-
-
-class BatchJobDefinition(BaseModel):
-    """Definition of a single job within a batch."""
-
-    batch_id: str = Field(..., description="ID of the parent batch")
-    flow: str = Field(..., description="Name of the flow to execute")
-    record_id: str = Field(..., description="ID of the record to process")
-    parameters: dict[str, Any] = Field(default_factory=dict, description="Parameters for this specific job")
-    status: BatchJobStatus = Field(default=BatchJobStatus.PENDING, description="Current status of this job")
-    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat(), description="Creation timestamp")
-    started_at: str | None = Field(default=None, description="Execution start timestamp")
-    completed_at: str | None = Field(default=None, description="Execution completion timestamp")
-    error: str | None = Field(default=None, description="Error message if job failed")
-    result_uri: str | None = Field(default=None, description="URI to job results if available")
-
-    def to_run_request(self) -> RunRequest:
-        """Convert job definition to a RunRequest for execution."""
-        return RunRequest(
-            flow=self.flow,
-            record_id=self.record_id,
-            parameters=self.parameters,
-        )
 
 
 class BatchMetadata(BaseModel):

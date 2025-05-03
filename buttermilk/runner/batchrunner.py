@@ -13,8 +13,9 @@ from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
-from buttermilk._core.batch import BatchErrorPolicy, BatchJobDefinition, BatchJobStatus, BatchMetadata, BatchRequest
+from buttermilk._core.batch import BatchErrorPolicy, BatchJobStatus, BatchMetadata, BatchRequest
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import logger
 from buttermilk.runner.batch_helper import BatchRunnerHelper
@@ -34,7 +35,7 @@ class BatchRunner(BaseModel):
     flow_runner: FlowRunner
     job_queue: JobQueueClient | None = None
     _active_batches: dict[str, BatchMetadata] = PrivateAttr(default_factory=dict)
-    _pending_jobs: dict[str, list[BatchJobDefinition]] = PrivateAttr(default_factory=dict)
+    _pending_jobs: dict[str, list[RunRequest]] = PrivateAttr(default_factory=dict)
     _running_jobs: set[str] = PrivateAttr(default_factory=set)
     _job_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
     _running: bool = PrivateAttr(default=False)
@@ -107,7 +108,7 @@ class BatchRunner(BaseModel):
         use_queue = self.job_queue is not None
 
         for record in record_ids:
-            job = BatchJobDefinition(
+            job = RunRequest(
                 batch_id=batch_metadata.id,
                 flow=batch_request.flow,
                 record_id=record["record_id"],
@@ -150,7 +151,7 @@ class BatchRunner(BaseModel):
 
         return self._active_batches[batch_id]
 
-    async def get_batch_jobs(self, batch_id: str) -> list[BatchJobDefinition]:
+    async def get_batch_jobs(self, batch_id: str) -> list[RunRequest]:
         """Get job definitions for a batch.
         
         Args:
@@ -242,6 +243,7 @@ class BatchRunner(BaseModel):
 
         self._running = True
         self._worker_task = asyncio.create_task(self._worker_loop())
+        # self.job_queue.start_processing()
         logger.info("Started BatchRunner worker")
 
     async def stop(self) -> None:
@@ -303,7 +305,7 @@ class BatchRunner(BaseModel):
             logger.error(f"Error in worker loop: {e}", exc_info=True)
             self._running = False
 
-    async def _get_next_job(self) -> BatchJobDefinition | None:
+    async def _get_next_job(self) -> RunRequest | None:
         """Get the next job to process."""
         for batch_id, jobs in self._pending_jobs.items():
             batch = self._active_batches[batch_id]
@@ -325,7 +327,7 @@ class BatchRunner(BaseModel):
 
         return None
 
-    async def _run_job(self, job: BatchJobDefinition) -> None:
+    async def _run_job(self, run_request: RunRequest) -> None:
         """Run a job and update its status."""
         batch_id = job.batch_id
         record_id = job.record_id
@@ -334,24 +336,21 @@ class BatchRunner(BaseModel):
         try:
             logger.info(f"Running job {job_id}")
 
-            # Convert job to RunRequest
-            run_request = job.to_run_request()
-
             # Run the flow
             callback = await self.flow_runner.run_flow(run_request)
 
             # Mark job as completed
-            job.status = BatchJobStatus.COMPLETED
-            job.completed_at = datetime.now(UTC).isoformat()
+            run_request.status = BatchJobStatus.COMPLETED
+            run_request.completed_at = datetime.now(UTC).isoformat()
 
             # Store job result
             if batch_id not in self._job_results:
                 self._job_results[batch_id] = {}
 
             self._job_results[batch_id][job_id] = {
-                "job_definition": job,
+                "job_definition": run_request,
                 "result": callback,  # This might be a callback function, consider what you want to store
-                "completed_at": job.completed_at,
+                "completed_at": run_request.completed_at,
             }
 
             # Update batch metadata
@@ -368,18 +367,18 @@ class BatchRunner(BaseModel):
             logger.error(f"Error running job {job_id}: {e}", exc_info=True)
 
             # Mark job as failed
-            job.status = BatchJobStatus.FAILED
-            job.completed_at = datetime.now(UTC).isoformat()
-            job.error = str(e)
+            run_request.status = BatchJobStatus.FAILED
+            run_request.completed_at = datetime.now(UTC).isoformat()
+            run_request.error = str(e)
 
             # Store job result
             if batch_id not in self._job_results:
                 self._job_results[batch_id] = {}
 
             self._job_results[batch_id][job_id] = {
-                "job_definition": job,
+                "job_definition": run_request,
                 "error": str(e),
-                "completed_at": job.completed_at,
+                "completed_at": run_request.completed_at,
             }
 
             # Update batch metadata

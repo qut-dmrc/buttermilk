@@ -85,7 +85,7 @@ class AutogenAgentAdapter(RoutedAgent):
         elif agent_cls and agent_cfg:
             # Instantiate the agent using the provided class and config.
             try:
-                self.agent = agent_cls(**agent_cfg.model_dump())
+                self.agent = agent_cls(**agent_cfg)
                 logger.debug(f"Adapter instantiated agent: {self.agent.agent_id} ({agent_cls.__name__})")
             except Exception as e:
                 logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.agent_id}: {e}")
