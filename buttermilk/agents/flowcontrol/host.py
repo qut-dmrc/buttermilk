@@ -165,7 +165,7 @@ class HostAgent(Agent):
         elif isinstance(message, TaskProcessingStarted):
             role = message.role
             self._total_outstanding_tasks += 1
-            logger.info(f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. {self._total_outstanding_tasks} total outstanding tasks.")
+            logger.debug(f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. {self._total_outstanding_tasks} total outstanding tasks.")
 
             # If tasks become outstanding, clear the completion event
             if self._total_outstanding_tasks > 0:

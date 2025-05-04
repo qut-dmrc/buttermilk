@@ -78,7 +78,6 @@ class AutogenOrchestrator(Orchestrator):
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
 
-        self._participants = {k: v.description for k, v in self.agents.items()}
         logger.debug("Autogen runtime started.")
 
         # does it need a second to spin up?
@@ -97,6 +96,10 @@ class AutogenOrchestrator(Orchestrator):
         potentially role-specific topics.
         """
         logger.debug("Registering agents with Autogen runtime...")
+
+        # Create list of participants in the group chat
+        self._participants = {k: v.description for k, v in self.agents.items()}
+
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)

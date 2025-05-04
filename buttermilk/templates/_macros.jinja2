@@ -1,6 +1,5 @@
-{# filepath: buttermilk/templates/_macros.jinja2 #}
 {% macro render_or_include(variable_value, template_suffix='.jinja2') %}
-  {#- Check if the variable has a value -#}
+  {#- Check if the variable has a truthy value (not Undefined, None, False, empty, etc.) -#}
   {% if variable_value %}
     {#- Attempt to include a template named after the variable's value. Capture output. -#}
     {% set included_content %}
@@ -14,7 +13,22 @@
     {% if included_content %}
       {{- included_content -}}
     {% else %}
+      {# If include failed (no template found), render the original value #}
       {{- variable_value -}}
     {% endif %}
+  {% else %}
+    {# If variable_value was initially falsey (e.g., Undefined, None, empty string),
+       render it directly. This allows KeepUndefined to catch Undefined variables. #}
+    {{- variable_value -}}
   {% endif %}
 {% endmacro %}
+
+{# Custom filter to strip leading/trailing whitespace from each line and remove blank lines #}
+{% filter strip_all(s) %}
+  {%- for line in s.split('\n') -%}
+    {%- set stripped_line = line | trim -%}
+    {%- if stripped_line -%}
+      {{ stripped_line }}
+    {%- endif -%}
+  {%- endfor -%}
+{% endfilter %}
