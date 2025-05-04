@@ -4,10 +4,10 @@ from functools import wraps
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from buttermilk.api.services.data_service import DataService
+from buttermilk.api.services.message_service import MessageService
+from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import logger
-from buttermilk.web.fastapi_frontend.services.data_service import DataService
-from buttermilk.web.fastapi_frontend.services.message_service import MessageService
-from buttermilk.web.fastapi_frontend.services.websocket_service import WebSocketManager
 
 
 class DashboardRoutes:
@@ -83,7 +83,7 @@ class DashboardRoutes:
             )
 
         @self.router.get("/dashboard", response_class=HTMLResponse)
-        async def dashboard(request: Request):
+        async def dashboard(self, request: Request):
             """Render the dashboard page with charts and data tables"""
             return self.templates.TemplateResponse(
                 "dashboard.html",
@@ -92,7 +92,7 @@ class DashboardRoutes:
 
         @self.router.get("/api/flows")
         @self._negotiate_content("partials/flow_options.html")
-        async def get_flows(request: Request):
+        async def get_flows(self, request: Request):
             """Get all available flows.
 
             Returns:
@@ -104,7 +104,7 @@ class DashboardRoutes:
             return {"flow_choices": flow_choices}
 
         @self.router.get("/api/debug/", response_class=HTMLResponse)  # Keep this as HTML only
-        async def get_debug(request: Request):
+        async def get_debug(self, request: Request):
             """Debug endpoint to test template rendering"""
             # import datetime # Moved to top
             return self.templates.TemplateResponse(

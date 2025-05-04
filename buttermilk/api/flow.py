@@ -117,28 +117,17 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             media_type="application/json",
         )
 
-    # Note: The following route is kept for backward compatibility but may be removed in future versions
-    @app.api_route("/html/flow/{flow}", methods=["GET", "POST"])
-    @app.api_route("/html/flow", methods=["GET", "POST"])
-    async def run_route_html(
-        request: Request,
-        flow: str = "",
-        flow_request: RunRequest | None = None,
-    ) -> JSONResponse:
-        """This endpoint is deprecated - please use the main API or WebSocket endpoints"""
-        return JSONResponse(
-            content={"message": "HTML flow rendering is deprecated. Please use the main API or WebSocket endpoints."},
-            status_code=200,
-        )
 
     # Set up CORS
     origins = [
         "http://localhost:5000",  # Frontend running on localhost:5000
         "http://127.0.0.1:5000",
-        "http://127.0.0.1:8080",  # Frontend running on localhost:8080
-        "http://localhost:8080",
+        "http://127.0.0.1:5173",  # Frontend running on localhost:5173
+        "http://localhost:5173",
         "http://localhost:8000",  # Allow requests from localhost:8000
         "http://127.0.0.1:8000",
+        "http://localhost",
+        "http://127.0.0.1",
         "http://automod.cc",  # Allow requests from your domain
     ]
 

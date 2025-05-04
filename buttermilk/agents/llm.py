@@ -309,8 +309,7 @@ class LLMAgent(Agent):
                 metadata={"error": True, "source": self.agent_id},
                 outputs=error_output,
             )
-            # Re-raising might be desired depending on orchestrator's error handling
-            # raise template_error
+            raise template_error
 
         # 2. Call the LLM
         logger.debug(f"Agent {self.agent_id}: Sending {len(llm_messages)} messages to model '{self._model}'.")
