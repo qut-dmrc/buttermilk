@@ -1,5 +1,8 @@
+import datetime
+from functools import wraps
+
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from buttermilk.bm import logger
 from buttermilk.web.fastapi_frontend.services.data_service import DataService
@@ -24,6 +27,41 @@ class DashboardRoutes:
         self.websocket_manager = WebSocketManager()
 
         self.setup_routes()
+
+    def _negotiate_content(self, html_template_name: str):
+        """Decorator to handle content negotiation (HTML vs JSON).
+
+        Args:
+            html_template_name: The name of the Jinja2 template for HTML responses.
+
+        """
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(request: Request, *args, **kwargs):
+                # Call the original route function, passing self
+                # It should return a dictionary for context/JSON,
+                # or a full Response object (e.g., for errors).
+                result = await func(self, request, *args, **kwargs)
+
+                # If the route returned a full Response, just return it
+                if isinstance(result, (JSONResponse, HTMLResponse, Response)):
+                    return result
+
+                # Otherwise, assume it's a dict for context/JSON
+                context_data = result
+                accept_header = request.headers.get("accept", "")
+
+                if "text/html" in accept_header:
+                    logger.debug(f"Returning HTML template '{html_template_name}' based on Accept header for {request.url.path}")
+                    return self.templates.TemplateResponse(
+                        html_template_name,
+                        {"request": request, **context_data},
+                    )
+                # Default to JSON
+                logger.debug(f"Returning JSON based on Accept header for {request.url.path}")
+                return JSONResponse(content=context_data)
+            return wrapper
+        return decorator
 
     def setup_routes(self):
         """Set up the application routes"""
@@ -52,139 +90,152 @@ class DashboardRoutes:
                 {"request": request},
             )
 
-        @self.router.get("/api/flows", response_class=HTMLResponse)
+        @self.router.get("/api/flows")
+        @self._negotiate_content("partials/flow_options.html")
         async def get_flows(request: Request):
-            """Get all available flows as HTML select options for htmx replacement"""
-            flow_choices = list(self.flows.flows.keys())
-            return self.templates.TemplateResponse(
-                "partials/flow_options.html",
-                {"request": request, "flow_choices": flow_choices},
-            )
+            """Get all available flows.
 
-        @self.router.get("/api/debug/", response_class=HTMLResponse)
+            Returns:
+                JSON by default or HTML if 'text/html' is accepted.
+
+            """
+            logger.debug(f"Request received for /api/flows (Accept: {request.headers.get('accept', '')})")
+            flow_choices = list(self.flows.flows.keys())
+            return {"flow_choices": flow_choices}
+
+        @self.router.get("/api/debug/", response_class=HTMLResponse)  # Keep this as HTML only
         async def get_debug(request: Request):
             """Debug endpoint to test template rendering"""
-            import datetime
+            # import datetime # Moved to top
             return self.templates.TemplateResponse(
                 "partials/debug.html",
                 {"request": request, "now": datetime.datetime.now()},
             )
 
-        @self.router.get("/api/flowdata/", response_class=HTMLResponse)
-        async def get_flowinfo(request: Request):
-            """Get criteria options and records for a specific flow using query parameter"""
-            flow_name = request.query_params.get("flow")  # Get flow from query parameter
-
-            logger.info(f"Flow data request received for flow: {flow_name}")
+        @self.router.get("/api/flowdata/")
+        @self._negotiate_content("partials/flow_dependent_data.html")  # Apply decorator
+        async def get_flowinfo(self, request: Request):  # Add self
+            """Get criteria options and records for a specific flow.
+            Returns JSON by default or HTML if 'text/html' is accepted.
+            """
+            flow_name = request.query_params.get("flow")
+            accept_header = request.headers.get("accept", "")  # Needed for error handling below
+            logger.info(f"Flow data request received for flow: {flow_name} (Accept: {accept_header})")
 
             if not flow_name:
                 logger.warning("Request to /api/flowdata/ missing 'flow' query parameter.")
-                return self.templates.TemplateResponse(
-                    "partials/flow_dependent_data.html",
-                    {"request": request, "criteria": [], "record_ids": []},
-                )
+                # Return specific error responses directly (decorator passes them through)
+                error_msg = "Missing 'flow' query parameter."
+                if "text/html" in accept_header:
+                     # Return the template directly for errors for now
+                     return self.templates.TemplateResponse(
+                         "partials/flow_dependent_data.html",  # Or an error partial
+                         {"request": request, "criteria": [], "record_ids": [], "error": error_msg},
+                         status_code=400,
+                     )
+                return JSONResponse(content={"error": error_msg}, status_code=400)
 
             try:
                 criteria = await DataService.get_criteria_for_flow(flow_name, self.flows)
                 record_ids = await DataService.get_records_for_flow(flow_name, self.flows)
-
-                # randomize the order
-                import random
+                # import random # Moved to top
                 random.shuffle(criteria)
 
-                logger.debug(f"Returning {len(criteria)} criteria options and {len(record_ids)} record options")
-
-                return self.templates.TemplateResponse(
-                    "partials/flow_dependent_data.html",
-                    {
-                        "request": request,
-                        "criteria": criteria,
-                        "record_ids": record_ids,
-                    },
-                )
+                logger.debug(f"Returning data for {len(criteria)} criteria options and {len(record_ids)} record options")
+                # Route returns data dict
+                return {
+                    "criteria": criteria,
+                    "record_ids": record_ids,
+                }
             except Exception as e:
                 logger.error(f"Error getting data for flow {flow_name}: {e}")
-                # Return debug template on error
-                import datetime
-                return self.templates.TemplateResponse(
-                    "partials/debug.html",
-                    {
-                        "request": request,
-                        "now": datetime.datetime.now(),
-                        "error": str(e),
-                    },
-                )
+                # Return specific error responses directly
+                error_content = {"error": f"Error getting data for flow {flow_name}: {e!s}"}
+                if "text/html" in accept_header:
+                     # Return debug template on error for now
+                     # import datetime # Moved to top
+                     return self.templates.TemplateResponse(
+                         "partials/debug.html",  # Or a dedicated error partial
+                         {
+                             "request": request,
+                             "now": datetime.datetime.now(),
+                             "error": error_content["error"],
+                         },
+                         status_code=500,
+                     )
+                return JSONResponse(content=error_content, status_code=500)
 
-        @self.router.get("/api/outcomes/", response_class=HTMLResponse)
-        async def get_outcomes(request: Request):
-            """Get outcomes data (predictions and scores) for HTMX replacement"""
+        @self.router.get("/api/outcomes/")
+        @self._negotiate_content("partials/outcomes_panel.html")
+        async def get_outcomes(self, request: Request):  # Add self
+            """Get outcomes data (predictions and scores).
+            Returns JSON by default or HTML if 'text/html' is accepted.
+            """
             session_id = request.query_params.get("session_id")
+            client_version = request.query_params.get("version", "0")  # For 304 check
+            accept_header = request.headers.get("accept", "")
+            logger.debug(f"Request received for /api/outcomes/ (Session: {session_id}, Accept: {accept_header})")
 
-            # Get client version to support conditional responses
-            client_version = request.query_params.get("version", "0")
-
-            # Use DataService to safely get session data with default values
             session_data = DataService.safely_get_session_data(self.websocket_manager, session_id or "")
-
-            # Initialize containers
             scores = {}
             pending_agents = session_data.get("pending_agents", [])
             current_version = "0"
 
-            # Check if we have a valid session with an outcomes version
             if session_id and session_id in self.websocket_manager.session_data:
-                # Get or create outcomes version
-                current_version = getattr(self.websocket_manager.session_data[session_id], "outcomes_version", "0") or "0"
+                session_state = self.websocket_manager.session_data[session_id]
+                current_version = getattr(session_state, "outcomes_version", "0") or "0"
 
-                # If client already has latest version, return 304 Not Modified
+                # Handle 304 Not Modified - return Response directly
                 if client_version == current_version:
+                    logger.debug(f"Client version {client_version} matches current {current_version}. Returning 304.")
                     return Response(status_code=304)
 
-                # Extract data from session messages if we have a valid session
-                if hasattr(self.websocket_manager.session_data[session_id], "messages"):
-                    # Get original Pydantic objects directly from message data
-                    original_messages = []
-                    for msg_data in self.websocket_manager.session_data[session_id].messages:
-                        if "original" in msg_data:
-                            original_messages.append(msg_data["original"])
-
-                    # Get scores and predictions using message service on the original objects
+                if hasattr(session_state, "messages"):
+                    original_messages = [msg_data["original"] for msg_data in session_state.messages if "original" in msg_data]
                     scores = MessageService.extract_scores_from_messages(original_messages)
 
-            # Return the template response with sanitized data
-            return self.templates.TemplateResponse(
-                "partials/outcomes_panel.html",
-                {"request": request, "scores": scores, "pending_agents": pending_agents},
-            )
+            # Return data dict for decorator
+            return {"scores": scores, "pending_agents": pending_agents}
 
-        @self.router.get("/api/history/", response_class=HTMLResponse)
-        async def get_run_history(request: Request):
-            """Get run history for a specific flow, criteria, and record using query parameters"""
+        @self.router.get("/api/history/")
+        @self._negotiate_content("partials/run_history.html")  # Apply decorator
+        async def get_run_history(self, request: Request):  # Add self
+            """Get run history for a specific flow, criteria, and record.
+            Returns JSON by default or HTML if 'text/html' is accepted.
+            """
             flow_name = request.query_params.get("flow")
             criteria = request.query_params.get("criteria")
             record_id = request.query_params.get("record_id")
+            accept_header = request.headers.get("accept", "")
+            logger.debug(f"Request received for /api/history/ (Flow: {flow_name}, Criteria: {criteria}, Record: {record_id} Accept: {accept_header})")
 
             if not flow_name or not criteria or not record_id:
                 logger.warning("Request to /api/history/ missing required query parameters.")
-                return self.templates.TemplateResponse(
-                    "partials/error.html",
-                    {"request": request, "error": "Missing required parameters: flow, criteria, and record_id"},
-                )
+                # Return specific error responses directly
+                error_msg = "Missing required parameters: flow, criteria, and record_id"
+                if "text/html" in accept_header:
+                    return self.templates.TemplateResponse(
+                        "partials/error.html",  # Assuming you have this
+                        {"request": request, "error": error_msg},
+                        status_code=400,
+                    )
+                return JSONResponse(content={"error": error_msg}, status_code=400)
 
-            # Get run history
             history = await DataService.get_run_history(flow_name, criteria, record_id, self.flows)
 
-            # If the results are empty
-            if not history:
-                return self.templates.TemplateResponse(
-                    "partials/empty_history.html",
-                    {"request": request},
-                )
+            # Handle empty history - return data dict, let template handle display
+            # Or return specific template if preferred for empty HTML?
+            # Let's return the data and let the main template handle empty case
+            # if not history and "text/html" in accept_header:
+            #     logger.debug("No history found, returning empty history partial.")
+            #     # If you want a specific template for empty HTML response:
+            #     return self.templates.TemplateResponse(
+            #         "partials/empty_history.html", # Assuming you have this
+            #         {"request": request},
+            #     )
 
-            return self.templates.TemplateResponse(
-                "partials/run_history.html",
-                {"request": request, "history": history},
-            )
+            # Return data dict for decorator
+            return {"history": history}
 
         @self.router.websocket("/ws/{session_id}")
         async def websocket_endpoint(websocket: WebSocket, session_id: str):
