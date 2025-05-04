@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 FlowRunner = Any
 
 from buttermilk.api.services.data_service import DataService
+from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 
 
@@ -24,6 +25,13 @@ async def get_flows(request: Request) -> FlowRunner:
     if flows is None:
         raise RuntimeError("FlowRunner not found in app.state.flows")
     return flows
+
+
+async def get_websocket_manager(request: Request):
+    manager = getattr(request.app.state, "websocket_manager", None)
+    if manager is None:
+        raise RuntimeError("WebSocketManager not found in app.state.websocket_manager")
+    return manager
 
 
 # --- Router ---
@@ -65,6 +73,44 @@ async def get_flows_endpoint(
     except Exception as e:
         logger.error(f"Error getting flows: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error retrieving flows")
+
+
+@flow_data_router.get("/api/outcomes")
+async def get_outcomes_endpoint(
+    request: Request,
+    websocket_manager: Annotated[Any, Depends(get_websocket_manager)],
+    templates: Annotated[Jinja2Templates, Depends(get_templates)],
+):
+    """Get outcomes data (predictions and scores).
+    Returns JSON by default or HTML if 'text/html' is accepted.
+    """
+    session_id = request.query_params.get("session_id")
+    client_version = request.query_params.get("version", "0")  # For 304 check
+    accept_header = request.headers.get("accept", "")
+    logger.debug(f"Request received for /api/outcomes/ (Session: {session_id}, Accept: {accept_header})")
+
+    session_data = DataService.safely_get_session_data(websocket_manager, session_id or "")
+    scores = {}
+    pending_agents = session_data.get("pending_agents", [])
+    current_version = "0"
+
+    if session_id and session_id in websocket_manager.session_data:
+        # Get the session data for this session
+        session = websocket_manager.session_data[session_id]
+        current_version = session.get("outcomes_version", "0") or "0"
+
+        # Handle 304 Not Modified - return Response directly
+        if client_version == current_version:
+            logger.debug(f"Client version {client_version} matches current {current_version}. Returning 304.")
+            return Response(status_code=304)
+
+        # Extract scores from messages if available
+        if "messages" in session:
+            scores = MessageService.extract_scores_from_messages(session["messages"])
+
+    # Prepare the context data for response
+    context_data = {"scores": scores, "pending_agents": pending_agents}
+    return await negotiate_response(request, context_data, "partials/outcomes_panel.html", templates)
 
 
 @flow_data_router.get("/api/flowinfo")

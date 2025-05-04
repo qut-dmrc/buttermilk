@@ -1,5 +1,6 @@
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import WebSocket
@@ -11,9 +12,15 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     TaskProgressUpdate,
 )
-from buttermilk.api.services.message_service import MessageService
+from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
 
+
+# Session data structure keys
+# - messages: list of message objects
+# - progress: dict with progress information
+# - callback: callable for sending messages back to the flow
+# - outcomes_version: string timestamp for version tracking
 
 class WebSocketManager:
     """Manages WebSocket connections and message handling"""
@@ -82,7 +89,7 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             try:
-                error_data = ErrorEvent(message=f"Failed to send message: {e!s}")
+                error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
                 await self.active_connections[session_id].send_json(error_data)
             except:
                 logger.error("Failed to send error message")
@@ -108,13 +115,13 @@ class WebSocketManager:
             else:
                 await self.send_message(
                     session_id,
-                    ErrorEvent(message=f"Unknown message type: {message_type}"),
+                    ErrorEvent(source="websocket_manager", content=f"Unknown message type: {message_type}"),
                 )
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             await self.send_message(
                 session_id,
-                ErrorEvent(message=f"Error processing message: {e!s}"),
+                ErrorEvent(source="websocket_manager", content=f"Error processing message: {e!s}"),
             )
 
     async def handle_run_flow(self, session_id: str, data: dict[str, Any], flow_runner) -> None:
@@ -133,30 +140,35 @@ class WebSocketManager:
             if not request.flow or not request.record_id:
                 await self.send_message(
                     session_id,
-                    ErrorEvent(message="Missing required fields: flow and record_id"),
+                    ErrorEvent(source="websocket_manager", content="Missing required fields: flow and record_id"),
                 )
                 return
 
             # Create run request
-            from buttermilk._core.types import RunRequest
+            parameters = {}
+
+            # Extract criteria from the original data if present
+            if "criteria" in data:
+                parameters["criteria"] = data["criteria"]
+
             run_request = RunRequest(
                 flow=request.flow,
                 record_id=request.record_id,
-                parameters=dict(criteria=request.criteria),
+                parameters=parameters,
                 client_callback=self.callback_to_ui(session_id),
                 session_id=session_id,
             )
 
             # Reset session data
-            self.session_data[session_id] = SessionData(
-                messages=[],
-                progress={"current_step": 0, "total_steps": 100, "status": "waiting"},
-                callback=None,
-                outcomes_version=None,
-            )
+            self.session_data[session_id] = {
+                "messages": [],
+                "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
+                "callback": None,
+                "outcomes_version": None,
+            }
 
             # Run the flow
-            self.session_data[session_id].callback = await flow_runner.run_flow(
+            self.session_data[session_id]["callback"] = await flow_runner.run_flow(
                 flow_name=request.flow,
                 run_request=run_request,
             )
@@ -165,7 +177,7 @@ class WebSocketManager:
             logger.error(f"Error starting flow: {e}")
             await self.send_message(
                 session_id,
-                ErrorEvent(message=f"Error starting flow: {e!s}"),
+                ErrorEvent(source="websocket_manager", content=f"Error starting flow: {e!s}"),
             )
 
     async def handle_user_input(self, session_id: str, data: dict[str, Any]) -> None:
@@ -181,28 +193,29 @@ class WebSocketManager:
             request = ManagerResponse(**data)
 
             session = self.session_data.get(session_id)
-            if not session or not session.callback:
+            if not session or not session.get("callback"):
                 await self.send_message(
                     session_id,
-                    ErrorEvent(message="No active flow to send message to"),
+                    ErrorEvent(source="websocket_manager", content="No active flow to send message to"),
                 )
                 return
 
-            await session.callback(request.message)
+            # Use the request directly as the message
+            await session["callback"](request)
 
             # Send message to client
             await self.send_message(
                 session_id,
                 {
                     "type": "message_sent",
-                    "message": request.message,
+                    "message": request,
                 },
             )
         except Exception as e:
             logger.error(f"Error handling user input: {e}")
             await self.send_message(
                 session_id,
-                ErrorEvent(message=f"Error handling user input: {e!s}"),
+                ErrorEvent(source="websocket_manager", content=f"Error handling user input: {e!s}"),
             )
 
     async def handle_confirm(self, session_id: str) -> None:
@@ -214,15 +227,15 @@ class WebSocketManager:
         """
         try:
             session = self.session_data.get(session_id)
-            if not session or not session.callback:
+            if not session or not session.get("callback"):
                 await self.send_message(
                     session_id,
-                    ErrorEvent(message="No active flow to confirm"),
+                    ErrorEvent(source="websocket_manager", content="No active flow to confirm"),
                 )
                 return
 
             message = ManagerResponse(confirm=True)
-            await session.callback(message)
+            await session["callback"](message)
 
             # Send confirmation to client
             await self.send_message(
@@ -235,62 +248,43 @@ class WebSocketManager:
             logger.error(f"Error handling confirm: {e}")
             await self.send_message(
                 session_id,
-                ErrorEvent(message=f"Error handling confirm: {e!s}"),
+                ErrorEvent(source="websocket_manager", content=f"Error handling confirm: {e!s}"),
             )
 
     async def send_formatted_message(self, session_id: str, message: Any) -> None:
-        """Process and send a message to the client with standardized format handling
+        """Process and send a message to the client
         
         Args:
             session_id: The session ID
             message: The message from the flow (a Pydantic object)
 
         """
-        # Format the message for the client using the MessageService
-        formatted_output = MessageService.format_message_for_client(message)
-
-        if not formatted_output:
+        if not message:
             return  # Skip empty messages
 
         try:
-            # Store message in session history - we store the original Pydantic object
-            # and the formatted output for frontend display
+            # Store only the original message in session history
             if session_id in self.session_data:
-                # Create a message data entry
+                # Create a message data entry with just the original message
                 message_data = {
-                    "content": formatted_output,
                     "type": type(message).__name__,
-                    "original": message,  # Store the original Pydantic object for direct access
+                    "message": message,  # Store the original object
                 }
-                self.session_data[session_id].messages.append(message_data)
+                self.session_data[session_id]["messages"].append(message_data)
 
                 # Update outcomes version for judge messages and score updates
                 from buttermilk.agents.evaluators.scorer import QualResults
                 from buttermilk.agents.judge import JudgeReasons
 
-                # Check the original message's outputs directly
+                # Check the message's outputs directly
                 if (hasattr(message, "outputs") and
                     (isinstance(message.outputs, JudgeReasons) or
                      isinstance(message.outputs, QualResults))):
                     # Generate a new version number (timestamp-based for uniqueness)
-                    self.session_data[session_id].outcomes_version = str(int(time.time() * 1000))
+                    self.session_data[session_id]["outcomes_version"] = str(int(time.time() * 1000))
 
-            # Send the message to the client
-            if isinstance(formatted_output, dict):
-                # Structured message data can be sent directly
-                logger.debug(f"Sending structured message of type: {formatted_output.get('type', 'unknown')}")
-                await self.send_message(session_id, formatted_output)
-            elif isinstance(formatted_output, str):
-                # Regular string content (usually HTML) needs to be wrapped as a chat message
-                await self.send_message(
-                    session_id,
-                    {
-                        "type": "chat_message",
-                        "content": formatted_output,
-                    },
-                )
-            else:
-                logger.warning(f"Unexpected output type from format_message_for_client: {type(formatted_output)}")
+            # Send the message directly to the client
+            await self.send_message(session_id, message)
 
         except Exception as e:
             logger.error(f"Error sending message to client: {e}")
@@ -298,7 +292,7 @@ class WebSocketManager:
             try:
                 await self.send_message(
                     session_id,
-                    ErrorEvent(message=f"Failed to process message: {e!s}"),
+                    ErrorEvent(source="websocket_manager", content=f"Failed to process message: {e!s}"),
                 )
             except:
                 logger.error("Failed to send error message to client")
@@ -322,65 +316,55 @@ class WebSocketManager:
             """
             # Send message to client if we have an active connection
             if session_id in self.active_connections:
-                await self.send_formatted_message(session_id, message)
+                # For TaskProgressUpdate, we need to update the progress tracking in session data
+                if isinstance(message, TaskProgressUpdate) and session_id in self.session_data:
+                    # Create progress data dictionary from the TaskProgressUpdate object directly
+                    progress_data = {
+                        "role": message.role,
+                        "step_name": message.step_name,
+                        "status": message.status,
+                        "message": message.message,
+                        "total_steps": message.total_steps,
+                        "current_step": message.current_step,
+                        "pending_agents": [],
+                    }
 
-            # Handle progress updates
-            if isinstance(message, TaskProgressUpdate) and session_id in self.active_connections:
-                # Create progress data dictionary
-                progress_data = {
-                    "role": message.role,
-                    "step_name": message.step_name,
-                    "status": message.status,
-                    "message": message.message,
-                    "total_steps": message.total_steps,
-                    "current_step": message.current_step,
-                    "pending_agents": [],
-                }
+                    # Update session data - add pending agents to the progress data
+                    if session_id in self.session_data:
+                        # Get existing progress data
+                        existing_progress = self.session_data[session_id]["progress"]
 
-                # Update session data - add pending agents to the progress data
-                if session_id in self.session_data:
-                    # Get existing progress data
-                    existing_progress = self.session_data[session_id].progress
+                        # Initialize pending agents list if it doesn't exist
+                        if "pending_agents" not in existing_progress:
+                            existing_progress["pending_agents"] = []
 
-                    # Initialize pending agents list if it doesn't exist
-                    if "pending_agents" not in existing_progress:
-                        existing_progress["pending_agents"] = []
+                        # Copy pending agents to new progress data
+                        progress_data["pending_agents"] = existing_progress.get("pending_agents", [])
 
-                    # Copy pending agents to new progress data
-                    progress_data["pending_agents"] = existing_progress.get("pending_agents", [])
+                        # Update pending agents based on status
+                        if message.status == "started" and message.role not in progress_data["pending_agents"]:
+                            progress_data["pending_agents"].append(message.role)
+                        elif message.status == "completed" and message.role in progress_data["pending_agents"]:
+                            progress_data["pending_agents"].remove(message.role)
 
-                    # Save pending_agents if a new agent starts working
-                    if message.status == "started" and message.role not in progress_data["pending_agents"]:
-                        progress_data["pending_agents"].append(message.role)
+                        # Update session data
+                        self.session_data[session_id]["progress"] = progress_data
 
-                    # Remove from pending list if the agent is the same as the current agent
-                    if message.status == "completed" and message.role in progress_data["pending_agents"]:
-                        progress_data["pending_agents"].remove(message.role)
-
-                    # Update session data
-                    self.session_data[session_id].progress = progress_data
-
-                # Create a ProgressUpdateEvent to send to the client
-                try:
+                    # Create and send a progress update event
                     update_event = {
                         "type": "progress_update",
                         "progress": progress_data,
                     }
                     await self.send_message(session_id, update_event)
-                except Exception as e:
-                    logger.error(f"Error sending progress update: {e}")
+                else:
+                    # For all other message types, just send them directly
+                    await self.send_formatted_message(session_id, message)
 
-            # Handle completion and interaction states
-            if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)) and session_id in self.active_connections:
-                await self.send_message(
-                    session_id,
-                    dict(state=type(message).__name__),
-                )
-
-                if isinstance(message, ManagerRequest):
+                # For special message types that indicate state changes, send an additional state notification
+                if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)):
                     await self.send_message(
                         session_id,
-                        message,
+                        dict(state=type(message).__name__),
                     )
 
         return callback
