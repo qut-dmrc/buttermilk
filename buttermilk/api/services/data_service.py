@@ -5,9 +5,9 @@ from buttermilk.bm import logger
 
 class FlowRunner(Protocol):
     """Protocol for FlowRunner to avoid circular imports"""
-    
+
     flows: dict[str, Any]
-    
+
     async def get_record_ids(self) -> list[dict[str, Any]]:
         ...
 
@@ -34,6 +34,25 @@ class DataService:
             return []
 
     @staticmethod
+    async def get_models_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
+        """Get models for a flow
+        
+        Args:
+            flow_name: The flow name
+            flow_runner: The flow runner instance
+            
+        Returns:
+            List[str]: The list of models
+
+        """
+        return ["lite", "full"]
+        try:
+            return list(flow_runner.flows[flow_name].parameters.get("model", []))
+        except Exception as e:
+            logger.warning(f"Error getting models for flow {flow_name}: {e}")
+            return []
+
+    @staticmethod
     async def get_records_for_flow(flow_name: str, flow_runner) -> list[str]:
         """Get records for a flow
         
@@ -42,14 +61,13 @@ class DataService:
             flow_runner: The flow runner instance
             
         Returns:
-            List[str]: The list of record IDs
+            List[dist[str, str]]: The list of record IDs and names.
 
         """
         try:
             record_mappings = await flow_runner.flows[flow_name].get_record_ids()
-            record_ids: list[str] = [r["record_id"] for r in record_mappings]
 
-            return record_ids
+            return record_mappings
         except Exception as e:
             logger.warning(f"Error getting records for flow {flow_name}: {e}")
             return []

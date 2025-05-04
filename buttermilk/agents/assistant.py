@@ -181,7 +181,7 @@ class AssistantAgentWrapper(Agent):
         # Add inner messages for debugging if needed
         # final_metadata["inner_messages"] = [msg.model_dump_json() for msg in getattr(response, 'inner_messages', [])]
 
-        return AgentTrace(
+        return AgentTrace(session_id=self.session_id,
             agent_info=self._cfg,
             outputs=output_data,
             metadata=final_metadata,

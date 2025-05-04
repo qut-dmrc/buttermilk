@@ -134,8 +134,9 @@ async def get_flowinfo_endpoint(
     try:
         criteria = await DataService.get_criteria_for_flow(flow, flows)
         record_ids = await DataService.get_records_for_flow(flow, flows)
+        models = await DataService.get_models_for_flow(flow, flows)
         logger.debug(f"Returning data for {len(criteria)} criteria options and {len(record_ids)} record options")
-        context_data = {"criteria": criteria, "record_ids": record_ids}
+        context_data = {"criteria": criteria, "record_ids": record_ids, "models": models}
         return await negotiate_response(request, context_data, "partials/flow_dependent_data.html", templates)
 
     except Exception as e:

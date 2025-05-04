@@ -241,6 +241,7 @@ class AgentTrace(FlowMessage):
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
     agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent (required)")
+    session_id: str = Field(..., description="Unique identifier for client session")
 
     # Tracing information and call metadata.
     call_info: TracingDetails = Field(default_factory=TracingDetails, exclude=True)
