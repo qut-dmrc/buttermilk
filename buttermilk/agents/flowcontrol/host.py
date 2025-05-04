@@ -201,14 +201,9 @@ class HostAgent(Agent):
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the total count of outstanding tasks reaches zero."""
-        # Removed initial check for self._total_outstanding_tasks == 0.
-        # Rely primarily on the event state to handle rapid task completion.
-
         # Check if the event is already set (e.g., tasks completed very quickly
         # or no tasks were ever started for the preceding step(s)).
         if self._all_tasks_complete_event.is_set():
-            # Re-verify the task count in case a new task started *just* after
-            # the event was set but before this check.
             if self._total_outstanding_tasks == 0:
                 logger.debug("All tasks complete (event is set and task count is 0).")
                 return
@@ -272,6 +267,9 @@ class HostAgent(Agent):
             if step.role == END:
                 logger.info("Host sequence finished. Waiting for final tasks before ending.")
                 break  # Exit the loop to perform final wait and send END
+
+            # Clear the flag so that we must have at least one completion to move forwards.
+            self._all_tasks_complete_event.clear()
 
             # --- Execute the current step ---
             logger.info(f"Host proceeding with step for role: {step.role}")
