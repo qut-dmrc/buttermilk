@@ -1,13 +1,22 @@
-from typing import Any
+from typing import Any, Protocol
 
 from buttermilk.bm import logger
+
+
+class FlowRunner(Protocol):
+    """Protocol for FlowRunner to avoid circular imports"""
+    
+    flows: dict[str, Any]
+    
+    async def get_record_ids(self) -> list[dict[str, Any]]:
+        ...
 
 
 class DataService:
     """Service for handling data-related operations"""
 
     @staticmethod
-    async def get_criteria_for_flow(flow_name: str, flow_runner: "FlowRunner") -> list[str]:
+    async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
         """Get criteria for a flow
         
         Args:
@@ -100,7 +109,7 @@ class DataService:
                 }
 
             # Ensure progress has all required fields with defaults
-            progress = session.progress if hasattr(session, "progress") and session.progress else {}
+            progress = session.get("progress", {})
             progress.setdefault("current_step", 0)
             progress.setdefault("total_steps", 100)
             progress.setdefault("status", "waiting")

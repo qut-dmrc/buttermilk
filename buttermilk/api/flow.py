@@ -159,7 +159,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         response = await call_next(request)
         return response
 
-    @self.router.websocket("/ws/{session_id}")
+    @flow_data_router.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """WebSocket endpoint for real-time communication"""
         manager: WebSocketManager = websocket.app.state.websocket_manager
@@ -262,23 +262,5 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
     # Set up static files
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-    # --- Import Shiny App object ---
-    from buttermilk.web.shiny import get_shiny_app
-
-    # --- Mount the Shiny App ---
-    shiny_app_asgi = get_shiny_app(flows=flows)
-    app.mount("/ui", shiny_app_asgi, name="shiny_app")
-
-    logger.info("Importing Dashboard app")
-
-    # --- Import Dashboard App object ---
-    from buttermilk.web.fastapi_frontend.app import create_dashboard_app
-
-    # --- Mount the Dashboard App ---
-    logger.info("Getting Dashboard app.")
-    dashboard_app = create_dashboard_app(flows=flows)
-    logger.info("Mounting Dashboard app.")
-    app.mount("/dash", dashboard_app, name="dashboard_app")
 
     return app
