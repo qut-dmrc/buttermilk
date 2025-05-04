@@ -11,6 +11,7 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     TaskProgressUpdate,
 )
+from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 from buttermilk.web.fastapi_frontend.schemas import (
     ErrorEvent as SchemaErrorEvent,
@@ -22,7 +23,6 @@ from buttermilk.web.fastapi_frontend.schemas import (
     UserInputRequest,
     WebSocketMessage,
 )
-from buttermilk.web.fastapi_frontend.services.message_service import MessageService
 
 
 class WebSocketManager:
@@ -263,6 +263,7 @@ class WebSocketManager:
         Args:
             session_id: The session ID
             message: The message from the flow (a Pydantic object)
+
         """
         # Format the message for the client using the MessageService
         formatted_output = MessageService.format_message_for_client(message)
@@ -271,7 +272,7 @@ class WebSocketManager:
             return  # Skip empty messages
 
         try:
-            # Store message in session history - we store the original Pydantic object 
+            # Store message in session history - we store the original Pydantic object
             # and the formatted output for frontend display
             if session_id in self.session_data:
                 # Create a message data entry
@@ -281,14 +282,14 @@ class WebSocketManager:
                     "original": message,  # Store the original Pydantic object for direct access
                 }
                 self.session_data[session_id].messages.append(message_data)
-                
+
                 # Update outcomes version for judge messages and score updates
                 from buttermilk.agents.evaluators.scorer import QualResults
                 from buttermilk.agents.judge import JudgeReasons
-                
+
                 # Check the original message's outputs directly
-                if (hasattr(message, "outputs") and 
-                    (isinstance(message.outputs, JudgeReasons) or 
+                if (hasattr(message, "outputs") and
+                    (isinstance(message.outputs, JudgeReasons) or
                      isinstance(message.outputs, QualResults))):
                     # Generate a new version number (timestamp-based for uniqueness)
                     self.session_data[session_id].outcomes_version = str(int(time.time() * 1000))
