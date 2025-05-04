@@ -24,6 +24,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     OOBMessages,
 )
+from buttermilk.web.messages import _format_message_for_client
 
 
 class WebUIAgent(RoutedAgent):
@@ -55,10 +56,9 @@ class WebUIAgent(RoutedAgent):
             message: The message to send
 
         """
-        if hasattr(message, "model_dump"):
-            message = message.model_dump()
-
-        await self.callback_to_ui(message)
+        message = _format_message_for_client(message)
+        if message:
+            await self.callback_to_ui(message)
 
     async def comms(self):
         # Monitor a websocket connection
