@@ -2,20 +2,30 @@ import asyncio
 import json
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import pydantic
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
+from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
 
+from .routes import flow_data_router
+
+# Define the base directory for the FastAPI app
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATES_DIR = BASE_DIR / "templates"
+STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
 
 
@@ -70,6 +80,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
+    app.state.websocket_manager = WebSocketManager()
 
     # Initialize batch runner
     logger.info("App state configured.")
@@ -117,7 +128,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             media_type="application/json",
         )
 
-
     # Set up CORS
     origins = [
         "http://localhost:5000",  # Frontend running on localhost:5000
@@ -148,6 +158,26 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         response = await call_next(request)
         return response
+
+    @self.router.websocket("/ws/{session_id}")
+    async def websocket_endpoint(websocket: WebSocket, session_id: str):
+        """WebSocket endpoint for real-time communication"""
+        manager: WebSocketManager = websocket.app.state.websocket_manager
+        flow_runner: FlowRunner = websocket.app.state.flow_runner
+
+        await manager.connect(websocket, session_id)
+
+        try:
+            # Listen for messages from the client
+            while True:
+                data = await websocket.receive_json()
+                await manager.process_message(session_id, data, flow_runner)
+
+        except WebSocketDisconnect:
+            manager.disconnect(session_id)
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+            await websocket.send_json({"type": "error", "message": str(e)})
 
     @app.websocket("/ws/{session_id}")
     async def agent_websocket(websocket: WebSocket, session_id: str):
@@ -224,6 +254,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         """
         return {"session_id": str(uuid.uuid4())}
+
+    # --- Add API data routes ---
+    # Set up templates
+    app.state.templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    app.include_router(flow_data_router)
+
+    # Set up static files
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     # --- Import Shiny App object ---
     from buttermilk.web.shiny import get_shiny_app

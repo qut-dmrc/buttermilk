@@ -13,16 +13,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
-from buttermilk.web.fastapi_frontend.schemas import (
-    ErrorEvent as SchemaErrorEvent,
-    FlowStartedEvent,
-    FlowStateChangeEvent,
-    RequiresConfirmationEvent,
-    RunFlowRequest,
-    SessionData,
-    UserInputRequest,
-    WebSocketMessage,
-)
 
 
 class WebSocketManager:
@@ -31,7 +21,7 @@ class WebSocketManager:
     def __init__(self):
         """Initialize the WebSocket manager"""
         self.active_connections: dict[str, WebSocket] = {}
-        self.session_data: dict[str, SessionData] = {}
+        self.session_data: dict[str, Any] = {}
 
     async def connect(self, websocket: WebSocket, session_id: str) -> None:
         """Accept a WebSocket connection and store it
@@ -43,7 +33,7 @@ class WebSocketManager:
         """
         await websocket.accept()
         self.active_connections[session_id] = websocket
-        self.session_data[session_id] = SessionData(
+        self.session_data[session_id] = dict(
             messages=[],
             progress={"current_step": 0, "total_steps": 100, "status": "waiting"},
             callback=None,
@@ -63,7 +53,7 @@ class WebSocketManager:
         if session_id in self.session_data:
             del self.session_data[session_id]
 
-    async def send_message(self, session_id: str, message: WebSocketMessage | dict[str, Any]) -> None:
+    async def send_message(self, session_id: str, message: Any | dict[str, Any]) -> None:
         """Send a message to a WebSocket connection
         
         Args:
@@ -92,8 +82,7 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             try:
-                error_message = SchemaErrorEvent(message=f"Failed to send message: {e!s}")
-                error_data = error_message.dict() if hasattr(error_message, "dict") else {"type": "error", "message": str(e)}
+                error_data = ErrorEvent(message=f"Failed to send message: {e!s}")
                 await self.active_connections[session_id].send_json(error_data)
             except:
                 logger.error("Failed to send error message")
@@ -119,13 +108,13 @@ class WebSocketManager:
             else:
                 await self.send_message(
                     session_id,
-                    SchemaErrorEvent(message=f"Unknown message type: {message_type}"),
+                    ErrorEvent(message=f"Unknown message type: {message_type}"),
                 )
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             await self.send_message(
                 session_id,
-                SchemaErrorEvent(message=f"Error processing message: {e!s}"),
+                ErrorEvent(message=f"Error processing message: {e!s}"),
             )
 
     async def handle_run_flow(self, session_id: str, data: dict[str, Any], flow_runner) -> None:
@@ -139,12 +128,12 @@ class WebSocketManager:
         """
         try:
             # Validate the request
-            request = RunFlowRequest(**data)
+            request = RunRequest(**data)
 
             if not request.flow or not request.record_id:
                 await self.send_message(
                     session_id,
-                    SchemaErrorEvent(message="Missing required fields: flow and record_id"),
+                    ErrorEvent(message="Missing required fields: flow and record_id"),
                 )
                 return
 
@@ -172,19 +161,11 @@ class WebSocketManager:
                 run_request=run_request,
             )
 
-            # Send confirmation
-            await self.send_message(
-                session_id,
-                FlowStartedEvent(
-                    flow=request.flow,
-                    record_id=request.record_id,
-                ),
-            )
         except Exception as e:
             logger.error(f"Error starting flow: {e}")
             await self.send_message(
                 session_id,
-                SchemaErrorEvent(message=f"Error starting flow: {e!s}"),
+                ErrorEvent(message=f"Error starting flow: {e!s}"),
             )
 
     async def handle_user_input(self, session_id: str, data: dict[str, Any]) -> None:
@@ -197,13 +178,13 @@ class WebSocketManager:
         """
         try:
             # Validate the request
-            request = UserInputRequest(**data)
+            request = ManagerResponse(**data)
 
             session = self.session_data.get(session_id)
             if not session or not session.callback:
                 await self.send_message(
                     session_id,
-                    SchemaErrorEvent(message="No active flow to send message to"),
+                    ErrorEvent(message="No active flow to send message to"),
                 )
                 return
 
@@ -221,7 +202,7 @@ class WebSocketManager:
             logger.error(f"Error handling user input: {e}")
             await self.send_message(
                 session_id,
-                SchemaErrorEvent(message=f"Error handling user input: {e!s}"),
+                ErrorEvent(message=f"Error handling user input: {e!s}"),
             )
 
     async def handle_confirm(self, session_id: str) -> None:
@@ -236,7 +217,7 @@ class WebSocketManager:
             if not session or not session.callback:
                 await self.send_message(
                     session_id,
-                    SchemaErrorEvent(message="No active flow to confirm"),
+                    ErrorEvent(message="No active flow to confirm"),
                 )
                 return
 
@@ -254,7 +235,7 @@ class WebSocketManager:
             logger.error(f"Error handling confirm: {e}")
             await self.send_message(
                 session_id,
-                SchemaErrorEvent(message=f"Error handling confirm: {e!s}"),
+                ErrorEvent(message=f"Error handling confirm: {e!s}"),
             )
 
     async def send_formatted_message(self, session_id: str, message: Any) -> None:
@@ -317,7 +298,7 @@ class WebSocketManager:
             try:
                 await self.send_message(
                     session_id,
-                    SchemaErrorEvent(message=f"Failed to process message: {e!s}"),
+                    ErrorEvent(message=f"Failed to process message: {e!s}"),
                 )
             except:
                 logger.error("Failed to send error message to client")
@@ -393,13 +374,13 @@ class WebSocketManager:
             if isinstance(message, (TaskProcessingComplete, ManagerRequest, ErrorEvent)) and session_id in self.active_connections:
                 await self.send_message(
                     session_id,
-                    FlowStateChangeEvent(state=type(message).__name__),
+                    dict(state=type(message).__name__),
                 )
 
                 if isinstance(message, ManagerRequest):
                     await self.send_message(
                         session_id,
-                        RequiresConfirmationEvent(),
+                        message,
                     )
 
         return callback

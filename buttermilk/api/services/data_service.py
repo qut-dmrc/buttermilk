@@ -1,6 +1,5 @@
 from typing import Any
 
-from buttermilk.api.flow import FlowRunner
 from buttermilk.bm import logger
 
 
@@ -8,7 +7,7 @@ class DataService:
     """Service for handling data-related operations"""
 
     @staticmethod
-    async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
+    async def get_criteria_for_flow(flow_name: str, flow_runner: "FlowRunner") -> list[str]:
         """Get criteria for a flow
         
         Args:
