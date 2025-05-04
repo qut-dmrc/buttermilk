@@ -74,13 +74,8 @@ class FlowRunner(BaseModel):
         callback = orchestrator._make_publish_callback()  # type: ignore
 
         # ======== MAJOR EVENT: FLOW STARTING ========
-        # Log detailed information about flow start with visual separators for visibility
-        logger.info("=" * 80)
-        logger.info(f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id})")
-        logger.info(f"📋 RunRequest: {run_request.model_dump_json(indent=2)}")
-        logger.info(f"⚙️ Source: {', '.join(run_request.source) if run_request.source else 'direct'}")
-        logger.info("✅ New flow instance created - all state has been reset")
-        logger.info("=" * 80)
+        # Log detailed information about flow start
+        logger.info(f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id}).\n📋 RunRequest: {run_request.model_dump_json(indent=2)}\n⚙️ Source: {', '.join(run_request.source) if run_request.source else 'direct'}\n✅ New flow instance created - all state has been reset")
 
         self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))  # type: ignore
 
