@@ -11,7 +11,14 @@ import json
 from typing import Any, Self
 
 import pydantic
-from google.cloud.pubsub import PublisherClient, SubscriberClient
+
+# Use the async subscriber client
+from google.cloud.pubsub_v1.publisher.client import Client as PublisherClient
+from google.cloud.pubsub_v1.subscriber.client import Client as SubscriberClient
+from google.cloud.pubsub_v1.subscriber.message import Message
+
+# Import FlowControl
+from google.cloud.pubsub_v1.types import FlowControl
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.batch import BatchJobStatus
@@ -41,7 +48,7 @@ class JobQueueClient(BaseModel):
     _status_subscription_path: str = PrivateAttr()
     _status_topic_path: str = PrivateAttr()
     _jobs_topic_path: str = PrivateAttr()
-    _subscription_future: asyncio.Future | None = PrivateAttr(default=None)
+    _subscription_future: Any | None = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
@@ -59,25 +66,32 @@ class JobQueueClient(BaseModel):
         return self
 
     async def pull_tasks(self):
-        # If we were initialised with a runner, set up the callback to process messages
+        """Starts the subscriber to listen for tasks using streaming pull."""
         if not self.flow_runner:
             return
 
-        logger.info(f"Started job worker processing. Listening for messages with {self._jobs_subscription_path} topic {self._jobs_topic_path}...")
-        while True:
-            if self.is_system_idle() and not self._processing.is_set():
-                try:
-                    self._processing.set()
-                    if messages := self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1):
-                        for job in messages.received_messages:
-                            task = asyncio.create_task(self._process_message(job))
-                except Exception as e:
-                    self._processing.clear()
-                    logger.error(f"Error pulling pub/sub message: {e}")
+        # Configure FlowControl to only handle one message at a time
+        flow_control = FlowControl(max_messages=1)
 
-            await asyncio.sleep(1)
+        logger.info(f"Starting job worker. Listening on {self._jobs_subscription_path}...")
 
-    def publish_job(self, job: RunRequest) -> str:
+        try:
+            # Start the subscription
+            self._subscription_future = self._subscriber.subscribe(
+                self._jobs_subscription_path,
+                callback=self._process_message_callback,
+                flow_control=flow_control,
+            )
+
+            logger.info(f"Subscriber started for {self._jobs_subscription_path}.")
+        except asyncio.CancelledError:
+            logger.info("Subscription cancelled.")
+        except Exception as e:
+            logger.error(f"Subscription error: {e}")
+        finally:
+            logger.info("Subscription stopped.")
+
+    async def publish_job(self, job: RunRequest) -> str:
         """Publish a job request to the queue.
         
         Args:
@@ -87,13 +101,8 @@ class JobQueueClient(BaseModel):
             The published message ID
 
         """
-        # Convert job to JSON
         job_data = job.model_dump()
-
-        # Add the job type for routing
         job_data["type"] = "job_request"
-
-        # Publish to the jobs topic
         message_data = json.dumps(job_data).encode("utf-8")
         future = self._publisher.publish(self._jobs_topic_path, message_data)
         message_id = future.result()
@@ -101,7 +110,7 @@ class JobQueueClient(BaseModel):
         logger.info(f"Published job {job.batch_id}:{job.record_id} to Pub/Sub (ID: {message_id}, topic: {self._jobs_topic_path})")
         return message_id
 
-    def publish_status_update(self,
+    async def publish_status_update(self,
                               batch_id: str,
                               record_id: str,
                               status: BatchJobStatus,
@@ -118,7 +127,6 @@ class JobQueueClient(BaseModel):
             The published message ID
 
         """
-        # Create status update data
         status_data = {
             "type": "job_status",
             "batch_id": batch_id,
@@ -129,7 +137,6 @@ class JobQueueClient(BaseModel):
         if error:
             status_data["error"] = error
 
-        # Publish to the status topic
         message_data = json.dumps(status_data).encode("utf-8")
         future = self._publisher.publish(self._status_topic_path, message_data)
         message_id = future.result()
@@ -137,87 +144,71 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _process_message(self, message):
-        """Process a message from the Pub/Sub queue.
-        
-        Args:
-            message: The Pub/Sub message containing the job details
-
-        """
-        ack_id = None
+    async def _process_message_callback(self, message: Message):
+        """Async callback to process a message received from Pub/Sub."""
         try:
-            # Parse the message data
-            if hasattr(message, "message"):
-                ack_id = message.ack_id
-                message = message.message
+            if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
+                logger.debug(f"System busy or max jobs ({self._active_jobs}) reached. Nacking message {message.message_id}.")
+                await message.nack()
+                return
+
             data = json.loads(message.data.decode("utf-8"))
 
-            # Only process job requests
             if data.get("type") != "job_request":
-                logger.warning(f"Ignoring message with type {data.get('type')}")
-                if ack_id:
-                    self._subscriber.acknowledge(ack_ids=[ack_id])
-                else:
-                    message.ack()
+                logger.warning(f"Ignoring message {message.message_id} with type {data.get('type')}")
+                await message.ack()
                 return
 
-            # Check if we can take on another job
-            if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
-                # We're not idle or at max capacity, nack the message so it gets redelivered
-                logger.debug("System busy, not processing job now")
-                if not ack_id:
-                    message.nack()
-                return
-
-            # Mark the system as processing
-            self._processing.set()
             self._active_jobs += 1
+            logger.debug(f"Starting job processing. Active jobs: {self._active_jobs}")
 
-            # Create a RunRequest object from the message data
             try:
                 run_request = RunRequest.model_validate(data)
-
             except Exception as e:
-                logger.error(f"Error creating RunRequest from message: {e}")
-                # message.ack()  # Don't retry if the message is malformed
-                self._processing.clear()
+                logger.error(f"Error creating RunRequest from message {message.message_id}: {e}")
+                await message.ack()
                 self._active_jobs -= 1
+                logger.debug(f"Job validation failed. Active jobs: {self._active_jobs}")
+                return
 
-            logger.info(f"Processing job {run_request.batch_id}:{run_request.record_id}")
+            logger.info(f"Processing job {run_request.batch_id}:{run_request.record_id} from message {message.message_id}")
 
-            # Run the job asynchronously
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._run_job(run_request, message))
-            # Publish a status update: job is running
+            await message.ack()
+            logger.debug(f"Acknowledged message {message.message_id}")
+
             self.publish_status_update(
                 batch_id=run_request.batch_id,
                 record_id=run_request.record_id,
                 status=BatchJobStatus.RUNNING,
             )
-            if ack_id:
-                self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
-            else:
-                message.ack()
+
+            await self._run_job(run_request)
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            if not ack_id:
-                message.nack()  # Retry the message
+            logger.error(f"Error processing message {message.message_id}: {e}", exc_info=True)
+            try:
+                if self._active_jobs > 0 and "run_request" not in locals():
+                    self._active_jobs -= 1
+                await message.nack()
+                logger.warning(f"Nacked message {message.message_id} due to processing error.")
+            except Exception as nack_e:
+                logger.error(f"Failed to nack message {message.message_id} after error: {nack_e}")
+        finally:
+            if "run_request" in locals():
+                self._active_jobs -= 1
+                logger.debug(f"Finished job processing. Active jobs: {self._active_jobs}")
 
     def stop(self):
         """Stop the job worker daemon."""
-        if not self.running:
-            logger.warning("Job worker is not running")
+        if not self._subscription_future:
+            logger.warning("Job worker subscription not active or already stopped.")
             return
 
-        logger.info("Stopping job worker daemon")
-        self.running = False
-
-        if self._subscription_future:
+        logger.info("Stopping job worker subscription...")
+        if self._subscription_future and not self._subscription_future.done():
             self._subscription_future.cancel()
-
-        if self._subscriber:
-            self._subscriber.close()
+        self._subscription_future = None
+        logger.info("Job worker stopped.")
 
     def is_system_idle(self) -> bool:
         """Check if the system is idle and can process jobs.
@@ -229,27 +220,19 @@ class JobQueueClient(BaseModel):
             True if the system is idle, False otherwise
 
         """
-        # Get activity tracker instance
         activity_tracker = get_activity_tracker()
-
-        # System is idle if both:
-        # 1. The activity tracker says it's idle (no active websockets/API requests)
-        # 2. The job queue itself is not processing anything
         return activity_tracker.is_idle()
 
-    async def _run_job(self, run_request: RunRequest, message):
+    async def _run_job(self, run_request: RunRequest):
         """Run a job and update its status.
-        
+
         Args:
             run_request: The RunRequest to execute
-            message: The original Pub/Sub message
 
         """
         try:
-            # Run the flow directly with the request
             result = await self.flow_runner.run_flow(run_request)
 
-            # Publish success status update
             self.publish_status_update(
                 batch_id=run_request.batch_id,
                 record_id=run_request.record_id,
@@ -259,9 +242,8 @@ class JobQueueClient(BaseModel):
             logger.info(f"Job {run_request.batch_id}:{run_request.record_id} completed successfully")
 
         except Exception as e:
-            logger.error(f"Error running job {run_request.batch_id}:{run_request.record_id}: {e}")
+            logger.error(f"Error running job {run_request.batch_id}:{run_request.record_id}: {e}", exc_info=True)
 
-            # Publish failure status update
             self.publish_status_update(
                 batch_id=run_request.batch_id,
                 record_id=run_request.record_id,

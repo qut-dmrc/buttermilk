@@ -1,10 +1,8 @@
 import asyncio
-import json
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import pydantic
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -12,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.websocket_service import WebSocketManager
@@ -161,10 +158,17 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
     @flow_data_router.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
-        """WebSocket endpoint for real-time communication"""
+        """WebSocket endpoint for client communication with the WebUIAgent.
+        
+        Args:
+            websocket: WebSocket connection
+            session_id: Unique identifier for this client session
+
+        """
         manager: WebSocketManager = websocket.app.state.websocket_manager
         flow_runner: FlowRunner = websocket.app.state.flow_runner
 
+        # Accept the connection first
         await manager.connect(websocket, session_id)
 
         try:
@@ -174,64 +178,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 await manager.process_message(session_id, data, flow_runner)
 
         except WebSocketDisconnect:
-            manager.disconnect(session_id)
+            logger.info(f"Client {session_id} disconnected.")
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
-            await websocket.send_json({"type": "error", "message": str(e)})
+            logger.error(f"Error receiving/processing client message for {session_id}: {e}")
 
-    @app.websocket("/ws/{session_id}")
-    async def agent_websocket(websocket: WebSocket, session_id: str):
-        """WebSocket endpoint for client communication with the WebUIAgent.
-        
-        Args:
-            websocket: WebSocket connection
-            session_id: Unique identifier for this client session
-
-        """
-        # Accept the connection first
-        await websocket.accept()
-        client_listener_task = None
-        try:
-            # Start the flow, passing in our websocket and session_id
-            # Wait for client message
-            while True:
-                client_message = await websocket.receive_json()
-                try:
-                    run_request = RunRequest.model_validate(client_message)
-                    run_request.client_callback = websocket
-                    run_request.session_id = session_id
-                    break
-                except (pydantic.ValidationError, json.JSONDecodeError):
-                    await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start.").model_dump())
-
-            agent_callback = await app.state.flow_runner.run_flow(run_request)
-
-            async def listen_client():
-                """Task to listen for incoming messages from the client."""
-                while True:
-                    try:
-                        incoming_data = await websocket.receive_json()
-                        # Forward data to the running flow via the handler
-                        await agent_callback(incoming_data)
-                    except WebSocketDisconnect:
-                        logger.info(f"Client {session_id} disconnected.")
-                        # Optionally signal the flow task to stop if needed
-                        # if flow_task_handle:
-                        #     flow_task_handle.cancel()
-                        break  # Exit loop on disconnect
-                    except Exception as e:
-                        logger.error(f"Error receiving/processing client message for {session_id}: {e}")
-                        # Decide if you want to break or continue
-                        # break # Exit loop on other errors
-
-            client_listener_task = asyncio.create_task(listen_client())
-
-            await client_listener_task
-
-        except WebSocketDisconnect:
-            logger.info("Client disconnected")
-        except Exception as e:
-            logger.error(f"Unexpected error: {e!s}")
             try:
                 await websocket.send_json({
                     "type": "error",
@@ -241,8 +191,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             except:
                 pass
         finally:
-            if client_listener_task and not client_listener_task.done():
-                client_listener_task.cancel()
+            manager.disconnect(session_id)
 
     # Helper route to generate session IDs for clients
     @app.get("/api/session")

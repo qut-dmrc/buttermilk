@@ -125,7 +125,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
 
                 # Yield one or more outputs
                 yield AgentTrace(
-                    source=self.id,
+                    source=self.id,session_id=self.session_id,
                     content=result_content,
                     outputs=result_outputs,
                     records=input_data.records, # Pass through records if needed

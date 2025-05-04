@@ -14,6 +14,7 @@ from autogen_core import (
     message_handler,
 )
 from fastapi import WebSocketDisconnect
+from pydantic import BaseModel
 
 from buttermilk import logger
 from buttermilk._core.contract import (
@@ -32,7 +33,7 @@ class WebUIAgent(RoutedAgent):
     It handles message routing in both directions.
     """
 
-    def __init__(self, client_callback: Any, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
+    def __init__(self, callback_to_ui: Any, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
         """Initialize the WebUIAgent.
         
         Args:
@@ -42,18 +43,31 @@ class WebUIAgent(RoutedAgent):
         super().__init__(description=description)
         self._topic_id = DefaultTopicId(type=MANAGER)
         logger.debug(f"WebUIAgent initialized with topic ID: {self._topic_id}")
-        self.callback_to_ui = client_callback
+        self.callback_to_ui = callback_to_ui
+
         self.session_id = session_id
         self.task = asyncio.create_task(self.comms())
 
+    async def send_to_ui(self, message: BaseModel | dict):
+        """Send a message to the UI via the websocket.
+
+        Args:
+            message: The message to send
+
+        """
+        if hasattr(message, "model_dump"):
+            message = message.model_dump()
+
+        await self.callback_to_ui(message)
+
     async def comms(self):
-        # Register a new WebSocket connection from a client.
-        # await self.callback_to_ui.accept()
-        logger.info(f"WebSocket connection registered for session {self.session_id}")
+        # Monitor a websocket connection
+        logger.info(f"WebSocket connection received by agent {self.id} for session {self.session_id}")
 
         # Optionally send a welcome message
         welcome_msg = {"type": "system", "content": "Connected to WebUIAgent", "session_id": self.session_id}
-        await self.callback_to_ui(welcome_msg)
+
+        await self.send_to_ui(welcome_msg)
 
         # Main communication loop
         while True:
@@ -64,7 +78,7 @@ class WebUIAgent(RoutedAgent):
                 break
             except Exception as e:
                 logger.error(f"Error in web ui: {e}")
-                await self.callback_to_ui(ErrorEvent(source="web runner", content=f"Error: {e!s}"))
+                await self.send_to_ui(ErrorEvent(source="web runner", content=f"Error: {e!s}"))
 
     # ===== Autogen Message Handlers =====
     @message_handler
@@ -82,7 +96,7 @@ class WebUIAgent(RoutedAgent):
         """
         logger.debug(f"WebUIAgent received group chat message: {type(message).__name__}")
 
-        await self.callback_to_ui(message)
+        await self.send_to_ui(message)
 
     @message_handler
     async def handle_control_message(

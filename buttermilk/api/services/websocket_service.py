@@ -1,6 +1,5 @@
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import WebSocket
@@ -12,15 +11,16 @@ from buttermilk._core.contract import (
     TaskProcessingComplete,
     TaskProgressUpdate,
 )
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
-
 
 # Session data structure keys
 # - messages: list of message objects
 # - progress: dict with progress information
 # - callback: callable for sending messages back to the flow
 # - outcomes_version: string timestamp for version tracking
+
 
 class WebSocketManager:
     """Manages WebSocket connections and message handling"""
@@ -76,9 +76,7 @@ class WebSocketManager:
             # Convert to dict if it's a Pydantic model
             if not isinstance(message, dict):
                 if hasattr(message, "model_dump"):  # Pydantic v2
-                    message_data = message.model_dump()
-                elif hasattr(message, "dict"):  # Pydantic v1 compatibility
-                    message_data = message.dict()
+                    message_data = message.model_dump(mode="json")
                 else:
                     # Convert to dict for JSON serialization
                     message_data = {"content": str(message), "type": "unknown"}
@@ -135,7 +133,7 @@ class WebSocketManager:
         """
         try:
             # Validate the request
-            request = RunRequest(**data)
+            request = RunRequest(session_id=session_id, **data)
 
             if not request.flow or not request.record_id:
                 await self.send_message(
@@ -150,12 +148,14 @@ class WebSocketManager:
             # Extract criteria from the original data if present
             if "criteria" in data:
                 parameters["criteria"] = data["criteria"]
+            else:
+                raise ProcessingError("You must add criteria params to the run request.")
 
             run_request = RunRequest(
                 flow=request.flow,
                 record_id=request.record_id,
                 parameters=parameters,
-                client_callback=self.callback_to_ui(session_id),
+                callback_to_ui=self.callback_to_ui(session_id),
                 session_id=session_id,
             )
 

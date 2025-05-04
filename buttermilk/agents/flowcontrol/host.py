@@ -201,15 +201,23 @@ class HostAgent(Agent):
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the total count of outstanding tasks reaches zero."""
-        if self._total_outstanding_tasks == 0:
-            logger.debug("No outstanding tasks to wait for.")
-            return
+        # Removed initial check for self._total_outstanding_tasks == 0.
+        # Rely primarily on the event state to handle rapid task completion.
 
-        # Check if the event is already set (e.g., tasks completed very quickly)
+        # Check if the event is already set (e.g., tasks completed very quickly
+        # or no tasks were ever started for the preceding step(s)).
         if self._all_tasks_complete_event.is_set():
-            logger.debug("All tasks already complete (event is set).")
-            return
+            # Re-verify the task count in case a new task started *just* after
+            # the event was set but before this check.
+            if self._total_outstanding_tasks == 0:
+                logger.debug("All tasks complete (event is set and task count is 0).")
+                return
+            # This scenario implies the event was set (tasks hit 0), but a new task
+            # started immediately after. Clear the event again and proceed to wait.
+            logger.warning("Completion event was set, but new tasks were found. Re-clearing event and waiting.")
+            self._all_tasks_complete_event.clear()
 
+        # If we reach here, the event is not set (or was re-cleared), so we wait.
         try:
             logger.debug(f"Waiting for {self._total_outstanding_tasks} outstanding task(s) to complete...")
             await asyncio.wait_for(self._all_tasks_complete_event.wait(), timeout=self.max_wait_time)

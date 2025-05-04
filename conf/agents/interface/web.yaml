@@ -3,4 +3,4 @@ manager:
   name: "👔 Manager"
   agent_obj: WebUIAgent
   description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
-  extra_params: ["client_callback", "session_id"]
+  extra_params: ["callback_to_ui", "session_id"]

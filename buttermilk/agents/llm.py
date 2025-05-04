@@ -205,7 +205,7 @@ class LLMAgent(Agent):
             An AgentTrace message containing the processed results and metadata.
 
         """
-        output = AgentTrace(
+        output = AgentTrace(session_id=self.session_id,
             agent_info=self._cfg,  # Include agent information
             inputs=inputs,
             messages=messages,  # Messages sent to LLM
