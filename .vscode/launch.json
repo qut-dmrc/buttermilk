@@ -99,7 +99,7 @@
         "hydra.verbose=false",
         "+flows=trans",
         "ui=api",
-        "llms=full",
+        "llms=lite",
         "name=bmdevelopment",
         "job=api",
         //"+record_id=${input:query}" // Will prompt for query
@@ -141,7 +141,7 @@
         "hydra.verbose=false",
         "+flows=[trans,hate,ffa,simple]",
         "ui=slackbot",
-        "llms=full",
+        "llms=lite",
         "++name=automod",
         "++job=development"
       ],  

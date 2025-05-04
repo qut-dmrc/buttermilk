@@ -183,7 +183,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                     run_request.session_id = session_id
                     break
                 except (pydantic.ValidationError, json.JSONDecodeError):
-                    await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start."))
+                    await websocket.send_json(ErrorEvent(source="fastapi flow websocket", content="Send a valid RunRequest to start.").model_dump())
 
             agent_callback = await app.state.flow_runner.run_flow(run_request)
 

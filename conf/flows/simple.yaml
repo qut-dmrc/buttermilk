@@ -3,6 +3,7 @@ defaults:
   - /data: tja_train 
   - /agents:
     - judge
+    - synth
   - /agents@observers:
     - scorer
     - host/sequencer
