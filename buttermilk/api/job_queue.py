@@ -64,7 +64,7 @@ class JobQueueClient(BaseModel):
         if not self.flow_runner:
             return
 
-        logger.info("Started job worker processing. Listening for messages with {self._jobs_subscription_path} topic {self._jobs_topic_path}...")
+        logger.info(f"Started job worker processing. Listening for messages with {self._jobs_subscription_path} topic {self._jobs_topic_path}...")
         while True:
             if self.is_system_idle() and not self._processing.is_set():
                 try:

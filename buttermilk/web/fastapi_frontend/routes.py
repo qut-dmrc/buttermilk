@@ -90,19 +90,6 @@ class DashboardRoutes:
                 {"request": request},
             )
 
-        @self.router.get("/api/flows")
-        @self._negotiate_content("partials/flow_options.html")
-        async def get_flows(self, request: Request):
-            """Get all available flows.
-
-            Returns:
-                JSON by default or HTML if 'text/html' is accepted.
-
-            """
-            logger.debug(f"Request received for /api/flows (Accept: {request.headers.get('accept', '')})")
-            flow_choices = list(self.flows.flows.keys())
-            return {"flow_choices": flow_choices}
-
         @self.router.get("/api/debug/", response_class=HTMLResponse)  # Keep this as HTML only
         async def get_debug(self, request: Request):
             """Debug endpoint to test template rendering"""
@@ -111,59 +98,6 @@ class DashboardRoutes:
                 "partials/debug.html",
                 {"request": request, "now": datetime.datetime.now()},
             )
-
-        @self.router.get("/api/flowdata/")
-        @self._negotiate_content("partials/flow_dependent_data.html")  # Apply decorator
-        async def get_flowinfo(self, request: Request):  # Add self
-            """Get criteria options and records for a specific flow.
-            Returns JSON by default or HTML if 'text/html' is accepted.
-            """
-            flow_name = request.query_params.get("flow")
-            accept_header = request.headers.get("accept", "")  # Needed for error handling below
-            logger.info(f"Flow data request received for flow: {flow_name} (Accept: {accept_header})")
-
-            if not flow_name:
-                logger.warning("Request to /api/flowdata/ missing 'flow' query parameter.")
-                # Return specific error responses directly (decorator passes them through)
-                error_msg = "Missing 'flow' query parameter."
-                if "text/html" in accept_header:
-                     # Return the template directly for errors for now
-                     return self.templates.TemplateResponse(
-                         "partials/flow_dependent_data.html",  # Or an error partial
-                         {"request": request, "criteria": [], "record_ids": [], "error": error_msg},
-                         status_code=400,
-                     )
-                return JSONResponse(content={"error": error_msg}, status_code=400)
-
-            try:
-                criteria = await DataService.get_criteria_for_flow(flow_name, self.flows)
-                record_ids = await DataService.get_records_for_flow(flow_name, self.flows)
-                # import random # Moved to top
-                random.shuffle(criteria)
-
-                logger.debug(f"Returning data for {len(criteria)} criteria options and {len(record_ids)} record options")
-                # Route returns data dict
-                return {
-                    "criteria": criteria,
-                    "record_ids": record_ids,
-                }
-            except Exception as e:
-                logger.error(f"Error getting data for flow {flow_name}: {e}")
-                # Return specific error responses directly
-                error_content = {"error": f"Error getting data for flow {flow_name}: {e!s}"}
-                if "text/html" in accept_header:
-                     # Return debug template on error for now
-                     # import datetime # Moved to top
-                     return self.templates.TemplateResponse(
-                         "partials/debug.html",  # Or a dedicated error partial
-                         {
-                             "request": request,
-                             "now": datetime.datetime.now(),
-                             "error": error_content["error"],
-                         },
-                         status_code=500,
-                     )
-                return JSONResponse(content=error_content, status_code=500)
 
         @self.router.get("/api/outcomes/")
         @self._negotiate_content("partials/outcomes_panel.html")
@@ -237,22 +171,6 @@ class DashboardRoutes:
             # Return data dict for decorator
             return {"history": history}
 
-        @self.router.websocket("/ws/{session_id}")
-        async def websocket_endpoint(websocket: WebSocket, session_id: str):
-            """WebSocket endpoint for real-time communication"""
-            await self.websocket_manager.connect(websocket, session_id)
-
-            try:
-                # Listen for messages from the client
-                while True:
-                    data = await websocket.receive_json()
-                    await self.websocket_manager.process_message(session_id, data, self.flows)
-
-            except WebSocketDisconnect:
-                self.websocket_manager.disconnect(session_id)
-            except Exception as e:
-                logger.error(f"WebSocket error: {e}")
-                await websocket.send_json({"type": "error", "message": str(e)})
 
     def get_router(self) -> APIRouter:
         """Get the router instance
