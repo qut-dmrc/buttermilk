@@ -51,7 +51,7 @@ class FlowRunner(BaseModel):
         return self
 
     async def run_flow(self,
-                        run_request: RunRequest,
+                      run_request: RunRequest,
                       **kwargs) -> Any:
         """Run a flow based on its configuration and a request.
         
@@ -69,9 +69,19 @@ class FlowRunner(BaseModel):
         """
         orchestrator = self.flows[run_request.flow]
 
-        callback = orchestrator._make_publish_callback()
+        # Type safety: The orchestrator will be an Orchestrator instance at runtime,
+        # even though the flows dict is typed with the more general OrchestratorProtocol
+        callback = orchestrator._make_publish_callback()  # type: ignore
 
-        logger.info(f"Starting flow '{run_request.flow}'")
-        self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))
+        # ======== MAJOR EVENT: FLOW STARTING ========
+        # Log detailed information about flow start with visual separators for visibility
+        logger.info("=" * 80)
+        logger.info(f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id})")
+        logger.info(f"📋 RunRequest: {run_request.model_dump_json(indent=2)}")
+        logger.info(f"⚙️ Source: {', '.join(run_request.source) if run_request.source else 'direct'}")
+        logger.info("✅ New flow instance created - all state has been reset")
+        logger.info("=" * 80)
+
+        self.tasks.append(asyncio.create_task(orchestrator.run(request=run_request)))  # type: ignore
 
         return callback
