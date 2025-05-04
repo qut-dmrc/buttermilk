@@ -41,8 +41,7 @@ class JobQueueClient(BaseModel):
     _status_subscription_path: str = PrivateAttr()
     _status_topic_path: str = PrivateAttr()
     _jobs_topic_path: str = PrivateAttr()
-    _processing: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    _subscription_future: Any = PrivateAttr()
+    _subscription_future: asyncio.Future | None = PrivateAttr(default=None)
 
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
