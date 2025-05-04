@@ -24,11 +24,11 @@
 {% endmacro %}
 
 {# Custom filter to strip leading/trailing whitespace from each line and remove blank lines #}
-{% filter strip_all(s) %}
+{% macro strip_all(s) %}
   {%- for line in s.split('\n') -%}
     {%- set stripped_line = line | trim -%}
     {%- if stripped_line -%}
       {{ stripped_line }}
     {%- endif -%}
   {%- endfor -%}
-{% endfilter %}
+{% endmacro %}
