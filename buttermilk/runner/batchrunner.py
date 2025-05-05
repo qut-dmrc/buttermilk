@@ -125,7 +125,7 @@ class BatchRunner(BaseModel):
                 # Publish to queue if available
                 if use_queue and self.job_queue is not None:
                     try:
-                        await self.job_queue.publish_job(job)
+                        self.job_queue.publish_job(job)
                         published_to_queue = True
                     except Exception as e:
                         msg = f"Failed to publish job to queue: {e}"

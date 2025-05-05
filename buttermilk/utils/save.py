@@ -243,7 +243,7 @@ async def upload_rows_async(rows, *, schema=None, dataset=None, save_dest: SaveI
     errors = [error for sublist in results for error in sublist]  # Flatten list of lists
 
     if not errors:
-        logger.debug(
+        logger.info(
             f"Successfully pushed {len(bq_rows)} rows asynchronously to BigQuery table {dataset}.",
         )
     else:

@@ -156,15 +156,11 @@ class LLMScorer(LLMAgent):
         score_fn = self.__call__
 
         # Call the LLMScorer._process method with the prepared input.
-        if public_callback is not None and message_callback is not None:
-            score_output: AgentTrace = await score_fn(
-                message=scorer_agent_input,
-                public_callback=public_callback,
-                message_callback=message_callback,
-            )
-        else:
-            logger.error(f"Scorer {self.agent_id}: Missing required callbacks, cannot proceed with scoring")
-            return
+        score_output: AgentTrace = await score_fn(
+            message=scorer_agent_input,
+            public_callback=public_callback,
+            message_callback=message_callback,
+        )
 
         # Tie the score to the original answer
         score_output.parent_call_id = message.call_id
@@ -183,7 +179,4 @@ class LLMScorer(LLMAgent):
             score_output.outputs = score
 
             # Publish the score back to the system using the provided callback.
-            if public_callback is not None:
-                await public_callback(score_output)
-            else:
-                logger.error(f"Scorer {self.agent_id}: Cannot publish score, public_callback is None")
+            await public_callback(score_output)

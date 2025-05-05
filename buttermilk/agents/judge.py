@@ -13,8 +13,6 @@ from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 from buttermilk.agents.reasoning import Reasons
 from buttermilk.bm import logger  # Global Buttermilk instance and logger
 
-# Utility imports
-# TODO: Confirm these utils are necessary here or only in LLMAgent/templating.py
 
 
 # --- Pydantic Models ---

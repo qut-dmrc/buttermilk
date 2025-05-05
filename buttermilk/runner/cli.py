@@ -13,7 +13,6 @@ Supported UI modes:
 
 import asyncio
 import os
-import threading
 
 import hydra
 import uvicorn
@@ -21,6 +20,7 @@ from omegaconf import DictConfig  # Import DictConfig for type hinting
 
 from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import create_app
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
@@ -133,17 +133,14 @@ def main(cfg: DictConfig) -> None:
 
         case "pub/sub":
             # Start a listener for Google Cloud Pub/Sub messages.
-            # TODO: Implementation details of start_pubsub_listener are missing here.
-            #       Requires documentation within buttermilk/api/pubsub.py.
-            # TODO: Running the listener in a separate thread might complicate error handling and shutdown.
-            #       Consider asyncio-native approaches if possible, depending on the listener implementation.
-            from buttermilk.api.pubsub import start_pubsub_listener
 
-            bm.logger.info("Starting Pub/Sub listener...")
-            listener_thread = threading.Thread(target=start_pubsub_listener, daemon=True)  # Use daemon thread?
-            listener_thread.start()
-            # Keep the main thread alive (or manage the lifecycle differently)
-            listener_thread.join()  # Or implement a more graceful shutdown mechanism.
+            worker = JobQueueClient(
+                flow_runner=flow_runner,
+                max_concurrent_jobs=1,
+            )
+            logger.info("Started job worker in FastAPI application")
+            asyncio.run(worker.pull_tasks())
+
             bm.logger.info("Pub/Sub listener stopped.")
 
         case "slackbot":
