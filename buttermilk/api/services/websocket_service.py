@@ -107,7 +107,9 @@ class WebSocketManager:
             elif message_type == "confirm":
                 await self.handle_confirm(session_id)
             elif message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":
-                await self.session_data[session_id]["callback"](message)
+                if self.session_data[session_id]["callback"]:
+                    await self.session_data[session_id]["callback"](message)
+                # Otherwise, ignore; we're not in a flow.
             else:
                 await self.send_message(
                     session_id,
