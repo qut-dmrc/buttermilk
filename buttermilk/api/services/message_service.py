@@ -41,8 +41,12 @@ class MessageService:
         try:
             if isinstance(message, (AgentTrace, AgentResponse)):
                 # Repackage
+                if isinstance(message.outputs, Record):
+                    message_type = "record"
+                else:
+                    message_type = "chat_message"
                 output = ChatMessage(message_id=message.call_id,
-                    type="chat_message",
+                    type=message_type,
                     content=message.content,
                     outputs=message.outputs,
                     timestamp=message.timestamp,
