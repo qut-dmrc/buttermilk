@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import Any
+from typing import Any, Union
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
@@ -86,7 +86,9 @@ class HostAgent(Agent):
     ) -> None:
         """Initialize the agent."""
         self._input_callback = input_callback
-        self._all_tasks_complete_event.set()  # Initially set (no tasks active)
+        # Event starts set (no tasks outstanding)
+        self._all_tasks_complete_event = asyncio.Event()
+        self._all_tasks_complete_event.set()
         self._participants_set_event.clear()  # Participants not set yet
         self._step_generator = self._sequence()
         self._exploration_path = []
@@ -111,7 +113,8 @@ class HostAgent(Agent):
         """Listen to messages in the group chat and maintain conversation history."""
         # Log messages to our local context cache, but truncate them
         content_to_log = None
-        msg_type = UserMessage  # Default to user message unless specified otherwise
+        # Allow both UserMessage and AssistantMessage types
+        msg_type: type[Union[UserMessage, AssistantMessage]] = UserMessage
 
         if isinstance(message, (AgentTrace, ConductorResponse)):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
@@ -169,14 +172,11 @@ class HostAgent(Agent):
                     f"Interrupt added '{interrupt_role}' task. "
                     f"Outstanding tasks incremented to {self._total_outstanding_tasks}.",
                 )
-                # Clear the completion event to pause the flow
-                if self._all_tasks_complete_event.is_set():
-                    self._all_tasks_complete_event.clear()
-                    logger.debug("Cleared completion event due to interrupt.")
+                # No event management needed here.
 
                 # Send a progress update indicating the pause, associated with the MANAGER role
                 await self._send_progress_update(
-                    role=interrupt_role,
+                    role=interrupt_role,  # Ensure role is passed
                     status="paused",
                     message="Workflow paused by interrupt signal. Waiting for resume signal.",
                     # Progress remains at the current step's level
@@ -226,15 +226,13 @@ class HostAgent(Agent):
 
         elif isinstance(message, TaskProcessingStarted):
             role = message.role
+            # Only need to increment the counter
             self._total_outstanding_tasks += 1
             logger.debug(
                 f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. "
                 f"{self._total_outstanding_tasks} total outstanding tasks.",
             )
-
-            # If tasks become outstanding, clear the completion event
-            if self._total_outstanding_tasks > 0:
-                self._all_tasks_complete_event.clear()
+            # Event is cleared in _run_flow before step execution if needed
 
             # Send a progress update that a task has started for the current step context
             await self._send_progress_update(
@@ -308,27 +306,14 @@ class HostAgent(Agent):
             return await self._wait_for_user(step)
 
     async def _wait_for_all_tasks_complete(self) -> None:
-        """Wait until the _all_tasks_complete_event is set.
-
-        The event is set by _handle_events when _total_outstanding_tasks reaches zero.
-        In _run_flow, the event is cleared before executing a step if no tasks
-        were outstanding, ensuring this method waits for completion signals
-        from the agents triggered by that step.
-
-        Raises:
-            FatalError: If the wait times out.
-
-        """
-        # Only wait if the event is not already set.
-        # This handles cases where tasks completed extremely quickly
-        # between _execute_step and this call, or if the previous
-        # state already indicated completion.
+        """Wait until the _all_tasks_complete_event is set."""
+        # The event is cleared in _run_flow before executing a step that requires waiting.
+        # It is set in _handle_events when the task counter reaches zero.
         if not self._all_tasks_complete_event.is_set():
             try:
                 logger.debug(
                     f"Waiting for tasks completion event ({self._total_outstanding_tasks} outstanding)...",
                 )
-                # Wait for the event to be set by _handle_events
                 await asyncio.wait_for(self._all_tasks_complete_event.wait(), timeout=self.max_wait_time)
                 logger.debug("Tasks completion event received.")
             except TimeoutError as e:
@@ -341,17 +326,7 @@ class HostAgent(Agent):
                 self._all_tasks_complete_event.set()
                 raise FatalError(msg) from e
         else:
-             # If the event was already set, log it. This might happen if tasks
-             # finished instantly or if called when no tasks were expected.
-             logger.debug("Tasks completion event was already set upon entry.")
-
-        # Sanity check: After waiting or skipping wait, the task count should ideally be zero.
-        if self._total_outstanding_tasks > 0:
-            logger.warning(
-                f"Completion event is set, but {self._total_outstanding_tasks} tasks are still marked outstanding. "
-                "Possible state inconsistency or race condition in task reporting.",
-            )
-        # No need to return anything
+            logger.debug("Tasks completion event was already set (or no wait was required).")
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute based on participants.
@@ -411,14 +386,16 @@ class HostAgent(Agent):
                 logger.info("Host sequence finished. Waiting for final tasks before ending.")
                 break  # Exit the loop to perform final wait and send END
 
-            # Clear the flag so that we must have at least one completion to move forwards.
-            # Do this *before* executing the step, in case the step completes instantly.
-            if self._total_outstanding_tasks == 0:
+            # Clear the event before executing the step if it's not a control step.
+            # This ensures we wait for completion signals related to this step.
+            if step.role not in (END, WAIT):
                 self._all_tasks_complete_event.clear()
-                logger.debug("Cleared completion event before step execution (no outstanding tasks).")
+                logger.debug(f"Cleared completion event before step: {step.role}")
+                await self._wait_for_user(step) # Also includes user wait if human_in_loop=True
+            # else: No need to wait for user or clear event for WAIT/END steps
 
-            if step.role != WAIT:
-                await self._wait_for_user(step)
+            # --- Execute the current step ---
+            logger.info(f"Host proceeding with step for role: {step.role}")
 
             # --- Execute the current step ---
             logger.info(f"Host proceeding with step for role: {step.role}")
@@ -456,10 +433,7 @@ class HostAgent(Agent):
         if step.role in (END, WAIT):  # Use 'in' for multiple comparisons
             logger.debug(f"Skipping execution for control step: {step.role}")
             self._current_step_name = step.role  # Still note the step name
-            # Ensure completion event is set if we are just waiting or ending,
-            # but only if no tasks are outstanding.
-            if self._total_outstanding_tasks == 0 and not self._all_tasks_complete_event.is_set():
-                self._all_tasks_complete_event.set()
+            # No event management needed here for Condition approach
             return
 
         logger.info(f"Host executing step for role: {step.role}")
@@ -561,7 +535,8 @@ class HostAgent(Agent):
         self._participants_set_event.clear()  # Reset participants event
         # Re-initialize the step generator (will wait for participants again).
         self._step_generator = self._sequence()
-        # Set completion event to ready state.
+        # Re-initialize event and set it
+        self._all_tasks_complete_event = asyncio.Event()
         self._all_tasks_complete_event.set()
         # Clear user feedback list
         self._user_feedback = []
