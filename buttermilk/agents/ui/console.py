@@ -234,7 +234,7 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> None:
         """Displays messages received from other agents on the console."""
-        logger.info(f"{self.agent_id} received message from {source} via _listen.")
+        logger.debug(f"{self.agent_id} received message from {source} via _listen.")
         # Format and display the message using the helper function.
         if msg_markdown := self._fmt_msg(message, source=source):
             self._console.print(msg_markdown)
@@ -247,7 +247,7 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band messages, displaying relevant ones."""
-        logger.info(f"{self.agent_id} received OOB message from {source}: {type(message).__name__}")
+        logger.debug(f"{self.agent_id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
         # AgentTrace isn't technically OOB, but might arrive here in some flows? Included defensively.
         displayable_types = (AgentTrace, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
