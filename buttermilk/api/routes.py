@@ -8,7 +8,6 @@ from fastapi.templating import Jinja2Templates
 FlowRunner = Any
 
 from buttermilk.api.services.data_service import DataService
-from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 
 
@@ -90,7 +89,6 @@ async def get_outcomes_endpoint(
     logger.debug(f"Request received for /api/outcomes/ (Session: {session_id}, Accept: {accept_header})")
 
     session_data = DataService.safely_get_session_data(websocket_manager, session_id or "")
-    scores = {}
     pending_agents = session_data.get("pending_agents", [])
     current_version = "0"
 
@@ -104,12 +102,8 @@ async def get_outcomes_endpoint(
             logger.debug(f"Client version {client_version} matches current {current_version}. Returning 304.")
             return Response(status_code=304)
 
-        # Extract scores from messages if available
-        if "messages" in session:
-            scores = MessageService.extract_scores_from_messages(session["messages"])
-
     # Prepare the context data for response
-    context_data = {"scores": scores, "pending_agents": pending_agents}
+    context_data = {"pending_agents": pending_agents}
     return await negotiate_response(request, context_data, "partials/outcomes_panel.html", templates)
 
 

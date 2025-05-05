@@ -562,7 +562,7 @@ OOBMessages = Union[
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentTrace,
-    ToolOutput,
+    ToolOutput, AgentResponse,
     AgentInput,
     Record,
 ]

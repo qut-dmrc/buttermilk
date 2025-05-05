@@ -210,7 +210,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 display_name = f"{display_name}: {request.record_id}"
             display_name = f"{display_name} {bm.run_info.run_id}"
 
-            langfuse_context.update_current_trace(name=display_name,
+            langfuse_context.update_current_trace(name=display_name.strip(),
                 metadata=tracing_attributes,
                 session_id=self.session_id,
             )
