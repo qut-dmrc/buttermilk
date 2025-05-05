@@ -18,7 +18,6 @@ from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger
 from buttermilk.runner.flowrunner import FlowRunner
-from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
 
 
 class JobQueueClient(BaseModel):
@@ -59,24 +58,28 @@ class JobQueueClient(BaseModel):
 
         return self
 
-    async def pull_tasks(self):
-        # If we were initialised with a runner, set up the callback to process messages
+    async def pull_tasks(self) -> None:
+        """Continuously pull tasks from Pub/Sub when the system is idle."""
         if not self.flow_runner:
+            logger.warning("JobQueueClient initialized without a FlowRunner. Cannot pull tasks.")
             return
 
-        logger.info(f"Started job worker processing. Listening for messages with {self._jobs_subscription_path} topic {self._jobs_topic_path}...")
+        logger.info(f"Started job worker processing. Listening for messages on {self._jobs_subscription_path}...")
         while True:
             if self.is_system_idle() and not self._processing.is_set():
                 try:
-                    self._processing.set()
-                    if messages := self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1):
-                        for job in messages.received_messages:
-                            task = asyncio.create_task(self._process_message(job))
+                    response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1, return_immediately=True)
+                    if response.received_messages:
+                        self._processing.set()
+                        message = response.received_messages[0]
+                        _ = asyncio.create_task(self._process_message(message))
                 except Exception as e:
-                    self._processing.clear()
-                    logger.error(f"Error pulling pub/sub message: {e}")
+                    logger.error(f"Error pulling pub/sub message: {e}", exc_info=True)
+                    if self._processing.is_set():
+                        self._processing.clear()
+                    await asyncio.sleep(5)
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(self.idle_check_interval)
 
     def publish_job(self, job: RunRequest) -> str:
         """Publish a job request to the queue.
@@ -88,13 +91,8 @@ class JobQueueClient(BaseModel):
             The published message ID
 
         """
-        # Convert job to JSON
         job_data = job.model_dump()
-
-        # Add the job type for routing
         job_data["type"] = "job_request"
-
-        # Publish to the jobs topic
         message_data = json.dumps(job_data).encode("utf-8")
         future = self._publisher.publish(self._jobs_topic_path, message_data)
         message_id = future.result()
@@ -119,7 +117,6 @@ class JobQueueClient(BaseModel):
             The published message ID
 
         """
-        # Create status update data
         status_data = {
             "type": "job_status",
             "batch_id": batch_id,
@@ -130,7 +127,6 @@ class JobQueueClient(BaseModel):
         if error:
             status_data["error"] = error
 
-        # Publish to the status topic
         message_data = json.dumps(status_data).encode("utf-8")
         future = self._publisher.publish(self._status_topic_path, message_data)
         message_id = future.result()
@@ -138,134 +134,124 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _process_message(self, message):
-        """Process a message from the Pub/Sub queue.
-        
-        Args:
-            message: The Pub/Sub message containing the job details
+    async def _process_message(self, message: Any) -> None:
+        """Parse and dispatch a single message from the Pub/Sub queue."""
+        ack_id = message.ack_id
+        message_data = message.message.data
+        message_obj = message
 
-        """
-        ack_id = None
         try:
-            # Parse the message data
-            if hasattr(message, "message"):
-                ack_id = message.ack_id
-                message = message.message
-            data = json.loads(message.data.decode("utf-8"))
+            data = json.loads(message_data.decode("utf-8"))
 
-            # Only process job requests
             if data.get("type") != "job_request":
-                logger.warning(f"Ignoring message with type {data.get('type')}")
-                if ack_id:
-                    self._subscriber.acknowledge(ack_ids=[ack_id])
-                else:
-                    message.ack()
+                logger.warning(f"Ignoring message with non-'job_request' type: {data.get('type')}")
+                try:
+                    self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
+                    logger.debug(f"Acked non-job_request message (ack_id: {ack_id})")
+                except Exception as ack_err:
+                    logger.error(f"Failed to ack non-job message (ack_id: {ack_id}): {ack_err}")
+                self._processing.clear()
                 return
 
-            # Check if we can take on another job
             if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
-                # We're not idle or at max capacity, nack the message so it gets redelivered
-                logger.debug("System busy, not processing job now")
-                if not ack_id:
-                    message.nack()
+                logger.info(f"System busy (Idle: {self.is_system_idle()}, Active Jobs: {self._active_jobs}/{self.max_concurrent_jobs}). Not processing job now (ack_id: {ack_id}). Message will be redelivered.")
+                self._processing.clear()
                 return
 
-            # Mark the system as processing
-            self._processing.set()
             self._active_jobs += 1
+            logger.debug(f"Incremented active jobs to {self._active_jobs} for job from message (ack_id: {ack_id})")
 
-            # Create a RunRequest object from the message data
             try:
                 run_request = RunRequest.model_validate(data)
+                if not run_request.job_id:
+                    run_request.job_id = ack_id
+            except pydantic.ValidationError as e:
+                logger.error(f"Validation error creating RunRequest from message (ack_id: {ack_id}): {e}. Message data: {data}")
+                try:
+                    self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
+                    logger.warning(f"Acked malformed message (ack_id: {ack_id})")
+                except Exception as ack_err:
+                    logger.error(f"Failed to ack malformed message (ack_id: {ack_id}): {ack_err}")
 
-            except Exception as e:
-                logger.error(f"Error creating RunRequest from message: {e}")
-                # message.ack()  # Don't retry if the message is malformed
+                if self._active_jobs > 0:
+                    self._active_jobs -= 1
                 self._processing.clear()
-                self._active_jobs -= 1
+                logger.debug(f"Decremented active jobs to {self._active_jobs} after malformed message (ack_id: {ack_id}).")
+                return
 
-            logger.info(f"Processing job {run_request.batch_id}:{run_request.record_id}")
+            logger.info(f"Processing job {run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Job ID: {run_request.job_id})")
 
-            # Run the job asynchronously
             loop = asyncio.get_running_loop()
-            loop.create_task(self._run_job(run_request, message))
-            # Publish a status update: job is running
+            loop.create_task(self._run_job(run_request, ack_id))
+
             self.publish_status_update(
-                batch_id=run_request.batch_id,
-                record_id=run_request.record_id,
+                batch_id=run_request.batch_id or "N/A",
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.RUNNING,
             )
-            if ack_id:
-                self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
-            else:
-                message.ack()
 
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            if not ack_id:
-                message.nack()  # Retry the message
-
-    def stop(self):
-        """Stop the job worker daemon."""
-        if not self.running:
-            logger.warning("Job worker is not running")
-            return
-
-        logger.info("Stopping job worker daemon")
-        self.running = False
-
-        if self._subscription_future:
-            self._subscription_future.cancel()
-
-        if self._subscriber:
-            self._subscriber.close()
+            logger.error(f"Error processing message envelope (ack_id: {ack_id}): {e}", exc_info=True)
+            if self._active_jobs > 0:
+                self._active_jobs -= 1
+                logger.warning(f"Decremented active jobs to {self._active_jobs} due to top-level processing error (ack_id: {ack_id}).")
+            self._processing.clear()
+            logger.warning(f"Cleared processing flag due to top-level error (ack_id: {ack_id}).")
 
     def is_system_idle(self) -> bool:
-        """Check if the system is idle and can process jobs.
-        
-        Checks both the ActivityTracker to see if there are any active
-        user sessions, and the job queue's own idle status.
-        
-        Returns:
-            True if the system is idle, False otherwise
-
-        """
-        # Get activity tracker instance
+        """Check if the system is idle (no active user sessions)."""
+        from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
         activity_tracker = get_activity_tracker()
-
-        # System is idle if both:
-        # 1. The activity tracker says it's idle (no active websockets/API requests)
-        # 2. The job queue itself is not processing anything
         return activity_tracker.is_idle()
 
-    async def _run_job(self, run_request: RunRequest, message):
-        """Run a job and update its status.
-        
-        Args:
-            run_request: The RunRequest to execute
-            message: The original Pub/Sub message
+    async def _run_job(self, run_request: RunRequest, ack_id: str) -> None:
+        """Run a job, update its status, and acknowledge the message upon success."""
+        assert self.flow_runner is not None, "FlowRunner must be initialized to run jobs"
 
-        """
+        job_desc = f"{run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Job ID: {run_request.job_id})"
+
         try:
-            # Run the flow directly with the request
+            logger.debug(f"Starting flow execution for job {job_desc}")
             result = await self.flow_runner.run_flow(run_request)
+            logger.debug(f"Flow execution finished for job {job_desc}. Result type: {type(result)}")
 
-            # Publish success status update
             self.publish_status_update(
-                batch_id=run_request.batch_id,
-                record_id=run_request.record_id,
+                batch_id=run_request.batch_id or "N/A",
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.COMPLETED,
             )
 
-            logger.info(f"Job {run_request.batch_id}:{run_request.record_id} completed successfully")
+            logger.info(f"Job {job_desc} completed successfully")
+
+            try:
+                self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
+                logger.debug(f"Acknowledged job {job_desc} using ack_id")
+            except Exception as ack_error:
+                logger.error(
+                    f"Failed to acknowledge message for job {job_desc}: {ack_error}",
+                    exc_info=True,
+                )
 
         except Exception as e:
-            logger.error(f"Error running job {run_request.batch_id}:{run_request.record_id}: {e}")
+            logger.error(f"Error running job {job_desc}: {e}", exc_info=True)
 
-            # Publish failure status update
             self.publish_status_update(
-                batch_id=run_request.batch_id,
-                record_id=run_request.record_id,
+                batch_id=run_request.batch_id or "N/A",
+                record_id=run_request.record_id or "N/A",
                 status=BatchJobStatus.FAILED,
                 error=str(e),
             )
+
+        finally:
+            if self._active_jobs > 0:
+                self._active_jobs -= 1
+            else:
+                logger.warning(f"Attempted to decrement active_jobs below zero for job {job_desc}. State might be inconsistent.")
+
+            if self._active_jobs == 0:
+                self._processing.clear()
+                logger.debug("Cleared processing flag as active jobs reached 0.")
+            else:
+                logger.debug(f"Processing flag remains set. Active jobs: {self._active_jobs}")
+
+            logger.debug(f"Finished _run_job for {job_desc}. Active jobs: {self._active_jobs}")
