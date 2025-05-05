@@ -15,12 +15,15 @@ from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from pydantic import BaseModel, Field, PrivateAttr
 
 # Buttermilk core imports
-from buttermilk._core.agent import Agent, AgentInput, AgentResponse, AgentTrace  # Base agent and message types
+from buttermilk._core.agent import Agent  # Base agent and message types
 from buttermilk._core.contract import (
+    AgentInput,
+    AgentResponse,
+    AgentTrace,
     # TODO: Review necessary contract types for this base class
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
-    )
+)
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
 from buttermilk._core.types import Record  # Data record type
@@ -305,8 +308,8 @@ class LLMAgent(Agent):
             # Create an error output
             error_output = ErrorEvent(source=self.agent_id, content=msg)
             # Wrap in AgentResponse
-            return AgentResponse(
-                metadata={"error": True, "source": self.agent_id},
+            return AgentResponse(agent_id=self.agent_id,
+                metadata={"error": True},
                 outputs=error_output,
             )
             raise template_error
@@ -328,8 +331,8 @@ class LLMAgent(Agent):
             logger.error(msg)
             error_output = ErrorEvent(source=self.agent_id, content=msg)
             # Wrap in AgentResponse
-            return AgentResponse(
-                metadata={"error": True, "source": self.agent_id},
+            return AgentResponse(agent_id=self.agent_id,
+                metadata={"error": True},
                 outputs=error_output,
             )
             # Depending on severity, might want to raise
@@ -346,7 +349,7 @@ class LLMAgent(Agent):
         trace.metadata.update({"role": self.role, "name": self.name})
 
         # 4. Wrap the trace in an AgentResponse
-        response = AgentResponse(
+        response = AgentResponse(agent_id=self.agent_id,
             metadata=trace.metadata,
             outputs=trace.outputs,
         )

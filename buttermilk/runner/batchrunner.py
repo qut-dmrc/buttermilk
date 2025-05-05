@@ -20,6 +20,7 @@ from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import logger
 from buttermilk.runner.batch_helper import BatchRunnerHelper
 from buttermilk.runner.flowrunner import FlowRunner
+from buttermilk.utils.utils import expand_dict
 
 
 class BatchRunner(BaseModel):
@@ -82,6 +83,9 @@ class BatchRunner(BaseModel):
             logger.error(f"Failed to extract record IDs for flow '{batch_request.flow}': {e}")
             raise ValueError(f"Failed to extract record IDs: {e}")
 
+        # Iterate batch parameters when asked (otherwise uses flow defaults configured on the runner)
+        iteration_values = expand_dict(batch_request.parameters) or [{}]
+
         # Shuffle if requested
         if batch_request.shuffle:
             random.shuffle(record_ids)
@@ -107,29 +111,31 @@ class BatchRunner(BaseModel):
         # Check if we can use the job queue
         use_queue = self.job_queue is not None
 
-        for record in record_ids:
-            job = RunRequest(
-                batch_id=batch_metadata.id,
-                flow=batch_request.flow,
-                record_id=record["record_id"],
-                parameters=batch_request.parameters,
-            )
-            job_definitions.append(job)
+        # Apply iteration values
+        for iteration_params in iteration_values:
+            for record in record_ids:
+                job = RunRequest(
+                    batch_id=batch_metadata.id,
+                    flow=batch_request.flow,
+                    record_id=record["record_id"],
+                    parameters=iteration_params,
+                )
+                job_definitions.append(job)
 
-            # Publish to queue if available
-            if use_queue and self.job_queue is not None:
-                try:
-                    await self.job_queue.publish_job(job)
-                    published_to_queue = True
-                except Exception as e:
-                    msg = f"Failed to publish job to queue: {e}"
-                    use_queue = False  # Fall back to local processing
-                    raise FatalError(msg) from e
+                # Publish to queue if available
+                if use_queue and self.job_queue is not None:
+                    try:
+                        await self.job_queue.publish_job(job)
+                        published_to_queue = True
+                    except Exception as e:
+                        msg = f"Failed to publish job to queue: {e}"
+                        use_queue = False  # Fall back to local processing
+                        raise FatalError(msg) from e
 
         # Store batch metadata
         self._active_batches[batch_metadata.id] = batch_metadata
 
-        logger.info(f"Created batch '{batch_metadata.id}' with {len(job_definitions)} jobs (published to queue)")
+        logger.info(f"Created batch '{batch_metadata.id}' with {len(job_definitions)} jobs using params {batch_request.parameters} (published to queue: {published_to_queue})")
 
         return batch_metadata
 

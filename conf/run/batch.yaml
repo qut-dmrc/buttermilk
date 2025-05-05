@@ -1,5 +1,8 @@
 # Batch execution configuration
-
+defaults:
+  # ... other defaults
+  - /flows/criteria@batch.parameters.criteria: 
+    - trans 
 # Set UI mode to batch
 ui: batch
 

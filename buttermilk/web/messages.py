@@ -283,14 +283,14 @@ def _format_message_for_client(message: Any) -> dict[str, Any] | str | None:
     if isinstance(message.outputs, QualResults):
         logger.debug(f"Detected score message from: {message.agent_info.name}")
         if message.parent_call_id in message_scores:
-            logger.debug(f"Sending score update with agent={message.outputs.agent_id}, assessor={message.outputs.assessor}")
+            logger.debug(f"Sending score update with agent={message.outputs.assessed_agent_id}, assessor={message.outputs.assessor}")
             # Store the QualResults directly
             message_scores[message.parent_call_id].append(message.outputs)
 
             # Always use the direct structured format for frontend updates
             return {
                 "type": "score_update",
-                "agent_id": message.outputs.agent_id,
+                "agent_id": message.outputs.assessed_agent_id,
                 "assessor": message.outputs.assessor,
                 "score_data": {
                     "correctness": message.outputs.correctness,

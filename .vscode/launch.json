@@ -40,8 +40,8 @@
       "args": [
         "ui=batch",
         "+run=batch",
-        "+flow=simple",
-        "llms=lite",
+        "+flow=trans",
+        "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
