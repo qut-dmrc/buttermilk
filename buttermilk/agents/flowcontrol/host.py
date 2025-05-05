@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import Any, Union
+from typing import Any
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
@@ -41,8 +41,8 @@ class HostAgent(Agent):
     until all agents that have started processing a task have reported completion.
     """
 
-    _input_callback: Callable[..., Awaitable[None]] | None = PrivateAttr(default=None)
-    _pending_agent_id: str | None = PrivateAttr(default=None)  # Track agent waiting for signal
+    _input_callback: Callable[..., Awaitable[None]] = PrivateAttr()
+    _pending_agent_id: str = PrivateAttr()  # Track agent waiting for signal
 
     _output_model: type[BaseModel] | None = StepRequest
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
@@ -114,7 +114,7 @@ class HostAgent(Agent):
         # Log messages to our local context cache, but truncate them
         content_to_log = None
         # Allow both UserMessage and AssistantMessage types
-        msg_type: type[Union[UserMessage, AssistantMessage]] = UserMessage
+        msg_type: type[UserMessage | AssistantMessage] = UserMessage
 
         if isinstance(message, (AgentTrace, ConductorResponse)):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
@@ -391,8 +391,9 @@ class HostAgent(Agent):
             if step.role not in (END, WAIT):
                 self._all_tasks_complete_event.clear()
                 logger.debug(f"Cleared completion event before step: {step.role}")
-                await self._wait_for_user(step) # Also includes user wait if human_in_loop=True
-            # else: No need to wait for user or clear event for WAIT/END steps
+                await self._wait_for_user(step)  # Also includes user wait if human_in_loop=True
+            elif step.role == WAIT:
+                await asyncio.sleep(5)  # Wait for a short period before checking again
 
             # --- Execute the current step ---
             logger.info(f"Host proceeding with step for role: {step.role}")
@@ -443,15 +444,6 @@ class HostAgent(Agent):
         # Pass empty list if _records doesn't exist
         records = getattr(self, "_records", [])
         message = StepRequest(role=step.role, content=message_content, records=records)
-
-        if not self._input_callback:
-            logger.error(
-                f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: "
-                "_input_callback is not set.",
-            )
-            # If publish fails, we might deadlock if agents were expected.
-            # Consider raising an error or specific handling. For now, just log.
-            return
 
         try:
             logger.debug(f"Host {self.agent_id} publishing StepRequest for role {step.role}...")
