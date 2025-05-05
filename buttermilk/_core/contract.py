@@ -100,7 +100,7 @@ class FlowMessage(BaseModel):
         return bool(self.error)
 
     def set_error(self, error_msg: str) -> None:
-        """Appends an error message to the error list."""
+        """Append an error message to the error list."""
         if not isinstance(self.error, list):  # Ensure error is a list
             self.error = []
         if error_msg:
@@ -209,6 +209,7 @@ class AgentInput(FlowMessage):
 
 class StepRequest(AgentInput):
     """Represents a request, typically from a Conductor agent, to execute a specific step in the flow.
+
     Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
 
     Attributes:
@@ -238,6 +239,7 @@ class StepRequest(AgentInput):
 
 class AgentResponse(BaseModel):
     """Standard response format for all Agent _process methods after processing an `AgentInput`.
+
     Contains the metadata and outputs from agent processing. Used by the Agent.__call__ method
     to create and manage the AgentTrace that will be logged and returned to the orchestrator.
 
@@ -290,6 +292,7 @@ class AgentResponse(BaseModel):
 
 class AgentTrace(FlowMessage, AgentResponse):
     """Full information about a single agent execution for tracing and logging.
+
     Combines the AgentInput parameters for the specific task execution, the run
     or session information, along with metadata, messages exchanged with LLMs,
     errors, and tracing information, as well as the main AgentResponse results.
@@ -389,6 +392,7 @@ class AgentTrace(FlowMessage, AgentResponse):
 
 class ManagerMessage(FlowMessage):
     """A generic message intended for the MANAGER (UI/User).
+
     Can be used for status updates, displaying results, or asking simple questions.
     """
 
@@ -405,6 +409,7 @@ class ManagerMessage(FlowMessage):
 
 class ConductorRequest(AgentInput):
     """A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
+
     Inherits fields from `AgentInput` (inputs, parameters, context, records, prompt).
     """
 
@@ -417,6 +422,7 @@ class ConductorRequest(AgentInput):
 
 class ConductorResponse(ManagerMessage, AgentTrace):
     """A response sent *from* a CONDUCTOR agent.
+
     Inherits fields from `ManagerMessage` (content?) and `AgentTrace` (outputs, metadata, etc.).
     The `outputs` field often contains a `StepRequest` object or special instructions (e.g., question for user).
     """
@@ -466,6 +472,7 @@ class ManagerResponse(FlowMessage):
 # --- Task Progress Message ---
 class TaskProgressUpdate(FlowMessage):
     """A message sent to provide information about the progress of a task or step in the workflow.
+
     This is primarily used to update the UI about the workflow's progress.
     """
 

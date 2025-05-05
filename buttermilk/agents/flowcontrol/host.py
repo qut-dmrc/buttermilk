@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import Any
+from typing import Any, NoReturn
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
@@ -28,6 +28,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 
 TRUNCATE_LEN = 1000  # characters per history message
+INTERRUPT_ROLE = "INTERRUPT"  # Special role for interrupt handling
 
 
 class HostAgent(Agent):
@@ -39,7 +40,7 @@ class HostAgent(Agent):
     until all agents that have started processing a task have reported completion.
     """
 
-    _input_callback: Any = PrivateAttr(...)
+    _input_callback: Callable[..., Awaitable[None]] | None = PrivateAttr(default=None)
     _pending_agent_id: str | None = PrivateAttr(default=None)  # Track agent waiting for signal
 
     _output_model: type[BaseModel] | None = StepRequest
@@ -50,17 +51,17 @@ class HostAgent(Agent):
         default=240,
         description="Maximum time to wait for agent responses in seconds",
     )
-    # human_in_loop removed for simplification
 
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     _current_step_name: str | None = PrivateAttr(default=None)
     # Simplified task tracking: single counter for all roles
     _total_outstanding_tasks: int = PrivateAttr(default=0)
 
-    _step_generator: Any = PrivateAttr(default=None)
-    _participants: dict = PrivateAttr(default={})  # Stores role descriptions
+    _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
+    _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
     # Event signals when _total_outstanding_tasks reaches 0
     _all_tasks_complete_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _participants_set_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)  # Event for participants being set
 
     # State tracking for exploration (kept for potential future use)
     _exploration_path: list[str] = PrivateAttr(default_factory=list)
@@ -72,20 +73,22 @@ class HostAgent(Agent):
     _current_step: int = PrivateAttr(default=0)
     _step_sequence: list[str] = PrivateAttr(default_factory=list)
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
-        """Initialize the agent"""
+    async def initialize(
+        self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs: Any
+    ) -> None:
+        """Initialize the agent."""
         self._input_callback = input_callback
         self._all_tasks_complete_event.set()  # Initially set (no tasks active)
+        self._participants_set_event.clear()  # Participants not set yet
         self._step_generator = self._sequence()
         self._exploration_path = []
         self._exploration_results = {}
         self._user_feedback = []
         self._total_outstanding_tasks = 0
-        self._total_steps = len(self._participants) if hasattr(self, "_participants") else 0
+        self._total_steps = 0  # Will be set when participants are known
         self._current_step = 0
-        self._step_sequence = list(self._participants.keys()) if hasattr(self, "_participants") else []
+        self._step_sequence = []  # Will be set when participants are known
         await super().initialize(**kwargs)  # Call parent initialize if needed
-        # self.human_in_loop = self.parameters.get("human_in_loop", True) # Removed
 
     async def _listen(
         self,
@@ -95,24 +98,33 @@ class HostAgent(Agent):
         source: str = "",
         public_callback: Callable | None = None,
         message_callback: Callable | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Listen to messages in the group chat and maintain conversation history."""
         # Log messages to our local context cache, but truncate them
+        content_to_log = None
+        msg_type = UserMessage  # Default to user message unless specified otherwise
+
         if isinstance(message, (AgentTrace, ConductorResponse)):
-            await self._model_context.add_message(AssistantMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+            content_to_log = str(message.content)[:TRUNCATE_LEN]
+            msg_type = AssistantMessage
         elif isinstance(message, StepRequest):
             if message.content and not message.content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(message.content)[:TRUNCATE_LEN], source=source))
+                content_to_log = str(message.content)[:TRUNCATE_LEN]
         elif isinstance(message, ManagerMessage):
             content = getattr(message, "content", getattr(message, "params", None))
-            if content and not content.startswith(COMMAND_SYMBOL):
-                await self._model_context.add_message(UserMessage(content=str(content)[:TRUNCATE_LEN], source=source))
+            if content and not str(content).startswith(COMMAND_SYMBOL):
+                content_to_log = str(content)[:TRUNCATE_LEN]
 
-        # Store user feedback if available (kept in case ManagerResponse is used elsewhere)
+        if content_to_log:
+            await self._model_context.add_message(msg_type(content=content_to_log, source=source))
+
+        # Store user feedback if available
         if isinstance(message, ManagerResponse) and message.prompt:
             self._user_feedback.append(message.prompt)
-            await self._model_context.add_message(UserMessage(content=f"User feedback: {message.prompt[:TRUNCATE_LEN]}", source="USER"))
+            await self._model_context.add_message(
+                UserMessage(content=f"User feedback: {message.prompt[:TRUNCATE_LEN]}", source="USER")
+            )
 
     async def _handle_events(
         self,
@@ -120,53 +132,95 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,
         message_callback: Callable | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> OOBMessages | None:
         """Handle special events and messages."""
         logger.debug(f"Host {self.agent_id} handling event: {type(message).__name__}")
 
-        # Handle ManagerResponse separately if still needed for other purposes
+        # Handle ManagerResponse
         if isinstance(message, ManagerResponse):
-            # If human_in_loop was removed, this might need adjustment
-            # depending on whether ManagerResponse is used for other things.
-            # For now, just log it.
-            logger.debug(f"Host received ManagerResponse: {message}")
-            # If it was purely for confirmation, we might not need to do anything.
-            # If it carries other data (like feedback), handle that:
-            if message.prompt:
-                self._user_feedback.append(message.prompt)
-            return
+            # Check for interrupt signal
+            if getattr(message, "interrupt", False):
+                logger.info(f"Host {self.agent_id} received interrupt signal. Pausing execution.")
+                self._total_outstanding_tasks += 1
+                # Use a specific role for the interrupt 'task'
+                interrupt_role = INTERRUPT_ROLE
+                logger.info(
+                    f"Interrupt added '{interrupt_role}' task. "
+                    f"Outstanding tasks incremented to {self._total_outstanding_tasks}."
+                )
+                # Clear the completion event to pause the flow
+                if self._all_tasks_complete_event.is_set():
+                    self._all_tasks_complete_event.clear()
+                    logger.debug("Cleared completion event due to interrupt.")
+
+                # Send a progress update indicating the pause, associated with the INTERRUPT role
+                await self._send_progress_update(
+                    role=interrupt_role,
+                    status="paused",
+                    message="Workflow paused by interrupt signal. Waiting for resume signal.",
+                    # Progress remains at the current step's level
+                    progress=(self._current_step / self._total_steps if self._total_steps > 0 else 0.0),
+                )
+                # Log the expectation for the external agent to send TaskProcessingComplete to resume
+                logger.info(f"Host expects a TaskProcessingComplete(role='{interrupt_role}') to resume.")
+                return None  # Stop processing this message further here
+
+            # --- Handle ManagerResponse (non-interrupt) ---
+            # This branch is now only for non-interrupt ManagerResponses (e.g., feedback)
+            # Resumption after an interrupt is handled by TaskProcessingComplete(role='INTERRUPT')
+            logger.debug(f"Host received ManagerResponse (non-interrupt): {message}")
+            # Feedback handling is done in _listen
+            return None # Return after handling non-interrupt ManagerResponse
 
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
             role = message.role
             if self._total_outstanding_tasks > 0:
                 self._total_outstanding_tasks -= 1
+                log_prefix = f"Host received TaskComplete from {message.agent_id} for role '{role}'."
+                if role == INTERRUPT_ROLE:
+                    log_prefix = f"Host received RESUME signal (TaskComplete for '{role}')."
+                    # Send progress update indicating resumption
+                    await self._send_progress_update(
+                        role=self._current_step_name or "WORKFLOW",  # Use current step or workflow
+                        status="resumed",
+                        message="Workflow resumed.",
+                        progress=(self._current_step / self._total_steps if self._total_steps > 0 else 0.0),
+                    )
+
                 logger.info(
-                    f"Host received TaskComplete from {message.agent_id} for role '{role}'. "
+                    f"{log_prefix} "
                     f"{self._total_outstanding_tasks} total tasks outstanding. "
                     f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
                 )
 
-                # If this was the last task, set the completion event
+                # If this was the last task (including the INTERRUPT task), set the completion event
                 if self._total_outstanding_tasks == 0:
                     logger.info("All outstanding tasks completed. Setting completion event.")
                     self._all_tasks_complete_event.set()
                     # Send progress update indicating current step (if any) is effectively done
-                    if self._current_step_name and self._current_step_name != END:
-                         await self._send_progress_update(
-                             role=self._current_step_name,
-                             status="completed",
-                             message=f"All tasks completed after step {self._current_step_name}",
-                             progress=(self._current_step / self._total_steps if self._total_steps > 0 else 1.0),
-                         )
+                    # Only send 'completed' status if it wasn't just the interrupt being cleared
+                    if role != INTERRUPT_ROLE and self._current_step_name and self._current_step_name != END:
+                        await self._send_progress_update(
+                            role=self._current_step_name,
+                            status="completed",
+                            message=f"All tasks completed after step {self._current_step_name}",
+                            progress=(self._current_step / self._total_steps if self._total_steps > 0 else 1.0),
+                        )
             else:
-                logger.warning(f"Host received TaskComplete from agent {message.agent_id} for role '{role}', but no outstanding tasks were tracked.")
+                logger.warning(
+                    f"Host received TaskComplete from agent {message.agent_id} for role '{role}', "
+                    "but no outstanding tasks were tracked."
+                )
 
         elif isinstance(message, TaskProcessingStarted):
             role = message.role
             self._total_outstanding_tasks += 1
-            logger.debug(f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. {self._total_outstanding_tasks} total outstanding tasks.")
+            logger.debug(
+                f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. "
+                f"{self._total_outstanding_tasks} total outstanding tasks."
+            )
 
             # If tasks become outstanding, clear the completion event
             if self._total_outstanding_tasks > 0:
@@ -187,6 +241,8 @@ class HostAgent(Agent):
                 if self._conductor_task and self._conductor_task.done():
                     try:
                         self._conductor_task.result()
+                    except asyncio.CancelledError:
+                        logger.info("Previous conductor task was cancelled.")
                     except Exception as e:
                         logger.error(f"Previous conductor task ended with exception: {e}")
                 logger.info(f"Host {self.agent_id} starting new conductor task.")
@@ -194,14 +250,16 @@ class HostAgent(Agent):
                 await self.on_reset()  # Ensure clean state
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
             else:
-                 logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
+                logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
 
-        return
-
-    # Removed _wait_for_user as human_in_loop is removed
+        return None  # Explicitly return None if no other value is returned
 
     async def _wait_for_all_tasks_complete(self) -> None:
-        """Wait until the total count of outstanding tasks reaches zero."""
+        """Wait until the total count of outstanding tasks reaches zero.
+
+        Raises:
+            FatalError: If the wait times out.
+        """
         # Check if the event is already set (e.g., tasks completed very quickly
         # or no tasks were ever started for the preceding step(s)).
         if self._all_tasks_complete_event.is_set():
@@ -218,26 +276,31 @@ class HostAgent(Agent):
             logger.debug(f"Waiting for {self._total_outstanding_tasks} outstanding task(s) to complete...")
             await asyncio.wait_for(self._all_tasks_complete_event.wait(), timeout=self.max_wait_time)
             logger.debug("All outstanding tasks completed (wait unblocked).")
-        except TimeoutError:
-            msg = (f"Timeout waiting for all tasks completion. "
-                   f"{self._total_outstanding_tasks} tasks still outstanding after {self.max_wait_time}s.")
+        except TimeoutError as e:
+            msg = (
+                f"Timeout waiting for all tasks completion. "
+                f"{self._total_outstanding_tasks} tasks still outstanding after {self.max_wait_time}s."
+            )
             logger.error(f"{msg} Aborting.")
             # Reset count and set event to allow potential cleanup/reset
             self._total_outstanding_tasks = 0
             self._all_tasks_complete_event.set()
-            raise FatalError(msg)
+            raise FatalError(msg) from e
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
-        """Generate a sequence of steps to execute based on participants."""
-        while not self._participants:
-            # Wait for participants to be set by ConductorRequest in _run_flow
-            await asyncio.sleep(0.1)
+        """Generate a sequence of steps to execute based on participants.
+
+        Yields:
+            StepRequest: The next step request in the sequence.
+        """
+        # Wait until participants are set
+        await self._participants_set_event.wait()
 
         self._step_sequence = list(self._participants.keys())
         self._total_steps = len(self._step_sequence)
         logger.info(f"Host {self.agent_id} initialized sequence with {self._total_steps} steps: {self._step_sequence}")
 
-        for i, (step_name, cfg) in enumerate(self._participants.items()):
+        for i, (step_name, _cfg) in enumerate(self._participants.items()):  # Use _cfg to indicate unused var
             self._current_step = i + 1  # 1-based step index for progress
             logger.info(f"Host {self.agent_id} generating step {self._current_step}/{self._total_steps}: {step_name}")
             yield StepRequest(role=step_name, content=f"Sequence host calling {step_name}.")
@@ -246,31 +309,45 @@ class HostAgent(Agent):
         yield StepRequest(role=END, content="Sequence wrapping up.")
 
     async def _run_flow(self, message: ConductorRequest) -> StepRequest:
-        """Runs the predefined sequence of steps, waiting for task completion between steps."""
+        """Run the predefined sequence of steps, waiting for task completion between steps.
+
+        Args:
+            message: The initial request containing participants.
+
+        Returns:
+            StepRequest: The final END step request.
+
+        Raises:
+            FatalError: If no participants are provided in the request.
+        """
         logger.info(f"Host {self.agent_id} starting flow execution.")
 
         # Initialize participants from the request
         if not self._participants:
             self._participants.update(message.participants)
             if not self._participants:
-                 logger.error("Host received ConductorRequest with no participants. Aborting.")
-                 raise FatalError("Host received ConductorRequest with no participants.")
-            # Re-initialize generator now that participants are known
+                msg = "Host received ConductorRequest with no participants."
+                logger.error(f"{msg} Aborting.")
+                raise FatalError(msg)
+            # Signal that participants are now set
+            self._participants_set_event.set()
+            # Re-initialize generator now that participants are known (it waits on the event)
             self._step_generator = self._sequence()
-            # Wait briefly for generator to potentially initialize sequence/total steps
-            await asyncio.sleep(0.1)
             logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
         while True:
             # Get the next step from the sequence generator
-            step = await self._choose(message=message)  # message might not be needed by _choose now
+            step = await self._choose()  # No message needed
 
             if step.role == END:
                 logger.info("Host sequence finished. Waiting for final tasks before ending.")
                 break  # Exit the loop to perform final wait and send END
 
             # Clear the flag so that we must have at least one completion to move forwards.
-            self._all_tasks_complete_event.clear()
+            # Do this *before* executing the step, in case the step completes instantly.
+            if self._total_outstanding_tasks == 0:
+                self._all_tasks_complete_event.clear()
+                logger.debug("Cleared completion event before step execution (no outstanding tasks).")
 
             # --- Execute the current step ---
             logger.info(f"Host proceeding with step for role: {step.role}")
@@ -305,39 +382,41 @@ class HostAgent(Agent):
 
     async def _execute_step(self, step: StepRequest) -> None:
         """Send the StepRequest for the current step."""
-        if step.role == END or step.role == WAIT:
+        if step.role in (END, WAIT):  # Use 'in' for multiple comparisons
             logger.debug(f"Skipping execution for control step: {step.role}")
             self._current_step_name = step.role  # Still note the step name
             # Ensure completion event is set if we are just waiting or ending,
             # but only if no tasks are outstanding.
             if self._total_outstanding_tasks == 0 and not self._all_tasks_complete_event.is_set():
-                 self._all_tasks_complete_event.set()
+                self._all_tasks_complete_event.set()
             return
 
         logger.info(f"Host executing step for role: {step.role}")
         self._current_step_name = step.role
 
-        # Event management is now handled solely in _handle_events based on _total_outstanding_tasks.
-        # No need to clear/set event here based on per-role counts.
-
         message_content = step.content or f"Executing step for role {step.role}"
-        message = StepRequest(role=step.role, content=message_content, records=getattr(self, "_records", []))
+        # Pass empty list if _records doesn't exist
+        records = getattr(self, "_records", [])
+        message = StepRequest(role=step.role, content=message_content, records=records)
 
-        if not hasattr(self, "_input_callback") or not callable(self._input_callback):
-            logger.error(f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: _input_callback is not set or not callable.")
+        if not self._input_callback:
+            logger.error(
+                f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: "
+                "_input_callback is not set."
+            )
             # If publish fails, we might deadlock if agents were expected.
             # Consider raising an error or specific handling. For now, just log.
-            # Setting the event might be dangerous if tasks *were* expected.
             return
 
         try:
             logger.debug(f"Host {self.agent_id} publishing StepRequest for role {step.role}...")
             await self._input_callback(message)
             logger.debug(f"Host {self.agent_id} successfully published StepRequest for role {step.role}")
-        except Exception as e:
-            logger.exception(f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}")
+        except Exception as e:  # Catch specific exceptions if possible
+            logger.exception(
+                f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}"
+            )
             # Consider raising FatalError or specific handling
-            # Setting the event might be dangerous if tasks *were* expected.
 
     def _store_exploration_result(self, execution_id: str, output: AgentTrace) -> None:
         """Store the result of an agent execution in the exploration history."""
@@ -354,16 +433,19 @@ class HostAgent(Agent):
         }
         logger.debug(f"Stored result for execution {execution_id}")
 
-    # Removed request_user_confirmation
+    async def _choose(self) -> StepRequest:
+        """Choose the next step from the sequence generator.
 
-    async def _choose(self, message: ConductorRequest | None) -> StepRequest:
-        """Choose the next step from the sequence generator."""
-        # This implementation doesn't need the message context anymore
+        Returns:
+            StepRequest: The next step request, or an END step if the sequence is complete.
+        """
+        if self._step_generator is None:
+            # Should not happen if initialized correctly, but handle defensively
+            logger.error("Step generator not initialized in _choose.")
+            return StepRequest(role=END, content="Error: Step generator not available.")
         try:
-            step = await self._step_generator.__anext__()
-            # Progress logging moved inside _sequence where step index is tracked
-            # logger.info(f"Host {self.agent_id} chose next step: {step.role} (step {self._current_step}/{self._total_steps})")
-            return step
+            # Use anext() builtin instead of dunder method
+            return await anext(self._step_generator)
         except StopAsyncIteration:
             logger.info(f"Host {self.agent_id} step generator exhausted, explicitly returning END step")
             return StepRequest(role=END, content="Sequence completed. All steps have been processed.")
@@ -378,10 +460,6 @@ class HostAgent(Agent):
             # Ensure progress is between 0 and 1
             progress = max(0.0, min(1.0, progress))
             progress_percent = int(100 * progress)
-
-            # Use tracked step counts for overall progress
-            current_step_idx = self._current_step
-            total_steps = self._total_steps
 
             # Create progress update message
             progress_update = TaskProgressUpdate(
@@ -398,16 +476,17 @@ class HostAgent(Agent):
             await self._input_callback(progress_update)
             logger.debug(f"Sent progress update for {role}: {status} - {message} (Overall: {progress_percent}%)")
 
-        except Exception as e:
+        except Exception as e:  # Catch specific exceptions if possible
             logger.error(f"Error sending progress update: {e}")
 
-    async def on_reset(self, cancellation_token=None) -> None:
-        """Resets the HostAgent's internal state."""
+    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+        """Reset the HostAgent's internal state."""
         logger.info(f"Resetting Host agent {self.agent_id}...")
         await super().on_reset(cancellation_token)
         self._current_step_name = None
         self._total_outstanding_tasks = 0  # Reset single counter
         self._participants.clear()
+        self._participants_set_event.clear()  # Reset participants event
         # Re-initialize the step generator (will wait for participants again).
         self._step_generator = self._sequence()
         # Set completion event to ready state.
@@ -428,15 +507,28 @@ class HostAgent(Agent):
                 await self._conductor_task
             except asyncio.CancelledError:
                 logger.debug("Conductor task cancelled during reset.")
-            except Exception as e:
-                 logger.error(f"Error retrieving result from cancelled conductor task during reset: {e}")
+            except Exception as e:  # Catch specific exceptions if possible
+                logger.error(f"Error retrieving result from cancelled conductor task during reset: {e}")
         self._conductor_task = None
 
         logger.info(f"Host agent {self.agent_id} reset complete.")
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
-        """Host _process implementation - not typically used directly."""
+    async def _process(
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs: Any
+    ) -> AgentResponse:
+        """Host _process implementation - not typically used directly.
+
+        Returns:
+            AgentResponse: An error response indicating this method is not used.
+        """
+        # Method arguments are part of the base class signature, keep them but mark as unused if needed
+        _ = message
+        _ = cancellation_token
+        _ = kwargs
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
-        return AgentResponse(agent_id=self.agent_id,
-            outputs=placeholder,
-        )
+        return AgentResponse(agent_id=self.agent_id, outputs=placeholder)
+
+# Helper function to replace asyncio.sleep(0) or similar busy-waits if needed elsewhere
+async def yield_control() -> None:
+    """Yield control to the event loop briefly."""
+    await asyncio.sleep(0)
