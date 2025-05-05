@@ -18,7 +18,6 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 from pydantic import BaseModel, Field, model_validator
-from replicate.exceptions import ModelError, ReplicateError
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -48,7 +47,7 @@ class RetryWrapper(BaseModel):
     """
 
     client: Any
-    concurrency: int = 1
+    concurrency: int = 4
     cooldown_seconds: float = 5.1
     max_retries: int = 3
     min_wait_seconds: float = 5.0

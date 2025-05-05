@@ -13,6 +13,7 @@ defaults:
     - scorer
     - host/sequencer
     - interface/web
+    # - interface/console
   - criteria@parameters.criteria: trans
   
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator

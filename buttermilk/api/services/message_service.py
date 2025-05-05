@@ -4,7 +4,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import ShortUUID
 
-from buttermilk._core.agent import AgentTrace
+from buttermilk._core.agent import AgentResponse, AgentTrace
+from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
@@ -13,10 +14,10 @@ from buttermilk.bm import logger
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message"]
+    type: Literal["chat_message", "record"]
     message_id: str = Field(default_factory=ShortUUID.uuid)
     content: str = Field(default="", description="Short (one-line) abstract of message")
-    outputs: JudgeReasons | QualResults | None = Field(None, description="Message outputs")
+    outputs: JudgeReasons | QualResults | Record | Reasons | None = Field(None, description="Message outputs")
     timestamp: datetime.datetime | None = Field(None, description="Timestamp of the message")
     agent_id: str = Field(..., description="Agent ID")
 
@@ -38,7 +39,7 @@ class MessageService:
         if message is None:
             return None
         try:
-            if isinstance(message, AgentTrace):
+            if isinstance(message, (AgentTrace, AgentResponse)):
                 # Repackage
                 output = ChatMessage(message_id=message.call_id,
                     type="chat_message",
@@ -48,6 +49,7 @@ class MessageService:
                     agent_id=message.agent_id,
                 )
                 return output
+
         except Exception as e:
             logger.error(f"Error formatting message for client: {e}")
 

@@ -66,6 +66,25 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "pubsub",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": true,
+      "args": [
+        "ui=pub/sub",
+        "flows=[trans,simple]",
+        "llms=full",
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "streamlit",
       "type": "debugpy",
       "request": "launch",

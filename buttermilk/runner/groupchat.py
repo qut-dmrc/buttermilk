@@ -22,6 +22,7 @@ from autogen_core import (
 )
 from pydantic import PrivateAttr
 
+from buttermilk._core import AgentInput, AgentTrace
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
@@ -214,6 +215,10 @@ class AutogenOrchestrator(Orchestrator):
                     for record in self._records:
                         # send each record to all clients
                         await self._runtime.publish_message(record, topic_id=self._topic)
+                        agent_type, variant_config = self._agent_types[CONDUCTOR][0]
+                        # TODO: FIX. THIS IS A HACK TO SEND TO UI. Wrap it in agentoutput first
+                        trace = AgentTrace(agent_id=agent_type.type, agent_info=variant_config, outputs=record, session_id=self.session_id, inputs=AgentInput())
+                        await self._runtime.publish_message(trace, topic_id=DefaultTopicId(type=MANAGER))
 
             # 3. Enter the main loop - now much simpler
             while True:

@@ -247,6 +247,7 @@ class AgentResponse(BaseModel):
 
     """
 
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     call_id: str = Field(
         default_factory=lambda: shortuuid.uuid(),
         description="A unique ID for this specific agent execution/response.",
@@ -271,15 +272,29 @@ class AgentResponse(BaseModel):
         exclude_none=True,
     )  # type: ignore
 
+    @property
+    def content(self) -> str:
+        """Provides a string representation of the 'outputs' field."""
+        # TODO: Improve string representation for different output types (dict, list, model).
+        try:
+            if self.outputs:
+                return str(self.outputs)
+        except Exception:
+            pass
+
+        return ""
+
+    def __str__(self) -> str:
+        return self.content
+
 
 class AgentTrace(FlowMessage, AgentResponse):
     """Full information about a single agent execution for tracing and logging.
     Combines the AgentInput parameters for the specific task execution, the run
     or session information, along with metadata, messages exchanged with LLMs,
-    errors, and tracing information, as well as the main AgentOutput results.
+    errors, and tracing information, as well as the main AgentResponse results.
     """
 
-    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     run_info: SessionInfo = Field(default_factory=_get_run_info)
     agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent (required)")
     session_id: str = Field(..., description="Unique identifier for client session")
@@ -335,18 +350,6 @@ class AgentTrace(FlowMessage, AgentResponse):
         except Exception:
             pass
         return "null"
-
-    @property
-    def content(self) -> str:
-        """Provides a string representation of the 'outputs' field."""
-        # TODO: Improve string representation for different output types (dict, list, model).
-        try:
-            if self.outputs:
-                return str(self.outputs)
-        except Exception:
-            pass
-
-        return ""
 
     def __str__(self) -> str:
         return self.content
