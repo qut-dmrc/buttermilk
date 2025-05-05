@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import Any, NoReturn
+from typing import Any
 
 from autogen_core import CancellationToken
 from autogen_core.models import AssistantMessage, UserMessage
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.constants import COMMAND_SYMBOL, END, WAIT
+from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
 from buttermilk._core.contract import (
     AgentInput,
     AgentResponse,
@@ -74,7 +74,7 @@ class HostAgent(Agent):
     _step_sequence: list[str] = PrivateAttr(default_factory=list)
 
     async def initialize(
-        self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs: Any
+        self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
         self._input_callback = input_callback
@@ -123,7 +123,7 @@ class HostAgent(Agent):
         if isinstance(message, ManagerResponse) and message.prompt:
             self._user_feedback.append(message.prompt)
             await self._model_context.add_message(
-                UserMessage(content=f"User feedback: {message.prompt[:TRUNCATE_LEN]}", source="USER")
+                UserMessage(content=f"User feedback: {message.prompt[:TRUNCATE_LEN]}", source="USER"),
             )
 
     async def _handle_events(
@@ -143,18 +143,18 @@ class HostAgent(Agent):
             if getattr(message, "interrupt", False):
                 logger.info(f"Host {self.agent_id} received interrupt signal. Pausing execution.")
                 self._total_outstanding_tasks += 1
-                # Use a specific role for the interrupt 'task'
-                interrupt_role = INTERRUPT_ROLE
+                # Use the MANAGER role for the interrupt 'task'
+                interrupt_role = MANAGER
                 logger.info(
                     f"Interrupt added '{interrupt_role}' task. "
-                    f"Outstanding tasks incremented to {self._total_outstanding_tasks}."
+                    f"Outstanding tasks incremented to {self._total_outstanding_tasks}.",
                 )
                 # Clear the completion event to pause the flow
                 if self._all_tasks_complete_event.is_set():
                     self._all_tasks_complete_event.clear()
                     logger.debug("Cleared completion event due to interrupt.")
 
-                # Send a progress update indicating the pause, associated with the INTERRUPT role
+                # Send a progress update indicating the pause, associated with the MANAGER role
                 await self._send_progress_update(
                     role=interrupt_role,
                     status="paused",
@@ -168,10 +168,10 @@ class HostAgent(Agent):
 
             # --- Handle ManagerResponse (non-interrupt) ---
             # This branch is now only for non-interrupt ManagerResponses (e.g., feedback)
-            # Resumption after an interrupt is handled by TaskProcessingComplete(role='INTERRUPT')
+            # Resumption after an interrupt is handled by TaskProcessingComplete(role='MANAGER')
             logger.debug(f"Host received ManagerResponse (non-interrupt): {message}")
             # Feedback handling is done in _listen
-            return None # Return after handling non-interrupt ManagerResponse
+            return None  # Return after handling non-interrupt ManagerResponse
 
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
@@ -179,15 +179,6 @@ class HostAgent(Agent):
             if self._total_outstanding_tasks > 0:
                 self._total_outstanding_tasks -= 1
                 log_prefix = f"Host received TaskComplete from {message.agent_id} for role '{role}'."
-                if role == INTERRUPT_ROLE:
-                    log_prefix = f"Host received RESUME signal (TaskComplete for '{role}')."
-                    # Send progress update indicating resumption
-                    await self._send_progress_update(
-                        role=self._current_step_name or "WORKFLOW",  # Use current step or workflow
-                        status="resumed",
-                        message="Workflow resumed.",
-                        progress=(self._current_step / self._total_steps if self._total_steps > 0 else 0.0),
-                    )
 
                 logger.info(
                     f"{log_prefix} "
@@ -195,23 +186,21 @@ class HostAgent(Agent):
                     f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
                 )
 
-                # If this was the last task (including the INTERRUPT task), set the completion event
+                # If this was the last task (including the MANAGER task), set the completion event
                 if self._total_outstanding_tasks == 0:
                     logger.info("All outstanding tasks completed. Setting completion event.")
                     self._all_tasks_complete_event.set()
                     # Send progress update indicating current step (if any) is effectively done
-                    # Only send 'completed' status if it wasn't just the interrupt being cleared
-                    if role != INTERRUPT_ROLE and self._current_step_name and self._current_step_name != END:
-                        await self._send_progress_update(
-                            role=self._current_step_name,
-                            status="completed",
-                            message=f"All tasks completed after step {self._current_step_name}",
-                            progress=(self._current_step / self._total_steps if self._total_steps > 0 else 1.0),
-                        )
+                    await self._send_progress_update(
+                        role=self._current_step_name,
+                        status="completed",
+                        message=f"All tasks completed after step {self._current_step_name}",
+                        progress=(self._current_step / self._total_steps if self._total_steps > 0 else 1.0),
+                    )
             else:
                 logger.warning(
                     f"Host received TaskComplete from agent {message.agent_id} for role '{role}', "
-                    "but no outstanding tasks were tracked."
+                    "but no outstanding tasks were tracked.",
                 )
 
         elif isinstance(message, TaskProcessingStarted):
@@ -219,7 +208,7 @@ class HostAgent(Agent):
             self._total_outstanding_tasks += 1
             logger.debug(
                 f"Host noted TaskStarted from agent {message.agent_id} for role '{role}'. "
-                f"{self._total_outstanding_tasks} total outstanding tasks."
+                f"{self._total_outstanding_tasks} total outstanding tasks.",
             )
 
             # If tasks become outstanding, clear the completion event
@@ -259,6 +248,7 @@ class HostAgent(Agent):
 
         Raises:
             FatalError: If the wait times out.
+
         """
         # Check if the event is already set (e.g., tasks completed very quickly
         # or no tasks were ever started for the preceding step(s)).
@@ -292,6 +282,7 @@ class HostAgent(Agent):
 
         Yields:
             StepRequest: The next step request in the sequence.
+
         """
         # Wait until participants are set
         await self._participants_set_event.wait()
@@ -319,6 +310,7 @@ class HostAgent(Agent):
 
         Raises:
             FatalError: If no participants are provided in the request.
+
         """
         logger.info(f"Host {self.agent_id} starting flow execution.")
 
@@ -402,7 +394,7 @@ class HostAgent(Agent):
         if not self._input_callback:
             logger.error(
                 f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: "
-                "_input_callback is not set."
+                "_input_callback is not set.",
             )
             # If publish fails, we might deadlock if agents were expected.
             # Consider raising an error or specific handling. For now, just log.
@@ -414,7 +406,7 @@ class HostAgent(Agent):
             logger.debug(f"Host {self.agent_id} successfully published StepRequest for role {step.role}")
         except Exception as e:  # Catch specific exceptions if possible
             logger.exception(
-                f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}"
+                f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}",
             )
             # Consider raising FatalError or specific handling
 
@@ -438,6 +430,7 @@ class HostAgent(Agent):
 
         Returns:
             StepRequest: The next step request, or an END step if the sequence is complete.
+
         """
         if self._step_generator is None:
             # Should not happen if initialized correctly, but handle defensively
@@ -514,12 +507,13 @@ class HostAgent(Agent):
         logger.info(f"Host agent {self.agent_id} reset complete.")
 
     async def _process(
-        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs: Any
+        self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs: Any,
     ) -> AgentResponse:
         """Host _process implementation - not typically used directly.
 
         Returns:
             AgentResponse: An error response indicating this method is not used.
+
         """
         # Method arguments are part of the base class signature, keep them but mark as unused if needed
         _ = message
@@ -527,6 +521,7 @@ class HostAgent(Agent):
         _ = kwargs
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
         return AgentResponse(agent_id=self.agent_id, outputs=placeholder)
+
 
 # Helper function to replace asyncio.sleep(0) or similar busy-waits if needed elsewhere
 async def yield_control() -> None:

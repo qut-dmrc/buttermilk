@@ -522,7 +522,7 @@ class TaskProcessingStarted(BaseModel):
 
     agent_id: str = Field(..., description="ID of the agent starting the task.")
     role: str = Field(..., description="Role of the agent starting the task.")
-    task_index: int = Field(..., description="Index of the task being started (for multi-task steps).")
+    task_index: int = Field(default=-1, description="Index of the task being started (for multi-task steps).")
 
 
 class TaskProcessingComplete(TaskProcessingStarted):
@@ -530,7 +530,7 @@ class TaskProcessingComplete(TaskProcessingStarted):
 
     # Inherits agent_id, role, task_index from TaskProcessingStarted.
     more_tasks_remain: bool = Field(
-        ..., description="True if the agent has more sequential tasks for the current input.",
+        default=False, description="True if the agent has more sequential tasks for the current input.",
     )
     is_error: bool = Field(default=False, description="True if the task ended with an error.")
 
