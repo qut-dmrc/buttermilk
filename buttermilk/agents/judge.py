@@ -101,7 +101,7 @@ class Judge(LLMAgent):
         response = await self._process(message=message)
 
         # Create a new AgentTrace from the response
-        trace = AgentTrace(session_id=self.session_id,
+        trace = AgentTrace(agent_id=self.agent_id, session_id=self.session_id,
             agent_info=self._cfg,
             inputs=message,
             outputs=response.outputs,

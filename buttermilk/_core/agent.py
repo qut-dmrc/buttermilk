@@ -203,7 +203,7 @@ class Agent(AgentConfig):
         )
 
         # Create the trace here with required values
-        trace = AgentTrace(session_id=self.session_id,
+        trace = AgentTrace(session_id=self.session_id, agent_id=self.agent_id,
             agent_info=self._cfg,
             inputs=final_input,
         )
