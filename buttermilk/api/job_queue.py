@@ -70,6 +70,9 @@ class JobQueueClient(BaseModel):
         if not self.flow_runner:
             return
 
+        # Delay until the rest of the system is ready
+        await asyncio.sleep(10)
+
         # Configure FlowControl to only handle one message at a time
         flow_control = FlowControl(max_messages=1)
 
@@ -110,7 +113,7 @@ class JobQueueClient(BaseModel):
         logger.info(f"Published job {job.batch_id}:{job.record_id} to Pub/Sub (ID: {message_id}, topic: {self._jobs_topic_path})")
         return message_id
 
-    async def publish_status_update(self,
+    def publish_status_update(self,
                               batch_id: str,
                               record_id: str,
                               status: BatchJobStatus,
@@ -144,19 +147,19 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _process_message_callback(self, message: Message):
-        """Async callback to process a message received from Pub/Sub."""
+    def _process_message_callback(self, message: Message):
+        """Callback to process a message received from Pub/Sub."""
         try:
             if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
                 logger.debug(f"System busy or max jobs ({self._active_jobs}) reached. Nacking message {message.message_id}.")
-                await message.nack()
+                message.nack()
                 return
 
             data = json.loads(message.data.decode("utf-8"))
 
             if data.get("type") != "job_request":
                 logger.warning(f"Ignoring message {message.message_id} with type {data.get('type')}")
-                await message.ack()
+                message.ack()
                 return
 
             self._active_jobs += 1
@@ -166,30 +169,30 @@ class JobQueueClient(BaseModel):
                 run_request = RunRequest.model_validate(data)
             except Exception as e:
                 logger.error(f"Error creating RunRequest from message {message.message_id}: {e}")
-                await message.ack()
+                message.ack()
                 self._active_jobs -= 1
                 logger.debug(f"Job validation failed. Active jobs: {self._active_jobs}")
                 return
 
             logger.info(f"Processing job {run_request.batch_id}:{run_request.record_id} from message {message.message_id}")
 
-            await message.ack()
+            message.ack()
             logger.debug(f"Acknowledged message {message.message_id}")
 
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._run_job(run_request))
             self.publish_status_update(
                 batch_id=run_request.batch_id,
                 record_id=run_request.record_id,
                 status=BatchJobStatus.RUNNING,
             )
 
-            await self._run_job(run_request)
-
         except Exception as e:
             logger.error(f"Error processing message {message.message_id}: {e}", exc_info=True)
             try:
                 if self._active_jobs > 0 and "run_request" not in locals():
                     self._active_jobs -= 1
-                await message.nack()
+                message.nack()
                 logger.warning(f"Nacked message {message.message_id} due to processing error.")
             except Exception as nack_e:
                 logger.error(f"Failed to nack message {message.message_id} after error: {nack_e}")
