@@ -57,6 +57,29 @@ class WebSocketManager:
         if session_id in self.session_data:
             del self.session_data[session_id]
 
+    def make_callback_to_ui(self, session_id: str) -> Callable:
+        """Create a callback function for the flow to send messages back to the UI
+        
+        Args:
+            session_id: The session ID
+            
+        Returns:
+            Callable: The callback function
+
+        """
+        async def callback(message):
+            """Handle messages from the flow
+            
+            Args:
+                message: The message from the flow
+
+            """
+            # Send message to client if we have an active connection
+            if session_id in self.active_connections:
+                await self.send_message(session_id, message)
+
+        return callback
+
     async def send_message(self, session_id: str, message: Any | dict[str, Any]) -> None:
         """Send a message to a WebSocket connection
         
@@ -67,6 +90,11 @@ class WebSocketManager:
         """
         if session_id not in self.active_connections:
             logger.warning(f"Attempted to send message to non-existent session: {session_id}")
+            return
+
+        formatted_message = MessageService.format_message_for_client(message)
+        if not formatted_message:
+            logger.debug(f"Dropping message not handled by client: {message}")
             return
 
         try:
@@ -251,28 +279,3 @@ class WebSocketManager:
                 session_id,
                 ErrorEvent(source="websocket_manager", content=f"Error handling confirm: {e!s}"),
             )
-
-    def make_callback_to_ui(self, session_id: str) -> Callable:
-        """Create a callback function for the flow to send messages back to the UI
-        
-        Args:
-            session_id: The session ID
-            
-        Returns:
-            Callable: The callback function
-
-        """
-        async def callback(message):
-            """Handle messages from the flow
-            
-            Args:
-                message: The message from the flow
-
-            """
-            # Send message to client if we have an active connection
-            if session_id in self.active_connections:
-                formatted_message = MessageService.format_message_for_client(message)
-                if formatted_message:
-                    await self.send_message(session_id, message)
-
-        return callback

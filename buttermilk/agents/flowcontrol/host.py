@@ -212,7 +212,8 @@ class HostAgent(Agent):
                     self._all_tasks_complete_event.set()
                     # Send progress update indicating current step (if any) is effectively done
                     await self._send_progress_update(
-                        role=self._current_step_name,
+                        # Provide a default role if current_step_name is None
+                        role=self._current_step_name or "UNKNOWN_STEP",
                         status="completed",
                         message=f"All tasks completed after step {self._current_step_name}",
                         progress=(self._current_step / self._total_steps if self._total_steps > 0 else 1.0),
@@ -263,9 +264,9 @@ class HostAgent(Agent):
 
         return None  # Explicitly return None if no other value is returned
 
-    async def request_user_confirmation(self, step: StepRequest) -> StepRequest:
+    async def request_user_confirmation(self, step: StepRequest) -> None:
         """Request confirmation from the user for the next step.
-        
+            
         This method is used when human_in_loop is True to get user approval
         before executing a step.
         
@@ -273,7 +274,7 @@ class HostAgent(Agent):
             step: The proposed next step
             
         Returns:
-            StepRequest: message asking the UI for input
+            None: This method does not return a value directly but sends a request.
 
         """
         request_content = (
@@ -282,10 +283,16 @@ class HostAgent(Agent):
             f"- **Description:** {step.content or '(No description)'}\n"
             f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
             f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
-            )
+        )
         logger.debug(f"Requesting info from user about proposed step {step.role}.")
-        confirmation_request = ManagerRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
-        await self._input_callback(confirmation_request)
+        confirmation_request = ManagerRequest(
+            role=MANAGER, prompt=request_content, inputs={"confirm": True, "selection": [True, False]},
+        )
+        if self._input_callback:
+            await self._input_callback(confirmation_request)
+        else:
+            logger.error(f"Host {self.agent_id} cannot request user confirmation: _input_callback is not set.")
+            # Depending on desired behavior, could raise an error here instead of just logging
 
     async def _wait_for_user(self, step) -> ManagerResponse:
         await self.request_user_confirmation(step)
@@ -301,38 +308,50 @@ class HostAgent(Agent):
             return await self._wait_for_user(step)
 
     async def _wait_for_all_tasks_complete(self) -> None:
-        """Wait until the total count of outstanding tasks reaches zero.
+        """Wait until the _all_tasks_complete_event is set.
+
+        The event is set by _handle_events when _total_outstanding_tasks reaches zero.
+        In _run_flow, the event is cleared before executing a step if no tasks
+        were outstanding, ensuring this method waits for completion signals
+        from the agents triggered by that step.
 
         Raises:
             FatalError: If the wait times out.
 
         """
-        # Check if the event is already set (e.g., tasks completed very quickly
-        # or no tasks were ever started for the preceding step(s)).
-        if self._all_tasks_complete_event.is_set():
-            if self._total_outstanding_tasks == 0:
-                logger.debug("All tasks complete (event is set and task count is 0).")
-                return
-            # This scenario implies the event was set (tasks hit 0), but a new task
-            # started immediately after. Clear the event again and proceed to wait.
-            logger.warning("Completion event was set, but new tasks were found. Re-clearing event and waiting.")
-            self._all_tasks_complete_event.clear()
+        # Only wait if the event is not already set.
+        # This handles cases where tasks completed extremely quickly
+        # between _execute_step and this call, or if the previous
+        # state already indicated completion.
+        if not self._all_tasks_complete_event.is_set():
+            try:
+                logger.debug(
+                    f"Waiting for tasks completion event ({self._total_outstanding_tasks} outstanding)...",
+                )
+                # Wait for the event to be set by _handle_events
+                await asyncio.wait_for(self._all_tasks_complete_event.wait(), timeout=self.max_wait_time)
+                logger.debug("Tasks completion event received.")
+            except TimeoutError as e:
+                msg = (
+                    f"Timeout waiting for tasks completion event. "
+                    f"{self._total_outstanding_tasks} tasks still outstanding after {self.max_wait_time}s."
+                )
+                logger.error(f"{msg} Aborting.")
+                # Set the event on timeout to potentially unblock and allow cleanup/reset.
+                self._all_tasks_complete_event.set()
+                raise FatalError(msg) from e
+        else:
+             # If the event was already set, log it. This might happen if tasks
+             # finished instantly or if called when no tasks were expected.
+             logger.debug("Tasks completion event was already set upon entry.")
 
-        # If we reach here, the event is not set (or was re-cleared), so we wait.
-        try:
-            logger.debug(f"Waiting for {self._total_outstanding_tasks} outstanding task(s) to complete...")
-            await asyncio.wait_for(self._all_tasks_complete_event.wait(), timeout=self.max_wait_time)
-            logger.debug("All outstanding tasks completed (wait unblocked).")
-        except TimeoutError as e:
-            msg = (
-                f"Timeout waiting for all tasks completion. "
-                f"{self._total_outstanding_tasks} tasks still outstanding after {self.max_wait_time}s."
+        # Sanity check: After waiting or skipping wait, the task count should ideally be zero.
+        if self._total_outstanding_tasks > 0:
+            logger.warning(
+                f"Completion event is set, but {self._total_outstanding_tasks} tasks are still marked outstanding. "
+                "Possible state inconsistency or race condition in task reporting.",
             )
-            logger.error(f"{msg} Aborting.")
-            # Reset count and set event to allow potential cleanup/reset
-            self._total_outstanding_tasks = 0
-            self._all_tasks_complete_event.set()
-            raise FatalError(msg) from e
+        # No need to return anything
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute based on participants.

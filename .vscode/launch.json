@@ -80,6 +80,7 @@
         "ui=pub/sub",
         "flows=[trans,simple]",
         "llms=full",
+        "human_in_loop=false"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

@@ -36,14 +36,24 @@
         "mode": "NULLABLE"
     },
     {
-        "name": "messages",
+        "name": "parameters",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "inputs",
+        "type": "JSON",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "records",
         "type": "JSON",
         "mode": "REPEATED"
     },
     {
-        "name": "parameters",
+        "name": "messages",
         "type": "JSON",
-        "mode": "NULLABLE"
+        "mode": "REPEATED"
     },
     {
         "name": "outputs",
