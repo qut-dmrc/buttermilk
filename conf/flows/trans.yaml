@@ -1,6 +1,7 @@
 # @package flows.trans
 # COMMENTED OUT # @package _global_
 defaults:
+  - _self_ 
   - /data: tja_train 
   - /agents:
     - judge
@@ -12,11 +13,8 @@ defaults:
     - scorer
     - host/sequencer
     - interface/web
-  - criteria@parameters/criteria: trans
-  - _self_ 
+  - criteria@parameters.criteria: trans
   
 orchestrator: buttermilk.runner.groupchat.AutogenOrchestrator
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
-parameters:
-  criteria:
-    - tja
+parameters: {}

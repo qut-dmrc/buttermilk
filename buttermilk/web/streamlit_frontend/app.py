@@ -16,7 +16,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk.bm import logger
 from buttermilk.runner.helpers import prepare_step_df
-from buttermilk.web.messages import _format_message_for_client
+from buttermilk.web.messages import format_message_for_client
 
 
 class StreamlitDashboardApp:
@@ -148,7 +148,7 @@ class StreamlitDashboardApp:
         async def callback(message):
             """Handle messages from the flow (async)"""
             logger.debug(f"Callback received message: {type(message).__name__} for session {session_id}")
-            content = _format_message_for_client(message)
+            content = format_message_for_client(message)
             needs_rerun = False
 
             if content:

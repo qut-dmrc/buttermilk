@@ -26,7 +26,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 # Assuming prepare_step_df is potentially async
 from buttermilk.runner.helpers import prepare_step_df
-from buttermilk.web.messages import _format_message_for_client
+from buttermilk.web.messages import format_message_for_client
 
 ALL_MESSAGES = Union[
     ManagerMessage,
@@ -215,7 +215,7 @@ def get_shiny_app(flows: FlowRunner):
             # Log all received messages for debugging
             logger.debug(f"Received message in callback_to_ui: Type={type(message)}, Content={message}")
 
-            content = _format_message_for_client(message)
+            content = format_message_for_client(message)
             if content:
                 # Raw HTML content should work with default behavior
                 await chat.append_message(content)

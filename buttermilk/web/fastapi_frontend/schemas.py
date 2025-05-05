@@ -65,13 +65,6 @@ class ProgressData(BaseModel):
         arbitrary_types_allowed = True
 
 
-class ChatMessage(BaseModel):
-    """Chat message model"""
-
-    content: str = Field(..., description="Content of the message")
-    timestamp: str | None = Field(None, description="Timestamp of the message")
-    agent_info: AgentInfo | None = Field(None, description="Information about the agent")
-
 
 class WebSocketMessage(BaseModel):
     """Base model for WebSocket messages"""

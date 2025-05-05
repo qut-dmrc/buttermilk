@@ -24,7 +24,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     OOBMessages,
 )
-from buttermilk.web.messages import _format_message_for_client
+from buttermilk.api.services.message_service import MessageService
 
 
 class WebUIAgent(RoutedAgent):
@@ -56,9 +56,9 @@ class WebUIAgent(RoutedAgent):
             message: The message to send
 
         """
-        message = _format_message_for_client(message)
-        if message:
-            await self.callback_to_ui(message)
+        formatted_message = MessageService.format_message_for_client(message)
+        if formatted_message:
+            await self.callback_to_ui(formatted_message)
 
     async def comms(self):
         # Monitor a websocket connection
@@ -94,7 +94,7 @@ class WebUIAgent(RoutedAgent):
             ctx: Message context
 
         """
-        logger.debug(f"WebUIAgent received group chat message: {type(message).__name__}")
+        logger.info(f"WebUIAgent received group chat message: {type(message).__name__}")
 
         await self.send_to_ui(message)
 
@@ -104,8 +104,8 @@ class WebUIAgent(RoutedAgent):
         message: AllMessages,  # Handles out-of-band control messages.
         ctx: MessageContext,
     ) -> OOBMessages | None:
-        logger.debug(f"WebUIAgent received event message: {type(message).__name__}")
-        await self.callback_to_ui(message)
+        logger.info(f"WebUIAgent received event message: {type(message).__name__}")
+        await self.send_to_ui(message)
         return None
 
     async def cleanup(self):

@@ -1,11 +1,10 @@
 import datetime
 from functools import wraps
 
-from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from buttermilk.api.services.data_service import DataService
-from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import logger
 
@@ -111,7 +110,6 @@ class DashboardRoutes:
             logger.debug(f"Request received for /api/outcomes/ (Session: {session_id}, Accept: {accept_header})")
 
             session_data = DataService.safely_get_session_data(self.websocket_manager, session_id or "")
-            scores = {}
             pending_agents = session_data.get("pending_agents", [])
             current_version = "0"
 
@@ -126,10 +124,9 @@ class DashboardRoutes:
 
                 if hasattr(session_state, "messages"):
                     original_messages = [msg_data["original"] for msg_data in session_state.messages if "original" in msg_data]
-                    scores = MessageService.extract_scores_from_messages(original_messages)
 
             # Return data dict for decorator
-            return {"scores": scores, "pending_agents": pending_agents}
+            return {"pending_agents": pending_agents}
 
         @self.router.get("/api/history/")
         @self._negotiate_content("partials/run_history.html")  # Apply decorator
@@ -170,7 +167,6 @@ class DashboardRoutes:
 
             # Return data dict for decorator
             return {"history": history}
-
 
     def get_router(self) -> APIRouter:
         """Get the router instance
