@@ -11,7 +11,7 @@ defaults:
     - owl
     - scorer
     - host/sequencer
-    # - interface/web
+    - interface/web
   - criteria@parameters/criteria: trans
   - _self_ 
   

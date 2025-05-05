@@ -60,7 +60,7 @@
       "args": [
         "ui=api",
         "flows=[trans,simple]",
-        "llms=lite",
+        "llms=full",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

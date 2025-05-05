@@ -49,14 +49,14 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """Lifespan event handler for startup and shutdown events.
         """
         try:
-            # Startup event
-            worker = JobQueueClient(
-                flow_runner=flows,
-                max_concurrent_jobs=1,
-            )
-            app.state.job_worker = worker
-            logger.info("Started job worker in FastAPI application")
-            task = asyncio.create_task(worker.pull_tasks())
+            # # Startup event
+            # worker = JobQueueClient(
+            #     flow_runner=flows,
+            #     max_concurrent_jobs=1,
+            # )
+            # app.state.job_worker = worker
+            # logger.info("Started job worker in FastAPI application")
+            # task = asyncio.create_task(worker.pull_tasks())
             yield
         except Exception as e:
             logger.error(f"Failed to start job worker: {e}")
