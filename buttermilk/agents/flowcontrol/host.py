@@ -418,13 +418,11 @@ class HostAgent(Agent):
             progress=1.0,
         )
 
+        logger.info(f"Host {self.agent_id} flow execution finished.")
         self._current_step_name = None  # Clear current step after finishing
+        # Send the END step to signal completion
         end_step = StepRequest(role=END, content="Flow completed.")
         await self._input_callback(end_step)
-
-        logger.info(f"Host {self.agent_id} flow execution finished.")
-        # Raise here so that the orchestrator can handle the end of the flow.
-        raise StopAsyncIteration
 
     async def _execute_step(self, step: StepRequest) -> None:
         """Send the StepRequest for the current step."""

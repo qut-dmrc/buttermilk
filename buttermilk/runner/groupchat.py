@@ -15,14 +15,16 @@ import shortuuid
 import weave
 from autogen_core import (
     AgentType,  # Represents a registered type of agent in the runtime.
+    DefaultInterventionHandler,
     DefaultTopicId,  # A standard implementation for topic identifiers.
+    MessageContext,
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
-)
+    )
 from pydantic import PrivateAttr
 
-from buttermilk._core import AgentInput, AgentTrace
+from buttermilk._core import AgentInput, AgentTrace, StepRequest
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
@@ -30,11 +32,32 @@ from buttermilk._core.contract import (
     FlowMessage,
     ManagerMessage,
 )
-from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
+
+
+class TerminationHandler(DefaultInterventionHandler):
+    def __init__(self) -> None:
+        self._termination_value: StepRequest | None = None
+
+    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
+        if isinstance(message, StepRequest):
+            if message.role == "END":
+                # This is a termination message
+                logger.info(f"Termination message received: {message}")
+                self._termination_value = message
+        return message
+
+    @property
+    def termination_value(self) -> StepRequest | None:
+        return self._termination_value
+
+    @property
+    def has_terminated(self) -> bool:
+        return self._termination_value is not None
 
 
 class AutogenOrchestrator(Orchestrator):
@@ -71,15 +94,16 @@ class AutogenOrchestrator(Orchestrator):
         """Initializes the Autogen runtime and registers all configured agents."""
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
-        self._runtime = SingleThreadedAgentRuntime()
+
+        termination_handler = TerminationHandler()
+        self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[termination_handler])
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
+        logger.debug("Autogen runtime started.")
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
-
-        logger.debug("Autogen runtime started.")
 
         # does it need a second to spin up?
         await asyncio.sleep(1)
@@ -220,29 +244,27 @@ class AutogenOrchestrator(Orchestrator):
                         trace = AgentTrace(agent_id=agent_type.type, agent_info=variant_config, outputs=record, session_id=self.session_id, inputs=AgentInput())
                         await self._runtime.publish_message(trace, topic_id=DefaultTopicId(type=MANAGER))
 
-            # 3. Enter the main loop - now much simpler
-            while True:
-                try:
-                    await asyncio.sleep(1)
-                    # # Handle END signal
-                    # if step.role == END:
-                    #     logger.info("Host agent signaled flow completion")
-                    #     break
+            # 3. Wait for termination.
+            # try:
+            await self._runtime.stop_when_idle()
+                # # Handle END signal
+                # if step.role == END:
+                #     logger.info("Host agent signaled flow completion")
+                #     break
 
-                except ProcessingError as e:
-                    # Non-fatal error - let the host agent decide how to recover
-                    logger.error(f"Error in execution: {e}")
-                    continue
-                except (StopAsyncIteration, KeyboardInterrupt):
-                    raise
-                except FatalError:
-                    raise
-                except Exception as e:
-                    logger.exception(f"Unexpected error: {e}")
-                    raise FatalError from e
+            # except ProcessingError as e:
+            #     # Non-fatal error - let the host agent decide how to recover
+            #     logger.error(f"Error in execution: {e}")
+            # except (StopAsyncIteration, KeyboardInterrupt):
+            #     raise
+            # except FatalError:
+            #     raise
+            # except Exception as e:
+            #     logger.exception(f"Unexpected error: {e}")
+            #     raise FatalError from e
 
-        except (StopAsyncIteration, KeyboardInterrupt):
-            logger.info("Flow terminated normally")
+        except (KeyboardInterrupt):
+            logger.info("Flow terminated by user.")
         except FatalError as e:
             logger.error(f"Fatal error: {e}")
         except Exception as e:
