@@ -44,7 +44,7 @@ class HostAgent(Agent):
     for synchronization.
     """
 
-    _input_callback: Callable[..., Awaitable[None]] | None = PrivateAttr(default=None)  # Allow None
+    _input_callback: Callable[..., Awaitable[None]] = PrivateAttr()
     _pending_agent_id: str | None = PrivateAttr(default=None)  # Track agent waiting for signal (Seems unused? Keep for now)
 
     _output_model: type[BaseModel] | None = StepRequest
@@ -164,41 +164,11 @@ class HostAgent(Agent):
                     if public_callback:
                         await public_callback(ErrorEvent(source=self.agent_id, content=msg))
 
-            # Check for interrupt signal
-            if getattr(message, "interrupt", False):
-                logger.info(f"Host {self.agent_id} received interrupt signal. Pausing execution.")
-                # Use the MANAGER role for the interrupt 'task'
-                interrupt_role = MANAGER
-                async with self._tasks_condition:
-                    self._pending_tasks_by_agent[interrupt_role] += 1  # Increment count for MANAGER
-                    logger.info(
-                        f"Interrupt added '{interrupt_role}' task. "
-                        f"Pending tasks: {dict(self._pending_tasks_by_agent)}.",  # Log the dict
-                    )
-
-                # Send a progress update indicating the pause, associated with the MANAGER role
-                await self._send_progress_update(
-                    role=interrupt_role,
-                    status="paused",
-                    message="Workflow paused by interrupt signal. Waiting for resume signal.",
-                    # Progress remains at the current step's level
-                    progress=(self._current_step / self._total_steps if self._total_steps > 0 else 0.0),
-                )
-                # Log the expectation for the external agent to send TaskProcessingComplete to resume
-                logger.info(f"Host expects a TaskProcessingComplete(role='{interrupt_role}') to resume.")
-                return None  # Stop processing this message further here
-
-            # --- Handle ManagerResponse (non-interrupt) ---
-            # This branch is now only for non-interrupt ManagerResponses (e.g., feedback)
-            # Resumption after an interrupt is handled by TaskProcessingComplete(role='MANAGER')
-            logger.debug(f"Host received ManagerResponse (non-interrupt): {message}")
-            # Feedback handling is done in _listen
             return None  # Return after handling non-interrupt ManagerResponse
 
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
-            # Use MANAGER role as ID if the completion is for an interrupt
-            agent_id_to_update = message.agent_id if message.role != MANAGER else MANAGER
+            agent_id_to_update = message.agent_id
             should_send_progress = False  # Flag to send progress update outside the lock
             async with self._tasks_condition:
                 if agent_id_to_update in self._pending_tasks_by_agent:
@@ -324,6 +294,8 @@ class HostAgent(Agent):
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the dictionary of pending tasks is empty using a Condition."""
+        # First, sleep a bit to allow other tasks to run
+        await asyncio.sleep(3)
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
@@ -446,13 +418,13 @@ class HostAgent(Agent):
             progress=1.0,
         )
 
+        self._current_step_name = None  # Clear current step after finishing
         end_step = StepRequest(role=END, content="Flow completed.")
-        if self._input_callback:
-            await self._input_callback(end_step)
+        await self._input_callback(end_step)
 
         logger.info(f"Host {self.agent_id} flow execution finished.")
-        self._current_step_name = None  # Clear current step after finishing
-        return end_step
+        # Raise here so that the orchestrator can handle the end of the flow.
+        raise StopAsyncIteration
 
     async def _execute_step(self, step: StepRequest) -> None:
         """Send the StepRequest for the current step."""
@@ -473,33 +445,12 @@ class HostAgent(Agent):
         records = getattr(self, "_records", [])
         message = StepRequest(role=step.role, content=message_content, records=records)
 
-        if not self._input_callback:
-             logger.error(
-                 f"Host {self.agent_id} cannot publish StepRequest for role {step.role}: "
-                 "_input_callback is not set.",
-             )
-             # If publish fails, we might deadlock if agents were expected.
-             # Consider raising an error or specific handling. For now, just log.
-             # Also ensure condition is notified if we error out here and nothing is pending
-             async with self._tasks_condition:
-                 if not self._pending_tasks_by_agent:
-                     self._tasks_condition.notify_all()
-             return
+        logger.info(f"Host {self.agent_id} publishing StepRequest for role {step.role}...")
+        await self._input_callback(message)
+        logger.debug(f"Host {self.agent_id} successfully published StepRequest for role {step.role}")
 
-        try:
-            logger.debug(f"Host {self.agent_id} publishing StepRequest for role {step.role}...")
-            await self._input_callback(message)
-            logger.debug(f"Host {self.agent_id} successfully published StepRequest for role {step.role}")
-        except Exception as e:  # Catch specific exceptions if possible
-            logger.exception(
-                f"Host {self.agent_id} encountered an error calling _input_callback for role {step.role}: {e}",
-            )
-            # Consider raising FatalError or specific handling
-            # Ensure condition is notified if we error out here and nothing is pending
-            async with self._tasks_condition:
-                if not self._pending_tasks_by_agent:
-                    self._tasks_condition.notify_all()
-            raise  # Re-raise the exception after attempting notification
+        # Wait a bit to allow the agent to process the request
+        await asyncio.sleep(5)
 
     def _store_exploration_result(self, execution_id: str, output: AgentTrace) -> None:
         """Store the result of an agent execution in the exploration history."""
@@ -536,10 +487,6 @@ class HostAgent(Agent):
 
     async def _send_progress_update(self, role: str, status: str, message: str, progress: float = 0.0) -> None:
         """Send a progress update to the UI agent."""
-        if not self._input_callback:
-            logger.warning("Cannot send progress update: input_callback is not set.")
-            return
-
         try:
             # Ensure progress is between 0 and 1
             progress = max(0.0, min(1.0, progress))
