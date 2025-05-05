@@ -4,10 +4,10 @@ from autogen_core import CancellationToken
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
+from buttermilk._core.constants import WAIT
 from buttermilk._core.contract import (
-    END,
-    WAIT,
     AgentInput,
+    AgentResponse,
     ConductorRequest,
     StepRequest,
 )
@@ -42,19 +42,19 @@ class ExplorerHost(LLMHostAgent):
 
     _output_model: type[BaseModel] | None = StepRequest
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs):
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
         """Process a message for the Explorer agent - calls _choose to determine the next step"""
         from buttermilk._core.agent import AgentResponse  # Import locally to avoid being removed
 
         if isinstance(message, ConductorRequest):
             step = await self._choose(message=message)
-            return AgentResponse(
-                metadata={"source": self.agent_id, "role": self.role},
+            return AgentResponse(agent_id=self.agent_id,
+                metadata={"role": self.role},
                 outputs=step,
             )
 
         step = StepRequest(role=WAIT, content="Waiting for conductor request")
-        return AgentResponse(
+        return AgentResponse(agent_id=self.agent_id,
             metadata={"source": self.agent_id, "role": self.role},
             outputs=step,
         )

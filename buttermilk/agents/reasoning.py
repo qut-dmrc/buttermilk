@@ -10,6 +10,7 @@ from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
 
 class Reasons(BaseModel):
+    conclusion: str = Field(..., description="Your conclusion or final answer summarizing current tentative conclusions and outlining any uncertainty or divergence.")
     reasons: list[str] = Field(..., description="Each element should represent a single step in logical reasoning.")
 
     def __str__(self):

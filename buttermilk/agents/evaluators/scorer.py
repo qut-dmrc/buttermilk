@@ -36,10 +36,8 @@ class QualResults(QualScore):
     """Extends QualScore to include metadata of assessed answers."""
 
     # This model is designed to present results externally, it is not used directly by the agent's output model.
-    agent_name: str = Field(..., description="The name of the agent whose output was assessed.")
-    agent_id: str = Field(..., description="The ID of the agent whose output was assessed.")
-    answer_id: str = Field(..., description="A unique identifier for the specific answer/output being assessed.")
-    assessor: str = Field(..., description="The name/ID of the agent performing the assessment (e.g., this LLMScorer).")
+    assessed_agent_id: str = Field(..., description="The ID of the agent whose output was assessed.")
+    assessed_call_id: str = Field(..., description="A unique identifier for the specific answer/output being assessed.")
     assessments: list[QualScoreCRA] = Field(..., description="A list of assessments, one for each criterion evaluated.")
 
     @computed_field
@@ -73,7 +71,7 @@ class QualResults(QualScore):
             score_str = "N/A"
 
         assessment_lines = [f"**{'✔️' if cra.correct else '✘'}**: {cra.feedback}" for cra in self.assessments]
-        return f"**Answer**: {self.answer_id}\t\t**Score**: {score_str}\n\n\t- " + "\n\n\t- ".join(assessment_lines)
+        return f"**Answer**: {self.assessed_call_id}\t\t**Score**: {score_str}\n\n\t- " + "\n\n\t- ".join(assessment_lines)
 
 
 # --- LLM Scorer Agent ---
@@ -178,10 +176,8 @@ class LLMScorer(LLMAgent):
         if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
             score = QualResults(
                 assessments=score_output.outputs.assessments,
-                agent_id=message.agent_info.agent_id,
-                agent_name=message.agent_info.name,
-                answer_id=message.call_id,
-                assessor=self.name,
+                assessed_agent_id=message.agent_info.agent_id,
+                assessed_call_id=message.call_id,
             )
             # replace the outputs object
             score_output.outputs = score

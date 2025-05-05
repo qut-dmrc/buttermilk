@@ -7,10 +7,11 @@ from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.agent import Agent, AgentResponse
+from buttermilk._core.agent import Agent
 from buttermilk._core.constants import COMMAND_SYMBOL, END, WAIT
 from buttermilk._core.contract import (
     AgentInput,
+    AgentResponse,
     AgentTrace,
     ConductorRequest,
     ConductorResponse,
@@ -436,7 +437,6 @@ class HostAgent(Agent):
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
         """Host _process implementation - not typically used directly."""
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
-        return AgentResponse(
-            metadata={"source": self.agent_id},
+        return AgentResponse(agent_id=self.agent_id,
             outputs=placeholder,
         )
