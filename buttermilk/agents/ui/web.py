@@ -56,9 +56,7 @@ class WebUIAgent(RoutedAgent):
             message: The message to send
 
         """
-        formatted_message = MessageService.format_message_for_client(message)
-        if formatted_message:
-            await self.callback_to_ui(formatted_message)
+        await self.callback_to_ui(message)
 
     async def comms(self):
         # Monitor a websocket connection
