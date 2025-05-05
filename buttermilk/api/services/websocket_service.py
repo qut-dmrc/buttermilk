@@ -9,6 +9,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import RunRequest
+from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 
 # Session data structure keys
@@ -270,6 +271,8 @@ class WebSocketManager:
             """
             # Send message to client if we have an active connection
             if session_id in self.active_connections:
-                await self.send_message(session_id, message)
+                formatted_message = MessageService.format_message_for_client(message)
+                if formatted_message:
+                    await self.send_message(session_id, message)
 
         return callback
