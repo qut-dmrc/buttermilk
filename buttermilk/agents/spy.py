@@ -26,7 +26,7 @@ class SpyAgent(RoutedAgent):
     @message_handler
     async def agent_output(self, message: AgentTrace, ctx: MessageContext) -> ErrorEvent | None:
         """Captures outputs from other agents and saves them."""
-        if isinstance(message, AgentTrace):
+        if isinstance(message, AgentTrace) and message.outputs:
             logger.info(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
             await self.manager.add(message)
         else:

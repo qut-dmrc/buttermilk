@@ -163,8 +163,7 @@ class JobQueueClient(BaseModel):
 
             try:
                 run_request = RunRequest.model_validate(data)
-                if not run_request.job_id:
-                    run_request.job_id = ack_id
+
             except pydantic.ValidationError as e:
                 logger.error(f"Validation error creating RunRequest from message (ack_id: {ack_id}): {e}. Message data: {data}")
                 try:
@@ -212,7 +211,8 @@ class JobQueueClient(BaseModel):
 
         try:
             logger.debug(f"Starting flow execution for job {job_desc}")
-            result = await self.flow_runner.run_flow(run_request)
+            # Ensure we wait for the flow to complete in the job queue context
+            result = await self.flow_runner.run_flow(run_request, wait_for_completion=True)
             logger.debug(f"Flow execution finished for job {job_desc}. Result type: {type(result)}")
 
             self.publish_status_update(

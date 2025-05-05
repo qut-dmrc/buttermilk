@@ -213,11 +213,12 @@ class Agent(AgentConfig):
             await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
 
             result = await self._process(message=final_input, cancellation_token=cancellation_token,
-        public_callback=public_callback,  # Callback provided by adapter
-        message_callback=message_callback,  # Callback provided by adapter
-          **kwargs)
-            trace.outputs = result.outputs
-            trace.metadata = result.metadata
+                public_callback=public_callback,  # Callback provided by adapter
+                message_callback=message_callback,  # Callback provided by adapter
+                **kwargs)
+            trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
+            if records := getattr(result, "records", None):
+                trace.records.extend([{"record_id": rec.record_id} for rec in records])  # Extract record IDs if available
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -462,5 +463,3 @@ class Agent(AgentConfig):
             f"Agent {self.agent_id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
         )
         return updated_inputs
-
-    # The _extract_vars method is no longer needed as we're using the utility functions

@@ -5,6 +5,7 @@ defaults:
     - trans 
 # Set UI mode to batch
 ui: batch
+human_in_loop: false
 
 # Batch-specific configuration
 batch:
