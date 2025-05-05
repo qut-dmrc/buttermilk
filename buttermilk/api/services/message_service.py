@@ -7,7 +7,7 @@ from shortuuid import ShortUUID
 from buttermilk._core.agent import AgentResponse, AgentTrace
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults
-from buttermilk.agents.judge import JudgeReasons
+from buttermilk.agents.judge import JudgeReasons, Reasons
 from buttermilk.bm import logger
 
 
