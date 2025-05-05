@@ -18,6 +18,7 @@ from buttermilk._core.contract import (
     ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
+    ManagerRequest,
     ManagerResponse,
     OOBMessages,
     StepRequest,
@@ -51,6 +52,13 @@ class HostAgent(Agent):
         default=240,
         description="Maximum time to wait for agent responses in seconds",
     )
+
+    human_in_loop: bool = Field(
+        default=True,
+        description="Whether to interact with the human/manager for step confirmation",
+    )
+    #  Queue for receiving confirmation responses from the MANAGER.
+    _user_confirmation: asyncio.Queue[ManagerResponse] = PrivateAttr(default_factory=lambda: asyncio.Queue(maxsize=1))
 
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     _current_step_name: str | None = PrivateAttr(default=None)
@@ -139,6 +147,18 @@ class HostAgent(Agent):
 
         # Handle ManagerResponse
         if isinstance(message, ManagerResponse):
+            # Check if the message is a user confirmation
+            if message.confirm:
+                logger.info(f"Host {self.agent_id} received user confirmation.")
+                # Store the confirmation in the queue for later processing
+                try:
+                    self._user_confirmation.put_nowait(message)
+                except asyncio.QueueFull:
+                    msg = f"Discarding user input because earlier input still hasn't been handled: {message}"
+                    logger.error(msg)
+                    if public_callback:
+                        await public_callback(ErrorEvent(source=self.agent_id, content=msg))
+
             # Check for interrupt signal
             if getattr(message, "interrupt", False):
                 logger.info(f"Host {self.agent_id} received interrupt signal. Pausing execution.")
@@ -243,6 +263,43 @@ class HostAgent(Agent):
 
         return None  # Explicitly return None if no other value is returned
 
+    async def request_user_confirmation(self, step: StepRequest) -> StepRequest:
+        """Request confirmation from the user for the next step.
+        
+        This method is used when human_in_loop is True to get user approval
+        before executing a step.
+        
+        Args:
+            step: The proposed next step
+            
+        Returns:
+            StepRequest: message asking the UI for input
+
+        """
+        request_content = (
+            f"**Next Proposed Step:**\n"
+            f"- **Agent Role:** {step.role}\n"
+            f"- **Description:** {step.content or '(No description)'}\n"
+            f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
+            f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
+            )
+        logger.debug(f"Requesting info from user about proposed step {step.role}.")
+        confirmation_request = ManagerRequest(role=MANAGER, prompt=request_content, inputs=dict(confirm=True, selection=[True, False]))
+        await self._input_callback(confirmation_request)
+
+    async def _wait_for_user(self, step) -> ManagerResponse:
+        await self.request_user_confirmation(step)
+        if not self.human_in_loop:
+            logger.warning("_wait_for_user called but host config has human in the loop disabled. Simulating user confirmation.")
+            return ManagerResponse(prompt=None, confirm=True, halt=False, interrupt=False, selection=None)
+        try:
+            response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_wait_time)
+            logger.debug(f"Received manager response: confirm = {response.confirm}, halt = {response.halt}, interrupt = {response.interrupt}, selection = {response.selection}")
+            return response
+        except TimeoutError:
+            logger.warning(f"{self.agent_id} hit timeout waiting for manager response after {self.max_wait_time} seconds.")
+            return await self._wait_for_user(step)
+
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the total count of outstanding tasks reaches zero.
 
@@ -340,6 +397,9 @@ class HostAgent(Agent):
             if self._total_outstanding_tasks == 0:
                 self._all_tasks_complete_event.clear()
                 logger.debug("Cleared completion event before step execution (no outstanding tasks).")
+
+            if step.role != WAIT:
+                await self._wait_for_user(step)
 
             # --- Execute the current step ---
             logger.info(f"Host proceeding with step for role: {step.role}")

@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import ShortUUID
 
+from buttermilk._core import ManagerRequest
 from buttermilk._core.agent import AgentResponse, AgentTrace
 from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import QualResults
@@ -53,6 +54,8 @@ class MessageService:
                     agent_id=message.agent_id,
                 )
                 return output
+            if isinstance(message, ManagerRequest):
+                return message
 
         except Exception as e:
             logger.error(f"Error formatting message for client: {e}")
