@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 """Mock Orchestrator for testing Buttermilk frontend components.
 
-This extends the real AutogenOrchestrator but simulates agent behavior by generating 
-fake messages of all types. It can be used as a direct replacement for the real 
-orchestrator during frontend testing.
+This extends the base Orchestrator class and simulates agent behavior by generating 
+fake messages of all types. It can be used for frontend testing without requiring
+actual agent execution.
 """
 
 import asyncio
 import random
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 import shortuuid
-import weave
-from autogen_core import (
-    DefaultTopicId,
-    MessageContext,
-    SingleThreadedAgentRuntime,
-)
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.config import AgentConfig
@@ -33,27 +28,17 @@ from buttermilk._core.contract import (
     ToolOutput,
 )
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import logger
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator, TerminationHandler
 
 
-class MockTerminationHandler(TerminationHandler):
-    """Extended termination handler that allows simulation control"""
+class MockTerminationHandler:
+    """Simplified termination handler that allows simulation control"""
 
     def __init__(self) -> None:
-        super().__init__()
         self._should_terminate = False
-
-    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
-        if isinstance(message, dict) and message.get("type") == "simulate_flow":
-            # Handle special simulation control messages
-            logger.info("Simulation flow control message received")
-            return None  # Don't propagate control messages
-
-        # Normal message handling
-        result = await super().on_publish(message, message_context=message_context)
-        return result
+        self._termination_value = None
 
     def request_termination(self):
         """Signal that the simulation should terminate"""
@@ -64,8 +49,8 @@ class MockTerminationHandler(TerminationHandler):
         return self._termination_value is not None or self._should_terminate
 
 
-class MockOrchestrator(AutogenOrchestrator):
-    """Mock version of AutogenOrchestrator that generates simulated agent messages.
+class MockOrchestrator(Orchestrator):
+    """Mock version of Orchestrator that generates simulated agent messages.
     
     This orchestrator bypasses the actual agent processing and instead generates
     fake messages that mimic a real orchestrator run. It's useful for frontend
@@ -82,18 +67,15 @@ class MockOrchestrator(AutogenOrchestrator):
     _termination_handler: MockTerminationHandler | None = PrivateAttr(default_factory=lambda: None)
     _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
     _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
+    _topic_type: str = PrivateAttr(default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}")
 
-    async def _setup(self, request: RunRequest) -> MockTerminationHandler:
-        """Override setup to create a mock runtime without actual agents"""
-        msg = f"Setting up MockOrchestrator for topic: {self._topic.type}"
+    async def _setup(self, request: RunRequest) -> None:
+        """Setup the mock orchestrator environment"""
+        msg = f"Setting up MockOrchestrator for topic: {self._topic_type}"
         logger.info(msg)
 
         # Create our custom termination handler
         self._termination_handler = MockTerminationHandler()
-
-        # Set up the runtime (just like the real orchestrator)
-        self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[self._termination_handler])
-        self._runtime.start()
 
         # Set up simplified participants dict
         self._participants = {
@@ -106,19 +88,25 @@ class MockOrchestrator(AutogenOrchestrator):
         }
 
         # Send initial welcome message
-        await self._runtime.publish_message(
+        await self._publish_message(
             ManagerMessage(content=msg),
-            topic_id=DefaultTopicId(type=MANAGER),
         )
 
-        return self._termination_handler
+        # Handle any initial data if provided
+        if request:
+            await self._fetch_initial_records(request)
 
-    @weave.op
-    async def _run(self, request: RunRequest | None = None) -> None:
+    async def _cleanup(self) -> None:
+        """Clean up resources"""
+        logger.debug("Cleaning up MockOrchestrator...")
+
+        await asyncio.sleep(0.1)  # Small delay for cleanup
+
+    async def _run(self, request: RunRequest | None = None, **ignored_tracing_kwargs) -> None:  # noqa
         """Override run to generate fake messages instead of using real agents"""
         try:
-            # Setup the runtime (simplified)
-            await self._setup(request or RunRequest())
+            # Setup the mock environment
+            await self._setup(request or RunRequest(flow="mock_flow"))
 
             # Set callback on request if provided
             if request and hasattr(request, "callback_to_ui") and request.callback_to_ui:
@@ -134,7 +122,7 @@ class MockOrchestrator(AutogenOrchestrator):
 
             # Wait for termination signal
             while True:
-                if self._termination_handler.has_terminated:
+                if self._termination_handler and self._termination_handler.has_terminated:
                     logger.info("Termination message received.")
                     break
                 await asyncio.sleep(0.1)
@@ -143,7 +131,7 @@ class MockOrchestrator(AutogenOrchestrator):
             logger.info("Flow terminated by user.")
         except FatalError as e:
             logger.error(f"Fatal error: {e}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.exception(f"Unhandled exception: {e}")
         finally:
             # Cancel simulation if running
@@ -155,18 +143,6 @@ class MockOrchestrator(AutogenOrchestrator):
                     pass
 
             await self._cleanup()
-
-    async def _cleanup(self) -> None:
-        """Clean up resources"""
-        logger.debug("Cleaning up MockOrchestrator...")
-        try:
-            # Stop the runtime
-            if self._runtime._run_context:  # runtime is started
-                await self._runtime.stop_when_idle()
-        except Exception as e:
-            logger.warning(f"Error during runtime cleanup: {e}")
-        finally:
-            await asyncio.sleep(1)  # Give it some time to properly shut down
 
     # --- Message Generation Methods ---
 
@@ -301,29 +277,43 @@ class MockOrchestrator(AutogenOrchestrator):
             await self._publish_message(completion)
 
             # Signal termination after simulation is complete
-            self._termination_handler.request_termination()
+            if self._termination_handler:
+                self._termination_handler.request_termination()
 
         except asyncio.CancelledError:
             logger.debug("Flow simulation cancelled")
             raise
 
+    def _make_publish_callback(self) -> Callable:
+        """Creates an asynchronous callback function for the UI to use.
+
+        Returns:
+            An async callback function that takes a message and publishes it.
+
+        """
+        async def publish_callback(message) -> None:
+            # Just forward to our _publish_message method
+            await self._publish_message(message)
+
+        return publish_callback
+
     async def _publish_message(self, message):
-        """Publish a message to both the runtime and directly to UI if possible"""
-        # Get appropriate topic ID based on message type
-        if hasattr(message, "role") and message.role == MANAGER:
-            topic_id = DefaultTopicId(type=MANAGER)
+        """Publish a message directly to the websocket if available"""
+        # Log the message
+        if hasattr(message, "content"):
+            log_content = message.content
+            if len(log_content) > 100:
+                log_content = log_content[:97] + "..."
+            logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
         else:
-            topic_id = self._topic
+            logger.debug(f"Mock message: {message.__class__.__name__}")
 
-        # First publish through the runtime (the normal flow)
-        await self._runtime.publish_message(message, topic_id=topic_id)
-
-        # Also send direct to websocket if we have a client_websocket
+        # Send directly to websocket if we have a client_websocket
         if self._client_websocket:
             try:
                 await self._client_websocket(message)
             except Exception as e:
-                logger.error(f"Error sending directly to websocket: {e}")
+                logger.error(f"Error sending to websocket: {e}")
 
     # --- Mock Message Generator Methods ---
 
@@ -350,17 +340,15 @@ class MockOrchestrator(AutogenOrchestrator):
                 "model": random.choice(["gpt-4", "claude-3", "gemini-pro", "llama-3"]),
             }
 
-        # Create a session ID if it wasn't already generated
-        session_id = getattr(self, "session_id", shortuuid.uuid())
-
         # Create an empty AgentInput for the trace
         agent_input = AgentInput()
 
-        # Create a basic agent config
+        # Create a proper AgentConfig instance
         agent_info = AgentConfig(
-            id=agent_id,
+            agent_id=agent_id,
             description=f"{agent_id} agent for processing tasks",
             parameters={},
+            session_id=self.session_id,
         )
 
         return AgentTrace(
@@ -370,7 +358,7 @@ class MockOrchestrator(AutogenOrchestrator):
             metadata=metadata,
             timestamp=datetime.now(UTC),
             agent_info=agent_info,
-            session_id=session_id,
+            session_id=self.session_id,
             inputs=agent_input,
         )
 
@@ -481,9 +469,8 @@ class MockOrchestrator(AutogenOrchestrator):
             ]
             content = random.choice(outputs)
 
-        # The actual ToolOutput class from buttermilk requires different parameters
         return ToolOutput(
-            name=function_name,  # Use name instead of function_name
+            name=function_name,
             content=content,
             call_id=str(uuid.uuid4()),
         )

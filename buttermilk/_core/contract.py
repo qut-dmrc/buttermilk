@@ -466,7 +466,7 @@ class ManagerResponse(FlowMessage):
     interrupt: bool = Field(
         default=False, description="If True, signals the user wants to pause for conductor review of feedback.",
     )
-    prompt: str | None = Field(default=None, description="Free-text feedback or instructions provided by the user.")
+    content: str | None = Field(default=None, description="Free-text feedback or instructions provided by the user.")
     selection: str | None = Field(
         default=None, description="The option selected by the user (e.g., a specific variant ID).",
     )
