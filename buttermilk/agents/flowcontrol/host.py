@@ -375,7 +375,7 @@ class HostAgent(Agent):
 
         while True:
             # Mark ourselves as processing
-            self._input_callback(TaskProcessingStarted(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
+            await self._input_callback(TaskProcessingStarted(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
             # Get the next step from the sequence generator
             step = await self._choose()  # No message needed
 
@@ -398,7 +398,7 @@ class HostAgent(Agent):
                 await self._execute_step(step)
                 await asyncio.sleep(5)  # Allow time for the agent to process the request
                 # clear our pending wait
-                self._input_callback(TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
+                await self._input_callback(TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
 
                 # wait for other tasks
                 await self._wait_for_all_tasks_complete()
