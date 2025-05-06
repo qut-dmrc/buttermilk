@@ -127,14 +127,14 @@ class WebSocketManager:
 
         """
         try:
-            message_type = message.get("type")
+            message_type = message.pop("type", None)
 
             if message_type == "run_flow":
                 await self.handle_run_flow(session_id, message, flow_runner)
             elif message_type == "user_input":
                 await self.handle_user_input(session_id, message)
-            elif message_type == "confirm":
-                await self.handle_confirm(session_id)
+            elif message_type == "manager_response":
+                await self.handle_confirm(session_id, message)
             elif message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":
                 if self.session_data[session_id]["callback"]:
                     await self.session_data[session_id]["callback"](message)
@@ -247,11 +247,12 @@ class WebSocketManager:
                 ErrorEvent(source="websocket_manager", content=f"Error handling user input: {e!s}"),
             )
 
-    async def handle_confirm(self, session_id: str) -> None:
+    async def handle_confirm(self, session_id: str, message: ManagerResponse) -> None:
         """Handle confirm action
         
         Args:
             session_id: The session ID
+            message: The message containing confirmation details
 
         """
         try:

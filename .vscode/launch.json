@@ -60,7 +60,7 @@
       "args": [
         "ui=api",
         "flows=[trans,simple]",
-        "llms=full",
+        "llms=lite",
         "human_in_loop=true"
       ],
       "envFile": "${workspaceFolder}/.env",
