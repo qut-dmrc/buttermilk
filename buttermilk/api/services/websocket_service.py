@@ -5,10 +5,12 @@ from fastapi import WebSocket
 
 from buttermilk._core.contract import (
     ErrorEvent,
+    FlowEvent,
+    FlowMessage,
     ManagerResponse,
 )
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.types import RunRequest
+from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 
@@ -80,7 +82,7 @@ class WebSocketManager:
 
         return callback
 
-    async def send_message(self, session_id: str, message: Any | dict[str, Any]) -> None:
+    async def send_message(self, session_id: str, message: Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection
         
         Args:

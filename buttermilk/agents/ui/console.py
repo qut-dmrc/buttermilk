@@ -291,7 +291,7 @@ class CLIUserAgent(UIAgent):
 
                 if is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerResponse(confirm=False, interrupt=False, prompt="\n".join(current_prompt_lines))
+                    response = ManagerResponse(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)
                 elif is_confirmation:
@@ -300,10 +300,10 @@ class CLIUserAgent(UIAgent):
                     has_feedback = bool(current_prompt_lines)
                     if has_feedback:
                         logger.info("User input interpreted as POSITIVE confirmation with feedback (interrupt).")
-                        response = ManagerResponse(confirm=True, interrupt=True, prompt="\n".join(current_prompt_lines))
+                        response = ManagerResponse(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
                     else:
                         logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = ManagerResponse(confirm=True, interrupt=False, prompt=None)
+                        response = ManagerResponse(confirm=True, interrupt=False, content=None)
 
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)

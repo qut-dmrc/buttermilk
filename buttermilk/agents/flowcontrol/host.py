@@ -133,10 +133,10 @@ class HostAgent(Agent):
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
 
         # Store user feedback if available
-        if isinstance(message, ManagerResponse) and message.prompt:
-            self._user_feedback.append(message.prompt)
+        if isinstance(message, ManagerResponse) and message.content:
+            self._user_feedback.append(message.content)
             await self._model_context.add_message(
-                UserMessage(content=f"User feedback: {message.prompt[:TRUNCATE_LEN]}", source="USER"),
+                UserMessage(content=f"User feedback: {message.content[:TRUNCATE_LEN]}", source="USER"),
             )
 
     async def _handle_events(
@@ -283,7 +283,7 @@ class HostAgent(Agent):
         await self.request_user_confirmation(step)
         if not self.human_in_loop:
             logger.warning("_wait_for_user called but host config has human in the loop disabled. Simulating user confirmation.")
-            return ManagerResponse(prompt=None, confirm=True, halt=False, interrupt=False, selection=None)
+            return ManagerResponse(content=None, confirm=True, halt=False, interrupt=False, selection=None)
         try:
             response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_wait_time)
             logger.debug(f"Received manager response: confirm = {response.confirm}, halt = {response.halt}, interrupt = {response.interrupt}, selection = {response.selection}")
