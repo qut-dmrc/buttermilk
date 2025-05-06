@@ -46,11 +46,6 @@
         "mode": "NULLABLE"
     },
     {
-        "name": "records",
-        "type": "JSON",
-        "mode": "REPEATED"
-    },
-    {
         "name": "messages",
         "type": "JSON",
         "mode": "REPEATED"

@@ -139,7 +139,7 @@ def main(cfg: DictConfig) -> None:
                 max_concurrent_jobs=1,
             )
             logger.info("Started job worker in FastAPI application")
-            asyncio.run(worker.pull_tasks())
+            asyncio.run(worker.pull_single_task())
 
             bm.logger.info("Pub/Sub listener stopped.")
 

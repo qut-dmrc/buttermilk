@@ -58,6 +58,20 @@ class JobQueueClient(BaseModel):
 
         return self
 
+    async def pull_single_task(self) -> None:
+        """Pull a single task from Pub/Sub and process it."""
+        if not self.flow_runner:
+            logger.warning("JobQueueClient initialized without a FlowRunner. Cannot pull tasks.")
+            return
+
+        try:
+            response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1)
+            if response.received_messages:
+                message = response.received_messages[0]
+                await self._process_message(message, wait=True)
+        except Exception as e:
+            logger.error(f"Error pulling pub/sub message: {e}", exc_info=True)
+
     async def pull_tasks(self) -> None:
         """Continuously pull tasks from Pub/Sub when the system is idle."""
         if not self.flow_runner:
@@ -134,7 +148,7 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _process_message(self, message: Any) -> None:
+    async def _process_message(self, message: Any, wait: bool = False) -> None:
         """Parse and dispatch a single message from the Pub/Sub queue."""
         ack_id = message.ack_id
         message_data = message.message.data
@@ -179,9 +193,11 @@ class JobQueueClient(BaseModel):
                 return
 
             logger.info(f"Processing job {run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Job ID: {run_request.job_id})")
-
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._run_job(run_request, ack_id))
+            if not wait:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._run_job(run_request, ack_id))
+            else:
+                await self._run_job(run_request, ack_id)
 
             self.publish_status_update(
                 batch_id=run_request.batch_id or "N/A",

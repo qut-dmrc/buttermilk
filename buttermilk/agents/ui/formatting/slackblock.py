@@ -227,9 +227,9 @@ def format_slack_message(result: AgentTrace) -> dict:
             blocks.extend(create_context_blocks(reason_elements))
 
         # Handle records if present
-        if hasattr(result_copy, "records") and result_copy.records:
+        if hasattr(result_copy, "records") and result_copy.records_deprecated:
             # Process each record
-            for record in result_copy.records:
+            for record in result_copy.records_deprecated:
                 record_metadata = dict(record.metadata)
                 record_metadata["record_id"] = record.record_id
                 record_metadata["title"] = record_metadata.get("title") or record.title
