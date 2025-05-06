@@ -196,18 +196,19 @@ class Orchestrator(OrchestratorProtocol, ABC):
         tracing_attributes = {
             **self.parameters,
             "orchestrator": self.__class__.__name__,  # Use class name
-            "flow_name": self.name,
+            "flow_name": request.flow if request else self.name,
             "flow_description": self.description,
             "record": request.record_id if request else None,
             "uri": request.uri if request else None,
         }
         try:
             assert bm.weave
-            display_name = self.name
-            if "criteria" in self.parameters:
-                display_name = f"{display_name} {self.parameters['criteria'][0]}"
-            if request and request.record_id:
-                display_name = f"{display_name}: {request.record_id}"
+            display_name = request.flow if request else self.name
+            if request:
+                if "criteria" in request.parameters:
+                    display_name = f"{display_name} {request.parameters['criteria'][0]}"
+                if request.record_id:
+                    display_name = f"{display_name}: {request.record_id}"
             display_name = f"{display_name} {bm.run_info.run_id}"
 
             langfuse_context.update_current_trace(name=display_name.strip(),

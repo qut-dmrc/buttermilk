@@ -218,7 +218,7 @@ class Agent(AgentConfig):
                 **kwargs)
             trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
             if records := getattr(result, "records", None):
-                trace.records.extend([{"record_id": rec.record_id} for rec in records])  # Extract record IDs if available
+                trace.records_deprecated.extend([{"record_id": rec.record_id} for rec in records])  # Extract record IDs if available
 
         except Exception as e:
             # Catch unexpected errors during _process.

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
+from buttermilk._core.constants import COMMAND_SYMBOL, CONDUCTOR, END, MANAGER, WAIT
 from buttermilk._core.contract import (
     AgentInput,
     AgentResponse,
@@ -374,6 +374,8 @@ class HostAgent(Agent):
             logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
         while True:
+            # Mark ourselves as processing
+            self._input_callback(TaskProcessingStarted(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
             # Get the next step from the sequence generator
             step = await self._choose()  # No message needed
 
@@ -381,30 +383,26 @@ class HostAgent(Agent):
                 logger.info("Host sequence finished. Waiting for final tasks before ending.")
                 break  # Exit the loop to perform final wait and send END
 
-            # No event clearing needed here, Condition handles the waiting logic based on the pending set
-
-            if step.role != WAIT:
-                await self._wait_for_user(step)  # Also includes user wait if human_in_loop=True
-            elif step.role == WAIT:
+            if step.role == WAIT:
                  # If it's a WAIT step, still wait for any potentially outstanding tasks from previous steps
                  # before proceeding with the artificial sleep/wait.
-                 await self._wait_for_all_tasks_complete()
                  logger.info("WAIT step: Completed waiting for any prior tasks. Now pausing.")
                  # Add artificial wait if needed for WAIT step, e.g., asyncio.sleep(5)
-                 # await asyncio.sleep(5) # Example: Wait for 5 seconds for WAIT step
+                 await asyncio.sleep(5)  # Example: Wait for 5 seconds for WAIT step
 
             # --- Execute the current step ---
             # Only execute if not a WAIT step (WAIT logic handled above)
-            if step.role != WAIT:
+            else:
+                await self._wait_for_user(step)  # Also includes user wait if human_in_loop=True
                 logger.info(f"Host proceeding with step for role: {step.role}")
                 await self._execute_step(step)
+                await asyncio.sleep(5)  # Allow time for the agent to process the request
+                # clear our pending wait
+                self._input_callback(TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
 
-            # --- Wait for ALL pending agents to complete before next iteration ---
-            # This ensures agents from the current step (or any previous step) finish
-            # before we proceed to the *next* step in the sequence.
-            await self._wait_for_all_tasks_complete()
-
-            logger.info(f"Host completed waiting period after step: {step.role}")
+                # wait for other tasks
+                await self._wait_for_all_tasks_complete()
+                logger.info(f"Host completed waiting period after step: {step.role}")
 
         # --- Sequence finished, perform final wait and send END ---
         await self._wait_for_all_tasks_complete()
@@ -423,6 +421,7 @@ class HostAgent(Agent):
         # Send the END step to signal completion
         end_step = StepRequest(role=END, content="Flow completed.")
         await self._input_callback(end_step)
+        return
 
     async def _execute_step(self, step: StepRequest) -> None:
         """Send the StepRequest for the current step."""

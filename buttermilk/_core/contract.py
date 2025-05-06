@@ -310,7 +310,7 @@ class AgentTrace(FlowMessage, AgentResponse):
         ...,
         description="The input for this call.",
     )
-    records: list[Any] = Field(
+    records_deprecated: list[Any] = Field(
         default_factory=list,
         description="List of data record IDs relevant to the current task.",
     )

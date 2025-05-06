@@ -19,6 +19,7 @@ from buttermilk import logger
 
 # Import base agent and specific message types used
 from buttermilk._core.agent import AgentInput, OOBMessages
+from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentTrace,
     ConductorResponse,
@@ -322,6 +323,10 @@ class CLIUserAgent(UIAgent):
             except asyncio.CancelledError:
                 logger.info(f"{self.agent_id}: Input polling task cancelled.")
                 break  # Exit loop cleanly on cancellation
+            except RuntimeError as e:
+                # Happens sometimes if multiple consoles are called in parallel. Best to
+                # kill the agent and hope we can go on.
+                raise FatalError(f"Runtime error in CLIUserAgent: {e}")
             except Exception as e:
                 # Log errors during input polling but try to continue
                 logger.error(f"{self.agent_id}: Error polling console input: {e}")
@@ -378,3 +383,21 @@ class CLIUserAgent(UIAgent):
             logger.debug(f"{self.agent_id}: No active input task to cancel.")
         # Call base class cleanup if needed
         # await super().cleanup()
+
+    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+        async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+            """Resets the agent state, including cancelling the input task."""
+            logger.info(f"{self.agent_id}: Resetting agent state...")
+            # Cancel the existing input task if it's running
+            if self._input_task and not self._input_task.done():
+                self._input_task.cancel()
+                try:
+                    await self._input_task
+                except asyncio.CancelledError:
+                    logger.debug(f"{self.agent_id}: Input task cancelled during reset.")
+                except Exception as e:
+                    logger.error(f"{self.agent_id}: Error cancelling input task during reset: {e}")
+            self._input_task = None  # Ensure the task reference is cleared
+            # Note: The input task will be restarted by `initialize` if called again after reset.
+            # Call base class reset if needed
+            # await super().on_reset(cancellation_token)

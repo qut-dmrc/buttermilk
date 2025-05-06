@@ -25,7 +25,7 @@ from autogen_core import (
 from pydantic import PrivateAttr
 
 from buttermilk._core import AgentInput, AgentTrace, StepRequest
-from buttermilk._core.agent import Agent
+from buttermilk._core.agent import Agent, ProcessingError
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
@@ -90,7 +90,7 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}"),
     )
 
-    async def _setup(self, request: RunRequest) -> None:
+    async def _setup(self, request: RunRequest) -> TerminationHandler:
         """Initializes the Autogen runtime and registers all configured agents."""
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
@@ -111,6 +111,8 @@ class AutogenOrchestrator(Orchestrator):
         # Send a welcome message to the UI and start up the host agent
         await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
+
+        return termination_handler
 
     async def _register_agents(self, params: RunRequest) -> None:
         """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
@@ -230,7 +232,7 @@ class AutogenOrchestrator(Orchestrator):
         """
         try:
             # 1. Setup the runtime and agents
-            await self._setup(request or RunRequest())
+            termination_handler = await self._setup(request or RunRequest())
 
             # 2. Load initial data if provided
             if request:
@@ -245,23 +247,23 @@ class AutogenOrchestrator(Orchestrator):
                         await self._runtime.publish_message(trace, topic_id=DefaultTopicId(type=MANAGER))
 
             # 3. Wait for termination.
-            # try:
-            await self._runtime.stop_when_idle()
-                # # Handle END signal
-                # if step.role == END:
-                #     logger.info("Host agent signaled flow completion")
-                #     break
+            while True:
+                try:
+                    if termination_handler.has_terminated:
+                        logger.info("Termination message received.")
+                        break
+                    await asyncio.sleep(0.1)
 
-            # except ProcessingError as e:
-            #     # Non-fatal error - let the host agent decide how to recover
-            #     logger.error(f"Error in execution: {e}")
-            # except (StopAsyncIteration, KeyboardInterrupt):
-            #     raise
-            # except FatalError:
-            #     raise
-            # except Exception as e:
-            #     logger.exception(f"Unexpected error: {e}")
-            #     raise FatalError from e
+                except ProcessingError as e:
+                    # Non-fatal error - let the host agent decide how to recover
+                    logger.error(f"Error in execution: {e}")
+                except (StopAsyncIteration, KeyboardInterrupt):
+                    raise
+                except FatalError:
+                    raise
+                except Exception as e:
+                    logger.exception(f"Unexpected error: {e}")
+                    raise FatalError from e
 
         except (KeyboardInterrupt):
             logger.info("Flow terminated by user.")
