@@ -187,6 +187,11 @@ class Agent(AgentConfig):
             error_output = ErrorEvent(source=self.agent_id, content=f"Failed to prepare input state: {e}")
             return error_output
 
+        trace_params = {**final_input.parameters, **final_input.metadata, **self.parameters}
+        langfuse_context.update_current_observation(name=f"{self.name} {self._cfg.parameters.get('model')}",
+                                                    input=final_input.inputs,
+                                                    metadata=trace_params,
+                                                    model=self._cfg.parameters.get("model"))
         # --- Weave Tracing ---
         # Get the current Weave call context if available.
         call = weave.get_current_call()
@@ -234,7 +239,7 @@ class Agent(AgentConfig):
             # --- Langfuse tracing ---
             langfuse_context.update_current_observation(name=self.name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
-        logger.info(f"Agent {self.agent_id} finished task {message}.")
+        logger.info(f"Agent {self.agent_id} {self.name} finished task {message}.")
         return trace
 
     @abstractmethod
