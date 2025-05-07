@@ -131,10 +131,13 @@ class WebSocketManager:
 
             if message_type == "run_flow":
                 run_request = await self.validate_request(session_id, message)
-                await self.handle_run_flow(session_id, run_request, flow_runner)
+                if run_request:
+                    run_request.callback_to_ui = self.make_callback_to_ui(session_id)
+                    await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "pull_task":
                 run_request = await self.queue_manager.pull_single_task()
                 if run_request:
+                    run_request.callback_to_ui = self.make_callback_to_ui(session_id)
                     await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "user_input":
                 await self.handle_user_input(session_id, message)
