@@ -67,6 +67,27 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "zot",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "pythonArgs": [
+        "-Xfrozen_modules=off",
+        "-Xdev"
+      ],
+      "justMyCode": true,
+      "args": [
+        "ui=console",
+        "flows=[trans,simple,z]",
+        "+flow=zot",
+        "llms=full",
+        "human_in_loop=true"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "pubsub",
       "type": "debugpy",
       "request": "launch",

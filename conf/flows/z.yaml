@@ -5,8 +5,8 @@ defaults:
   - /agents:
       - ragzot
   - /agents@observers:
-      - host/assistant
-      - interface/web
+    - host/assistant
+    - interface/web
     # - interface/console
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator

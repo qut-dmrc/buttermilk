@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
-from buttermilk._core import ManagerRequest
+from buttermilk._core import AgentConfig, ManagerRequest
 from buttermilk._core.agent import AgentOutput, AgentTrace
 from buttermilk._core.constants import CONDUCTOR
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerResponse
@@ -20,15 +20,14 @@ class ChatMessage(BaseModel):
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
-    agent_id: str = Field(..., description="Agent ID")
-    agent_name: str = Field(..., description="Agent ID")
+    agent_info: AgentConfig | None = Field(None, description="Agent information")
 
 
 class MessageService:
     """Service for handling message processing with Pydantic objects directly"""
 
     @staticmethod
-    def format_message_for_client(message: ChatMessage | Record | FlowEvent | FlowMessage) -> None | ChatMessage:
+    def format_message_for_client(message: AgentTrace | ChatMessage | Record | FlowEvent | FlowMessage) -> None | ChatMessage:
         """Pass through the message directly to the client
         
         Args:
@@ -43,20 +42,26 @@ class MessageService:
         if isinstance(message, ChatMessage):
             return message
 
-        message_id = None
+        message_id = message.call_id if hasattr(message, "call_id") else str(uuid())
         message_type = None
         outputs = message.outputs if hasattr(message, "outputs") else message
-        agent_id = message.agent_id if hasattr(message, "agent_id") else CONDUCTOR
-        agent_name = message.agent_name if hasattr(message, "agent_name") else CONDUCTOR
         preview = message.content if hasattr(message, "content") else None
         try:
+            if hasattr(message, "agent_info"):
+                agent_info = message.agent_info
+            else:
+                agent_info = AgentConfig(session_id=message.session_id if hasattr(message, "session_id") else None,
+                    agent_id=message.agent_id if hasattr(message, "agent_id") else CONDUCTOR,
+                    name=message.agent_name if hasattr(message, "agent_name") else CONDUCTOR,
+                    role=message.role if hasattr(message, "role") else CONDUCTOR,
+                    description="",
+                )
             if isinstance(message, Record):
                 message_type = "record"
                 preview = message.text
                 outputs = message
             elif isinstance(message, (AgentTrace, AgentOutput)):
                 message_type = "chat_message"
-                message_id = message.call_id
                 outputs = message.outputs
             elif isinstance(message, ManagerRequest):
                 message_type = "manager_request"
@@ -73,7 +78,7 @@ class MessageService:
                 type=message_type,
                 preview=preview,
                 outputs=outputs,
-                agent_id=agent_id, agent_name=agent_name,
+                agent_info=agent_info,
                 timestamp=datetime.datetime.now(),
             )
             return output

@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from buttermilk._core import AgentTrace
 from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
@@ -85,7 +86,7 @@ class WebSocketManager:
 
         return callback
 
-    async def send_message(self, session_id: str, message: Record | FlowEvent | FlowMessage) -> None:
+    async def send_message(self, session_id: str, message: AgentTrace | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection
         
         Args:
