@@ -75,8 +75,6 @@ class LLMAgent(Agent):
     _model_client: AutoGenWrapper = PrivateAttr(default=None)  # Populated by init_model validator
     # Subclasses should override this if they expect specific structured output
     _output_model: type[BaseModel] | None = PrivateAttr(default=None)
-    # TODO: _pause seems unused in this base class. Consider removing or implementing usage.
-    # _pause: bool = PrivateAttr(default=False)
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:

@@ -206,7 +206,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             display_name = request.flow if request else self.name
             if request:
                 if criteria := request.parameters.get("criteria"):
-                    display_name = f"{display_name} {criteria[0]}"
+                    display_name = f"{display_name} {criteria}"
                 if request.record_id:
                     display_name = f"{display_name}: {request.record_id}"
             display_name = f"{display_name} {bm.run_info.run_id}"
