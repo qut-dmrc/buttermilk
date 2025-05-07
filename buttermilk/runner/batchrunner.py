@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
-from buttermilk._core.batch import BatchErrorPolicy, BatchJobStatus, BatchMetadata, BatchRequest
+from buttermilk._core.batch import BatchJobStatus, BatchMetadata, BatchRequest
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
@@ -33,7 +33,6 @@ class BatchRunner(BaseModel):
     - Maintaining batch metadata
     """
 
-    flow_runner: FlowRunner
     job_queue: JobQueueClient | None = None
     _active_batches: dict[str, BatchMetadata] = PrivateAttr(default_factory=dict)
     _pending_jobs: dict[str, list[RunRequest]] = PrivateAttr(default_factory=dict)
@@ -41,6 +40,8 @@ class BatchRunner(BaseModel):
     _job_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
     _running: bool = PrivateAttr(default=False)
     _worker_task: asyncio.Task | None = PrivateAttr(default=None)
+
+    flow_runner: FlowRunner
 
     def __init__(self, **data):
         """Initialize the BatchRunner."""
@@ -67,16 +68,10 @@ class BatchRunner(BaseModel):
             ValueError: If the flow doesn't exist or record extraction fails
 
         """
-        # Validate flow exists
-        if batch_request.flow not in self.flow_runner.flows:
-            raise ValueError(f"Flow '{batch_request.flow}' not found. Available flows: {list(self.flow_runner.flows.keys())}")
-
         # Extract record IDs from the flow's data source
         try:
             # Use our helper class to get the record IDs
-            record_ids = await BatchRunnerHelper.get_record_ids_for_flow(
-                self.flow_runner, batch_request.flow,
-            )
+            record_ids = await BatchRunnerHelper.get_record_ids_for_flow(flow_runner=self.flow_runner, flow_name=batch_request.flow)
 
             logger.info(f"Extracted {len(record_ids)} record IDs for flow '{batch_request.flow}'")
         except Exception as e:
@@ -240,173 +235,3 @@ class BatchRunner(BaseModel):
 
         logger.info(f"Cancelled batch '{batch_id}'")
         return batch
-
-    async def start(self) -> None:
-        """Start the batch runner worker."""
-        if self._running:
-            logger.warning("BatchRunner already running")
-            return
-
-        self._running = True
-        self._worker_task = asyncio.create_task(self._worker_loop())
-        # self.job_queue.start_processing()
-        logger.info("Started BatchRunner worker")
-
-    async def stop(self) -> None:
-        """Stop the batch runner worker."""
-        if not self._running:
-            logger.warning("BatchRunner not running")
-            return
-
-        self._running = False
-        if self._worker_task:
-            self._worker_task.cancel()
-            try:
-                await self._worker_task
-            except asyncio.CancelledError:
-                pass
-            self._worker_task = None
-
-        logger.info("Stopped BatchRunner worker")
-
-    async def _worker_loop(self) -> None:
-        """Main worker loop for processing batch jobs."""
-        try:
-            while self._running:
-                # Process any pending jobs
-                job = await self._get_next_job()
-
-                if job:
-                    # Process the job
-                    batch_id = job.batch_id
-                    record_id = job.record_id
-
-                    job_id = f"{batch_id}:{record_id}"
-                    if job_id in self._running_jobs:
-                        # Job already running, skip
-                        continue
-
-                    # Mark job as running
-                    self._running_jobs.add(job_id)
-                    job.status = BatchJobStatus.RUNNING
-                    job.started_at = datetime.now(UTC).isoformat()
-
-                    # Update batch status if needed
-                    batch = self._active_batches[batch_id]
-                    if batch.status == BatchJobStatus.PENDING:
-                        batch.status = BatchJobStatus.RUNNING
-                        batch.started_at = datetime.now(UTC).isoformat()
-
-                    # Run the job
-                    asyncio.create_task(self._run_job(job))
-
-                else:
-                    # No pending jobs, sleep
-                    await asyncio.sleep(1)
-
-        except asyncio.CancelledError:
-            logger.info("Worker loop cancelled")
-            raise
-        except Exception as e:
-            logger.error(f"Error in worker loop: {e}", exc_info=True)
-            self._running = False
-
-    async def _get_next_job(self) -> RunRequest | None:
-        """Get the next job to process."""
-        for batch_id, jobs in self._pending_jobs.items():
-            batch = self._active_batches[batch_id]
-
-            # Skip cancelled batches
-            if batch.status == BatchJobStatus.CANCELLED:
-                continue
-
-            # Check if we have any pending jobs
-            pending_jobs = [j for j in jobs if j.status == BatchJobStatus.PENDING]
-            if pending_jobs:
-                # Get the first pending job
-                job = pending_jobs[0]
-
-                # Remove from pending list (will be added back if it fails)
-                self._pending_jobs[batch_id].remove(job)
-
-                return job
-
-        return None
-
-    async def _run_job(self, run_request: RunRequest) -> None:
-        """Run a job and update its status."""
-        batch_id = job.batch_id
-        record_id = job.record_id
-        job_id = f"{batch_id}:{record_id}"
-
-        try:
-            logger.info(f"Running job {job_id}")
-
-            # Run the flow
-            callback = await self.flow_runner.run_flow(run_request)
-
-            # Mark job as completed
-            run_request.status = BatchJobStatus.COMPLETED
-            run_request.completed_at = datetime.now(UTC).isoformat()
-
-            # Store job result
-            if batch_id not in self._job_results:
-                self._job_results[batch_id] = {}
-
-            self._job_results[batch_id][job_id] = {
-                "job_definition": run_request,
-                "result": callback,  # This might be a callback function, consider what you want to store
-                "completed_at": run_request.completed_at,
-            }
-
-            # Update batch metadata
-            batch = self._active_batches[batch_id]
-            batch.completed_jobs += 1
-
-            # Check if batch is complete
-            if batch.completed_jobs + batch.failed_jobs >= batch.total_jobs:
-                batch.status = BatchJobStatus.COMPLETED
-                batch.completed_at = datetime.now(UTC).isoformat()
-                logger.info(f"Batch {batch_id} completed")
-
-        except Exception as e:
-            logger.error(f"Error running job {job_id}: {e}", exc_info=True)
-
-            # Mark job as failed
-            run_request.status = BatchJobStatus.FAILED
-            run_request.completed_at = datetime.now(UTC).isoformat()
-            run_request.error = str(e)
-
-            # Store job result
-            if batch_id not in self._job_results:
-                self._job_results[batch_id] = {}
-
-            self._job_results[batch_id][job_id] = {
-                "job_definition": run_request,
-                "error": str(e),
-                "completed_at": run_request.completed_at,
-            }
-
-            # Update batch metadata
-            batch = self._active_batches[batch_id]
-            batch.failed_jobs += 1
-
-            # Check if batch should be failed based on error policy
-            if batch.parameters.get("error_policy") == BatchErrorPolicy.STOP:
-                batch.status = BatchJobStatus.FAILED
-                batch.completed_at = datetime.now(UTC).isoformat()
-                logger.info(f"Batch {batch_id} failed due to error policy")
-
-                # Remove all pending jobs
-                self._pending_jobs[batch_id] = []
-
-            # Check if batch is complete
-            elif batch.completed_jobs + batch.failed_jobs >= batch.total_jobs:
-                batch.status = BatchJobStatus.COMPLETED
-                batch.completed_at = datetime.now(UTC).isoformat()
-                logger.info(f"Batch {batch_id} completed with {batch.failed_jobs} failures")
-
-        finally:
-            # Remove from running jobs
-            if job_id in self._running_jobs:
-                self._running_jobs.remove(job_id)

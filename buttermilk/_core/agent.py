@@ -232,7 +232,7 @@ class Agent(AgentConfig):
             await public_callback(trace)
 
             # --- Langfuse tracing ---
-            langfuse_context.update_current_observation(name=self.name, inputs=trace.inputs, outputs=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
+            langfuse_context.update_current_observation(name=self.name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
         logger.info(f"Agent {self.agent_id} finished task {message}.")
         return trace

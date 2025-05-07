@@ -20,7 +20,6 @@ from omegaconf import DictConfig  # Import DictConfig for type hinting
 
 from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import create_app
-from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
@@ -132,16 +131,12 @@ def main(cfg: DictConfig) -> None:
                 bm.logger.info("Shutting down API server...")
 
         case "pub/sub":
-            # Start a listener for Google Cloud Pub/Sub messages.
 
-            worker = JobQueueClient(
-                flow_runner=flow_runner,
-                max_concurrent_jobs=1,
-            )
-            logger.info("Started job worker in FastAPI application")
-            asyncio.run(worker.fetch_and_run_task())
+            from buttermilk.runner.batch_cli import main as batch_main
 
-            bm.logger.info("Pub/Sub listener stopped.")
+            bm.logger.info("Running in batch mode...")
+            # We're already in the hydra context, so we can just call the main function
+            batch_main(cfg)
 
         case "slackbot":
             # Start a Slack bot integration.

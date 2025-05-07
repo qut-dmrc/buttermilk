@@ -61,7 +61,7 @@
         "ui=api",
         "flows=[trans,simple,z]",
         "llms=full",
-        "human_in_loop=true"
+        "human_in_loop=false"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -100,7 +100,9 @@
       "justMyCode": true,
       "args": [
         "ui=pub/sub",
-        "flows=[trans,simple]",
+        "+run=batch",
+        "flows=[trans]",
+        "+flow=trans",
         "llms=full",
         "human_in_loop=false"
       ],
