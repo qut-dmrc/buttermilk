@@ -206,6 +206,23 @@ class AgentInput(FlowMessage):
     # Validator to ensure context and records are always lists.
     _ensure_input_list = field_validator("context", "records", mode="before")(make_list_validator())
 
+    def __str__(self) -> str:
+        # Provide an abridged string representation of the inputs.
+        parts = []
+        if self.prompt:
+            prompt_summary = self.prompt[:50] + "..." if len(self.prompt) > 50 else self.prompt
+            parts.append(f"Prompt: '{prompt_summary}'")
+        if self.inputs:
+            parts.append(f"{len(self.inputs)} inputs")
+        if self.parameters:
+            parts.append(f"{len(self.parameters)} parameters")
+        if self.records:
+            parts.append(", ".join([rec.record_id for rec in self.records]))
+
+        if not parts:
+            return "AgentInput (empty)"
+        return f"AgentInput({', '.join(parts)})"
+
 
 class StepRequest(AgentInput):
     """Represents a request, typically from a Conductor agent, to execute a specific step in the flow.

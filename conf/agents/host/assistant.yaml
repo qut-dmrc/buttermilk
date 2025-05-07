@@ -1,8 +1,8 @@
 host:
   role: HOST
-  name: "🎯 Sequencer"
+  name: "🎯 Assistant"
   description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
-  agent_obj: HostAgent
+  agent_obj: LLMHostAgent
   human_in_loop: ${human_in_loop}
   inputs:
     task: Ask the MANAGER for input and assign an agent to the task. Repeat.
