@@ -76,7 +76,7 @@ class RagZot(LLMAgent, ToolConfig):
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
-        for data_conf in self.data:
+        for data_conf in self.data.values():
             if data_conf.type == "chromadb":
                 self._chromadb = ChromaDBEmbeddings(**data_conf.model_dump())
                 self._vectorstore = self._chromadb.collection

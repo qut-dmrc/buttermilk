@@ -205,8 +205,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
             assert bm.weave
             display_name = request.flow if request else self.name
             if request:
-                if "criteria" in request.parameters:
-                    display_name = f"{display_name} {request.parameters['criteria'][0]}"
+                if criteria := request.parameters.get("criteria"):
+                    display_name = f"{display_name} {criteria[0]}"
                 if request.record_id:
                     display_name = f"{display_name}: {request.record_id}"
             display_name = f"{display_name} {bm.run_info.run_id}"

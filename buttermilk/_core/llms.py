@@ -184,11 +184,11 @@ class AutoGenWrapper(RetryWrapper):
         """Pass messages to the Chat LLM, run tools if required, and reflect."""
         create_result = await self.create(messages=messages, tools=tools_list, cancellation_token=cancellation_token, schema=schema)
 
-        if isinstance(create_result, list):
+        if isinstance(create_result.content, list):
             # Tool choices
 
             tool_outputs = await self._execute_tools(
-                calls=create_result,
+                calls=create_result.content,
                 tools_list=tools_list,
                 cancellation_token=cancellation_token,
             )
