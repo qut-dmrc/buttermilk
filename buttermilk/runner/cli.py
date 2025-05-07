@@ -65,7 +65,7 @@ def main(cfg: DictConfig) -> None:
 
             # Run the flow synchronously
             bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
-            asyncio.run(flow_runner.run_flow(run_request=run_request))
+            asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
         case "batch":

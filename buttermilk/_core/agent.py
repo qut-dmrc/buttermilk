@@ -197,11 +197,6 @@ class Agent(AgentConfig):
         else:
             logger.warning(f"Agent {self.agent_id} __call__ executing outside Weave trace context.")
 
-        # --- Langfuse tracing ---
-        langfuse_context.update_current_observation(name=self.name,
-            metadata=self.parameters,
-        )
-
         # Create the trace here with required values
         trace = AgentTrace(session_id=self.session_id, agent_id=self.agent_id,
             agent_info=self._cfg,
@@ -233,8 +228,11 @@ class Agent(AgentConfig):
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
             )
 
-            # Send a full trace off for logging and further processing.
+            # Send a full trace off to another agent to save to the database
             await public_callback(trace)
+
+            # --- Langfuse tracing ---
+            langfuse_context.update_current_observation(name=self.name, inputs=trace.inputs, outputs=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
         logger.info(f"Agent {self.agent_id} finished task {message}.")
         return trace

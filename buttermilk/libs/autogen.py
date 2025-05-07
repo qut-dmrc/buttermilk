@@ -88,7 +88,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 self.agent = agent_cls(**agent_cfg)
                 logger.debug(f"Adapter instantiated agent: {self.agent.agent_id} ({agent_cls.__name__})")
             except Exception as e:
-                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg.agent_id}: {e}")
+                logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg}: {e}")
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e
         else:
             # Insufficient information provided.
