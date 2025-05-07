@@ -59,7 +59,7 @@
       "justMyCode": true,
       "args": [
         "ui=api",
-        "flows=[trans,simple]",
+        "flows=[trans,simple,z]",
         "llms=full",
         "human_in_loop=true"
       ],
