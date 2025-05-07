@@ -291,7 +291,7 @@ class HostAgent(Agent):
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the dictionary of pending tasks is empty using a Condition."""
         # First, sleep a bit to allow other tasks to run
-        await asyncio.sleep(3)
+        await asyncio.sleep(10)
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
@@ -380,25 +380,29 @@ class HostAgent(Agent):
                 break  # Exit the loop to perform final wait and send END
 
             if step.role == WAIT:
-                 # If it's a WAIT step, still wait for any potentially outstanding tasks from previous steps
-                 # before proceeding with the artificial sleep/wait.
-                 logger.info("WAIT step: Completed waiting for any prior tasks. Now pausing.")
-                 # Add artificial wait if needed for WAIT step, e.g., asyncio.sleep(5)
-                 await asyncio.sleep(5)  # Example: Wait for 5 seconds for WAIT step
+                # Control WAIT step: flush previous tasks before pausing
+                await self._input_callback(
+                    TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1),
+                )
+                # Wait for any remaining tasks to finish
+                await self._wait_for_all_tasks_complete()
+                # Artificial pause for WAIT step
+                await asyncio.sleep(5)
+                logger.info("Host completed waiting period after WAIT step.")
+                continue
 
             # --- Execute the current step ---
             # Only execute if not a WAIT step (WAIT logic handled above)
-            else:
-                await self._wait_for_user(step)  # Also includes user wait if human_in_loop=True
-                logger.info(f"Host proceeding with step for role: {step.role}")
-                await self._execute_step(step)
-                await asyncio.sleep(5)  # Allow time for the agent to process the request
-                # clear our pending wait
-                await self._input_callback(TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
+            await self._wait_for_user(step)  # Also includes user wait if human_in_loop=True
+            logger.info(f"Host proceeding with step for role: {step.role}")
+            await self._execute_step(step)
+            await asyncio.sleep(5)  # Allow time for the agent to process the request
+            # clear our pending wait
+            await self._input_callback(TaskProcessingComplete(role=CONDUCTOR, agent_id=self.agent_id, task_index=-1))
 
-                # wait for other tasks
-                await self._wait_for_all_tasks_complete()
-                logger.info(f"Host completed waiting period after step: {step.role}")
+            # wait for other tasks
+            await self._wait_for_all_tasks_complete()
+            logger.info(f"Host completed waiting period after step: {step.role}")
 
         # --- Sequence finished, perform final wait and send END ---
         await self._wait_for_all_tasks_complete()
