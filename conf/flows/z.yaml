@@ -1,0 +1,15 @@
+# @package flows.zot
+defaults:
+  - _self_
+  - /data: zot
+  - /agents:
+      - ragzot
+  - /agents@observers:
+      - host/rag
+      - interface/web
+    # - interface/console
+
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+description: Research assistant
+parameters:
+  human_in_loop: ${human_in_loop}

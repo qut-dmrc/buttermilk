@@ -9,7 +9,6 @@ from buttermilk._core.contract import (
     FlowMessage,
     ManagerResponse,
 )
-from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.flow import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
@@ -167,10 +166,10 @@ class WebSocketManager:
             data: The request data
 
         """
-        if not data.get("flow") or not data.get("record_id"):
+        if not data.get("flow"):
             await self.send_message(
                 session_id,
-                ErrorEvent(source="websocket_manager", content="Missing required fields: flow and record_id"),
+                ErrorEvent(source="websocket_manager", content="Missing required fields: flow"),
             )
             return None
 
@@ -180,8 +179,6 @@ class WebSocketManager:
         # Extract criteria from the original data if present
         if "criteria" in data:
             parameters["criteria"] = data["criteria"]
-        else:
-            raise ProcessingError("You must add criteria params to the run request.")
 
         run_request = RunRequest(
             flow=data["flow"],
