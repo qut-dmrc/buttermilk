@@ -12,12 +12,11 @@ from typing import Any, Self
 
 import pydantic
 from google.cloud.pubsub import PublisherClient, SubscriberClient
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger
-from buttermilk.runner.flowrunner import FlowRunner
 
 
 class JobQueueClient(BaseModel):
@@ -29,7 +28,6 @@ class JobQueueClient(BaseModel):
     - Checking if the system is idle
     """
 
-    flow_runner: FlowRunner | None = Field(default=None)
     idle_check_interval: float = 5.0
     max_concurrent_jobs: int = 1
 
@@ -148,7 +146,7 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _make_run_request(self, message: Any) -> RunRequest:
+    async def _make_run_request(self, message: Any) -> RunRequest | None:
         ack_id = message.ack_id
         message_data = message.message.data
 
@@ -163,6 +161,7 @@ class JobQueueClient(BaseModel):
                 logger.warning(f"Acked malformed message (ack_id: {ack_id})")
             except Exception as ack_err:
                 logger.error(f"Failed to ack malformed message (ack_id: {ack_id}): {ack_err}")
+        return None
 
     async def _process_message(self, run_request: RunRequest, wait: bool = False) -> None:
         """Parse and dispatch a single message from the Pub/Sub queue."""
@@ -198,14 +197,13 @@ class JobQueueClient(BaseModel):
 
     async def _run_job(self, run_request: RunRequest) -> None:
         """Run a job, update its status, and acknowledge the message upon success."""
-        assert self.flow_runner is not None, "FlowRunner must be initialized to run jobs"
-
         job_desc = f"{run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Job ID: {run_request.job_id})"
 
         try:
             logger.debug(f"Starting flow execution for job {job_desc}")
-            # Ensure we wait for the flow to complete in the job queue context
-            result = await self.flow_runner.run_flow(run_request, wait_for_completion=True)
+
+            # NOT IMPLEMENTED
+
             logger.debug(f"Flow execution finished for job {job_desc}. Result type: {type(result)}")
 
             self.publish_status_update(
