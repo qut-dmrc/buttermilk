@@ -219,7 +219,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             with weave.attributes(tracing_attributes):
                 await self._run(request=request, __weave={"display_name": display_name})
 
-                logger.info(f"Orchestrator '{self.name}' run finished successfully.")
+                logger.info(f"Orchestrator '{display_name}' run finished successfully.")
 
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.

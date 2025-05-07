@@ -28,13 +28,13 @@ class SpyAgent(RoutedAgent):
         """Captures outputs from other agents and saves them."""
         if isinstance(message, AgentTrace):
             if message.outputs:
-                logger.info(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
+                logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
                 await self.manager.add(message)
             else:
                 logger.debug(f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}")
         else:
             msg = f"Spy database save agent received incompatible output type: {type(message)} on topic {ctx.topic_id}"
-            logger.erdror(msg)
+            logger.error(msg)
             await self.publish_message(ErrorEvent(source=self.id.type, content=msg), topic_id=ctx.topic_id)
             raise ProcessingError(msg)
         return None

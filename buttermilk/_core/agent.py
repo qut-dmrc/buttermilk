@@ -236,7 +236,7 @@ class Agent(AgentConfig):
             # Send a full trace off for logging and further processing.
             await public_callback(trace)
 
-        logger.debug(f"Agent {self.agent_id} finished __call__.")
+        logger.info(f"Agent {self.agent_id} finished task {message}.")
         return trace
 
     @abstractmethod
