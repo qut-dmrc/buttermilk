@@ -11,8 +11,10 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record, RunRequest
+from buttermilk.api.flow import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
+from buttermilk.runner.flowrunner import FlowRunner
 
 # Session data structure keys
 # - messages: list of message objects
@@ -28,6 +30,8 @@ class WebSocketManager:
         """Initialize the WebSocket manager"""
         self.active_connections: dict[str, WebSocket] = {}
         self.session_data: dict[str, Any] = {}
+
+        self.queue_manager: JobQueueClient = JobQueueClient()
 
     async def connect(self, websocket: WebSocket, session_id: str) -> None:
         """Accept a WebSocket connection and store it
@@ -98,28 +102,22 @@ class WebSocketManager:
         if not formatted_message:
             logger.debug(f"Dropping message not handled by client: {message}")
             return
-
         try:
-            # Convert to dict if it's a Pydantic model
-            if not isinstance(message, dict):
-                if hasattr(message, "model_dump"):  # Pydantic v2
-                    message_data = message.model_dump(mode="json")
-                else:
-                    # Convert to dict for JSON serialization
-                    message_data = {"content": str(message), "type": "unknown"}
-            else:
-                message_data = message
+            message_type = formatted_message.type
+            formatted_message = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+            message_data = {"content": formatted_message, "type": message_type}
 
             await self.active_connections[session_id].send_json(message_data)
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             try:
                 error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
-                await self.active_connections[session_id].send_json(error_data)
-            except:
+                message_data = {"content": error_data, "type": "system_message"}
+                await self.active_connections[session_id].send_json(message_data)
+            except Exception as e:
                 logger.error("Failed to send error message")
 
-    async def process_message(self, session_id: str, message: dict[str, Any], flow_runner) -> None:
+    async def process_message(self, session_id: str, message: dict[str, Any], flow_runner: FlowRunner) -> None:
         """Process a message from a WebSocket connection
         
         Args:
@@ -132,7 +130,12 @@ class WebSocketManager:
             message_type = message.pop("type", None)
 
             if message_type == "run_flow":
-                await self.handle_run_flow(session_id, message, flow_runner)
+                run_request = await self.validate_request(session_id, message)
+                await self.handle_run_flow(session_id, run_request, flow_runner)
+            elif message_type == "pull_task":
+                run_request = await self.queue_manager.pull_single_task()
+                if run_request:
+                    await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "user_input":
                 await self.handle_user_input(session_id, message)
             elif message_type == "manager_response":
@@ -153,7 +156,40 @@ class WebSocketManager:
                 ErrorEvent(source="websocket_manager", content=f"Error processing message: {e!s}"),
             )
 
-    async def handle_run_flow(self, session_id: str, data: dict[str, Any], flow_runner) -> None:
+    async def validate_request(self, session_id: str, data: dict[str, Any]) -> RunRequest | None:
+        """Validate the request data
+        
+        Args:
+            session_id: The session ID
+            data: The request data
+
+        """
+        if not data.get("flow") or not data.get("record_id"):
+            await self.send_message(
+                session_id,
+                ErrorEvent(source="websocket_manager", content="Missing required fields: flow and record_id"),
+            )
+            return None
+
+        # Create run request
+        parameters = {}
+
+        # Extract criteria from the original data if present
+        if "criteria" in data:
+            parameters["criteria"] = data["criteria"]
+        else:
+            raise ProcessingError("You must add criteria params to the run request.")
+
+        run_request = RunRequest(
+            flow=data["flow"],
+            record_id=data["record_id"],
+            parameters=parameters,
+            callback_to_ui=self.make_callback_to_ui(session_id),
+            session_id=session_id,
+        )
+        return run_request
+
+    async def handle_run_flow(self, session_id: str, run_request: RunRequest, flow_runner) -> None:
         """Handle a flow run request
         
         Args:
@@ -163,33 +199,6 @@ class WebSocketManager:
 
         """
         try:
-            # Validate the request
-            request = RunRequest(session_id=session_id, **data)
-
-            if not request.flow or not request.record_id:
-                await self.send_message(
-                    session_id,
-                    ErrorEvent(source="websocket_manager", content="Missing required fields: flow and record_id"),
-                )
-                return
-
-            # Create run request
-            parameters = {}
-
-            # Extract criteria from the original data if present
-            if "criteria" in data:
-                parameters["criteria"] = data["criteria"]
-            else:
-                raise ProcessingError("You must add criteria params to the run request.")
-
-            run_request = RunRequest(
-                flow=request.flow,
-                record_id=request.record_id,
-                parameters=parameters,
-                callback_to_ui=self.make_callback_to_ui(session_id),
-                session_id=session_id,
-            )
-
             # Reset session data
             self.session_data[session_id] = {
                 "messages": [],
@@ -200,7 +209,7 @@ class WebSocketManager:
 
             # Run the flow
             self.session_data[session_id]["callback"] = await flow_runner.run_flow(
-                flow_name=request.flow,
+                flow_name=run_request.flow,
                 run_request=run_request,
             )
 

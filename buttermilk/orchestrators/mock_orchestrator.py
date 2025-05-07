@@ -30,6 +30,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
+from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 
 
@@ -157,6 +158,7 @@ class MockOrchestrator(Orchestrator):
                     self._generate_error_event,
                     self._generate_manager_request,
                     self._generate_tool_output,
+                    self._generate_record,
                 ])
 
                 # Generate and publish the message
@@ -197,6 +199,19 @@ class MockOrchestrator(Orchestrator):
                     current_step=1,
                 )
                 await self._publish_message(progress)
+
+                # Add a sample record for each research iteration
+                record = self._generate_record(
+                    record_id=f"research-data-{i + 1}",
+                    content=f"Research data sample #{i + 1}: Analysis of trending topics in AI research",
+                    metadata={
+                        "source": "academic_database",
+                        "relevance_score": round(random.uniform(0.65, 0.95), 2),
+                        "publication_date": "2025-03-15",
+                        "category": "research_paper",
+                    },
+                )
+                await self._publish_message(record)
                 await asyncio.sleep(0.8)
 
             research_result = self._generate_agent_trace(
@@ -225,6 +240,21 @@ class MockOrchestrator(Orchestrator):
                 content="Analysis complete: found 3 key trends in the data",
             )
             await self._publish_message(tool_output)
+            await asyncio.sleep(0.8)
+
+            # Add an analysis record with processed data
+            analysis_record = self._generate_record(
+                record_id="data-analysis-summary",
+                content="## Analysis Results\n\n- Market growth trend: 12.5% increase over 6 months\n- User engagement: 35% higher on new platform\n- Conversion rate: Improved from 3.2% to 4.8%\n\nThese metrics suggest the new strategy is performing above expectations.",
+                metadata={
+                    "source": "data_processing_engine",
+                    "analysis_id": f"analysis-{shortuuid.uuid()[:6]}",
+                    "confidence": 0.92,
+                    "charts_available": True,
+                    "categories": ["market_analysis", "user_metrics", "performance"],
+                },
+            )
+            await self._publish_message(analysis_record)
             await asyncio.sleep(0.8)
 
             analysis_result = self._generate_agent_trace(
@@ -264,6 +294,21 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(final_result)
             await asyncio.sleep(0.8)
 
+            # Add a final summary record
+            final_record = self._generate_record(
+                record_id="final-recommendations",
+                content="# Executive Summary\n\nBased on our comprehensive analysis, we recommend the following strategic actions:\n\n1. **Implement Strategy X** - Focus on expanding market reach through targeted campaigns\n2. **Modify Approach Y** - Revise the user onboarding process to improve retention\n3. **Consider Alternative Z** - Explore new partnership opportunities in emerging markets\n\nExpected outcomes include 18% growth in Q2 and improved user satisfaction metrics.",
+                metadata={
+                    "source": "final_analysis",
+                    "report_type": "executive_summary",
+                    "priority": "high",
+                    "implementation_timeline": "Q2 2025",
+                    "stakeholders": ["executive_team", "product_management", "marketing"],
+                },
+            )
+            await self._publish_message(final_record)
+            await asyncio.sleep(0.8)
+
             # Step 6: Completion
             completion = self._generate_progress_update(
                 source="ORCHESTRATOR",
@@ -300,18 +345,19 @@ class MockOrchestrator(Orchestrator):
     async def _publish_message(self, message):
         """Publish a message directly to the websocket if available"""
         # Log the message
-        if hasattr(message, "content"):
-            log_content = message.content
-            if len(log_content) > 100:
-                log_content = log_content[:97] + "..."
-            logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
-        else:
-            logger.debug(f"Mock message: {message.__class__.__name__}")
+        formatted_message = MessageService.format_message_for_client(message)
+        if formatted_message is None:
+            logger.warning(f"Message not formatted: {message}")
+            return
+        log_content = str(formatted_message.preview)
+        if len(log_content) > 100:
+            log_content = log_content[:97] + "..."
+        logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
 
         # Send directly to websocket if we have a client_websocket
         if self._client_websocket:
             try:
-                await self._client_websocket(message)
+                await self._client_websocket(formatted_message)
             except Exception as e:
                 logger.error(f"Error sending to websocket: {e}")
 
@@ -331,7 +377,7 @@ class MockOrchestrator(Orchestrator):
                 "The search results show 15 relevant articles on this topic...",
                 "I've generated a comprehensive response to the query...",
             ]
-            outputs = random.choice(outputs_list)
+            outputs = [random.choice(outputs_list)]
 
         if metadata is None:
             metadata = {
@@ -345,7 +391,7 @@ class MockOrchestrator(Orchestrator):
 
         # Create a proper AgentConfig instance
         agent_info = AgentConfig(
-            agent_id=agent_id,
+            agent_id=agent_id, name=agent_id,
             description=f"{agent_id} agent for processing tasks",
             parameters={},
             session_id=self.session_id,
@@ -448,9 +494,10 @@ class MockOrchestrator(Orchestrator):
                 options = [f"Option {i + 1}" for i in range(num_options)]
 
         return ManagerRequest(
-            content=content,
+            description=content,
             role=MANAGER,
             options=options,
+            prompt="Please select one of the options",
         )
 
     def _generate_tool_output(self, function_name=None, content=None) -> ToolOutput:
@@ -473,6 +520,51 @@ class MockOrchestrator(Orchestrator):
             name=function_name,
             content=content,
             call_id=str(uuid.uuid4()),
+        )
+
+    def _generate_record(self, record_id=None, content=None, metadata=None) -> Any:
+        """Generate a fake record message"""
+        # Import Record locally to avoid circular imports
+        from buttermilk._core.types import Record
+
+        if record_id is None:
+            record_id = f"record-{shortuuid.uuid()[:8]}"
+
+        if content is None:
+            content_options = [
+                "This is a sample document about machine learning applications in healthcare.",
+                "The quarterly financial report shows a 15% increase in revenue compared to last year.",
+                "User feedback survey indicates high satisfaction with the new interface design.",
+                "Research paper: 'Advances in Natural Language Processing for Document Analysis'",
+                "Customer support transcript regarding product installation issues.",
+            ]
+            content = random.choice(content_options)
+
+        if metadata is None:
+            metadata = {
+                "source": random.choice(["database", "api", "user_upload", "web_scrape"]),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "category": random.choice(["document", "report", "article", "data", "message"]),
+                "confidence": round(random.uniform(0.7, 0.99), 2),
+                "word_count": random.randint(100, 5000),
+            }
+
+        # Occasionally add a title to the metadata
+        if random.choice([True, False]):
+            titles = [
+                "Quarterly Report Q1 2025",
+                "User Feedback Analysis",
+                "ML Applications in Healthcare",
+                "Customer Support Summary",
+                "Research Findings",
+            ]
+            metadata["title"] = random.choice(titles)
+
+        return Record(
+            record_id=record_id,
+            content=content,
+            metadata=metadata,
+            mime="text/plain",
         )
 
 

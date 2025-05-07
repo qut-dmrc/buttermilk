@@ -8,7 +8,7 @@ import regex as re
 from autogen_core.tools import FunctionTool
 from shortuuid import uuid
 
-from buttermilk._core.agent import Agent, AgentResponse, CancellationToken
+from buttermilk._core.agent import Agent, AgentOutput, CancellationToken
 from buttermilk._core.config import ToolConfig
 from buttermilk._core.constants import COMMAND_SYMBOL
 from buttermilk._core.contract import (
@@ -109,7 +109,7 @@ class FetchAgent(FetchRecord, Agent):
                 result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
 
         if result and isinstance(result, Record):
-            output = AgentResponse(agent_id=self.agent_id,
+            output = AgentOutput(agent_id=self.agent_id,
                 outputs=result,
                 metadata=result.metadata,
             )

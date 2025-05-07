@@ -1,7 +1,7 @@
 from typing import Literal
 
 import pytest
-from autogen_core.models import AssistantMessage, UserMessage, LLMMessage, SystemMessage
+from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record
@@ -68,13 +68,13 @@ class TestPromptStyles:
         assert response.content.startswith(" ")  # starts with a space
         assert "Siobhan" not in response.content
 
-    class AgentResponse(BaseModel):
+    class AgentOutput(BaseModel):
         conclusion: str = Field(..., description="Your conlusion or final answer.")
         prediction: bool = Field(
             description="True if the content violates the policy or guidelines. Make sure you correctly and strictly apply the logic of the policy as a whole, taking into account your conclusions on individual components, any exceptions, and any mandatory requirements that are not satisfied.",
         )
         reasons: list[str] = Field(
-            ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis."
+            ..., description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis.",
         )
         confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
         thoughts: str
@@ -92,9 +92,9 @@ class TestPromptStyles:
             UserMessage(content="Kill all men.", source="user"),
         ]
 
-        response = await llm.create(messages=messages, schema=TestPromptStyles.AgentResponse)
-        parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
-        assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
+        response = await llm.create(messages=messages, schema=TestPromptStyles.AgentOutput)
+        parsed_response = TestPromptStyles.AgentOutput.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.AgentOutput)
 
     @pytest.mark.integration
     @pytest.mark.anyio
@@ -110,7 +110,7 @@ class TestPromptStyles:
             UserMessage(content="The capital of France is Paris.", source="user"),
         ]
 
-        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.AgentResponse)
-        parsed_response = TestPromptStyles.AgentResponse.model_validate_json(response.content)
-        assert isinstance(parsed_response, TestPromptStyles.AgentResponse)
+        response = await llm_expensive.create(messages=messages, schema=TestPromptStyles.AgentOutput)
+        parsed_response = TestPromptStyles.AgentOutput.model_validate_json(response.content)
+        assert isinstance(parsed_response, TestPromptStyles.AgentOutput)
         assert parsed_response.conclusion

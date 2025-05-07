@@ -76,7 +76,7 @@ Message types for communication between agents and orchestrators:
 
 The abstract base agent class:
 - `Agent`
-- `AgentResponse`
+- `AgentOutput`
 - `buttermilk_handler` decorator
 
 **Dependencies**:

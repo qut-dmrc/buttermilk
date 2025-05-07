@@ -26,7 +26,7 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import COMMAND_SYMBOL  # Constant for command messages,
 from buttermilk._core.contract import (
     AgentInput,
-    AgentResponse,  # Standard input message structure
+    AgentOutput,  # Standard input message structure
     AgentTrace,
     ErrorEvent,
     GroupchatMessageTypes,  # Union of types expected in group chat listening
@@ -243,7 +243,7 @@ class Agent(AgentConfig):
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,  # Callback provided by adapter
         message_callback: Callable | None = None,  # Callback provided by adapter,
-        **kwargs) -> AgentResponse:
+        **kwargs) -> AgentOutput:
         """Abstract method for core agent logic. Subclasses MUST implement this.
 
         This method receives the `AgentInput` (potentially augmented with internal state
@@ -260,7 +260,7 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments passed from `__call__`.
 
         Returns:
-            An AgentResponse object
+            An AgentOutput object
 
         """
         raise NotImplementedError("Subclasses must implement the _process method.")

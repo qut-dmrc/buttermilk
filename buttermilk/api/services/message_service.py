@@ -1,34 +1,34 @@
 import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from shortuuid import ShortUUID
+from shortuuid import uuid
 
 from buttermilk._core import ManagerRequest
-from buttermilk._core.agent import AgentResponse, AgentTrace
+from buttermilk._core.agent import AgentOutput, AgentTrace
+from buttermilk._core.constants import CONDUCTOR
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerResponse
 from buttermilk._core.types import Record
-from buttermilk.agents.evaluators.scorer import QualResults
-from buttermilk.agents.judge import JudgeReasons, Reasons
 from buttermilk.bm import logger
 
 
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message", "record"]
-    message_id: str = Field(default_factory=ShortUUID.uuid)
-    content: str = Field(default="", description="Short (one-line) abstract of message")
-    outputs: JudgeReasons | QualResults | Record | Reasons | None = Field(None, description="Message outputs")
-    timestamp: datetime.datetime | None = Field(None, description="Timestamp of the message")
+    type: Literal["chat_message", "record", "manager_request", "manager_response", "system_message", "user_message"]
+    message_id: str | None = Field(default_factory=lambda: uuid())
+    preview: str | None = Field(default="", description="Short (one-line) abstract of message")
+    outputs: Any | None = Field(None, description="Message outputs")
+    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
     agent_id: str = Field(..., description="Agent ID")
+    agent_name: str = Field(..., description="Agent ID")
 
 
 class MessageService:
     """Service for handling message processing with Pydantic objects directly"""
 
     @staticmethod
-    def format_message_for_client(message: Record | FlowEvent | FlowMessage) -> None | ChatMessage:
+    def format_message_for_client(message: ChatMessage | Record | FlowEvent | FlowMessage) -> None | ChatMessage:
         """Pass through the message directly to the client
         
         Args:
@@ -38,22 +38,23 @@ class MessageService:
             dict[str, Any] | None: The serialized message or None if not serializable
 
         """
-        message_id = None
-        message_type = None
-        outputs = None
-        agent_id = None
-        content = None
         if message is None:
             return None
+        if isinstance(message, ChatMessage):
+            return message
+
+        message_id = None
+        message_type = None
+        outputs = message.outputs if hasattr(message, "outputs") else message
+        agent_id = message.agent_id if hasattr(message, "agent_id") else CONDUCTOR
+        agent_name = message.agent_name if hasattr(message, "agent_name") else CONDUCTOR
+        preview = message.content if hasattr(message, "content") else None
         try:
-
-            agent_id = message.agent_id if hasattr(message, "agent_id") else None
-            content = message.content if hasattr(message, "content") else None
-
             if isinstance(message, Record):
                 message_type = "record"
+                preview = message.text
                 outputs = message
-            elif isinstance(message, (AgentTrace, AgentResponse)):
+            elif isinstance(message, (AgentTrace, AgentOutput)):
                 message_type = "chat_message"
                 message_id = message.call_id
                 outputs = message.outputs
@@ -69,11 +70,10 @@ class MessageService:
 
             # Repackage
             output = ChatMessage(
-                message_id=message_id,
                 type=message_type,
-                content=content,
+                preview=preview,
                 outputs=outputs,
-                agent_id=agent_id,
+                agent_id=agent_id, agent_name=agent_name,
                 timestamp=datetime.datetime.now(),
             )
             return output

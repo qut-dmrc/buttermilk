@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import RunRequest
+from buttermilk.api.flow import JobQueueClient
 from buttermilk.bm import BM, logger
 
 
@@ -49,6 +50,18 @@ class FlowRunner(BaseModel):
         self.flow_configs = self.flows
         self.flows = initialized_flows
         return self
+
+    async def pull_and_run_task(self) -> None:
+        """Pull tasks from the queue and run them."""
+        if self.queue_manager is None:
+            self.queue_manager = JobQueueClient()
+
+            # Pull task from the queue
+            request = await self.queue_manager.pull_single_task()
+
+            if request:
+                # Run the task
+                await self.run_flow(request, wait_for_completion=True)
 
     async def run_flow(self,
                       run_request: RunRequest,

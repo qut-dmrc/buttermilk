@@ -58,35 +58,35 @@ class JobQueueClient(BaseModel):
 
         return self
 
-    async def pull_single_task(self) -> None:
+    async def pull_single_task(self) -> RunRequest | None:
         """Pull a single task from Pub/Sub and process it."""
-        if not self.flow_runner:
-            logger.warning("JobQueueClient initialized without a FlowRunner. Cannot pull tasks.")
-            return
-
         try:
             response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1)
             if response.received_messages:
                 message = response.received_messages[0]
-                await self._process_message(message, wait=True)
+                request = await self._make_run_request(message)
+                return request
         except Exception as e:
             logger.error(f"Error pulling pub/sub message: {e}", exc_info=True)
+        return None
+
+    async def fetch_and_run_task(self) -> None:
+        if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
+            logger.info(f"System busy (Idle: {self.is_system_idle()}, Active Jobs: {self._active_jobs}/{self.max_concurrent_jobs}). Not processing job now.")
+            self._processing.clear()
+            return
+
+        request = await self.pull_single_task()
+        if request:
+            await self._process_message(run_request=request, wait=True)
 
     async def pull_tasks(self) -> None:
         """Continuously pull tasks from Pub/Sub when the system is idle."""
-        if not self.flow_runner:
-            logger.warning("JobQueueClient initialized without a FlowRunner. Cannot pull tasks.")
-            return
-
         logger.info(f"Started job worker processing. Listening for messages on {self._jobs_subscription_path}...")
         while True:
             if self.is_system_idle() and not self._processing.is_set():
                 try:
-                    response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1, return_immediately=True)
-                    if response.received_messages:
-                        self._processing.set()
-                        message = response.received_messages[0]
-                        _ = asyncio.create_task(self._process_message(message))
+                    await self.fetch_and_run_task()
                 except Exception as e:
                     logger.error(f"Error pulling pub/sub message: {e}", exc_info=True)
                     if self._processing.is_set():
@@ -148,56 +148,33 @@ class JobQueueClient(BaseModel):
         logger.debug(f"Published status update for job {batch_id}:{record_id}: {status}")
         return message_id
 
-    async def _process_message(self, message: Any, wait: bool = False) -> None:
-        """Parse and dispatch a single message from the Pub/Sub queue."""
+    async def _make_run_request(self, message: Any) -> RunRequest:
         ack_id = message.ack_id
         message_data = message.message.data
-        message_obj = message
 
         try:
             data = json.loads(message_data.decode("utf-8"))
-
-            if data.get("type") != "job_request":
-                logger.warning(f"Ignoring message with non-'job_request' type: {data.get('type')}")
-                try:
-                    self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
-                    logger.debug(f"Acked non-job_request message (ack_id: {ack_id})")
-                except Exception as ack_err:
-                    logger.error(f"Failed to ack non-job message (ack_id: {ack_id}): {ack_err}")
-                self._processing.clear()
-                return
-
-            if not self.is_system_idle() or self._active_jobs >= self.max_concurrent_jobs:
-                logger.info(f"System busy (Idle: {self.is_system_idle()}, Active Jobs: {self._active_jobs}/{self.max_concurrent_jobs}). Not processing job now (ack_id: {ack_id}). Message will be redelivered.")
-                self._processing.clear()
-                return
-
-            self._active_jobs += 1
-            logger.debug(f"Incremented active jobs to {self._active_jobs} for job from message (ack_id: {ack_id})")
-
+            run_request = RunRequest.model_validate(data)
+            return run_request
+        except pydantic.ValidationError as e:
+            logger.error(f"Validation error creating RunRequest from message (ack_id: {ack_id}): {e}. Message data: {message_data}")
             try:
-                run_request = RunRequest.model_validate(data)
+                self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
+                logger.warning(f"Acked malformed message (ack_id: {ack_id})")
+            except Exception as ack_err:
+                logger.error(f"Failed to ack malformed message (ack_id: {ack_id}): {ack_err}")
 
-            except pydantic.ValidationError as e:
-                logger.error(f"Validation error creating RunRequest from message (ack_id: {ack_id}): {e}. Message data: {data}")
-                try:
-                    self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
-                    logger.warning(f"Acked malformed message (ack_id: {ack_id})")
-                except Exception as ack_err:
-                    logger.error(f"Failed to ack malformed message (ack_id: {ack_id}): {ack_err}")
-
-                if self._active_jobs > 0:
-                    self._active_jobs -= 1
-                self._processing.clear()
-                logger.debug(f"Decremented active jobs to {self._active_jobs} after malformed message (ack_id: {ack_id}).")
-                return
-
+    async def _process_message(self, run_request: RunRequest, wait: bool = False) -> None:
+        """Parse and dispatch a single message from the Pub/Sub queue."""
+        self._active_jobs += 1
+        try:
+            logger.debug(f"Incremented active jobs to {self._active_jobs} for job processing.")
             logger.info(f"Processing job {run_request.batch_id or 'N/A'}:{run_request.record_id or 'N/A'} (Job ID: {run_request.job_id})")
             if not wait:
                 loop = asyncio.get_running_loop()
-                loop.create_task(self._run_job(run_request, ack_id))
+                loop.create_task(self._run_job(run_request))
             else:
-                await self._run_job(run_request, ack_id)
+                await self._run_job(run_request)
 
             self.publish_status_update(
                 batch_id=run_request.batch_id or "N/A",
@@ -206,12 +183,12 @@ class JobQueueClient(BaseModel):
             )
 
         except Exception as e:
-            logger.error(f"Error processing message envelope (ack_id: {ack_id}): {e}", exc_info=True)
+            logger.error(f"Error processing message: {e}", exc_info=True)
             if self._active_jobs > 0:
                 self._active_jobs -= 1
-                logger.warning(f"Decremented active jobs to {self._active_jobs} due to top-level processing error (ack_id: {ack_id}).")
+                logger.warning(f"Decremented active jobs to {self._active_jobs} due to top-level processing error.")
             self._processing.clear()
-            logger.warning(f"Cleared processing flag due to top-level error (ack_id: {ack_id}).")
+            logger.warning("Cleared processing flag due to top-level error.")
 
     def is_system_idle(self) -> bool:
         """Check if the system is idle (no active user sessions)."""
@@ -219,7 +196,7 @@ class JobQueueClient(BaseModel):
         activity_tracker = get_activity_tracker()
         return activity_tracker.is_idle()
 
-    async def _run_job(self, run_request: RunRequest, ack_id: str) -> None:
+    async def _run_job(self, run_request: RunRequest) -> None:
         """Run a job, update its status, and acknowledge the message upon success."""
         assert self.flow_runner is not None, "FlowRunner must be initialized to run jobs"
 
@@ -238,15 +215,6 @@ class JobQueueClient(BaseModel):
             )
 
             logger.info(f"Job {job_desc} completed successfully")
-
-            try:
-                self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
-                logger.debug(f"Acknowledged job {job_desc} using ack_id")
-            except Exception as ack_error:
-                logger.error(
-                    f"Failed to acknowledge message for job {job_desc}: {ack_error}",
-                    exc_info=True,
-                )
 
         except Exception as e:
             logger.error(f"Error running job {job_desc}: {e}", exc_info=True)
