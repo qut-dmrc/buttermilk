@@ -237,7 +237,7 @@ class StepRequest(AgentInput):
         return "StepRequest()"
 
 
-class AgentResponse(BaseModel):
+class AgentOutput(BaseModel):
     """Standard response format for all Agent _process methods after processing an `AgentInput`.
 
     Contains the metadata and outputs from agent processing. Used by the Agent.__call__ method
@@ -290,12 +290,12 @@ class AgentResponse(BaseModel):
         return self.content
 
 
-class AgentTrace(FlowMessage, AgentResponse):
+class AgentTrace(FlowMessage, AgentOutput):
     """Full information about a single agent execution for tracing and logging.
 
     Combines the AgentInput parameters for the specific task execution, the run
     or session information, along with metadata, messages exchanged with LLMs,
-    errors, and tracing information, as well as the main AgentResponse results.
+    errors, and tracing information, as well as the main AgentOutput results.
     """
 
     run_info: SessionInfo = Field(default_factory=_get_run_info)
@@ -321,7 +321,7 @@ class AgentTrace(FlowMessage, AgentResponse):
         description="Messages sent to the LLM for this execution step.",
     )
 
-    # The main result data from the agent is inherited from AgentResponse
+    # The main result data from the agent is inherited from AgentOutput
 
     # Validator to ensure context and records are always lists.
     _ensure_input_list = field_validator("messages", mode="before")(make_list_validator())
@@ -441,19 +441,12 @@ class ManagerRequest(ManagerMessage, StepRequest):
     """
 
     role: str = Field(default=MANAGER)
-    # Override description from StepRequest for Manager context.
     description: str = Field(default="Requesting input or confirmation from the user.")
     # Options for multiple-choice questions presented to the user.
     options: bool | list[str] | None = Field(
         default=None,
         description="If list[str], presents options to the user. If bool, implies simple yes/no.",
     )
-    # TODO: 'confirm' and 'halt' seem like response fields, not request fields. Verify placement.
-    # confirm: bool | None = Field(
-    #     default=None,
-    #     description="Response from user: confirm y/n", # Description indicates response field.
-    # )
-    # halt: bool = Field(default=False, description="Whether to stop the flow")
 
 
 class ManagerResponse(FlowMessage):
@@ -576,7 +569,7 @@ OOBMessages = Union[
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentTrace,
-    ToolOutput, AgentResponse,
+    ToolOutput, AgentOutput,
     AgentInput,
     Record,
 ]

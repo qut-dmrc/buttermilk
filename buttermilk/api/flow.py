@@ -51,7 +51,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         try:
             # # Startup event
             # worker = JobQueueClient(
-            #     flow_runner=flows,
             #     max_concurrent_jobs=1,
             # )
             # app.state.job_worker = worker

@@ -12,7 +12,7 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.constants import COMMAND_SYMBOL, CONDUCTOR, END, MANAGER, WAIT
 from buttermilk._core.contract import (
     AgentInput,
-    AgentResponse,
+    AgentOutput,
     AgentTrace,
     ConductorRequest,
     ConductorResponse,
@@ -262,16 +262,12 @@ class HostAgent(Agent):
             None: This method does not return a value directly but sends a request.
 
         """
-        request_content = (
-            f"**Next Proposed Step:**\n"
-            f"- **Agent Role:** {step.role}\n"
-            f"- **Description:** {step.content or '(No description)'}\n"
-            f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}\n\n"
-            f"Confirm (Enter), provide feedback, or reject ('n'/'q')."
-        )
+        request_content = f"Proposed next step: {step.role}"
+        if step.content:
+            request_content += f": {step.content}"
         logger.debug(f"Requesting info from user about proposed step {step.role}.")
         confirmation_request = ManagerRequest(
-            role=MANAGER, prompt=request_content, inputs={"confirm": True, "selection": [True, False]},
+            role=MANAGER, prompt=step.prompt, description=request_content, inputs={"confirm": True, "selection": [True, False]},
         )
         if self._input_callback:
             await self._input_callback(confirmation_request)
@@ -544,11 +540,11 @@ class HostAgent(Agent):
 
     async def _process(
         self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs: Any,
-    ) -> AgentResponse:
+    ) -> AgentOutput:
         """Host _process implementation - not typically used directly.
 
         Returns:
-            AgentResponse: An error response indicating this method is not used.
+            AgentOutput: An error response indicating this method is not used.
 
         """
         # Method arguments are part of the base class signature, keep them but mark as unused if needed
@@ -556,7 +552,7 @@ class HostAgent(Agent):
         _ = cancellation_token
         _ = kwargs
         placeholder = ErrorEvent(source=self.agent_id, content="Host agent does not process direct inputs via _process")
-        return AgentResponse(agent_id=self.agent_id, outputs=placeholder)
+        return AgentOutput(agent_id=self.agent_id, outputs=placeholder)
 
 
 # Helper function to replace asyncio.sleep(0) or similar busy-waits if needed elsewhere

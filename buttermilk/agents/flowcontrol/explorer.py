@@ -7,7 +7,7 @@ from buttermilk import logger
 from buttermilk._core.constants import WAIT
 from buttermilk._core.contract import (
     AgentInput,
-    AgentResponse,
+    AgentOutput,
     ConductorRequest,
     StepRequest,
 )
@@ -42,19 +42,19 @@ class ExplorerHost(LLMHostAgent):
 
     _output_model: type[BaseModel] | None = StepRequest
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentResponse:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Process a message for the Explorer agent - calls _choose to determine the next step"""
-        from buttermilk._core.agent import AgentResponse  # Import locally to avoid being removed
+        from buttermilk._core.agent import AgentOutput  # Import locally to avoid being removed
 
         if isinstance(message, ConductorRequest):
             step = await self._choose(message=message)
-            return AgentResponse(agent_id=self.agent_id,
+            return AgentOutput(agent_id=self.agent_id,
                 metadata={"role": self.role},
                 outputs=step,
             )
 
         step = StepRequest(role=WAIT, content="Waiting for conductor request")
-        return AgentResponse(agent_id=self.agent_id,
+        return AgentOutput(agent_id=self.agent_id,
             metadata={"source": self.agent_id, "role": self.role},
             outputs=step,
         )
@@ -115,7 +115,7 @@ class ExplorerHost(LLMHostAgent):
         elif (hasattr(result, "outputs") and
               hasattr(result, "metadata") and
               isinstance(result.outputs, StepRequest)):
-            # Handle AgentResponse or similar structures that contain a StepRequest
+            # Handle AgentOutput or similar structures that contain a StepRequest
             step = result.outputs
         else:
             # Fallback for invalid or unexpected return types

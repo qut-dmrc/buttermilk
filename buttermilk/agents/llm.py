@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.agent import Agent  # Base agent and message types
 from buttermilk._core.contract import (
     AgentInput,
-    AgentResponse,
+    AgentOutput,
     AgentTrace,
     # TODO: Review necessary contract types for this base class
     ErrorEvent,
@@ -279,7 +279,7 @@ class LLMAgent(Agent):
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,  # Callback provided by adapter
         message_callback: Callable | None = None,  # Callback provided by adapter,
-        **kwargs) -> AgentResponse:
+        **kwargs) -> AgentOutput:
         """Core processing logic: fills template, calls LLM, makes AgentTrace.
 
         Args:
@@ -307,8 +307,8 @@ class LLMAgent(Agent):
             logger.error(msg)
             # Create an error output
             error_output = ErrorEvent(source=self.agent_id, content=msg)
-            # Wrap in AgentResponse
-            return AgentResponse(agent_id=self.agent_id,
+            # Wrap in AgentOutput
+            return AgentOutput(agent_id=self.agent_id,
                 metadata={"error": True},
                 outputs=error_output,
             )
@@ -330,8 +330,8 @@ class LLMAgent(Agent):
             msg = f"Agent {self.agent_id}: Error during LLM call to '{self._model}': {llm_error}"
             logger.error(msg)
             error_output = ErrorEvent(source=self.agent_id, content=msg)
-            # Wrap in AgentResponse
-            return AgentResponse(agent_id=self.agent_id,
+            # Wrap in AgentOutput
+            return AgentOutput(agent_id=self.agent_id,
                 metadata={"error": True},
                 outputs=error_output,
             )
@@ -348,8 +348,8 @@ class LLMAgent(Agent):
         # Add agent role/name for context in logs/outputs
         trace.metadata.update({"role": self.role, "name": self.name})
 
-        # 4. Wrap the trace in an AgentResponse
-        response = AgentResponse(agent_id=self.agent_id,
+        # 4. Wrap the trace in an AgentOutput
+        response = AgentOutput(agent_id=self.agent_id,
             metadata=trace.metadata,
             outputs=trace.outputs,
         )
