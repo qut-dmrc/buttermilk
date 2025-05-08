@@ -12,8 +12,8 @@ defaults:
     - owl
     - scorer
     - host/sequencer
-    - interface/web
-    # - interface/console
+    # - interface/web
+    - interface/console
   - criteria@parameters.criteria: trans
   
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator

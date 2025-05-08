@@ -13,16 +13,35 @@ Supported UI modes:
 
 import asyncio
 import os
+from time import sleep
 
 import hydra
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
+from buttermilk._core.config import FatalError
 from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import create_app
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
+
+
+async def run_batch_job(flow_runner: FlowRunner) -> None:
+    """Pull a single job from the queue and run it."""
+    try:
+
+        worker = JobQueueClient(
+            max_concurrent_jobs=1,
+        )
+        run_request = await worker.pull_single_task()
+        if run_request:
+            return await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
+        raise FatalError("No run request found in the queue.")
+    except Exception as e:
+        logger.error(f"Error running job from task: {e}")
+        raise
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -68,12 +87,12 @@ def main(cfg: DictConfig) -> None:
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
         case "batch":
-            # Run a batch job using the batch runner
-            from buttermilk.runner.batch_cli import main as batch_main
+            # Run a batch job from the queue
 
             bm.logger.info("Running in batch mode...")
-            # We're already in the hydra context, so we can just call the main function
-            batch_main(cfg)
+            while True:  # stop on error
+                asyncio.run(run_batch_job(flow_runner=flow_runner))
+                sleep(10)
 
         case "streamlit":
             # Start the Streamlit interface
