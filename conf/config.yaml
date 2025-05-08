@@ -2,9 +2,7 @@ defaults:
   - _self_
   - local
   - llms: lite
-  - flows: 
-    - trans
-    - simple
+  - flows: []
 
 
 name: default_project

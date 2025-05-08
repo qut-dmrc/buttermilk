@@ -3,9 +3,10 @@ defaults:
   - _self_
   - /data: zot
   - /agents:
-      - ragzot
+    - ragzot
   - /agents@observers:
     - host/assistant
+    # - interface/slack
     - interface/web
     # - interface/console
 

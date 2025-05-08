@@ -7,5 +7,5 @@ host:
   parameters:
     template: panel_host
     model: ${llms.host}
-  inputs:
     task: Ask the MANAGER for input and assign an agent to the task. Repeat.
+  inputs: {}

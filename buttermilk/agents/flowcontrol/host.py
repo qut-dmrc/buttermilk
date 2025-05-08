@@ -125,20 +125,14 @@ class HostAgent(Agent):
         elif isinstance(message, StepRequest):
             if message.content and not message.content.startswith(COMMAND_SYMBOL):
                 content_to_log = str(message.content)[:TRUNCATE_LEN]
-        elif isinstance(message, ManagerMessage):
+        elif isinstance(message, (ManagerMessage, ManagerRequest)):
             content = getattr(message, "content", getattr(message, "params", None))
             if content and not str(content).startswith(COMMAND_SYMBOL):
                 content_to_log = str(content)[:TRUNCATE_LEN]
-
+                # store in user feedback
+                self._user_feedback.append(content)
         if content_to_log:
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
-
-        # Store user feedback if available
-        if isinstance(message, ManagerResponse) and message.content:
-            self._user_feedback.append(message.content)
-            await self._model_context.add_message(
-                UserMessage(content=f"User feedback: {message.content[:TRUNCATE_LEN]}", source="USER"),
-            )
 
     async def _handle_events(
         self,
@@ -242,8 +236,6 @@ class HostAgent(Agent):
                     except Exception as e:
                         logger.error(f"Previous conductor task ended with exception: {e}")
                 logger.info(f"Host {self.agent_id} starting new conductor task.")
-                # Reset state before starting a new flow
-                await self.on_reset()  # Ensure clean state
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
             else:
                 logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")

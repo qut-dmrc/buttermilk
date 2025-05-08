@@ -13,7 +13,6 @@ from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
     GroupchatMessageTypes,
-    ManagerMessage,
     ManagerRequest,
     ManagerResponse,
     OOBMessages,
@@ -64,10 +63,10 @@ class SlackUIAgent(UIAgent):
             if isinstance(message, AgentTrace):
                 formatted_blocks = format_slack_message(message)
                 await self.send_to_thread(**formatted_blocks)
-            elif message.params:
-                await self.send_to_thread(text=message.params)
+            else:
+                logger.warning(
+                    f"Message type {type(message)} not supported for sending to user.")
         except Exception as e:  # noqa
-            await self.send_to_thread(text=message.params)
             _fn_debug_blocks(message)
 
     async def send_to_thread(self, text=None, blocks=None, **kwargs):
@@ -95,35 +94,32 @@ class SlackUIAgent(UIAgent):
 
     async def _request_input(
         self,
-        message: AgentInput | ManagerRequest | ManagerMessage,
+        message: ManagerRequest,
         **kwargs,
     ) -> None:
         """Ask for user input from the UI."""
-        if isinstance(message, ManagerResponse):
-            return
-        if isinstance(message, (AgentInput, ManagerRequest)):
-            extra_blocks = dict_to_blocks(message.outputs)
+        if isinstance(message, ManagerRequest):
+            extra_blocks = []
+            if message.prompt:
+                extra_blocks = dict_to_blocks(message.prompt)
             if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons
                     confirm_blocks = confirm_bool(
-                        message=message.content,
-                        extra_blocks=extra_blocks,
+                        message=message.description,
                     )
                 elif isinstance(message.options, list):
                     # If there are multiple options, display a dropdown
                     confirm_blocks = confirm_options(
-                        message=message.content,
+                        message=message.description,
                         options=message.options,
-                        extra_blocks=extra_blocks,
                     )
                 else:
                     raise ValueError("Invalid options type")
             else:
                 # Assume binary yes / no
                 confirm_blocks = confirm_bool(
-                    message=message.content,
-                    extra_blocks=extra_blocks,
+                    message=message.description,
                 )
                 await self._cancel_input_request()
 
@@ -155,8 +151,8 @@ class SlackUIAgent(UIAgent):
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentTrace | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        if isinstance(inputs, (AgentInput, ManagerRequest)):
-            await self._request_input(inputs)
+        if isinstance(message, ManagerRequest):
+            await self._request_input(message)
 
     async def initialize(self, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""
