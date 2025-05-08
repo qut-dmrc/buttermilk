@@ -48,10 +48,10 @@ class RetryWrapper(BaseModel):
 
     client: Any
     concurrency: int = 4
-    cooldown_seconds: float = 5.1
+    cooldown_seconds: float = 0.5
     max_retries: int = 3
     min_wait_seconds: float = 5.0
-    max_wait_seconds: float = 120.0
+    max_wait_seconds: float = 60.0
     jitter_seconds: float = 5.0
 
     semaphore: asyncio.Semaphore = Field(default=None)
@@ -59,7 +59,12 @@ class RetryWrapper(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     @model_validator(mode="after")
-    def create_semaphore(self) -> Self:
+    def _create_semaphore(self) -> Self:
+        """Create a semaphore for rate limiting."""
+        # This works because the wrapper is used to wrap singleton
+        # clients, so the semaphore is created once and shared
+        # by a single instance for each client. It is not a global
+        # semaphore, so it won't affect other clients.
         self.semaphore = asyncio.Semaphore(
             self.concurrency,
         )

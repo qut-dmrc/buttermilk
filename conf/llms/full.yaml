@@ -6,14 +6,16 @@ general:
 
 judgers:
   - gemini2flash
+  - gemini2flashlite
   - gemini25pro
   - gpt41
   - gpt41mini
   - o4mini
 
 synthesisers:
-  - gemini25pro
   - gemini2flash
+  - gemini2flashlite
+  - gemini25pro
   - gpt41
   - gpt41mini
   - o4mini
