@@ -8,7 +8,7 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
     FlowMessage,
-    ManagerResponse,
+    ManagerMessage,
 )
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.flow import JobQueueClient
@@ -229,7 +229,7 @@ class WebSocketManager:
         """
         try:
             # Validate the request
-            request = ManagerResponse(**data)
+            request = ManagerMessage(**data)
 
             session = self.session_data.get(session_id)
 

@@ -25,8 +25,8 @@ from buttermilk._core.contract import (
     ConductorResponse,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
+    ManagerMessage,  # Responses sent *from* the manager (this agent)
     ManagerRequest,  # Requests sent *to* the manager (this agent)
-    ManagerResponse,  # Responses sent *from* the manager (this agent)
     TaskProcessingComplete,  # Status updates
     ToolOutput,  # Potentially displayable tool output
 )
@@ -66,7 +66,7 @@ class CLIUserAgent(UIAgent):
     """
 
     # Callback function provided by the orchestrator/adapter to send ManagerResponse back.
-    _input_callback: Callable[[ManagerResponse], Awaitable[None]] | None = PrivateAttr(default=None)
+    _input_callback: Callable[[ManagerMessage], Awaitable[None]] | None = PrivateAttr(default=None)
     # Rich console instance for formatted output.
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
@@ -291,7 +291,7 @@ class CLIUserAgent(UIAgent):
 
                 if is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = ManagerResponse(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
+                    response = ManagerMessage(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)
                 elif is_confirmation:
@@ -300,10 +300,10 @@ class CLIUserAgent(UIAgent):
                     has_feedback = bool(current_prompt_lines)
                     if has_feedback:
                         logger.info("User input interpreted as POSITIVE confirmation with feedback (interrupt).")
-                        response = ManagerResponse(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
+                        response = ManagerMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
                     else:
                         logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = ManagerResponse(confirm=True, interrupt=False, content=None)
+                        response = ManagerMessage(confirm=True, interrupt=False, content=None)
 
                     current_prompt_lines = []  # Reset prompt buffer
                     await self._input_callback(response)

@@ -17,7 +17,6 @@ import shortuuid
 from pydantic import Field, PrivateAttr
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
@@ -494,10 +493,8 @@ class MockOrchestrator(Orchestrator):
                 options = [f"Option {i + 1}" for i in range(num_options)]
 
         return ManagerRequest(
-            description=content,
-            role=MANAGER,
+            content=content,
             options=options,
-            prompt="Please select one of the options",
         )
 
     def _generate_tool_output(self, function_name=None, content=None) -> ToolOutput:

@@ -31,6 +31,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowMessage,
     ManagerMessage,
+    ManagerRequest,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
@@ -109,7 +110,7 @@ class AutogenOrchestrator(Orchestrator):
         await asyncio.sleep(1)
 
         # Send a welcome message to the UI and start up the host agent
-        await self._runtime.publish_message(ManagerMessage(content=msg), topic_id=DefaultTopicId(type=MANAGER))
+        await self._runtime.publish_message(ManagerRequest(content=msg), topic_id=DefaultTopicId(type=MANAGER))
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
 
         return termination_handler

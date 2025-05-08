@@ -7,7 +7,7 @@ from shortuuid import uuid
 from buttermilk._core import AgentConfig, ManagerRequest
 from buttermilk._core.agent import AgentOutput, AgentTrace
 from buttermilk._core.constants import CONDUCTOR
-from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerResponse
+from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
 from buttermilk._core.types import Record
 from buttermilk.bm import logger
 
@@ -65,7 +65,7 @@ class MessageService:
                 outputs = message.outputs
             elif isinstance(message, ManagerRequest):
                 message_type = "manager_request"
-            elif isinstance(message, ManagerResponse):
+            elif isinstance(message, ManagerMessage):
                 message_type = "manager_response"
             elif isinstance(message, FlowEvent):
                 message_type = "system_message"

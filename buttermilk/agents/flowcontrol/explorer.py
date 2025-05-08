@@ -1,7 +1,7 @@
 from typing import Any
 
 from autogen_core import CancellationToken
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.constants import WAIT
@@ -41,6 +41,10 @@ class ExplorerHost(LLMHostAgent):
     """
 
     _output_model: type[BaseModel] | None = StepRequest
+
+    # State tracking for exploration (kept for potential future use)
+    _exploration_path: list[str] = PrivateAttr(default_factory=list)
+    _exploration_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
         """Process a message for the Explorer agent - calls _choose to determine the next step"""
@@ -195,6 +199,21 @@ class ExplorerHost(LLMHostAgent):
             enhanced.prompt = prioritize_message + (enhanced.prompt or "")
 
         return enhanced
+
+    def _store_exploration_result(self, execution_id: str, output: AgentTrace) -> None:
+        """Store the result of an agent execution in the exploration history."""
+        if execution_id not in self._exploration_path:
+            self._exploration_path.append(execution_id)
+        self._exploration_results[execution_id] = {
+            "id": output.call_id,
+            "role": self._current_step_name or "unknown",  # Use current step name if available
+            "inputs": getattr(output, "inputs", {}),
+            "outputs": getattr(output, "outputs", getattr(output, "contents", "")),
+            "is_error": getattr(output, "is_error", False),
+            "error_details": getattr(output, "error", []) if getattr(output, "is_error", False) else None,
+            "metadata": getattr(output, "metadata", {}),
+        }
+        logger.debug(f"Stored result for execution {execution_id}")
 
     def _summarize_exploration_history(self) -> list[dict[str, Any]]:
         """Create a summarized version of the exploration history.

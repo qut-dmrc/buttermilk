@@ -30,9 +30,6 @@ from buttermilk.utils.validators import (  # Pydantic validators
 )
 
 # Import constants first to avoid circular dependencies
-from .constants import (
-    MANAGER,
-)
 
 # Use TYPE_CHECKING to avoid circular imports for type hints
 if TYPE_CHECKING:
@@ -249,9 +246,7 @@ class StepRequest(AgentInput):
         return v
 
     def __str__(self) -> str:
-        if self.content:
-            return f"{self.role}: {self.content}"
-        return "StepRequest()"
+        return f"{self.role} {self.content}: {self.prompt}"
 
 
 class AgentOutput(BaseModel):
@@ -410,24 +405,6 @@ class AgentTrace(FlowMessage, AgentOutput):
 # These messages facilitate communication between the orchestrator, conductor agents,
 # and the user interface agent (Manager).
 
-
-class ManagerMessage(FlowMessage):
-    """A generic message intended for the MANAGER (UI/User).
-
-    Can be used for status updates, displaying results, or asking simple questions.
-    """
-
-    content: str | None = Field(
-        default=None,
-        description="Human-readable text content of the message.",
-    )
-
-    def __str__(self) -> str:
-        if self.content is None:
-            return "ManagerMessage()"
-        return self.content
-
-
 class ConductorRequest(AgentInput):
     """A request sent *to* a CONDUCTOR agent, asking for the next step or decision.
 
@@ -441,7 +418,7 @@ class ConductorRequest(AgentInput):
     # No additional fields specific to ConductorRequest currently defined.
 
 
-class ConductorResponse(ManagerMessage, AgentTrace):
+class ConductorResponse(AgentTrace):
     """A response sent *from* a CONDUCTOR agent.
 
     Inherits fields from `ManagerMessage` (content?) and `AgentTrace` (outputs, metadata, etc.).
@@ -451,14 +428,13 @@ class ConductorResponse(ManagerMessage, AgentTrace):
     # No additional fields specific to ConductorResponse currently defined.
 
 
-class ManagerRequest(ManagerMessage, StepRequest):
+class ManagerRequest(FlowMessage):
     """A request sent *to* the MANAGER (UI/User), typically asking for confirmation,
     feedback, or selection.
     Inherits content/outputs from `ManagerMessage` and role/prompt/description from `StepRequest`.
     """
 
-    role: str = Field(default=MANAGER)
-    description: str = Field(default="Requesting input or confirmation from the user.")
+    content: str = Field(...)
     # Options for multiple-choice questions presented to the user.
     options: bool | list[str] | None = Field(
         default=None,
@@ -466,7 +442,7 @@ class ManagerRequest(ManagerMessage, StepRequest):
     )
 
 
-class ManagerResponse(FlowMessage):
+class ManagerMessage(FlowMessage):
     """A response sent *from* the MANAGER (UI/User) back to the orchestrator/system.
     Communicates user decisions like confirmation, feedback, or selections.
     """
@@ -498,9 +474,14 @@ class TaskProgressUpdate(FlowMessage):
     total_steps: int = Field(default=0, description="Total number of steps in the workflow")
     current_step: int = Field(default=0, description="Current step number")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
+    waiting_on: dict[str, Any] = Field(default={}, description="Agents with outstanding tasks")
 
     def __str__(self) -> str:
-        return f"[{self.status.upper()}] {self.message} ({self.current_step:.0%})"
+        status = f"[{self.status.upper()}] {self.message} ({self.current_step:.0%})"
+        if self.waiting_on:
+            waiting_on_str = ", ".join([f"{k}: {v}" for k, v in self.waiting_on.items()])
+            status += f" - Waiting on: {waiting_on_str}"
+        return status
 
 
 # --- Tool / Function Call Messages ---
@@ -567,26 +548,13 @@ class HeartBeat(BaseModel):
 # --- Message Union Types ---
 # Convenience types for type hinting.
 
-# Out-Of-Band (OOB) messages: Control, status, or manager interactions outside the main agent-to-agent data flow.
-OOBMessages = Union[
-    ManagerMessage,
-    ManagerRequest,
-    ManagerResponse,
-    TaskProcessingComplete,
-    TaskProcessingStarted,
-    TaskProgressUpdate,
-    ConductorResponse,
-    ConductorRequest,
-    ErrorEvent,
-    StepRequest,
-    ProceedToNextTaskSignal,
-    HeartBeat,
-]
+# Out-Of-Band (OOB) messages: Control, status, or other events outside the main agent-to-agent data flow.
+OOBMessages = Union[ManagerRequest, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorResponse, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
 
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[
     AgentTrace,
-    ToolOutput, AgentOutput,
+    ToolOutput, AgentOutput, ManagerMessage,
     AgentInput,
     Record,
 ]

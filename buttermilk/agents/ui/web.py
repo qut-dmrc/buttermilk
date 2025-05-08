@@ -17,8 +17,8 @@ from fastapi import WebSocketDisconnect
 from pydantic import BaseModel
 
 from buttermilk import logger
+from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
-    MANAGER,
     AllMessages,
     ErrorEvent,
     GroupchatMessageTypes,

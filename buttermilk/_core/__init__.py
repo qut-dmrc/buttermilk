@@ -10,7 +10,6 @@ from .contract import (
     HeartBeat as HeartBeat,
     ManagerMessage as ManagerMessage,
     ManagerRequest as ManagerRequest,
-    ManagerResponse as ManagerResponse,
     OOBMessages as OOBMessages,
     ProceedToNextTaskSignal as ProceedToNextTaskSignal,
     StepRequest as StepRequest,
