@@ -188,7 +188,7 @@ class WebSocketManager:
         )
         return run_request
 
-    async def handle_run_flow(self, session_id: str, run_request: RunRequest, flow_runner) -> None:
+    async def handle_run_flow(self, session_id: str, run_request: RunRequest, flow_runner: FlowRunner) -> None:
         """Handle a flow run request
         
         Args:
