@@ -272,11 +272,11 @@ class Agent(AgentConfig):
         self,
         message: GroupchatMessageTypes,
         *,
-        cancellation_token: CancellationToken | None = None,
-        source: str = "",  # ID/Name of the sending agent
-        public_callback: Callable | None = None,  # Callback provided by adapter
-        message_callback: Callable | None = None,  # Callback provided by adapter
-        **kwargs,
+        cancellation_token: CancellationToken,
+        source: str = "",
+        public_callback: Callable,
+        message_callback: Callable,
+        **kwargs: Any,
     ) -> None:
         """Handles passively received messages from other agents in the group chat.
 

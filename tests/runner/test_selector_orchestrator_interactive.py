@@ -10,7 +10,6 @@ from buttermilk._core.config import AgentVariants
 from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
-    ConductorResponse,
     ManagerMessage,
     ManagerRequest,
     ManagerResponse,
@@ -134,7 +133,7 @@ async def test_host_interaction_with_ui(selector_config):
 
     # Mock host agent asking a question (via conductor response)
     host_question = "Would you like to compare these two analyses or explore a different approach?"
-    conductor_message = ConductorResponse(
+    conductor_message = ConductorRequest(
         content=host_question,
         outputs={"type": "question", "options": ["Compare analyses", "Try different approach", "End exploration"]},
     )
@@ -170,7 +169,7 @@ async def test_variant_comparison(selector_config):
     orchestrator = Selector(**selector_config)
 
     # Create a comparison message that would be sent by the conductor
-    comparison_request = ConductorResponse(
+    comparison_request = ConductorRequest(
         role="conductor",
         content="Here's a comparison of the results from both agents:",
         outputs={

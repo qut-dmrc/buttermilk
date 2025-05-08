@@ -4,7 +4,6 @@ from .contract import (
     AgentTrace as AgentTrace,
     AllMessages as AllMessages,
     ConductorRequest as ConductorRequest,
-    ConductorResponse as ConductorResponse,
     FlowMessage as FlowMessage,
     GroupchatMessageTypes as GroupchatMessageTypes,
     HeartBeat as HeartBeat,
@@ -36,6 +35,5 @@ ALL = [
     "OOBMessages",
     "ProceedToNextTaskSignal",
     "ConductorRequest",
-    "ConductorResponse",
     "HeartBeat",
 ]

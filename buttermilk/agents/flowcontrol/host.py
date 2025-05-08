@@ -15,7 +15,6 @@ from buttermilk._core.contract import (
     AgentOutput,
     AgentTrace,
     ConductorRequest,
-    ConductorResponse,
     ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
@@ -54,7 +53,7 @@ class HostAgent(Agent):
     # Track count of pending tasks per agent ID
     _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))
     _participants_set_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)  # Event for participants being set
-
+    _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
         default=240,
@@ -79,7 +78,7 @@ class HostAgent(Agent):
 
     async def _listen(
         self,
-        message: GroupchatMessageTypes | StepRequest,
+        message: GroupchatMessageTypes,
         *,
         cancellation_token: CancellationToken,
         source: str = "",
@@ -93,7 +92,7 @@ class HostAgent(Agent):
         # Allow both UserMessage and AssistantMessage types
         msg_type: type[UserMessage | AssistantMessage] = UserMessage
 
-        if isinstance(message, (AgentTrace, ConductorResponse, StepRequest)):
+        if isinstance(message, (AgentTrace)):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
             msg_type = AssistantMessage
         elif isinstance(message, ManagerMessage):
