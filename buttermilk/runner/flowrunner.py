@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
+from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk.api.flow import JobQueueClient
 from buttermilk.bm import BM, logger
@@ -33,19 +33,15 @@ class FlowRunner(BaseModel):
         initialized_flows: dict[str, OrchestratorProtocol] = {}
 
         for flow_name, flow_config in self.flows.items():
-            if isinstance(flow_config, Orchestrator):
-                # Already an instantiated orchestrator
-                initialized_flows[flow_name] = flow_config
-            else:
-                # Extract orchestrator class path
-                orchestrator_path = flow_config.orchestrator
-                module_name, class_name = orchestrator_path.rsplit(".", 1)
-                module = importlib.import_module(module_name)
-                orchestrator_cls = getattr(module, class_name)
+            # Extract orchestrator class path
+            orchestrator_path = flow_config.orchestrator
+            module_name, class_name = orchestrator_path.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            orchestrator_cls = getattr(module, class_name)
 
-                # Create orchestrator instance with config
-                config = flow_config if isinstance(flow_config, dict) else flow_config.model_dump()
-                initialized_flows[flow_name] = orchestrator_cls(**config)
+            # Create orchestrator instance with config
+            config = flow_config if isinstance(flow_config, dict) else flow_config.model_dump()
+            initialized_flows[flow_name] = orchestrator_cls(**config)
 
         self.flow_configs = self.flows
         self.flows = initialized_flows
@@ -85,6 +81,9 @@ class FlowRunner(BaseModel):
             ValueError: If orchestrator isn't specified or unknown
 
         """
+        # reinitialize the orchestrator to make sure we have a fresh instance
+        self.instantiate_orchestrators()
+
         orchestrator = self.flows[run_request.flow]
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,

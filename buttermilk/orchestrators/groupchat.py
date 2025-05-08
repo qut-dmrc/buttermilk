@@ -199,7 +199,7 @@ class AutogenOrchestrator(Orchestrator):
             # Stop the runtime
             if self._runtime._run_context:
                 # runtime is started
-                await self._runtime.stop_when_idle()
+                await self._runtime.stop()
 
             # Print weave link again
             call = weave.get_current_call()
