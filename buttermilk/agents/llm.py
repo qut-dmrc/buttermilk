@@ -310,7 +310,6 @@ class LLMAgent(Agent):
                 metadata={"error": True},
                 outputs=error_output,
             )
-            raise template_error
 
         # 2. Call the LLM
         logger.debug(f"Agent {self.agent_id}: Sending {len(llm_messages)} messages to model '{self._model}'.")
