@@ -27,7 +27,6 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 
 TRUNCATE_LEN = 1000  # characters per history message
-INTERRUPT_ROLE = "INTERRUPT"  # Special role for interrupt handling
 
 
 class HostAgent(Agent):
@@ -65,8 +64,8 @@ class HostAgent(Agent):
         description="Whether to interact with the human/manager for step confirmation",
     )
     #  Event for confirmation responses from the MANAGER.
-    _user_confirmation: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-    _user_interrupt: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
+    _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
 
     async def initialize(
@@ -97,9 +96,8 @@ class HostAgent(Agent):
             msg_type = AssistantMessage
         elif isinstance(message, ManagerMessage):
             logger.info(f"Host {self.agent_id} received user input.")
-            self._user_confirmation.set()
-            if not message.confirm:
-                self._user_interrupt.set()
+            self._user_confirmation = message
+            self._user_confirmation_received.set()
             content = getattr(message, "content", getattr(message, "params", None))
             if content and not str(content).startswith(COMMAND_SYMBOL):
                 content_to_log = str(content)[:TRUNCATE_LEN]
@@ -191,30 +189,28 @@ class HostAgent(Agent):
             None: This method does not return a value directly but sends a request.
 
         """
-        self._user_confirmation.clear()  # Clear previous confirmation state
+        self._user_confirmation = None
         logger.info(f"Requesting info from user about proposed step: {step}.")
         confirmation_request = ManagerRequest(
             content=str(step), options=["confirm", "reject"],  # Options for user confirmation
         )
         await self._input_callback(confirmation_request)
 
-    async def _wait_for_user(self, step, n_minutes: int = 5) -> bool:
+    async def _wait_for_user(self, step, n_minutes: int = 5) -> ManagerMessage:
         if self.human_in_loop:
             for i in range(n_minutes):
                 logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
                 try:
                     await self.request_user_confirmation(step)
-                    await asyncio.wait_for(self._user_confirmation.wait(), timeout=60)
-                    if not self._user_interrupt.is_set():
-                        logger.info(f"User confirmed step: {step.role}")
-                        return True
+                    if await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60):
+                        logger.debug(f"User confirmed step: {step.role}")
+                        return self._user_confirmation
                     logger.warning(f"User rejected step: {step.role}")
-                    self._user_interrupt.clear()  # Reset interrupt state
-                    return False
+                    return self._user_confirmation
                 except TimeoutError:
                     logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
                     continue
-        return False
+        return ManagerMessage(confirm=False, content="User did not respond in time.")
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until all tasks are completed."""
