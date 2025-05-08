@@ -7,16 +7,17 @@ from functools import partial
 from typing import Any
 
 from autogen_core.models import AssistantMessage, UserMessage
-from omegaconf import OmegaConf
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
-from buttermilk._core.contract import MANAGER
 from buttermilk._core.orchestrator import OrchestratorProtocol
+from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.bm import BM, bm, logger
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
+from buttermilk.orchestrators.groupchat import AutogenOrchestrator  #noqa
 
+_ = "AutogenOrchestrator"
 BOTPATTERNS = re.compile(
     r"^!?[<@>\w\d]*\s+(\w+)(.*)",
     re.IGNORECASE | re.MULTILINE,
@@ -237,7 +238,7 @@ async def start_flow_thread(
     logger.info(
         f"Starting flow {flow_cfg.name} in Slack thread {context.thread_ts}...",
         extra={
-            "name": flow_cfg.name,
+            "flow_name": flow_cfg.name,
             "channel_id": context.channel_id,
             "thread_ts": context.thread_ts,
             "user_id": context.user_id,
@@ -248,8 +249,8 @@ async def start_flow_thread(
 
     # Instantiate the slack thread agent before the orchestrator
     try:
-        _config = OmegaConf.to_container(flow_cfg, resolve=True)
-        orchestrator_name = _config.pop("orchestrator")
+        _config = flow_cfg  # OmegaConf.to_container(flow_cfg, resolve=True)
+        orchestrator_name = _config.orchestrator.split(".")[-1]
         thread_agent_name = f"slack_thread_{context.thread_ts}"
         # partially fill the SlackUIAgent object and add it to the registry
         AgentRegistry._agents[thread_agent_name] = partial(  # type: ignore
@@ -258,7 +259,7 @@ async def start_flow_thread(
             app=slack_app,
         )
         # and replace the fake name in the config with an identifier for this one
-        _config["agents"][MANAGER]["agent_obj"] = thread_agent_name
+        _config.observers["manager"].agent_obj = thread_agent_name
 
         # Read thread history and append init text
         logger.debug(
@@ -283,22 +284,13 @@ async def start_flow_thread(
 
         logger.info(
             f"Creating {orchestrator_name} orchestrator",
-            extra={
-                "orchestrator": orchestrator_name,
-                "name": _config.get("name", "unknown"),
-                "history_length": len(history),
-            },
         )
-        thread_orchestrator = globals()[orchestrator_name](bm=bm, **_config, history=history)
+        thread_orchestrator = globals()[orchestrator_name](**_config.model_dump())
 
-        t = asyncio.create_task(thread_orchestrator.run())
+        t = asyncio.create_task(thread_orchestrator.run(RunRequest(flow=flow_cfg.name)))
         await orchestrator_tasks.put(t)
         logger.debug(
             "Flow task created and queued",
-            extra={
-                "name": _config.get("name", "unknown"),
-                "thread_ts": context.thread_ts,
-            },
         )
     except Exception as e:
         logger.error(
@@ -306,7 +298,7 @@ async def start_flow_thread(
             extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
-                "name": flow_cfg.name,
+                "flow_name": flow_cfg.name,
                 "thread_ts": context.thread_ts,
                 "traceback": traceback.format_exc(),
             },

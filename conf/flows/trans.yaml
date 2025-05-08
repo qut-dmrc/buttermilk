@@ -1,8 +1,8 @@
 # @package flows.trans
 # COMMENTED OUT # @package _global_
 defaults:
-  - _self_ 
   - /data: tja_train 
+  - _self_ 
   - /agents:
     - judge
     - synth

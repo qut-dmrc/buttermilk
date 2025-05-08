@@ -139,10 +139,8 @@ class WebSocketManager:
                 if run_request:
                     run_request.callback_to_ui = self.make_callback_to_ui(session_id)
                     await self.handle_run_flow(session_id, run_request, flow_runner)
-            elif message_type == "user_input":
-                await self.handle_user_input(session_id, message)
             elif message_type == "manager_response":
-                await self.handle_confirm(session_id, message)
+                await self.handle_user_input(session_id, message)
             elif message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":
                 if self.session_data[session_id]["callback"]:
                     await self.session_data[session_id]["callback"](message)
@@ -234,61 +232,13 @@ class WebSocketManager:
             request = ManagerResponse(**data)
 
             session = self.session_data.get(session_id)
-            if not session or not session.get("callback"):
-                await self.send_message(
-                    session_id,
-                    ErrorEvent(source="websocket_manager", content="No active flow to send message to"),
-                )
-                return
 
             # Use the request directly as the message
             await session["callback"](request)
 
-            # Send message to client
-            await self.send_message(
-                session_id,
-                {
-                    "type": "message_sent",
-                    "message": request,
-                },
-            )
         except Exception as e:
             logger.error(f"Error handling user input: {e}")
             await self.send_message(
                 session_id,
                 ErrorEvent(source="websocket_manager", content=f"Error handling user input: {e!s}"),
-            )
-
-    async def handle_confirm(self, session_id: str, message: ManagerResponse) -> None:
-        """Handle confirm action
-        
-        Args:
-            session_id: The session ID
-            message: The message containing confirmation details
-
-        """
-        try:
-            session = self.session_data.get(session_id)
-            if not session or not session.get("callback"):
-                await self.send_message(
-                    session_id,
-                    ErrorEvent(source="websocket_manager", content="No active flow to confirm"),
-                )
-                return
-
-            message = ManagerResponse(confirm=True)
-            await session["callback"](message)
-
-            # Send confirmation to client
-            await self.send_message(
-                session_id,
-                {
-                    "type": "confirmed",
-                },
-            )
-        except Exception as e:
-            logger.error(f"Error handling confirm: {e}")
-            await self.send_message(
-                session_id,
-                ErrorEvent(source="websocket_manager", content=f"Error handling confirm: {e!s}"),
             )

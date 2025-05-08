@@ -211,7 +211,7 @@ class AutogenOrchestrator(Orchestrator):
             await asyncio.sleep(2)  # Give it some time to properly shut down
 
     @weave.op
-    async def _run(self, request: RunRequest | None = None) -> None:
+    async def _run(self, request: RunRequest | None = None, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
         
         This version delegates most of the substantive flow control to the

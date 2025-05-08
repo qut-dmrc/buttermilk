@@ -182,9 +182,9 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[trans,hate,ffa,simple]",
+        "+flows=[trans,z]",
         "ui=slackbot",
-        "llms=lite",
+        "llms=full",
         "++name=automod",
         "++job=development"
       ],  
