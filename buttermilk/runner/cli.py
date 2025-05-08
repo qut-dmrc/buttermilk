@@ -13,7 +13,6 @@ Supported UI modes:
 
 import asyncio
 import os
-from time import sleep
 
 import hydra
 import uvicorn
@@ -90,9 +89,7 @@ def main(cfg: DictConfig) -> None:
             # Run a batch job from the queue
 
             bm.logger.info("Running in batch mode...")
-            while True:  # stop on error
-                asyncio.run(run_batch_job(flow_runner=flow_runner))
-                sleep(10)
+            asyncio.run(run_batch_job(flow_runner=flow_runner))
 
         case "streamlit":
             # Start the Streamlit interface
