@@ -22,7 +22,6 @@ from buttermilk._core.agent import AgentInput, OOBMessages
 from buttermilk._core.config import FatalError
 from buttermilk._core.contract import (
     AgentTrace,
-    ConductorResponse,
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
@@ -42,7 +41,6 @@ console = Console(highlighter=JSONHighlighter())
 # Define a Union for types _fmt_msg can handle, improving type safety for the formatter.
 FormattableMessages = Union[
     AgentTrace,
-    ConductorResponse,
     TaskProcessingComplete,
     ManagerRequest,
     ToolOutput,
@@ -120,7 +118,7 @@ class CLIUserAgent(UIAgent):
             output_lines.append(header)
 
             # --- Specific Type Formatting ---
-            if isinstance(message, (AgentTrace, ConductorResponse)):
+            if isinstance(message, (AgentTrace)):
                 outputs = getattr(message, "outputs", None)
                 inputs = getattr(message, "inputs", None)  # Original inputs triggering this output
                 metadata = getattr(message, "metadata", {})
@@ -250,8 +248,7 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.agent_id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        # AgentTrace isn't technically OOB, but might arrive here in some flows? Included defensively.
-        displayable_types = (AgentTrace, ConductorResponse, TaskProcessingComplete, ManagerRequest, ToolOutput)
+        displayable_types = (TaskProcessingComplete, ManagerRequest, ToolOutput)
         if isinstance(message, displayable_types):
             if msg_markdown := self._fmt_msg(message, source=source):
                 self._console.print(msg_markdown)

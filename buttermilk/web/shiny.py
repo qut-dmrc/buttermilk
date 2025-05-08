@@ -8,7 +8,6 @@ from shiny import App, Session, reactive, render, ui
 from buttermilk._core.agent import AgentInput, AgentTrace, ManagerMessage
 from buttermilk._core.contract import (
     ConductorRequest,
-    ConductorResponse,
     ErrorEvent,
     HeartBeat,
     ManagerMessage,
@@ -28,7 +27,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.web.messages import format_message_for_client
 
-ALL_MESSAGES = Union[ManagerMessage, ManagerRequest, TaskProcessingComplete, TaskProcessingStarted, ConductorResponse, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat, AgentTrace, ToolOutput, AgentInput, Record]
+ALL_MESSAGES = Union[ManagerMessage, ManagerRequest, TaskProcessingComplete, TaskProcessingStarted, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat, AgentTrace, ToolOutput, AgentInput, Record]
 
 
 def get_shiny_app(flows: FlowRunner):

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import WAIT, AgentInput, AgentTrace, ConductorResponse, StepRequest
+from buttermilk._core.contract import WAIT, AgentInput, AgentTrace, ConductorRequest, StepRequest
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.selector import Selector
 
@@ -58,7 +58,7 @@ async def test_get_host_action_success(orchestrator):
     mock_step = StepRequest(role="test_agent", description="test step", prompt="test prompt")
 
     # Create a conductor response for the first call
-    conductor_response = ConductorResponse(
+    conductor_response = ConductorRequest(
         content="Need more info",
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
@@ -149,8 +149,8 @@ async def test_get_host_action_success(orchestrator):
 @pytest.mark.anyio
 async def test_get_host_conductor_message(orchestrator):
     """Test handling when conductor returns a message instead of a step."""
-    # Mock response from _ask_agents with ConductorResponse
-    conductor_response = ConductorResponse(
+    # Mock response from _ask_agents with ConductorRequest
+    conductor_response = ConductorRequest(
         content="Need more info",
         outputs={"type": "question", "options": ["Option 1", "Option 2"]},
     )
@@ -238,7 +238,7 @@ async def test_wait_for_human_confirmed(orchestrator):
 async def test_handle_host_message_question(orchestrator):
     """Test handling a question from the host agent."""
     # Setup
-    message = ConductorResponse(
+    message = ConductorRequest(
         role="conductor",
         content="Which option do you prefer?",
         outputs={"type": "question", "options": ["Option A", "Option B"]},
@@ -266,7 +266,7 @@ async def test_handle_host_message_question(orchestrator):
 async def test_handle_comparison(orchestrator):
     """Test handling comparison results from variants."""
     # Setup
-    message = ConductorResponse(
+    message = ConductorRequest(
         role="conductor",
         content="Comparison of variants",
         outputs={
