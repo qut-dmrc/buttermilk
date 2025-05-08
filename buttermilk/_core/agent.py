@@ -30,7 +30,7 @@ from buttermilk._core.contract import (
     AgentTrace,
     ErrorEvent,
     GroupchatMessageTypes,  # Union of types expected in group chat listening
-    ManagerMessage,  # Messages for display to the user
+    ManagerMessage,  # Messages from the user
     OOBMessages,  # Union of Out-Of-Band control messages
     TaskProcessingComplete,
     TaskProcessingStarted,  # Request to execute a specific step
@@ -127,7 +127,7 @@ class Agent(AgentConfig):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, input_callback: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """
@@ -254,7 +254,7 @@ class Agent(AgentConfig):
         
         LLM agent implementations will typically return AgentTrace.
         Flow control agents (like host agents) will typically return StepRequest directly.
-        Interface agents may return ManagerRequest or ManagerMessage.
+        Interface agents may return ManagerMessage.
         Tool agents typically return ToolOutput.
 
         Args:

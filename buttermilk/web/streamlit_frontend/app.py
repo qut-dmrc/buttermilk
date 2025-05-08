@@ -9,7 +9,7 @@ from buttermilk._core.agent import (
 )
 from buttermilk._core.contract import (
     ErrorEvent,
-    ManagerResponse,
+    ManagerMessage,
     RunRequest,
     TaskProcessingComplete,
     TaskProgressUpdate,
@@ -271,7 +271,7 @@ class StreamlitDashboardApp:
         if callback and st.session_state.flow_running:
             try:
                 logger.info(f"Sending confirmation to flow for session {session_id}")
-                message = ManagerResponse(confirm=True)
+                message = ManagerMessage(confirm=True)
                 await callback(message)
                 # Update session state immediately
                 st.session_state.requires_confirmation = False

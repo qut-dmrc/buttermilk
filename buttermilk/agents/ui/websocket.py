@@ -8,7 +8,7 @@ from pydantic import PrivateAttr
 
 # Import base agent and specific message types used
 from buttermilk._core.contract import (
-    ManagerResponse,  # Responses sent *from* the manager (this agent)
+    ManagerMessage,  # Responses sent *from* the manager (this agent)
 )
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
@@ -18,6 +18,6 @@ class ProxyUserAgent(UIAgent):
     """
 
     # Callback function provided by the orchestrator/adapter to send ManagerResponse back.
-    _input_callback: Callable[[ManagerResponse], Awaitable[None]] | None = PrivateAttr(default=None)
+    _input_callback: Callable[[ManagerMessage], Awaitable[None]] | None = PrivateAttr(default=None)
     # Background task for polling user input.
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
