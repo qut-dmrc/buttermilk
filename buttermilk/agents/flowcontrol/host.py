@@ -55,6 +55,7 @@ class HostAgent(Agent):
         default=240,
         description="Maximum time to wait for agent responses in seconds",
     )
+    max_user_wait_time: int = Field(default=60, description="Maximum time to wait for user confirmation in seconds")
 
     human_in_loop: bool = Field(
         default=True,
@@ -281,17 +282,17 @@ class HostAgent(Agent):
             logger.warning("_wait_for_user called but host config has human in the loop disabled. Simulating user confirmation.")
             return ManagerResponse(content=None, confirm=True, halt=False, interrupt=False, selection=None)
         try:
-            response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_wait_time)
+            response = await asyncio.wait_for(self._user_confirmation.get(), timeout=self.max_user_wait_time)
             logger.debug(f"Received manager response: confirm = {response.confirm}, halt = {response.halt}, interrupt = {response.interrupt}, selection = {response.selection}")
             return response
         except TimeoutError:
-            logger.warning(f"{self.agent_id} hit timeout waiting for manager response after {self.max_wait_time} seconds.")
+            logger.warning(f"{self.agent_id} hit timeout waiting for manager response after {self.max_user_wait_time} seconds.")
             return await self._wait_for_user(step)
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until the dictionary of pending tasks is empty using a Condition."""
         # First, sleep a bit to allow other tasks to run
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
@@ -312,10 +313,14 @@ class HostAgent(Agent):
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
             )
             logger.error(f"{msg} Aborting.")
+            # signal end to the conductor
+            await self._input_callback(StepRequest(role=END, content="Timeout waiting for task completion."))
             # No need to manually reset count or notify here, but raise FatalError
             raise FatalError(msg) from e
         except Exception as e:
             # Catch other potential errors during wait
+            # signal end to the conductor
+            await self._input_callback(StepRequest(role=END, content=f"Unexpected error during task completion wait: {e}"))
             logger.exception(f"Unexpected error during task completion wait: {e}")
             raise
 
@@ -476,7 +481,6 @@ class HostAgent(Agent):
             logger.error("Step generator not initialized in _choose.")
             return StepRequest(role=END, content="Error: Step generator not available.")
         try:
-            # Use anext() builtin instead of dunder method
             return await anext(self._step_generator)
         except StopAsyncIteration:
             logger.info(f"Host {self.agent_id} step generator exhausted, explicitly returning END step")

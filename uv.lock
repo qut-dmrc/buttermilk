@@ -2415,7 +2415,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-aiplatform"
-version = "1.91.0"
+version = "1.92.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docstring-parser" },
@@ -2424,6 +2424,7 @@ dependencies = [
     { name = "google-cloud-bigquery" },
     { name = "google-cloud-resource-manager" },
     { name = "google-cloud-storage" },
+    { name = "google-genai" },
     { name = "packaging" },
     { name = "proto-plus" },
     { name = "protobuf" },
@@ -2431,9 +2432,9 @@ dependencies = [
     { name = "shapely" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/08/5854569782efbbc8efd0aeda3a4486153605104cbab6ac836b2328bae48e/google_cloud_aiplatform-1.91.0.tar.gz", hash = "sha256:b14e5e52b52b6012c7dc253beab34c511fdc53c69b13f436ddb06882c1a92cd7", size = 9102586 }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/ff/0cc338abd667558cdcc73901df2f5c0060ece69b0a7114b4901adf0825ad/google_cloud_aiplatform-1.92.0.tar.gz", hash = "sha256:54e6f4ef74566d0e8d8a48e1cbe3ca46017e7a4030689d1cb1561115297630fd", size = 9110499 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/88/cea8583fadd142e8ef26f8ec14a6ee4d7c69c4e5ab82bea01a077fddddbe/google_cloud_aiplatform-1.91.0-py2.py3-none-any.whl", hash = "sha256:ff8df100c2af692d114a2219d3abbb96110b3e5655f342fdbb6aefad43901b52", size = 7591910 },
+    { url = "https://files.pythonhosted.org/packages/aa/21/13367593506a5bdeb090f997abadaef2cce04f129437a202ca23ffaebb7a/google_cloud_aiplatform-1.92.0-py2.py3-none-any.whl", hash = "sha256:ced3e6aca90fadb6f224eb0ee71db41b38723efe26cf46266f65601079e3b2f3", size = 7604989 },
 ]
 
 [[package]]
@@ -2651,7 +2652,7 @@ wheels = [
 
 [[package]]
 name = "google-genai"
-version = "1.13.0"
+version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2662,9 +2663,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/1f/0861dad47febbb391123a529f3655582e2a7ce14aadb6ddc527dd7dea470/google_genai-1.13.0.tar.gz", hash = "sha256:de7b4960d361c7ea85b715ce0e07fe34903d94affa82d566d9eb04e8f92512b9", size = 165727 }
+sdist = { url = "https://files.pythonhosted.org/packages/00/ba/c8e4c0b60c6dda40e51e2125709d097c2609fce1389b4a05f40cdd51c1ec/google_genai-1.14.0.tar.gz", hash = "sha256:7c608de5bb173486a546f5ec4562255c26bae72d33d758a3207bb26f695d0087", size = 169938 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/2c/1833fa15311fa4f0790e9c8ea3488382fe428c3eca62b329d6aa355871ae/google_genai-1.13.0-py3-none-any.whl", hash = "sha256:e88417c95f333827ed051282803db627192fd8e5fdf5b49b6f26644a67775d1a", size = 164405 },
+    { url = "https://files.pythonhosted.org/packages/12/86/dde4cd028c8b0716b3f1f6d202647396a87a4ecbbdc7e4beb59b9d9284d3/google_genai-1.14.0-py3-none-any.whl", hash = "sha256:5916ee985bf69ac7b68c4488949225db71e21579afc7ba5ecd5321173b60d3b2", size = 168862 },
 ]
 
 [[package]]
@@ -5910,11 +5911,11 @@ wheels = [
 
 [[package]]
 name = "platformdirs"
-version = "4.3.7"
+version = "4.3.8"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b6/2d/7d512a3913d60623e7eb945c6d1b4f0bddf1d0b7ada5225274c87e5b53d1/platformdirs-4.3.7.tar.gz", hash = "sha256:eb437d586b6a0986388f0d6f74aa0cde27b48d0e3d66843640bfb6bdcdb6e351", size = 21291 }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/8b/3c73abc9c759ecd3f1f7ceff6685840859e8070c4d947c93fae71f6a0bf2/platformdirs-4.3.8.tar.gz", hash = "sha256:3d512d96e16bcb959a814c9f348431070822a6496326a4be0911c40b5a74c2bc", size = 21362 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/45/59578566b3275b8fd9157885918fcd0c4d74162928a5310926887b856a51/platformdirs-4.3.7-py3-none-any.whl", hash = "sha256:a03875334331946f13c549dbd8f4bac7a13a50a895a0eb1e8c6a8ace80d40a94", size = 18499 },
+    { url = "https://files.pythonhosted.org/packages/fe/39/979e8e21520d4e47a0bbe349e2713c0aac6f3d853d0e5b34d76206c439aa/platformdirs-4.3.8-py3-none-any.whl", hash = "sha256:ff7059bb7eb1179e2685604f4aaf157cfd9535242bd23742eadc3c13542139b4", size = 18567 },
 ]
 
 [[package]]

@@ -39,9 +39,9 @@
       "justMyCode": false,
       "args": [
         "ui=batch",
-        "+run=batch",
-        "+flow=trans",
+        "flows=[trans]",
         "llms=full",
+        "human_in_loop=false",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -61,7 +61,6 @@
         "ui=api",
         "flows=[trans,simple,z]",
         "llms=full",
-        "human_in_loop=false"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -121,7 +120,7 @@
       ],
       "args": ["run", "buttermilk/web/interface.py",
         "hydra.verbose=false",
-        "+flows=trans",
+        "flows=[trans]",
         "ui=streamlit",
         "llms=lite",
         "name=bmdevelopment",
