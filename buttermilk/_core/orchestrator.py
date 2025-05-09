@@ -128,6 +128,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     _records: list[Record] = PrivateAttr(default_factory=list)
 
     _otel_span: Span = PrivateAttr()
+    _tracing_attributes: dict[str, Any] = PrivateAttr(default={})
 
     # Pydantic Model Configuration
     model_config = ConfigDict(
@@ -168,8 +169,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # --- Tracing ---
     @model_validator(mode="after")
     def setup_tracing(self) -> Self:
-        tracing_attributes = {
+        self._tracing_attributes = {
             **self.parameters,
+            "orchestrator": self.__class__.__name__,  # Use class name
             "session_id": self.session_id,
             "flow_description": self.description,
         }
@@ -194,11 +196,8 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
         # Define attributes for Weave tracing.
-        tracing_attributes = {
-            **self.parameters,
-            "orchestrator": self.__class__.__name__,  # Use class name
+        self._tracing_attributes.update({
             "flow_name": request.flow if request else self.name,
-            "flow_description": self.description,
             "record": request.record_id if request else None,
             "uri": request.uri if request else None,
         }
@@ -213,11 +212,11 @@ class Orchestrator(OrchestratorProtocol, ABC):
             display_name = f"{display_name} {bm.run_info.run_id}"
 
             langfuse_context.update_current_trace(name=display_name.strip(),
-                metadata=tracing_attributes,
+                metadata=self._tracing_attributes,
                 session_id=self.session_id,
             )
 
-            with weave.attributes(tracing_attributes):
+            with weave.attributes(self._tracing_attributes):
                 await self._run(request=request, __weave={"display_name": display_name})
 
                 logger.info(f"Orchestrator '{display_name}' run finished successfully.")
