@@ -89,9 +89,14 @@ def main(cfg: DictConfig) -> None:
              attempted before) could improve type safety if cfg structure is stable.
 
     """
+    # Set the UI type if provided in the config
+    ui_type = cfg.get("ui_type", None)
+    if ui_type:
+        logger.info(f"Using UI implementation: {ui_type}")
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
 
+    # Create the FlowRunner with the specified UI type
     flow_runner: FlowRunner = FlowRunner.model_validate(cfg)  # hydra.utils.instantiate(cfg)
     bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
 
@@ -152,6 +157,7 @@ def main(cfg: DictConfig) -> None:
 
             # Create the FastAPI app with dependencies
             bm.logger.info("Attempting to create FastAPI app...")
+            # Create the FastAPI app with the FlowRunner
             app = create_app(
                 bm=bm,
                 flows=flow_runner,

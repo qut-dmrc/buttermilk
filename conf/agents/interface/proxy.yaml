@@ -1,0 +1,7 @@
+manager:
+  role: MANAGER
+  name: "👔 Manager"
+  agent_obj: UIProxyAgent
+  description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
+  ui_type: ${ui_type:web} # Default to web UI if not specified
+  extra_params: ["callback_to_ui", "session_id"]
