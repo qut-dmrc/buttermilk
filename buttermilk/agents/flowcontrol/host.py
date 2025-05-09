@@ -59,6 +59,10 @@ class HostAgent(Agent):
         description="Maximum time to wait for agent responses in seconds",
     )
 
+    max_user_confirmation_time: int = Field(
+        default=240,
+        description="Maximum time to wait for agent responses in seconds",
+    )
     human_in_loop: bool = Field(
         default=True,
         description="Whether to interact with the human/manager for step confirmation",
@@ -197,9 +201,10 @@ class HostAgent(Agent):
         self._user_confirmation_received.clear()  # Reset the event for the next confirmation
         await self._input_callback(confirmation_request)
 
-    async def _wait_for_user(self, step, n_minutes: int = 5) -> ManagerMessage:
+    async def _wait_for_user(self, step) -> ManagerMessage:
+        max_tries = self.max_user_confirmation_time // 60
         if self.human_in_loop:
-            for i in range(n_minutes):
+            for i in range(max_tries):
                 logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
                 try:
                     await self.request_user_confirmation(step)
@@ -208,7 +213,7 @@ class HostAgent(Agent):
                 except TimeoutError:
                     logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
                     continue
-        return ManagerMessage(confirm=False, content="User did not respond in time.")
+        raise FatalError("User did not respond in time.")
 
     async def _wait_for_all_tasks_complete(self) -> None:
         """Wait until all tasks are completed."""

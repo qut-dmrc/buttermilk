@@ -295,25 +295,25 @@ class Agent(AgentConfig):
 
         if isinstance(message, Record):
             self._records.append(message)
+        else:
+            # Extract data from the message using the utility function
+            extracted = extract_message_data(
+                message=message,
+                source=source,
+                input_mappings=self.inputs,
+            )
 
-        # Extract data from the message using the utility function
-        extracted = extract_message_data(
-            message=message,
-            source=source,
-            input_mappings=self.inputs,
-        )
+            self._records.extend(extracted.pop("records", []))
 
-        self._records.extend(extracted.pop("records", []))
+            # Update internal state (_data, _records)
+            found = []
+            for key, value in extracted.items():
+                if value and value != [] and value != {}:
+                    self._data.add(key, value)
+                    found.append(key)
 
-        # Update internal state (_data, _records)
-        found = []
-        for key, value in extracted.items():
-            if value and value != [] and value != {}:
-                self._data.add(key, value)
-                found.append(key)
-
-        if found:
-            logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
+            if found:
+                logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.

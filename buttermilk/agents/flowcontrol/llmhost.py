@@ -38,6 +38,11 @@ class LLMHostAgent(LLMAgent, HostAgent):
     _output_model: type[BaseModel] | None = CallOnAgent
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
 
+    max_user_confirmation_time: int = Field(
+        default=7200,
+        description="Maximum time to wait for agent responses in seconds",
+    )
+
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
         # First, say hello to the user

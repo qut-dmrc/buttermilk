@@ -150,9 +150,9 @@ class AutoGenWrapper(RetryWrapper):
                 # TODO: check if the word 'json' is in the system message or add a quick direction.
                 json_output = self.model_info.get("json_output", False)
 
-                # Don't use json_output if we're calling tools
-                if tools:
-                    json_output = False
+            # Don't use json_output if we're calling tools
+            if tools:
+                json_output = False
 
             # --- Langfuse tracing ---
             langfuse_context.update_current_observation(input=messages)
