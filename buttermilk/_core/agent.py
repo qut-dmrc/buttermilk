@@ -19,6 +19,7 @@ from pydantic import (
     PrivateAttr,
     computed_field,
 )
+from shortuuid import uuid
 
 from buttermilk._core.config import AgentConfig
 
@@ -150,7 +151,6 @@ class Agent(AgentConfig):
                 break
         # Allow subclasses to add more reset logic.
 
-    @weave.op()  # Mark the primary execution method for tracing.
     @observe()
     async def __call__(
         self,
@@ -195,15 +195,19 @@ class Agent(AgentConfig):
         # --- Weave Tracing ---
         # Get the current Weave call context if available.
         call = weave.get_current_call()
+        call_id = getattr(call, "id", uuid())  # Get the call ID if available
         if call:
             call.set_display_name(self.name)  # Set trace display name
+            if message.parent_call_id:
+                call.parent_id = message.parent_call_id  # Set parent call ID if available
+
             # TODO: Log inputs? Be careful about large data/PII.
             logger.debug(f"Agent {self.agent_id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
         else:
             logger.warning(f"Agent {self.agent_id} __call__ executing outside Weave trace context.")
 
         # Create the trace here with required values
-        trace = AgentTrace(session_id=self.session_id, agent_id=self.agent_id,
+        trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
             agent_info=self._cfg,
             inputs=final_input,
         )

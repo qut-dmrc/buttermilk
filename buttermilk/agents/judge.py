@@ -13,8 +13,6 @@ from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 from buttermilk.agents.reasoning import Reasons
 from buttermilk.bm import logger  # Global Buttermilk instance and logger
 
-
-
 # --- Pydantic Models ---
 
 
@@ -90,6 +88,7 @@ class Judge(LLMAgent):
             or an error if processing fails.
 
         """
+        raise NotImplementedError("@buttermilk_handler is only an idea at this stage.")
         logger.debug(f"Judge agent '{self.agent_id}' received evaluation request.")
         # Note that we don't do error handling here. If the call fails, the Autogen Adapter
         # or whatever else called us has to deal with it.

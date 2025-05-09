@@ -16,7 +16,7 @@ class FlowRunContext(BaseModel):
 
     flow_name: str
     orchestrator: OrchestratorProtocol
-    task: asyncio.Task | None = None
+    task: Any = None
     result: Any = None
     status: str = "pending"
 

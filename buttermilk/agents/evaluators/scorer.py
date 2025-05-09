@@ -121,7 +121,7 @@ class LLMScorer(LLMAgent):
             input_mappings=self.inputs,
         )
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(records=extracted.pop("records"), inputs=extracted)
+        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=extracted.pop("records"), inputs=extracted)
 
         # Define the scoring function (our own __call__ method)
         score_fn = self.__call__
@@ -132,9 +132,6 @@ class LLMScorer(LLMAgent):
             public_callback=public_callback,
             message_callback=message_callback,
         )
-
-        # Tie the score to the original answer
-        score_output.parent_call_id = message.call_id
 
         # Add the inputs to the trace output object
         score_output.inputs = scorer_agent_input
