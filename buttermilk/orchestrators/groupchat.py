@@ -29,9 +29,8 @@ from buttermilk._core.agent import Agent, ProcessingError
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
+    FlowEvent,
     FlowMessage,
-    ManagerMessage,
-    ManagerRequest,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
@@ -109,8 +108,10 @@ class AutogenOrchestrator(Orchestrator):
         # does it need a second to spin up?
         await asyncio.sleep(1)
 
-        # Send a welcome message to the UI and start up the host agent
-        await self._runtime.publish_message(ManagerRequest(content=msg), topic_id=DefaultTopicId(type=MANAGER))
+        # Send a welcome message to the UI
+        await self._runtime.publish_message(FlowEvent(source="orchestrator", content=msg), topic_id=DefaultTopicId(type=MANAGER))
+
+        # Start up the host agent
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
 
         return termination_handler
@@ -126,7 +127,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Registering agents with Autogen runtime...")
 
         # Create list of participants in the group chat
-        self._participants = {k: v.description for k, v in self.agents.items()}
+        self._participants = {v.role: v.description for k, v in self.agents.items()}
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []

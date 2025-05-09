@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Self
 
+import pandas as pd
 import shortuuid  # For generating unique IDs
 import weave  # For tracing
 from langfuse.decorators import langfuse_context, observe
@@ -336,14 +337,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
             await self.load_data()
 
         for dataset in self._data_sources.values():
-            rec = dataset.query("record_id==@record_id")
+            rec: pd.Series = dataset.query("record_id==@record_id")
             if rec.shape[0] == 1:
                 data = rec.iloc[0].to_dict()
-                if "components" in data:
-                    content = "\n".join([d["content"] for d in data["components"]])
-                    return Record(
-                        content=content, metadata=data.get("metadata"), ground_truth=data.get("ground_truth"), uri=data.get("metadata").get("url"),
-                    )
+                data["record_id"] = rec.index[0]  # Add the index explicitly
+                if "components" in data and not data["components"]:
+                    data["components"] = "\n".join([d["content"] for d in data["components"]])
                 return Record(**data)
             if rec.shape[0] > 1:
                 raise ValueError(

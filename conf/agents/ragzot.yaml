@@ -1,8 +1,9 @@
-ragzot:
+researcher:
   role: RESEARCHER
   name: "🧑‍💻 Researcher"
   agent_obj: RagZot
   description: A research assistant that provides relevant information from an academic knowledge base. Should be called upon frequently during a conversation and before analysis to help provide information for other agents.
+  data: ${...data}
   variants:
     model: ${llms.general}
   parameters:

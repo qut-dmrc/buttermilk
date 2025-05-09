@@ -66,38 +66,3 @@ def extract_message_data(
     logger.debug(f"Finished extracting vars. Keys extracted: {list(extracted.keys())}")
     return extracted
 
-
-def extract_records_from_message(data: Record | dict[str, Any]) -> list[Record]:
-    """Extract Record objects from the 'records' field in the extracted data.
-    
-    Args:
-        data: Record or dictionary containing 'records' key
-        
-    Returns:
-        List of Record objects
-
-    """
-    if isinstance(data, Record):
-        return [data]
-    if hasattr(data, "model_dump"):
-        data = data.model_dump()
-
-    record_data = data.get("records", [])
-
-    records = []
-    # Handle both single record and list of records
-    if not isinstance(record_data, Sequence) or isinstance(record_data, str):
-        record_data = [record_data]
-
-    for rec in record_data:
-        try:
-            if isinstance(rec, Record):
-                records.append(rec)
-            elif isinstance(rec, dict):
-                records.append(Record(**rec))
-            elif isinstance(rec, BaseModel):
-                records.append(Record(**rec.model_dump()))
-        except Exception as e:
-            logger.warning(f"Error creating Record object from data: {e}")
-
-    return records

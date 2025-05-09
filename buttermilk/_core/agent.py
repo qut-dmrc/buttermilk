@@ -37,7 +37,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger instance
-from buttermilk._core.message_data import extract_message_data, extract_records_from_message
+from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
@@ -217,8 +217,6 @@ class Agent(AgentConfig):
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
             trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
-            if records := getattr(result, "records", None):
-                trace.records_deprecated.extend([{"record_id": rec.record_id} for rec in records])  # Extract record IDs if available
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -294,8 +292,6 @@ class Agent(AgentConfig):
 
         """
         logger.debug(f"Agent {self.agent_id} received message from {source} via _listen.")
-        # Extract any records in the message first.
-        self._records.extend(extract_records_from_message(message))
 
         # Extract data from the message using the utility function
         extracted = extract_message_data(
@@ -308,21 +304,14 @@ class Agent(AgentConfig):
         found = []
         for key, value in extracted.items():
             if value and value != [] and value != {}:
-                if key == "records":
-                    # Extract records from the data
-                    records_data = {"records": value}
-                    # TODO: check if this is still needed.
-                    new_records = extract_records_from_message(records_data)
-                    # Add to internal records list
-                    self._records.extend(new_records)
-                    found.append(key)
-                else:
-                    # Add other extracted data to the KeyValueCollector
-                    self._data.add(key, value)
-                    found.append(key)
+                self._data.add(key, value)
+                found.append(key)
 
         if found:
             logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
+
+        if "records" in extracted:
+            self._records.extend(extracted.pop("records", []))  # Extract records from the message
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -334,6 +323,7 @@ class Agent(AgentConfig):
                 await self._model_context.add_message(
                     AssistantMessage(content=str(content_to_add), source=source),
                 )  # Assume Assistant role for outputs
+
         elif isinstance(message, ManagerMessage) and message.content:
             # ManagerMessage and subclasses have content field
             content_str = str(message.content) if message.content else ""

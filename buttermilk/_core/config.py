@@ -331,7 +331,8 @@ class AgentVariants(AgentConfig):
 
     Example:
     ```yaml
-    - id: ANALYST
+    any_key_name:
+      id: ANALYST
       role: "Analyst"
       agent_obj: LLMAgent
       num_runs: 1

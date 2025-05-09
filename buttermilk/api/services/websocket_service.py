@@ -9,6 +9,7 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
     ManagerMessage,
+    ManagerRequest,
 )
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.flow import JobQueueClient
@@ -20,6 +21,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 # - messages: list of message objects
 # - progress: dict with progress information
 # - callback: callable for sending messages back to the flow
+# - callback_to_ui: callable for sending messages back to the UI
 # - outcomes_version: string timestamp for version tracking
 
 
@@ -43,12 +45,15 @@ class WebSocketManager:
         """
         await websocket.accept()
         self.active_connections[session_id] = websocket
-        self.session_data[session_id] = dict(
-            messages=[],
-            progress={"current_step": 0, "total_steps": 100, "status": "waiting"},
-            callback=None,
-            outcomes_version=None,
-        )
+        if session_id not in self.session_data:
+            # This is a new session, so we need to initialize the session data
+            self.session_data[session_id] = dict(
+                messages=[],
+                progress={"current_step": 0, "total_steps": 100, "status": "waiting"},
+                callback=None,
+                callback_to_ui=self.make_callback_to_ui(session_id),
+                outcomes_version=None,
+            )
 
     def disconnect(self, session_id: str) -> None:
         """Remove a WebSocket connection
@@ -80,13 +85,11 @@ class WebSocketManager:
                 message: The message from the flow
 
             """
-            # Send message to client if we have an active connection
-            if session_id in self.active_connections:
-                await self.send_message(session_id, message)
+            await self.send_message(session_id, message)
 
         return callback
 
-    async def send_message(self, session_id: str, message: AgentTrace | Record | FlowEvent | FlowMessage) -> None:
+    async def send_message(self, session_id: str, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection
         
         Args:
@@ -132,19 +135,13 @@ class WebSocketManager:
             if message_type == "run_flow":
                 run_request = await self.validate_request(session_id, message)
                 if run_request:
-                    run_request.callback_to_ui = self.make_callback_to_ui(session_id)
                     await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "pull_task":
                 run_request = await self.queue_manager.pull_single_task()
                 if run_request:
-                    run_request.callback_to_ui = self.make_callback_to_ui(session_id)
                     await self.handle_run_flow(session_id, run_request, flow_runner)
-            elif message_type == "manager_response":
+            elif message_type == "manager_response" or message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":
                 await self.handle_user_input(session_id, message)
-            elif message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":
-                if self.session_data[session_id]["callback"]:
-                    await self.session_data[session_id]["callback"](message)
-                # Otherwise, ignore; we're not in a flow.
             else:
                 await self.send_message(
                     session_id,
@@ -203,6 +200,7 @@ class WebSocketManager:
                 "messages": [],
                 "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
                 "callback": None,
+                "callback_to_ui": self.make_callback_to_ui(session_id),
                 "outcomes_version": None,
             }
 

@@ -294,6 +294,10 @@ class LLMAgent(Agent):
 
         """
         logger.debug(f"Agent {self.agent_id} starting _process.")
+        if prompt := getattr(message, "prompt", None):
+            if message.parameters.get("prompt"):
+                logger.warning(f"Agent {self.agent_id}: Both prompt and parameters.prompt provided in AgentInput. Using AgentInput.prompt.")
+            message.parameters["prompt"] = prompt  # Override parameters with prompt from message
         try:
             # 1. Prepare messages for the LLM using the template
             llm_messages = await self._fill_template(

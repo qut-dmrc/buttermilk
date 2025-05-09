@@ -16,13 +16,8 @@ Your goal is to dynamically guide the conversation by deciding the next best ste
 OBJECTIVE:
 {{ task }}
 
-AVAILABLE PARTICIPANTS:
-{{ participants | pprint }}
-
-{% if available_variants %}
-AVAILABLE VARIANTS (by role):
-{{ available_variants | pprint }}
-{% endif %}
+AVAILABLE PARTICIPANT ROLES:
+{{ participants | pprint if participants else None }}
 
 CURRENT EXPLORATION STATUS:
 {% if exploration_path %}
