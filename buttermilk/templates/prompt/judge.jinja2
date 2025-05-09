@@ -11,6 +11,10 @@ You are a careful and precise auditor. You will be provided with a set of criter
 {{ render_or_include(criteria) }}
 <END CRITERIA>
 
+{% if not records %}
+{# this ensures we raise an error if the records are not provided #}
+{{records}}
+{% endif %}
 # Placeholder:
 {{records}}
 

@@ -293,12 +293,17 @@ class Agent(AgentConfig):
         """
         logger.debug(f"Agent {self.agent_id} received message from {source} via _listen.")
 
+        if isinstance(message, Record):
+            self._records.append(message)
+
         # Extract data from the message using the utility function
         extracted = extract_message_data(
             message=message,
             source=source,
             input_mappings=self.inputs,
         )
+
+        self._records.extend(extracted.pop("records", []))
 
         # Update internal state (_data, _records)
         found = []
@@ -309,9 +314,6 @@ class Agent(AgentConfig):
 
         if found:
             logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
-
-        if "records" in extracted:
-            self._records.extend(extracted.pop("records", []))  # Extract records from the message
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -446,11 +448,9 @@ class Agent(AgentConfig):
             logger.error(f"Agent {self.agent_id}: Error retrieving model context: {e}")
             # Decide how to handle context retrieval failure. Continue without history?
 
-        # Append stored records.
-        # Ensure records list exists.
-        if updated_inputs.records is None:
-            updated_inputs.records = []
-        updated_inputs.records.extend(self._records)
+        # Ensure records list exists. Use the last saved one if it doesn't.
+        if not updated_inputs.records:
+            updated_inputs.records = self._records[-1:] if self._records else []
 
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. Final input keys: {list(updated_inputs.inputs.keys())}, Context length: {len(updated_inputs.context)}, Records count: {len(updated_inputs.records)}",
