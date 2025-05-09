@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
-from buttermilk.api.flow import JobQueueClient
+from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
 
 

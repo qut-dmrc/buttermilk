@@ -65,7 +65,8 @@ class MessageService:
             elif isinstance(message, ManagerRequest):
                 message_type = "manager_request"
             elif isinstance(message, ManagerMessage):
-                message_type = "manager_response"
+                # Message from UI to chat; don't send back to UI
+                return None
             elif isinstance(message, FlowEvent):
                 message_type = "system_message"
             else:

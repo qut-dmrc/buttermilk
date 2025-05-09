@@ -12,7 +12,6 @@ from buttermilk._core.contract import (
     ManagerRequest,
 )
 from buttermilk._core.types import Record, RunRequest
-from buttermilk.api.flow import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
 from buttermilk.runner.flowrunner import FlowRunner
@@ -32,8 +31,6 @@ class WebSocketManager:
         """Initialize the WebSocket manager"""
         self.active_connections: dict[str, WebSocket] = {}
         self.session_data: dict[str, Any] = {}
-
-        self.queue_manager: JobQueueClient = JobQueueClient()
 
     async def connect(self, websocket: WebSocket, session_id: str) -> None:
         """Accept a WebSocket connection and store it
@@ -120,7 +117,7 @@ class WebSocketManager:
             except Exception as e:
                 logger.error("Failed to send error message")
 
-    async def process_message(self, session_id: str, message: dict[str, Any], flow_runner: FlowRunner) -> None:
+    async def process_message_from_ui(self, session_id: str, message: dict[str, Any], flow_runner: FlowRunner) -> None:
         """Process a message from a WebSocket connection
         
         Args:
@@ -137,7 +134,8 @@ class WebSocketManager:
                 if run_request:
                     await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "pull_task":
-                run_request = await self.queue_manager.pull_single_task()
+                from buttermilk.api.job_queue import JobQueueClient
+                run_request = await JobQueueClient().pull_single_task()
                 if run_request:
                     await self.handle_run_flow(session_id, run_request, flow_runner)
             elif message_type == "manager_response" or message_type == "TaskProcessingComplete" or message_type == "TaskProcessingStarted":

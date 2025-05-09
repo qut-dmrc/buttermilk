@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +10,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from buttermilk._core.types import RunRequest
-from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
@@ -174,7 +172,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             # Listen for messages from the client
             while True:
                 data = await websocket.receive_json()
-                await manager.process_message(session_id, data, flow_runner)
+                await manager.process_message_from_ui(session_id, data, flow_runner)
 
         except WebSocketDisconnect:
             logger.info(f"Client {session_id} disconnected.")
