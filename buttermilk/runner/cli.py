@@ -27,19 +27,52 @@ from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
 
 
-async def run_batch_job(flow_runner: FlowRunner) -> None:
-    """Pull a single job from the queue and run it."""
+async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
+    """Pull and run jobs from the queue, ensuring fresh state for each job.
+    
+    Args:
+        flow_runner: The FlowRunner instance to use for running flows
+        max_jobs: Maximum number of jobs to process in this batch run
+        
+    Raises:
+        FatalError: If no run requests are found in the queue
+        Exception: If there's an error running a job
+    """
     try:
-
         worker = JobQueueClient(
-            max_concurrent_jobs=1,
+            max_concurrent_jobs=1,  # Process one job at a time to maintain isolation
         )
-        run_request = await worker.pull_single_task()
-        if run_request:
-            return await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
-        raise FatalError("No run request found in the queue.")
+        
+        jobs_processed = 0
+        
+        while jobs_processed < max_jobs:
+            # Pull a job from the queue
+            run_request = await worker.pull_single_task()
+            if not run_request:
+                if jobs_processed == 0:
+                    # Only raise an error if we didn't process any jobs
+                    raise FatalError("No run request found in the queue.")
+                break  # No more jobs to process
+            
+            logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
+            
+            try:
+                # Run the job with wait_for_completion=True to ensure it finishes before moving to the next
+                await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
+                logger.info(f"Successfully completed job {run_request.job_id}")
+            except Exception as job_error:
+                logger.error(f"Error running job {run_request.job_id}: {job_error}")
+                # Continue processing other jobs even if one fails
+            
+            jobs_processed += 1
+            
+        logger.info(f"Batch processing complete. Processed {jobs_processed} jobs.")
+        
+    except FatalError:
+        # Re-raise FatalError to be handled by the caller
+        raise
     except Exception as e:
-        logger.error(f"Error running job from task: {e}")
+        logger.error(f"Fatal error during batch processing: {e}")
         raise
 
 
@@ -86,10 +119,15 @@ def main(cfg: DictConfig) -> None:
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
         case "batch":
-            # Run a batch job from the queue
-
-            bm.logger.info("Running in batch mode...")
-            asyncio.run(run_batch_job(flow_runner=flow_runner))
+            # Run batch jobs from the queue
+            # max_jobs controls how many jobs to process before exiting
+            # Each job gets a completely fresh orchestrator instance to ensure
+            # no state is shared between jobs, preventing cross-contamination
+            # This is critical for research integrity where old state might affect results
+            max_jobs = cfg.get("max_jobs", 1)  # Get max_jobs from config or default to 1
+            
+            bm.logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
+            asyncio.run(run_batch_job(flow_runner=flow_runner, max_jobs=max_jobs))
 
         case "streamlit":
             # Start the Streamlit interface
