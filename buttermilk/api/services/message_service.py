@@ -41,7 +41,7 @@ class MessageService:
             return None
         if isinstance(message, ChatMessage):
             return message
-
+        call_id = message.call_id if hasattr(message, "call_id") else str(uuid())
         message_type = None
         outputs = message.outputs if hasattr(message, "outputs") else message
         preview = message.content if hasattr(message, "content") else None
@@ -73,7 +73,7 @@ class MessageService:
                 return None
 
             # Repackage
-            output = ChatMessage(
+            output = ChatMessage(message_id=call_id,
                 type=message_type,
                 preview=preview,
                 outputs=outputs,

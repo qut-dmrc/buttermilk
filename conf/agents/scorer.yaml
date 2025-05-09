@@ -9,9 +9,10 @@ scorer:
   parameters:
     template: score
   inputs:
-    model: "*.parameters.model|[0]"
-    criteria: "*.parameters.criteria|[0]"
-    template: "*.parameters.template|[0]"
-    records: "[FETCH]||[HOST,CONDUCTOR,MANAGER].records[]"
-    expected: "[FETCH]||*.records[]||*.records[]|[0].ground_truth.reasons"
+    model: "*.agent_info.parameters.model|[0]"
+    criteria: "*.agent_info.parameters.criteria|[0]"
+    template: "*.agent_info.parameters.template|[0]"
+    records: "*.inputs.records[]"
+    expected: "*.inputs.records[]||*.inputs.records[]|[0].ground_truth"
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.id, agent_name: agent_info.name, result: outputs, answer_id: call_id }"
+    

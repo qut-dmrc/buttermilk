@@ -62,13 +62,13 @@ class RefResult(pydantic.BaseModel):
 
 
 class Reference(pydantic.BaseModel):
-    summary: str
-    citation: str
+    summary: str = pydantic.Field(..., description="Summary of the key point from the reference.")
+    citation: str = pydantic.Field(..., description="Citation for the reference.")
 
 
 class ResearchResult(pydantic.BaseModel):
-    literature: list[Reference]
-    response: str
+    literature: list[Reference] = pydantic.Field(..., description="List of references cited in the research.")
+    response: str = pydantic.Field(..., description="Response from the model.")
 
 
 class RagZot(LLMAgent, ToolConfig):
@@ -78,7 +78,7 @@ class RagZot(LLMAgent, ToolConfig):
 
     _chromadb: ChromaDBEmbeddings
     _vectorstore: Collection
-    _output_model: type[pydantic.BaseModel] | None = ResearchResult
+    _output_model: type[pydantic.BaseModel] = ResearchResult
 
     # RAG query settings
     n_results: int = pydantic.Field(default=20)
@@ -98,6 +98,7 @@ class RagZot(LLMAgent, ToolConfig):
             name="search",
             description=self.description,
             func=self._run,
+            strict=False,
         )
 
         # Add tools to the agent
