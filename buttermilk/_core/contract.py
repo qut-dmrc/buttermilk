@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
+import weave
 
 # Import Autogen types used as base or components
 from autogen_core.models import FunctionExecutionResult, LLMMessage
@@ -179,6 +180,7 @@ class AgentInput(FlowMessage):
     The `Orchestrator` or another `Agent` typically constructs this before calling an agent.
     """
 
+    parent_call_id: str | None = Field(default=None, description="ID of the parent call, if applicable.")
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="Dictionary containing input data resolved from mappings or passed directly.",
@@ -262,8 +264,7 @@ class AgentOutput(BaseModel):
     """
 
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
-    call_id: str = Field(
-        default_factory=lambda: shortuuid.uuid(),
+    call_id: str = Field(default="",
         description="A unique ID for this specific agent execution/response.",
     )
     agent_id: str = Field(..., description="Unique identifier for the agent instance.")
@@ -297,6 +298,20 @@ class AgentOutput(BaseModel):
             pass
 
         return ""
+
+    @field_validator("call_id", mode="before")
+    @classmethod
+    def _ensure_call_id(cls, v: str) -> str:
+        """Look up call id if available."""
+        if not v:
+            # --- Weave Tracing ---
+            # Get the current Weave call context if available.
+            call = weave.get_current_call()
+            if call and call.id:
+                v = call.id
+        if not v:
+            v = str(shortuuid.uuid())
+        return v
 
     def __str__(self) -> str:
         return self.content

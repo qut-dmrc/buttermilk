@@ -42,6 +42,7 @@
         "flows=[trans]",
         "llms=full",
         "human_in_loop=false",
+        "max_jobs=2",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
