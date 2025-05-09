@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from buttermilk._core import AgentInput, StepRequest
+from buttermilk._core.constants import END, MANAGER
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 
@@ -39,10 +40,21 @@ class LLMHostAgent(LLMAgent, HostAgent):
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
+        # First, say hello to the user
+        yield StepRequest(
+            role=MANAGER,
+            prompt="Hi! What would you like to do?",
+        )
         while True:
-            result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback}))
+            # With user feedback, call the LLM to get the next step
+            result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))
+
+            # Now call the agent specified in the result
             next_step = StepRequest(
                 role=result.outputs.role,
                 prompt=result.outputs.prompt,
             )
             yield next_step
+
+        # This will never be reached, but is here for completeness
+        yield StepRequest(role=END, prompt="End of sequence")

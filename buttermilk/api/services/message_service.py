@@ -42,7 +42,6 @@ class MessageService:
         if isinstance(message, ChatMessage):
             return message
 
-        message_id = message.call_id if hasattr(message, "call_id") else str(uuid())
         message_type = None
         outputs = message.outputs if hasattr(message, "outputs") else message
         preview = message.content if hasattr(message, "content") else None

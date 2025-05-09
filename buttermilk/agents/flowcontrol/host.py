@@ -95,7 +95,7 @@ class HostAgent(Agent):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
             msg_type = AssistantMessage
         elif isinstance(message, ManagerMessage):
-            logger.info(f"Host {self.agent_id} received user input.")
+            logger.info(f"Host {self.agent_id} received user input: {message}")
             self._user_confirmation = message
             self._user_confirmation_received.set()
             content = getattr(message, "content", getattr(message, "params", None))
@@ -194,6 +194,7 @@ class HostAgent(Agent):
         confirmation_request = ManagerRequest(
             content=str(step), options=["confirm", "reject"],  # Options for user confirmation
         )
+        self._user_confirmation_received.clear()  # Reset the event for the next confirmation
         await self._input_callback(confirmation_request)
 
     async def _wait_for_user(self, step, n_minutes: int = 5) -> ManagerMessage:
@@ -202,10 +203,7 @@ class HostAgent(Agent):
                 logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
                 try:
                     await self.request_user_confirmation(step)
-                    if await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60):
-                        logger.debug(f"User confirmed step: {step.role}")
-                        return self._user_confirmation
-                    logger.warning(f"User rejected step: {step.role}")
+                    await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
                     return self._user_confirmation
                 except TimeoutError:
                     logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
@@ -282,8 +280,8 @@ class HostAgent(Agent):
 
         async for step in self._sequence():
             if self.human_in_loop:
-                user_confirmed = await self._wait_for_user(step)
-                if not user_confirmed:
+                await self._wait_for_user(step)
+                if not self._user_confirmation or self._user_confirmation.confirm is False:
                     logger.info(f"User rejected step: {step.role}. Moving on.")
                     continue
             await self._execute_step(step)

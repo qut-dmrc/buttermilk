@@ -61,6 +61,16 @@ class RefResult(pydantic.BaseModel):
         )
 
 
+class Reference(pydantic.BaseModel):
+    summary: str
+    citation: str
+
+
+class ResearchResult(pydantic.BaseModel):
+    literature: list[Reference]
+    response: str
+
+
 class RagZot(LLMAgent, ToolConfig):
     """Retrieval Augmented Generation Agent that queries a vector store
     and fills a template with the results.
@@ -68,6 +78,7 @@ class RagZot(LLMAgent, ToolConfig):
 
     _chromadb: ChromaDBEmbeddings
     _vectorstore: Collection
+    _output_model: type[pydantic.BaseModel] | None = ResearchResult
 
     # RAG query settings
     n_results: int = pydantic.Field(default=20)
@@ -91,6 +102,9 @@ class RagZot(LLMAgent, ToolConfig):
 
         # Add tools to the agent
         self._tools_list.extend([search_tool])
+
+        if not self._vectorstore:
+            raise ValueError("No vector store found. Please check your configuration.")
 
         return self
 
