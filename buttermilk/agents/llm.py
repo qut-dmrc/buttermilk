@@ -144,7 +144,7 @@ class LLMAgent(Agent):
         logger.debug(f"Agent {self.agent_id}: Using template '{template_name}'.")
 
         # Combine agent default parameters and task-specific parameters. Task parameters override defaults.
-        combined_params = {**self.parameters, **task_params}
+        combined_params = {**self.parameters, **task_params, "records": records}
 
         # Render the Jinja2 template. `load_template` handles finding and rendering.
         # It takes parameters needed *by the template loading/finding logic itself*
