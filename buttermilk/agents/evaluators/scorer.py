@@ -11,10 +11,8 @@ from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
-    GroupchatMessageTypes,
-    Record,  # Type hint union for listen
+    GroupchatMessageTypes,  # Type hint union for listen
     )
-from buttermilk._core.message_data import extract_message_data
 from buttermilk.agents.judge import JudgeReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
 
@@ -109,41 +107,28 @@ class LLMScorer(LLMAgent):
         original message's trace. The score result (AgentTrace containing QualScore)
         is published back using the `public_callback`.
         """
-        # Extract data from the message using the utility function
-        extracted = extract_message_data(
+        # Store data from the message for later use
+        await super()._listen(
             message=message,
+            cancellation_token=cancellation_token,
             source=source,
-            input_mappings=self.inputs,
+            public_callback=public_callback,
+            message_callback=message_callback,
+            **kwargs,
         )
-        if isinstance(message, Record):
-            self._records.append(message)
-
-        # prefer records in message over those in state
-        self._records.extend(extracted.pop("records", []))
 
         # Ignore messages that are not AgentTrace, or don't have AgentReasons in outputs
         if not isinstance(message, AgentTrace) or not hasattr(message, "outputs") or not isinstance(message.outputs, JudgeReasons):
-            # logger.debug(f"Scorer {self.id} ignoring message type {type(message)} or output type {type(getattr(message, 'outputs', None))}")
             return
+
         logger.debug(f"Scorer {self.agent_id} received potential scoring target from agent {source} (Output Type: AgentReasons).")
 
         if message and message.inputs and isinstance(message.inputs, dict):
-            self._records.extend(message.inputs.get("records", []))  # Extract records from the message
+            # Extract records from the message if they exist
+            self._records.extend(message.inputs.get("records", []))
+
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(inputs=extracted)
-
-        # Prepare the input for the scorer's own LLM call (_process)
-        # 'inputs' should match what the scorer's prompt template expects.
-        # It needs the judge's output (message.outputs) and the ground_truth.
-
-        # Add the ground truth to the inputs
-        if not extracted.get("expected"):
-            if not self._records:
-                raise ValueError("No ground truth and no records found in the message or internal state.")
-            scorer_agent_input.records = self._records[-1:]
-            scorer_agent_input.inputs["expected"] = self._records[-1].ground_truth
-
-        scorer_agent_input.inputs["assessor"] = self.agent_id
+        scorer_agent_input = AgentInput()
 
         # Define the scoring function (our own __call__ method)
         score_fn = self.__call__
