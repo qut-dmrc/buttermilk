@@ -6,7 +6,7 @@ from collections.abc import (
 from typing import Any
 
 from autogen_core import CancellationToken
-from pydantic import PrivateAttr
+from pydantic import Field, PrivateAttr
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentTrace, OOBMessages
@@ -14,8 +14,9 @@ from buttermilk._core.contract import AgentInput, AgentTrace, OOBMessages
 
 class UIAgent(Agent):
     _input_task: asyncio.Task | None = PrivateAttr(default=None)  # Allow None and provide default
-    _input_callback: Any = PrivateAttr(...)
+    _callback_to_groupchat: Any = PrivateAttr(...)
     _trace_this = False
+    callback_to_ui: Callable[..., Awaitable[None]] | None = Field(default=None, description="Callback function for the UI")
 
     async def _process(
         self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs,
@@ -48,9 +49,9 @@ class UIAgent(Agent):
         #     return
         return None
 
-    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, session_id: str, callback_to_groupchat: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""
-        self._input_callback = input_callback
+        self._callback_to_groupchat = callback_to_groupchat
 
     async def cleanup(self) -> None:
         """Clean up resources"""

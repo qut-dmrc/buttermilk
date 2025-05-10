@@ -98,7 +98,7 @@ class TestAutogenAgentAdapter:
                 agent_cls=LLMHostAgent,
                 agent_cfg=host_config,
             )
-            await adapter.agent.initialize(input_callback=AsyncMock())  # Initialize agent
+            await adapter.agent.initialize(callback_to_groupchat=AsyncMock())  # Initialize agent
 
         assert isinstance(adapter.agent, LLMHostAgent)
         assert adapter.agent.role == "host"
@@ -114,7 +114,7 @@ class TestAutogenAgentAdapter:
                 agent_cls=ExplorerHost,
                 agent_cfg=explorer_config,
             )
-            await adapter.agent.initialize(input_callback=AsyncMock())  # Initialize agent
+            await adapter.agent.initialize(callback_to_groupchat=AsyncMock())  # Initialize agent
 
         assert isinstance(adapter.agent, ExplorerHost)
         assert adapter.agent.role == "explorer"

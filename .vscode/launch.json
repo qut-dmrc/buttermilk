@@ -63,7 +63,7 @@
         "+run=api",
         "flows=[trans,simple,z]",
         "llms=full",
-        "ui=web"
+        "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -84,7 +84,8 @@
         "flows=[trans,simple,z]",
         "+flow=zot",
         "llms=full",
-        "human_in_loop=true"
+        "human_in_loop=true",
+        "ui=console"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

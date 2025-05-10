@@ -60,11 +60,11 @@ class CLIUserAgent(UIAgent):
     by the agent (`_listen`, `_handle_events`) and `aioconsole` to asynchronously
     poll for user input (`_poll_input`). User input is interpreted as confirmation,
     negation, or free text, which is then sent back to the system as a `ManagerResponse`
-    via the `_input_callback` provided during initialization.
+    via the `_callback_to_groupchat` provided during initialization.
     """
 
     # Callback function provided by the orchestrator/adapter to send ManagerResponse back.
-    _input_callback: Callable[[ManagerMessage], Awaitable[None]] | None = PrivateAttr(default=None)
+    _callback_to_groupchat: Callable[[ManagerMessage], Awaitable[None]] | None = PrivateAttr(default=None)
     # Rich console instance for formatted output.
     _console: Console = PrivateAttr(default_factory=lambda: Console(highlight=True, markup=True))
     # Background task for polling user input.
@@ -278,7 +278,7 @@ class CLIUserAgent(UIAgent):
                     # For now, simulate interrupt. Need a better mechanism.
                     # Find the main task and cancel it? Difficult from here.
                     # Send a special message via callback?
-                    # await self._input_callback(ManagerResponse(confirm=False, prompt="USER_EXIT_REQUEST"))
+                    # await self._callback_to_groupchat(ManagerResponse(confirm=False, prompt="USER_EXIT_REQUEST"))
                     raise KeyboardInterrupt  # Temporary way to stop, might need refinement
 
                 # Handle confirmation/negation based on input
@@ -290,7 +290,7 @@ class CLIUserAgent(UIAgent):
                     logger.info("User input interpreted as NEGATIVE confirmation.")
                     response = ManagerMessage(confirm=False, interrupt=False, content="\n".join(current_prompt_lines))
                     current_prompt_lines = []  # Reset prompt buffer
-                    await self._input_callback(response)
+                    await self._callback_to_groupchat(response)
                 elif is_confirmation:
                     # If we have accumulated feedback in the prompt buffer, this is a confirmation WITH feedback,
                     # which should be treated as an interruption requiring the Conductor's attention
@@ -303,7 +303,7 @@ class CLIUserAgent(UIAgent):
                         response = ManagerMessage(confirm=True, interrupt=False, content=None)
 
                     current_prompt_lines = []  # Reset prompt buffer
-                    await self._input_callback(response)
+                    await self._callback_to_groupchat(response)
                 else:
                     # Non-empty, non-negation input: add to multi-line buffer
                     logger.debug(f"User input added to buffer: '{user_input}'")
@@ -312,8 +312,8 @@ class CLIUserAgent(UIAgent):
                     continue  # Go back to prompt for more input
 
                 # Optional: Signal heartbeat or task completion after processing input via callback
-                # await self._input_callback(TaskProcessingComplete(...)) # If input completes a "task"
-                # await self._input_callback(HeartBeat(go_next=True)) # If input allows flow to proceed
+                # await self._callback_to_groupchat(TaskProcessingComplete(...)) # If input completes a "task"
+                # await self._callback_to_groupchat(HeartBeat(go_next=True)) # If input allows flow to proceed
 
                 await asyncio.sleep(0.1)  # Small sleep to prevent tight loop if needed
 
@@ -333,19 +333,19 @@ class CLIUserAgent(UIAgent):
                 if isinstance(e, KeyboardInterrupt):
                     raise
 
-    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, session_id: str, callback_to_groupchat: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         # Call base class initialize if needed
         await super().initialize(**kwargs)
         """
         Initializes the agent and starts the background input polling task if a callback is provided.
 
         Args:
-            input_callback: The async function to call when user input is received.
+            callback_to_groupchat: The async function to call when user input is received.
                             Expected signature: `async def callback(response: ManagerResponse)`
             **kwargs: Additional keyword arguments passed to the base class initializer.
         """
         logger.debug(f"Initializing {self.agent_id}...")
-        self._input_callback = input_callback
+        self._callback_to_groupchat = callback_to_groupchat
         # Ensure any existing task is cancelled before starting a new one (e.g., on reset)
         if self._input_task and not self._input_task.done():
             self._input_task.cancel()
@@ -354,13 +354,13 @@ class CLIUserAgent(UIAgent):
             except asyncio.CancelledError:
                 pass  # Expected
 
-        if self._input_callback:
+        if self._callback_to_groupchat:
             # Start the background task to poll for console input.
             self._input_task = asyncio.create_task(self._poll_input())
             logger.debug(f"{self.agent_id}: Input polling task created.")
         else:
             # If no callback, input polling is disabled.
-            logger.warning(f"{self.agent_id}: Initialized without input_callback. Console input polling disabled.")
+            logger.warning(f"{self.agent_id}: Initialized without callback_to_groupchat. Console input polling disabled.")
             self._input_task = None
 
     async def cleanup(self) -> None:
