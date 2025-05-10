@@ -19,18 +19,18 @@ except ImportError:
     logger.warning("WebUIAgent not available")
 
 try:
-    from buttermilk.agents.ui.console import ConsoleUIAgent
+    from buttermilk.agents.ui.console import CLIUserAgent
     console_available = True
 except ImportError:
     console_available = False
     logger.warning("ConsoleUIAgent not available")
 
 try:
-    from buttermilk.agents.ui.slackthreadchat import SlackThreadChatUIAgent
+    from buttermilk.agents.ui.slackthreadchat import SlackUIAgent
     slack_available = True
 except ImportError:
     slack_available = False
-    logger.warning("SlackThreadChatUIAgent not available")
+    logger.warning("SlackUIAgent not available")
 
 # Register available UI implementations with the registry
 # This makes them available for dynamic selection by the UIProxyAgent
@@ -42,12 +42,12 @@ try:
 
     # Register console UI if available
     if console_available:
-        register_ui("console", ConsoleUIAgent)
+        register_ui("console", CLIUserAgent)
         logger.debug("Registered 'console' UI implementation")
 
     # Register Slack UI if available
     if slack_available:
-        register_ui("slack", SlackThreadChatUIAgent)
+        register_ui("slack", SlackUIAgent)
         logger.debug("Registered 'slack' UI implementation")
 
 except Exception as e:

@@ -364,7 +364,6 @@ class AgentVariants(AgentConfig):
     tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
     num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
     extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
-    ui_type: str | None = Field(default=None, description="Type of UI to use for this agent. Only used if agent_obj is 'UIProxyAgent'.")
     # --- Variant configuration: fields used to generate AgentConfig objects ---
 
     def get_configs(self, params: RunRequest | None = None) -> list[tuple[type, AgentConfig]]:

@@ -194,33 +194,34 @@ class Agent(AgentConfig):
                                                     model=self._cfg.parameters.get("model"))
         # --- Weave Tracing ---
         # Get the current Weave call context if available.
-        call = weave.get_current_call()
-        call_id = getattr(call, "id", uuid())  # Get the call ID if available
-        if call:
-            call.set_display_name(self.name)  # Set trace display name
-            if message.parent_call_id:
-                call.parent_id = message.parent_call_id  # Set parent call ID if available
-
-            # TODO: Log inputs? Be careful about large data/PII.
-            logger.debug(f"Agent {self.agent_id} __call__ executing within Weave trace: {getattr(call.ref, 'id', 'N/A')}")
-        else:
-            logger.warning(f"Agent {self.agent_id} __call__ executing outside Weave trace context.")
-
-        # Create the trace here with required values
-        trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
-            agent_info=self._cfg,
-            inputs=final_input,
-        )
+        parent_call = weave.get_current_call()
+        parent_call_id = getattr(parent_call, "id", uuid())  # Get the call ID if available
+        call_id = None
         is_error = False
+
+        await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
+
         # --- Execute Core Logic ---
         try:
-            await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
-
-            result = await self._process(message=final_input, cancellation_token=cancellation_token,
+            op = weave.op(self._process, call_display_name=self.name)
+            from buttermilk.bm import bm
+            inputs = dict(message=final_input, cancellation_token=cancellation_token,
                 public_callback=public_callback,  # Callback provided by adapter
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
-            trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
+            try:
+                child_call = bm.weave.create_call(op, inputs=inputs, parent=parent_call, display_name=self.name, attributes=trace_params)
+                parent_call._children.append(child_call)
+                result = await self._process(**inputs)
+                bm.weave.finish_call(child_call, output=result, op=op)
+                call_id = child_call.id
+            except Exception as e:
+                logger.error(f"Agent {self.agent_id} error during butchered weave child call: {e}")
+                result, other_child_call = await op.call(**inputs)
+                other_child_call.parent_id = message.parent_call_id
+                # I don't think this will work, but trying anyways. I think it's too late at this stage.
+                parent_call._children.append(other_child_call)
+                call_id = other_child_call.id
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -234,6 +235,12 @@ class Agent(AgentConfig):
             await public_callback(
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
             )
+            # Create the trace here with required values
+            trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
+                agent_info=self._cfg,
+                inputs=final_input,
+            )
+            trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
             # Send a full trace off to another agent to save to the database
             await public_callback(trace)

@@ -22,6 +22,7 @@ from buttermilk._core.contract import (
 from buttermilk.agents.ui.generic import UIAgent
 from buttermilk.agents.ui.registry import get_ui_implementation, list_ui_implementations
 
+
 # Define a protocol for methods we expect on a UI implementation
 class UIImplementation(Protocol):
     async def _process(self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | None: ...
@@ -40,16 +41,17 @@ class UIProxyAgent(UIAgent):
     """
 
     ui_type: str | None = Field(default=None, description="The type of UI to use")
-    session_id: str = Field(default="", description="Session identifier for the UI")
+    session_id: str = Field(description="Session identifier for the UI")
     # Use Any for runtime flexibility, but we'll type check appropriately in our methods
     _concrete_ui: Any = PrivateAttr(default=None)
     _initialized: bool = PrivateAttr(default=False)
     _ui_parameters: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the proxy agent and connect to a concrete UI implementation.
         
         Args:
+            session_id: The session identifier for the UI
             input_callback: Callback function for the UI
             **kwargs: Additional parameters to pass to the concrete UI implementation
 
@@ -59,13 +61,11 @@ class UIProxyAgent(UIAgent):
         # Store parameters for later use with the concrete UI
         self._ui_parameters = kwargs
         self._ui_parameters["input_callback"] = input_callback
+        self._ui_parameters["session_id"] = session_id
+        self.ui_type = self.parameters.get("ui_type", self.ui_type)
 
         if "callback_to_ui" in kwargs:
             self._ui_parameters["callback_to_ui"] = kwargs["callback_to_ui"]
-
-        if "session_id" in kwargs:
-            self._ui_parameters["session_id"] = kwargs["session_id"]
-            self.session_id = kwargs["session_id"]
 
         # Connect to the concrete UI implementation if available
         if self.ui_type:

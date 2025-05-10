@@ -103,7 +103,7 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Autogen runtime started.")
 
         # Register UI
-        self.ui.ui_type = request.ui_type
+        self.ui.parameters["ui_type"] = request.ui_type
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
