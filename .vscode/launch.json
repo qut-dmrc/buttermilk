@@ -63,6 +63,7 @@
         "+run=api",
         "flows=[trans,simple,z]",
         "llms=full",
+        "ui=web"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

@@ -1,5 +1,0 @@
-manager:
-  role: MANAGER
-  name: "👔 Manager"
-  agent_obj: slack_replaced
-  description: Your manager, supervisor, and final approver. Should be consulted if more information is needed, when approval is required on a final answer, or to check whether there are further questions once an answer has been given.
