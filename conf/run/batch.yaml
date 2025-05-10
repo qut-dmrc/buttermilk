@@ -3,7 +3,9 @@ defaults:
   # ... other defaults
   - /flows/criteria@batch.parameters.criteria: 
     - trans 
-# Set UI mode to batch
+
+# Set mode and UI to batch
+mode: batch
 ui: batch
 human_in_loop: false
 

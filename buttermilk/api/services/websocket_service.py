@@ -174,7 +174,7 @@ class WebSocketManager:
         if "criteria" in data:
             parameters["criteria"] = data["criteria"]
 
-        run_request = RunRequest(
+        run_request = RunRequest(ui_type="web",
             flow=data["flow"],
             record_id=data["record_id"],
             parameters=parameters,

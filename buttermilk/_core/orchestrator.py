@@ -81,7 +81,7 @@ class OrchestratorProtocol(BaseModel):
         default_factory=dict,
         description="Mapping of agent roles (uppercase) to their variant configurations.",
     )
-    ui: Any = Field(default=None)
+    ui: AgentVariants = Field(..., description="Configuration for the UI agent.")
 
     observers: Mapping[str, AgentVariants] = Field(
         default_factory=dict, description="Agents that will not be called upon but are still present in a discussion.",
@@ -200,7 +200,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             "flow_name": request.flow if request else self.name,
             "record": request.record_id if request else None,
             "uri": request.uri if request else None,
-        }
+        })
         try:
             assert bm.weave
             display_name = request.flow if request else self.name

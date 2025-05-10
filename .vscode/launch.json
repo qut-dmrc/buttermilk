@@ -38,11 +38,12 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": false,
       "args": [
-        "ui=batch",
+        "+run=batch",
         "flows=[trans]",
         "llms=full",
         "human_in_loop=false",
-        "max_jobs=2",
+        "+max_jobs=2",
+        "ui=web",
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
@@ -59,7 +60,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "ui=api",
+        "+run=api",
         "flows=[trans,simple,z]",
         "llms=full",
       ],
@@ -78,7 +79,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "ui=console",
+        "+run=console",
         "flows=[trans,simple,z]",
         "+flow=zot",
         "llms=full",
@@ -99,7 +100,7 @@
       ],
       "justMyCode": true,
       "args": [
-        "ui=pub/sub",
+        "+run=pub/sub",
         "+run=batch",
         "flows=[trans]",
         "+flow=trans",
@@ -122,7 +123,7 @@
       "args": ["run", "buttermilk/web/interface.py",
         "hydra.verbose=false",
         "flows=[trans]",
-        "ui=streamlit",
+        "+run=streamlit",
         "llms=lite",
         "name=bmdevelopment",
         "job=api",
@@ -142,7 +143,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=trans",
-        "ui=api",
+        "+run=api",
         "llms=lite",
         "name=bmdevelopment",
         "job=api",
@@ -165,7 +166,7 @@
         "+flows=[panel]",
         "flow=panel",
         "record_id=NCAA_transgender_athletes",
-        "ui=console",
+        "+run=console",
         "llms=lite",
         "++name=panel",
         //"+record_id=${input:query}" // Will prompt for query
@@ -184,7 +185,7 @@
       "args": [
         "hydra.verbose=false",
         "+flows=[trans,z]",
-        "ui=slackbot",
+        "+run=slackbot",
         "llms=full",
         "++name=automod",
         "++job=development"

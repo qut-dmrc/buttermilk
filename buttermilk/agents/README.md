@@ -69,7 +69,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
 1.  **Initialization:** `cli.py` uses Hydra to load configuration and instantiate the chosen `Orchestrator` (e.g., `Selector`).
 2.  **Runtime Setup:** The `AutogenOrchestrator`'s `run()` method calls `_setup_runtime()`.
 3.  **Agent Registration:** `_register_agents()` creates `AutogenAgentAdapter` instances for each Buttermilk agent defined in the config and registers them with the Autogen runtime. UI agents (`UIAgent` subclasses) are also registered.
-4.  **Flow Start:** The orchestrator might prompt the user via `_send_ui_message()`. The UI agent (e.g., `SlackUIAgent`, `CLIUserAgent`) displays the prompt.
+4.  **Flow Start:** The orchestrator might prompt the user via `_send_ui_message()`. The UI agent (e.g., `Slack `, `CLIUserAgent`) displays the prompt.
 5.  **User Input:** The user provides input (text, button click). The UI agent's callback (`_input_callback` provided by `AutogenAgentAdapter.handle_input()`) publishes   `ManagerResponse` message into the Autogen runtime via the adapter.
 6.  **Orchestration Logic:**
     *   The orchestrator (e.g., `Selector`) might receive the user input (if subscribed) or proceed based on its internal logic (`_get_next_step`).

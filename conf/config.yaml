@@ -9,7 +9,7 @@ name: default_project
 job: development
 ui: console
 human_in_loop: true
-
+run: help
 bm:
   _target_: buttermilk.bm.BM
 

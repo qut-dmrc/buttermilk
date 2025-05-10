@@ -12,8 +12,7 @@ defaults:
     - owl
     - scorer
     - host/sequencer
-    - interface/proxy  # Use the proxy agent that can dynamically switch UI implementations
-    # - interface/console  # No longer needed as proxy can handle all UI types
+  - /agents/interface@ui: proxy  # Use the proxy agent that can dynamically switch UI implementations
   - criteria@parameters.criteria: trans
   
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator

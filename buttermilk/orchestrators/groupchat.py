@@ -102,6 +102,9 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime.start()
         logger.debug("Autogen runtime started.")
 
+        # Register UI
+        self.ui.ui_type = request.ui_type
+
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
 
@@ -129,7 +132,7 @@ class AutogenOrchestrator(Orchestrator):
         # Create list of participants in the group chat
         self._participants = {v.role: v.description for k, v in self.agents.items()}
 
-        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
+        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items(), [(MANAGER, self.ui)]):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params):
@@ -213,7 +216,7 @@ class AutogenOrchestrator(Orchestrator):
             await asyncio.sleep(2)  # Give it some time to properly shut down
 
     @weave.op
-    async def _run(self, request: RunRequest | None = None, flow_name: str = "") -> None:
+    async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
         
         This version delegates most of the substantive flow control to the
@@ -234,7 +237,7 @@ class AutogenOrchestrator(Orchestrator):
         """
         try:
             # 1. Setup the runtime and agents
-            termination_handler = await self._setup(request or RunRequest())
+            termination_handler = await self._setup(request)
 
             # 2. Load initial data if provided
             if request:
