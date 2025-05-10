@@ -5,7 +5,6 @@ group chat workflow, routing messages in both directions.
 """
 
 import asyncio
-from typing import Any
 
 from autogen_core import (
     DefaultTopicId,
@@ -33,7 +32,7 @@ class WebUIAgent(RoutedAgent):
     It handles message routing in both directions.
     """
 
-    def __init__(self, callback_to_ui: Any, session_id: str, description: str = "Web UI Agent for handling user interactions", **kwargs):
+    def __init__(self, description: str = "Web UI Agent for handling user interactions", **kwargs):
         """Initialize the WebUIAgent.
         
         Args:
@@ -43,9 +42,9 @@ class WebUIAgent(RoutedAgent):
         super().__init__(description=description)
         self._topic_id = DefaultTopicId(type=MANAGER)
         logger.debug(f"WebUIAgent initialized with topic ID: {self._topic_id}")
-        self.callback_to_ui = callback_to_ui
+        # self.callback_to_ui = callback_to_ui
 
-        self.session_id = session_id
+        # self.session_id = session_id
         self.task = asyncio.create_task(self.comms())
 
     async def send_to_ui(self, message: BaseModel | dict):

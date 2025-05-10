@@ -14,7 +14,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import logger
-from buttermilk.runner.flowrunner import FlowRunner
+from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 
 # Session data structure keys
 # - messages: list of message objects
@@ -30,7 +30,7 @@ class WebSocketManager:
     def __init__(self):
         """Initialize the WebSocket manager"""
         self.active_connections: dict[str, WebSocket] = {}
-        self.session_data: dict[str, Any] = {}
+        self.session_data: dict[str, FlowRunContext] = {}
 
     async def connect(self, websocket: WebSocket, session_id: str) -> None:
         """Accept a WebSocket connection and store it
@@ -42,15 +42,6 @@ class WebSocketManager:
         """
         await websocket.accept()
         self.active_connections[session_id] = websocket
-        if session_id not in self.session_data:
-            # This is a new session, so we need to initialize the session data
-            self.session_data[session_id] = dict(
-                messages=[],
-                progress={"current_step": 0, "total_steps": 100, "status": "waiting"},
-                callback=None,
-                callback_to_ui=self.make_callback_to_ui(session_id),
-                outcomes_version=None,
-            )
 
     def disconnect(self, session_id: str) -> None:
         """Remove a WebSocket connection
@@ -61,9 +52,6 @@ class WebSocketManager:
         """
         if session_id in self.active_connections:
             del self.active_connections[session_id]
-
-        if session_id in self.session_data:
-            del self.session_data[session_id]
 
     def make_callback_to_ui(self, session_id: str) -> Callable:
         """Create a callback function for the flow to send messages back to the UI
@@ -178,7 +166,7 @@ class WebSocketManager:
             flow=data["flow"],
             record_id=data["record_id"],
             parameters=parameters,
-            callback_to_ui=self.session_data[session_id]["callback_to_ui"],
+            callback_to_ui=self.make_callback_to_ui(session_id),
             session_id=session_id,
         )
         return run_request
@@ -193,17 +181,9 @@ class WebSocketManager:
 
         """
         try:
-            # Reset session data
-            self.session_data[session_id] = {
-                "messages": [],
-                "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
-                "callback": None,
-                "callback_to_ui": run_request.callback_to_ui,
-                "outcomes_version": None,
-            }
 
             # Run the flow
-            self.session_data[session_id]["callback"] = await flow_runner.run_flow(
+            self.session_data[session_id] = await flow_runner.run_flow(
                 flow_name=run_request.flow,
                 run_request=run_request,
             )
