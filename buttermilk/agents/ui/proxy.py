@@ -42,6 +42,7 @@ class UIProxyAgent(UIAgent):
 
     ui_type: str | None = Field(default=None, description="The type of UI to use")
     session_id: str = Field(description="Session identifier for the UI")
+    callback_to_ui: Callable[..., Awaitable[None]] | None = Field(default=None, description="Callback function for the UI")
     # Use Any for runtime flexibility, but we'll type check appropriately in our methods
     _concrete_ui: Any = PrivateAttr(default=None)
     _initialized: bool = PrivateAttr(default=False)
@@ -56,16 +57,14 @@ class UIProxyAgent(UIAgent):
             **kwargs: Additional parameters to pass to the concrete UI implementation
 
         """
-        await super().initialize(input_callback, **kwargs)
+        await super().initialize(session_id=session_id, input_callback=input_callback, **kwargs)
 
         # Store parameters for later use with the concrete UI
         self._ui_parameters = kwargs
         self._ui_parameters["input_callback"] = input_callback
         self._ui_parameters["session_id"] = session_id
+        self._ui_parameters["callback_to_ui"] = self.parameters.get("callback_to_ui", kwargs.get("callback_to_ui"))
         self.ui_type = self.parameters.get("ui_type", self.ui_type)
-
-        if "callback_to_ui" in kwargs:
-            self._ui_parameters["callback_to_ui"] = kwargs["callback_to_ui"]
 
         # Connect to the concrete UI implementation if available
         if self.ui_type:

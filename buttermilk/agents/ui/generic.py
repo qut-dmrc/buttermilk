@@ -48,7 +48,7 @@ class UIAgent(Agent):
         #     return
         return None
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         """Initialize the interface"""
         self._input_callback = input_callback
 

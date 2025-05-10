@@ -15,7 +15,6 @@ from buttermilk._core.contract import (
     TaskProgressUpdate,
 )
 from buttermilk.bm import logger
-from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.web.messages import format_message_for_client
 
 
@@ -65,48 +64,6 @@ class StreamlitDashboardApp:
                 logger.warning(f"Could not get criteria for {flow_name}: {e}")
                 # Keep criteria empty if error
         return criteria
-
-    async def _get_record_ids(self, flow_name):
-        """Get record IDs for a specific flow (async version)"""
-        record_ids = []
-        # Ensure flow_name is valid before proceeding
-        if not flow_name or flow_name not in self.flows.flows:
-            return record_ids
-
-        try:
-            flow_obj = self.flows.flows.get(flow_name)
-            if flow_obj:
-                # Try to use get_record_ids method if it exists and is async
-                if hasattr(flow_obj, "get_record_ids") and callable(flow_obj.get_record_ids):
-                    # Assuming get_record_ids is potentially async
-                    df = await flow_obj.get_record_ids()
-                    if hasattr(df, "index"):
-                        record_ids = df.index.tolist()
-                    else:
-                        logger.error("get_record_ids did not return an object with an index attribute")
-                # Otherwise try to use the data directly
-                elif hasattr(flow_obj, "data") and flow_obj.data:
-                    # Check if we have mock data first (simpler approach)
-                    if "mock_data" in flow_obj.data and "record_ids" in flow_obj.data["mock_data"]:
-                        record_ids = flow_obj.data["mock_data"]["record_ids"]
-                    # Otherwise, try prepare_step_df potentially in a thread
-                    else:
-                        try:
-                            # Run synchronous prepare_step_df in a thread to avoid blocking
-                            df_dict = await prepare_step_df(flow_obj.data)
-                            if df_dict and isinstance(df_dict, dict) and len(df_dict) > 0:
-                                # Assuming the last df in the dict is the relevant one
-                                df = list(df_dict.values())[-1]
-                                if hasattr(df, "index"):
-                                    record_ids = df.index.values.tolist()
-                                else:
-                                    logger.warning("Prepared DataFrame lacks an index.")
-                        except Exception as e:
-                            logger.error(f"Error preparing data asynchronously: {e}")
-        except Exception as e:
-            logger.error(f"Error loading data for flow '{flow_name}': {e}")
-
-        return record_ids
 
     async def _get_run_history(self, flow_name, criteria, record_id):
         """Get run history for a specific flow, criteria, and record (async)"""

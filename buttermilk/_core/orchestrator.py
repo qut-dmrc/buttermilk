@@ -317,20 +317,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         else:
             logger.debug("Orchestrator already has records, skipping initial fetch.")
 
-    async def get_record_ids(self) -> list[dict[str, str]]:
-        if not self._data_sources:
-            await self.load_data()
-        record_ids = []
-
-        for dataset in self._data_sources.values():
-            df = dataset.reset_index()
-            if "name" not in df.columns:
-                df["name"] = df["record_id"]
-
-            record_ids.extend(df[["record_id", "name"]].to_dict(orient="records"))
-
-        return record_ids
-
     async def get_record_dataset(self, record_id: str) -> Record:
         if not self._data_sources:
             await self.load_data()

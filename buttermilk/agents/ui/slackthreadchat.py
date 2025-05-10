@@ -154,7 +154,7 @@ class SlackUIAgent(UIAgent):
         if isinstance(message, ManagerRequest):
             await self._request_input(message)
 
-    async def initialize(self, input_callback, **kwargs) -> None:
+    async def initialize(self, session_id: str, input_callback, **kwargs) -> None:
         """Initialize the interface and register handlers"""
         self._input_callback = input_callback
 
