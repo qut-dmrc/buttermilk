@@ -101,7 +101,7 @@ class AutogenAgentAdapter(RoutedAgent):
         super().__init__(description=self.agent.description)
 
         # This allows UI agents, for example, to send user input back into the Autogen flow.
-        init_task = self.agent.initialize(input_callback=self._make_publish_callback())
+        init_task = self.agent.initialize(input_callback=self._make_publish_callback(), session_id=self.agent.session_id)
         asyncio.create_task(init_task)
         logger.debug(f"Scheduled initialization for agent {self.agent.agent_id} with callback.")
 

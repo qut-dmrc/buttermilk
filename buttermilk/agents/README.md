@@ -104,7 +104,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         from buttermilk import logger
 
         class MyCustomAgent(Agent):
-            async def initialize(self, **kwargs) -> None:
+            async def initialize(self,session_id: str,  **kwargs) -> None:
                 logger.info(f"Initializing {self.id}...")
                 # Load models, resources, etc.
                 # Access config via self.parameters, self.tools, etc.

@@ -104,6 +104,8 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register UI
         self.ui.parameters["ui_type"] = request.ui_type
+        self.ui.parameters["session_id"] = self.session_id
+        self.ui.parameters["callback_to_ui"] = request.callback_to_ui
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)

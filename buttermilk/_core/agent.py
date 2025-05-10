@@ -128,7 +128,7 @@ class Agent(AgentConfig):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """

@@ -198,7 +198,7 @@ class WebSocketManager:
                 "messages": [],
                 "progress": {"current_step": 0, "total_steps": 100, "status": "waiting"},
                 "callback": None,
-                "callback_to_ui": self.make_callback_to_ui(session_id),
+                "callback_to_ui": run_request.callback_to_ui,
                 "outcomes_version": None,
             }
 

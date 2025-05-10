@@ -71,8 +71,7 @@ class BatchRunner(BaseModel):
         # Extract record IDs from the flow's data source
         try:
             # Use our helper class to get the record IDs
-            record_ids = await BatchRunnerHelper.get_record_ids_for_flow(flow_runner=self.flow_runner, flow_name=batch_request.flow)
-
+            record_ids = 
             logger.info(f"Extracted {len(record_ids)} record IDs for flow '{batch_request.flow}'")
         except Exception as e:
             logger.error(f"Failed to extract record IDs for flow '{batch_request.flow}': {e}")

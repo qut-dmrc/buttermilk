@@ -6,9 +6,7 @@ defaults:
     - ragzot
   - /agents@observers:
     - host/assistant
-    # - interface/slack
-    - interface/web
-    # - interface/console
+  - /agents/interface@ui: proxy  # Use the proxy agent that can dynamically switch UI implementations
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 description: Research assistant

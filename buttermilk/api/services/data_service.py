@@ -1,6 +1,7 @@
 from typing import Any, Protocol
 
 from buttermilk.bm import logger
+from buttermilk.runner.helpers import prepare_step_df
 
 
 class FlowRunner(Protocol):
@@ -8,7 +9,7 @@ class FlowRunner(Protocol):
 
     flows: dict[str, Any]
 
-    async def get_record_ids(self) -> list[dict[str, Any]]:
+    async def get_records_for_flow(self) -> list[dict[str, Any]]:
         ...
 
 
@@ -53,7 +54,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner) -> list[str]:
+    async def get_records_for_flow(flow_name: str, flow_runner) -> list[dict[str, str]]:
         """Get records for a flow
         
         Args:
@@ -61,13 +62,22 @@ class DataService:
             flow_runner: The flow runner instance
             
         Returns:
-            List[dist[str, str]]: The list of record IDs and names.
+            List[dict[str, str]]: The list of record IDs and names.
 
         """
         try:
-            record_mappings = await flow_runner.flows[flow_name].get_record_ids()
+            record_ids = []
+            datasets = await prepare_step_df(flow_runner.flows[flow_name].data)
 
-            return record_mappings
+            for name, df in datasets.items():
+                df_temp = df.copy().reset_index()
+                if "name" not in df_temp.columns:
+                    df_temp["name"] = df_temp["record_id"]
+
+                record_ids.extend(df_temp[["record_id", "name"]].to_dict(orient="records"))
+
+            return record_ids
+
         except Exception as e:
             logger.warning(f"Error getting records for flow {flow_name}: {e}")
             return []

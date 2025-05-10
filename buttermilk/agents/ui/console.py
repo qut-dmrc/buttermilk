@@ -333,7 +333,7 @@ class CLIUserAgent(UIAgent):
                 if isinstance(e, KeyboardInterrupt):
                     raise
 
-    async def initialize(self, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
         # Call base class initialize if needed
         await super().initialize(**kwargs)
         """
