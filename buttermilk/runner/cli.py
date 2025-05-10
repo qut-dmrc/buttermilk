@@ -16,14 +16,12 @@ import os
 from uuid import uuid4
 
 import hydra
-from requests import session
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
 from buttermilk._core.config import FatalError
 from buttermilk._core.constants import MANAGER
 from buttermilk._core.types import RunRequest
-from buttermilk.agents.ui import CLIUserAgent
 from buttermilk.api.flow import create_app
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
