@@ -56,7 +56,6 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
                 break  # No more jobs to process
 
             logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
-
             try:
                 # Run the job with wait_for_completion=True to ensure it finishes before moving to the next
                 await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)

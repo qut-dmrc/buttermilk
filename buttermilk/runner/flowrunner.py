@@ -34,6 +34,7 @@ class FlowRunner(BaseModel):
     flows: dict[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
     flow_configs: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Original flow configurations
 
+    ui_type: str = Field(default="console", description="Type of UI to use (default, unless overridden in request)")
     save: SaveInfo
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
@@ -137,6 +138,9 @@ class FlowRunner(BaseModel):
         """
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
+
+        if not run_request.ui_type:
+            run_request.ui_type = self.ui_type
 
         # Create a context for this specific run
         context = FlowRunContext(

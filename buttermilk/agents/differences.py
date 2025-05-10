@@ -12,19 +12,28 @@ from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 class Expert(BaseModel):
     """Expert class representing an expert's name and answer."""
 
-    name: str
-    answer_id: str
+    name: str = Field(..., description="Name of the expert.")
+    answer_id: str = Field(..., description="Unique identifier for the expert's answer.")
+
+
+class Position(BaseModel):
+    """Position class representing a position held by experts."""
+
+    experts: list[Expert] = Field(..., description="Experts holding this position.")
+    position: str = Field(..., description="Summary of the position held by the experts.")
 
 
 class Divergence(BaseModel):
     topic: str = Field(..., description="The key topic, point, or fact at hand.")
-    positions: list[dict[list[Expert], str]] = Field(..., description="Summary of positions held by each group of experts (only include material differences).")
+    positions: list[Position] = Field(..., description="The key positions held by experts (only include material differences).")
 
 
 class Differences(BaseModel):
     conclusion: str = Field(..., description="Your conclusion or final answer summarizing current tentative conclusions and outlining any uncertainty or divergence.")
     divergences: list[Divergence] = Field(..., description="A list of divergences, where each divergence represents a disagreement or difference in opinion among experts.")
 
+
+class DifferencesOutput(Differences):
     def __str__(self):
         """Returns a nicely formatted MarkDown representation of the evaluation."""
         divergences_str = "\n\n".join(
