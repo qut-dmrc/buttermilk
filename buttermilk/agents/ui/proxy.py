@@ -4,7 +4,6 @@ This module defines a UI Proxy Agent that dynamically connects to a concrete UI
 implementation at runtime based on configuration or defaults.
 """
 
-from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from autogen_core import CancellationToken, MessageContext, message_handler
@@ -42,28 +41,25 @@ class UIProxyAgent(UIAgent):
 
     ui_type: str | None = Field(default=None, description="The type of UI to use")
     session_id: str = Field(description="Session identifier for the UI")
-    callback_to_ui: Callable[..., Awaitable[None]] | None = Field(default=None, description="Callback function for the UI")
     # Use Any for runtime flexibility, but we'll type check appropriately in our methods
     _concrete_ui: Any = PrivateAttr(default=None)
     _initialized: bool = PrivateAttr(default=False)
     _ui_parameters: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-    async def initialize(self, session_id: str, input_callback: Callable[..., Awaitable[None]] | None = None, **kwargs) -> None:
+    async def initialize(self, **kwargs) -> None:
         """Initialize the proxy agent and connect to a concrete UI implementation.
         
         Args:
-            session_id: The session identifier for the UI
-            input_callback: Callback function for the UI
             **kwargs: Additional parameters to pass to the concrete UI implementation
 
         """
-        await super().initialize(session_id=session_id, input_callback=input_callback, **kwargs)
+        await super().initialize(**kwargs)
 
         # Store parameters for later use with the concrete UI
         self._ui_parameters = kwargs
-        self._ui_parameters["input_callback"] = input_callback
-        self._ui_parameters["session_id"] = session_id
-        self._ui_parameters["callback_to_ui"] = self.parameters.get("callback_to_ui", kwargs.get("callback_to_ui"))
+        self._ui_parameters["callback_to_ui"] = self.parameters.get("callback_to_ui", self.callback_to_ui)
+        self._ui_parameters["session_id"] = self.parameters.get("session_id", self.session_id)
+        self._ui_parameters["name"] = self.ui_type
         self.ui_type = self.parameters.get("ui_type", self.ui_type)
 
         # Connect to the concrete UI implementation if available

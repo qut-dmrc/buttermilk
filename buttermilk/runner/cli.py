@@ -13,6 +13,7 @@ Supported UI modes:
 
 import asyncio
 import os
+from uuid import uuid4
 
 import hydra
 import uvicorn
@@ -108,7 +109,7 @@ def main(cfg: DictConfig) -> None:
                 flow=cfg.get("flow"),
                 record_id=cfg.get("record_id", ""),
                 prompt=cfg.get("prompt", ""),
-                uri=cfg.get("uri", ""),
+                uri=cfg.get("uri", ""),session_id=uuid4().hex
             )
 
             # Run the flow synchronously

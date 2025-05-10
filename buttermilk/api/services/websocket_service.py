@@ -178,7 +178,7 @@ class WebSocketManager:
             flow=data["flow"],
             record_id=data["record_id"],
             parameters=parameters,
-            callback_to_ui=self.make_callback_to_ui(session_id),
+            callback_to_ui=self.session_data[session_id]["callback_to_ui"],
             session_id=session_id,
         )
         return run_request

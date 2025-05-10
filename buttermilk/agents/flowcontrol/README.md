@@ -98,8 +98,8 @@ async def _execute_step(self, step: StepRequest) -> None:
     message = AgentInput(prompt=step.prompt, records=self._records)
     
     # Publish directly to agent role topic
-    if self._input_callback:
-        await self._input_callback(message)
+    if self._callback_to_groupchat:
+        await self._callback_to_groupchat(message)
 ```
 
 This allows bypassing the orchestrator's execution loop for more efficient agent-to-agent communication.

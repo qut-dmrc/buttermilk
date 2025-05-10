@@ -55,18 +55,18 @@ def slack_ui_agent(slack_app, slack_context):
 @pytest.mark.anyio
 async def test_slack_ui_agent_initialization(slack_ui_agent):
     """Test that the SlackUIAgent initializes correctly."""
-    input_callback = AsyncMock()
+    callback_to_groupchat = AsyncMock()
 
     with patch(
         "buttermilk.agents.ui.slackthreadchat.register_chat_thread_handler",
     ) as mock_register:
-        await slack_ui_agent.initialize(input_callback=input_callback)
+        await slack_ui_agent.initialize(callback_to_groupchat=callback_to_groupchat)
 
     mock_register.assert_called_once_with(
         slack_ui_agent.context.thread_ts,
         slack_ui_agent,
     )
-    assert slack_ui_agent._input_callback == input_callback
+    assert slack_ui_agent._callback_to_groupchat == callback_to_groupchat
 
 
 @pytest.mark.anyio
@@ -245,7 +245,7 @@ async def test_handle_confirm_action():
     thread_ts = "test_thread"
     agent = MagicMock()
     agent._current_input_message = MagicMock()
-    agent._input_callback = AsyncMock()
+    agent._callback_to_groupchat = AsyncMock()
     agent.context = MagicMock(channel_id="test_channel")
 
     # Create a mock client
@@ -281,5 +281,5 @@ async def test_handle_confirm_action():
 
     ack.assert_called_once()
     client.chat_update.assert_called_once()
-    agent._input_callback.assert_called_once()
+    agent._callback_to_groupchat.assert_called_once()
     assert agent._current_input_message is None

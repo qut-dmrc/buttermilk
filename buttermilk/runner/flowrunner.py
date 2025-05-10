@@ -22,6 +22,7 @@ class FlowRunContext(BaseModel):
     status: str = "pending"
     ui_type: str = "console"
     callback_to_ui: Any = None  # Callback function to send messages back to the UI
+    session_id: str
 
 
 class FlowRunner(BaseModel):
@@ -149,6 +150,7 @@ class FlowRunner(BaseModel):
             orchestrator=fresh_orchestrator,
             ui_type=run_request.ui_type,
             callback_to_ui=run_request.callback_to_ui,
+            session_id=run_request.session_id,
         )
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
