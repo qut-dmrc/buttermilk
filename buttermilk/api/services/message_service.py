@@ -4,8 +4,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
-from buttermilk._core import AgentConfig, ManagerRequest
-from buttermilk._core.agent import AgentOutput, AgentTrace
+from buttermilk._core import AgentConfig, ManagerRequest, TaskProcessingComplete
+from buttermilk._core.agent import AgentOutput, AgentTrace, TaskProcessingStarted
+from buttermilk._core.config import RunRequest
 from buttermilk._core.constants import CONDUCTOR
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
 from buttermilk._core.types import Record
@@ -87,3 +88,44 @@ class MessageService:
             logger.error(f"Error formatting message for client: {e}")
 
         return None
+
+    @staticmethod
+    async def process_message_from_ui(data: dict[str, Any]) -> FlowEvent | RunRequest | FlowMessage | TaskProcessingStarted | TaskProcessingComplete | None:
+        """Process a message from a WebSocket connection.
+        
+        Args:
+            session_id: The session ID
+            message: The message to process
+
+        Returns:
+            FlowEvent | FlowMessage | None: The processed message or None if not handled
+
+        """
+        try:
+            message_type = data.pop("type", None)
+
+            match message_type:
+                case "run_flow":
+                    run_request = RunRequest(ui_type="web",
+                        flow=data.pop("flow"),
+                        record_id=data.pop("record_id", None),
+                        parameters=data,
+                        callback_to_ui=None,
+                        session_id=None,
+                    )
+                    return run_request
+                case "pull_task":
+                    from buttermilk.api.job_queue import JobQueueClient
+                    return await JobQueueClient().pull_single_task()
+                case "manager_request":
+                    return ManagerRequest(**data)
+                case "manager_response":
+                    return ManagerMessage(**data)
+                case "TaskProcessingComplete":
+                    return TaskProcessingComplete(**data)
+                case "TaskProcessingStarted":
+                    return TaskProcessingStarted(**data)
+            return None
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            return None

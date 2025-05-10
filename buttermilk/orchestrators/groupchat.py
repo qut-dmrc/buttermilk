@@ -14,8 +14,11 @@ from typing import Any
 import shortuuid
 import weave
 from autogen_core import (
-    AgentType,  # Represents a registered type of agent in the runtime.
+    AgentType,
+    ClosureAgent,
+    ClosureContext,  # Represents a registered type of agent in the runtime.
     DefaultInterventionHandler,
+    DefaultSubscription,
     DefaultTopicId,  # A standard implementation for topic identifiers.
     MessageContext,
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
@@ -101,15 +104,6 @@ class AutogenOrchestrator(Orchestrator):
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
         logger.debug("Autogen runtime started.")
-
-        # Register UI - Explicitly set key parameters for the UI proxy agent
-        self.ui.parameters["ui_type"] = request.ui_type
-        self.ui.parameters["session_id"] = request.session_id
-        self.ui.parameters["callback_to_ui"] = request.callback_to_ui
-
-        # Pre-create the callback function needed by the UI to send messages back to the group chat
-        # This is critical for the UI agent to function properly
-        self.ui.parameters["callback_to_groupchat"] = self._make_publish_callback()
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
@@ -203,6 +197,22 @@ class AutogenOrchestrator(Orchestrator):
             self._agent_types[role_name.upper()] = registered_for_role
             logger.debug(f"Registered {len(registered_for_role)} agent variants for role '{role_name}'.")
 
+    async def register_ui(self, callback_to_ui: Callable[..., Awaitable[None]]) -> None:
+        """Registers a callback function for the groupchat to send messages to the UI.
+
+        Args:
+            callback_to_ui: A callable that takes a message and sends it to the UI.
+
+        """
+        logger.debug("Registering UI callback...")
+
+        async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+            await callback_to_ui(message)
+
+        await ClosureAgent.register_closure(
+            self._runtime, "UI Proxy", output_result, subscriptions=lambda: [DefaultSubscription(topic_type=self._topic.type)],
+        )
+
     async def _cleanup(self) -> None:
         """Cleans up resources, primarily by stopping the Autogen runtime."""
         logger.debug("Cleaning up AutogenOrchestrator...")
@@ -289,7 +299,7 @@ class AutogenOrchestrator(Orchestrator):
             except Exception:
                 pass
 
-    def _make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
+    def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use.
 
         Returns:

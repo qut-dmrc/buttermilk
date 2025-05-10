@@ -74,39 +74,6 @@ async def get_flows_endpoint(
         raise HTTPException(status_code=500, detail="Internal server error retrieving flows")
 
 
-@flow_data_router.get("/api/outcomes")
-async def get_outcomes_endpoint(
-    request: Request,
-    websocket_manager: Annotated[Any, Depends(get_websocket_manager)],
-    templates: Annotated[Jinja2Templates, Depends(get_templates)],
-):
-    """Get outcomes data (predictions and scores).
-    Returns JSON by default or HTML if 'text/html' is accepted.
-    """
-    session_id = request.query_params.get("session_id")
-    client_version = request.query_params.get("version", "0")  # For 304 check
-    accept_header = request.headers.get("accept", "")
-    logger.debug(f"Request received for /api/outcomes/ (Session: {session_id}, Accept: {accept_header})")
-
-    session_data = DataService.safely_get_session_data(websocket_manager, session_id or "")
-    pending_agents = session_data.get("pending_agents", [])
-    current_version = "0"
-
-    if session_id and session_id in websocket_manager.session_data:
-        # Get the session data for this session
-        session = websocket_manager.session_data[session_id]
-        current_version = session.get("outcomes_version", "0") or "0"
-
-        # Handle 304 Not Modified - return Response directly
-        if client_version == current_version:
-            logger.debug(f"Client version {client_version} matches current {current_version}. Returning 304.")
-            return Response(status_code=304)
-
-    # Prepare the context data for response
-    context_data = {"pending_agents": pending_agents}
-    return await negotiate_response(request, context_data, "partials/outcomes_panel.html", templates)
-
-
 @flow_data_router.get("/api/flowinfo")
 async def get_flowinfo_endpoint(
     request: Request,
