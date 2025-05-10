@@ -7,7 +7,6 @@ defaults:
   - /agents@observers:
     - scorer
     - host/sequencer
-  - /agents/interface@ui: proxy  # Use the proxy agent that can dynamically switch UI implementations
   - _self_
 
 

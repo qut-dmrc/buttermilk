@@ -27,7 +27,7 @@ from autogen_core import (
     )
 from pydantic import PrivateAttr
 
-from buttermilk._core import StepRequest
+from buttermilk._core import AllMessages, StepRequest
 from buttermilk._core.agent import Agent, ProcessingError
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
@@ -132,7 +132,7 @@ class AutogenOrchestrator(Orchestrator):
         # Create list of participants in the group chat
         self._participants = {v.role: v.description for k, v in self.agents.items()}
 
-        for role_name, step_config in itertools.chain([(MANAGER, self.ui)], self.agents.items(), self.observers.items()):
+        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params):

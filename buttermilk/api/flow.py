@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,13 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from buttermilk._core.types import RunRequest
-from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
-from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
 
 from .routes import flow_data_router
 
@@ -22,20 +21,6 @@ BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
-
-
-# Middleware to track API activity
-class ActivityTrackerMiddleware(BaseHTTPMiddleware):
-    """Middleware that tracks API requests for the ActivityTracker."""
-
-    async def dispatch(self, request: Request, call_next):
-        # Record the API request in the activity tracker
-        activity_tracker = get_activity_tracker()
-        activity_tracker.record_api_request()
-
-        # Process the request as usual
-        response = await call_next(request)
-        return response
 
 
 def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
@@ -66,15 +51,11 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     # Create the FastAPI app with the lifespan
     app = FastAPI(lifespan=lifespan)
 
-    # Add the activity tracker middleware
-    app.add_middleware(ActivityTrackerMiddleware)
-
     logger.info("FastAPI() instance created.")
 
     # Set up state
     app.state.bm = bm
     app.state.flow_runner = flows
-    app.state.websocket_manager = WebSocketManager()
 
     # Initialize batch runner
     logger.info("App state configured.")
@@ -164,24 +145,28 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         """
         flow_runner: FlowRunner = websocket.app.state.flow_runner
 
-        # Accept the connection first
-        await websocket.accept()
-
+        await asyncio.sleep(0.1)
         session = FlowRunContext(session_id=session_id, websocket=websocket)
-
-        try:
-            # Listen for messages from the client
-            async for run_request in session.monitor_ui():
-                await flow_runner.run_flow(
+        await asyncio.sleep(0.1)
+        task = None
+        # Listen for messages from the client
+        async for run_request in session.monitor_ui():
+            try:
+                await asyncio.sleep(0.1)
+                task = asyncio.create_task(flow_runner.run_flow(
                     run_request=run_request,
                     session=session,
-                )
+                ))
 
-        except WebSocketDisconnect:
-            logger.info(f"Client {session_id} disconnected.")
-        except Exception as e:
-            logger.error(f"Error receiving/processing client message for {session_id}: {e}")
-        finally:
+            except WebSocketDisconnect:
+                logger.info(f"Client {session_id} disconnected.")
+                break
+            except Exception as e:
+                logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+
+        if task:
+            await task
+        with contextlib.suppress(Exception):
             await websocket.close()
 
     # Helper route to generate session IDs for clients

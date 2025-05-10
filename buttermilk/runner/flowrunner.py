@@ -1,8 +1,10 @@
 import asyncio
+import contextlib
 import importlib
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from fastapi import WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk import logger
@@ -15,20 +17,20 @@ from buttermilk._core.contract import (
     FlowMessage,
     ManagerRequest,
 )
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import BM, logger
-from buttermilk.runner.flowrunner import FlowRunContext
 
 
 class FlowRunContext(BaseModel):
     """Encapsulates all state for a single flow run."""
 
     flow_name: str = ""
-    flow_task: asyncio.Task | None = None
-    orchestrator: Orchestrator
+    flow_task: Any | None = None
+    orchestrator: Orchestrator | None = None
     status: str = "pending"
     session_id: str
     callback_to_ui: Any = None  # Callback function to send messages back to the UI
@@ -36,7 +38,7 @@ class FlowRunContext(BaseModel):
     messages: list = []
     progress: dict = Field(default_factory=dict)
 
-    websocket: Any
+    websocket: Any = None
 
     @model_validator(mode="after")
     def set_websocket(self) -> "FlowRunContext":
@@ -47,7 +49,14 @@ class FlowRunContext(BaseModel):
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
         while True:
+            if not self.websocket:
+                await asyncio.sleep(0.1)
+                continue
+            with contextlib.suppress(Exception):
+                await self.websocket.accept()
+
             try:
+                await asyncio.sleep(0.1)
                 data = await self.websocket.receive_json()
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
@@ -63,8 +72,12 @@ class FlowRunContext(BaseModel):
                 else:
                     await self.callback_to_groupchat(message)
 
+            except WebSocketDisconnect:
+                logger.info(f"Client {self.session_id} disconnected."):
+                with contextlib.suppress(Exception):
+                    await self.websocket.close()
             except Exception as e:
-                logger.error(f"Error monitoring UI: {e}")
+                logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
 
     async def send_message_to_ui(self, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
@@ -109,7 +122,7 @@ class FlowRunner(BaseModel):
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
 
-    sessions: list[FlowRunContext] = Field(default_factory=list)  # List of active sessions
+    sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions
 
     @model_validator(mode="after")
     def instantiate_orchestrators(self) -> "FlowRunner":
@@ -128,6 +141,7 @@ class FlowRunner(BaseModel):
         # Pull task from the queue
         request = await self.queue_manager.pull_single_task()
 
+        raise FatalError("Need to create the sssion object first")
         if request:
             # Run the task with a fresh orchestrator
             logger.info(f"Running task from queue: {request.flow} (Job ID: {request.job_id})")
@@ -189,6 +203,7 @@ class FlowRunner(BaseModel):
     async def run_flow(self,
                       run_request: RunRequest,
                       wait_for_completion: bool = False,
+                      session: FlowRunContext = None,
                       **kwargs) -> FlowRunContext:
         """Run a flow based on its configuration and a request.
         
@@ -215,15 +230,14 @@ class FlowRunner(BaseModel):
         # even though the flows dict is typed with the more general OrchestratorProtocol
 
         # Create a context for this specific run
-        context = FlowRunContext(
-            flow_name=run_request.flow,
-            orchestrator=fresh_orchestrator,
-            callback_to_ui=run_request.callback_to_ui,
-            session_id=run_request.session_id,
-            callback_to_groupchat=fresh_orchestrator.make_publish_callback(),  # type: ignore
-        )
+        session.flow_name = run_request.flow
+        session.orchestrator = fresh_orchestrator
+        session.callback_to_ui = run_request.callback_to_ui
+        session.session_id = run_request.session_id
+        session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
+
         # Create the task
-        context.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+        session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
         await fresh_orchestrator.register_ui(run_request.callback_to_ui)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
@@ -233,18 +247,18 @@ class FlowRunner(BaseModel):
         try:
             if wait_for_completion:
                 # Wait for the task and return its result
-                result = await context.flow_task
-                context.status = "completed"
+                result = await session.flow_task
+                session.status = "completed"
                 return result
             # Add task to list and return callback for non-blocking execution
             # Note: We still keep this for backward compatibility, but each task is now tied to a fresh instance
-            self.sessions[run_request.session_id] = context
+            self.sessions[run_request.session_id] = session
         except Exception as e:
-            context.status = "failed"
+            session.status = "failed"
             logger.error(f"Error running flow '{run_request.flow}': {e}")
             raise
         finally:
             if wait_for_completion:
                 # Clean up after completion if we were waiting
-                await self._cleanup_flow_context(context)
-        return context
+                await self._cleanup_flow_context(session)
+        return session
