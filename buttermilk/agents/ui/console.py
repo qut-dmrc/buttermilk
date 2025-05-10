@@ -128,7 +128,7 @@ class CLIUserAgent(UIAgent):
                     output_lines.append(str(outputs))  # Use QualResults's __str__
                 elif isinstance(outputs, JudgeReasons):
                     output_lines.append("### Conclusion")
-                    output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.confidence}")
+                    output_lines.append(f"**Prediction**: {outputs.prediction}\t\t**Confidence**: {outputs.uncertainty}")
                     output_lines.append(f"**Conclusion**: {outputs.conclusion}")
                     if outputs.reasons:
                         output_lines.append("### Reasons:")
