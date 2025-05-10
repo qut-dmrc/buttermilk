@@ -3,7 +3,7 @@ from typing import Any
 
 import pydantic
 from autogen_core import CancellationToken
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
 from slack_bolt.async_app import AsyncApp
@@ -54,7 +54,7 @@ class SlackUIAgent(UIAgent):
     app: AsyncApp = None
     context: "SlackContext" = None
     _handlers: _ThreadInteractions = PrivateAttr(default_factory=_ThreadInteractions)
-    _callback_to_groupchat: Any = PrivateAttr(default=None)
+    callback_to_groupchat: Any = Field()
     _current_input_message: Any = PrivateAttr(default=None)
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -156,7 +156,7 @@ class SlackUIAgent(UIAgent):
 
     async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
         """Initialize the interface and register handlers"""
-        self._callback_to_groupchat = callback_to_groupchat
+        self.callback_to_groupchat = callback_to_groupchat
 
         _active_thread_registry[self.context.thread_ts] = self
 
@@ -181,7 +181,7 @@ class SlackUIAgent(UIAgent):
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self._callback_to_groupchat(ManagerMessage(confirm=False, params=message["text"]))
+            await self.callback_to_groupchat(ManagerMessage(confirm=False, params=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):
@@ -213,7 +213,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean False
-            await self._callback_to_groupchat(ManagerMessage(confirm=False))
+            await self.callback_to_groupchat(ManagerMessage(confirm=False))
 
         async def handle_confirm(ack, body, client):
             await ack()
@@ -248,7 +248,7 @@ class SlackUIAgent(UIAgent):
                 actions=None,
             )
             # Call callback with boolean True
-            await self._callback_to_groupchat(ManagerMessage(confirm=True))
+            await self.callback_to_groupchat(ManagerMessage(confirm=True))
             self._current_input_message = None
 
         async def handle_cancel(ack, body, client):
@@ -279,7 +279,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean Halt signal.
-            await self._callback_to_groupchat(ManagerMessage(confirm=False, halt=True))
+            await self.callback_to_groupchat(ManagerMessage(confirm=False, halt=True))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)

@@ -102,10 +102,14 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime.start()
         logger.debug("Autogen runtime started.")
 
-        # Register UI
+        # Register UI - Explicitly set key parameters for the UI proxy agent
         self.ui.parameters["ui_type"] = request.ui_type
-        self.ui.parameters["session_id"] = self.session_id
+        self.ui.parameters["session_id"] = request.session_id
         self.ui.parameters["callback_to_ui"] = request.callback_to_ui
+
+        # Pre-create the callback function needed by the UI to send messages back to the group chat
+        # This is critical for the UI agent to function properly
+        self.ui.parameters["callback_to_groupchat"] = self._make_publish_callback()
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
@@ -134,7 +138,7 @@ class AutogenOrchestrator(Orchestrator):
         # Create list of participants in the group chat
         self._participants = {v.role: v.description for k, v in self.agents.items()}
 
-        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items(), [(MANAGER, self.ui)]):
+        for role_name, step_config in itertools.chain([(MANAGER, self.ui)], self.agents.items(), self.observers.items()):
             registered_for_role = []
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params):

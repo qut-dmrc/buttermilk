@@ -69,7 +69,7 @@ class TestUserInterrupt:
 
         # Mock the callback_to_groupchat
         callback_mock = AsyncMock()
-        agent._callback_to_groupchat = callback_mock
+        agent.callback_to_groupchat = callback_mock
 
         # Mock ainput to simulate user inputs
         with patch("buttermilk.agents.ui.console.ainput") as mock_ainput:

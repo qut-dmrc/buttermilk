@@ -20,9 +20,13 @@ class FlowRunContext(BaseModel):
     task: Any = None
     result: Any = None
     status: str = "pending"
-    ui_type: str = "console"
-    callback_to_ui: Any = None  # Callback function to send messages back to the UI
+    ui_type: str
     session_id: str
+    callback_to_ui: Any   # Callback function to send messages back to the UI
+    callback_to_groupchat: Any
+    messages: list = []
+    progress: dict = Field(default_factory=dict)
+    outcomes_version: str = ""
 
 
 class FlowRunner(BaseModel):
@@ -36,7 +40,6 @@ class FlowRunner(BaseModel):
     flows: dict[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
     flow_configs: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Original flow configurations
 
-    ui_type: str = Field(default="console", description="Type of UI to use (default, unless overridden in request)")
     save: SaveInfo
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
@@ -119,7 +122,7 @@ class FlowRunner(BaseModel):
     async def run_flow(self,
                       run_request: RunRequest,
                       wait_for_completion: bool = False,
-                      **kwargs) -> Any:
+                      **kwargs) -> FlowRunContext:
         """Run a flow based on its configuration and a request.
         
         Args:
@@ -141,8 +144,8 @@ class FlowRunner(BaseModel):
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
 
-        if not run_request.ui_type:
-            run_request.ui_type = self.ui_type
+        # Type safety: The orchestrator will be an Orchestrator instance at runtime,
+        # even though the flows dict is typed with the more general OrchestratorProtocol
 
         # Create a context for this specific run
         context = FlowRunContext(
@@ -151,11 +154,8 @@ class FlowRunner(BaseModel):
             ui_type=run_request.ui_type,
             callback_to_ui=run_request.callback_to_ui,
             session_id=run_request.session_id,
+            callback_to_groupchat=fresh_orchestrator._make_publish_callback(),  # type: ignore
         )
-
-        # Type safety: The orchestrator will be an Orchestrator instance at runtime,
-        # even though the flows dict is typed with the more general OrchestratorProtocol
-        callback = fresh_orchestrator._make_publish_callback()  # type: ignore
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
@@ -173,7 +173,6 @@ class FlowRunner(BaseModel):
             # Add task to list and return callback for non-blocking execution
             # Note: We still keep this for backward compatibility, but each task is now tied to a fresh instance
             self.tasks.append(context.task)
-            return callback
         except Exception as e:
             context.status = "failed"
             logger.error(f"Error running flow '{run_request.flow}': {e}")
@@ -182,3 +181,4 @@ class FlowRunner(BaseModel):
             if wait_for_completion:
                 # Clean up after completion if we were waiting
                 await self._cleanup_flow_context(context)
+        return context

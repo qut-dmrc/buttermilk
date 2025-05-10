@@ -377,10 +377,9 @@ class RunRequest(BaseModel):
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
     parameters: dict = Field(default_factory=dict, description="Additional parameters for flow execution")
 
-    ui_type: str = Field(default="console", description="Type of UI to use for this run")
-
     # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
-    callback_to_ui: Any = Field(default=None, exclude=True)
+    callback_to_ui: Any = Field(..., exclude=True)
+    ui_type: str = Field(..., description="Type of UI to use for this run", exclude=True)
 
     # Batch processing fields
     batch_id: str | None = Field(default=None, description="ID of the parent batch, if this is a batch job")

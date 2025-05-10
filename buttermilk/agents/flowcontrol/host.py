@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict  # Import defaultdict
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from autogen_core import CancellationToken
@@ -40,10 +40,8 @@ class HostAgent(Agent):
     for synchronization.
     """
 
-    _callback_to_groupchat: Callable[..., Awaitable[None]] = PrivateAttr()
-
     _message_types_handled: type[Any] = PrivateAttr(default=type(ConductorRequest))
-
+    callback_to_groupchat: Any = Field(default=None)
     _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
     # Condition variable to synchronize task completion based on pending agents
     _tasks_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
@@ -73,10 +71,10 @@ class HostAgent(Agent):
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
 
     async def initialize(
-        self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs: Any,
+        self, callback_to_groupchat, **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
-        self._callback_to_groupchat = callback_to_groupchat
+        self.callback_to_groupchat = callback_to_groupchat
         self._participants_set_event.clear()
 
     async def _listen(
@@ -199,7 +197,7 @@ class HostAgent(Agent):
             content=str(step), options=["confirm", "reject"],  # Options for user confirmation
         )
         self._user_confirmation_received.clear()  # Reset the event for the next confirmation
-        await self._callback_to_groupchat(confirmation_request)
+        await self.callback_to_groupchat(confirmation_request)
 
     async def _wait_for_user(self, step) -> ManagerMessage:
         max_tries = self.max_user_confirmation_time // 60
@@ -233,13 +231,13 @@ class HostAgent(Agent):
             )
             logger.error(f"{msg} Aborting.")
             # signal end to the conductor
-            await self._callback_to_groupchat(StepRequest(role=END, content="Timeout waiting for task completion."))
+            await self.callback_to_groupchat(StepRequest(role=END, content="Timeout waiting for task completion."))
             # No need to manually reset count or notify here, but raise FatalError
             raise FatalError(msg) from e
         except Exception as e:
             # Catch other potential errors during wait
             # signal end to the conductor
-            await self._callback_to_groupchat(StepRequest(role=END, content=f"Unexpected error during task completion wait: {e}"))
+            await self.callback_to_groupchat(StepRequest(role=END, content=f"Unexpected error during task completion wait: {e}"))
             logger.exception(f"Unexpected error during task completion wait: {e}")
             raise
 
@@ -303,10 +301,10 @@ class HostAgent(Agent):
             await asyncio.sleep(10)
         elif step.role == END:
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
-            await self._callback_to_groupchat(step)
+            await self.callback_to_groupchat(step)
         else:
             logger.info(f"Host executing step: {step}")
-            await self._callback_to_groupchat(step)
+            await self.callback_to_groupchat(step)
         # Wait a bit to allow the agent to process the request
         await asyncio.sleep(5)
 

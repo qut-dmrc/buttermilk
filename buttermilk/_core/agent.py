@@ -16,6 +16,7 @@ from autogen_core.models import AssistantMessage, UserMessage
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
+    Field,
     PrivateAttr,
     computed_field,
 )
@@ -92,6 +93,10 @@ class Agent(AgentConfig):
     `_process` method for their primary logic.
     """
 
+    session_id: str = Field(...,
+        description="A unique session id for this specific flow execution.",
+    )
+
     # --- Internal State ---
     _records: list[Record] = PrivateAttr(default_factory=list)  # Stores data records relevant to the agent.
     _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)  # Stores conversation history.
@@ -128,7 +133,7 @@ class Agent(AgentConfig):
 
     # --- Core Methods (Lifecycle & Interaction) ---
 
-    async def initialize(self, session_id: str, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(self, **kwargs) -> None:
         """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """

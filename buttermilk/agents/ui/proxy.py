@@ -4,6 +4,7 @@ This module defines a UI Proxy Agent that dynamically connects to a concrete UI
 implementation at runtime based on configuration or defaults.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from autogen_core import CancellationToken, MessageContext, message_handler
@@ -13,6 +14,7 @@ from typing_extensions import Protocol
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
+    AgentOutput,
     AgentTrace,
     AllMessages,
     GroupchatMessageTypes,
@@ -40,31 +42,44 @@ class UIProxyAgent(UIAgent):
     """
 
     ui_type: str | None = Field(default=None, description="The type of UI to use")
-    session_id: str = Field(description="Session identifier for the UI")
+
     # Use Any for runtime flexibility, but we'll type check appropriately in our methods
     _concrete_ui: Any = PrivateAttr(default=None)
     _initialized: bool = PrivateAttr(default=False)
     _ui_parameters: dict[str, Any] = PrivateAttr(default_factory=dict)
 
-    async def initialize(self, **kwargs) -> None:
+    async def initialize(self, session_id: str, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the proxy agent and connect to a concrete UI implementation.
         
         Args:
+            session_id: The session ID for this UI instance
+            callback_to_groupchat: Callback function to send messages back to the group chat
             **kwargs: Additional parameters to pass to the concrete UI implementation
 
         """
-        await super().initialize(**kwargs)
-
-        # Store parameters for later use with the concrete UI
-        self._ui_parameters = kwargs
-        self._ui_parameters["callback_to_ui"] = self.parameters.get("callback_to_ui", self.callback_to_ui)
-        self._ui_parameters["session_id"] = self.parameters.get("session_id", self.session_id)
+        if not self.ui_type:
+            self.ui_type = self.parameters.get("ui_type")
+        # Copy these essential parameters to the UI parameters dictionary
+        self._ui_parameters["session_id"] = self.session_id
+        self._ui_parameters["callback_to_groupchat"] = callback_to_groupchat
         self._ui_parameters["name"] = self.ui_type
-        self.ui_type = self.parameters.get("ui_type", self.ui_type)
+        await super().initialize(callback_to_groupchat=callback_to_groupchat, session_id=session_id, ui_type=self.ui_type, **kwargs)
 
-        # Connect to the concrete UI implementation if available
-        if self.ui_type:
+        logger.info(f"UIProxyAgent initialized with: ui_type={self.ui_type}, session_id={self.session_id}, "
+                   f"callback_to_groupchat={self._ui_parameters['callback_to_groupchat'] is not None}")
+
+        # Connect to the concrete UI implementation if all required parameters are available
+        if self.ui_type and self.session_id and self._ui_parameters["callback_to_groupchat"]:
             await self.connect_to_ui(self.ui_type)
+        else:
+            missing = []
+            if not self.ui_type:
+                missing.append("ui_type")
+            if not self.session_id:
+                missing.append("session_id")
+            if not self._ui_parameters["callback_to_groupchat"]:
+                missing.append("callback_to_groupchat")
+            logger.warning(f"UIProxyAgent not fully initialized. Missing: {', '.join(missing)}")
 
     async def connect_to_ui(self, ui_type: str) -> None:
         """Connect to a specific UI implementation.
@@ -99,8 +114,14 @@ class UIProxyAgent(UIAgent):
             raise
 
     async def _process(
-        self, *, inputs: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs,
-    ) -> AgentTrace | None:
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
+        **kwargs,
+    ) -> AgentOutput:
         """Process inputs by delegating to the concrete UI implementation.
         
         Args:
@@ -116,33 +137,69 @@ class UIProxyAgent(UIAgent):
 
         """
         if not self._initialized or not self._concrete_ui:
+            callback_to_groupchat = self._ui_parameters.get("callback_to_groupchat")
             logger.warning("UI proxy used before initialization or without concrete implementation")
             # If UI type is specified but not connected yet, try to connect
-            if self.ui_type:
-                await self.connect_to_ui(self.ui_type)
+            if self.ui_type and self.session_id and callback_to_groupchat:
+                await self.connect_to_ui(self.ui_type, callback_to_groupchat=callback_to_groupchat)
             else:
                 available = ", ".join(list_ui_implementations())
-                error_msg = f"No UI implementation connected. Available: {available}"
+                missing = []
+                if not self.ui_type:
+                    missing.append("ui_type")
+                if not self.session_id:
+                    missing.append("session_id")
+                if not self._ui_parameters.get("callback_to_groupchat"):
+                    missing.append("callback_to_groupchat")
+
+                error_msg = f"No UI implementation connected. Missing parameters: {', '.join(missing)}. Available UIs: {available}"
                 logger.error(error_msg)
-                # We cannot create a proper AgentTrace without required parameters,
-                # so return None with logging instead
-                return None
+                # Create a trace with error information
+                return AgentTrace(
+                    agent_id=self.agent_id,
+                    session_id=self.session_id,
+                    agent_info=self._cfg,
+                    inputs=message,
+                    outputs={"error": error_msg},
+                    metadata={"error": True},
+                )
 
         # Delegate to the concrete UI implementation
         if self._concrete_ui and hasattr(self._concrete_ui, "_process"):
             # Use dynamic call but ensure we return the right type
             result = await self._concrete_ui._process(
-                inputs=inputs, cancellation_token=cancellation_token, **kwargs,
+                inputs=message, cancellation_token=cancellation_token, **kwargs,
             )
             # The result should already be an AgentTrace or None, but cast to satisfy type checker
-            return cast("AgentTrace | None", result)
+            if result is None:
+                # Create a default trace for None results
+                return AgentTrace(
+                    agent_id=self.agent_id,
+                    session_id=self.session_id,
+                    agent_info=self._cfg,
+                    inputs=message,
+                    outputs={},
+                    metadata={"no_response": True},
+                )
+            return result
 
-        return None
+        # Create a default trace if no concrete UI or process method
+        return AgentTrace(
+            agent_id=self.agent_id,
+            session_id=self.session_id,
+            agent_info=self._cfg,
+            inputs=message,
+            outputs={},
+            metadata={"no_handler": True},
+        )
 
     async def _handle_events(
         self,
         message: OOBMessages,
         cancellation_token: CancellationToken | None = None,
+        public_callback: Callable | None = None,
+        message_callback: Callable | None = None,
+        source: str = "",
         **kwargs,
     ) -> OOBMessages | None:
         """Handle events by delegating to the concrete UI implementation.
@@ -163,7 +220,12 @@ class UIProxyAgent(UIAgent):
         # Delegate to the concrete UI implementation
         if self._concrete_ui and hasattr(self._concrete_ui, "_handle_events"):
             return await self._concrete_ui._handle_events(
-                message, cancellation_token=cancellation_token, **kwargs,
+                message,
+                cancellation_token=cancellation_token,
+                public_callback=public_callback,
+                message_callback=message_callback,
+                source=source,
+                **kwargs,
             )
 
         return None

@@ -213,9 +213,6 @@ class AgentConfig(BaseModel):
     # Core Identification
     agent_id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
 
-    session_id: str = Field(...,
-        description="A unique session id for this specific flow execution.",
-    )
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
         default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
@@ -356,9 +353,6 @@ class AgentVariants(AgentConfig):
     agent_obj: str = Field(  # Class name used by Hydra for instantiation.
         default="",
         description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
-    )
-    session_id: str = Field(default="",
-        description="Leave unset, will be overwritten on initialisation by the Agent class",
     )
     variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
     tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")

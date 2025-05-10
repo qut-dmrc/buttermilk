@@ -66,7 +66,7 @@ async def test_slack_ui_agent_initialization(slack_ui_agent):
         slack_ui_agent.context.thread_ts,
         slack_ui_agent,
     )
-    assert slack_ui_agent._callback_to_groupchat == callback_to_groupchat
+    assert slack_ui_agent.callback_to_groupchat == callback_to_groupchat
 
 
 @pytest.mark.anyio
@@ -245,7 +245,7 @@ async def test_handle_confirm_action():
     thread_ts = "test_thread"
     agent = MagicMock()
     agent._current_input_message = MagicMock()
-    agent._callback_to_groupchat = AsyncMock()
+    agent.callback_to_groupchat = AsyncMock()
     agent.context = MagicMock(channel_id="test_channel")
 
     # Create a mock client
@@ -281,5 +281,5 @@ async def test_handle_confirm_action():
 
     ack.assert_called_once()
     client.chat_update.assert_called_once()
-    agent._callback_to_groupchat.assert_called_once()
+    agent.callback_to_groupchat.assert_called_once()
     assert agent._current_input_message is None

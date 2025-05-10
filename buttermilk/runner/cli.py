@@ -16,11 +16,14 @@ import os
 from uuid import uuid4
 
 import hydra
+from requests import session
 import uvicorn
 from omegaconf import DictConfig  # Import DictConfig for type hinting
 
 from buttermilk._core.config import FatalError
+from buttermilk._core.constants import MANAGER
 from buttermilk._core.types import RunRequest
+from buttermilk.agents.ui import CLIUserAgent
 from buttermilk.api.flow import create_app
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.bm import BM, logger
@@ -104,12 +107,14 @@ def main(cfg: DictConfig) -> None:
     # Branch execution based on the configured UI mode.
     match cfg.run.mode:
         case "console":
+            ui = CLIUserAgent(name=MANAGER, session_id=uuid4().hex)
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(ui_type=cfg.ui,
                 flow=cfg.get("flow"),
                 record_id=cfg.get("record_id", ""),
                 prompt=cfg.get("prompt", ""),
-                uri=cfg.get("uri", ""),session_id=uuid4().hex
+                uri=cfg.get("uri", ""), session_id=ui.session_id,
+                callback_to_ui=ui.callback_to_ui,
             )
 
             # Run the flow synchronously
