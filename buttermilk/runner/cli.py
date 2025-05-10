@@ -37,14 +37,15 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
     Raises:
         FatalError: If no run requests are found in the queue
         Exception: If there's an error running a job
+
     """
     try:
         worker = JobQueueClient(
             max_concurrent_jobs=1,  # Process one job at a time to maintain isolation
         )
-        
+
         jobs_processed = 0
-        
+
         while jobs_processed < max_jobs:
             # Pull a job from the queue
             run_request = await worker.pull_single_task()
@@ -53,9 +54,9 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
                     # Only raise an error if we didn't process any jobs
                     raise FatalError("No run request found in the queue.")
                 break  # No more jobs to process
-            
+
             logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
-            
+
             try:
                 # Run the job with wait_for_completion=True to ensure it finishes before moving to the next
                 await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
@@ -63,11 +64,11 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
             except Exception as job_error:
                 logger.error(f"Error running job {run_request.job_id}: {job_error}")
                 # Continue processing other jobs even if one fails
-            
+
             jobs_processed += 1
-            
+
         logger.info(f"Batch processing complete. Processed {jobs_processed} jobs.")
-        
+
     except FatalError:
         # Re-raise FatalError to be handled by the caller
         raise
@@ -89,10 +90,6 @@ def main(cfg: DictConfig) -> None:
              attempted before) could improve type safety if cfg structure is stable.
 
     """
-    # Set the UI type if provided in the config
-    ui_type = cfg.get("ui_type", None)
-    if ui_type:
-        logger.info(f"Using UI implementation: {ui_type}")
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
 
@@ -104,15 +101,12 @@ def main(cfg: DictConfig) -> None:
     # This might involve loading credentials, setting up logging, initializing API clients, etc.
     bm.setup_instance()
 
-    logger.info(f"Starting UI: {flow_runner.ui}...")
     # Branch execution based on the configured UI mode.
-    match flow_runner.ui:
+    match cfg.run.mode:
         case "console":
-            # Run a flow directly in the console
-            flow_name = cfg.flow
-
             # Prepare the RunRequest with command-line parameters
-            run_request = RunRequest(flow=cfg.get("flow"),
+            run_request = RunRequest(ui_type=cfg.ui,
+                flow=cfg.get("flow"),
                 record_id=cfg.get("record_id", ""),
                 prompt=cfg.get("prompt", ""),
                 uri=cfg.get("uri", ""),
@@ -130,7 +124,7 @@ def main(cfg: DictConfig) -> None:
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
             max_jobs = cfg.get("max_jobs", 1)  # Get max_jobs from config or default to 1
-            
+
             bm.logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
             asyncio.run(run_batch_job(flow_runner=flow_runner, max_jobs=max_jobs))
 
@@ -257,8 +251,8 @@ def main(cfg: DictConfig) -> None:
                 loop.close()
 
         case _:
-            # Handle unexpected UI modes.
-            raise ValueError(f"Unsupported UI mode specified in configuration: {flow_runner.ui}")
+            # Handle unexpected modes.
+            raise ValueError(f"Unsupported run mode specified in configuration: {cfg.run}")
 
 
 if __name__ == "__main__":

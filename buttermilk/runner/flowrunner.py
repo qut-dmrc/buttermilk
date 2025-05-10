@@ -1,11 +1,11 @@
 import asyncio
 import importlib
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from buttermilk._core.config import SaveInfo
 from buttermilk import logger
+from buttermilk._core.config import SaveInfo
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
@@ -20,6 +20,7 @@ class FlowRunContext(BaseModel):
     task: Any = None
     result: Any = None
     status: str = "pending"
+    ui_type: str = "console"
 
 
 class FlowRunner(BaseModel):
@@ -35,49 +36,13 @@ class FlowRunner(BaseModel):
 
     save: SaveInfo
     tasks: list = Field(default=[])
-    ui: str  # The UI mode (console, api, slackbot, etc.)
-    ui_type: Optional[str] = Field(default=None)  # The UI implementation type (web, console, slack, etc.)
     model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def instantiate_orchestrators(self) -> "FlowRunner":
         """Initialize orchestrator instances from their configuration."""
-        initialized_flows: dict[str, OrchestratorProtocol] = {}
-
-        for flow_name, flow_config in self.flows.items():
-            # Extract orchestrator class path
-            orchestrator_path = flow_config.orchestrator
-            module_name, class_name = orchestrator_path.rsplit(".", 1)
-            module = importlib.import_module(module_name)
-            orchestrator_cls = getattr(module, class_name)
-
-            # Create orchestrator instance with config
-            config = flow_config if isinstance(flow_config, dict) else flow_config.model_dump()
-            
-            # If we have a ui_type parameter and there's an interface agent in the observers,
-            # make sure it gets the ui_type value
-            if self.ui_type and "observers" in config:
-                # Check if we have interface agents in the observers
-                interface_agents = []
-                for agent_group in config.get("observers", {}).keys():
-                    if agent_group.startswith("interface/"):
-                        interface_agents.append(agent_group)
-                
-                # If we found interface agents, update them with the ui_type
-                if interface_agents:
-                    logger.debug(f"Setting ui_type={self.ui_type} for interface agents: {interface_agents}")
-                    for agent_key in interface_agents:
-                        # Add ui_type to the agent parameters if it's a UIProxyAgent
-                        agent_config = config["observers"][agent_key]
-                        for role_name, role_config in agent_config.items():
-                            if role_config.get("agent_obj") == "UIProxyAgent":
-                                role_config["ui_type"] = self.ui_type
-                                logger.debug(f"Set ui_type={self.ui_type} for {agent_key}.{role_name}")
-            
-            initialized_flows[flow_name] = orchestrator_cls(**config)
-
         self.flow_configs = self.flows
-        self.flows = initialized_flows
+
         return self
 
     async def pull_and_run_task(self) -> None:
@@ -86,7 +51,7 @@ class FlowRunner(BaseModel):
         queue_manager = getattr(self, "queue_manager", None)
         if queue_manager is None:
             self.queue_manager = JobQueueClient()
-        
+
         # Pull task from the queue
         request = await self.queue_manager.pull_single_task()
 
@@ -177,6 +142,7 @@ class FlowRunner(BaseModel):
         context = FlowRunContext(
             flow_name=run_request.flow,
             orchestrator=fresh_orchestrator,
+            ui_type=run_request.ui_type,
         )
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,

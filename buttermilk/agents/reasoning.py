@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field
 # Buttermilk core imports
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 
+class Agreement(BaseModel):
+    topic: str = Field(..., description="The key topic, point, or fact at hand.")
+    divergence: str = Field(..., description="The specific divergence or difference in opinion.")
+    agreement: str = Field(..., description="The specific agreement or common ground.")
+
+    
 
 class Reasons(BaseModel):
     conclusion: str = Field(..., description="Your conclusion or final answer summarizing current tentative conclusions and outlining any uncertainty or divergence.")
