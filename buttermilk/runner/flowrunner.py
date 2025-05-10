@@ -1,32 +1,97 @@
 import asyncio
 import importlib
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk import logger
+from buttermilk._core import AgentTrace
+from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.orchestrator import OrchestratorProtocol
-from buttermilk._core.types import RunRequest
+from buttermilk._core.contract import (
+    ErrorEvent,
+    FlowEvent,
+    FlowMessage,
+    ManagerRequest,
+)
+from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
+from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
+from buttermilk.api.services.message_service import MessageService
 from buttermilk.bm import BM, logger
+from buttermilk.runner.flowrunner import FlowRunContext
 
 
 class FlowRunContext(BaseModel):
     """Encapsulates all state for a single flow run."""
 
-    flow_name: str
-    orchestrator: OrchestratorProtocol
-    task: Any = None
-    result: Any = None
+    flow_name: str = ""
+    flow_task: asyncio.Task | None = None
+    orchestrator: Orchestrator
     status: str = "pending"
-    ui_type: str
     session_id: str
-    callback_to_ui: Any   # Callback function to send messages back to the UI
-    callback_to_groupchat: Any
+    callback_to_ui: Any = None  # Callback function to send messages back to the UI
+    callback_to_groupchat: Any = None
     messages: list = []
     progress: dict = Field(default_factory=dict)
-    outcomes_version: str = ""
+
+    websocket: Any
+
+    @model_validator(mode="after")
+    def set_websocket(self) -> "FlowRunContext":
+        """Set the websocket callback for this flow run context."""
+        self.callback_to_ui = self.websocket.send_json
+        return self
+
+    async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
+        """Monitor the UI for incoming messages."""
+        while True:
+            try:
+                data = await self.websocket.receive_json()
+                message = await MessageService.process_message_from_ui(data)
+                if not message:
+                    continue
+
+                if isinstance(message, RunRequest):
+                    # Run the flow with the new parameters
+                    message.callback_to_ui = self.callback_to_ui
+                    message.session_id = self.session_id
+
+                    yield message
+
+                else:
+                    await self.callback_to_groupchat(message)
+
+            except Exception as e:
+                logger.error(f"Error monitoring UI: {e}")
+
+    async def send_message_to_ui(self, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
+        """Send a message to a WebSocket connection.
+        
+        Args:
+            session_id: The session ID
+            message: The message to send
+
+        """
+        formatted_message = MessageService.format_message_for_client(message)
+        if not formatted_message:
+            logger.debug(f"Dropping message not handled by client: {message}")
+            return
+        try:
+            message_type = formatted_message.type
+            formatted_message = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+            message_data = {"content": formatted_message, "type": message_type}
+
+            await self.callback_to_ui(message_data)
+        except Exception as e:
+            logger.error(f"Error sending message: {e}")
+            try:
+                error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
+                message_data = {"content": error_data, "type": "system_message"}
+                await self.callback_to_ui(message_data)
+            except Exception as e:
+                logger.error("Failed to send error message")
 
 
 class FlowRunner(BaseModel):
@@ -43,6 +108,8 @@ class FlowRunner(BaseModel):
     save: SaveInfo
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
+
+    sessions: list[FlowRunContext] = Field(default_factory=list)  # List of active sessions
 
     @model_validator(mode="after")
     def instantiate_orchestrators(self) -> "FlowRunner":
@@ -151,28 +218,27 @@ class FlowRunner(BaseModel):
         context = FlowRunContext(
             flow_name=run_request.flow,
             orchestrator=fresh_orchestrator,
-            ui_type=run_request.ui_type,
             callback_to_ui=run_request.callback_to_ui,
             session_id=run_request.session_id,
-            callback_to_groupchat=fresh_orchestrator._make_publish_callback(),  # type: ignore
+            callback_to_groupchat=fresh_orchestrator.make_publish_callback(),  # type: ignore
         )
+        # Create the task
+        context.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+        await fresh_orchestrator.register_ui(run_request.callback_to_ui)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
         logger.info(f"🚀 FLOW STARTING: '{run_request.flow}' (ID: {run_request.job_id}).\n📋 RunRequest: {run_request.model_dump_json(indent=2)}\n⚙️ Source: {', '.join(run_request.source) if run_request.source else 'direct'}\n✅ New flow instance created - all state has been reset")
 
-        # Create the task
-        context.task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
-
         try:
             if wait_for_completion:
                 # Wait for the task and return its result
-                context.result = await context.task
+                result = await context.flow_task
                 context.status = "completed"
-                return context.result
+                return result
             # Add task to list and return callback for non-blocking execution
             # Note: We still keep this for backward compatibility, but each task is now tied to a fresh instance
-            self.tasks.append(context.task)
+            self.sessions[run_request.session_id] = context
         except Exception as e:
             context.status = "failed"
             logger.error(f"Error running flow '{run_request.flow}': {e}")

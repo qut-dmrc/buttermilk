@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from buttermilk._core.types import RunRequest
 from buttermilk.api.services.websocket_service import WebSocketManager
 from buttermilk.bm import BM, logger
-from buttermilk.runner.flowrunner import FlowRunner
+from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 from buttermilk.web.activity_tracker import get_instance as get_activity_tracker
 
 from .routes import flow_data_router
@@ -162,33 +162,27 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             session_id: Unique identifier for this client session
 
         """
-        manager: WebSocketManager = websocket.app.state.websocket_manager
         flow_runner: FlowRunner = websocket.app.state.flow_runner
 
         # Accept the connection first
-        await manager.connect(websocket, session_id)
+        await websocket.accept()
+
+        session = FlowRunContext(session_id=session_id, websocket=websocket)
 
         try:
             # Listen for messages from the client
-            while True:
-                data = await websocket.receive_json()
-                await manager.process_message_from_ui(session_id, data, flow_runner)
+            async for run_request in session.monitor_ui():
+                await flow_runner.run_flow(
+                    run_request=run_request,
+                    session=session,
+                )
 
         except WebSocketDisconnect:
             logger.info(f"Client {session_id} disconnected.")
         except Exception as e:
             logger.error(f"Error receiving/processing client message for {session_id}: {e}")
-
-            try:
-                await websocket.send_json({
-                    "type": "error",
-                    "content": f"Unexpected error: {e!s}",
-                    "source": "system",
-                })
-            except:
-                pass
         finally:
-            manager.disconnect(session_id)
+            await websocket.close()
 
     # Helper route to generate session IDs for clients
     @app.get("/api/session")
