@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk import logger
@@ -33,47 +34,49 @@ class FlowRunContext(BaseModel):
     orchestrator: Orchestrator | None = None
     status: str = "pending"
     session_id: str
-    callback_to_ui: Any = None  # Callback function to send messages back to the UI
     callback_to_groupchat: Any = None
     messages: list = []
     progress: dict = Field(default_factory=dict)
 
     websocket: Any = None
 
-    @model_validator(mode="after")
-    def set_websocket(self) -> "FlowRunContext":
-        """Set the websocket callback for this flow run context."""
-        self.callback_to_ui = self.websocket.send_json
-        return self
-
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
         while True:
-            if not self.websocket:
+            await asyncio.sleep(0.1)
+
+            # Check if the WebSocket is connected
+            if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
+                logger.debug(f"WebSocket not connected for session {self.session_id}")
                 await asyncio.sleep(0.1)
+                # Accept the WebSocket connection
+                if self.websocket.client_state == WebSocketState.CONNECTING:
+                    logger.debug(f"Accepting WebSocket connection for session {self.session_id}")
+                    with contextlib.suppress(Exception):
+                        await self.websocket.accept()
                 continue
-            with contextlib.suppress(Exception):
-                await self.websocket.accept()
 
             try:
-                await asyncio.sleep(0.1)
                 data = await self.websocket.receive_json()
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
                     continue
 
                 if isinstance(message, RunRequest):
-                    # Run the flow with the new parameters
-                    message.callback_to_ui = self.callback_to_ui
+                    # Generate a request to run the flow with the new parameters
+                    message.callback_to_ui = self.send_message_to_ui
                     message.session_id = self.session_id
 
                     yield message
-
+                elif not self.callback_to_groupchat:
+                    # Group chat has not started yet
+                    logger.debug(f"Group chat not yet started for session {self.session_id}")
+                    continue
                 else:
                     await self.callback_to_groupchat(message)
 
             except WebSocketDisconnect:
-                logger.info(f"Client {self.session_id} disconnected."):
+                logger.info(f"Client {self.session_id} disconnected.")
                 with contextlib.suppress(Exception):
                     await self.websocket.close()
             except Exception as e:
@@ -96,15 +99,15 @@ class FlowRunContext(BaseModel):
             formatted_message = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
             message_data = {"content": formatted_message, "type": message_type}
 
-            await self.callback_to_ui(message_data)
+            await self.websocket.send_json(message_data)
         except Exception as e:
             logger.error(f"Error sending message: {e}")
             try:
                 error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
                 message_data = {"content": error_data, "type": "system_message"}
-                await self.callback_to_ui(message_data)
+                await self.websocket.send_json(message_data)
             except Exception as e:
-                logger.error("Failed to send error message")
+                logger.error(f"Failed to send error message: {e!s}")
 
 
 class FlowRunner(BaseModel):
@@ -130,6 +133,21 @@ class FlowRunner(BaseModel):
         self.flow_configs = self.flows
 
         return self
+
+    def get_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext:
+        """Get or create a session for the given session ID.
+        
+        Args:
+            session_id: Unique identifier for the session
+            websocket: WebSocket connection for this session
+
+        Returns:
+            A FlowRunContext object representing the session
+
+        """
+        if session_id not in self.sessions:
+            self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
+        return self.sessions[session_id]
 
     async def pull_and_run_task(self) -> None:
         """Pull tasks from the queue and run them."""
@@ -203,7 +221,6 @@ class FlowRunner(BaseModel):
     async def run_flow(self,
                       run_request: RunRequest,
                       wait_for_completion: bool = False,
-                      session: FlowRunContext = None,
                       **kwargs) -> FlowRunContext:
         """Run a flow based on its configuration and a request.
         
@@ -229,16 +246,16 @@ class FlowRunner(BaseModel):
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol
 
-        # Create a context for this specific run
-        session.flow_name = run_request.flow
-        session.orchestrator = fresh_orchestrator
-        session.callback_to_ui = run_request.callback_to_ui
-        session.session_id = run_request.session_id
-        session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
+        self.sessions[run_request.session_id].flow_name = run_request.flow
+        self.sessions[run_request.session_id].orchestrator = fresh_orchestrator
+        self.sessions[run_request.session_id].callback_to_groupchat = fresh_orchestrator.make_publish_callback()
 
         # Create the task
-        session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
-        await fresh_orchestrator.register_ui(run_request.callback_to_ui)
+        self.sessions[run_request.session_id].flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+        fresh_orchestrator._session = self.sessions[run_request.session_id]
+
+        # this doesn't work if you call it here
+        # await fresh_orchestrator.register_ui(self.sessions[run_request.session_id].send_message_to_ui)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
