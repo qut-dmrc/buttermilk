@@ -18,7 +18,6 @@ from autogen_core import (
     ClosureAgent,
     ClosureContext,  # Represents a registered type of agent in the runtime.
     DefaultInterventionHandler,
-    DefaultSubscription,
     DefaultTopicId,  # A standard implementation for topic identifiers.
     MessageContext,
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
@@ -39,7 +38,8 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
-from buttermilk.libs.autogen import AutogenAgentAdapter  # Adapter to wrap Buttermilk agents for Autogen.
+from buttermilk.libs.autogen import AutogenAgentAdapter
+from buttermilk.runner.flowrunner import FlowRunContext  # Adapter to wrap Buttermilk agents for Autogen.
 
 
 class TerminationHandler(DefaultInterventionHandler):
@@ -86,6 +86,7 @@ class AutogenOrchestrator(Orchestrator):
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
     _participants: dict[str, str] = PrivateAttr()
+    _session: FlowRunContext = PrivateAttr()
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
@@ -107,6 +108,8 @@ class AutogenOrchestrator(Orchestrator):
 
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
+
+        await self.register_ui(callback_to_ui=self._session.send_message_to_ui)
 
         # does it need a second to spin up?
         await asyncio.sleep(1)
@@ -207,10 +210,22 @@ class AutogenOrchestrator(Orchestrator):
         logger.debug("Registering UI callback...")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+            logger.debug(f"Sending message to UI: {message}")
             await callback_to_ui(message)
 
+        # Register the closure function as an agent named MANAGER.
         await ClosureAgent.register_closure(
-            self._runtime, "UI Proxy", output_result, subscriptions=lambda: [DefaultSubscription(topic_type=self._topic.type)],
+            runtime=self._runtime,
+            type=MANAGER,  # Agent ID/Name.
+            closure=output_result,  # The async function to handle messages.
+            subscriptions=lambda: [
+                TypeSubscription(
+                    topic_type=self._topic.type,  # Subscribe to the main group chat topic
+                    agent_type=MANAGER,
+                ),
+            ],
+            # If a message arrives that isn't handled, just ignore it silently.
+            # unknown_type_policy="ignore",
         )
 
     async def _cleanup(self) -> None:

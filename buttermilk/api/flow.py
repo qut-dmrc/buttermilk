@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import BM, logger
-from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
+from buttermilk.runner.flowrunner import FlowRunner
 
 from .routes import flow_data_router
 
@@ -144,18 +144,18 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         """
         flow_runner: FlowRunner = websocket.app.state.flow_runner
-
-        await asyncio.sleep(0.1)
-        session = FlowRunContext(session_id=session_id, websocket=websocket)
-        await asyncio.sleep(0.1)
+        session = flow_runner.get_session(session_id=session_id, websocket=websocket)
         task = None
         # Listen for messages from the client
         async for run_request in session.monitor_ui():
             try:
                 await asyncio.sleep(0.1)
+                # This loop internally feeds the groupchat with messages from the client.
+                # The only message we receive is a run_request -- which we then
+                # use to create a new flow.
                 task = asyncio.create_task(flow_runner.run_flow(
                     run_request=run_request,
-                    session=session,
+                    wait_for_completion=False,
                 ))
 
             except WebSocketDisconnect:
