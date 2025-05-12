@@ -7,7 +7,7 @@ and interactions with manager/conductor roles.
 
 import datetime
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Union
+from typing import Any, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
@@ -30,14 +30,7 @@ from buttermilk.utils.validators import (  # Pydantic validators
     make_list_validator,
 )
 
-# Import constants first to avoid circular dependencies
-
-# Use TYPE_CHECKING to avoid circular imports for type hints
-if TYPE_CHECKING:
-    from .config import AgentConfig  # Core configuration models
-else:
-    from .config import AgentConfig  # Required at runtime for now, will be refactored later
-
+from .config import AgentConfig
 from .log import logger
 from .types import Record  # Core data types
 
@@ -323,7 +316,7 @@ class AgentTrace(FlowMessage, AgentOutput):
     """
 
     run_info: SessionInfo = Field(default_factory=_get_run_info)
-    agent_info: "AgentConfig" = Field(..., description="Configuration info from the agent (required)")
+    agent_info: AgentConfig = Field(..., description="Configuration info from the agent (required)")
     session_id: str = Field(..., description="Unique identifier for client session")
 
     # Tracing information and call metadata.

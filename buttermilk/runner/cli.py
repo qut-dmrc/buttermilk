@@ -236,7 +236,7 @@ def main(cfg: DictConfig) -> None:
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
                 await register_handlers(
                     slack_app=slack_app,
-                    flows=flow_runner.flow_configs,
+                    flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
                 )
                 bm.logger.info("Slack handlers registered. Bot is ready.")

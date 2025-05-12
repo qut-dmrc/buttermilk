@@ -1,12 +1,11 @@
 import asyncio
-import contextlib
 import importlib
 from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk import logger
 from buttermilk._core import AgentTrace
@@ -72,12 +71,11 @@ class FlowRunContext(BaseModel):
 
             except WebSocketDisconnect:
                 logger.info(f"Client {self.session_id} disconnected.")
-                with contextlib.suppress(Exception):
-                    await self.websocket.close()
                 self.websocket = None
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
-                break
+                self.websocket = None
+                # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
     async def send_message_to_ui(self, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
@@ -115,21 +113,13 @@ class FlowRunner(BaseModel):
     """
 
     bm: BM
-    flows: dict[str, OrchestratorProtocol]  # Dictionary of instantiated flow orchestrators.
-    flow_configs: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Original flow configurations
+    flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
 
     save: SaveInfo
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
 
     sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions
-
-    @model_validator(mode="after")
-    def instantiate_orchestrators(self) -> "FlowRunner":
-        """Initialize orchestrator instances from their configuration."""
-        self.flow_configs = self.flows
-
-        return self
 
     def get_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext:
         """Get or create a session for the given session ID.
@@ -177,13 +167,13 @@ class FlowRunner(BaseModel):
             A new orchestrator instance with fresh state
             
         Raises:
-            ValueError: If flow_name doesn't exist in flow_configs
+            ValueError: If flow_name doesn't exist in flows
 
         """
-        if flow_name not in self.flow_configs:
-            raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flow_configs.keys())}")
+        if flow_name not in self.flows:
+            raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}")
 
-        flow_config = self.flow_configs[flow_name]
+        flow_config = self.flows[flow_name]
 
         # Extract orchestrator class path
         orchestrator_path = flow_config.orchestrator

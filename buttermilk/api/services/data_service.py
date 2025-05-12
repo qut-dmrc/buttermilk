@@ -54,7 +54,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_records_for_flow(flow_name: str, flow_runner) -> list[dict[str, str]]:
+    async def get_records_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[dict[str, str]]:
         """Get records for a flow
         
         Args:

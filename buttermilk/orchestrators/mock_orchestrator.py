@@ -328,7 +328,7 @@ class MockOrchestrator(Orchestrator):
             logger.debug("Flow simulation cancelled")
             raise
 
-    def _make_publish_callback(self) -> Callable:
+    def make_publish_callback(self) -> Callable:
         """Creates an asynchronous callback function for the UI to use.
 
         Returns:
