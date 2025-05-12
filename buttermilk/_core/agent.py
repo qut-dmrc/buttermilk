@@ -193,7 +193,7 @@ class Agent(AgentConfig):
             return error_output
 
         trace_params = {**final_input.parameters, **final_input.metadata, **self.parameters}
-        langfuse_context.update_current_observation(name=f"{self.name} {self._cfg.parameters.get('model')}",
+        langfuse_context.update_current_observation(name=f"{self.agent_name} {self._cfg.parameters.get('model')}",
                                                     input=final_input.inputs,
                                                     metadata=trace_params,
                                                     model=self._cfg.parameters.get("model"))
@@ -214,14 +214,14 @@ class Agent(AgentConfig):
 
         # --- Execute Core Logic ---
         try:
-            op = weave.op(self._process, call_display_name=self.name)
+            op = weave.op(self._process, call_display_name=self.agent_name)
             inputs = dict(message=final_input, cancellation_token=cancellation_token,
                 public_callback=public_callback,  # Callback provided by adapter
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
 
             child_call = bm.weave.create_call(op, inputs=final_input.model_dump(mode="json"),
-                                              parent=parent_call, display_name=self.name, attributes=trace_params)
+                                              parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
             parent_call._children.append(child_call)
             result = await self._process(**inputs)
@@ -252,9 +252,9 @@ class Agent(AgentConfig):
             await public_callback(trace)
 
             # --- Langfuse tracing ---
-            langfuse_context.update_current_observation(name=self.name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
+            langfuse_context.update_current_observation(name=self.agent_name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
-        logger.info(f"Agent {self.agent_id} {self.name} finished task {message}.")
+        logger.info(f"Agent {self.agent_id} {self.agent_name} finished task {message}.")
         return trace
 
     @abstractmethod
