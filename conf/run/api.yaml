@@ -1,11 +1,12 @@
+# @package _global_
 # Batch execution configuration
 defaults:
+  - _self_
   # ... other defaults
-  - /flows/criteria@batch.parameters.criteria:
-      - trans
 
 name: bm_api
 job: flows
-mode: api
-ui: web
-human_in_loop: true
+run:
+  mode: api
+  ui: web
+  human_in_loop: true

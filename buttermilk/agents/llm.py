@@ -13,6 +13,7 @@ from autogen_core.models import (
 )
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from pydantic import BaseModel, Field, PrivateAttr
+import weave
 
 # Buttermilk core imports
 from buttermilk._core.agent import Agent  # Base agent and message types
@@ -217,6 +218,11 @@ class LLMAgent(Agent):
 
         parsed_object = None
         parse_error = None
+
+        # Get tracing link
+        call = weave.get_current_call()
+        if call and hasattr(call, "ui_url"):
+            output.tracing_link = call.ui_url
 
         # 1. Handle structured output validation first (if schema is defined)
         if schema:

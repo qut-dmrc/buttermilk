@@ -331,7 +331,7 @@ class AgentTrace(FlowMessage, AgentOutput):
 
     # Tracing information and call metadata.
     parent_call_id: str | None = Field(default=None)
-
+    tracing_link: str | None = Field(default=None, description="Link to the tracing information, if available.")
     # The original inputs dict for this call.
     inputs: AgentInput = Field(
         ...,

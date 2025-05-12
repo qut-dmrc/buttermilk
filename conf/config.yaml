@@ -5,8 +5,6 @@ defaults:
   - flows: []
 
 
-name: default_project
-job: development
 ui: console
 human_in_loop: true
 run: help

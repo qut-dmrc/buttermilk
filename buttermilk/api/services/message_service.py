@@ -29,7 +29,7 @@ class MessageService:
 
     @staticmethod
     def format_message_for_client(message: AgentTrace | ChatMessage | Record | FlowEvent | FlowMessage) -> None | ChatMessage:
-        """Pass through the message directly to the client
+        """Format and pass the message to the client
         
         Args:
             message: The message to format (Pydantic object)
@@ -68,7 +68,7 @@ class MessageService:
             elif isinstance(message, ManagerMessage):
                 # Message from UI to chat; don't send back to UI
                 return None
-            elif isinstance(message, FlowEvent):
+            elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
                 message_type = "system_message"
             else:
                 logger.warning(f"Unknown message type: {type(message)}")
