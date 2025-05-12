@@ -106,7 +106,7 @@ class FetchAgent(FetchRecord, Agent):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
 
         if result and isinstance(result, Record):
             output = AgentOutput(agent_id=self.agent_id,
@@ -121,7 +121,7 @@ class FetchAgent(FetchRecord, Agent):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                result = await self._run(record_id=record_id, uri=uri, prompt=message.prompt)
+                result = await self._run(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
 
         if result:
             return result

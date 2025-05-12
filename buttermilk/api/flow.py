@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.websockets import WebSocketState
 
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import BM, logger
@@ -143,6 +144,10 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             session_id: Unique identifier for this client session
 
         """
+        # Accept the WebSocket connection
+        if websocket.client_state == WebSocketState.CONNECTING:
+            logger.debug(f"Accepting WebSocket connection for session {session_id}")
+            await websocket.accept()
         flow_runner: FlowRunner = websocket.app.state.flow_runner
         session = flow_runner.get_session(session_id=session_id, websocket=websocket)
         task = None

@@ -181,6 +181,7 @@ class AgentInput(FlowMessage):
     """
 
     parent_call_id: str | None = Field(default=None, description="ID of the parent call, if applicable.")
+
     inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="Dictionary containing input data resolved from mappings or passed directly.",
@@ -197,10 +198,6 @@ class AgentInput(FlowMessage):
         default_factory=list,
         description="List of data records relevant to the current task.",
     )
-    prompt: str | None = Field(
-        default="",
-        description="The primary prompt or instruction for the agent.",
-    )
 
     # Validator to ensure context and records are always lists.
     _ensure_input_list = field_validator("context", "records", mode="before")(make_list_validator())
@@ -208,8 +205,8 @@ class AgentInput(FlowMessage):
     def __str__(self) -> str:
         # Provide an abridged string representation of the inputs.
         parts = []
-        if self.prompt:
-            prompt_summary = self.prompt[:50] + "..." if len(self.prompt) > 50 else self.prompt
+        if prompt := self.inputs.get("prompt"):
+            prompt_summary = prompt[:50] + "..." if len(prompt) > 50 else prompt
             parts.append(f"Prompt: '{prompt_summary}'")
         if self.inputs:
             parts.append(f"{len(self.inputs)} inputs")
@@ -248,7 +245,7 @@ class StepRequest(AgentInput):
         return v
 
     def __str__(self) -> str:
-        return f"{self.role} {self.content}: {self.prompt}"
+        return f"{self.role}: {self.content}"
 
 
 class AgentOutput(BaseModel):

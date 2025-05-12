@@ -181,7 +181,6 @@ class CLIUserAgent(UIAgent):
 
             elif isinstance(message, AgentInput):
                 output_lines.append("### Input Request:")
-                output_lines.append(f"**Prompt:** {message.prompt}" if message.prompt else "(No explicit prompt)")
                 if message.inputs:
                     output_lines.append("**Inputs:**")
                     output_lines.append(f"```json\n{json.dumps(message.inputs, indent=2)}\n```")
@@ -201,9 +200,6 @@ class CLIUserAgent(UIAgent):
                 # TODO: Format tool output better based on its content type
                 output_lines.append(f"```\n{pretty_repr(message.content, max_string=1000)}\n```")
 
-            # Generic FlowMessage with content/prompt
-            elif hasattr(message, "prompt") and message.prompt:
-                output_lines.append(f"### Prompt:\n{message.prompt}")
             elif hasattr(message, "content") and message.content:
                 output_lines.append(message.content)
 

@@ -178,7 +178,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
 
         # Define attributes for logging and tracing.
-
         try:
             assert bm.weave
 

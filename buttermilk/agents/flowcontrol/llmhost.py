@@ -55,10 +55,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
             result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))
 
             # Now call the agent specified in the result
-            next_step = StepRequest(
-                role=result.outputs.role,
-                prompt=result.outputs.prompt,
-            )
+            next_step = StepRequest(**result.outputs)
             yield next_step
 
         # This will never be reached, but is here for completeness

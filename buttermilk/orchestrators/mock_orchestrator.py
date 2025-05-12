@@ -393,7 +393,6 @@ class MockOrchestrator(Orchestrator):
             agent_id=agent_id, name=agent_id,
             description=f"{agent_id} agent for processing tasks",
             parameters={},
-            session_id=self.session_id,
         )
 
         return AgentTrace(

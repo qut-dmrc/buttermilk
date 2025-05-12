@@ -39,7 +39,6 @@ from buttermilk._core.orchestrator import Orchestrator  # Base class for orchest
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger  # Core Buttermilk instance and logger.
 from buttermilk.libs.autogen import AutogenAgentAdapter
-from buttermilk.runner.flowrunner import FlowRunContext  # Adapter to wrap Buttermilk agents for Autogen.
 
 
 class TerminationHandler(DefaultInterventionHandler):
@@ -86,7 +85,6 @@ class AutogenOrchestrator(Orchestrator):
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
     _participants: dict[str, str] = PrivateAttr()
-    _session: FlowRunContext = PrivateAttr()
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
@@ -109,7 +107,7 @@ class AutogenOrchestrator(Orchestrator):
         # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
 
-        await self.register_ui(callback_to_ui=self._session.send_message_to_ui)
+        await self.register_ui(callback_to_ui=request.callback_to_ui)
 
         # does it need a second to spin up?
         await asyncio.sleep(1)

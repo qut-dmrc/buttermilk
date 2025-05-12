@@ -49,11 +49,6 @@ class FlowRunContext(BaseModel):
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
                 logger.debug(f"WebSocket not connected for session {self.session_id}")
                 await asyncio.sleep(0.1)
-                # Accept the WebSocket connection
-                if self.websocket.client_state == WebSocketState.CONNECTING:
-                    logger.debug(f"Accepting WebSocket connection for session {self.session_id}")
-                    with contextlib.suppress(Exception):
-                        await self.websocket.accept()
                 continue
 
             try:
@@ -79,8 +74,10 @@ class FlowRunContext(BaseModel):
                 logger.info(f"Client {self.session_id} disconnected.")
                 with contextlib.suppress(Exception):
                     await self.websocket.close()
+                self.websocket = None
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
+                break
 
     async def send_message_to_ui(self, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
@@ -104,7 +101,7 @@ class FlowRunContext(BaseModel):
             logger.error(f"Error sending message: {e}")
             try:
                 error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
-                message_data = {"content": error_data, "type": "system_message"}
+                message_data = {"content": error_data.model_dump(), "type": "system_message"}
                 await self.websocket.send_json(message_data)
             except Exception as e:
                 logger.error(f"Failed to send error message: {e!s}")
@@ -147,6 +144,8 @@ class FlowRunner(BaseModel):
         """
         if session_id not in self.sessions:
             self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
+        elif self.sessions[session_id].websocket is None and websocket is not None:
+            self.sessions[session_id].websocket = websocket
         return self.sessions[session_id]
 
     async def pull_and_run_task(self) -> None:
@@ -167,12 +166,13 @@ class FlowRunner(BaseModel):
         else:
             logger.debug("No tasks available in the queue")
 
-    def _create_fresh_orchestrator(self, flow_name: str) -> OrchestratorProtocol:
+    def _create_fresh_orchestrator(self, flow_name: str, session_id: str) -> OrchestratorProtocol:
         """Create a completely fresh orchestrator instance.
         
         Args:
             flow_name: The name of the flow to create an orchestrator for
-            
+            session_id: The session ID for the flow
+
         Returns:
             A new orchestrator instance with fresh state
             
@@ -195,7 +195,7 @@ class FlowRunner(BaseModel):
         config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
 
         # Create and return a fresh instance
-        return orchestrator_cls(**config)
+        return orchestrator_cls(**config, session_id=session_id)
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
         """Clean up resources associated with a flow run.
@@ -221,7 +221,7 @@ class FlowRunner(BaseModel):
     async def run_flow(self,
                       run_request: RunRequest,
                       wait_for_completion: bool = False,
-                      **kwargs) -> FlowRunContext:
+                      **kwargs) -> None:
         """Run a flow based on its configuration and a request.
         
         Args:
@@ -241,21 +241,17 @@ class FlowRunner(BaseModel):
 
         """
         # Create a fresh orchestrator instance
-        fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
+        fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow, session_id=run_request.session_id)
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol
-
-        self.sessions[run_request.session_id].flow_name = run_request.flow
-        self.sessions[run_request.session_id].orchestrator = fresh_orchestrator
-        self.sessions[run_request.session_id].callback_to_groupchat = fresh_orchestrator.make_publish_callback()
+        _session = self.sessions[run_request.session_id]
+        _session.flow_name = run_request.flow
+        _session.orchestrator = fresh_orchestrator
+        _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()
 
         # Create the task
-        self.sessions[run_request.session_id].flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
-        fresh_orchestrator._session = self.sessions[run_request.session_id]
-
-        # this doesn't work if you call it here
-        # await fresh_orchestrator.register_ui(self.sessions[run_request.session_id].send_message_to_ui)
+        _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
 
         # ======== MAJOR EVENT: FLOW STARTING ========
         # Log detailed information about flow start
@@ -263,19 +259,16 @@ class FlowRunner(BaseModel):
 
         try:
             if wait_for_completion:
-                # Wait for the task and return its result
-                result = await session.flow_task
-                session.status = "completed"
-                return result
-            # Add task to list and return callback for non-blocking execution
-            # Note: We still keep this for backward compatibility, but each task is now tied to a fresh instance
-            self.sessions[run_request.session_id] = session
+                # Wait for the task
+                result = await _session.flow_task
+                _session.status = "completed"
+                return
         except Exception as e:
-            session.status = "failed"
+            _session.status = "failed"
             logger.error(f"Error running flow '{run_request.flow}': {e}")
             raise
         finally:
             if wait_for_completion:
                 # Clean up after completion if we were waiting
-                await self._cleanup_flow_context(session)
-        return session
+                await self._cleanup_flow_context(_session)
+        return

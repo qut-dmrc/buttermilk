@@ -197,10 +197,16 @@ class Agent(AgentConfig):
                                                     input=final_input.inputs,
                                                     metadata=trace_params,
                                                     model=self._cfg.parameters.get("model"))
-        # --- Weave Tracing ---
-        # Get the current Weave call context if available.
+        # --- Tracing ---
+        from buttermilk.bm import bm
+        # Get the parent call context if available.
         parent_call = weave.get_current_call()
-        parent_call_id = getattr(parent_call, "id", uuid())  # Get the call ID if available
+        if message.parent_call_id:
+            try:
+                parent_call = bm.weave.get_call(message.parent_call_id)
+                parent_call_id = getattr(parent_call, "id", uuid())  # Get the call ID if available
+            except:
+                pass
         call_id = None
         is_error = False
 
@@ -209,17 +215,18 @@ class Agent(AgentConfig):
         # --- Execute Core Logic ---
         try:
             op = weave.op(self._process, call_display_name=self.name)
-            from buttermilk.bm import bm
             inputs = dict(message=final_input, cancellation_token=cancellation_token,
                 public_callback=public_callback,  # Callback provided by adapter
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
 
-            child_call = bm.weave.create_call(op, inputs=inputs, parent=parent_call, display_name=self.name, attributes=trace_params)
+            child_call = bm.weave.create_call(op, inputs=final_input.model_dump(mode="json"),
+                                              parent=parent_call, display_name=self.name, attributes=trace_params)
+
             parent_call._children.append(child_call)
             result = await self._process(**inputs)
             bm.weave.finish_call(child_call, output=result, op=op)
-            call_id = child_call.id
+            call_id = child_call.id or uuid()  # Set our trace ID to the tracer's call ID if available
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -227,6 +234,7 @@ class Agent(AgentConfig):
             logger.error(error_msg)
             result = ErrorEvent(source=self.agent_id, content=error_msg)
             is_error = True
+            call_id = uuid()
 
         finally:
             # Publish status update: Task Complete (including error if error)
