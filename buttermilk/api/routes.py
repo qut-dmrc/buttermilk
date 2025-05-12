@@ -20,8 +20,9 @@ async def get_templates(request: Request) -> Jinja2Templates:
 
 
 async def get_flows(request: Request) -> FlowRunner:
+    from buttermilk.runner.flowrunner import FlowRunner as FlowRunner_object
     flows = getattr(request.app.state, "flow_runner", None)
-    if flows is None:
+    if flows is None or not isinstance(flows, FlowRunner_object):
         raise RuntimeError("FlowRunner not found in app.state.flows")
     return flows
 

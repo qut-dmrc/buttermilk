@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import (
     Annotated,
@@ -8,6 +9,7 @@ from typing import (
 )
 
 import cloudpathlib
+import jmespath
 from google.cloud.bigquery.schema import SchemaField
 from pydantic import (
     AfterValidator,
@@ -245,6 +247,9 @@ class AgentConfig(BaseModel):
     outputs: dict[str, Any] = Field(default_factory=dict,
         serialization_alias="mapping_outputs")
 
+    # Defines which attributes are combined to create the human-friendly 'name'.
+    name_components: list[str] = Field(default=["role", "unique_identifier"], exclude=False)
+
     # Pydantic Model Configuration
     model_config = {
         "extra": "allow",  # Allow extra fields not explicitly defined (useful with Hydra).
@@ -254,23 +259,68 @@ class AgentConfig(BaseModel):
 
     # Private Attributes (Internal state, often defaults or generated)
     unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
-
+    _agent_name:    str = PrivateAttr()  # Human-friendly name for the agent instance.
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
     _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
 
+    @property
+    def agent_name(self) -> str:
+        """Generates a human-friendly name for the agent instance based on its role and unique identifier.
+        
+        The name is constructed from the `role`, `unique_identifier`, and any other specified components.
+        You can use JMESPath expressions to extract values from the agent's inputs and parameters.
+
+        Returns:
+            str: The generated name for the agent instance.
+
+        """
+        return self._agent_name
+
     @model_validator(mode="after")
     def _generate_id(self) -> Self:
-        """Generates the unique `id` for the agent instance after validation.
+        """Generates an ID and human-friendly name for the agent instance based on its role and unique identifier.
+        
         Designed to be idempotent to work with validate_assignment=True.
-
+        
         - Sets `id` based on `role` and `unique_identifier`.
+
+        - By default `name` is constructed from the `role`, `unique_identifier`, and any other specified components.
+
+        You can use JMESPath expressions to extract values from the agent's inputs and parameters.
+
+        Returns:
+            Self: The updated instance of the AgentConfig class with the generated ID and name.
+
         """
         # 2. Calculate the intended final ID
         intended_id = f"{self.role}-{self.unique_identifier}"
 
         if self.agent_id != intended_id:
             self.agent_id = intended_id
+
+        # Calculate the intended final name based on components
+        name_parts = []
+        inputs_dict = self.model_dump(exclude={"agent_name"})
+        if "variants" in self.model_fields_set:
+            inputs_dict.update(self.variants)
+        inputs_dict.update({**self.inputs, **self.parameters})
+
+        for comp in self.name_components:
+            # Get other components like unique_identifier, role etc.
+            part = None
+            with suppress(Exception):
+                # Search the data structure using the JMESPath expression
+                part = jmespath.search(comp, inputs_dict)
+            if part is not None and str(part):  # Ensure part is not None and not empty string
+                name_parts.append(str(part))
+            elif comp and comp not in inputs_dict and len(comp) <= 8:
+                # If the component is not a JMESPath expression, but instead is
+                # a short string, use it directly
+                name_parts.append(comp)
+
+        name = " ".join(name_parts).strip()
+        self._agent_name = name or self.agent_id
 
         return self
 

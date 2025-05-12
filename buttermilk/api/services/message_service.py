@@ -7,7 +7,6 @@ from shortuuid import uuid
 from buttermilk._core import AgentConfig, ManagerRequest, TaskProcessingComplete
 from buttermilk._core.agent import AgentOutput, AgentTrace, TaskProcessingStarted
 from buttermilk._core.config import RunRequest
-from buttermilk._core.constants import CONDUCTOR
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
 from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
@@ -53,12 +52,8 @@ class MessageService:
             if hasattr(message, "agent_info"):
                 agent_info = message.agent_info
             else:
-                agent_info = AgentConfig(session_id=message.session_id if hasattr(message, "session_id") else str(uuid()),
-                    agent_id=message.agent_id if hasattr(message, "agent_id") else CONDUCTOR,
-                    agent_name=message.agent_name if hasattr(message, "agent_name") else CONDUCTOR,
-                    role=message.role if hasattr(message, "role") else CONDUCTOR,
-                    description="",
-                )
+                agent_info = AgentConfig()
+
             if isinstance(message, Record):
                 message_type = "record"
                 preview = message.text

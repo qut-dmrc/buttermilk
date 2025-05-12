@@ -4,11 +4,9 @@
 import asyncio
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable
-from contextlib import suppress
 from functools import wraps  # Import wraps for decorator
 from typing import Any
 
-import jmespath
 import weave  # For tracing
 
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
@@ -99,9 +97,6 @@ class Agent(AgentConfig):
         description="A unique session id for this specific flow execution.",
     )
 
-    # Defines which attributes are combined to create the human-friendly 'name'.
-    name_components: list[str] = Field(default=["role", "unique_identifier"], exclude=True)
-
     # --- Internal State ---
     _records: list[Record] = PrivateAttr(default_factory=list)  # Stores data records relevant to the agent.
     _model_context: ChatCompletionContext = PrivateAttr(default_factory=UnboundedChatCompletionContext)  # Stores conversation history.
@@ -136,35 +131,6 @@ class Agent(AgentConfig):
         # Create a new AgentConfig instance with the extracted data
         return AgentConfig(**config_data)
 
-    @computed_field
-    @property
-    def agent_name(self) -> str:
-        """Generates a human-friendly name for the agent instance based on its role and unique identifier.
-
-        By default name is constructed from the `role`, `unique_identifier`, and any other specified components.
-
-        You can use JMESPath expressions to extract values from the agent's inputs and parameters.
-        """
-        # Calculate the intended final name based on components
-        name_parts = []
-        inputs_dict = self.model_dump(exclude={"agent_name"})
-        inputs_dict.update({**self.inputs, **self.parameters})
-        for comp in self.name_components:
-            # Get other components like unique_identifier, role etc.
-            part = None
-            with suppress(Exception):
-                # Search the data structure using the JMESPath expression
-                part = jmespath.search(comp, inputs_dict)
-            if part is not None and str(part):  # Ensure part is not None and not empty string
-                name_parts.append(str(part))
-            elif comp and comp not in inputs_dict and len(comp) <= 8:
-                # If the component is not a JMESPath expression, but instead is
-                # a short string, use it directly
-                name_parts.append(comp)
-
-        name = " ".join(name_parts).strip()
-
-        return name or self.agent_id
     # --- Core Methods (Lifecycle & Interaction) ---
 
     async def initialize(self, **kwargs) -> None:
