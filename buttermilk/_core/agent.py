@@ -214,19 +214,12 @@ class Agent(AgentConfig):
                 public_callback=public_callback,  # Callback provided by adapter
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
-            try:
-                child_call = bm.weave.create_call(op, inputs=inputs, parent=parent_call, display_name=self.name, attributes=trace_params)
-                parent_call._children.append(child_call)
-                result = await self._process(**inputs)
-                bm.weave.finish_call(child_call, output=result, op=op)
-                call_id = child_call.id
-            except Exception as e:
-                logger.error(f"Agent {self.agent_id} error during butchered weave child call: {e}")
-                result, other_child_call = await op.call(**inputs)
-                other_child_call.parent_id = message.parent_call_id
-                # I don't think this will work, but trying anyways. I think it's too late at this stage.
-                parent_call._children.append(other_child_call)
-                call_id = other_child_call.id
+
+            child_call = bm.weave.create_call(op, inputs=inputs, parent=parent_call, display_name=self.name, attributes=trace_params)
+            parent_call._children.append(child_call)
+            result = await self._process(**inputs)
+            bm.weave.finish_call(child_call, output=result, op=op)
+            call_id = child_call.id
 
         except Exception as e:
             # Catch unexpected errors during _process.

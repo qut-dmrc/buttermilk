@@ -120,7 +120,7 @@ def main(cfg: DictConfig) -> None:
             asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
-        case "batch":
+        case "batch_run":
             # Run batch jobs from the queue
             # max_jobs controls how many jobs to process before exiting
             # Each job gets a completely fresh orchestrator instance to ensure
