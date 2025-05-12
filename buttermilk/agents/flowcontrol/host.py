@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
 )
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.types import RunRequest
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -49,7 +50,6 @@ class HostAgent(Agent):
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
     # Track count of pending tasks per agent ID
     _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))
-    _participants_set_event: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)  # Event for participants being set
     _conductor_task: asyncio.Task | None = PrivateAttr(default=None)
     # Additional configuration
     max_wait_time: int = Field(
@@ -75,7 +75,6 @@ class HostAgent(Agent):
     ) -> None:
         """Initialize the agent."""
         self.callback_to_groupchat = callback_to_groupchat
-        self._participants_set_event.clear()
 
     async def _listen(
         self,
@@ -162,7 +161,7 @@ class HostAgent(Agent):
                 )
 
         # Handle conductor request to start running the flow
-        elif isinstance(message, ConductorRequest):
+        elif isinstance(message, RunRequest):
             if not self._conductor_task or self._conductor_task.done():
                 if self._conductor_task and self._conductor_task.done():
                     try:
@@ -174,7 +173,7 @@ class HostAgent(Agent):
                 logger.info(f"Host {self.agent_id} starting new conductor task.")
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
             else:
-                logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
+                logger.warning(f"Host {self.agent_id} received RunRequest but task is already running.")
 
         return None  # Explicitly return None if no other value is returned
 
@@ -248,12 +247,11 @@ class HostAgent(Agent):
             StepRequest: The next step request in the sequence.
 
         """
-        await self._participants_set_event.wait()
         for role in self._participants.keys():
             yield StepRequest(role=role, content=f"Executing step for {role}")
         yield StepRequest(role=END, content="Sequence completed.")
 
-    async def _run_flow(self, message: ConductorRequest) -> None:
+    async def _run_flow(self, message: RunRequest) -> None:
         """Run the predefined sequence of steps, waiting for task completion between steps.
 
         Args:
@@ -269,19 +267,17 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_id} starting flow execution.")
 
         # Initialize participants from the request
+        self._participants.update(message.parameters.get("participants", {}))
         if not self._participants:
-            self._participants.update(message.participants)
-            if not self._participants:
-                msg = "Host received ConductorRequest with no participants."
-                logger.error(f"{msg} Aborting.")
-                raise FatalError(msg)
-            # Signal that participants are now set
-            self._participants_set_event.set()
-            # Re-initialize generator now that participants are known (it waits on the event)
-            self._step_generator = self._sequence()
-            logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
+            msg = "Host received RunRequest with no participants."
+            logger.error(f"{msg} Aborting.")
+            raise FatalError(msg)
 
-        async for step in self._sequence():
+        # Initialize generator now that participants are known
+        self._step_generator = self._sequence()
+        logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
+
+        async for step in self._step_generator:
             if self.human_in_loop:
                 await self._wait_for_user(step)
                 if not self._user_confirmation or self._user_confirmation.confirm is False:

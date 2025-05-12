@@ -28,7 +28,7 @@ You should not refer to the analyst or their response in your answer; just expla
 
 <BEGIN EXPECTED ANSWER>
 {% for reason in expected['reasons'] %}
-- {{ reason }}
+{{ loop.index0 }}: {{ reason }}
 {% endfor %}
 <END EXPECTED ANSWER>
 
