@@ -90,8 +90,6 @@ class LLMScorer(LLMAgent):
     # Sets the expected output structure for the LLM call made by _process.
     _output_model: type[BaseModel] | None = QualScore
 
-    _name_components: list[str] = ["role", "model", "criteria", "unique_identifier"]
-
     async def _listen(
         self,
         message: GroupchatMessageTypes,  # Use the base type for compatibility

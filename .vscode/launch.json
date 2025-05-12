@@ -61,7 +61,7 @@
       "justMyCode": true,
       "args": [
         "+run=api",
-        "flows=[trans,simple,z]",
+        "flows=[trans,simple,z, judger]",
         "human_in_loop=${input:human_in_loop}",
         "llms=full",
         "ui=web"
