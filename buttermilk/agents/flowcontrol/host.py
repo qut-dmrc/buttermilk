@@ -161,18 +161,13 @@ class HostAgent(Agent):
 
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
-            if not self._conductor_task or self._conductor_task.done():
-                if self._conductor_task and self._conductor_task.done():
-                    try:
-                        self._conductor_task.result()
-                    except asyncio.CancelledError:
-                        logger.info("Previous conductor task was cancelled.")
-                    except Exception as e:
-                        logger.error(f"Previous conductor task ended with exception: {e}")
-                logger.info(f"Host {self.agent_id} starting new conductor task.")
-                self._conductor_task = asyncio.create_task(self._run_flow(message=message))
-            else:
+            if self._conductor_task and not self._conductor_task.done():
                 logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
+                return None
+
+            # If no task is running, start a new one
+            logger.info(f"Host {self.agent_id} starting new conductor task.")
+            self._conductor_task = asyncio.create_task(self._run_flow(message=message))
 
         return None  # Explicitly return None if no other value is returned
 
