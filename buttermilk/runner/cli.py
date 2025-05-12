@@ -106,7 +106,7 @@ def main(cfg: DictConfig) -> None:
     # Branch execution based on the configured UI mode.
     match cfg.run.mode:
         case "console":
-            ui = CLIUserAgent(name=MANAGER, session_id=uuid4().hex)
+            ui = CLIUserAgent(agent_name=MANAGER, session_id=uuid4().hex)
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(ui_type=cfg.ui,
                 flow=cfg.get("flow"),

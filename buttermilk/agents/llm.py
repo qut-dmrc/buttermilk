@@ -351,7 +351,7 @@ class LLMAgent(Agent):
             schema=self._output_model,  # Pass schema used for validation attempt
         )
         # Add agent role/name for context in logs/outputs
-        trace.metadata.update({"role": self.role, "name": self.name})
+        trace.metadata.update({"role": self.role, "name": self.agent_name})
 
         # 4. Wrap the trace in an AgentOutput
         response = AgentOutput(agent_id=self.agent_id,

@@ -390,7 +390,7 @@ class MockOrchestrator(Orchestrator):
 
         # Create a proper AgentConfig instance
         agent_info = AgentConfig(
-            agent_id=agent_id, name=agent_id,
+            agent_id=agent_id, agent_name=agent_id,
             description=f"{agent_id} agent for processing tasks",
             parameters={},
         )

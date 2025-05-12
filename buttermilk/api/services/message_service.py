@@ -55,7 +55,7 @@ class MessageService:
             else:
                 agent_info = AgentConfig(session_id=message.session_id if hasattr(message, "session_id") else str(uuid()),
                     agent_id=message.agent_id if hasattr(message, "agent_id") else CONDUCTOR,
-                    name=message.agent_name if hasattr(message, "agent_name") else CONDUCTOR,
+                    agent_name=message.agent_name if hasattr(message, "agent_name") else CONDUCTOR,
                     role=message.role if hasattr(message, "role") else CONDUCTOR,
                     description="",
                 )

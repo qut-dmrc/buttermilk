@@ -265,7 +265,7 @@ class AgentConfig(BaseModel):
 
     @computed_field
     @property
-    def name(self) -> str:
+    def agent_name(self) -> str:
         """Generates a human-friendly name for the agent instance based on its role and unique identifier.
 
         By default name is constructed from the `role`, `unique_identifier`, and any other specified components.
@@ -409,6 +409,6 @@ class AgentVariants(AgentConfig):
                         raise  # Re-raise by default
 
         if not generated_configs:  # Check if list is empty
-            raise FatalError(f"Could not create any agent variant configs for {self.role} {self.name}")
+            raise FatalError(f"Could not create any agent variant configs for {self.role} {self.agent_name}")
 
         return generated_configs

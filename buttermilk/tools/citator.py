@@ -22,7 +22,7 @@ class Citator(BaseModel):
     def _init_agent(self) -> Self:
         self._agent = LLMAgent(
             agent_id="citator",
-            name="Citator",
+            agent_name="Citator",
             description="Gets citation information from the first page or two.",
             parameters={"template": "citator", "model": self.model},
             inputs={"text_extract": "text_extract"},
