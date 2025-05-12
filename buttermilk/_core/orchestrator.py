@@ -12,7 +12,6 @@ from typing import Any, Self
 import pandas as pd
 import shortuuid  # For generating unique IDs
 import weave  # For tracing
-from langfuse.decorators import langfuse_context, observe
 from opentelemetry.trace import Span
 from pydantic import (
     BaseModel,
@@ -165,25 +164,12 @@ class Orchestrator(OrchestratorProtocol, ABC):
         self._flow_data.init(agent_roles)
         return self
 
-    # --- Tracing ---
-    @model_validator(mode="after")
-    def setup_tracing(self) -> Self:
-        self._tracing_attributes = {
-            **self.parameters,
-            "orchestrator": self.__class__.__name__,  # Use class name
-            "session_id": self.session_id,
-            "flow_description": self.description,
-        }
-
-        return self
-
     # --- Records ---
     async def load_data(self):
         self._data_sources = await prepare_step_df(self.data)
 
     # --- Public Execution Method ---
-    @observe()
-    async def run(self, request: RunRequest | None = None):
+    async def run(self, request: RunRequest) -> None:
         """Public entry point to start the orchestrator's flow execution.
 
         Sets up tracing context for the run and calls the internal `_run` method.
@@ -194,31 +180,21 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         """
         logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
-        # Define attributes for Weave tracing.
-        self._tracing_attributes.update({
-            "flow_name": request.flow if request else self.name,
-            "record": request.record_id if request else None,
-            "uri": request.uri if request else None,
-        })
+
+        # Define attributes for logging and tracing.
+
         try:
             assert bm.weave
-            display_name = request.flow if request else self.name
-            if request:
-                if criteria := request.parameters.get("criteria"):
-                    display_name = f"{display_name} {criteria}"
-                if request.record_id:
-                    display_name = f"{display_name}: {request.record_id}"
-            display_name = f"{display_name} {bm.run_info.run_id}"
 
-            langfuse_context.update_current_trace(name=display_name.strip(),
-                metadata=self._tracing_attributes,
-                session_id=self.session_id,
-            )
+            # langfuse_context.update_current_trace(name=display_name.strip(),
+            #     metadata=self._tracing_attributes,
+            #     session_id=self.session_id,
+            # )
 
             with weave.attributes(self._tracing_attributes):
-                await self._run(request=request, __weave={"display_name": display_name})
+                await self._run(request=request, __weave={"display_name": request.name})
 
-                logger.info(f"Orchestrator '{display_name}' run finished successfully.")
+                logger.info(f"Orchestrator '{request.name}' run finished successfully.")
 
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.
@@ -251,7 +227,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
     @weave.op
     @abstractmethod
-    async def _run(self, request: RunRequest | None = None):
+    async def _run(self, request: RunRequest):
         """Abstract method containing the main execution logic/control loop for the flow.
 
         Called by the public `run` method after Weave tracing setup. Subclasses

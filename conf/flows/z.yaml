@@ -5,7 +5,7 @@ defaults:
   - /agents:
     - ragzot
   - /agents@observers:
-    - host/assistant
+    - host/ra
 
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 description: Research assistant

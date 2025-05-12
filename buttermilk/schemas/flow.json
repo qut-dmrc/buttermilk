@@ -59,5 +59,10 @@
         "name": "error",
         "type": "JSON",
         "mode": "NULLABLE"
+    },
+    {
+        "name": "tracing_link",
+        "type": "STRING",
+        "mode": "REQUIRED"
     }
 ]

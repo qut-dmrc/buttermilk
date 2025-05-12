@@ -141,7 +141,7 @@ class AutogenOrchestrator(Orchestrator):
             for agent_cls, variant_config in step_config.get_configs(params=params):
                 # Define a factory function required by Autogen's registration.
                 if isinstance(agent_cls, type(Agent)):
-                    config_with_session = {**variant_config.model_dump(), **self.parameters, "session_id": self.session_id}
+                    config_with_session = {**variant_config.model_dump(), **self.parameters, "session_id": params.session_id}
 
                     # This function creates an instance of the AutogenAgentAdapter,
                     # wrapping the actual Buttermilk agent logic.

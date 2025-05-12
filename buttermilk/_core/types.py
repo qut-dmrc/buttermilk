@@ -420,3 +420,26 @@ class RunRequest(BaseModel):
         if self.batch_id and self.record_id:
             return f"{self.batch_id}:{self.record_id}"
         return shortuuid.uuid()
+
+    # --- Tracing ---
+    @computed_field
+    def tracing_attributes(self) -> dict:
+
+        metadata = {
+            **self.parameters,
+            "session_id": self.session_id,
+            "flow_name": self.flow,
+            "name": self.name,
+            "record_id": self.record_id,
+            "uri": self.uri,
+            "batch_id": self.batch_id,
+        }
+        metadata = {k: v for k, v in metadata.items() if v is not None}
+        return metadata
+
+    @computed_field
+    def name(self) -> str:
+        request_parts = [self.flow, self.parameters.get("record_id"), self.parameters.get("criteria"), self.session_id]
+        request_parts = [str(part) for part in request_parts if part]
+        display_name = " ".join(request_parts).strip()
+        return display_name
