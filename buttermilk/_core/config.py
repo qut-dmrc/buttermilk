@@ -1,5 +1,4 @@
 from collections.abc import Mapping, Sequence
-from contextlib import suppress
 from pathlib import Path
 from typing import (
     Annotated,
@@ -9,7 +8,6 @@ from typing import (
 )
 
 import cloudpathlib
-import jmespath
 from google.cloud.bigquery.schema import SchemaField
 from pydantic import (
     AfterValidator,
@@ -256,35 +254,10 @@ class AgentConfig(BaseModel):
 
     # Private Attributes (Internal state, often defaults or generated)
     unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
-    # Defines which attributes are combined to create the human-friendly 'name'.
-    _name_components: list[str] = ["role", "unique_identifier"]
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
     _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
-
-    @computed_field
-    @property
-    def agent_name(self) -> str:
-        """Generates a human-friendly name for the agent instance based on its role and unique identifier.
-
-        By default name is constructed from the `role`, `unique_identifier`, and any other specified components.
-        """
-        # Calculate the intended final name based on components
-        name_parts = []
-        inputs_dict = {**self.inputs, **self.parameters}
-        for comp in self._name_components:
-            # Get other components like unique_identifier, role etc.
-            part = None
-            with suppress(Exception):
-                # Search the data structure using the JMESPath expression
-                part = jmespath.search(comp, inputs_dict)
-            if part is not None and str(part):  # Ensure part is not None and not empty string
-                name_parts.append(str(part))
-
-        name = " ".join(name_parts)
-
-        return name or self.agent_id
 
     @model_validator(mode="after")
     def _generate_id(self) -> Self:

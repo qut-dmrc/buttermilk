@@ -71,13 +71,11 @@ class LLMAgent(Agent):
     # Private Attributes (managed internally)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(default_factory=list)
     _model: str = PrivateAttr(default="")  # Populated by init_model validator
-    # _name_components is inherited from Agent, used for generating agent ID/name.
+    # name_components is inherited from Agent, used for generating agent ID/name.
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     _model_client: AutoGenWrapper = PrivateAttr(default=None)  # Populated by init_model validator
     # Subclasses should override this if they expect specific structured output
     _output_model: type[BaseModel] | None = PrivateAttr(default=None)
-
-    _name_components: list[str] = ["role", "model", "unique_identifier"]
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:

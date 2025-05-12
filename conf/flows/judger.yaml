@@ -1,0 +1,16 @@
+# @package flows.judger
+# COMMENTED OUT # @package _global_
+defaults:
+  - /data: tja_train
+  - _self_
+  - /agents:
+      - judge
+  - /agents@observers:
+      - spy
+      - host/sequencer
+  - criteria@parameters.criteria: trans
+
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+name: "Judge"
+parameters:
+  human_in_loop: ${human_in_loop}
