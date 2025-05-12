@@ -12,7 +12,6 @@ from typing import Any, Self
 import pandas as pd
 import shortuuid  # For generating unique IDs
 import weave  # For tracing
-from opentelemetry.trace import Span
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -125,9 +124,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
     # Holds the primary data records being processed by the flow.
     _records: list[Record] = PrivateAttr(default_factory=list)
 
-    _otel_span: Span = PrivateAttr()
-    _tracing_attributes: dict[str, Any] = PrivateAttr(default={})
-
     # Pydantic Model Configuration
     model_config = ConfigDict(
         extra="forbid",  # Disallow extra fields in config unless explicitly handled by subclasses.
@@ -186,19 +182,14 @@ class Orchestrator(OrchestratorProtocol, ABC):
         try:
             assert bm.weave
 
-            # langfuse_context.update_current_trace(name=display_name.strip(),
-            #     metadata=self._tracing_attributes,
-            #     session_id=self.session_id,
-            # )
-
-            with weave.attributes(self._tracing_attributes):
+            with weave.attributes(request.tracing_attributes):
                 await self._run(request=request, __weave={"display_name": request.name})
 
                 logger.info(f"Orchestrator '{request.name}' run finished successfully.")
 
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.
-            logger.exception(f"Orchestrator '{self.name}' run failed: {e}")
+            logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e}")
             # Optionally re-raise or handle the error further.
 
     # --- Abstract & Core Internal Methods ---

@@ -423,6 +423,7 @@ class RunRequest(BaseModel):
 
     # --- Tracing ---
     @computed_field
+    @property
     def tracing_attributes(self) -> dict:
 
         metadata = {
@@ -439,7 +440,7 @@ class RunRequest(BaseModel):
 
     @computed_field
     def name(self) -> str:
-        request_parts = [self.flow, self.parameters.get("record_id"), self.parameters.get("criteria"), self.session_id]
+        request_parts = [self.flow, self.record_id, self.parameters.get("criteria")]
         request_parts = [str(part) for part in request_parts if part]
         display_name = " ".join(request_parts).strip()
         return display_name

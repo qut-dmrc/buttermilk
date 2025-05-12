@@ -10,6 +10,9 @@
     "workspaceFolder": "/src/buttermilk",
     "shutdownAction": "stopCompose",
     "remoteUser": "debian",
+    "runArgs": [
+        "--network=host"
+    ], 
     "containerEnv": {
     },
     "customizations": {

@@ -10,13 +10,16 @@ from buttermilk._core.config import RunRequest
 from buttermilk._core.constants import CONDUCTOR
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
 from buttermilk._core.types import Record
+from buttermilk.agents.differences import Differences
+from buttermilk.agents.evaluators.scorer import QualResults
+from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
 
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message", "record", "manager_request", "manager_response", "system_message", "user_message"]
+    type: Literal["chat_message", "record", "manager_request", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
     message_id: str | None = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
@@ -60,9 +63,19 @@ class MessageService:
                 message_type = "record"
                 preview = message.text
                 outputs = message
-            elif isinstance(message, (AgentTrace, AgentOutput)):
-                message_type = "chat_message"
-                outputs = message.outputs
+            elif isinstance(message, (AgentTrace, AgentOutput)) and message.outputs:
+                if isinstance(message.outputs, JudgeReasons):
+                    message_type = "judge_reasons"
+                    outputs = message.outputs
+                elif isinstance(message.outputs, QualResults):
+                    message_type = "qual_results"
+                    outputs = message.outputs
+                elif isinstance(message.outputs, Differences):
+                    message_type = "differences"
+                    outputs = message.outputs
+                else:
+                    message_type = "chat_message"
+                    outputs = message.outputs
             elif isinstance(message, ManagerRequest):
                 message_type = "manager_request"
             elif isinstance(message, ManagerMessage):
