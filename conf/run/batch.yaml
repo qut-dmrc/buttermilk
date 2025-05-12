@@ -1,39 +1,42 @@
+# @package _global_
 # Batch execution configuration
+
 defaults:
+  - _self_
   # ... other defaults
-  - /flows/criteria@batch.parameters.criteria: 
-    - trans 
 
-# Set mode and UI to batch
-mode: batch
-ui: batch
-human_in_loop: false
+name: bm_api
+job: flows
+run:
+  mode: batch_run
+  ui: batch
+  human_in_loop: false
 
-# Batch-specific configuration
-batch:
-  # Command to execute (create, list, status, cancel)
-  command: create
-  
-  # Whether to shuffle record IDs
-  shuffle: true
-  
-  # Maximum number of records to process (null for all)
-  max_records: null
-  
-  # Number of jobs to process concurrently
-  concurrency: 5
-  
-  # How to handle job failures (continue, stop)
-  error_policy: continue
-  
-  # Whether to wait for batch completion
-  wait: false
-  
-  # Whether the batch requires interactive input
-  interactive: false
-  
-  # Additional parameters to pass to each flow run
-  parameters: {}
-  
-  # Batch ID (required for status and cancel commands)
-  # batch_id: null
+  # Batch-specific configuration
+  batch:
+    # Command to execute (create, list, status, cancel)
+    command: create
+    
+    # Whether to shuffle record IDs
+    shuffle: true
+    
+    # Maximum number of records to process (null for all)
+    max_records: null
+    
+    # Number of jobs to process concurrently
+    concurrency: 5
+    
+    # How to handle job failures (continue, stop)
+    error_policy: continue
+    
+    # Whether to wait for batch completion
+    wait: false
+    
+    # Whether the batch requires interactive input
+    interactive: false
+    
+    # Additional parameters to pass to each flow run
+    parameters: {}
+    
+    # Batch ID (required for status and cancel commands)
+    # batch_id: null

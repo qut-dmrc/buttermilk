@@ -21,22 +21,25 @@ Your task is to qualitatively assess the reasoning provided. You will be provide
 
 You should not refer to the analyst or their response in your answer; just explain your evaluation of the reasoning provided.
 
-{% if instructions %}
+
+{%- if instructions -%}
 <BEGIN ORIGINAL INSTRUCTIONS>
 {{ instructions }}
 <END ORIGINAL INSTRUCTIONS>
-{% endif %}
+{%- endif -%}
 
 <BEGIN EXPECTED ANSWER>
-{{expected}}
+{% for reason in expected['reasons'] %}
+- {{ reason }}
+{% endfor %}
 <END EXPECTED ANSWER>
 
 # Placeholder:
-{{records}}
+{{records if reasons}}
 
 # User:
 {% for answer in answers %}
 <BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:4]}}>
 {{ answer.result }}
 <END DRAFT ANSWER>
-{% endfor %}
+{%- endfor -%}
