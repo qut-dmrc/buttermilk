@@ -25,7 +25,6 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
 )
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.types import RunRequest
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -161,7 +160,7 @@ class HostAgent(Agent):
                 )
 
         # Handle conductor request to start running the flow
-        elif isinstance(message, RunRequest):
+        elif isinstance(message, ConductorRequest):
             if not self._conductor_task or self._conductor_task.done():
                 if self._conductor_task and self._conductor_task.done():
                     try:
@@ -173,7 +172,7 @@ class HostAgent(Agent):
                 logger.info(f"Host {self.agent_id} starting new conductor task.")
                 self._conductor_task = asyncio.create_task(self._run_flow(message=message))
             else:
-                logger.warning(f"Host {self.agent_id} received RunRequest but task is already running.")
+                logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
 
         return None  # Explicitly return None if no other value is returned
 
@@ -251,7 +250,7 @@ class HostAgent(Agent):
             yield StepRequest(role=role, content=f"Executing step for {role}")
         yield StepRequest(role=END, content="Sequence completed.")
 
-    async def _run_flow(self, message: RunRequest) -> None:
+    async def _run_flow(self, message: ConductorRequest) -> None:
         """Run the predefined sequence of steps, waiting for task completion between steps.
 
         Args:
@@ -269,7 +268,7 @@ class HostAgent(Agent):
         # Initialize participants from the request
         self._participants.update(message.parameters.get("participants", {}))
         if not self._participants:
-            msg = "Host received RunRequest with no participants."
+            msg = "Host received ConductorRequest with no participants."
             logger.error(f"{msg} Aborting.")
             raise FatalError(msg)
 
