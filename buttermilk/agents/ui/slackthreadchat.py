@@ -20,7 +20,6 @@ from buttermilk._core.contract import (
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
     confirm_options,
-    dict_to_blocks,
     format_slack_message,
 )
 from buttermilk.agents.ui.generic import UIAgent
@@ -100,8 +99,6 @@ class SlackUIAgent(UIAgent):
         """Ask for user input from the UI."""
         if isinstance(message, ManagerRequest):
             extra_blocks = []
-            if message.prompt:
-                extra_blocks = dict_to_blocks(message.prompt)
             if isinstance(message, ManagerRequest) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons

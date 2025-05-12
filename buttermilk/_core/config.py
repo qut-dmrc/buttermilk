@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import (
     Annotated,
@@ -8,6 +9,7 @@ from typing import (
 )
 
 import cloudpathlib
+import jmespath
 from google.cloud.bigquery.schema import SchemaField
 from pydantic import (
     AfterValidator,
@@ -217,7 +219,6 @@ class AgentConfig(BaseModel):
         default="",
         description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
     )
-    name: str = Field(default="", description="A human-friendly name for the agent instance, often including the role and a unique ID.")
     description: str = Field(
         default="",
         description="A brief explanation of the agent's purpose and capabilities.",
@@ -255,64 +256,48 @@ class AgentConfig(BaseModel):
 
     # Private Attributes (Internal state, often defaults or generated)
     unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
-    base_name: str | None = Field(default=None, description="Base name component, initially derived from 'name'.", exclude=False)
     # Defines which attributes are combined to create the human-friendly 'name'.
-    _name_components: list[str] = ["base_name", "unique_identifier"]
+    _name_components: list[str] = ["role", "unique_identifier"]
 
     # Field Validators
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
     _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
 
-    @model_validator(mode="after")
-    def _generate_name_and_id(self) -> Self:
-        """Generates the unique `id` and formatted `name` for the agent instance after validation.
-        Designed to be idempotent to work with validate_assignment=True.
+    @computed_field
+    @property
+    def name(self) -> str:
+        """Generates a human-friendly name for the agent instance based on its role and unique identifier.
 
-        - Sets `id` based on `role` and `unique_identifier`.
-        - Sets `base_name` from the initial `name` if not already set.
-        - Sets final `name` by combining components defined in `_name_components`.
+        By default name is constructed from the `role`, `unique_identifier`, and any other specified components.
         """
-        # 1. Determine the intended base_name
-        # 'self.name' here holds the value provided *before* this validator potentially modifies it.
-        intended_base_name = self.base_name
-        if intended_base_name is None:
-            if not self.name:  # Check if initial name was provided
-                raise ValueError("AgentConfig requires an initial human-friendly 'name' field in configuration.")
-            intended_base_name = self.name  # Intend to use the initial name as base
-
-        # 2. Calculate the intended final ID
-        intended_id = f"{self.role}-{self.unique_identifier}"
-
-        # 3. Calculate the intended final name based on components
+        # Calculate the intended final name based on components
         name_parts = []
-        # Use the *intended* base_name for calculation, not necessarily the current self.base_name
-        current_base_name_for_calc = intended_base_name if intended_base_name is not None else ""
-
+        inputs_dict = {**self.inputs, **self.parameters}
         for comp in self._name_components:
-            if comp == "base_name":
-                part = current_base_name_for_calc
-            else:
-                # Get other components like unique_identifier, role etc.
-                part = getattr(self, comp, None)
-
+            # Get other components like unique_identifier, role etc.
+            part = None
+            with suppress(Exception):
+                # Search the data structure using the JMESPath expression
+                part = jmespath.search(comp, inputs_dict)
             if part is not None and str(part):  # Ensure part is not None and not empty string
                 name_parts.append(str(part))
 
-        intended_name = " ".join(name_parts)
+        name = " ".join(name_parts)
 
-        # 4. Assign values only if they differ from the calculated intended state
-        # This prevents infinite loops with validate_assignment=True
-        if self.base_name != intended_base_name:
-             # Only set base_name if it's currently None and we determined it from initial name
-             if self.base_name is None and intended_base_name is not None:
-                 self.base_name = intended_base_name
+        return name or self.agent_id
+
+    @model_validator(mode="after")
+    def _generate_id(self) -> Self:
+        """Generates the unique `id` for the agent instance after validation.
+        Designed to be idempotent to work with validate_assignment=True.
+
+        - Sets `id` based on `role` and `unique_identifier`.
+        """
+        # 2. Calculate the intended final ID
+        intended_id = f"{self.role}-{self.unique_identifier}"
 
         if self.agent_id != intended_id:
             self.agent_id = intended_id
-
-        if self.name != intended_name:
-            # Update the 'name' field to the final composed name
-            self.name = intended_name
 
         return self
 

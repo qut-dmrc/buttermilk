@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any, Self  # Added Type for Pydantic model hinting
 
 import pydantic
+import weave
 
 # Import Autogen components used for type hints and LLM interaction
 from autogen_core import CancellationToken, FunctionCall
@@ -13,7 +14,6 @@ from autogen_core.models import (
 )
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from pydantic import BaseModel, Field, PrivateAttr
-import weave
 
 # Buttermilk core imports
 from buttermilk._core.agent import Agent  # Base agent and message types
@@ -76,6 +76,8 @@ class LLMAgent(Agent):
     _model_client: AutoGenWrapper = PrivateAttr(default=None)  # Populated by init_model validator
     # Subclasses should override this if they expect specific structured output
     _output_model: type[BaseModel] | None = PrivateAttr(default=None)
+
+    _name_components: list[str] = ["role", "model", "unique_identifier"]
 
     @pydantic.model_validator(mode="after")
     def init_model(self) -> Self:
@@ -300,10 +302,6 @@ class LLMAgent(Agent):
 
         """
         logger.debug(f"Agent {self.agent_id} starting _process.")
-        if prompt := getattr(message, "prompt", None):
-            if message.parameters.get("prompt"):
-                logger.warning(f"Agent {self.agent_id}: Both prompt and parameters.prompt provided in AgentInput. Using AgentInput.prompt.")
-            message.parameters["prompt"] = prompt  # Override parameters with prompt from message
         try:
             # 1. Prepare messages for the LLM using the template
             llm_messages = await self._fill_template(

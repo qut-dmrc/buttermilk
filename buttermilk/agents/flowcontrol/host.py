@@ -261,7 +261,7 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_id} starting flow execution.")
 
         # Initialize participants from the request
-        self._participants.update(message.parameters.get("participants", {}))
+        self._participants.update(message.participants)
         if not self._participants:
             msg = "Host received ConductorRequest with no participants."
             logger.error(f"{msg} Aborting.")

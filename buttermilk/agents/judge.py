@@ -74,6 +74,7 @@ class Judge(LLMAgent):
     # LLMAgent's _process method will attempt to parse the LLM response into this model.
     _output_model: type[BaseModel] | None = JudgeReasons
 
+    _name_components: list[str] = ["role", "model","criteria", "unique_identifier"]
     # Initialization (`__init__`) is handled by the parent LLMAgent, which takes
     # configuration (like model, template, parameters) via its AgentConfig.
 

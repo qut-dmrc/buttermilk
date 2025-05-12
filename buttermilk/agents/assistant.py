@@ -10,7 +10,6 @@ from autogen_agentchat.messages import (
 from autogen_core import CancellationToken, MessageContext, RoutedAgent
 from autogen_core.memory import Memory
 from autogen_core.models import ChatCompletionClient  # Import RequestUsage
-from autogen_core.models._types import UserMessage
 from autogen_core.tools import BaseTool
 from pydantic import PrivateAttr
 
@@ -113,19 +112,7 @@ class AssistantAgentWrapper(Agent):
 
         # context_messages = inputs.context # Original didn't use this
 
-        # Revert message creation logic (assuming original used UserMessage or similar)
-        # This part needs careful checking against the original intent before async changes
-        # Let's assume it needed UserMessage based on previous context
-        if message.prompt:
-            # Use UserMessage as likely intended originally
-            messages_to_send.append(UserMessage(content=message.prompt))
-        elif message.inputs:
-            # Fallback: serialize inputs dict if no direct content
-            content_str = json.dumps(message.inputs)
-            messages_to_send.append(UserMessage(content=content_str))
-        else:
-            logger.debug(f"AssistantWrapper {self.role} received message with no content/inputs. Skipping.")
-            return None
+        raise NotImplementedError(f"AssistantWrapper {self.role} received message with no content/inputs. Skipping.")
 
         # --- Call AssistantAgent ---
         try:

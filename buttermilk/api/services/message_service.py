@@ -123,8 +123,6 @@ class MessageService:
                         flow=data.pop("flow"),
                         record_id=data.pop("record_id", None),
                         parameters=data,
-                        callback_to_ui=None,
-                        session_id=None,
                     )
                     return run_request
                 case "pull_task":
