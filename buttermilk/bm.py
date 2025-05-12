@@ -21,8 +21,7 @@ from typing import (
     ClassVar,
     TypeVar,
 )
-from rich import print
-from opentelemetry import trace
+
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
@@ -30,20 +29,20 @@ import pandas as pd
 import pydantic
 import shortuuid
 import weave
-from langfuse import Langfuse
-from weave.trace.weave_client import WeaveClient
 from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import aiplatform, bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from omegaconf import DictConfig
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from pydantic import (
     PrivateAttr,
     model_validator,
 )
+from rich import print
+from weave.trace.weave_client import WeaveClient
 
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from ._core.config import Project
 from ._core.llms import LLMs
 from ._core.log import logger
@@ -115,7 +114,7 @@ class Singleton:
 class BM(Singleton, Project):
     _gcp_project: str = PrivateAttr(default="")
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(
-        default=None
+        default=None,
     )  # Allow None initially
     _weave: WeaveClient = PrivateAttr()
 
@@ -135,7 +134,7 @@ class BM(Singleton, Project):
                 self._weave = weave.init(collection)
             else:
                 raise RuntimeError(
-                    "run_info/tracing details not set, cannot initialize Weave."
+                    "run_info/tracing details not set, cannot initialize Weave.",
                 )
         return self._weave
 
@@ -196,7 +195,7 @@ class BM(Singleton, Project):
             # This depends on how run_info is expected to be populated
             # For now, let's raise an error if it's critical
             raise ValueError(
-                "BM instance created without run_info, which is required for setup."
+                "BM instance created without run_info, which is required for setup.",
             )
 
         for cloud in self.clouds:
@@ -207,7 +206,7 @@ class BM(Singleton, Project):
                     cloud.project,  # type: ignore[attr-defined]
                 )
                 if hasattr(
-                    cloud, "quota_project_id"
+                    cloud, "quota_project_id",
                 ):  # Check attribute existence for safety
                     os.environ["google_billing_project"] = cloud.quota_project_id  # type: ignore[attr-defined]
 
@@ -243,48 +242,49 @@ class BM(Singleton, Project):
 
         # Ensure run_info exists before setting up tracing
         if self.tracing and self.run_info and self.tracing.enabled:
+            from opentelemetry.sdk import trace as trace_sdk
+
+            WANDB_BASE_URL = "https://trace.wandb.ai"
             collection = f"{self.run_info.name}-{self.run_info.job}"
-            # if self.tracing.provider == "traceloop":
-            #     from traceloop.sdk import Traceloop
+            OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
+            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
+            os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
+            # WANDB_API_KEY: get from https://wandb.ai/authorize
+            AUTH = base64.b64encode(f"api:{os.environ['WANDB_API_KEY']}".encode()).decode()
 
-            #     Traceloop.init(
-            #         disable_batch=True,
-            #         api_key=self.tracing.api_key,
-            #     )
+            OTEL_EXPORTER_OTLP_HEADERS = {
+                "Authorization": f"Basic {AUTH}",
+                "project_id": os.environ["WANDB_PROJECT"],
+            }
 
-            langfuse = Langfuse(
-                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                host=os.getenv("LANGFUSE_HOST"),
+            # Initialize the OpenTelemetry SDK
+            tracer_provider = trace_sdk.TracerProvider()
+
+            # Configure the OTLP exporter
+            exporter = OTLPSpanExporter(
+                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                headers=OTEL_EXPORTER_OTLP_HEADERS,
             )
 
-            LANGFUSE_AUTH = base64.b64encode(
-                f"{os.environ.get('LANGFUSE_PUBLIC_KEY')}:{os.environ.get('LANGFUSE_SECRET_KEY')}".encode()
-            ).decode()
+            # Add the exporter to the tracer provider
+            tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
 
-            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = (
-                os.environ.get("LANGFUSE_HOST") + "/api/public/otel"
-            )
-            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = (
-                f"Authorization=Basic {LANGFUSE_AUTH}"
-            )
-
-            # trace_provider = TracerProvider()
+            # OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
             # trace_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter()))
 
-            # # Sets the global default tracer provider
-            # trace.set_tracer_provider(trace_provider)
+            # # # Sets the global default tracer provider
+            # # trace.set_tracer_provider(trace_provider)
 
-            # # Creates a tracer from the global tracer provider
-            # self._tracer = trace.get_tracer(self.run_info.name)
+            # # # Creates a tracer from the global tracer provider
+            # # self._tracer = trace.get_tracer(self.run_info.name)
 
-            # # Initialize OpenLIT instrumentation.
-            # # # The disable_batch flag controls wheter to process traces immediately.
-            # openlit.init(tracer=self._tracer, disable_batch=False)
+            # # # Initialize OpenLIT instrumentation.
+            # # # # The disable_batch flag controls wheter to process traces immediately.
+            # # openlit.init(tracer=self._tracer, disable_batch=False)
 
             # pass
             logger.info(
-                f"Tracing set up, tracing to {os.environ.get('LANGFUSE_HOST')}."
+                f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT}.",
             )
 
     @property
@@ -301,7 +301,7 @@ class BM(Singleton, Project):
         # Provide default extension if None
         effective_extension = extension if extension is not None else ".json"
         result = save.save(
-            data=data, save_dir=save_dir, extension=effective_extension, **kwargs
+            data=data, save_dir=save_dir, extension=effective_extension, **kwargs,
         )
         logger.info(
             dict(
@@ -320,7 +320,7 @@ class BM(Singleton, Project):
         if self.logger_cfg and self.logger_cfg.type == "gcp":
             if not self.run_info:
                 raise RuntimeError(
-                    "run_info must be set before configuring GCP logging."
+                    "run_info must be set before configuring GCP logging.",
                 )
             if not hasattr(self.logger_cfg, "project"):
                 raise RuntimeError("GCP logger config missing 'project' attribute.")
@@ -395,7 +395,7 @@ class BM(Singleton, Project):
             message = f"{message} {resource}"  # Append resource info if available
 
         bm_logger.info(
-            message, extra=dict(run=self.run_info.model_dump() if self.run_info else {})
+            message, extra=dict(run=self.run_info.model_dump() if self.run_info else {}),
         )
 
         try:
@@ -410,7 +410,7 @@ class BM(Singleton, Project):
         # Ensure logger_cfg and project exist before creating client
         if not self.logger_cfg or not hasattr(self.logger_cfg, "project"):
             raise RuntimeError(
-                "Logger config with GCP project needed for GCS Log Client."
+                "Logger config with GCP project needed for GCS Log Client.",
             )
 
         if _REGISTRY.get("gcslogging") is None:
@@ -427,12 +427,12 @@ class BM(Singleton, Project):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
             if not hasattr(self, "_gcp_project"):  # Check again
                 raise RuntimeError(
-                    "GCP project not determined. Ensure GCP cloud config is present."
+                    "GCP project not determined. Ensure GCP cloud config is present.",
                 )
 
         if _REGISTRY.get("gcs") is None:
             _REGISTRY["gcs"] = storage.Client(
-                project=self._gcp_project, credentials=self._gcp_credentials_cached
+                project=self._gcp_project, credentials=self._gcp_credentials_cached,
             )  # Pass credentials
         return _REGISTRY["gcs"]
 
@@ -459,7 +459,7 @@ class BM(Singleton, Project):
             # Ensure the returned value is a dictionary
             if not isinstance(creds, dict):
                 raise TypeError(
-                    f"Expected credentials secret to be a dict, got {type(creds)}"
+                    f"Expected credentials secret to be a dict, got {type(creds)}",
                 )
             _REGISTRY["credentials"] = creds
         # Return type assertion for clarity
@@ -494,7 +494,7 @@ class BM(Singleton, Project):
             # Ensure connections is a dictionary before passing to LLMs
             if not isinstance(connections, dict):
                 raise TypeError(
-                    f"LLM connections loaded from secret/cache is not a dict: {type(connections)}"
+                    f"LLM connections loaded from secret/cache is not a dict: {type(connections)}",
                 )
 
             _REGISTRY["llms"] = LLMs(connections=connections)
@@ -508,12 +508,12 @@ class BM(Singleton, Project):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
             if not hasattr(self, "_gcp_project"):  # Check again
                 raise RuntimeError(
-                    "GCP project not determined. Ensure GCP cloud config is present."
+                    "GCP project not determined. Ensure GCP cloud config is present.",
                 )
 
         if _REGISTRY.get("bq") is None:
             _REGISTRY["bq"] = bigquery.Client(
-                project=self._gcp_project, credentials=self._gcp_credentials_cached
+                project=self._gcp_project, credentials=self._gcp_credentials_cached,
             )  # Pass credentials
         return _REGISTRY["bq"]
 
@@ -551,7 +551,7 @@ class BM(Singleton, Project):
 
             # Set write_disposition directly on the config object
             # job_config_dict["write_disposition"] = "WRITE_TRUNCATE" if overwrite else "WRITE_APPEND"
-            pass  # Will set on object below
+            # Will set on object below
 
         job_config = bigquery.QueryJobConfig(**job_config_dict)
         # Set attributes directly
@@ -570,10 +570,10 @@ class BM(Singleton, Project):
         if bytes_billed:
             approx_cost = bytes_billed * GOOGLE_BQ_PRICE_PER_BYTE
             bytes_billed_str = humanfriendly.format_size(
-                bytes_billed
+                bytes_billed,
             )  # Use different var name
             approx_cost_str = humanfriendly.format_number(
-                approx_cost
+                approx_cost,
             )  # Use different var name
         else:
             bytes_billed_str = "N/A"  # Assign to string var
