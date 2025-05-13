@@ -33,7 +33,7 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
         # Must be absolute
         path = os.getcwd() + "/conf"
 
-    overrides.append("name=notebook")
+    overrides.append("+run=notebook")
     overrides.append(f"job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):

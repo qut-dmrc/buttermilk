@@ -30,7 +30,7 @@
       "args": []
     },
     {
-      "name": "batch run",
+      "name": "batch create",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -41,9 +41,7 @@
         "+run=batch",
         "flows=[trans]",
         "llms=full",
-        "human_in_loop=${input:human_in_loop}",
-        "+max_jobs=2",
-        "ui=web",
+        "+flow=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"

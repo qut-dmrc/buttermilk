@@ -3,12 +3,14 @@
 
 defaults:
   - _self_
+  - /flows/criteria@run.batch.parameters.criteria: 
+    - trans 
   # ... other defaults
 
 name: bm_api
 job: flows
 run:
-  mode: batch_run
+  mode: batch
   ui: batch
   human_in_loop: false
 
