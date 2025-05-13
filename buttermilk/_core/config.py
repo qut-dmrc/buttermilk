@@ -264,6 +264,7 @@ class AgentConfig(BaseModel):
     # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
     _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
 
+    @computed_field
     @property
     def agent_name(self) -> str:
         """Generates a human-friendly name for the agent instance based on its role and unique identifier.

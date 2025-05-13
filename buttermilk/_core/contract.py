@@ -327,10 +327,6 @@ class AgentTrace(FlowMessage, AgentOutput):
         ...,
         description="The input for this call.",
     )
-    records_deprecated: list[Any] = Field(
-        default_factory=list,
-        description="List of data record IDs relevant to the current task.",
-    )
 
     # Stores the list of messages sent to the LLM during processing.
     messages: list[LLMMessage] = Field(

@@ -201,6 +201,7 @@ class Agent(AgentConfig):
         from buttermilk.bm import bm
         # Get the parent call context if available.
         parent_call = weave.get_current_call()
+        parent_call_id = None
         if message.parent_call_id:
             try:
                 parent_call = bm.weave.get_call(message.parent_call_id)
@@ -244,7 +245,7 @@ class Agent(AgentConfig):
             # Create the trace here with required values
             trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
                 agent_info=self._cfg,
-                inputs=final_input,
+                inputs=final_input, parent_call_id=parent_call_id,
             )
             trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
