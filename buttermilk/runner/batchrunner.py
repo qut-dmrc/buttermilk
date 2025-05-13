@@ -17,8 +17,8 @@ from buttermilk._core.batch import BatchJobStatus, BatchMetadata, BatchRequest
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
+from buttermilk.api.services.data_service import DataService
 from buttermilk.bm import logger
-from buttermilk.runner.batch_helper import BatchRunnerHelper
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.utils.utils import expand_dict
 
@@ -71,7 +71,7 @@ class BatchRunner(BaseModel):
         # Extract record IDs from the flow's data source
         try:
             # Use our helper class to get the record IDs
-            record_ids = 
+            record_ids = await DataService.get_records_for_flow(flow_name=batch_request.flow, flow_runner=self.flow_runner)
             logger.info(f"Extracted {len(record_ids)} record IDs for flow '{batch_request.flow}'")
         except Exception as e:
             logger.error(f"Failed to extract record IDs for flow '{batch_request.flow}': {e}")
@@ -108,11 +108,11 @@ class BatchRunner(BaseModel):
         # Apply iteration values
         for iteration_params in iteration_values:
             for record in record_ids:
-                job = RunRequest(
+                job = RunRequest(ui_type="batch",
                     batch_id=batch_metadata.id,
                     flow=batch_request.flow,
                     record_id=record["record_id"],
-                    parameters=iteration_params,
+                    parameters=iteration_params,callback_to_ui=None,
                 )
                 job_definitions.append(job)
 

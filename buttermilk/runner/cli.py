@@ -121,6 +121,14 @@ def main(cfg: DictConfig) -> None:
             asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
             bm.logger.info(f"Flow '{cfg.flow}' finished.")
 
+        case "batch":
+
+            bm.logger.info("Running batch manager...")
+            from buttermilk.runner.batch_cli import main as batch_main
+
+            # We're already in the hydra context, so we can just call the main function
+            batch_main(cfg)
+
         case "batch_run":
             # Run batch jobs from the queue
             # max_jobs controls how many jobs to process before exiting
