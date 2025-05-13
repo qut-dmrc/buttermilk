@@ -232,17 +232,21 @@ class AutogenOrchestrator(Orchestrator):
         try:
             # Stop the runtime
             if self._runtime._run_context:
-                # runtime is started
-                await self._runtime.stop()
+                # runtime is started. Call close() to stop and stop the agents.
+                await self._runtime.close()
+                logger.info("Autogen runtime stopped.")
+            await asyncio.sleep(2)  # Give it some time to properly shut down
 
             # Print weave link again
-            call = weave.get_current_call()
-            logger.info(f"Tracing link for weave: 🍩 {call.ui_url}")
+            try:
+                call = weave.get_current_call()
+                if call and hasattr(call, "ui_url"):
+                    logger.info(f"Tracing link: 🍩 {call.ui_url}")
+            except Exception:
+                pass
 
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
-        finally:
-            await asyncio.sleep(2)  # Give it some time to properly shut down
 
     @weave.op
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
@@ -303,14 +307,6 @@ class AutogenOrchestrator(Orchestrator):
             logger.exception(f"Unhandled exception: {e}")
         finally:
             await self._cleanup()
-
-            # Log completion - use try/except to handle possible None cases
-            try:
-                call = weave.get_current_call()
-                if call and hasattr(call, "ui_url"):
-                    logger.info(f"Tracing link: 🍩 {call.ui_url}")
-            except Exception:
-                pass
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use.

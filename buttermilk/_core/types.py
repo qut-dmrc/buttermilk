@@ -372,7 +372,10 @@ class RunRequest(BaseModel):
     flow: str = Field(..., description="The name of the flow to execute")
     prompt: str | None = Field(default="", description="The main prompt or question for the run.", validation_alias=AliasChoices("prompt", "q"))
     record_id: str | None = Field(default="", description="Record to lookup")
-    session_id: Any = Field(default=None, exclude=False)
+    session_id: str = Field(
+        default_factory=shortuuid.uuid,
+        description="A unique session id for this specific flow execution.",
+    )
     uri: str | None = Field(default="", description="URI to fetch")
     records: list[Record] = Field(default_factory=list, description="Input records, potentially including ground truth.")
     parameters: dict = Field(default_factory=dict, description="Additional parameters for flow execution")

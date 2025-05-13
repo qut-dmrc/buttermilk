@@ -216,8 +216,11 @@ class AutoGenWrapper(RetryWrapper):
             results = [results]
         outputs = []
         for result in results:
-            result.call_id = call.id
-            result.name = tool.name
+            try:
+                result.name = tool.name
+                result.call_id = call.id
+            except:
+                pass
             outputs.append(result)
         return outputs
 

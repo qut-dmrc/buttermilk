@@ -569,7 +569,7 @@ async def start_mock_orchestrator(flow_name="mock_flow", record_id="sample-recor
     from buttermilk._core.types import RunRequest
 
     # Create a basic run request
-    request = RunRequest(
+    request = RunRequest(ui_type="web", callback_to_ui=None,
         flow=flow_name,
         record_id=record_id,
         parameters={"criteria": ["test"]},

@@ -114,7 +114,7 @@ class MessageService:
 
             match message_type:
                 case "run_flow":
-                    run_request = RunRequest(ui_type="web",
+                    run_request = RunRequest(ui_type="web", callback_to_ui=None,
                         flow=data.pop("flow"),
                         record_id=data.pop("record_id", None),
                         parameters=data,

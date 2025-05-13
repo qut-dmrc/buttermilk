@@ -200,7 +200,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
                 # Example: Send input to AgentA, then AgentB
                 try:
                     # Step 1: Agent A
-                    step_a_request = StepRequest(role="AGENT_A_ROLE", prompt=initial_input.content) # Get role from self.agents keys
+                    step_a_request = StepRequest(role="AGENT_A_ROLE", content=initial_input.content) # Get role from self.agents keys
                     await self._execute_step(step_a_request) # Uses Autogen publish
 
                     # Need a way to wait for and get AgentA's output
