@@ -1,12 +1,20 @@
 
-from collections.abc import AsyncGenerator
+import asyncio
+from collections.abc import AsyncGenerator, Callable
+from enum import StrEnum
+from typing import Any
 
+from autogen_core import CancellationToken
+from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
-from buttermilk._core import AgentInput, StepRequest
+from buttermilk._core import AgentInput, ManagerMessage, StepRequest
 from buttermilk._core.constants import END, MANAGER
+from buttermilk._core.contract import GroupchatMessageTypes
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
+
+TRUNCATE_LEN = 1000
 
 
 class CallOnAgent(BaseModel):
@@ -48,15 +56,52 @@ class LLMHostAgent(LLMAgent, HostAgent):
         # First, say hello to the user
         yield StepRequest(
             role=MANAGER,
-            prompt="Hi! What would you like to do?",
+            content="Hi! What would you like to do?",
         )
         while True:
-            # With user feedback, call the LLM to get the next step
-            result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))
-
-            # Now call the agent specified in the result
-            next_step = StepRequest(**result.outputs)
-            yield next_step
+            # do nothing; we'll handle steps through the _listen method
+            await asyncio.sleep(5)
+            continue
 
         # This will never be reached, but is here for completeness
-        yield StepRequest(role=END, prompt="End of sequence")
+        yield StepRequest(role=END, content="End of sequence")
+
+    async def _listen(
+        self,
+        message: GroupchatMessageTypes,
+        *,
+        cancellation_token: CancellationToken,
+        source: str = "",
+        public_callback: Callable,
+        message_callback: Callable,
+        **kwargs: Any,
+    ) -> None:
+        """Listen to messages in the group chat respond to the manager."""
+        # Save messages to context
+        await super()._listen(
+            message=message,
+            cancellation_token=cancellation_token,
+            source=source,
+            public_callback=public_callback,
+            message_callback=message_callback,
+            **kwargs,
+        )
+        if isinstance(message, ManagerMessage):
+            # If the message is from the manager, we need to process it
+
+            # Assemble our list of participants as tools
+
+            participant_names = list(self._participants.keys())
+            RoleEnumType = StrEnum("RoleEnumType", {name: name for name in participant_names})
+
+            async def _call_on_agent(role: RoleEnumType, prompt: str) -> None:
+                """Call on another agent to perform an action."""
+                # Create a new message for the agent
+                choice = StepRequest(role=role, inputs={"prompt": prompt})
+                # Send the message to the agent
+                await self.callback_to_groupchat(choice)
+
+            self._tools_list = [FunctionTool(_call_on_agent, description="Call on another agent to perform an action.")]
+
+            # With user feedback, call the LLM to get the next step
+            result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))

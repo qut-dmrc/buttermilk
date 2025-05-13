@@ -152,6 +152,7 @@ class JobQueueClient(BaseModel):
 
         try:
             data = json.loads(message_data.decode("utf-8"))
+            data.update({"ui_type": "web"})
             run_request = RunRequest.model_validate(data)
             return run_request
         except pydantic.ValidationError as e:

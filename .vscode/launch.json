@@ -67,7 +67,26 @@
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
     },
-    {
+{
+  "name": "batch run",
+  "type": "debugpy",
+  "request": "launch",
+  "module": "buttermilk.runner.cli",
+  "cwd": "${workspaceFolder}",
+  "pythonArgs": [
+    "-Xfrozen_modules=off",
+    "-Xdev"
+  ],
+  "justMyCode": false,
+  "args": [
+    "+run=batch",
+    "run.mode=batch_run",
+    "flows=[trans]",
+  ],
+  "envFile": "${workspaceFolder}/.env",
+  "console": "integratedTerminal"
+},
+{
       "name": "zot",
       "type": "debugpy",
       "request": "launch",
