@@ -237,8 +237,7 @@ class Agent(AgentConfig):
         finally:
             if child_call:
                 # Mark the child call as complete, regardless of success or failure.
-               child_call.mark_complete()
-            bm.weave.finish_call(child_call, output=result, op=op)
+                bm.weave.finish_call(child_call, output=result, op=op)
             # Publish status update: Task Complete (including error if error)
             await public_callback(
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
