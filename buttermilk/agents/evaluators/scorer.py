@@ -145,6 +145,3 @@ class LLMScorer(LLMAgent):
             )
             # replace the outputs object
             score_output.outputs = score
-
-            # Publish the score back to the system using the provided callback.
-            await public_callback(score_output)
