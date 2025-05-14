@@ -52,7 +52,7 @@ Your response should be written for an external audience. Do not mention our int
 {# Raise an error if answers do not exist: #}{% if not answers %}{{ answers }}{% endif %}
 {# Loop through each provided draft answer. #}
 {% for answer in answers %}
-<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[:4]}}>
+<BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[-4:]}}>
 {{ answer.result }}
 <END DRAFT ANSWER>
 {% endfor %}
