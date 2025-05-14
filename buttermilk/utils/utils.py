@@ -41,7 +41,7 @@ def extract_url(text: str) -> str | None:
                 [
                     parsed_url.scheme,
                     parsed_url.netloc,
-                ]
+                ],
             ):  # Check for valid scheme and netloc
                 return word
         except ValueError:  # Invalid url
@@ -510,12 +510,52 @@ def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dic
     if isinstance(obj, pydantic.BaseModel):
         # Convert Pydantic model to dict, handles nested models automatically
         return obj.model_dump()
-    elif isinstance(obj, dict):
+    if isinstance(obj, dict):
         # Recursively process dictionary values
         return {k: pydantic_to_dict(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple)):
         # Recursively process list/tuple elements
         return [pydantic_to_dict(item) for item in obj]
-    else:
-        # Return other types as is
-        return obj
+    # Return other types as is
+    return obj
+
+
+def clean_empty_values(data):
+    """Recursively removes keys with empty values from a nested dictionary structure.
+    Empty values are: None, empty strings, empty lists, and empty dictionaries.
+    
+    Args:
+        data: Dictionary, list, or other value to clean
+        
+    Returns:
+        The cleaned data structure (modifies dictionaries in-place)
+
+    """
+    if isinstance(data, dict):
+        # Process each key in the dictionary
+        keys_to_delete = []
+        for key, value in list(data.items()):
+            # Recursively clean the value
+            cleaned_value = clean_empty_values(value)
+
+            # Check if the cleaned value is empty
+            if cleaned_value is None or cleaned_value == "" or (isinstance(cleaned_value, (dict, list)) and not cleaned_value):
+                keys_to_delete.append(key)
+            else:
+                data[key] = cleaned_value
+
+        # Remove empty keys
+        for key in keys_to_delete:
+            del data[key]
+        return data
+
+    if isinstance(data, list):
+        # Clean each element in the list
+        cleaned_list = [clean_empty_values(item) for item in data]
+        # Filter out empty values
+        return [item for item in cleaned_list
+                if not (item is None or
+                       item == "" or
+                       (isinstance(item, (dict, list)) and not item))]
+    # Return primitive values unchanged
+    return data
