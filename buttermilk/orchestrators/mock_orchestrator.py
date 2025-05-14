@@ -22,9 +22,9 @@ from buttermilk._core.contract import (
     AgentTrace,
     ErrorEvent,
     ManagerMessage,
-    ManagerRequest,
     TaskProgressUpdate,
     ToolOutput,
+    UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
@@ -473,7 +473,7 @@ class MockOrchestrator(Orchestrator):
             content=content,
         )
 
-    def _generate_manager_request(self, content=None, options=None) -> ManagerRequest:
+    def _generate_manager_request(self, content=None, options=None) -> UIMessage:
         """Generate a fake manager request"""
         if content is None:
             questions = [
@@ -491,7 +491,7 @@ class MockOrchestrator(Orchestrator):
                 num_options = random.randint(2, 4)
                 options = [f"Option {i + 1}" for i in range(num_options)]
 
-        return ManagerRequest(
+        return UIMessage(
             content=content,
             options=options,
         )

@@ -31,7 +31,7 @@ These components form the foundation of Buttermilk and are designed to be runtim
         *   `FlowMessage`: Base class for all messages.
         *   `AgentInput`: Standard input to an agent's `_process` method. Contains `content`, `context`, `inputs`, `records`, etc.
         *   `AgentTrace`: Standard output yielded by an agent's `_process` method. Contains `content`, `outputs`, `metadata`, `error`, etc.
-        *   `ManagerRequest`, `ManagerResponse`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
+        *   `UIMessage`, `ManagerResponse`, `ConductorRequest`: Control messages for UI interaction or specific orchestration patterns.
         *   `StepRequest`: Used by some orchestrators (`Selector`) to define the next agent to run and its parameters.
 
 ## Autogen Integration (Optional Runtime)

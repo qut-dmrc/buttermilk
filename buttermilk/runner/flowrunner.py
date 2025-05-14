@@ -15,7 +15,7 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
     FlowMessage,
-    ManagerRequest,
+    UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
@@ -77,7 +77,7 @@ class FlowRunContext(BaseModel):
                 self.websocket = None
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
-    async def send_message_to_ui(self, message: AgentTrace | ManagerRequest | Record | FlowEvent | FlowMessage) -> None:
+    async def send_message_to_ui(self, message: AgentTrace | UIMessage | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
         
         Args:

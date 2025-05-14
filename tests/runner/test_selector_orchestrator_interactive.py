@@ -11,9 +11,9 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ManagerMessage,
-    ManagerRequest,
     ManagerResponse,
     StepRequest,
+    UIMessage,
 )
 from buttermilk._core.types import Record
 from buttermilk.runner.selector import Selector
@@ -145,8 +145,8 @@ async def test_host_interaction_with_ui(selector_config):
     orchestrator._runtime.publish_message.assert_called_once()
     args = orchestrator._runtime.publish_message.call_args[0]
 
-    # First arg should be a ManagerRequest with the question
-    assert isinstance(args[0], ManagerRequest)
+    # First arg should be a UIMessage with the question
+    assert isinstance(args[0], UIMessage)
     assert host_question in args[0].content
     assert "Compare analyses" in args[0].content
 

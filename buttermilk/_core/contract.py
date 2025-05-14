@@ -419,7 +419,7 @@ class ConductorRequest(AgentInput):
     # No additional fields specific to ConductorRequest currently defined.
 
 
-class ManagerRequest(FlowMessage):
+class UIMessage(FlowMessage):
     """A request sent *to* the MANAGER (UI/User), typically asking for confirmation,
     feedback, or selection.
     Inherits content/outputs from `ManagerMessage` and role/prompt/description from `StepRequest`.
@@ -540,7 +540,7 @@ class HeartBeat(BaseModel):
 # Convenience types for type hinting.
 
 # Out-Of-Band (OOB) messages: Control, status, or other events outside the main agent-to-agent data flow.
-OOBMessages = Union[ManagerRequest, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
+OOBMessages = Union[UIMessage, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
 
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[

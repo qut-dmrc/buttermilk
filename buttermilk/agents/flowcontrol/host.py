@@ -18,11 +18,11 @@ from buttermilk._core.contract import (
     ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
-    ManagerRequest,
     OOBMessages,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
+    UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
 
@@ -120,6 +120,7 @@ class HostAgent(Agent):
 
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
+            self._step_starting.clear()
             agent_id_to_update = message.agent_id
             async with self._tasks_condition:
                 if agent_id_to_update in self._pending_tasks_by_agent:
@@ -182,30 +183,43 @@ class HostAgent(Agent):
             step: The proposed next step
             
         Returns:
-            None: This method does not return a value directly but sends a request.
+            None
 
         """
-        self._user_confirmation = None
-        logger.info(f"Requesting info from user about proposed step: {step}.")
-        confirmation_request = ManagerRequest(
-            content=str(step), options=["confirm", "reject"],  # Options for user confirmation
+        self._user_confirmation_received.clear()
+        # Send the request to the user
+        confirmation_request = UIMessage(
+            content=f"Confirm next step: {step.role}",
+            options=["confirm", "reject"],
         )
-        self._user_confirmation_received.clear()  # Reset the event for the next confirmation
         await self.callback_to_groupchat(confirmation_request)
 
-    async def _wait_for_user(self, step) -> ManagerMessage:
+    async def _wait_for_user(self, step) -> bool:
+        """Wait for user confirmation before proceeding with the next step.
+
+        Returns:
+            bool: True if user confirmed, False if rejected or timed out
+
+        """
         max_tries = self.max_user_confirmation_time // 60
-        if self.human_in_loop:
-            for i in range(max_tries):
-                logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
-                try:
-                    await self.request_user_confirmation(step)
-                    await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
-                    return self._user_confirmation
-                except TimeoutError:
-                    logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
-                    continue
-        raise FatalError("User did not respond in time.")
+        for i in range(max_tries):
+            logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
+            try:
+                await self.request_user_confirmation(step)
+                await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
+            except TimeoutError:
+                logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
+                continue
+            else:
+                # Check user's decision
+                if self._user_confirmation and getattr(self._user_confirmation, "confirm", False):
+                    logger.info(f"User confirmed step: {step.role}")
+                    return True
+                logger.info(f"User rejected step: {step.role}")
+                return False
+
+        logger.error("User did not respond in time.")
+        return False
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed."""
@@ -269,13 +283,10 @@ class HostAgent(Agent):
         logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
         async for next_step in self._step_generator:
-            if not await self.wait_check_last_step():
+            if not await self.wait_check_last_step_completions():
                 break
-            if self.human_in_loop:
-                await self._wait_for_user(next_step)
-                if not self._user_confirmation or self._user_confirmation.confirm is False:
-                    logger.info(f"User rejected step: {next_step.role}. Moving on.")
-                    continue
+            if self.human_in_loop and not self._wait_for_user(next_step):
+                continue
 
             await self._execute_step(next_step)
 
@@ -283,7 +294,7 @@ class HostAgent(Agent):
 
         # --- Sequence finished ---
 
-    async def wait_check_last_step(self) -> bool:
+    async def wait_check_last_step_completions(self) -> bool:
         """Decide what to do if the last step did not complete."""
         # Wait for pending tasks to complete
         last_step_successful = await self._wait_for_all_tasks_complete()

@@ -176,7 +176,7 @@ class Agent(AgentConfig):
 
         Returns:
             Either an AgentTrace for standard agent results, 
-            or a direct message type (StepRequest, ManagerRequest, ManagerMessage)
+            or a direct message type (StepRequest, UIMessage, ManagerMessage)
             for flow control agents, or an ErrorEvent if there were errors.
 
         """
