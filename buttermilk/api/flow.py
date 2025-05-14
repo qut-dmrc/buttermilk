@@ -149,7 +149,11 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
             logger.debug(f"Accepting WebSocket connection for session {session_id}")
             await websocket.accept()
         flow_runner: FlowRunner = websocket.app.state.flow_runner
-        session = flow_runner.get_session(session_id=session_id, websocket=websocket)
+        if not (session := flow_runner.get_websocket_session(session_id=session_id, websocket=websocket)):
+            logger.error(f"Session {session_id} not found.")
+            await websocket.close()
+            raise HTTPException(status_code=404, detail="Session not found")
+
         task = None
         # Listen for messages from the client
         async for run_request in session.monitor_ui():

@@ -130,9 +130,9 @@ class HostAgent(Agent):
                     # If count reaches zero, remove the agent from pending
                     if self._pending_tasks_by_agent[agent_id_to_update] == 0:
                         del self._pending_tasks_by_agent[agent_id_to_update]
-                        logger.info(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
+                        logger.debug(f"{log_prefix} Agent {agent_id_to_update} has no more pending tasks.")
                     else:
-                         logger.info(
+                         logger.debug(
                             f"{log_prefix} "
                             f"Agent {agent_id_to_update} has {self._pending_tasks_by_agent[agent_id_to_update]} remaining tasks. "
                             f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",

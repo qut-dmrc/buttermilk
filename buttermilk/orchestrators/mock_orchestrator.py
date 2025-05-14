@@ -155,7 +155,7 @@ class MockOrchestrator(Orchestrator):
                     self._generate_agent_trace,
                     self._generate_progress_update,
                     self._generate_error_event,
-                    self._generate_manager_request,
+                    self._generate_ui_message,
                     self._generate_tool_output,
                     self._generate_record,
                 ])
@@ -265,7 +265,7 @@ class MockOrchestrator(Orchestrator):
             await asyncio.sleep(1)
 
             # Step 4: User interaction
-            user_request = self._generate_manager_request(
+            user_request = self._generate_ui_message(
                 content="Should I proceed with the detailed analysis or generate a summary?",
                 options=["Detailed analysis", "Generate summary"],
             )
@@ -473,7 +473,7 @@ class MockOrchestrator(Orchestrator):
             content=content,
         )
 
-    def _generate_manager_request(self, content=None, options=None) -> UIMessage:
+    def _generate_ui_message(self, content=None, options=None) -> UIMessage:
         """Generate a fake manager request"""
         if content is None:
             questions = [

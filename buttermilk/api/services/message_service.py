@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from shortuuid import uuid
 
 from buttermilk._core import AgentConfig, TaskProcessingComplete, UIMessage
-from buttermilk._core.agent import AgentOutput, AgentTrace, TaskProcessingStarted
+from buttermilk._core.agent import AgentTrace, TaskProcessingStarted
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
 from buttermilk._core.types import Record
@@ -14,11 +14,13 @@ from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.bm import logger
 
+PREVIEW_LENGTH = 200
+
 
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message", "record", "manager_request", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
+    type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
     message_id: str | None = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
@@ -40,60 +42,34 @@ class MessageService:
             dict[str, Any] | None: The serialized message or None if not serializable
 
         """
-        if message is None:
-            return None
-        if isinstance(message, ChatMessage):
-            # Already formatted
-            return message
-
-        if isinstance(message, AgentTrace) and message.outputs:
-            # Send the unwrapped message instead of the AgentTrace object
-            outputs = message.outputs
-
-        """OOBMessages = Union[UIMessage, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
-
-# Group Chat messages: Standard outputs shared among participating agents.
-GroupchatMessageTypes = Union[
-    AgentTrace,
-    ToolOutput, AgentOutput, ManagerMessage,
-    AgentInput,
-    Record,
-]
-
-# All possible message types used within the system.
-AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput]
-"""
-        call_id = message.call_id if hasattr(message, "call_id") else str(uuid())
-        message_type = None
-        preview = message.content if hasattr(message, "content") else None
         try:
-            if hasattr(message, "agent_info"):
-                agent_info = message.agent_info
-            else:
-                agent_info = AgentConfig()
+            if message is None:
+                return None
+            if isinstance(message, AgentTrace) and message.outputs:
+                # Send the unwrapped message instead of the AgentTrace object
+                message = message.outputs
 
-            if isinstance(message, Record):
-                message_type = "record"
-                preview = message.text
-                outputs = message
-            elif isinstance(message, (AgentTrace, AgentOutput)) and message.outputs:
-                if isinstance(message.outputs, JudgeReasons):
-                    message_type = "judge_reasons"
-                    outputs = message.outputs
-                elif isinstance(message.outputs, QualResults):
-                    message_type = "qual_results"
-                    outputs = message.outputs
-                elif isinstance(message.outputs, Differences):
-                    message_type = "differences"
-                    outputs = message.outputs
-                else:
-                    message_type = "chat_message"
-                    outputs = message.outputs
-            elif isinstance(message, UIMessage):
-                message_type = "manager_request"
-            elif isinstance(message, ManagerMessage):
+            if isinstance(message, ChatMessage):
+                # Already formatted
+                return message
+            if isinstance(message, ManagerMessage):
                 # Message from UI to chat; don't send back to UI
                 return None
+
+            message_type = None
+            call_id = message.call_id if hasattr(message, "call_id") else None
+            agent_info = message.agent_info if hasattr(message, "agent_info") else AgentConfig()
+            preview = message.preview if hasattr(message, "preview") else str(message)[PREVIEW_LENGTH:]
+            if isinstance(message, Record):
+                message_type = "record"
+            if isinstance(message, JudgeReasons):
+                message_type = "judge_reasons"
+            elif isinstance(message, QualResults):
+                message_type = "qual_results"
+            elif isinstance(message, Differences):
+                message_type = "differences"
+            elif isinstance(message, UIMessage):
+                message_type = "ui_message"
             elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
                 message_type = "system_message"
             else:
@@ -104,7 +80,7 @@ AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput]
             output = ChatMessage(message_id=call_id,
                 type=message_type,
                 preview=preview,
-                outputs=outputs,
+                outputs=message,
                 agent_info=agent_info,
                 timestamp=datetime.datetime.now(),
             )
@@ -144,7 +120,7 @@ AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput]
                 case "pull_tox":
                     from buttermilk.api.job_queue import JobQueueClient
                     return await JobQueueClient().pull_tox_example()
-                case "manager_request":
+                case "ui_message":
                     return UIMessage(**data)
                 case "manager_response":
                     return ManagerMessage(**data)
