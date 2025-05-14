@@ -62,7 +62,7 @@ class MessageService:
             preview = message.preview if hasattr(message, "preview") else str(message)[PREVIEW_LENGTH:]
             if isinstance(message, Record):
                 message_type = "record"
-            if isinstance(message, JudgeReasons):
+            elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):
                 message_type = "qual_results"
