@@ -134,9 +134,11 @@ class FlowRunner(BaseModel):
         if session_id not in self.sessions and not websocket:
             return None
         if session_id not in self.sessions:
-            logger.debug(f"Creating new session for {session_id} with WebSocket")
+            logger.info(f"Creating new session for {session_id} with WebSocket")
             self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
-        elif self.sessions[session_id].websocket is None:
+        elif websocket is not None:
+            # Replace the existing WebSocket connection
+            logger.info(f"Updating WebSocket for existing session {session_id}")
             self.sessions[session_id].websocket = websocket
         return self.sessions[session_id]
 
