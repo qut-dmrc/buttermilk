@@ -14,8 +14,8 @@ from buttermilk._core.contract import (
     AgentTrace,
     GroupchatMessageTypes,
     ManagerMessage,
-    ManagerRequest,
     OOBMessages,
+    UIMessage,
 )
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
@@ -93,13 +93,13 @@ class SlackUIAgent(UIAgent):
 
     async def _request_input(
         self,
-        message: ManagerRequest,
+        message: UIMessage,
         **kwargs,
     ) -> None:
         """Ask for user input from the UI."""
-        if isinstance(message, ManagerRequest):
+        if isinstance(message, UIMessage):
             extra_blocks = []
-            if isinstance(message, ManagerRequest) and message.options is not None:
+            if isinstance(message, UIMessage) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons
                     confirm_blocks = confirm_bool(
@@ -148,7 +148,7 @@ class SlackUIAgent(UIAgent):
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken = None, **kwargs) -> AgentTrace | None:
         """Tell the user we're expecting some data, but don't wait around"""
-        if isinstance(message, ManagerRequest):
+        if isinstance(message, UIMessage):
             await self._request_input(message)
 
     async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
@@ -294,7 +294,7 @@ class SlackUIAgent(UIAgent):
     ) -> OOBMessages:
         """Handle non-standard messages if needed (e.g., from orchestrator)."""
         # Ask for input if we need to
-        if isinstance(message, ManagerRequest):
+        if isinstance(message, UIMessage):
             await self._request_input(message)
         else:
             # otherwise just send to UI

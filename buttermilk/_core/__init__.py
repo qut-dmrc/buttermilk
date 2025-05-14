@@ -8,12 +8,12 @@ from .contract import (
     GroupchatMessageTypes as GroupchatMessageTypes,
     HeartBeat as HeartBeat,
     ManagerMessage as ManagerMessage,
-    ManagerRequest as ManagerRequest,
     OOBMessages as OOBMessages,
     ProceedToNextTaskSignal as ProceedToNextTaskSignal,
     StepRequest as StepRequest,
     TaskProcessingComplete as TaskProcessingComplete,
     ToolOutput as ToolOutput,
+    UIMessage as UIMessage,
 )
 
 ALL = [
@@ -25,7 +25,7 @@ ALL = [
     "AgentInput",
     "AgentTrace",
     "ManagerMessage",
-    "ManagerRequest",
+    "UIMessage",
     "ManagerResponse",
     "TaskProcessingComplete",
     "OOBMessages",

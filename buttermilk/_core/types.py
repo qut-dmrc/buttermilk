@@ -381,7 +381,7 @@ class RunRequest(BaseModel):
     parameters: dict = Field(default_factory=dict, description="Additional parameters for flow execution")
 
     # Exclude; these fields are needed for some clients, but we don't need to keep them after initialisation
-    callback_to_ui: Any = Field(None, exclude=True)
+    callback_to_ui: Any | None = Field(default=None, exclude=True)
     ui_type: str = Field(..., description="Type of UI to use for this run", exclude=True)
 
     # Batch processing fields

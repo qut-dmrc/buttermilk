@@ -17,9 +17,9 @@ from buttermilk._core.contract import (
     ErrorEvent,
     GroupchatMessageTypes,
     ManagerMessage,
-    ManagerRequest,
     StepRequest,
     ToolOutput,
+    UIMessage,
 )
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
@@ -115,7 +115,7 @@ class FetchAgent(FetchRecord, Agent):
             )
             await public_callback(output)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | ManagerRequest | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | UIMessage | ManagerMessage | ToolOutput | ErrorEvent:
         result = None
         if isinstance(message, AgentInput):
             uri = message.inputs.get("uri")

@@ -25,9 +25,9 @@ from buttermilk._core.contract import (
     FlowMessage,  # Base type for messages
     GroupchatMessageTypes,  # Union type for messages in group chat
     ManagerMessage,  # Responses sent *from* the manager (this agent)
-    ManagerRequest,  # Requests sent *to* the manager (this agent)
     TaskProcessingComplete,  # Status updates
     ToolOutput,  # Potentially displayable tool output
+    UIMessage,  # Requests sent *to* the manager (this agent)
 )
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
@@ -42,7 +42,7 @@ console = Console(highlighter=JSONHighlighter())
 FormattableMessages = Union[
     AgentTrace,
     TaskProcessingComplete,
-    ManagerRequest,
+    UIMessage,
     ToolOutput,
     AgentInput,
     Record,
@@ -186,7 +186,7 @@ class CLIUserAgent(UIAgent):
                     output_lines.append(f"```json\n{json.dumps(message.inputs, indent=2)}\n```")
                 # Could add context/records display here if needed
 
-            elif isinstance(message, ManagerRequest):
+            elif isinstance(message, UIMessage):
                 output_lines.append(f"### Request:\n{message.content}")
                 # Often includes a plan or question needing confirmation
 
@@ -245,7 +245,7 @@ class CLIUserAgent(UIAgent):
         """Handles Out-Of-Band messages, displaying relevant ones."""
         logger.debug(f"{self.agent_id} received OOB message from {source}: {type(message).__name__}")
         # Check if the specific OOB message type is one we want to display.
-        displayable_types = (TaskProcessingComplete, ManagerRequest, ToolOutput)
+        displayable_types = (TaskProcessingComplete, UIMessage, ToolOutput)
         if isinstance(message, displayable_types):
             if msg_markdown := self._fmt_msg(message, source=source):
                 self._console.print(msg_markdown)

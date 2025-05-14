@@ -18,6 +18,7 @@ from pydantic import BaseModel, PrivateAttr
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
 from buttermilk.bm import bm, logger
+from buttermilk.toxicity.tox_data import toxic_record
 
 
 class JobQueueClient(BaseModel):
@@ -57,6 +58,13 @@ class JobQueueClient(BaseModel):
 
         return self
 
+    async def pull_tox_example(self) -> RunRequest:
+        record = toxic_record()
+
+        data = {"ui_type": "web", "parameters": {"criteria": "criteria_ordinary"}}
+        request = RunRequest(flow="tox", records=[record], **data)
+        return request
+
     async def pull_single_task(self) -> RunRequest | None:
         """Pull a single task from Pub/Sub and process it."""
         try:
@@ -77,7 +85,7 @@ class JobQueueClient(BaseModel):
 
         request = await self.pull_single_task()
         if request:
-            await self._process_message(run_request=request, wait=True)
+            await self._process_run_request(run_request=request, wait=True)
 
     async def pull_tasks(self) -> None:
         """Continuously pull tasks from Pub/Sub when the system is idle."""
@@ -170,7 +178,7 @@ class JobQueueClient(BaseModel):
                 logger.error(f"Failed to ack malformed message (ack_id: {ack_id}): {ack_err}")
         return None
 
-    async def _process_message(self, run_request: RunRequest, wait: bool = False) -> None:
+    async def _process_run_request(self, run_request: RunRequest, wait: bool = False) -> None:
         """Parse and dispatch a single message from the Pub/Sub queue."""
         self._active_jobs += 1
         try:

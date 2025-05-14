@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
-from buttermilk._core import AgentConfig, ManagerRequest, TaskProcessingComplete
+from buttermilk._core import AgentConfig, TaskProcessingComplete, UIMessage
 from buttermilk._core.agent import AgentOutput, AgentTrace, TaskProcessingStarted
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
@@ -43,10 +43,28 @@ class MessageService:
         if message is None:
             return None
         if isinstance(message, ChatMessage):
+            # Already formatted
             return message
+
+        if isinstance(message, AgentTrace) and message.outputs:
+            # Send the unwrapped message instead of the AgentTrace object
+            outputs = message.outputs
+
+        """OOBMessages = Union[UIMessage, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
+
+# Group Chat messages: Standard outputs shared among participating agents.
+GroupchatMessageTypes = Union[
+    AgentTrace,
+    ToolOutput, AgentOutput, ManagerMessage,
+    AgentInput,
+    Record,
+]
+
+# All possible message types used within the system.
+AllMessages = Union[GroupchatMessageTypes, OOBMessages, AgentInput]
+"""
         call_id = message.call_id if hasattr(message, "call_id") else str(uuid())
         message_type = None
-        outputs = message.outputs if hasattr(message, "outputs") else message
         preview = message.content if hasattr(message, "content") else None
         try:
             if hasattr(message, "agent_info"):
@@ -71,7 +89,7 @@ class MessageService:
                 else:
                     message_type = "chat_message"
                     outputs = message.outputs
-            elif isinstance(message, ManagerRequest):
+            elif isinstance(message, UIMessage):
                 message_type = "manager_request"
             elif isinstance(message, ManagerMessage):
                 # Message from UI to chat; don't send back to UI
@@ -114,7 +132,7 @@ class MessageService:
 
             match message_type:
                 case "run_flow":
-                    run_request = RunRequest(ui_type="web", callback_to_ui=None,
+                    run_request = RunRequest(ui_type="web",
                         flow=data.pop("flow"),
                         record_id=data.pop("record_id", None),
                         parameters=data,
@@ -123,8 +141,11 @@ class MessageService:
                 case "pull_task":
                     from buttermilk.api.job_queue import JobQueueClient
                     return await JobQueueClient().pull_single_task()
+                case "pull_tox":
+                    from buttermilk.api.job_queue import JobQueueClient
+                    return await JobQueueClient().pull_tox_example()
                 case "manager_request":
-                    return ManagerRequest(**data)
+                    return UIMessage(**data)
                 case "manager_response":
                     return ManagerMessage(**data)
                 case "TaskProcessingComplete":

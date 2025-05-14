@@ -1,8 +1,3 @@
----
-inputs:
-  - criteria
-  - record
----
 {% from '_macros.jinja2' import render_or_include with context %}
 # System:
 You are a careful and precise auditor. You will be provided with a set of criteria and some material to be assessed.
@@ -15,6 +10,7 @@ You are a careful and precise auditor. You will be provided with a set of criter
 {# this ensures we raise an error if the records are not provided #}
 {{records}}
 {% endif %}
+
 # Placeholder:
 {{records}}
 
