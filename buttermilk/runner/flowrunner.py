@@ -47,7 +47,6 @@ class FlowRunContext(BaseModel):
             # Check if the WebSocket is connected
             if not self.websocket or self.websocket.client_state != WebSocketState.CONNECTED:
                 logger.debug(f"WebSocket not connected for session {self.session_id}")
-                await asyncio.sleep(0.1)
                 continue
 
             try:
@@ -71,10 +70,10 @@ class FlowRunContext(BaseModel):
 
             except WebSocketDisconnect:
                 logger.info(f"Client {self.session_id} disconnected.")
-                self.websocket = None
+                # self.websocket = None
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
-                self.websocket = None
+                # self.websocket = None
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
     async def send_message_to_ui(self, message: AgentTrace | UIMessage | Record | FlowEvent | FlowMessage) -> None:
@@ -121,7 +120,7 @@ class FlowRunner(BaseModel):
 
     sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions
 
-    def get_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext:
+    def get_websocket_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
         """Get or create a session for the given session ID.
         
         Args:
@@ -132,9 +131,12 @@ class FlowRunner(BaseModel):
             A FlowRunContext object representing the session
 
         """
+        if session_id not in self.sessions and not websocket:
+            return None
         if session_id not in self.sessions:
+            logger.debug(f"Creating new session for {session_id} with WebSocket")
             self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
-        elif self.sessions[session_id].websocket is None and websocket is not None:
+        elif self.sessions[session_id].websocket is None:
             self.sessions[session_id].websocket = websocket
         return self.sessions[session_id]
 
@@ -235,7 +237,11 @@ class FlowRunner(BaseModel):
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol
-        _session = self.get_session(run_request.session_id)
+        if run_request.session_id not in self.sessions:
+            # Create a new session if it doesn't exist
+            self.sessions[run_request.session_id] = FlowRunContext(session_id=run_request.session_id)
+
+        _session = self.sessions[run_request.session_id]
         _session.flow_name = run_request.flow
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()

@@ -255,7 +255,7 @@ class Agent(AgentConfig):
             # --- Langfuse tracing ---
             langfuse_context.update_current_observation(name=self.agent_name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
-        logger.info(f"Agent {self.agent_id} {self.agent_name} finished task {message}.")
+        logger.debug(f"Agent {self.agent_id} {self.agent_name} finished task {message}.")
         return trace
 
     @abstractmethod
