@@ -8,6 +8,7 @@ and processes them when the system is idle (no interactive API or websocket acti
 
 import asyncio
 import json
+import uuid
 from typing import Any, Self
 
 import pydantic
@@ -151,8 +152,13 @@ class JobQueueClient(BaseModel):
         message_data = message.message.data
 
         try:
-            data = json.loads(message_data.decode("utf-8"))
-            data.update({"ui_type": "web"})
+            # Add default fields that are likely missing because we're in batch mode
+            data = {"ui_type": "web", "session_id": uuid.uuid4().hex, "callback_to_ui": None}
+
+            # Decode the message data and parse it into a RunRequest
+            incoming = json.loads(message_data.decode("utf-8"))
+            incoming = {k: v for k, v in incoming.items() if v}
+            data.update(incoming)
             run_request = RunRequest.model_validate(data)
             return run_request
         except pydantic.ValidationError as e:

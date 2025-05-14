@@ -45,6 +45,7 @@ class HostAgent(Agent):
     _step_generator: AsyncGenerator[StepRequest, None] | None = PrivateAttr(default=None)
     # Condition variable to synchronize task completion based on pending agents
     _tasks_condition: asyncio.Condition = PrivateAttr(default_factory=asyncio.Condition)
+    _step_starting: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _pending_tasks_by_agent: defaultdict[str, int] = PrivateAttr(default_factory=lambda: defaultdict(int))
     _participants: dict[str, Any] = PrivateAttr(default_factory=dict)  # Stores role descriptions
     # Track count of pending tasks per agent ID
@@ -206,33 +207,30 @@ class HostAgent(Agent):
                     continue
         raise FatalError("User did not respond in time.")
 
-    async def _wait_for_all_tasks_complete(self) -> None:
+    async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed."""
         try:
             async with self._tasks_condition:
                 logger.info(f"Waiting for pending tasks to complete: {dict(self._pending_tasks_by_agent)}...")
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 await asyncio.wait_for(
-                    self._tasks_condition.wait_for(lambda: not self._pending_tasks_by_agent),
+                    self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
                     timeout=self.max_wait_time,
                 )
-        except TimeoutError as e:
+                return True
+        except TimeoutError:
             # Lock is released automatically on timeout exception from wait_for
             msg = (
                 f"Timeout waiting for task completion condition. "
                 f"Pending tasks: {dict(self._pending_tasks_by_agent)} after {self.max_wait_time}s."
             )
-            logger.error(f"{msg} Aborting.")
-            # signal end to the conductor
-            await self.callback_to_groupchat(StepRequest(role=END, content="Timeout waiting for task completion."))
-            # No need to manually reset count or notify here, but raise FatalError
-            raise FatalError(msg) from e
+            logger.warning(msg)
+            self._step_starting.clear()  # Reset the event to allow for new steps
         except Exception as e:
             # Catch other potential errors during wait
-            # signal end to the conductor
-            await self.callback_to_groupchat(StepRequest(role=END, content=f"Unexpected error during task completion wait: {e}"))
             logger.exception(f"Unexpected error during task completion wait: {e}")
             raise
+        return False
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute.
@@ -271,28 +269,41 @@ class HostAgent(Agent):
         self._step_generator = self._sequence()
         logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
 
-        async for step in self._step_generator:
+        async for next_step in self._step_generator:
+            await self.wait_check_last_step()
             if self.human_in_loop:
-                await self._wait_for_user(step)
+                await self._wait_for_user(next_step)
                 if not self._user_confirmation or self._user_confirmation.confirm is False:
-                    logger.info(f"User rejected step: {step.role}. Moving on.")
+                    logger.info(f"User rejected step: {next_step.role}. Moving on.")
                     continue
-            await self._execute_step(step)
+            
+            await self._execute_step(next_step)
 
             await asyncio.sleep(5)  # Allow time for the agent to process the request
 
         # --- Sequence finished, perform final wait and send END ---
         await self._wait_for_all_tasks_complete()
 
+    async def wait_check_last_step(self) -> None:
+        """Decide what to do if the last step did not complete."""
+        # Wait for pending tasks to complete
+        last_step_successful = await self._wait_for_all_tasks_complete()
+        if not last_step_successful:
+            msg = f"Host {self.agent_id} failed to complete all tasks: {dict(self._pending_tasks_by_agent)}"
+            await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+            raise FatalError(msg)
+
     async def _execute_step(self, step: StepRequest) -> None:
         """Process a single step."""
-        await self._wait_for_all_tasks_complete()
         if step.role == WAIT:
             await asyncio.sleep(10)
         elif step.role == END:
             logger.info(f"Flow completed and all tasks finished. Sending END signal: {step}")
             await self.callback_to_groupchat(step)
         else:
+            if step.role in self._participants:
+                # Signal that we expect at least one response
+                self._step_starting.set()
             logger.info(f"Host executing step: {step}")
             await self.callback_to_groupchat(step)
         # Wait a bit to allow the agent to process the request

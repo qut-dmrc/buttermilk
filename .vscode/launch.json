@@ -82,6 +82,7 @@
     "+run=batch",
     "run.mode=batch_run",
     "flows=[trans]",
+    "human_in_loop=false",
   ],
   "envFile": "${workspaceFolder}/.env",
   "console": "integratedTerminal"

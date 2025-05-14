@@ -5,7 +5,7 @@ of agent-based workflows (flows).
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Self
 
@@ -27,6 +27,7 @@ from buttermilk._core.config import (  # Configuration models
     AgentVariants,  # Agent variant configuration
     DataSourceConfig,
 )
+from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.types import (
     Record,  # Data types
@@ -300,3 +301,17 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 )
 
         raise ProcessingError(f"Unable to find requested record: {record_id}")
+
+    def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
+        """Creates a callback function for publishing messages to the UI.
+
+        Returns:
+            An async function that sends a FlowMessage to the flow agents. 
+
+        """
+        async def publish_callback(message: FlowMessage) -> None:
+            # Implement the logic to publish the message to the UI.
+            # This could involve sending it over a WebSocket or other communication channel.
+            pass
+
+        return publish_callback

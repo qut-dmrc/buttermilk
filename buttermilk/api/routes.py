@@ -1,8 +1,9 @@
+import asyncio
 import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 FlowRunner = Any
@@ -10,6 +11,8 @@ FlowRunner = Any
 from buttermilk.api.services.data_service import DataService
 from buttermilk.bm import logger
 
+#
+# curl -v 'http://127.0.0.1:8000/api/pull_task' -H 'accept: application/json'
 
 # --- Dependency Provider Functions ---
 async def get_templates(request: Request) -> Jinja2Templates:
@@ -115,3 +118,20 @@ async def get_flowinfo_endpoint(
                  status_code=500,
              )
         return JSONResponse(content=error_content, status_code=500)
+
+
+@flow_data_router.get("/api/pull_task")
+async def pull_task_endpoint(request: Request) -> StreamingResponse:
+    logger.debug(f"Request received for /api/pull_task (Accept: {request.headers.get('accept', '')})")
+    try:
+        from buttermilk.api.job_queue import JobQueueClient
+        run_request = await JobQueueClient().pull_single_task()
+
+        asyncio.create_task(request.app.state.flow_runner.run_flow(
+                    run_request=run_request,
+                    wait_for_completion=False,
+                ))
+
+    except Exception as e:
+        logger.error(f"Error pulling task: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error pulling task")

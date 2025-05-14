@@ -13,7 +13,7 @@ import weave  # For tracing
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import langfuse_context
 from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
     Field,
@@ -156,7 +156,6 @@ class Agent(AgentConfig):
                 break
         # Allow subclasses to add more reset logic.
 
-    @observe()
     async def __call__(
         self,
         message: AgentInput,
@@ -192,13 +191,11 @@ class Agent(AgentConfig):
             error_output = ErrorEvent(source=self.agent_id, content=f"Failed to prepare input state: {e}")
             return error_output
 
-        trace_params = {**final_input.parameters, **final_input.metadata, **self.parameters}
-        langfuse_context.update_current_observation(name=f"{self.agent_name} {self._cfg.parameters.get('model')}",
-                                                    input=final_input.inputs,
-                                                    metadata=trace_params,
-                                                    model=self._cfg.parameters.get("model"))
         # --- Tracing ---
         from buttermilk.bm import bm
+
+        trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **final_input.parameters, **final_input.metadata, **self.parameters}
+
         # Get the parent call context if available.
         parent_call = weave.get_current_call()
         parent_call_id = None
@@ -208,6 +205,7 @@ class Agent(AgentConfig):
                 parent_call_id = getattr(parent_call, "id", uuid())  # Get the call ID if available
             except:
                 pass
+        child_call = None
         call_id = None
         is_error = False
 
@@ -224,10 +222,9 @@ class Agent(AgentConfig):
             child_call = bm.weave.create_call(op, inputs=final_input.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
-            parent_call._children.append(child_call)
-            result = await self._process(**inputs)
-            bm.weave.finish_call(child_call, output=result, op=op)
             call_id = child_call.id or uuid()  # Set our trace ID to the tracer's call ID if available
+            parent_call._children.append(child_call)  # Nest this call for tracing
+            result = await self._process(**inputs)
 
         except Exception as e:
             # Catch unexpected errors during _process.
@@ -238,6 +235,10 @@ class Agent(AgentConfig):
             call_id = uuid()
 
         finally:
+            if child_call:
+                # Mark the child call as complete, regardless of success or failure.
+               child_call.mark_complete()
+            bm.weave.finish_call(child_call, output=result, op=op)
             # Publish status update: Task Complete (including error if error)
             await public_callback(
                 TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
