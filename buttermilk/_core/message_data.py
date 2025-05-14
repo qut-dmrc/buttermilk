@@ -6,11 +6,10 @@ from typing import Any
 
 import jmespath  # For resolving input mappings
 from jmespath import exceptions as jmespath_exceptions
-from pydantic import BaseModel
 
 from buttermilk._core.contract import GroupchatMessageTypes
 from buttermilk._core.log import logger
-from buttermilk._core.types import Record
+from buttermilk.utils.utils import clean_empty_values
 
 
 def extract_message_data(
@@ -62,7 +61,8 @@ def extract_message_data(
         else:
             # Handle non-string or empty mappings
             logger.error(f"Invalid or complex input mapping for key '{key}': {mapping}. Skipping.")
+    # clean empty values
+    extracted = clean_empty_values(extracted)
 
     logger.debug(f"Finished extracting vars. Keys extracted: {list(extracted.keys())}")
     return extracted
-

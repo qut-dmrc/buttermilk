@@ -120,6 +120,7 @@ class LLMScorer(LLMAgent):
             source=source,
             input_mappings=self.inputs,
         )
+
         # Create an AgentInput with minimal state
         scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=extracted.pop("records"), inputs=extracted)
 
