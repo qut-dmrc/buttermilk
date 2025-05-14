@@ -235,7 +235,7 @@ class FlowRunner(BaseModel):
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol
-        _session = self.sessions[run_request.session_id]
+        _session = self.get_session(run_request.session_id)
         _session.flow_name = run_request.flow
         _session.orchestrator = fresh_orchestrator
         _session.callback_to_groupchat = fresh_orchestrator.make_publish_callback()

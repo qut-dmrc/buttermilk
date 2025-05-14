@@ -205,11 +205,17 @@ class AutogenOrchestrator(Orchestrator):
             callback_to_ui: A callable that takes a message and sends it to the UI.
 
         """
-        logger.debug("Registering UI callback...")
+        if callback_to_ui:
+            logger.debug("Registering UI callback...")
+        else:
+            logger.warning("No UI callback provided. Messages will not be sent to the UI.")
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
-            logger.debug(f"Sending message to UI: {message}")
-            await callback_to_ui(message)
+            if callback_to_ui is not None:
+                logger.debug(f"Sending message to UI: {message}")
+                await callback_to_ui(message)
+            else:
+                logger.debug(f"[{self.session_id}] {message}")
 
         # Register the closure function as an agent named MANAGER.
         await ClosureAgent.register_closure(
