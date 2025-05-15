@@ -29,6 +29,9 @@ from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
 
+# High callback duration when dealing with LLMs
+asyncio.get_event_loop().slow_callback_duration = 120
+
 
 async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
     """Pull and run jobs from the queue, ensuring fresh state for each job.
