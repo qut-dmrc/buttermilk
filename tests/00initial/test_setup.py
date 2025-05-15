@@ -6,12 +6,14 @@ import google.auth.credentials
 import pytest
 from huggingface_hub import login
 
-from buttermilk.bm import BM
+from buttermilk.bm import BM  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.utils.utils import read_yaml
 
+bm = bm
 
-from buttermilk.bm import BM
-bm=BM()
+
 class Test00Setup:
     def test_imports(self):
         pass

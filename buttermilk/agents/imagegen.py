@@ -26,7 +26,9 @@ from shortuuid import ShortUUID
 
 from buttermilk._core.image import ImageRecord, read_image
 from buttermilk._core.retry import RetryWrapper
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class TextToImageClient(RetryWrapper):

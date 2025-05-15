@@ -8,8 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from buttermilk.bm import BM
-bm=BM()
+bm = bm
 from buttermilk.utils.save import data_to_export_rows
 
 SAMPLE_DATA = [

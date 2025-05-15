@@ -52,7 +52,6 @@ Configuration classes that define how agents and systems are configured:
 - `AgentVariants`
 - `DataSourceConfig`
 - `SaveInfo` 
-- `Project`
 
 **Dependencies**: 
 - `types.py`

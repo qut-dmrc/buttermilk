@@ -1,6 +1,8 @@
 from cloudpathlib import AnyPath
 
-from buttermilk.bm import BM
+from buttermilk.bm import BM  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 def test_has_test_info(bm: BM):
@@ -21,14 +23,14 @@ def test_save_dir(bm):
 
 
 def test_singleton(bm):
-    obj1 = BM()
-    obj2 = BM()
+    obj1 = bm
+    obj2 = bm
 
     assert id(obj1) == id(obj2), "variables contain different instances."
 
 
 def test_singleton_from_fixture(bm):
-    obj2 = BM()
+    obj2 = bm
 
     assert id(bm) == id(obj2), "variables contain different instances."
 
@@ -37,7 +39,7 @@ def test_time_to_instantiate():
     import time
 
     start = time.time()
-    obj = BM()
+    obj = bm
     end = time.time()
     time_taken = end - start
     print(f"Time taken: {time_taken:.2f} seconds")

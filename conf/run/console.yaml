@@ -4,8 +4,9 @@ defaults:
   - /flows/criteria@batch.parameters.criteria:
       - trans
 
-name: bm_console
-job: zot
-mode: console
-ui: console
-human_in_loop: true
+run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
+  save: ${save}
+  mode: console
+  ui: console
+  human_in_loop: true

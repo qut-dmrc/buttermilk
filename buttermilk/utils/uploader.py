@@ -12,7 +12,9 @@ from typing import Any
 from pydantic import BaseModel
 
 from buttermilk._core.config import SaveInfo
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.utils.save import upload_rows, upload_rows_async
 
 
@@ -119,7 +121,7 @@ class AsyncDataUploader:
                 upload_rows(self.buffer, save_dest=self.save_dest)
             except Exception as e:
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
-                BM().save(self.buffer)
+                bm.save(self.buffer)
 
                 # Clean backup files synchronously
                 for f in self.backup_dir.glob("backup_*.json"):

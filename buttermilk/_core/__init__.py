@@ -1,4 +1,4 @@
-from .config import AgentConfig as AgentConfig, AgentVariants as AgentVariants, Project as Project
+from .config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
 from .contract import (
     AgentInput as AgentInput,
     AgentTrace as AgentTrace,
@@ -19,7 +19,6 @@ from .contract import (
 ALL = [
     "AgentConfig",
     "AgentVariants",
-    "Project",
     "StepRequest",
     "FlowMessage",
     "AgentInput",

@@ -17,8 +17,12 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.toxicity.tox_data import toxic_record
+
+bm = bm
 
 
 class JobQueueClient(BaseModel):
@@ -46,15 +50,15 @@ class JobQueueClient(BaseModel):
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
         self._jobs_subscription_path = self._subscriber.subscription_path(
-            BM().pubsub.project,
-            BM().pubsub.jobs_subscription,
+            bm.pubsub.project,
+            bm.pubsub.jobs_subscription,
         )
         self._status_subscription_path = self._subscriber.subscription_path(
-            BM().pubsub.project,
-            BM().pubsub.status_subscription,
+            bm.pubsub.project,
+            bm.pubsub.status_subscription,
         )
-        self._status_topic_path = self._subscriber.topic_path(BM().pubsub.project, BM().pubsub.status_topic)
-        self._jobs_topic_path = self._subscriber.topic_path(BM().pubsub.project, BM().pubsub.jobs_topic)
+        self._status_topic_path = self._subscriber.topic_path(bm.pubsub.project, bm.pubsub.status_topic)
+        self._jobs_topic_path = self._subscriber.topic_path(bm.pubsub.project, bm.pubsub.jobs_topic)
 
         return self
 

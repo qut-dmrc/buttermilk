@@ -24,7 +24,9 @@ from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 from buttermilk.api.flow import create_app
 from buttermilk.api.job_queue import JobQueueClient
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
 
@@ -96,16 +98,17 @@ def main(cfg: DictConfig) -> None:
     """
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
-
     objs = hydra.utils.instantiate(cfg)
+    flow_runner = objs.run
     bm = objs.bm
-    flow_runner: FlowRunner = FlowRunner.model_validate(cfg)
+    # flow_runner: FlowRunner = FlowRunner.model_validate(cfg)
+    # bm = BM.model_validate(cfg.bm)
     # # Create the FlowRunner with the specified UI type
-    # flow_runner:  # hydra.utils.instantiate(cfg)
+    # flow_runner:  #
     # bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
 
     # Branch execution based on the configured UI mode.
-    match cfg.run.mode:
+    match flow_runner.mode:
         case "console":
             ui = CLIUserAgent(session_id=uuid4().hex)
             # Prepare the RunRequest with command-line parameters

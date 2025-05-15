@@ -13,7 +13,9 @@ from slack_bolt.async_app import AsyncApp
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator  #noqa
 

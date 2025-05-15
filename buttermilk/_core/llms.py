@@ -261,7 +261,9 @@ class LLMs(BaseModel):
         return Enum("AllModelNames", list(self.connections.keys()))
 
     def get_autogen_chat_client(self, name) -> AutoGenWrapper:
-        from buttermilk.bm import BM
+        from buttermilk.bm import BM  # Buttermilk global instance
+
+        bm = BM()
         if name in self.autogen_models:
             return self.autogen_models[name]
 
@@ -287,7 +289,7 @@ class LLMs(BaseModel):
                 **client_params,
             )
         elif self.connections[name].api_type == "vertex":
-            client_params["api_key"] = BM()._gcp_credentials.token
+            client_params["api_key"] = bm._gcp_credentials.token
             #             client = GeminiChatCompletionClient(**parameters)
             client = OpenAIChatCompletionClient(
                 **client_params,
@@ -296,7 +298,7 @@ class LLMs(BaseModel):
         elif self.connections[name].api_type == "anthropic":
             # token = credentials.refresh(google.auth.transport.requests.Request())
             _vertex_params = {k: v for k, v in client_params.items() if k in ["region", "project_id"]}
-            _vertex_params["credentials"] = BM()._gcp_credentials
+            _vertex_params["credentials"] = bm._gcp_credentials
             _vertex_client = AsyncAnthropicVertex(**_vertex_params)
             client = AnthropicChatCompletionClient(**client_params)
             client._client = _vertex_client  # type: ignore # replace client with vertexai version

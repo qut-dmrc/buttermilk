@@ -33,16 +33,17 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.bm import logger  # Global instance and logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
 from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .config import AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
-from .log import logger
 from .types import Record  # Core data types
 
+bm = BM()
 
 class OrchestratorProtocol(BaseModel):
     """Defines the overall structure expected for a flow configuration (e.g., loaded from YAML).
@@ -180,7 +181,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         # Define attributes for logging and tracing.
         try:
-            assert BM().weave
+            assert bm.weave
 
             with weave.attributes(request.tracing_attributes):
                 await self._run(request=request, __weave={"display_name": request.name})

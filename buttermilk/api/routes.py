@@ -9,7 +9,10 @@ from fastapi.templating import Jinja2Templates
 FlowRunner = Any
 
 from buttermilk.api.services.data_service import DataService
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
+
 
 #
 # curl -v 'http://127.0.0.1:8000/api/pull_task' -H 'accept: application/json'

@@ -8,7 +8,9 @@ creating batches, checking status, and retrieving results.
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from buttermilk._core.batch import BatchMetadata, BatchRequest
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.runner.batchrunner import BatchRunner
 
 

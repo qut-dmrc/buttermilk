@@ -23,7 +23,7 @@ from autogen_core import (
     SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
-    )
+)
 from pydantic import PrivateAttr
 
 from buttermilk._core import AllMessages, StepRequest
@@ -37,8 +37,10 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import logger  # Core Buttermilk instance and logger.
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
 from buttermilk.libs.autogen import AutogenAgentAdapter
+
+bm = BM()
 
 
 class TerminationHandler(DefaultInterventionHandler):
@@ -89,7 +91,7 @@ class AutogenOrchestrator(Orchestrator):
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
     _topic: TopicId = PrivateAttr(
-        default_factory=lambda: DefaultTopicId(type=f"{BM().run_info.name}-{BM().run_info.job}-{shortuuid.uuid()[:8]}"),
+        default_factory=lambda: DefaultTopicId(type=f"{bm.run_info.name}-{bm.run_info.job}-{shortuuid.uuid()[:8]}"),
     )
 
     async def _setup(self, request: RunRequest) -> TerminationHandler:

@@ -1,6 +1,8 @@
 from typing import Any, Protocol
 
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.runner.helpers import prepare_step_df
 
 

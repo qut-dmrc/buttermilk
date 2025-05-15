@@ -13,7 +13,9 @@ from pydantic import (
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.utils.media import download_and_convert
 
 
@@ -53,7 +55,7 @@ async def flow_stream(
         job = flow_request.to_job()
 
         if not flow_request.source:
-            flow_request.source = [BM().run_info.job]
+            flow_request.source = [bm.run_info.job]
 
         # First step, fetch the record if we need to.
         if not job.record and job.inputs:
@@ -63,7 +65,7 @@ async def flow_stream(
                 job.record = await download_and_convert(**job.inputs)
 
         # Set run info
-        job.run_info = BM().run_info
+        job.run_info = bm.run_info
 
     else:
         # New RunRequest model
@@ -85,7 +87,7 @@ async def flow_stream(
             job.record = run_request.records[0]
 
         # Set run info
-        job.run_info = BM().run_info
+        job.run_info = bm.run_info
 
     # Run the flow
     async for result in flow.run_flows(job=job):

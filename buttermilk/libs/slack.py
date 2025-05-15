@@ -11,7 +11,9 @@ from tenacity import (
     wait_exponential,
 )
 
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class SlackContext(BaseModel):

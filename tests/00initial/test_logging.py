@@ -3,13 +3,15 @@ import uuid
 
 import pytest
 
-from buttermilk.bm import BM
+from buttermilk.bm import BM  # Buttermilk global instance and logger
+
+bm = BM()
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
-from buttermilk.bm import BM
-bm=BM()
+bm = bm
+
 
 @pytest.fixture(scope="function")
 def logger_new(bm):
