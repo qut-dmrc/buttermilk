@@ -88,7 +88,7 @@ class BM(Singleton, BaseModel):
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(
         default=None,
     )  # Allow None initially
-    _weave: WeaveClient = PrivateAttr()
+    _weave: WeaveClient | None = PrivateAttr(default=None)  # Initialize as None
 
     _tracer: trace.Tracer = PrivateAttr()
 
@@ -102,9 +102,23 @@ class BM(Singleton, BaseModel):
 
     @property
     def weave(self) -> WeaveClient:
-        if not self._weave:
+        # Initialize weave only if it hasn't been initialized yet
+        if self._weave is None:
+            # Check if tracing is enabled, provider is weave, and run_info is available
+            if not self.tracing or not self.tracing.enabled or self.tracing.provider != "weave":
+                raise RuntimeError("Weave tracing is not enabled, provider is not 'weave', or tracing config is missing.")
+            if not self.run_info:
+                raise RuntimeError("Cannot initialize Weave tracing: run_info is missing.")
+
             collection = f"{self.run_info.name}-{self.run_info.job}"
-            self._weave = weave.init(collection)
+            try:
+                self._weave = weave.init(collection)
+                logger.info(f"Weave tracing initialized for collection: {collection}")
+            except Exception as e:
+                # Crash out if Weave initialization fails
+                logger.error(f"Failed to initialize Weave tracing: {e}")
+                raise RuntimeError(f"Failed to initialize Weave tracing: {e}") from e
+
         return self._weave
 
     @property
@@ -131,7 +145,7 @@ class BM(Singleton, BaseModel):
         auth_request = Request()  # Use imported Request
         # Check if credentials support refresh before calling
         if hasattr(self._gcp_credentials_cached, "refresh"):
-             self._gcp_credentials_cached.refresh(auth_request)
+            self._gcp_credentials_cached.refresh(auth_request)
 
         return self._gcp_credentials_cached
 
@@ -205,28 +219,32 @@ class BM(Singleton, BaseModel):
             os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
             os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
             # WANDB_API_KEY: get from https://wandb.ai/authorize
-            AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
+            # Ensure credentials are available before accessing WANDB_API_KEY
+            if self.credentials and "WANDB_API_KEY" in self.credentials and "WANDB_PROJECT" in self.credentials:
+                AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
 
-            OTEL_EXPORTER_OTLP_HEADERS = {
-                "Authorization": f"Basic {AUTH}",
-                "project_id": self.credentials["WANDB_PROJECT"],
-            }
+                OTEL_EXPORTER_OTLP_HEADERS = {
+                    "Authorization": f"Basic {AUTH}",
+                    "project_id": self.credentials["WANDB_PROJECT"],
+                }
 
-            # Initialize the OpenTelemetry SDK
-            tracer_provider = trace_sdk.TracerProvider()
+                # Initialize the OpenTelemetry SDK
+                tracer_provider = trace_sdk.TracerProvider()
 
-            # Configure the OTLP exporter
-            exporter = OTLPSpanExporter(
-                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
-                headers=OTEL_EXPORTER_OTLP_HEADERS,
-            )
+                # Configure the OTLP exporter
+                exporter = OTLPSpanExporter(
+                    endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                    headers=OTEL_EXPORTER_OTLP_HEADERS,
+                )
 
-            # Add the exporter to the tracer provider
-            tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+                # Add the exporter to the tracer provider
+                tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
 
-            logger.info(
-                f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT} and {WANDB_BASE_URL}.",
-            )
+                logger.info(
+                    "Tracing setup configured (OTEL). Weave initialization happens on first access.",
+                )
+            else:
+                logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
 
     @property
     def save_dir(self) -> str:
@@ -330,7 +348,7 @@ class BM(Singleton, BaseModel):
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                     loop.set_debug(False)
+                    loop.set_debug(False)
                 else:
                     # If no loop is running, setting debug might not be relevant or could raise error
                     pass  # Or handle appropriately
@@ -378,7 +396,7 @@ class BM(Singleton, BaseModel):
         # Ensure _gcp_project is set (happens in _gcp_credentials getter)
         if not hasattr(self, "_gcp_project"):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
-            if not hasattr(self, "_gcp_project"):  # Check again
+            if not hasattr(self, "_gcp_project"):
                 raise RuntimeError(
                     "GCP project not determined. Ensure GCP cloud config is present.",
                 )
