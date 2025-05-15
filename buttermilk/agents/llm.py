@@ -25,7 +25,7 @@ from buttermilk._core.contract import (
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
 )
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
 from buttermilk._core.types import Record  # Data record type
 from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
@@ -36,8 +36,6 @@ from buttermilk.utils.templating import (
     load_template,  # Template loading utility
     make_messages,  # Message list creation utility
 )
-
-bm = BM()
 
 
 class LLMAgent(Agent):
@@ -87,19 +85,14 @@ class LLMAgent(Agent):
         if not self._model:
             # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
             raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
+        bm = BM()
 
         logger.debug(f"Agent {self.agent_id}: Initializing model client for '{self._model}'.")
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             self._model_client = bm.llms.get_autogen_chat_client(self._model)
         except Exception as e:
-            logger.error(f"Agent {self.agent_id}: Failed to initialize model client for '{self._model}': {e}")
-            # Raise a more informative error or handle appropriately.
-            raise ValueError(f"Failed to get model client for '{self._model}'") from e
-
-        if not hasattr(self, "_model_client") or not self._model_client:
-            # This check is likely redundant due to the exception handling above, but belts and suspenders.
-            raise ValueError(f"Agent {self.agent_id}: Model client initialization failed for '{self._model}'.")
+            raise FatalError(f"Agent {self.agent_id}: Failed to initialize model client for '{self._model}': {e}") from e
 
         return self
 
