@@ -77,13 +77,12 @@ class MLPlatformTypes(Enum):
 # ```
 CHATMODELS = [
     "gemini25pro",
-    "gemini2flash",
-    "gemini2flashlite",
-    "gemini2flashthinking",
-    "gpt41nano", "gpt41mini",
+    "gemini25flash",
+    "gpt41nano",
+    "gpt41mini",
     "gpt41",
-    "o4-mini",
-    "llama31_8b",
+    "o3mini",
+    "llama4maverick",
     "llama32_90b",
     "llama33_70b",
     "haiku",
@@ -91,15 +90,13 @@ CHATMODELS = [
 ]
 CHEAP_CHAT_MODELS = [
     "haiku",
-    "gemini2flash",
-    "o4-mini",
+    "gemini25flash",
+    "o3mini",
     "gpt41mini",
     "llama31_8b",
-    "gemini2flashthinking",
-    "gemini2flashlite",
     "haiku",
 ]
-MULTIMODAL_MODELS = ["gemini25pro", "gpt41", "llama32_90b", "gemini2pro"]
+MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
 
 
 class LLMClient(BaseModel):

@@ -6,7 +6,6 @@ from buttermilk._core import StepRequest
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import AgentTrace
 from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA
-from buttermilk.agents.judge import AgentReasons
 from buttermilk.utils.uploader import AsyncDataUploader
 
 

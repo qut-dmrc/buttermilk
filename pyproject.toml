@@ -205,7 +205,7 @@ addopts = [
     "--tb=auto",
     "--show-capture=no",
     "--disable-warnings",
-    "-m", "not integration",
+#    "-m", "not integration",
 ]
 
 #    "--no-summary",
