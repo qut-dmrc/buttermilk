@@ -4,7 +4,6 @@ This module handles streaming API requests to flows, using the unified RunReques
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
 from pydantic import (
     BaseModel,
@@ -13,10 +12,13 @@ from pydantic import (
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
 from buttermilk.utils.media import download_and_convert
+bm = get_bm()
 
 
 class Job(BaseModel):
@@ -53,14 +55,12 @@ async def flow_stream(
         # Legacy FlowRequest conversion
         job = flow_request.to_job()
 
-
         # First step, fetch the record if we need to.
         if not job.record and job.inputs:
             if record_id := job.inputs.pop("record_id", None):
                 job.record = flow.get_record(record_id=record_id)
             else:
                 job.record = await download_and_convert(**job.inputs)
-
 
     else:
         # New RunRequest model
@@ -80,7 +80,6 @@ async def flow_stream(
             job.record = await download_and_convert(uri=run_request.uri)
         elif len(run_request.records) > 0:
             job.record = run_request.records[0]
-
 
     # Run the flow
     async for result in flow.run_flows(job=job):

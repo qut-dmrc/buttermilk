@@ -12,9 +12,12 @@ from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    BM,
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
 from buttermilk.runner.flowrunner import FlowRunner
 
 from .routes import flow_data_router
@@ -25,6 +28,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
 
+bm = get_bm()
 
 def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     """Create and configure the FastAPI application."""

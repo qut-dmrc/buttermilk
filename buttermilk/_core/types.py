@@ -40,10 +40,8 @@ def _make_run_id() -> str:
     run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
     run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    _global_run_id = run_id
     return run_id
-
-
-_global_run_id = _make_run_id()
 
 
 class MediaObj(BaseModel):

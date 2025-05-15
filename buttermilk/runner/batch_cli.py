@@ -11,9 +11,12 @@ import hydra
 from omegaconf import DictConfig
 
 from buttermilk._core.batch import BatchRequest
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 from buttermilk.runner.batchrunner import BatchRunner
 from buttermilk.runner.flowrunner import FlowRunner
 

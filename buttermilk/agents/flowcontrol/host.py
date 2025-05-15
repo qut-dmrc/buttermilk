@@ -96,7 +96,7 @@ class HostAgent(Agent):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
             msg_type = AssistantMessage
         elif isinstance(message, ManagerMessage):
-            logger.info(f"Host {self.agent_id} received user input: {message}")
+            logger.info(f"Host {self.agent_name} received user input: {message}")
             self._user_confirmation = message
             self._user_confirmation_received.set()
             content = getattr(message, "content", getattr(message, "params", None))
@@ -116,7 +116,7 @@ class HostAgent(Agent):
         **kwargs: Any,
     ) -> OOBMessages | None:
         """Handle special events and messages."""
-        logger.debug(f"Host {self.agent_id} handling event: {type(message).__name__}")
+        logger.debug(f"Host {self.agent_name} handling event: {type(message).__name__}")
 
         # Handle task completion signals from worker agents.
         if isinstance(message, TaskProcessingComplete):
@@ -164,11 +164,11 @@ class HostAgent(Agent):
         # Handle conductor request to start running the flow
         elif isinstance(message, ConductorRequest):
             if self._conductor_task and not self._conductor_task.done():
-                logger.warning(f"Host {self.agent_id} received ConductorRequest but task is already running.")
+                logger.warning(f"Host {self.agent_name} received ConductorRequest but task is already running.")
                 return None
 
             # If no task is running, start a new one
-            logger.info(f"Host {self.agent_id} starting new conductor task.")
+            logger.info(f"Host {self.agent_name} starting new conductor task.")
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))
 
         return None  # Explicitly return None if no other value is returned
@@ -203,12 +203,12 @@ class HostAgent(Agent):
         """
         max_tries = self.max_user_confirmation_time // 60
         for i in range(max_tries):
-            logger.debug(f"Host {self.agent_id} waiting for user confirmation for {step.role} step.")
+            logger.debug(f"Host {self.agent_name} waiting for user confirmation for {step.role} step.")
             try:
                 await self.request_user_confirmation(step)
                 await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
             except TimeoutError:
-                logger.warning(f"{self.agent_id} hit timeout waiting for manager response after 60 seconds.")
+                logger.warning(f"{self.agent_name} hit timeout waiting for manager response after 60 seconds.")
                 continue
             else:
                 # Check user's decision
@@ -269,7 +269,7 @@ class HostAgent(Agent):
             FatalError: If no participants are provided in the request.
 
         """
-        logger.info(f"Host {self.agent_id} starting flow execution.")
+        logger.info(f"Host {self.agent_name} starting flow execution.")
 
         # Initialize participants from the request
         self._participants.update(message.participants)

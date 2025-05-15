@@ -25,6 +25,7 @@ from shortuuid import uuid
 
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
+from buttermilk.bm import get_bm
 from buttermilk.utils.utils import expand_dict
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,
@@ -108,7 +109,7 @@ class SaveInfo(CloudProviderCfg):
     @property
     def bq_schema(self) -> list[SchemaField]:
         if not self._loaded_schema:
-
+            bm = get_bm()
             self._loaded_schema = bm.bq.schema_from_json(self.db_schema)
         return self._loaded_schema
 

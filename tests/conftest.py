@@ -6,7 +6,7 @@ from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODE
 from buttermilk._core.types import Record
 from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
 
-bm = BM()
+# Don't initialize BM here, we'll let the fixture handle it
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 

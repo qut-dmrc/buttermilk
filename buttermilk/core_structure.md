@@ -108,7 +108,7 @@ Classes that coordinate agent execution:
 
 ## Implementation Recommendations
 
-1. **Move Core Types to the Top of Dependency Chain**: Ensure `Record`, `SessionInfo`, and other fundamental types are defined in `types.py` without circular imports.
+1. **Move Core Types to the Top of Dependency Chain**: Ensure `Record` and other fundamental types are defined in `types.py` without circular imports.
 
 2. **Avoid Direct Imports of Higher-Level Components**: Lower-level modules should never import from higher-level modules.
 

@@ -33,7 +33,10 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
@@ -42,7 +45,7 @@ from buttermilk.utils.validators import convert_omegaconf_objects
 from .config import AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
 from .types import Record  # Core data types
 
-bm = BM()
+bm = get_bm()
 
 
 class OrchestratorProtocol(BaseModel):
@@ -116,7 +119,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     """
 
     # --- Internal State ---
-    session_id: str = Field(
+    trace_id: str = Field(
         default_factory=shortuuid.uuid,
         description="A unique session id for this specific flow execution.",
     )
@@ -177,20 +180,25 @@ class Orchestrator(OrchestratorProtocol, ABC):
                      or parameters for the flow.
 
         """
-        logger.info(f"Starting run for orchestrator '{self.name}', session '{self.session_id}'.")
+        logger.info(f"Starting run for orchestrator '{self.name}'.")
 
+        bm = get_bm()  # Get the singleton instance using our new module-level function
         # Define attributes for logging and tracing.
+        op = weave.op(self._run, call_display_name=f"{self.name} {request.name}")
+        orchestrator_trace = bm.weave.create_call(op, inputs=request.model_dump(mode="json"),
+                                                    display_name=f"{self.orchestrator} {self.name}",
+                                                    attributes=request.tracing_attributes)
+        self.trace_id = orchestrator_trace.trace_id
         try:
-            with weave.attributes(request.tracing_attributes):
-                await self._run(request=request, __weave={"display_name": request.name})
-
-                logger.info(f"Orchestrator '{request.name}' run finished successfully.")
+            await self._run(request=request)
+            logger.info(f"Orchestrator '{request.name}' run finished successfully.")
 
         except Exception as e:
             # Catch errors originating from _run or its setup/cleanup phases.
             logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e}")
             # Optionally re-raise or handle the error further.
-
+        finally:
+            bm.weave.finish_call(orchestrator_trace, op=op)
     # --- Abstract & Core Internal Methods ---
 
     @abstractmethod
@@ -215,7 +223,6 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         raise NotImplementedError("Orchestrator subclasses must implement _cleanup.")
 
-    @weave.op
     @abstractmethod
     async def _run(self, request: RunRequest):
         """Abstract method containing the main execution logic/control loop for the flow.

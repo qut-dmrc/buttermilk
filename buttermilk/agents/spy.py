@@ -7,11 +7,13 @@ from autogen_core import (
 from buttermilk._core.agent import ProcessingError
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import AgentTrace, ErrorEvent
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
-
-bm = BM()
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 from buttermilk.utils.uploader import AsyncDataUploader
 
+bm = get_bm()
 BATCH_SIZE = 10
 
 

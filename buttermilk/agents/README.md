@@ -174,7 +174,8 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         from buttermilk._core.orchestrator import Orchestrator # Or AutogenOrchestrator
         from buttermilk._core.contract import AgentInput  # etc.
         from buttermilk.bm import  BM, logger  # Buttermilk global instance and logger
-bm = BM()
+        from buttermilk.bm import  BM, logger, get_bm # Buttermilk global instance and logger
+        bm = get_bm()
 
         class MyCustomOrchestrator(Orchestrator): # Or AutogenOrchestrator
 

@@ -20,10 +20,13 @@ from buttermilk._core.contract import (
 )
 
 # Restore original bm import
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 from buttermilk.utils._tools import create_tool_functions
 
-bm = BM()
+bm = get_bm()
 
 
 class SimpleAutogenChatWrapper(RoutedAgent):

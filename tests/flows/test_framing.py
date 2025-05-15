@@ -2,9 +2,12 @@ import pytest
 
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.types import MediaObj, Record
-from buttermilk.bm import BM  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    BM,  # Buttermilk global instance and logger
+    get_bm,
+)
 
-bm = BM()
+bm = get_bm()
 
 bm = bm
 

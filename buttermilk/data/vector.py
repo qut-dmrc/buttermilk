@@ -23,9 +23,13 @@ from vertexai.language_models import (
 
 from buttermilk import logger
 from buttermilk._core.config import DataSouce
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    BM,
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed

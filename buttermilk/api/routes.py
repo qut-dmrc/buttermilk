@@ -9,9 +9,12 @@ from fastapi.templating import Jinja2Templates
 FlowRunner = Any
 
 from buttermilk.api.services.data_service import DataService
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 
 
 #

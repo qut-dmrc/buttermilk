@@ -139,14 +139,14 @@ class Agent(AgentConfig):
         """Initialize the agent state or resources. Called once by the orchestrator.
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """
-        logger.debug(f"Agent {self.agent_id}: Base initialize.")
+        logger.debug(f"Agent {self.agent_name}: Base initialize.")
         # Default implementation does nothing.
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state to its initial condition.
         Called by the orchestrator, e.g., between different runs using the same agent instance.
         """
-        logger.info(f"Agent {self.agent_id}: Resetting state.")
+        logger.info(f"Agent {self.agent_name}: Resetting state.")
         self._records = []
         self._model_context = UnboundedChatCompletionContext()
         self._data = KeyValueCollector()
@@ -183,14 +183,14 @@ class Agent(AgentConfig):
 
         """
         result = None
-        logger.debug(f"Agent {self.agent_id} received input via __call__.")
-        from buttermilk.bm import BM  # Importing here to avoid circular dependency
-        bm = BM()
+        logger.debug(f"Agent {self.agent_name} received input via __call__.")
+        from buttermilk.bm import get_bm  # Importing here to avoid circular dependency
+        bm = get_bm()  # Get the singleton instance using our new module-level function
         # Prepare the final input by merging message data with internal agent state.
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
-            logger.error(f"Agent {self.agent_id}: Error preparing input state: {e}")
+            logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
             error_output = ErrorEvent(source=self.agent_id, content=f"Failed to prepare input state: {e}")
             return error_output
 
@@ -226,9 +226,9 @@ class Agent(AgentConfig):
 
         except Exception as e:
             # Catch unexpected errors during _process.
-            error_msg = f"Agent {self.agent_id} error during _process: {e}"
+            error_msg = f"Agent {self.agent_name} error during _process: {e}"
             logger.error(error_msg)
-            result = ErrorEvent(source=self.agent_id, content=error_msg)
+            result = ErrorEvent(source=self.agent_name, content=error_msg)
             is_error = True
 
         finally:
@@ -255,7 +255,7 @@ class Agent(AgentConfig):
             # --- Langfuse tracing ---
             langfuse_context.update_current_observation(name=self.agent_name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
 
-        logger.debug(f"Agent {self.agent_id} {self.agent_name} finished task {message}.")
+        logger.debug(f"Agent {self.agent_name} {self.agent_name} finished task {message}.")
         return trace
 
     @abstractmethod
@@ -309,7 +309,7 @@ class Agent(AgentConfig):
             **kwargs: Additional arguments.
 
         """
-        logger.debug(f"Agent {self.agent_id} received message from {source} via _listen.")
+        logger.debug(f"Agent {self.agent_name} received message from {source} via _listen.")
 
         if isinstance(message, Record):
             self._records.append(message)
@@ -331,7 +331,7 @@ class Agent(AgentConfig):
                     found.append(key)
 
             if found:
-                logger.debug(f"Agent {self.agent_id} extracted keys [{found}] from {source}.")
+                logger.debug(f"Agent {self.agent_name} extracted keys [{found}] from {source}.")
 
         # Add relevant message content to the conversation history (_model_context).
         # Exclude command messages and potentially filter based on message type.
@@ -351,7 +351,7 @@ class Agent(AgentConfig):
                 await self._model_context.add_message(UserMessage(content=content_str, source=source))
         else:
             # don't log other types of messages to history by default
-            logger.debug(f"Agent {self.agent_id} ignored message type {type(message)} for context history.")
+            logger.debug(f"Agent {self.agent_name} ignored message type {type(message)} for context history.")
 
     async def _handle_events(
         self,
@@ -398,16 +398,16 @@ class Agent(AgentConfig):
 
         """
         try:
-            logger.debug(f"Agent {self.agent_id} waiting for heartbeat (timeout: {timeout}s)...")
+            logger.debug(f"Agent {self.agent_name} waiting for heartbeat (timeout: {timeout}s)...")
             await asyncio.wait_for(self._heartbeat.get(), timeout=timeout)
-            logger.debug(f"Agent {self.agent_id} received heartbeat.")
+            logger.debug(f"Agent {self.agent_name} received heartbeat.")
             self._heartbeat.task_done()  # Mark as processed
             return True
         except TimeoutError:
-            logger.warning(f"Agent {self.agent_id} timed out waiting for heartbeat.")
+            logger.warning(f"Agent {self.agent_name} timed out waiting for heartbeat.")
             return False
         except Exception as e:
-            logger.error(f"Agent {self.agent_id}: Error checking heartbeat: {e}")
+            logger.error(f"Agent {self.agent_name}: Error checking heartbeat: {e}")
             return False
 
     async def _add_state_to_input(self, inputs: AgentInput) -> AgentInput:
@@ -450,7 +450,7 @@ class Agent(AgentConfig):
             merged_inputs_dict = {**extracted_data, **updated_inputs.inputs}
             updated_inputs.inputs = merged_inputs_dict
         except Exception as e:
-            logger.error(f"Agent {self.agent_id}: Error resolving input mappings: {e}")
+            logger.error(f"Agent {self.agent_name}: Error resolving input mappings: {e}")
             # Continue without resolved mappings? Or raise? Raising for clarity.
             raise ProcessingError(f"Error resolving input mappings for agent {self.agent_id}") from e
 
@@ -463,7 +463,7 @@ class Agent(AgentConfig):
             # Prepend history so message.context comes after agent's context
             updated_inputs.context = history + updated_inputs.context
         except Exception as e:
-            logger.error(f"Agent {self.agent_id}: Error retrieving model context: {e}")
+            logger.error(f"Agent {self.agent_name}: Error retrieving model context: {e}")
             # Decide how to handle context retrieval failure. Continue without history?
 
         # Ensure records list exists. Use the last saved one if it doesn't.

@@ -13,22 +13,23 @@ from typing import Any, Literal
 import aiohttp
 import httpx
 import replicate
-import weave
 from cloudpathlib import CloudPath
 from google import genai
 from google.genai import types
 from huggingface_hub import AsyncInferenceClient, login
 from openai import AsyncOpenAI
 from PIL import Image
-from promptflow.tracing import trace
 from pydantic import BaseModel, Field, field_validator
 from shortuuid import ShortUUID
 
 from buttermilk._core.image import ImageRecord, read_image
 from buttermilk._core.retry import RetryWrapper
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 
 
 class TextToImageClient(RetryWrapper):
@@ -39,8 +40,6 @@ class TextToImageClient(RetryWrapper):
     )
     prefix: str
 
-    @trace
-    @weave.op
     async def generate(
         self,
         text: str,

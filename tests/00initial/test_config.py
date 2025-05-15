@@ -1,8 +1,11 @@
 from cloudpathlib import AnyPath
 
-from buttermilk.bm import BM  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    BM,  # Buttermilk global instance and logger
+    get_bm,
+)
 
-bm = BM()
+bm = get_bm()
 
 
 def test_has_test_info(bm: BM):
