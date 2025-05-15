@@ -223,6 +223,8 @@ class LLMAgent(Agent):
         call = weave.get_current_call()
         if call and hasattr(call, "ui_url"):
             output.tracing_link = call.ui_url
+            # replace call id in our trace with Weave call id
+            output.call_id = call.id or output.call_id
 
         # 1. Handle structured output validation first (if schema is defined)
         if schema:
@@ -239,12 +241,11 @@ class LLMAgent(Agent):
                 except Exception as e:
                     # Log schema validation/parsing error
                     parse_error = f"Error parsing LLM response into {schema.__name__}: {e}"
-                    logger.warning(f"Agent {self.agent_id}: {parse_error}")
-                    # Keep the error, we'll add it to output later.
+                    raise ProcessingError(f"Agent {self.agent_id}: {parse_error}")
             else:
                 # Content is not string and not pre-parsed object, schema validation fails.
                 parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
-                logger.warning(f"Agent {self.agent_id}: {parse_error}")
+                raise ProcessingError(f"Agent {self.agent_id}: {parse_error}")
 
         # 2. Store the result in output.outputs
         if parsed_object is not None:
@@ -257,25 +258,13 @@ class LLMAgent(Agent):
                 logger.debug(f"Agent {self.agent_id}: Successfully parsed content as generic JSON.")
             except Exception as json_e:
                 # If generic JSON parsing also fails, store raw content
-                raw_content_error = f"Failed to parse LLM response as JSON: {json_e}. Storing raw content."
-                logger.warning(f"Agent {self.agent_id}: {raw_content_error}")
-                output.outputs = chat_result.content  # Store raw string
-                # Add both schema error (if any) and JSON parsing error
-                if parse_error:
-                    output.set_error(parse_error)
-                output.set_error(raw_content_error)
+                raise ProcessingError(f"Failed to parse LLM response as JSON: {json_e}.")
         elif chat_result.content is not None:
             # Content is not None, not string - store as is.
-            logger.warning(f"Agent {self.agent_id}: LLM response content is not a string ({type(chat_result.content)}). Storing as is.")
-            output.outputs = chat_result.content
-            if parse_error:  # Add schema error if validation failed
-                output.set_error(parse_error)
+            raise ProcessingError(f"Agent {self.agent_id}: LLM response content is not a string ({type(chat_result.content)}).")
         else:
             # Content is None
-            logger.warning(f"Agent {self.agent_id}: LLM response content is None.")
-            output.outputs = None
-            if parse_error:  # Add schema error if validation failed
-                output.set_error(parse_error)
+            raise ProcessingError(f"Agent {self.agent_id}: LLM response content is None.")
 
         return output
 

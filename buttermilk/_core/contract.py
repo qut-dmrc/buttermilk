@@ -6,6 +6,7 @@ and interactions with manager/conductor roles.
 """
 
 import datetime
+import uuid
 from collections.abc import Mapping
 from typing import Any, Union
 
@@ -254,7 +255,7 @@ class AgentOutput(BaseModel):
     """
 
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
-    call_id: str = Field(default="",
+    call_id: str = Field(default=uuid.uuid4().hex,
         description="A unique ID for this specific agent execution/response.",
     )
     agent_id: str = Field(..., description="Unique identifier for the agent instance.")

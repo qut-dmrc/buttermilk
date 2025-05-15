@@ -42,7 +42,6 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     objs = hydra.utils.instantiate(cfg)
     
     bm = objs.bm
-    bm.setup_instance()
     logger = bm.logger
     logger.info(
         f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",

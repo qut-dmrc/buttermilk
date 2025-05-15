@@ -161,7 +161,6 @@ class AutogenOrchestrator(Orchestrator):
                         factory=agent_factory,
                     )
                 else:
-
                     # Register the adapter factory with the runtime.
                     agent_type: AgentType = await agent_cls.register(
                         runtime=self._runtime,

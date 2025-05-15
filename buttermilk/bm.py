@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import (
     Any,
     ClassVar,
+    Self,
     TypeVar,
 )
 
@@ -180,12 +181,9 @@ class BM(Singleton, Project):
         # Not sure why this does nothing... maybe debugging?
         return vars
 
-    # @model_validator(mode="after") # Remove this validator
-    # def ensure_config(self) -> Self:
-    #     ... # Logic moved to setup_instance
-
-    def setup_instance(self) -> None:
-        """Performs setup requiring configuration (e.g., run_info, logger_cfg). Call after instantiation."""
+    @model_validator(mode="after")
+    def setup_instance(self) -> Self:
+        """Performs setup requiring configuration (e.g., run_info, logger_cfg)."""
         # Ensure run_info is set before proceeding with dependent setups
         if not self.run_info:
             # Try to get it from environment or raise error

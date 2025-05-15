@@ -45,9 +45,13 @@ class MessageService:
         try:
             if message is None:
                 return None
+            call_id = getattr(message, "call_id", None)
+            preview = getattr(message, "preview", None)
+            agent_info = getattr(message, "agent_info", None)
             if isinstance(message, AgentTrace):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
+                    agent_info = message.agent_info
                     message = message.outputs
                 else:
                     logger.warning(f"AgentTrace object with no outputs: {message}")
@@ -61,9 +65,6 @@ class MessageService:
                 return None
 
             message_type = None
-            call_id = message.call_id if hasattr(message, "call_id") else None
-            agent_info = message.agent_info if hasattr(message, "agent_info") else AgentConfig()
-            preview = message.preview if hasattr(message, "preview") else str(message)[PREVIEW_LENGTH:]
             if isinstance(message, Record):
                 message_type = "record"
             elif isinstance(message, JudgeReasons):
@@ -75,7 +76,7 @@ class MessageService:
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
             elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
-                message_type = "system_message"
+                return None
             else:
                 logger.warning(f"Unknown message type: {type(message)}")
                 return None
