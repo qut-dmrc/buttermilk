@@ -15,20 +15,25 @@ import datetime
 import json
 import logging
 import os
+import platform
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import (
     Any,
+    Self,
 )
 
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
 import pandas as pd
+import psutil
 import pydantic
 import shortuuid
 import weave
+from cloudpathlib import AnyPath, CloudPath
 from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
@@ -51,7 +56,7 @@ from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger
 from buttermilk._core.singleton import Singleton
 from buttermilk._core.types import SessionInfo
-from buttermilk.utils import save
+from buttermilk.utils import get_ip, save
 from buttermilk.utils.utils import load_json_flexi
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -60,6 +65,28 @@ _SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
+
+
+class SessionInfo(BaseModel):
+    platform: str = "local"
+    name: str
+    job: str
+    run_id: str
+    max_concurrency: int = -1
+    ip: str = Field(default="")
+    node_name: str = Field(default_factory=lambda: platform.uname().node)
+    username: str = Field(
+        default_factory=lambda: psutil.Process().username().split("\\")[-1],
+    )
+    save_dir: str | None = None
+    flow_api: str | None = None
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+    )
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
 
 class BM(Singleton, BaseModel):
@@ -76,13 +103,24 @@ class BM(Singleton, BaseModel):
     )
     datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
 
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        exclude_none=True,
-        exclude_unset=True,
+    platform: str = "local"
+    name: str
+    job: str
+    run_id: str
+    max_concurrency: int = -1
+    node_name: str = Field(default_factory=lambda: platform.uname().node)
+    username: str = Field(
+        default_factory=lambda: psutil.Process().username().split("\\")[-1],
     )
+    save_dir: str | None = None
+    flow_api: str | None = None
+    _get_ip_task: asyncio.Task
+    _ip: str = PrivateAttr()
+
+    save_dir_base: str = Field(
+        default_factory=mkdtemp,
+        validate_default=True,
+    )  # Default to temp dir
 
     _gcp_project: str = PrivateAttr(default="")
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(
@@ -100,17 +138,39 @@ class BM(Singleton, BaseModel):
     _llms_cached: LLMs | None = PrivateAttr(default=None)
     _bq_cached: bigquery.Client | None = PrivateAttr(default=None)
 
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
+
+    @pydantic.field_validator("save_dir_base", mode="before")
+    def get_save_dir(cls, save_dir_base, values) -> str:
+        if isinstance(save_dir_base, str):
+            pass
+        elif isinstance(save_dir_base, Path):
+            save_dir_base = save_dir_base.as_posix()
+        elif isinstance(save_dir_base, CloudPath):
+            save_dir_base = save_dir_base.as_uri()
+        else:
+            raise ValueError(
+                f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
+            )
+        return save_dir_base
+
+    @pydantic.model_validator(mode="after")
+    def set_full_save_dir(self) -> Self:
+        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
+        self.save_dir = str(save_dir)
+        return self
+
     @property
     def weave(self) -> WeaveClient:
         # Initialize weave only if it hasn't been initialized yet
         if self._weave is None:
-            # Check if tracing is enabled, provider is weave, and run_info is available
-            if not self.tracing or not self.tracing.enabled or self.tracing.provider != "weave":
-                raise RuntimeError("Weave tracing is not enabled, provider is not 'weave', or tracing config is missing.")
-            if not self.run_info:
-                raise RuntimeError("Cannot initialize Weave tracing: run_info is missing.")
-
-            collection = f"{self.run_info.name}-{self.run_info.job}"
+            collection = f"{self.name}-{self.job}"
             try:
                 self._weave = weave.init(collection)
                 logger.info(f"Weave tracing initialized for collection: {collection}")
@@ -120,6 +180,16 @@ class BM(Singleton, BaseModel):
                 raise RuntimeError(f"Failed to initialize Weave tracing: {e}") from e
 
         return self._weave
+
+    async def get_ip(self):
+        if not self.ip:
+            self.ip = await get_ip()
+
+    @property
+    def run_info(self) -> SessionInfo:
+        return SessionInfo(platform=self.platform, name=self.name, job=self.job, run_id=self.run_id,
+                           node_name=self.node_name, username=self.username, ip=self.ip, save_dir=self.save_dir,
+                           flow_api=self.flow_api)
 
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
@@ -165,9 +235,6 @@ class BM(Singleton, BaseModel):
         """Initializes the BM singleton instance after validation."""
         super().__init__(**data)  # Call BaseModel's __init__ to populate fields
 
-        # Performs setup requiring configuration (e.g., run_info, logger_cfg).
-        # This logic was moved from the model_validator.
-
         for cloud in self.clouds:
             if cloud.type == "gcp":
                 # store authentication info
@@ -211,48 +278,39 @@ class BM(Singleton, BaseModel):
                 logger.error(f"Could not save config to default save dir: {e}")
 
         # Ensure run_info exists before setting up tracing
-        if self.tracing and self.run_info and self.tracing.enabled:
-            from opentelemetry.sdk import trace as trace_sdk
+        from opentelemetry.sdk import trace as trace_sdk
 
-            WANDB_BASE_URL = "https://trace.wandb.ai"
-            OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
-            os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
-            os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
-            # WANDB_API_KEY: get from https://wandb.ai/authorize
-            # Ensure credentials are available before accessing WANDB_API_KEY
-            if self.credentials and "WANDB_API_KEY" in self.credentials and "WANDB_PROJECT" in self.credentials:
-                AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
+        WANDB_BASE_URL = "https://trace.wandb.ai"
+        OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
+        os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
+        os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
+        # WANDB_API_KEY: get from https://wandb.ai/authorize
+        # Ensure credentials are available before accessing WANDB_API_KEY
+        if self.credentials and "WANDB_API_KEY" in self.credentials and "WANDB_PROJECT" in self.credentials:
+            AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
 
-                OTEL_EXPORTER_OTLP_HEADERS = {
-                    "Authorization": f"Basic {AUTH}",
-                    "project_id": self.credentials["WANDB_PROJECT"],
-                }
+            OTEL_EXPORTER_OTLP_HEADERS = {
+                "Authorization": f"Basic {AUTH}",
+                "project_id": self.credentials["WANDB_PROJECT"],
+            }
 
-                # Initialize the OpenTelemetry SDK
-                tracer_provider = trace_sdk.TracerProvider()
+            # Initialize the OpenTelemetry SDK
+            tracer_provider = trace_sdk.TracerProvider()
 
-                # Configure the OTLP exporter
-                exporter = OTLPSpanExporter(
-                    endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
-                    headers=OTEL_EXPORTER_OTLP_HEADERS,
-                )
+            # Configure the OTLP exporter
+            exporter = OTLPSpanExporter(
+                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                headers=OTEL_EXPORTER_OTLP_HEADERS,
+            )
 
-                # Add the exporter to the tracer provider
-                tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+            # Add the exporter to the tracer provider
+            tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
 
-                logger.info(
-                    "Tracing setup configured (OTEL). Weave initialization happens on first access.",
-                )
-            else:
-                logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
-
-    @property
-    def save_dir(self) -> str:
-        if not self.run_info:
-            # Raise error to ensure str return type for static analysis
-            raise RuntimeError("run_info not set, cannot determine save_dir.")
-        # run_info is guaranteed non-None here
-        return self.run_info.save_dir
+            logger.info(
+                "Tracing setup configured (OTEL). Weave initialization happens on first access.",
+            )
+        else:
+            logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
 
     def save(self, data, save_dir=None, extension: str | None = None, **kwargs):
         """Failsafe save method."""
@@ -266,7 +324,7 @@ class BM(Singleton, BaseModel):
             dict(
                 message=f"Saved data to: {result}",
                 uri=result,
-                run_id=self.run_info.run_id if self.run_info else "unknown",
+                run_id=self.run_id,
             ),
         )
         return result
@@ -277,10 +335,6 @@ class BM(Singleton, BaseModel):
     ) -> None:
         # Ensure run_info is available before setting up GCP logging
         if self.logger_cfg and self.logger_cfg.type == "gcp":
-            if not self.run_info:
-                raise RuntimeError(
-                    "run_info must be set before configuring GCP logging.",
-                )
             if not hasattr(self.logger_cfg, "project"):
                 raise RuntimeError("GCP logger config missing 'project' attribute.")
             if not hasattr(self.logger_cfg, "location"):
@@ -314,17 +368,17 @@ class BM(Singleton, BaseModel):
                 labels={
                     "project_id": self.logger_cfg.project,  # type: ignore[attr-defined]
                     "location": self.logger_cfg.location,  # type: ignore[attr-defined]
-                    "namespace": self.run_info.name,  # type: ignore[union-attr] # Checked above
-                    "job": self.run_info.job,  # type: ignore[union-attr] # Checked above
-                    "task_id": self.run_info.run_id,  # type: ignore[union-attr] # Checked above
+                    "namespace": self.name,  # type: ignore[union-attr] # Checked above
+                    "job": self.job,  # type: ignore[union-attr] # Checked above
+                    "task_id": self.run_id,  # type: ignore[union-attr] # Checked above
                 },
             )
 
             cloudHandler = CloudLoggingHandler(
                 client=self.gcs_log_client,  # Access via property
                 resource=resource,
-                name=self.run_info.name,  # type: ignore[union-attr] # Checked above
-                labels=self.run_info.model_dump(  # type: ignore[union-attr] # Checked above
+                name=self.name,  # type: ignore[union-attr] # Checked above
+                labels=self.model_dump(  # type: ignore[union-attr] # Checked above
                     include={"run_id", "name", "job", "platform", "username"},
                 ),
             )
