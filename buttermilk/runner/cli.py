@@ -102,10 +102,6 @@ def main(cfg: DictConfig) -> None:
     flow_runner: FlowRunner = FlowRunner.model_validate(cfg)  # hydra.utils.instantiate(cfg)
     bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
 
-    # Perform essential setup for the Buttermilk instance *after* it's been instantiated by Hydra.
-    # This might involve loading credentials, setting up logging, initializing API clients, etc.
-    bm.setup_instance()
-
     # Branch execution based on the configured UI mode.
     match cfg.run.mode:
         case "console":
@@ -173,7 +169,6 @@ def main(cfg: DictConfig) -> None:
             )
 
             # --- WORKAROUND for potential bm async init timing ---
-            # If bm.setup_instance starts background tasks, give them time.
             # This is fragile; a better fix involves awaiting readiness.
             import time
             time.sleep(2)

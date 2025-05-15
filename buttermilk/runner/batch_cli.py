@@ -24,7 +24,6 @@ def main(cfg: DictConfig) -> None:
     """
     # Initialize FlowRunner and BatchRunner
     flow_runner = FlowRunner.model_validate(cfg)
-    flow_runner.bm.setup_instance()
 
     batch_runner = BatchRunner(flow_runner=flow_runner)
 
