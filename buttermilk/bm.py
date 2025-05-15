@@ -141,24 +141,21 @@ class BM(Singleton, Project):
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
         from google.auth import default
-        from google.auth.transport.requests import (
-            Request,
-        )  # Correct import needed here too
+        from google.auth.transport.requests import Request
 
         if self._gcp_credentials_cached is None:
             billing_project = os.environ.get(
                 "google_billing_project",
                 os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
             )
+            scopes = ["https://www.googleapis.com/auth/cloud-platform"]
             if not billing_project:
-                self._gcp_credentials_cached, self._gcp_project = default()
+                self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
                 billing_project = self._gcp_project
-                # raise ValueError("GOOGLE_CLOUD_PROJECT or google_billing_project environment variable not set.")
-
-            # Use PrivateAttr default=None and check for None before using
-            if self._gcp_credentials_cached is None:
+            else:
                 self._gcp_credentials_cached, self._gcp_project = default(
                     quota_project_id=billing_project,
+                    scopes=scopes,
                 )
 
         # GCP tokens last 60 minutes and need to be refreshed after that
