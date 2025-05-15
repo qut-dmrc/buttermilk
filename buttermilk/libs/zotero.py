@@ -9,7 +9,7 @@ import pydantic
 from pydantic import BaseModel, PrivateAttr  # Import Field
 from pyzotero import zotero
 
-from buttermilk.bm import bm, logger
+from buttermilk.bm import logger
 
 # Import ChromaDBEmbeddings for type hinting
 from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument
@@ -34,7 +34,7 @@ class ZotDownloader(BaseModel):
         self._zot = zotero.Zotero(
             library_id=self.library,
             library_type="group",
-            api_key=bm.credentials.get("ZOTERO_API_KEY"),
+            api_key=BM().credentials.get("ZOTERO_API_KEY"),
         )
         os.makedirs(self.save_dir, exist_ok=True)
         return self

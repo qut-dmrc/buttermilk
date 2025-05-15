@@ -10,6 +10,8 @@ from buttermilk.bm import BM
 from buttermilk.utils.utils import read_yaml
 
 
+from buttermilk.bm import BM
+bm=BM()
 class Test00Setup:
     def test_imports(self):
         pass

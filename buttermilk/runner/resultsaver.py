@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.job import Job
-from buttermilk.bm import bm, logger
+from buttermilk.bm import logger
 from buttermilk.utils.save import upload_rows
 
 
@@ -32,7 +32,7 @@ class ResultsCollector(BaseModel):
     @model_validator(mode="after")
     def get_path(self) -> "ResultsCollector":
         if self.batch_path is None:
-            self.batch_path = CloudPath(bm.save_dir)
+            self.batch_path = CloudPath(BM().save_dir)
         return self
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -78,7 +78,7 @@ class ResultsCollector(BaseModel):
     def _save(self):
         if self.to_save:
             _save_path = self.batch_path / f"results_{self.n_results}.json"
-            uri = bm.save(data=self.to_save, uri=_save_path.as_uri())
+            uri = BM().save(data=self.to_save, uri=_save_path.as_uri())
             self.to_save = []
             return uri
 
@@ -126,5 +126,5 @@ class ResultSaver(ResultsCollector):
                 self.to_save = []  # Clear the batch after saving
         except Exception as e:
             # emergency save
-            uri = bm.save(self.to_save)
+            uri = BM().save(self.to_save)
             raise FatalError(f"Hit error in ResultSaver: {e}. Saved to {uri}.") from e

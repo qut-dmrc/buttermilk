@@ -149,19 +149,7 @@ def _get_run_info() -> SessionInfo:
         A SessionInfo object with the current run information.
 
     """
-    from buttermilk.bm import bm
-
-    if not hasattr(bm, "run_info") or bm.run_info is None:
-        # Create a default SessionInfo if none exists
-        from buttermilk._core.job import SessionInfo
-
-        return SessionInfo(
-            name="default_session",
-            job="default_job",
-            _get_ip_task=lambda: "127.0.0.1",
-        )
-
-    return bm.run_info
+    return BM().run_info
 
 
 # --- Core Step Execution ---

@@ -13,6 +13,8 @@ from buttermilk._core.types import Record
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
 from buttermilk.agents.judge import AgentReasons  # Judge output model
 
+from buttermilk.bm import BM
+bm=BM()
 
 # Mock weave globally for all tests in this module
 # We patch the actual location where 'weave' is imported and used within the codebase (buttermilk.bm)

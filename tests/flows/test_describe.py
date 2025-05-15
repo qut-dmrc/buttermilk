@@ -5,6 +5,8 @@ from buttermilk._core.types import Record
 from buttermilk.agents.describer import Describer
 from buttermilk.utils.media import download_and_convert
 
+from buttermilk.bm import BM
+bm=BM()
 
 @pytest.fixture(params=MULTIMODAL_MODELS)
 def flow_describer(request):

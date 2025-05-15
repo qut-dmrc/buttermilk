@@ -3,9 +3,9 @@ import io
 import json
 import pickle
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Hashable, Mapping
 from pathlib import Path
-from typing import Any, Hashable
+from typing import Any
 
 import google.cloud.storage
 import pandas as pd
@@ -47,9 +47,8 @@ def save(
 
     if not save_dir:
         try:
-            from buttermilk.bm import bm
 
-            save_dir = bm.save_dir
+            save_dir = BM().save_dir
         except Exception as e:
             logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")
 

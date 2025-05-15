@@ -29,6 +29,7 @@ from buttermilk.bm import BM, logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
 
+bm = BM()
 # High callback duration when dealing with LLMs
 asyncio.get_event_loop().slow_callback_duration = 120
 

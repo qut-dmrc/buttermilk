@@ -23,7 +23,7 @@ from vertexai.language_models import (
 
 from buttermilk import logger
 from buttermilk._core.config import DataSouce
-from buttermilk.bm import BM, bm
+from buttermilk.bm import BM
 
 MODEL_NAME = "text-embedding-large-exp-03-07"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -302,7 +302,7 @@ class ChromaDBEmbeddings(DataSouce):
                             task_type=self.task,
                             title=chunk.chunk_title,
                         ),
-                    )
+                    ),
                 )
             else:
                 logger.warning(
@@ -384,7 +384,7 @@ class ChromaDBEmbeddings(DataSouce):
                 pa.field("chunk_text", pa.string()),
                 pa.field("embedding", embedding_type),
                 pa.field("chunk_metadata", pa.string()),
-            ]
+            ],
         )
 
         table = pa.Table.from_pydict(data, schema=schema)
@@ -528,11 +528,11 @@ class ChromaDBEmbeddings(DataSouce):
                     f"Failed to upsert chunks for document {doc.record_id} into ChromaDB: {e} {e.args=}",
                 )
                 try:
-                    failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                    failed_doc_filename = BM().save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                     logger.info(
                         f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                     )
-                    bm.save(doc, failed_doc_filename)
+                    BM().save(doc, failed_doc_filename)
                 except Exception as save_e:
                     logger.error(
                         f"Could not save failed document {doc.record_id} to disk: {save_e} {save_e.args=}",
@@ -601,11 +601,11 @@ class ChromaDBEmbeddings(DataSouce):
             logger.error(f"Failed to upsert document {doc.record_id}: {e}")
             # Save the failed document for retry
             try:
-                failed_doc_filename = bm.save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
+                failed_doc_filename = BM().save_dir / Path(FAILED_BATCH_DIR) / f"failed_upsert_doc_{doc.record_id}_{uuid.uuid4()}.pkl"
                 logger.info(
                     f"Saving failed document {doc.record_id} to {failed_doc_filename}",
                 )
-                bm.save(doc_with_embeddings, failed_doc_filename)
+                BM().save(doc_with_embeddings, failed_doc_filename)
             except Exception as save_e:
                 logger.error(
                     f"Could not save failed document {doc.record_id}: {save_e}",

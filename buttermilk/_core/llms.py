@@ -27,9 +27,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from buttermilk._core.contract import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.log import logger
+from buttermilk.bm import BM
 
 from .retry import RetryWrapper
 
+bm = BM()
 _ = "ChatCompletionClient"
 
 
@@ -261,7 +263,6 @@ class LLMs(BaseModel):
         return Enum("AllModelNames", list(self.connections.keys()))
 
     def get_autogen_chat_client(self, name) -> AutoGenWrapper:
-        from buttermilk.bm import bm
 
         if name in self.autogen_models:
             return self.autogen_models[name]
