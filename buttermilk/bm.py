@@ -185,10 +185,6 @@ class BM(Singleton, Project):
     def setup_instance(self) -> Self:
         """Performs setup requiring configuration (e.g., run_info, logger_cfg)."""
         # Ensure run_info is set before proceeding with dependent setups
-        if not self.run_info:
-            raise ValueError(
-                "BM instance created without run_info, which is required for setup.",
-            )
 
         for cloud in self.clouds:
             if cloud.type == "gcp":

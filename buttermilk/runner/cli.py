@@ -17,19 +17,17 @@ from uuid import uuid4
 
 import hydra
 import uvicorn
-from omegaconf import DictConfig  # Import DictConfig for type hinting
+from omegaconf import DictConfig
 
 from buttermilk._core.config import FatalError
-from buttermilk._core.constants import MANAGER
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 from buttermilk.api.flow import create_app
 from buttermilk.api.job_queue import JobQueueClient
-from buttermilk.bm import BM, logger
+from buttermilk.bm import logger
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.runner.slackbot import register_handlers
 
-bm = BM()
 # High callback duration when dealing with LLMs
 asyncio.get_event_loop().slow_callback_duration = 120
 
@@ -99,14 +97,17 @@ def main(cfg: DictConfig) -> None:
     # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
     # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
 
-    # Create the FlowRunner with the specified UI type
-    flow_runner: FlowRunner = FlowRunner.model_validate(cfg)  # hydra.utils.instantiate(cfg)
-    bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
+    objs = hydra.utils.instantiate(cfg)
+    bm = objs.bm
+    flow_runner: FlowRunner = FlowRunner.model_validate(cfg)
+    # # Create the FlowRunner with the specified UI type
+    # flow_runner:  # hydra.utils.instantiate(cfg)
+    # bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
 
     # Branch execution based on the configured UI mode.
     match cfg.run.mode:
         case "console":
-            ui = CLIUserAgent(agent_name=MANAGER, session_id=uuid4().hex)
+            ui = CLIUserAgent(session_id=uuid4().hex)
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(ui_type=cfg.ui,
                 flow=cfg.get("flow"),

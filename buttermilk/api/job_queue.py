@@ -17,7 +17,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.toxicity.tox_data import toxic_record
 
 

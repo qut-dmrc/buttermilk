@@ -9,7 +9,7 @@ import pydantic
 from pydantic import BaseModel, PrivateAttr  # Import Field
 from pyzotero import zotero
 
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 
 # Import ChromaDBEmbeddings for type hinting
 from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument

@@ -2,8 +2,6 @@ from cloudpathlib import AnyPath
 
 from buttermilk.bm import BM
 
-bm = BM()
-
 
 def test_has_test_info(bm: BM):
     assert bm.run_info.name == "buttermilk"

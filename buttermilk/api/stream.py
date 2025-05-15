@@ -13,7 +13,7 @@ from pydantic import (
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.utils.media import download_and_convert
 
 

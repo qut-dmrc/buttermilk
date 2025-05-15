@@ -22,9 +22,6 @@ from buttermilk._core.contract import (
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
-from buttermilk.bm import BM
-
-bm = BM()
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
