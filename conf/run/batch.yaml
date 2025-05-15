@@ -2,6 +2,7 @@
 # Batch execution configuration
 
 defaults:
+  - local
   - _self_
   - /flows/criteria@run.batch.parameters.criteria: 
     - trans 
@@ -9,7 +10,10 @@ defaults:
 
 name: bm_api
 job: flows
+
 run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
+  save: ${save}
   mode: batch
   ui: batch
   human_in_loop: false

@@ -5,7 +5,9 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core.contract import AgentInput
 from buttermilk.agents.llm import LLMAgent
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.data.vector import InputDocument
 
 CITATION_TEXT_CHAR_LIMIT = 4000  # characters

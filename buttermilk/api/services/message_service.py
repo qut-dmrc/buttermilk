@@ -12,7 +12,9 @@ from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
-from buttermilk.bm import logger, BM
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 PREVIEW_LENGTH = 200
 

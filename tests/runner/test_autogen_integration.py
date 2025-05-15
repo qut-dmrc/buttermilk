@@ -17,8 +17,7 @@ from buttermilk.agents.judge import AgentReasons, Judge
 # The adapter under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
-from buttermilk.bm import BM
-bm=BM()
+bm = bm
 # --- Test Fixtures ---
 
 

@@ -48,7 +48,7 @@ def save(
     if not save_dir:
         try:
 
-            save_dir = BM().save_dir
+            save_dir = bm.save_dir
         except Exception as e:
             logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")
 

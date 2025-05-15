@@ -16,6 +16,8 @@ import json
 import logging
 import os
 import sys
+import threading
+from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
@@ -39,15 +41,21 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
     PrivateAttr,
     model_validator,
 )
 from rich import print
 from weave.trace.weave_client import WeaveClient
 
-from ._core.config import Project
+from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
+from buttermilk._core.log import logger
+
 from ._core.llms import LLMs
 from ._core.log import logger
+from ._core.types import SessionInfo
 from .utils import save
 from .utils.keys import SecretsManager
 from .utils.utils import load_json_flexi
@@ -63,6 +71,9 @@ GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 _REGISTRY = {}
 _CONFIG = "config"  # registry key for config object
 
+# Add a lock for thread safety
+_singleton_lock = threading.Lock()
+
 
 class ConfigRegistry:
     _instance = None
@@ -71,7 +82,12 @@ class ConfigRegistry:
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            cls._instance = ConfigRegistry()
+            # Use the lock to ensure thread-safe creation
+            with _singleton_lock:
+                # Check again inside the lock in case another thread created it
+                # while waiting for the lock
+                if cls._instance is None:
+                    cls._instance = ConfigRegistry()
         return cls._instance
 
     @classmethod
@@ -99,21 +115,48 @@ def _convert_to_hashable_type(element: Any) -> Any:
 
 
 class Singleton:
-    # From https://py.iceberg.apache.org/reference/pyiceberg/utils/singleton/
-    _instances: ClassVar[dict] = {}  # type: ignore
+    # Use a class variable for instances, as suggested by the comment
+    _instances: ClassVar[dict] = {}
+    _lock: ClassVar[threading.Lock] = threading.Lock()  # Use a lock per Singleton class
 
-    def __new__(cls, *args, **kwargs):  # type: ignore
-        key = cls.__name__
-        if key not in _REGISTRY:
-            _REGISTRY[key] = super().__new__(cls)
-        return _REGISTRY[key]
+    def __new__(cls, *args, **kwargs):
+        # Use the lock to ensure thread-safe creation
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__new__(cls)
+                cls._instances[cls] = instance
+                # Call __init__ manually only on the first creation
+                # This prevents __init__ from being called on subsequent calls
+                instance.__init__(*args, **kwargs)
+            return cls._instances[cls]
 
     def __deepcopy__(self, memo: dict[int, Any] | None = None):
         """Prevent deep copy operations for singletons"""
         return self
 
 
-class BM(Singleton, Project):
+class BM(Singleton, BaseModel):
+
+    connections: Sequence[str] = Field(default_factory=list)
+    secret_provider: CloudProviderCfg = Field(default=None)
+    logger_cfg: CloudProviderCfg = Field(default=None)
+    pubsub: CloudProviderCfg = Field(default=None)
+    clouds: list[CloudProviderCfg] = Field(default_factory=list)
+    tracing: Tracing | None = Field(default_factory=Tracing)
+    run_info: SessionInfo | None = Field(
+        default=None,
+        description="Information about the context in which this project runs",
+    )
+    datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,
+        exclude_none=True,
+        exclude_unset=True,
+    )
+
     _gcp_project: str = PrivateAttr(default="")
     _gcp_credentials_cached: GoogleCredentials | None = PrivateAttr(
         default=None,

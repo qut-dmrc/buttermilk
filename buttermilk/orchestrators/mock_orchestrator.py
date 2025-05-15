@@ -30,7 +30,9 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class MockTerminationHandler:

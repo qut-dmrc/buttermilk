@@ -12,7 +12,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 from buttermilk.runner.flowrunner import FlowRunner
 
 from .routes import flow_data_router

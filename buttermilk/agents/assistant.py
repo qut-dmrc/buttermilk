@@ -13,15 +13,17 @@ from autogen_core.models import ChatCompletionClient  # Import RequestUsage
 from autogen_core.tools import BaseTool
 from pydantic import PrivateAttr
 
-from buttermilk._core.agent import Agent, AgentInput, AgentTrace, ToolOutput
+from buttermilk._core.agent import Agent, AgentInput, AgentTrace
 from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
 )
 
 # Restore original bm import
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
 from buttermilk.utils._tools import create_tool_functions
+
+bm = BM()
 
 
 class SimpleAutogenChatWrapper(RoutedAgent):
@@ -56,7 +58,7 @@ class AssistantAgentWrapper(Agent):
         if not model_name:
             raise ValueError(f"Agent {self.role}: 'model' parameter is required.")
         # Use the global bm instance
-        self._model_client = BM().llms.get_autogen_chat_client(model_name)  # Use global bm
+        self._model_client = bm.llms.get_autogen_chat_client(model_name)  # Use global bm
 
         # 2. Initialize Tools
         # Ensure create_tool_functions returns the correct type or cast/ignore

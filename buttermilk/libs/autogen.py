@@ -33,7 +33,9 @@ from buttermilk._core.contract import (
     OOBMessages,
     StepRequest,  # Union type for Out-Of-Band control messages.
 )
-from buttermilk.bm import logger  # Buttermilk logger instance.
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class AutogenAgentAdapter(RoutedAgent):

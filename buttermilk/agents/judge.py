@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 # Buttermilk core imports
 from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
-from buttermilk.bm import logger  # Global Buttermilk instance and logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 # --- Pydantic Models ---

@@ -32,7 +32,7 @@ from buttermilk.utils.validators import (
 )
 
 from .defaults import BQ_SCHEMA_DIR
-from .types import RunRequest, SessionInfo
+from .types import RunRequest
 
 BASE_DIR = Path(__file__).absolute().parent
 
@@ -109,7 +109,7 @@ class SaveInfo(CloudProviderCfg):
     def bq_schema(self) -> list[SchemaField]:
         if not self._loaded_schema:
 
-            self._loaded_schema = BM().bq.schema_from_json(self.db_schema)
+            self._loaded_schema = bm.bq.schema_from_json(self.db_schema)
         return self._loaded_schema
 
 
@@ -179,28 +179,6 @@ class Tracing(BaseModel):
     provider: str = ""
     endpoint: str | None = None
     otlp_headers: Mapping | None = Field(default_factory=dict)
-
-
-class Project(BaseModel):
-    connections: Sequence[str] = Field(default_factory=list)
-    secret_provider: CloudProviderCfg = Field(default=None)
-    logger_cfg: CloudProviderCfg = Field(default=None)
-    pubsub: CloudProviderCfg = Field(default=None)
-    clouds: list[CloudProviderCfg] = Field(default_factory=list)
-    tracing: Tracing | None = Field(default_factory=Tracing)
-    run_info: SessionInfo | None = Field(
-        default=None,
-        description="Information about the context in which this project runs",
-    )
-    datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
-
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=False,
-        populate_by_name=True,
-        exclude_none=True,
-        exclude_unset=True,
-    )
 
 
 # --- Agent Configuration ---

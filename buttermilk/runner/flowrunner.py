@@ -22,7 +22,9 @@ from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.bm import BM, logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class FlowRunContext(BaseModel):
@@ -113,7 +115,6 @@ class FlowRunner(BaseModel):
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
     """
 
-    bm: BM
     flows: dict[str, OrchestratorProtocol] = Field(default_factory=dict)  # Flow configurations
 
     save: SaveInfo

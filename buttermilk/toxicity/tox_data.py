@@ -12,7 +12,9 @@ from datasets import load_dataset
 from torch.utils.data.datapipes.datapipe import IterDataPipe
 
 from buttermilk._core.types import Record
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+
+bm = BM()
 
 
 class ToxicPipe(IterDataPipe):

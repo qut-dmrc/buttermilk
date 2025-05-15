@@ -149,7 +149,7 @@ def _get_run_info() -> SessionInfo:
         A SessionInfo object with the current run information.
 
     """
-    return BM().run_info
+    return bm.run_info
 
 
 # --- Core Step Execution ---

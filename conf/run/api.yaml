@@ -6,7 +6,11 @@ defaults:
 
 name: bm_api
 job: flows
+
 run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
   mode: api
   ui: web
   human_in_loop: true
+  save: ${save}
+  flows: ${flows}
