@@ -22,9 +22,12 @@ from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 
 
 class FlowRunContext(BaseModel):
@@ -120,7 +123,9 @@ class FlowRunner(BaseModel):
     save: SaveInfo
     tasks: list = Field(default=[])
     model_config = ConfigDict(extra="allow")
-
+    mode: str = Field(default="api")
+    ui: str = Field(default="console")
+    human_in_loop: bool = False
     sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions
 
     def get_websocket_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
@@ -163,7 +168,7 @@ class FlowRunner(BaseModel):
         else:
             logger.debug("No tasks available in the queue")
 
-    def _create_fresh_orchestrator(self, flow_name: str, session_id: str) -> OrchestratorProtocol:
+    def _create_fresh_orchestrator(self, flow_name: str) -> OrchestratorProtocol:
         """Create a completely fresh orchestrator instance.
         
         Args:
@@ -192,7 +197,7 @@ class FlowRunner(BaseModel):
         config = flow_config.model_dump() if hasattr(flow_config, "model_dump") else dict(flow_config)
 
         # Create and return a fresh instance
-        return orchestrator_cls(**config, session_id=session_id)
+        return orchestrator_cls(**config)
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
         """Clean up resources associated with a flow run.
@@ -238,7 +243,7 @@ class FlowRunner(BaseModel):
 
         """
         # Create a fresh orchestrator instance
-        fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow, session_id=run_request.session_id)
+        fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
 
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol

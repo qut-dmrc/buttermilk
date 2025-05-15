@@ -64,6 +64,8 @@ def _convert_to_hashable_type(element: Any) -> Any:
 class Singleton:
     # Use a class variable for instances, as suggested by the comment
     _instances: ClassVar[dict] = {}
+    _initialized: ClassVar[dict] = {}  # Track which classes have been initialized
+    _deferred_args: ClassVar[dict] = {}  # Store args and kwargs for deferred initialization
     _lock: ClassVar[threading.Lock] = threading.Lock()  # Use a lock per Singleton class
 
     def __new__(cls, *args, **kwargs):
@@ -72,10 +74,51 @@ class Singleton:
             if cls not in cls._instances:
                 instance = super().__new__(cls)
                 cls._instances[cls] = instance
-                # Call __init__ manually only on the first creation
-                # This prevents __init__ from being called on subsequent calls
-                instance.__init__(*args, **kwargs)
+                cls._initialized[cls] = False  # Mark as not initialized yet
             return cls._instances[cls]
+
+    def __init__(self, *args, **kwargs):
+        cls = self.__class__
+        with cls._lock:
+            if not cls._initialized.get(cls, False):
+                try:
+                    # Only initialize once - attempt full initialization
+                    super().__init__(*args, **kwargs)
+                    cls._initialized[cls] = True
+                except Exception:
+                    # If initialization fails, we'll defer it
+                    # This is particularly useful in testing environments
+                    # where BM might be imported before it's properly initialized
+                    cls._initialized[cls] = False
+                    # Store the args and kwargs for later initialization
+                    if not hasattr(cls, "_deferred_args"):
+                        cls._deferred_args = {}
+                    cls._deferred_args[cls] = (args, kwargs)
+                    # We don't re-raise the exception, allowing a partial initialization
+                    # that will be completed later
+            elif kwargs:
+                # If we have kwargs and the singleton is already initialized
+                if cls._initialized.get(cls, False):
+                    # Update existing attributes
+                    for key, value in kwargs.items():
+                        if hasattr(self, key):
+                            setattr(self, key, value)
+                else:
+                    # We have a deferred initialization, try again with combined kwargs
+                    try:
+                        # Get original args/kwargs
+                        orig_args, orig_kwargs = cls._deferred_args.get(cls, ((), {}))
+                        # Merge with new kwargs
+                        merged_kwargs = {**orig_kwargs, **kwargs}
+                        # Attempt to initialize
+                        super().__init__(*orig_args, **merged_kwargs)
+                        cls._initialized[cls] = True
+                        # If successful, remove deferred args
+                        if cls in cls._deferred_args:
+                            del cls._deferred_args[cls]
+                    except Exception:
+                        # Still not ready, keep deferred initialization
+                        pass
 
     def __deepcopy__(self, memo: dict[int, Any] | None = None):
         """Prevent deep copy operations for singletons"""

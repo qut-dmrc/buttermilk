@@ -3,9 +3,12 @@ import uuid
 
 import pytest
 
-from buttermilk.bm import BM  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    BM,  # Buttermilk global instance and logger
+    get_bm,
+)
 
-bm = BM()
+bm = get_bm()
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())

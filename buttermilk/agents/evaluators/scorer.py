@@ -111,10 +111,10 @@ class LLMScorer(LLMAgent):
         # Ignore messages that are not AgentTrace, or don't have AgentReasons in outputs, or
         # don't have records in inputs
         if not isinstance(message, AgentTrace) or not hasattr(message, "outputs") or not isinstance(message.outputs, JudgeReasons) or not message.inputs:
-            logger.debug(f"Scorer {self.agent_id} received message from agent {source} without required fields.")
+            logger.debug(f"Scorer {self.agent_name} received message from agent {source} without required fields.")
             return
 
-        logger.debug(f"Scorer {self.agent_id} received potential scoring target from agent {source}")
+        logger.debug(f"Scorer {self.agent_name} received potential scoring target from agent {source}")
         extracted = extract_message_data(
             message=message,
             source=source,

@@ -32,7 +32,7 @@ from buttermilk.utils.validators import (  # Pydantic validators
 
 from .config import AgentConfig
 from .log import logger
-from .types import Record, SessionInfo  # Core data types
+from .types import Record  # Core data types
 
 # --- General Communication & Base Messages ---
 
@@ -141,15 +141,15 @@ class TracingDetails(BaseModel):
         return value  # Return provided value if exists
 
 
-def _get_run_info() -> SessionInfo:
+def _get_run_info():
     """Get the current session info from the global bm instance.
 
     Returns:
         A SessionInfo object with the current run information.
 
     """
-    from buttermilk.bm import BM
-    bm = BM()
+    from buttermilk.bm import get_bm
+    bm = get_bm()
     return bm.run_info
 
 
@@ -305,7 +305,7 @@ class AgentTrace(FlowMessage, AgentOutput):
     errors, and tracing information, as well as the main AgentOutput results.
     """
 
-    run_info: SessionInfo = Field(default_factory=_get_run_info)
+    run_info: Any = Field(default_factory=_get_run_info)
     agent_info: AgentConfig = Field(..., description="Configuration info from the agent (required)")
     session_id: str = Field(..., description="Unique identifier for client session")
 

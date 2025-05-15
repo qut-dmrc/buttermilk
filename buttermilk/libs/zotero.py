@@ -9,9 +9,12 @@ import pydantic
 from pydantic import BaseModel, PrivateAttr  # Import Field
 from pyzotero import zotero
 
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 
-bm = BM()
+bm = get_bm()
 
 # Import ChromaDBEmbeddings for type hinting
 from buttermilk.data.vector import ChromaDBEmbeddings, InputDocument

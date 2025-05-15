@@ -37,10 +37,13 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import (  # Buttermilk global instance and logger
+    get_bm,  # Buttermilk global instance and logger
+    logger,
+)
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
-bm = BM()
+bm = get_bm()
 
 
 class TerminationHandler(DefaultInterventionHandler):
@@ -170,7 +173,7 @@ class AutogenOrchestrator(Orchestrator):
                         factory=lambda params=variant_config.parameters, cls=agent_cls:  cls(**params),
                     )
 
-                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_id}', Role='{role_name}', Type='{agent_type}'")
+                logger.debug(f"Registered agent adapter: ID='{variant_config.agent_name}', Role='{role_name}', Type='{agent_type}'")
 
                 # Subscribe the newly registered agent type to the main group chat topic.
                 # This allows it to receive general messages sent to the group.
@@ -216,7 +219,7 @@ class AutogenOrchestrator(Orchestrator):
                 logger.debug(f"Sending message to UI: {message}")
                 await callback_to_ui(message)
             else:
-                logger.debug(f"[{self.session_id}] {message}")
+                logger.debug(f"[{self.trace_id}] {message}")
 
         # Register the closure function as an agent named MANAGER.
         await ClosureAgent.register_closure(
@@ -255,7 +258,6 @@ class AutogenOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Error during runtime cleanup: {e}")
 
-    @weave.op
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
         

@@ -17,6 +17,7 @@ import logging
 import os
 import platform
 import sys
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import mkdtemp
@@ -28,6 +29,7 @@ from typing import (
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
+import hydra
 import pandas as pd
 import psutil
 import pydantic
@@ -37,6 +39,7 @@ from cloudpathlib import AnyPath, CloudPath
 from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
+from omegaconf import DictConfig
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -54,8 +57,9 @@ from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger
-from buttermilk._core.singleton import Singleton
-from buttermilk._core.types import SessionInfo
+
+# We'll no longer use the Singleton class from _core.singleton
+from buttermilk._core.types import _make_run_id
 from buttermilk.utils import get_ip, save
 from buttermilk.utils.utils import load_json_flexi
 
@@ -73,11 +77,9 @@ class SessionInfo(BaseModel):
     job: str
     run_id: str
     max_concurrency: int = -1
-    ip: str = Field(default="")
+    ip: str | None = Field(default=None)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(
-        default_factory=lambda: psutil.Process().username().split("\\")[-1],
-    )
+    username: str = Field(...)
     save_dir: str | None = None
     flow_api: str | None = None
 
@@ -89,7 +91,7 @@ class SessionInfo(BaseModel):
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
 
-class BM(Singleton, BaseModel):
+class BM(BaseModel):
 
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg = Field(default=None)
@@ -97,16 +99,11 @@ class BM(Singleton, BaseModel):
     pubsub: CloudProviderCfg = Field(default=None)
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
-    run_info: SessionInfo | None = Field(
-        default=None,
-        description="Information about the context in which this project runs",
-    )
     datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
 
     platform: str = "local"
     name: str
     job: str
-    run_id: str
     max_concurrency: int = -1
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     username: str = Field(
@@ -114,8 +111,10 @@ class BM(Singleton, BaseModel):
     )
     save_dir: str | None = None
     flow_api: str | None = None
+
+    _run_id: str = PrivateAttr(default_factory=_make_run_id)
     _get_ip_task: asyncio.Task
-    _ip: str = PrivateAttr()
+    _ip: str | None = PrivateAttr(default=None)
 
     save_dir_base: str = Field(
         default_factory=mkdtemp,
@@ -162,7 +161,7 @@ class BM(Singleton, BaseModel):
 
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
+        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self._run_id
         self.save_dir = str(save_dir)
         return self
 
@@ -187,8 +186,8 @@ class BM(Singleton, BaseModel):
 
     @property
     def run_info(self) -> SessionInfo:
-        return SessionInfo(platform=self.platform, name=self.name, job=self.job, run_id=self.run_id,
-                           node_name=self.node_name, username=self.username, ip=self.ip, save_dir=self.save_dir,
+        return SessionInfo(platform=self.platform, name=self.name, job=self.job, run_id=self._run_id,
+                           node_name=self.node_name, username=self.username, ip=self._ip, save_dir=self.save_dir,
                            flow_api=self.flow_api)
 
     @property
@@ -228,37 +227,50 @@ class BM(Singleton, BaseModel):
     def logger(self) -> logging.Logger:
         return logger
 
-    # Removed model_validator(mode="before") and get_vars
-
-    # Renamed from setup_instance and removed model_validator
-    def __init__(self, **data: Any) -> None:
+    def setup_instance(self, cfg: DictConfig = None) -> None:
         """Initializes the BM singleton instance after validation."""
-        super().__init__(**data)  # Call BaseModel's __init__ to populate fields
+        # Only proceed with the full initialization once
+        # This should only happen when we actually call BM() with parameters
+        if cfg:  # Only perform expensive initialization with actual data
+            # Initialize IP task asynchronously if needed
+            if not hasattr(self, "_get_ip_task") or self._get_ip_task is None:
+                try:
+                    # Only create a task if an event loop is running
+                    if asyncio.get_event_loop().is_running():
+                        self._get_ip_task = asyncio.create_task(self.get_ip())
+                except RuntimeError:
+                    # No event loop running, skip IP task
+                    pass
 
-        for cloud in self.clouds:
-            if cloud.type == "gcp":
-                # store authentication info
-                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
-                    "GOOGLE_CLOUD_PROJECT",
-                    cloud.project,  # type: ignore[attr-defined]
-                )
-                if hasattr(
-                    cloud, "quota_project_id",
-                ):  # Check attribute existence for safety
-                    os.environ["google_billing_project"] = cloud.quota_project_id  # type: ignore[attr-defined]
+            # Only process clouds if we have them and they're properly initialized
+            if hasattr(self, "clouds") and self.clouds:
+                for cloud in self.clouds:
+                    if not cloud or not hasattr(cloud, "type"):
+                        continue  # Skip invalid cloud entries
 
-                # authenticate here (triggers property getter)
-                _ = self._gcp_credentials
+                    if cloud.type == "gcp":
+                        # store authentication info
+                        os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
+                            "GOOGLE_CLOUD_PROJECT",
+                            cloud.project,  # type: ignore[attr-defined]
+                        )
+                        if hasattr(
+                            cloud, "quota_project_id",
+                        ):  # Check attribute existence for safety
+                            os.environ["google_billing_project"] = cloud.quota_project_id  # type: ignore[attr-defined]
 
-            if cloud.type == "vertex":
-                # initialize vertexai
-                aiplatform_init(
-                    project=cloud.project,  # type: ignore[attr-defined]
-                    location=cloud.location,  # type: ignore[attr-defined]
-                    staging_bucket=cloud.bucket,  # type: ignore[attr-defined]
-                )
-                # list available models
-                # models = aiplatform.Model.list() # Potentially slow, consider if needed at init
+                        # authenticate here (triggers property getter)
+                        _ = self._gcp_credentials
+
+                    if cloud.type == "vertex":
+                        # initialize vertexai
+                        aiplatform_init(
+                            project=cloud.project,  # type: ignore[attr-defined]
+                            location=cloud.location,  # type: ignore[attr-defined]
+                            staging_bucket=cloud.bucket,  # type: ignore[attr-defined]
+                        )
+                        # list available models
+                        # models = aiplatform.Model.list() # Potentially slow, consider if needed at init
 
         if self.logger_cfg:
             # Pass verbose safely using getattr
@@ -277,7 +289,6 @@ class BM(Singleton, BaseModel):
             except Exception as e:
                 logger.error(f"Could not save config to default save dir: {e}")
 
-        # Ensure run_info exists before setting up tracing
         from opentelemetry.sdk import trace as trace_sdk
 
         WANDB_BASE_URL = "https://trace.wandb.ai"
@@ -324,7 +335,7 @@ class BM(Singleton, BaseModel):
             dict(
                 message=f"Saved data to: {result}",
                 uri=result,
-                run_id=self.run_id,
+                run_id=self._run_id,
             ),
         )
         return result
@@ -333,7 +344,6 @@ class BM(Singleton, BaseModel):
         self,
         verbose=False,
     ) -> None:
-        # Ensure run_info is available before setting up GCP logging
         if self.logger_cfg and self.logger_cfg.type == "gcp":
             if not hasattr(self.logger_cfg, "project"):
                 raise RuntimeError("GCP logger config missing 'project' attribute.")
@@ -370,7 +380,7 @@ class BM(Singleton, BaseModel):
                     "location": self.logger_cfg.location,  # type: ignore[attr-defined]
                     "namespace": self.name,  # type: ignore[union-attr] # Checked above
                     "job": self.job,  # type: ignore[union-attr] # Checked above
-                    "task_id": self.run_id,  # type: ignore[union-attr] # Checked above
+                    "task_id": self._run_id,  # type: ignore[union-attr] # Checked above
                 },
             )
 
@@ -604,6 +614,55 @@ class BM(Singleton, BaseModel):
                 return results_df
             return pd.DataFrame()
         return result  # Return Any (BigQuery result object)
+
+
+# Module-level singleton instance and lock
+_bm_instance = None
+_bm_lock = threading.Lock()
+
+
+def get_bm() -> BM:
+    """Get the singleton BM instance.
+    
+    This function ensures that we always get the same BM instance,
+    no matter where it's imported from.
+    
+    Returns:
+        BM: The singleton BM instance
+
+    """
+    global _bm_instance
+    if _bm_instance is None:
+        with _bm_lock:
+            if _bm_instance is None:
+                try:
+                    # In a testing environment, we might not have all required params
+                    _bm_instance = BM(name="uninitialized", job="uninitialized", _run_id="uninitialized")
+                except Exception:
+                    # Create with defaults that will be overridden later
+                    pass
+    return _bm_instance
+
+
+def initialize_bm(cfg: DictConfig) -> BM:
+    """Initialize the BM singleton with the provided configuration.
+    
+    This function should be called once at startup, typically from cli.py
+    via hydra instantiation, to set up the BM instance with the proper 
+    configuration values.
+    
+    Args:
+        cfg (DictConfig): Configuration parameters for BM
+
+    Returns:
+        BM: The initialized singleton BM instance
+
+    """
+    global _bm_instance
+    with _bm_lock:
+        _bm_instance = hydra.utils.instantiate(cfg)
+        _bm_instance.setup_instance(cfg)
+    return _bm_instance
 
 
 if __name__ == "__main__":
