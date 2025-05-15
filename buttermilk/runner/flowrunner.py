@@ -70,10 +70,12 @@ class FlowRunContext(BaseModel):
 
             except WebSocketDisconnect:
                 logger.info(f"Client {self.session_id} disconnected.")
-                # self.websocket = None
+                self.websocket = None
+                break
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {self.session_id}: {e}")
-                # self.websocket = None
+                self.websocket = None
+                break
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
     async def send_message_to_ui(self, message: AgentTrace | UIMessage | Record | FlowEvent | FlowMessage) -> None:
