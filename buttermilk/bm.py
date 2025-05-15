@@ -20,7 +20,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
-    Self,
 )
 
 import coloredlogs
@@ -41,7 +40,6 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
-    model_validator,
 )
 from rich import print
 from vertexai import init as aiplatform_init
@@ -104,19 +102,9 @@ class BM(Singleton, BaseModel):
 
     @property
     def weave(self) -> WeaveClient:
-        if not hasattr(self, "_weave"):
-            if (
-                self.tracing
-                and self.run_info
-                and self.tracing.enabled
-                and self.tracing.provider == "weave"
-            ):
-                collection = f"{self.run_info.name}-{self.run_info.job}"
-                weave.init(collection)
-            else:
-                raise RuntimeError(
-                    "run_info/tracing details not set, cannot initialize Weave.",
-                )
+        if not self._weave:
+            collection = f"{self.run_info.name}-{self.run_info.job}"
+            self._weave = weave.init(collection)
         return self._weave
 
     @property
@@ -141,7 +129,9 @@ class BM(Singleton, BaseModel):
 
         # GCP tokens last 60 minutes and need to be refreshed after that
         auth_request = Request()  # Use imported Request
-        self._gcp_credentials_cached.refresh(auth_request)
+        # Check if credentials support refresh before calling
+        if hasattr(self._gcp_credentials_cached, "refresh"):
+             self._gcp_credentials_cached.refresh(auth_request)
 
         return self._gcp_credentials_cached
 
@@ -154,16 +144,15 @@ class BM(Singleton, BaseModel):
     def logger(self) -> logging.Logger:
         return logger
 
-    @model_validator(mode="before")
-    @classmethod
-    def get_vars(cls, vars) -> dict:
-        # Not sure why this does nothing... maybe debugging?
-        return vars
+    # Removed model_validator(mode="before") and get_vars
 
-    @model_validator(mode="after")
-    def setup_instance(self) -> Self:
-        """Performs setup requiring configuration (e.g., run_info, logger_cfg)."""
-        # Ensure run_info is set before proceeding with dependent setups
+    # Renamed from setup_instance and removed model_validator
+    def __init__(self, **data: Any) -> None:
+        """Initializes the BM singleton instance after validation."""
+        super().__init__(**data)  # Call BaseModel's __init__ to populate fields
+
+        # Performs setup requiring configuration (e.g., run_info, logger_cfg).
+        # This logic was moved from the model_validator.
 
         for cloud in self.clouds:
             if cloud.type == "gcp":
@@ -212,7 +201,6 @@ class BM(Singleton, BaseModel):
             from opentelemetry.sdk import trace as trace_sdk
 
             WANDB_BASE_URL = "https://trace.wandb.ai"
-            collection = f"{self.run_info.name}-{self.run_info.job}"
             OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
             os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
             os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
@@ -235,10 +223,6 @@ class BM(Singleton, BaseModel):
 
             # Add the exporter to the tracer provider
             tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
-
-            # Initialize weave tracing
-            collection = f"{self.run_info.name}-{self.run_info.job}"
-            self._weave = weave.init(collection)
 
             logger.info(
                 f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT} and {WANDB_BASE_URL}.",
@@ -342,7 +326,18 @@ class BM(Singleton, BaseModel):
         if verbose:
             bm_logger.setLevel(logging.DEBUG)
         else:
-            asyncio.get_event_loop().set_debug(False)
+            # Check if an event loop is running before setting debug mode
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                     loop.set_debug(False)
+                else:
+                    # If no loop is running, setting debug might not be relevant or could raise error
+                    pass  # Or handle appropriately
+            except RuntimeError:
+                # No current event loop
+                pass
+
             bm_logger.setLevel(logging.INFO)
 
         message = (
@@ -438,14 +433,11 @@ class BM(Singleton, BaseModel):
                     cfg_key=_MODELS_CFG_KEY,
                 )
                 try:
-                    # Blocking IO
+                    # Optionally cache the fetched connections to a file for next time
                     Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
-                    Path(CONFIG_CACHE_PATH).write_text(
-                        json.dumps(connections),
-                        encoding="utf-8",
-                    )
+                    Path(CONFIG_CACHE_PATH).write_text(json.dumps(connections), encoding="utf-8")
                 except Exception as e:
-                    logger.error(f"Unable to cache connections: {e}, {e.args}")
+                    logger.warning(f"Could not cache LLM connections to {CONFIG_CACHE_PATH}: {e}")
 
             # Ensure connections is a dictionary before passing to LLMs
             if not isinstance(connections, dict):
@@ -462,7 +454,7 @@ class BM(Singleton, BaseModel):
         # Ensure _gcp_project is set (happens in _gcp_credentials getter)
         if not hasattr(self, "_gcp_project"):
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
-            if not hasattr(self, "_gcp_project"):  # Check again
+            if not hasattr(self, "_gcp_project"):
                 raise RuntimeError(
                     "GCP project not determined. Ensure GCP cloud config is present.",
                 )
@@ -470,7 +462,7 @@ class BM(Singleton, BaseModel):
         if self._bq_cached is None:
             self._bq_cached = bigquery.Client(
                 project=self._gcp_project, credentials=self._gcp_credentials_cached,
-            )  # Pass credentials
+            )
         return self._bq_cached
 
     def run_query(

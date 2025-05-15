@@ -30,7 +30,6 @@ class Job(BaseModel):
     parameters: dict = Field(default_factory=dict)
     inputs: dict = Field(default_factory=dict)
     record: Record | None = None
-    run_info: Any = None
 
 
 async def flow_stream(
@@ -54,8 +53,6 @@ async def flow_stream(
         # Legacy FlowRequest conversion
         job = flow_request.to_job()
 
-        if not flow_request.source:
-            flow_request.source = [bm.run_info.job]
 
         # First step, fetch the record if we need to.
         if not job.record and job.inputs:
@@ -64,8 +61,6 @@ async def flow_stream(
             else:
                 job.record = await download_and_convert(**job.inputs)
 
-        # Set run info
-        job.run_info = bm.run_info
 
     else:
         # New RunRequest model
@@ -86,8 +81,6 @@ async def flow_stream(
         elif len(run_request.records) > 0:
             job.record = run_request.records[0]
 
-        # Set run info
-        job.run_info = bm.run_info
 
     # Run the flow
     async for result in flow.run_flows(job=job):
