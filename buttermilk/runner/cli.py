@@ -84,7 +84,7 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
-def main(cfg: DictConfig) -> None:
+def main(conf: DictConfig) -> None:
     """Main application function orchestrated by Hydra.
 
     Args:
@@ -101,8 +101,8 @@ def main(cfg: DictConfig) -> None:
     from buttermilk.bm import initialize_bm
 
     # Initialize BM singleton via our new function instead of direct instantiation
-    bm = initialize_bm(cfg.bm)
-    flow_runner: FlowRunner = FlowRunner.model_validate(cfg.run)
+    bm = initialize_bm(conf.bm)
+    flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
     # bm = BM.model_validate(cfg.bm)
     # # Create the FlowRunner with the specified UI type
     # flow_runner:  #
@@ -113,18 +113,18 @@ def main(cfg: DictConfig) -> None:
         case "console":
             ui = CLIUserAgent(session_id=uuid4().hex)
             # Prepare the RunRequest with command-line parameters
-            run_request = RunRequest(ui_type=cfg.ui,
-                flow=cfg.get("flow"),
-                record_id=cfg.get("record_id", ""),
-                prompt=cfg.get("prompt", ""),
-                uri=cfg.get("uri", ""), session_id=ui.session_id,
+            run_request = RunRequest(ui_type=conf.ui,
+                flow=conf.get("flow"),
+                record_id=conf.get("record_id", ""),
+                prompt=conf.get("prompt", ""),
+                uri=conf.get("uri", ""), session_id=ui.session_id,
                 callback_to_ui=ui.callback_to_ui,
             )
 
             # Run the flow synchronously
-            bm.logger.info(f"Running flow '{cfg.flow}' in console mode...")
+            bm.logger.info(f"Running flow '{conf.flow}' in console mode...")
             asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
-            bm.logger.info(f"Flow '{cfg.flow}' finished.")
+            bm.logger.info(f"Flow '{conf.flow}' finished.")
 
         case "batch":
 
@@ -132,7 +132,7 @@ def main(cfg: DictConfig) -> None:
             from buttermilk.runner.batch_cli import main as batch_main
 
             # We're already in the hydra context, so we can just call the main function
-            batch_main(cfg)
+            batch_main(conf)
 
         case "batch_run":
             # Run batch jobs from the queue
@@ -140,7 +140,7 @@ def main(cfg: DictConfig) -> None:
             # Each job gets a completely fresh orchestrator instance to ensure
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
-            max_jobs = cfg.get("max_jobs", 1)  # Get max_jobs from config or default to 1
+            max_jobs = conf.get("max_jobs", 1)  # Get max_jobs from config or default to 1
 
             bm.logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
             asyncio.run(run_batch_job(flow_runner=flow_runner, max_jobs=max_jobs))
@@ -206,7 +206,7 @@ def main(cfg: DictConfig) -> None:
 
             bm.logger.info("Running in batch mode...")
             # We're already in the hydra context, so we can just call the main function
-            batch_main(cfg)
+            batch_main(conf)
 
         case "slackbot":
             # Start a Slack bot integration.
@@ -268,7 +268,7 @@ def main(cfg: DictConfig) -> None:
 
         case _:
             # Handle unexpected modes.
-            raise ValueError(f"Unsupported run mode specified in configuration: {cfg.run}")
+            raise ValueError(f"Unsupported run mode specified in configuration: {conf.run}")
 
 
 if __name__ == "__main__":

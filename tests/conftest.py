@@ -4,11 +4,21 @@ from pytest import MarkDecorator
 
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
-from buttermilk.bm import BM, logger  # Buttermilk global instance and logger
+from buttermilk.bm import BM, initialize_bm, logger  # Buttermilk global instance and logger
 
 # Don't initialize BM here, we'll let the fixture handle it
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
+
+
+@pytest.fixture(scope="session", autouse=True)
+def conf():
+    """Hydra config fixture."""
+    from hydra import compose, initialize
+
+    with initialize(version_base=None, config_path="../conf"):
+        cfg = compose(config_name="testing")
+    return cfg
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -23,8 +33,13 @@ def objs():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def bm(objs):
+def bm_unitialised(objs):
     return objs.bm
+
+
+@pytest.fixture(scope="session", autouse=True)
+def bm(conf):
+    return initialize_bm(conf.bm)
 
 
 @pytest.fixture(scope="session", autouse=True)
