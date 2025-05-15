@@ -10,12 +10,11 @@ ui: console
 bm:
   _target_: buttermilk.bm.BM
 
-  run_info:
-    name: ${name}
-    job: ${job}
-    platform: local
-    max_concurrency: 16
-    flow_api: http://flow:8000/flow/
+  name: ${name}
+  job: ${job}
+  platform: local
+  max_concurrency: 16
+  flow_api: http://flow:8000/flow/
     
   clouds:
     - type: gcp

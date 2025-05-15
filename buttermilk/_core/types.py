@@ -1,17 +1,14 @@
-import asyncio
 import base64
 import datetime
 import platform
 from collections.abc import Sequence
 from pathlib import Path
-from tempfile import mkdtemp
 from typing import Any, Literal, Self
 
 import psutil
-import pydantic
 import shortuuid
 from autogen_core.models import AssistantMessage, UserMessage
-from cloudpathlib import AnyPath, CloudPath
+from cloudpathlib import CloudPath
 from PIL.Image import Image
 from pydantic import (
     AliasChoices,
@@ -47,69 +44,6 @@ def _make_run_id() -> str:
 
 
 _global_run_id = _make_run_id()
-
-
-class SessionInfo(pydantic.BaseModel):
-    platform: str = "local"
-    name: str
-    job: str
-    run_id: str = Field(default=_global_run_id)
-    max_concurrency: int = -1
-    ip: str = Field(default="")
-    node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(
-        default_factory=lambda: psutil.Process().username().split("\\")[-1],
-    )
-    save_dir: str | None = None
-    flow_api: str | None = None
-
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=True,
-        populate_by_name=True,
-    )
-    _get_ip_task: asyncio.Task
-
-    save_dir_base: str = Field(
-        default_factory=mkdtemp,
-        validate_default=True,
-    )  # Default to temp dir
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
-
-    def __str__(self):
-        return _global_run_id
-
-    @pydantic.field_validator("save_dir_base", mode="before")
-    def get_save_dir(cls, save_dir_base, values) -> str:
-        if isinstance(save_dir_base, str):
-            pass
-        elif isinstance(save_dir_base, Path):
-            save_dir_base = save_dir_base.as_posix()
-        elif isinstance(save_dir_base, CloudPath):
-            save_dir_base = save_dir_base.as_uri()
-        else:
-            raise ValueError(
-                f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
-            )
-        return save_dir_base
-
-    @pydantic.model_validator(mode="after")
-    def set_full_save_dir(self) -> Self:
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
-        self.save_dir = str(save_dir)
-        return self
-
-    # @pydantic.model_validator(mode="after")
-    # def schedule_get_ip(self) -> Self:
-    #     self._get_ip_task = asyncio.create_task(self.get_ip())
-    #     return self
-
-    async def get_ip(self):
-        if not self.ip:
-            from ..utils import get_ip
-
-            self.ip = await get_ip()
 
 
 class MediaObj(BaseModel):
