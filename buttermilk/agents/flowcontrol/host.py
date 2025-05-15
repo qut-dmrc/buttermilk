@@ -124,6 +124,9 @@ class HostAgent(Agent):
             agent_id_to_update = message.agent_id
             async with self._tasks_condition:
                 if agent_id_to_update in self._pending_tasks_by_agent:
+                    # Check if the dictionary is empty *before* potentially making it empty
+                    was_empty_before_update = not self._pending_tasks_by_agent
+
                     self._pending_tasks_by_agent[agent_id_to_update] -= 1
                     log_prefix = f"Host received TaskComplete from {message.agent_id} (ID: {agent_id_to_update}) for role '{message.role}'."
 
@@ -138,8 +141,8 @@ class HostAgent(Agent):
                             f"Task {message.task_index}, More: {message.more_tasks_remain}, Error: {message.is_error}",
                          )
 
-                    # If the entire dictionary is now empty, notify waiters
-                    if not self._pending_tasks_by_agent:
+                    # If the entire dictionary is now empty AND it was NOT empty before this update, notify waiters
+                    if not self._pending_tasks_by_agent and not was_empty_before_update:
                         logger.info("All pending tasks completed across all agents. Notifying waiters.")
                         self._tasks_condition.notify_all()
 
