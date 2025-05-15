@@ -17,7 +17,6 @@ import logging
 import os
 import platform
 import sys
-import threading
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import mkdtemp
@@ -54,12 +53,11 @@ from vertexai import init as aiplatform_init
 from weave.trace.weave_client import WeaveClient
 
 from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger
-
-# We'll no longer use the Singleton class from _core.singleton
-from buttermilk._core.types import _make_run_id
+from buttermilk._core.singleton import ConfigRegistry, Singleton  # Import the simplified Singleton and ConfigRegistry
 from buttermilk.utils import get_ip, save
 from buttermilk.utils.utils import load_json_flexi
 
@@ -71,7 +69,30 @@ _SHARED_CREDENTIALS_KEY = "credentials_secret"
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
 
 
+_global_run_id = ""
+
+
+def _make_run_id() -> str:
+    global _global_run_id
+    if _global_run_id:
+        return _global_run_id
+    # Create a unique identifier for this run
+    node_name = platform.uname().node
+    username = psutil.Process().username()
+    # get rid of windows domain if present
+    username = str.split(username, "\\")[-1]
+
+    # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
+    run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
+
+    run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    _global_run_id = run_id
+    return run_id
+
+
 class SessionInfo(BaseModel):
+    """This is a model purely for exporting configuration information."""
+
     platform: str = "local"
     name: str
     job: str
@@ -91,8 +112,8 @@ class SessionInfo(BaseModel):
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=False)
 
 
-class BM(BaseModel):
-
+# Inherit from BaseModel and the simplified Singleton
+class BM(BaseModel, Singleton):
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg = Field(default=None)
     logger_cfg: CloudProviderCfg = Field(default=None)
@@ -112,8 +133,9 @@ class BM(BaseModel):
     save_dir: str | None = None
     flow_api: str | None = None
 
+    # Use PrivateAttr for run_id as before
     _run_id: str = PrivateAttr(default_factory=_make_run_id)
-    _get_ip_task: asyncio.Task
+    _get_ip_task: asyncio.Task | None = PrivateAttr(default=None)  # Initialize as None
     _ip: str | None = PrivateAttr(default=None)
 
     save_dir_base: str = Field(
@@ -139,7 +161,7 @@ class BM(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid",
-        arbitrary_types_allowed=False,
+        arbitrary_types_allowed=True,  # Allow arbitrary types for things like GoogleCredentials, WeaveClient, etc.
         populate_by_name=True,
         exclude_none=True,
         exclude_unset=True,
@@ -161,7 +183,10 @@ class BM(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self._run_id
+        # This validator runs *after* BaseModel initialization.
+        # Ensure _run_id is accessible here.
+        run_id_val = self._run_id  # Access the private attribute
+        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / run_id_val
         self.save_dir = str(save_dir)
         return self
 
@@ -171,6 +196,8 @@ class BM(BaseModel):
         if self._weave is None:
             collection = f"{self.name}-{self.job}"
             try:
+                # Ensure credentials are loaded before accessing WANDB_API_KEY
+                _ = self.credentials  # Trigger credential loading
                 self._weave = weave.init(collection)
                 logger.info(f"Weave tracing initialized for collection: {collection}")
             except Exception as e:
@@ -181,14 +208,23 @@ class BM(BaseModel):
         return self._weave
 
     async def get_ip(self):
-        if not self.ip:
-            self.ip = await get_ip()
+        if not self._ip:  # Check the private attribute
+            self._ip = await get_ip()  # Set the private attribute
 
     @property
     def run_info(self) -> SessionInfo:
-        return SessionInfo(platform=self.platform, name=self.name, job=self.job, run_id=self._run_id,
-                           node_name=self.node_name, username=self.username, ip=self._ip, save_dir=self.save_dir,
-                           flow_api=self.flow_api)
+        # Access private attributes directly
+        return SessionInfo(
+            platform=self.platform,
+            name=self.name,
+            job=self.job,
+            run_id=self._run_id,
+            node_name=self.node_name,
+            username=self.username,
+            ip=self._ip,
+            save_dir=self.save_dir,
+            flow_api=self.flow_api,
+        )
 
     @property
     def _gcp_credentials(self) -> GoogleCredentials:
@@ -196,19 +232,61 @@ class BM(BaseModel):
         from google.auth.transport.requests import Request
 
         if self._gcp_credentials_cached is None:
-            billing_project = os.environ.get(
-                "google_billing_project",
-                os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
-            )
-            scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-            if not billing_project:
-                self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
-                billing_project = self._gcp_project
-            else:
+            # Ensure clouds config is available
+            if not hasattr(self, "clouds") or not self.clouds:
+                # Attempt to get config from registry if available (e.g., in tests)
+                cfg = ConfigRegistry.get_config()
+                if cfg and hasattr(cfg, "bm") and hasattr(cfg.bm, "clouds"):
+                    self.clouds = cfg.bm.clouds  # type: ignore
+                else:
+                    # If still no clouds config, try environment variables or default
+                    billing_project = os.environ.get(
+                        "google_billing_project",
+                        os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
+                    )
+                    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+                    if not billing_project:
+                        self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
+                        billing_project = self._gcp_project
+                    else:
+                        self._gcp_credentials_cached, self._gcp_project = default(
+                            quota_project_id=billing_project,
+                            scopes=scopes,
+                        )
+                    # Return the credentials found
+                    return self._gcp_credentials_cached
+
+            # Find GCP cloud config
+            gcp_cloud_cfg = next((c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"), None)
+
+            if gcp_cloud_cfg:
+                # Use project and quota_project_id from config if available
+                project_id = getattr(gcp_cloud_cfg, "project", None)
+                quota_project_id = getattr(gcp_cloud_cfg, "quota_project_id", project_id)
+
+                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
+                os.environ["google_billing_project"] = os.environ.get("google_billing_project", quota_project_id)
+
+                scopes = ["https://www.googleapis.com/auth/cloud-platform"]
                 self._gcp_credentials_cached, self._gcp_project = default(
-                    quota_project_id=billing_project,
+                    quota_project_id=quota_project_id,
                     scopes=scopes,
                 )
+            else:
+                # Fallback to environment variables or default if no GCP cloud config
+                billing_project = os.environ.get(
+                    "google_billing_project",
+                    os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
+                )
+                scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+                if not billing_project:
+                    self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
+                    billing_project = self._gcp_project
+                else:
+                    self._gcp_credentials_cached, self._gcp_project = default(
+                        quota_project_id=billing_project,
+                        scopes=scopes,
+                    )
 
         # GCP tokens last 60 minutes and need to be refreshed after that
         auth_request = Request()  # Use imported Request
@@ -218,59 +296,58 @@ class BM(BaseModel):
 
         return self._gcp_credentials_cached
 
-    model_config = pydantic.ConfigDict(
-        arbitrary_types_allowed=True,
-        extra="allow",  # Allow extra fields
-    )
-
     @property
     def logger(self) -> logging.Logger:
         return logger
 
     def setup_instance(self, cfg: DictConfig = None) -> None:
         """Initializes the BM singleton instance after validation."""
-        # Only proceed with the full initialization once
-        # This should only happen when we actually call BM() with parameters
-        if cfg:  # Only perform expensive initialization with actual data
-            # Initialize IP task asynchronously if needed
-            if not hasattr(self, "_get_ip_task") or self._get_ip_task is None:
-                try:
-                    # Only create a task if an event loop is running
-                    if asyncio.get_event_loop().is_running():
-                        self._get_ip_task = asyncio.create_task(self.get_ip())
-                except RuntimeError:
-                    # No event loop running, skip IP task
-                    pass
+        # This method is called *after* the BaseModel initialization is complete
+        # and the instance attributes are set according to the config.
 
-            # Only process clouds if we have them and they're properly initialized
-            if hasattr(self, "clouds") and self.clouds:
-                for cloud in self.clouds:
-                    if not cloud or not hasattr(cloud, "type"):
-                        continue  # Skip invalid cloud entries
+        # Initialize IP task asynchronously if needed
+        # Check if an event loop is running before creating a task
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                if not hasattr(self, "_get_ip_task") or self._get_ip_task is None:
+                    self._get_ip_task = asyncio.create_task(self.get_ip())
+            else:
+                # No event loop running, skip IP task creation
+                pass
+        except RuntimeError:
+            # No current event loop
+            pass
 
-                    if cloud.type == "gcp":
-                        # store authentication info
-                        os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
-                            "GOOGLE_CLOUD_PROJECT",
-                            cloud.project,  # type: ignore[attr-defined]
+        # Only process clouds if we have them and they're properly initialized
+        if hasattr(self, "clouds") and self.clouds:
+            for cloud in self.clouds:
+                if not cloud or not hasattr(cloud, "type"):
+                    continue  # Skip invalid cloud entries
+
+                if cloud.type == "gcp":
+                    # store authentication info - this is now handled in _gcp_credentials property
+                    pass  # Keep this block for clarity if needed later
+
+                if cloud.type == "vertex":
+                    # initialize vertexai
+                    # Ensure project, location, bucket attributes exist before accessing
+                    project = getattr(cloud, "project", None)
+                    location = getattr(cloud, "location", None)
+                    bucket = getattr(cloud, "bucket", None)
+                    if project and location and bucket:
+                        try:
+                            aiplatform_init(
+                                project=project,
+                                location=location,
+                                staging_bucket=bucket,
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to initialize Vertex AI: {e}")
+                    else:
+                        logger.warning(
+                            "Skipping Vertex AI initialization due to missing project, location, or bucket in config.",
                         )
-                        if hasattr(
-                            cloud, "quota_project_id",
-                        ):  # Check attribute existence for safety
-                            os.environ["google_billing_project"] = cloud.quota_project_id  # type: ignore[attr-defined]
-
-                        # authenticate here (triggers property getter)
-                        _ = self._gcp_credentials
-
-                    if cloud.type == "vertex":
-                        # initialize vertexai
-                        aiplatform_init(
-                            project=cloud.project,  # type: ignore[attr-defined]
-                            location=cloud.location,  # type: ignore[attr-defined]
-                            staging_bucket=cloud.bucket,  # type: ignore[attr-defined]
-                        )
-                        # list available models
-                        # models = aiplatform.Model.list() # Potentially slow, consider if needed at init
 
         if self.logger_cfg:
             # Pass verbose safely using getattr
@@ -279,66 +356,87 @@ class BM(BaseModel):
             # Print config to console and save to default save dir
             print(self.model_dump())
             try:
-                self.save(
-                    data=[self.model_dump(), self.run_info.model_dump()],
-                    basename="config",
-                    extension=".json",  # Default extension
-                    save_dir=self.save_dir,
-                )
+                # Ensure save_dir is set before saving
+                if self.save_dir:
+                    self.save(
+                        data=[self.model_dump(), self.run_info.model_dump()],
+                        basename="config",
+                        extension=".json",  # Default extension
+                        save_dir=self.save_dir,
+                    )
+                else:
+                    logger.warning("save_dir is not set. Skipping saving config.")
 
             except Exception as e:
                 logger.error(f"Could not save config to default save dir: {e}")
 
-        from opentelemetry.sdk import trace as trace_sdk
-
+        # Tracing setup (OTEL)
         WANDB_BASE_URL = "https://trace.wandb.ai"
         OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
         os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
         os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
         # WANDB_API_KEY: get from https://wandb.ai/authorize
         # Ensure credentials are available before accessing WANDB_API_KEY
-        if self.credentials and "WANDB_API_KEY" in self.credentials and "WANDB_PROJECT" in self.credentials:
-            AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
+        # Accessing self.credentials will trigger loading if not cached
+        try:
+            creds = self.credentials
+            if creds and "WANDB_API_KEY" in creds and "WANDB_PROJECT" in creds:
+                AUTH = base64.b64encode(f"api:{creds['WANDB_API_KEY']}".encode()).decode()
 
-            OTEL_EXPORTER_OTLP_HEADERS = {
-                "Authorization": f"Basic {AUTH}",
-                "project_id": self.credentials["WANDB_PROJECT"],
-            }
+                OTEL_EXPORTER_OTLP_HEADERS = {
+                    "Authorization": f"Basic {AUTH}",
+                    "project_id": creds["WANDB_PROJECT"],
+                }
 
-            # Initialize the OpenTelemetry SDK
-            tracer_provider = trace_sdk.TracerProvider()
+                # Initialize the OpenTelemetry SDK
+                from opentelemetry.sdk import trace as trace_sdk
 
-            # Configure the OTLP exporter
-            exporter = OTLPSpanExporter(
-                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
-                headers=OTEL_EXPORTER_OTLP_HEADERS,
-            )
+                tracer_provider = trace_sdk.TracerProvider()
 
-            # Add the exporter to the tracer provider
-            tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+                # Configure the OTLP exporter
+                exporter = OTLPSpanExporter(
+                    endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                    headers=OTEL_EXPORTER_OTLP_HEADERS,
+                )
 
-            logger.info(
-                "Tracing setup configured (OTEL). Weave initialization happens on first access.",
-            )
-        else:
-            logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
+                # Add the exporter to the tracer provider
+                tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+                # Set the global tracer provider
+                trace.set_tracer_provider(tracer_provider)
+                self._tracer = trace.get_tracer(__name__)  # Get a tracer instance
+
+                logger.info(
+                    "Tracing setup configured (OTEL). Weave initialization happens on first access.",
+                )
+            else:
+                logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
+        except Exception as e:
+            logger.warning(f"Error during OpenTelemetry tracing setup: {e}. Continuing without OTEL tracing.")
 
     def save(self, data, save_dir=None, extension: str | None = None, **kwargs):
         """Failsafe save method."""
         save_dir = save_dir or self.save_dir
         # Provide default extension if None
         effective_extension = extension if extension is not None else ".json"
-        result = save.save(
-            data=data, save_dir=save_dir, extension=effective_extension, **kwargs,
-        )
-        logger.info(
-            dict(
-                message=f"Saved data to: {result}",
-                uri=result,
-                run_id=self._run_id,
-            ),
-        )
-        return result
+        try:
+            result = save.save(
+                data=data,
+                save_dir=save_dir,
+                extension=effective_extension,
+                **kwargs,
+            )
+            logger.info(
+                dict(
+                    message=f"Saved data to: {result}",
+                    uri=result,
+                    run_id=self._run_id,  # Access private attribute
+                ),
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Failed to save data to {save_dir}: {e}")
+            return None  # Indicate save failure
 
     def setup_logging(
         self,
@@ -380,7 +478,7 @@ class BM(BaseModel):
                     "location": self.logger_cfg.location,  # type: ignore[attr-defined]
                     "namespace": self.name,  # type: ignore[union-attr] # Checked above
                     "job": self.job,  # type: ignore[union-attr] # Checked above
-                    "task_id": self._run_id,  # type: ignore[union-attr] # Checked above
+                    "task_id": self._run_id,  # type: ignore[union-attr] # Checked above # Access private attribute
                 },
             )
 
@@ -399,10 +497,14 @@ class BM(BaseModel):
 
         # --- Set logging level: warning for others, either debug or info for us ---
         root_logger.setLevel(logging.WARNING)
+        # Iterate over a copy of the keys as loggerDict can change during iteration
         for logger_str in list(logging.Logger.manager.loggerDict.keys()):
             try:
-                logging.getLogger(logger_str).setLevel(logging.WARNING)
-            except:
+                # Avoid setting level on loggers that might not be fully initialized or are placeholders
+                if isinstance(logging.Logger.manager.loggerDict[logger_str], logging.Logger):
+                    logging.getLogger(logger_str).setLevel(logging.WARNING)
+            except Exception:
+                # Handle potential errors during logger access
                 pass
 
         if verbose:
@@ -430,7 +532,8 @@ class BM(BaseModel):
             message = f"{message} {resource}"  # Append resource info if available
 
         bm_logger.info(
-            message, extra=dict(run=self.run_info.model_dump() if self.run_info else {}),
+            message,
+            extra=dict(run=self.run_info.model_dump() if self.run_info else {}),
         )
 
         try:
@@ -444,13 +547,20 @@ class BM(BaseModel):
     def gcs_log_client(self) -> google.cloud.logging.Client:
         # Ensure logger_cfg and project exist before creating client
         if not self.logger_cfg or not hasattr(self.logger_cfg, "project"):
-            raise RuntimeError(
-                "Logger config with GCP project needed for GCS Log Client.",
-            )
+            # Attempt to get config from registry if available (e.g., in tests)
+            cfg = ConfigRegistry.get_config()
+            if cfg and hasattr(cfg, "bm") and hasattr(cfg.bm, "logger_cfg") and hasattr(cfg.bm.logger_cfg, "project"):
+                self.logger_cfg = cfg.bm.logger_cfg  # type: ignore
+            else:
+                raise RuntimeError(
+                    "Logger config with GCP project needed for GCS Log Client.",
+                )
 
         if self._gcs_log_client_cached is None:
+            # Ensure credentials are loaded before creating client
+            _ = self._gcp_credentials  # Trigger credential loading
             self._gcs_log_client_cached = google.cloud.logging.Client(
-                project=self.logger_cfg.project,
+                project=self.logger_cfg.project,  # type: ignore[attr-defined]
                 credentials=self._gcp_credentials_cached,  # type: ignore[attr-defined]  # Pass credentials
             )
         return self._gcs_log_client_cached
@@ -458,16 +568,19 @@ class BM(BaseModel):
     @property
     def gcs(self) -> storage.Client:
         # Ensure _gcp_project is set (happens in _gcp_credentials getter)
-        if not hasattr(self, "_gcp_project"):
+        if not hasattr(self, "_gcp_project") or not self._gcp_project:
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
-            if not hasattr(self, "_gcp_project"):
+            if not hasattr(self, "_gcp_project") or not self._gcp_project:
                 raise RuntimeError(
-                    "GCP project not determined. Ensure GCP cloud config is present.",
+                    "GCP project not determined. Ensure GCP cloud config is present or GOOGLE_CLOUD_PROJECT env var is set.",
                 )
 
         if self._gcs_cached is None:
+            # Ensure credentials are loaded before creating client
+            _ = self._gcp_credentials  # Trigger credential loading
             self._gcs_cached = storage.Client(
-                project=self._gcp_project, credentials=self._gcp_credentials_cached,
+                project=self._gcp_project,
+                credentials=self._gcp_credentials_cached,
             )  # Pass credentials
         return self._gcs_cached
 
@@ -475,10 +588,15 @@ class BM(BaseModel):
     def secret_manager(self) -> SecretsManager:
         if self._secret_manager_cached is None:
             if not self.secret_provider:
-                raise RuntimeError("Secret provider configuration is missing.")
+                # Attempt to get config from registry if available (e.g., in tests)
+                cfg = ConfigRegistry.get_config()
+                if cfg and hasattr(cfg, "bm") and hasattr(cfg.bm, "secret_provider"):
+                    self.secret_provider = cfg.bm.secret_provider  # type: ignore
+                else:
+                    raise RuntimeError("Secret provider configuration is missing.")
 
             self._secret_manager_cached = SecretsManager(
-                **self.secret_provider.model_dump(),
+                **self.secret_provider.model_dump(),  # type: ignore[union-attr]
             )
         return self._secret_manager_cached
 
@@ -511,9 +629,14 @@ class BM(BaseModel):
             except Exception:
                 # Blocking call
                 # Ensure secret_manager is available
-                connections = self.secret_manager.get_secret(
-                    cfg_key=_MODELS_CFG_KEY,
-                )
+                try:
+                    connections = self.secret_manager.get_secret(
+                        cfg_key=_MODELS_CFG_KEY,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load LLM connections from secret manager: {e}")
+                    raise RuntimeError("Failed to load LLM connections.") from e
+
                 try:
                     # Optionally cache the fetched connections to a file for next time
                     Path(CONFIG_CACHE_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -534,16 +657,19 @@ class BM(BaseModel):
     @property
     def bq(self) -> bigquery.Client:
         # Ensure _gcp_project is set (happens in _gcp_credentials getter)
-        if not hasattr(self, "_gcp_project"):
+        if not hasattr(self, "_gcp_project") or not self._gcp_project:
             _ = self._gcp_credentials  # Trigger credential loading if not done yet
-            if not hasattr(self, "_gcp_project"):
+            if not hasattr(self, "_gcp_project") or not self._gcp_project:
                 raise RuntimeError(
-                    "GCP project not determined. Ensure GCP cloud config is present.",
+                    "GCP project not determined. Ensure GCP cloud config is present or GOOGLE_CLOUD_PROJECT env var is set.",
                 )
 
         if self._bq_cached is None:
+            # Ensure credentials are loaded before creating client
+            _ = self._gcp_credentials  # Trigger credential loading
             self._bq_cached = bigquery.Client(
-                project=self._gcp_project, credentials=self._gcp_credentials_cached,
+                project=self._gcp_project,
+                credentials=self._gcp_credentials_cached,
             )
         return self._bq_cached
 
@@ -567,6 +693,11 @@ class BM(BaseModel):
         # Cannot set write_disposition if saving to GCS
         if save_to_gcs:
             # Tell BigQuery to save the results to a specific GCS location
+            # Ensure save_dir is set before using it
+            if not self.save_dir:
+                logger.error("save_dir is not set. Cannot save query results to GCS.")
+                return False  # Indicate failure
+
             gcs_results_uri = f"{self.save_dir}/query_{shortuuid.uuid()}/*.json"
             job_config_dict["destination_uris"] = [gcs_results_uri]
             job_config_dict["write_disposition"] = bigquery.WriteDisposition.WRITE_TRUNCATE  # Overwrite existing files
@@ -582,7 +713,11 @@ class BM(BaseModel):
 
         job_config = bigquery.QueryJobConfig(**job_config_dict)
         # Set attributes directly
-        job = self.bq.query(sql, job_config=job_config)
+        try:
+            job = self.bq.query(sql, job_config=job_config)
+        except Exception as e:
+            logger.error(f"BigQuery query failed: {e}")
+            return False  # Indicate failure
 
         bytes_billed = job.total_bytes_billed
         cache_hit = job.cache_hit
@@ -607,61 +742,104 @@ class BM(BaseModel):
             return True  # Return bool as per type hint
 
         # job.result() blocks until the query has finished.
-        result = job.result()
-        if return_df:
-            if result.total_rows and result.total_rows > 0:
-                results_df = result.to_dataframe()
-                return results_df
-            return pd.DataFrame()
-        return result  # Return Any (BigQuery result object)
+        try:
+            result = job.result()
+            if return_df:
+                if result.total_rows and result.total_rows > 0:
+                    results_df = result.to_dataframe()
+                    return results_df
+                return pd.DataFrame()  # Return empty DataFrame if no rows
+            return result  # Return Any (BigQuery result object)
+        except Exception as e:
+            logger.error(f"Failed to get BigQuery query results: {e}")
+            return False  # Indicate failure
 
 
-# Module-level singleton instance and lock
-_bm_instance = None
-_bm_lock = threading.Lock()
+# Module-level singleton instance (will be set by initialize_bm)
+_bm_instance: BM | None = None
+# Use the lock from the Singleton base class
+# _bm_lock = threading.Lock()
 
 
 def get_bm() -> BM:
     """Get the singleton BM instance.
-    
+
     This function ensures that we always get the same BM instance,
     no matter where it's imported from.
-    
+
     Returns:
         BM: The singleton BM instance
 
+    Raises:
+        RuntimeError: If BM has not been initialized yet.
+
     """
     global _bm_instance
-    if _bm_instance is None:
-        with _bm_lock:
-            if _bm_instance is None:
-                try:
-                    # In a testing environment, we might not have all required params
-                    _bm_instance = BM(name="uninitialized", job="uninitialized", _run_id="uninitialized")
-                except Exception:
-                    # Create with defaults that will be overridden later
-                    pass
+    # Use the lock to ensure thread-safe access
+    with BM._lock:  # Use the lock defined in the Singleton base class
+        # Attempt to get the instance via the class constructor, which uses __new__
+        # This will return the existing instance if it exists, or create a new uninitialized one.
+        potential_instance = BM()
+        if potential_instance._is_base_model_initialized:
+            _bm_instance = potential_instance  # Set the module-level instance if it's initialized
+        else:
+            # If the instance exists but isn't initialized, or doesn't exist, raise error
+            raise RuntimeError("BM singleton has not been initialized. Call initialize_bm() first.")
+
     return _bm_instance
 
 
 def initialize_bm(cfg: DictConfig) -> BM:
     """Initialize the BM singleton with the provided configuration.
-    
+
     This function should be called once at startup, typically from cli.py
-    via hydra instantiation, to set up the BM instance with the proper 
+    via hydra instantiation, to set up the BM instance with the proper
     configuration values.
-    
+
     Args:
         cfg (DictConfig): Configuration parameters for BM
 
     Returns:
         BM: The initialized singleton BM instance
 
+    Raises:
+        RuntimeError: If BM has already been initialized.
+
     """
     global _bm_instance
-    with _bm_lock:
-        _bm_instance = hydra.utils.instantiate(cfg)
-        _bm_instance.setup_instance(cfg)
+    with BM._lock:  # Use the lock defined in the Singleton base class
+        # Get the singleton instance via the class constructor
+        instance = BM()
+
+        if instance._is_base_model_initialized:
+            # If already initialized, raise an error
+            raise RuntimeError("BM singleton has already been initialized.")
+
+        # Store the config in the registry before initialization
+        # This allows properties like _gcp_credentials to potentially access it
+        # if they are called during the BaseModel initialization process.
+        ConfigRegistry.set_config(cfg)
+
+        # Perform the actual Pydantic BaseModel initialization
+        # Use model_dump() to get a dictionary of the config values
+        # Pass the dictionary to the initialization method
+        try:
+            # Convert DictConfig to dict for Pydantic initialization
+            cfg_dict = hydra.utils.to_container(cfg, resolve=True)
+            instance._perform_base_model_initialization(**cfg_dict)
+        except Exception as e:
+            BM._instance = None  # Clear the instance so a subsequent call can try again
+            raise FatalError(f"Failed to initialize BM BaseModel: {e}") from e
+
+        # Now that the BaseModel is initialized, run the setup_instance logic
+        try:
+            instance.setup_instance(cfg)
+        except Exception as e:
+            raise FatalError(f"Failed during BM setup_instance: {e}") from e
+
+        # Set the module-level instance after successful initialization
+        _bm_instance = instance
+
     return _bm_instance
 
 

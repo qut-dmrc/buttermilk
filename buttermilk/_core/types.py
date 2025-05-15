@@ -1,11 +1,9 @@
 import base64
 import datetime
-import platform
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, Self
 
-import psutil
 import shortuuid
 from autogen_core.models import AssistantMessage, UserMessage
 from cloudpathlib import CloudPath
@@ -22,26 +20,6 @@ from pydantic import (
 )
 
 from buttermilk.utils.utils import is_b64
-
-_global_run_id = ""
-
-
-def _make_run_id() -> str:
-    global _global_run_id
-    if _global_run_id:
-        return _global_run_id
-    # Create a unique identifier for this run
-    node_name = platform.uname().node
-    username = psutil.Process().username()
-    # get rid of windows domain if present
-    username = str.split(username, "\\")[-1]
-
-    # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
-    run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
-
-    run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-    _global_run_id = run_id
-    return run_id
 
 
 class MediaObj(BaseModel):
