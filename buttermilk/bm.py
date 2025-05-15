@@ -159,7 +159,6 @@ class BM(Singleton, Project):
                 )
 
         # GCP tokens last 60 minutes and need to be refreshed after that
-        # Ensure creds are not None before refreshing
         auth_request = Request()  # Use imported Request
         self._gcp_credentials_cached.refresh(auth_request)
 
