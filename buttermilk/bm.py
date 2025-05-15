@@ -470,10 +470,10 @@ class BM(Singleton, BaseModel):
 
     @property
     def secret_manager(self) -> SecretsManager:
-        if not self.secret_provider:
-            raise RuntimeError("Secret provider configuration is missing.")
-
         if _REGISTRY.get("secret_manager") is None:
+            if not self.secret_provider:
+                raise RuntimeError("Secret provider configuration is missing.")
+
             _REGISTRY["secret_manager"] = SecretsManager(
                 **self.secret_provider.model_dump(),
             )
@@ -499,9 +499,6 @@ class BM(Singleton, BaseModel):
 
     @property
     def llms(self) -> LLMs:
-        # Ensure secret_manager is available
-        secret_mgr = self.secret_manager  # Trigger secret_manager init if needed
-
         if _REGISTRY.get("llms") is None:
             connections = None
             try:
@@ -510,7 +507,8 @@ class BM(Singleton, BaseModel):
                 connections = load_json_flexi(contents)
             except Exception:
                 # Blocking call
-                connections = secret_mgr.get_secret(
+                # Ensure secret_manager is available
+                connections = self.secret_manager.get_secret(
                     cfg_key=_MODELS_CFG_KEY,
                 )
                 try:
