@@ -8,8 +8,6 @@ from buttermilk.bm import BM
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
-bm = BM()
-
 
 @pytest.fixture(scope="session", autouse=True)
 def objs():

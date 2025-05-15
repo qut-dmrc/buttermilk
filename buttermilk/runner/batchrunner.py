@@ -112,7 +112,7 @@ class BatchRunner(BaseModel):
                     batch_id=batch_metadata.id,
                     flow=batch_request.flow,
                     record_id=record["record_id"],
-                    parameters=iteration_params,callback_to_ui=None,
+                    parameters=iteration_params, callback_to_ui=None,
                 )
                 job_definitions.append(job)
 

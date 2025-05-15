@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from buttermilk._core.config import SaveInfo
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.utils.save import upload_rows, upload_rows_async
 
 

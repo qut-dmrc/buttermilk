@@ -20,7 +20,7 @@ from buttermilk._core.contract import (
 )
 
 # Restore original bm import
-from buttermilk.bm import logger
+from buttermilk.bm import BM, logger
 from buttermilk.utils._tools import create_tool_functions
 
 

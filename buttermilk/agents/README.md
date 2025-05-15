@@ -173,7 +173,7 @@ Buttermilk can leverage the Autogen library for its runtime capabilities, provid
         import asyncio
         from buttermilk._core.orchestrator import Orchestrator # Or AutogenOrchestrator
         from buttermilk._core.contract import AgentInput  # etc.
-        from buttermilk.bm import logger
+        from buttermilk.bm import logger, BM
 
         class MyCustomOrchestrator(Orchestrator): # Or AutogenOrchestrator
 
