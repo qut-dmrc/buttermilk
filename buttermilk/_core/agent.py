@@ -11,7 +11,7 @@ from uuid import uuid4
 import weave  # For tracing
 
 if TYPE_CHECKING:
-    from weave.trace.weave_client import Call
+    from weave.trace.weave_client import Call, WeaveObject
 # Autogen imports (primarily for type hints and base classes/interfaces used in methods)
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
@@ -199,13 +199,12 @@ class Agent(AgentConfig):
         trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **final_input.parameters, **final_input.metadata, **self.parameters}
 
         # Get the trace context if necessary
-        parent_call: Call = weave.get_current_call()
+        parent_call: Call | WeaveObject = weave.get_current_call()
         if message.parent_call_id:
             try:
                 parent_call = bm.weave.get_call(message.parent_call_id)
             except:
                 pass
-        parent_call_id = parent_call.id
         child_call = None
         is_error = False
 
@@ -246,7 +245,7 @@ class Agent(AgentConfig):
             # Create the trace here with required values
             trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
                 agent_info=self._cfg,
-                inputs=final_input, parent_call_id=parent_call_id,
+                inputs=final_input, parent_call_id=message.parent_call_id,
             )
             trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 

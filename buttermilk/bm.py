@@ -112,7 +112,7 @@ class BM(Singleton, BaseModel):
                 and self.tracing.provider == "weave"
             ):
                 collection = f"{self.run_info.name}-{self.run_info.job}"
-                self._weave = weave.init(collection)
+                weave.init(collection)
             else:
                 raise RuntimeError(
                     "run_info/tracing details not set, cannot initialize Weave.",
@@ -236,8 +236,12 @@ class BM(Singleton, BaseModel):
             # Add the exporter to the tracer provider
             tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
 
+            # Initialize weave tracing
+            collection = f"{self.run_info.name}-{self.run_info.job}"
+            self._weave = weave.init(collection)
+
             logger.info(
-                f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT}.",
+                f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT} and {WANDB_BASE_URL}.",
             )
 
     @property
