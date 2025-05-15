@@ -16,14 +16,11 @@ import json
 import logging
 import os
 import sys
-import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
-    ClassVar,
     Self,
-    TypeVar,
 )
 
 import coloredlogs
@@ -34,11 +31,10 @@ import pydantic
 import shortuuid
 import weave
 from google.auth.credentials import Credentials as GoogleCredentials
-from google.cloud import aiplatform, bigquery, storage
+from google.cloud import bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
-from omegaconf import DictConfig
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from pydantic import (
     BaseModel,
@@ -48,17 +44,17 @@ from pydantic import (
     model_validator,
 )
 from rich import print
+from vertexai import init as aiplatform_init
 from weave.trace.weave_client import WeaveClient
 
 from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
+from buttermilk._core.keys import SecretsManager
+from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger
-
-from ._core.llms import LLMs
-from ._core.log import logger
-from ._core.types import SessionInfo
-from .utils import save
-from .utils.keys import SecretsManager
-from .utils.utils import load_json_flexi
+from buttermilk._core.singleton import Singleton
+from buttermilk._core.types import SessionInfo
+from buttermilk.utils import save
+from buttermilk.utils.utils import load_json_flexi
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
 _MODELS_CFG_KEY = "models_secret"
@@ -66,73 +62,6 @@ _SHARED_CREDENTIALS_KEY = "credentials_secret"
 
 # https://cloud.google.com/bigquery/pricing
 GOOGLE_BQ_PRICE_PER_BYTE = 5 / 10e12  # $5 per tb.
-
-
-_REGISTRY = {}
-_CONFIG = "config"  # registry key for config object
-
-# Add a lock for thread safety
-_singleton_lock = threading.Lock()
-
-
-class ConfigRegistry:
-    _instance = None
-    _config: DictConfig | None = None
-
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            # Use the lock to ensure thread-safe creation
-            with _singleton_lock:
-                # Check again inside the lock in case another thread created it
-                # while waiting for the lock
-                if cls._instance is None:
-                    cls._instance = ConfigRegistry()
-        return cls._instance
-
-    @classmethod
-    def set_config(cls, cfg: DictConfig):
-        instance = cls.get_instance()
-        instance._config = cfg
-
-    @classmethod
-    def get_config(cls) -> DictConfig | None:
-        return cls.get_instance()._config
-
-
-T = TypeVar("T")
-
-
-def _convert_to_hashable_type(element: Any) -> Any:
-    if isinstance(element, dict):
-        return tuple(
-            (_convert_to_hashable_type(k), _convert_to_hashable_type(v))
-            for k, v in element.items()
-        )
-    if isinstance(element, list):
-        return tuple(map(_convert_to_hashable_type, element))
-    return element
-
-
-class Singleton:
-    # Use a class variable for instances, as suggested by the comment
-    _instances: ClassVar[dict] = {}
-    _lock: ClassVar[threading.Lock] = threading.Lock()  # Use a lock per Singleton class
-
-    def __new__(cls, *args, **kwargs):
-        # Use the lock to ensure thread-safe creation
-        with cls._lock:
-            if cls not in cls._instances:
-                instance = super().__new__(cls)
-                cls._instances[cls] = instance
-                # Call __init__ manually only on the first creation
-                # This prevents __init__ from being called on subsequent calls
-                instance.__init__(*args, **kwargs)
-            return cls._instances[cls]
-
-    def __deepcopy__(self, memo: dict[int, Any] | None = None):
-        """Prevent deep copy operations for singletons"""
-        return self
 
 
 class BM(Singleton, BaseModel):
@@ -165,10 +94,17 @@ class BM(Singleton, BaseModel):
 
     _tracer: trace.Tracer = PrivateAttr()
 
+    # Private attributes for caching client instances
+    _gcs_log_client_cached: google.cloud.logging.Client | None = PrivateAttr(default=None)
+    _gcs_cached: storage.Client | None = PrivateAttr(default=None)
+    _secret_manager_cached: SecretsManager | None = PrivateAttr(default=None)
+    _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
+    _llms_cached: LLMs | None = PrivateAttr(default=None)
+    _bq_cached: bigquery.Client | None = PrivateAttr(default=None)
+
     @property
     def weave(self) -> WeaveClient:
         if not hasattr(self, "_weave"):
-            # Ensure run_info is available before accessing name/job
             if (
                 self.tracing
                 and self.run_info
@@ -246,7 +182,7 @@ class BM(Singleton, BaseModel):
 
             if cloud.type == "vertex":
                 # initialize vertexai
-                aiplatform.init(
+                aiplatform_init(
                     project=cloud.project,  # type: ignore[attr-defined]
                     location=cloud.location,  # type: ignore[attr-defined]
                     staging_bucket=cloud.bucket,  # type: ignore[attr-defined]
@@ -300,20 +236,6 @@ class BM(Singleton, BaseModel):
             # Add the exporter to the tracer provider
             tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
 
-            # OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
-            # trace_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter()))
-
-            # # # Sets the global default tracer provider
-            # # trace.set_tracer_provider(trace_provider)
-
-            # # # Creates a tracer from the global tracer provider
-            # # self._tracer = trace.get_tracer(self.run_info.name)
-
-            # # # Initialize OpenLIT instrumentation.
-            # # # # The disable_batch flag controls wheter to process traces immediately.
-            # # openlit.init(tracer=self._tracer, disable_batch=False)
-
-            # pass
             logger.info(
                 f"Tracing set up, tracing to {OTEL_EXPORTER_OTLP_ENDPOINT}.",
             )
@@ -445,12 +367,12 @@ class BM(Singleton, BaseModel):
                 "Logger config with GCP project needed for GCS Log Client.",
             )
 
-        if _REGISTRY.get("gcslogging") is None:
-            _REGISTRY["gcslogging"] = google.cloud.logging.Client(
+        if self._gcs_log_client_cached is None:
+            self._gcs_log_client_cached = google.cloud.logging.Client(
                 project=self.logger_cfg.project,
                 credentials=self._gcp_credentials_cached,  # type: ignore[attr-defined]  # Pass credentials
             )
-        return _REGISTRY["gcslogging"]
+        return self._gcs_log_client_cached
 
     @property
     def gcs(self) -> storage.Client:
@@ -462,29 +384,29 @@ class BM(Singleton, BaseModel):
                     "GCP project not determined. Ensure GCP cloud config is present.",
                 )
 
-        if _REGISTRY.get("gcs") is None:
-            _REGISTRY["gcs"] = storage.Client(
+        if self._gcs_cached is None:
+            self._gcs_cached = storage.Client(
                 project=self._gcp_project, credentials=self._gcp_credentials_cached,
             )  # Pass credentials
-        return _REGISTRY["gcs"]
+        return self._gcs_cached
 
     @property
     def secret_manager(self) -> SecretsManager:
-        if _REGISTRY.get("secret_manager") is None:
+        if self._secret_manager_cached is None:
             if not self.secret_provider:
                 raise RuntimeError("Secret provider configuration is missing.")
 
-            _REGISTRY["secret_manager"] = SecretsManager(
+            self._secret_manager_cached = SecretsManager(
                 **self.secret_provider.model_dump(),
             )
-        return _REGISTRY["secret_manager"]
+        return self._secret_manager_cached
 
     @property
     def credentials(self) -> dict[str, str]:
         # Ensure secret_manager is available
         secret_mgr = self.secret_manager  # Trigger secret_manager init if needed
 
-        if _REGISTRY.get("credentials") is None:
+        if self._credentials_cached is None:
             creds = secret_mgr.get_secret(
                 cfg_key=_SHARED_CREDENTIALS_KEY,
             )
@@ -493,13 +415,13 @@ class BM(Singleton, BaseModel):
                 raise TypeError(
                     f"Expected credentials secret to be a dict, got {type(creds)}",
                 )
-            _REGISTRY["credentials"] = creds
+            self._credentials_cached = creds
         # Return type assertion for clarity
-        return _REGISTRY["credentials"]
+        return self._credentials_cached
 
     @property
     def llms(self) -> LLMs:
-        if _REGISTRY.get("llms") is None:
+        if self._llms_cached is None:
             connections = None
             try:
                 # Blocking IO
@@ -527,9 +449,9 @@ class BM(Singleton, BaseModel):
                     f"LLM connections loaded from secret/cache is not a dict: {type(connections)}",
                 )
 
-            _REGISTRY["llms"] = LLMs(connections=connections)
+            self._llms_cached = LLMs(connections=connections)
         # Return type assertion for clarity
-        return _REGISTRY["llms"]
+        return self._llms_cached
 
     @property
     def bq(self) -> bigquery.Client:
@@ -541,11 +463,11 @@ class BM(Singleton, BaseModel):
                     "GCP project not determined. Ensure GCP cloud config is present.",
                 )
 
-        if _REGISTRY.get("bq") is None:
-            _REGISTRY["bq"] = bigquery.Client(
+        if self._bq_cached is None:
+            self._bq_cached = bigquery.Client(
                 project=self._gcp_project, credentials=self._gcp_credentials_cached,
             )  # Pass credentials
-        return _REGISTRY["bq"]
+        return self._bq_cached
 
     def run_query(
         self,
@@ -568,30 +490,20 @@ class BM(Singleton, BaseModel):
         if save_to_gcs:
             # Tell BigQuery to save the results to a specific GCS location
             gcs_results_uri = f"{self.save_dir}/query_{shortuuid.uuid()}/*.json"
-            export_command = f"""   EXPORT DATA OPTIONS(
-                        uri='{gcs_results_uri}',
-                        format='JSON',
-                        overwrite=false) AS """
-            sql = export_command + sql
-            logger.debug(f"Saving results to {gcs_results_uri}.")
-        elif destination:
-            logger.debug(f"Saving results to {destination}.")
-            job_config_dict["destination"] = destination
-            job_config_dict["allow_large_results"] = True
+            job_config_dict["destination_uris"] = [gcs_results_uri]
+            job_config_dict["write_disposition"] = bigquery.WriteDisposition.WRITE_TRUNCATE  # Overwrite existing files
 
-            # Set write_disposition directly on the config object
-            # job_config_dict["write_disposition"] = "WRITE_TRUNCATE" if overwrite else "WRITE_APPEND"
-            # Will set on object below
+        elif destination:
+            # Configure destination table if specified
+            job_config_dict["destination"] = destination
+            job_config_dict["write_disposition"] = (
+                bigquery.WriteDisposition.WRITE_TRUNCATE
+                if overwrite
+                else bigquery.WriteDisposition.WRITE_EMPTY
+            )
 
         job_config = bigquery.QueryJobConfig(**job_config_dict)
         # Set attributes directly
-        if destination:
-            job_config.destination = destination
-            job_config.allow_large_results = True
-            job_config.write_disposition = (
-                "WRITE_TRUNCATE" if overwrite else "WRITE_APPEND"
-            )
-
         job = self.bq.query(sql, job_config=job_config)
 
         bytes_billed = job.total_bytes_billed
