@@ -39,6 +39,7 @@ def bm_unitialised(objs):
 
 @pytest.fixture(scope="session", autouse=True)
 def bm(conf):
+    """Initialize the BM singleton instance."""
     return initialize_bm(conf.bm)
 
 
