@@ -25,7 +25,6 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk._core.job import SessionInfo
 from buttermilk.utils.validators import (  # Pydantic validators
     convert_omegaconf_objects,
     make_list_validator,
@@ -33,7 +32,7 @@ from buttermilk.utils.validators import (  # Pydantic validators
 
 from .config import AgentConfig
 from .log import logger
-from .types import Record  # Core data types
+from .types import Record, SessionInfo  # Core data types
 
 # --- General Communication & Base Messages ---
 
