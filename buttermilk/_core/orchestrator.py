@@ -33,7 +33,7 @@ from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
 )
-from buttermilk.bm import bm, logger  # Global instance and logger
+from buttermilk.bm import logger  # Global instance and logger
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.templating import KeyValueCollector  # State management utility
@@ -180,7 +180,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         # Define attributes for logging and tracing.
         try:
-            assert bm.weave
+            assert BM().weave
 
             with weave.attributes(request.tracing_attributes):
                 await self._run(request=request, __weave={"display_name": request.name})

@@ -20,7 +20,7 @@ from buttermilk._core.contract import (
 )
 
 # Restore original bm import
-from buttermilk.bm import bm, logger
+from buttermilk.bm import logger
 from buttermilk.utils._tools import create_tool_functions
 
 
@@ -56,7 +56,7 @@ class AssistantAgentWrapper(Agent):
         if not model_name:
             raise ValueError(f"Agent {self.role}: 'model' parameter is required.")
         # Use the global bm instance
-        self._model_client = bm.llms.get_autogen_chat_client(model_name)  # Use global bm
+        self._model_client = BM().llms.get_autogen_chat_client(model_name)  # Use global bm
 
         # 2. Initialize Tools
         # Ensure create_tool_functions returns the correct type or cast/ignore

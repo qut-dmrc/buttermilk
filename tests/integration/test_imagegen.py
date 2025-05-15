@@ -4,6 +4,8 @@ from buttermilk.agents.imagegen import (
     BatchImageGenerator,
     ImageClients,
 )
+from buttermilk.bm import BM
+bm=BM()
 
 prompts = [
     (

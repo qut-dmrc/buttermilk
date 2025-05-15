@@ -194,7 +194,6 @@ class Agent(AgentConfig):
             return error_output
 
         # --- Tracing ---
-        from buttermilk.bm import bm
 
         trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **final_input.parameters, **final_input.metadata, **self.parameters}
 
@@ -202,7 +201,7 @@ class Agent(AgentConfig):
         parent_call: Call = weave.get_current_call()
         if message.parent_call_id:
             try:
-                parent_call = bm.weave.get_call(message.parent_call_id)
+                parent_call = BM().weave.get_call(message.parent_call_id)
             except:
                 pass
         parent_call_id = parent_call.id
@@ -219,7 +218,7 @@ class Agent(AgentConfig):
                 message_callback=message_callback,  # Callback provided by adapter
                 **kwargs)
 
-            child_call = bm.weave.create_call(op, inputs=final_input.model_dump(mode="json"),
+            child_call = BM().weave.create_call(op, inputs=final_input.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
             parent_call._children.append(child_call)  # Nest this call for tracing
@@ -235,7 +234,7 @@ class Agent(AgentConfig):
         finally:
             if child_call:
                 # Mark the child call as complete, regardless of success or failure.
-                bm.weave.finish_call(child_call, output=result, op=op)
+                BM().weave.finish_call(child_call, output=result, op=op)
                 call_id = child_call.id
             else:
                 call_id = uuid4().hex

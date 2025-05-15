@@ -8,6 +8,8 @@ from buttermilk.bm import BM
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 
+from buttermilk.bm import BM
+bm=BM()
 
 @pytest.fixture(scope="function")
 def logger_new(bm):

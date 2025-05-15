@@ -186,9 +186,6 @@ class BM(Singleton, Project):
         """Performs setup requiring configuration (e.g., run_info, logger_cfg)."""
         # Ensure run_info is set before proceeding with dependent setups
         if not self.run_info:
-            # Try to get it from environment or raise error
-            # This depends on how run_info is expected to be populated
-            # For now, let's raise an error if it's critical
             raise ValueError(
                 "BM instance created without run_info, which is required for setup.",
             )
@@ -245,11 +242,11 @@ class BM(Singleton, Project):
             os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
             os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
             # WANDB_API_KEY: get from https://wandb.ai/authorize
-            AUTH = base64.b64encode(f"api:{bm.credentials['WANDB_API_KEY']}".encode()).decode()
+            AUTH = base64.b64encode(f"api:{self.credentials['WANDB_API_KEY']}".encode()).decode()
 
             OTEL_EXPORTER_OTLP_HEADERS = {
                 "Authorization": f"Basic {AUTH}",
-                "project_id": bm.credentials["WANDB_PROJECT"],
+                "project_id": self.credentials["WANDB_PROJECT"],
             }
 
             # Initialize the OpenTelemetry SDK
@@ -591,9 +588,6 @@ class BM(Singleton, Project):
             return pd.DataFrame()
         return result  # Return Any (BigQuery result object)
 
-
-# Create the global instance directly using the BM class
-bm = BM()
 
 if __name__ == "__main__":
     pass

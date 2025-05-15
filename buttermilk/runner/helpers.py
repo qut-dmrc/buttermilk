@@ -66,18 +66,16 @@ def combine_datasets(
 
 
 def load_bq(data_cfg: DataSourceConfig) -> pd.DataFrame:
-    from buttermilk.bm import bm
 
     sql = f"SELECT * FROM `{data_cfg.path}`"
     sql += " ORDER BY RAND() "
 
-    df = bm.run_query(sql)
+    df = BM().run_query(sql)
 
     return df
 
 
 def load_jobs(data_cfg: DataSourceConfig) -> pd.DataFrame:
-    from buttermilk.bm import bm
 
     last_n_days = data_cfg.last_n_days
 
@@ -130,7 +128,7 @@ def load_jobs(data_cfg: DataSourceConfig) -> pd.DataFrame:
 
     sql += " ORDER BY RAND() "
 
-    df = bm.run_query(sql)
+    df = BM().run_query(sql)
 
     return df
 
@@ -259,10 +257,9 @@ async def prepare_step_df(data_configs: Mapping[str, DataSourceConfig]) -> dict[
             # start of list
             source_list = [key] + source_list
 
-
     combined_df = pd.DataFrame()
     for key in source_list:
-        src =  data_configs[key]
+        src = data_configs[key]
         new_df = load_data(src)
         # Load and join prior job data
         new_df = group_and_filter_jobs(

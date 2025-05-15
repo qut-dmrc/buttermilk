@@ -28,7 +28,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
 from buttermilk._core.types import Record  # Data record type
-from buttermilk.bm import bm, logger  # Global instance and logger
+from buttermilk.bm import logger  # Global instance and logger
 from buttermilk.utils._tools import create_tool_functions  # Tool handling utility
 from buttermilk.utils.json_parser import ChatParser  # JSON parsing utility
 from buttermilk.utils.templating import (
@@ -89,7 +89,7 @@ class LLMAgent(Agent):
         logger.debug(f"Agent {self.agent_id}: Initializing model client for '{self._model}'.")
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
-            self._model_client = bm.llms.get_autogen_chat_client(self._model)
+            self._model_client = BM().llms.get_autogen_chat_client(self._model)
         except Exception as e:
             logger.error(f"Agent {self.agent_id}: Failed to initialize model client for '{self._model}': {e}")
             # Raise a more informative error or handle appropriately.

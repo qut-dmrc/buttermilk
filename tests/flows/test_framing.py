@@ -5,6 +5,8 @@ from buttermilk._core.types import MediaObj, Record
 from buttermilk.bm import BM
 
 
+from buttermilk.bm import BM
+bm=BM()
 def param_model(request):
     return {"model": request.param}
 
