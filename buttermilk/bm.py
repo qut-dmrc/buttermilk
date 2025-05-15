@@ -247,11 +247,11 @@ class BM(Singleton, Project):
             os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
             os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
             # WANDB_API_KEY: get from https://wandb.ai/authorize
-            AUTH = base64.b64encode(f"api:{os.environ['WANDB_API_KEY']}".encode()).decode()
+            AUTH = base64.b64encode(f"api:{bm.credentials['WANDB_API_KEY']}".encode()).decode()
 
             OTEL_EXPORTER_OTLP_HEADERS = {
                 "Authorization": f"Basic {AUTH}",
-                "project_id": os.environ["WANDB_PROJECT"],
+                "project_id": bm.credentials["WANDB_PROJECT"],
             }
 
             # Initialize the OpenTelemetry SDK
