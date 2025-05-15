@@ -1,21 +1,24 @@
-host: gemini2flash
+host: gemini25flash
 
 general:
   - gemini25pro
   - gpt41
+  - gemini25flash
 
 judgers:
+  - gemini25flash
   - gemini2flash
-  - gemini2flashlite
   - gemini25pro
+  - o3mini
   - gpt41
   - gpt41mini
-  - o4mini
+  - gpt41nano
+  - sonnet
+  - llama32_90b
 
 synthesisers:
-  - gemini2flash
-  - gemini2flashlite
+  - gemini25flash
   - gemini25pro
+  - o3mini
   - gpt41
   - gpt41mini
-  - o4mini

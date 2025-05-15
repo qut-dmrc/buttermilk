@@ -11,7 +11,6 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ManagerMessage,
-    ManagerResponse,
     StepRequest,
     UIMessage,
 )

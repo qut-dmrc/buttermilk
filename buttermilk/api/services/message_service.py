@@ -45,7 +45,7 @@ class MessageService:
         try:
             if message is None:
                 return None
-            if isinstance(message, AgentTrace)
+            if isinstance(message, AgentTrace):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
                     message = message.outputs
