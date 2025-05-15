@@ -1,8 +1,8 @@
 # @package _global_
 # Batch execution configuration
 defaults:
+  - /local
   - _self_
-  # ... other defaults
 
 name: bm_api
 job: flows
