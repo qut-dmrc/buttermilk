@@ -9,6 +9,7 @@
 
 from __future__ import annotations  # Enable postponed annotations
 
+import asyncio
 import base64
 import datetime
 import json
@@ -381,6 +382,7 @@ class BM(Singleton, Project):
         if verbose:
             bm_logger.setLevel(logging.DEBUG)
         else:
+            asyncio.get_event_loop().set_debug(False)
             bm_logger.setLevel(logging.INFO)
 
         message = (

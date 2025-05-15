@@ -45,9 +45,13 @@ class MessageService:
         try:
             if message is None:
                 return None
-            if isinstance(message, AgentTrace) and message.outputs:
-                # Send the unwrapped message instead of the AgentTrace object
-                message = message.outputs
+            if isinstance(message, AgentTrace)
+                if message.outputs:
+                    # Send the unwrapped message instead of the AgentTrace object
+                    message = message.outputs
+                else:
+                    logger.warning(f"AgentTrace object with no outputs: {message}")
+                    return None
 
             if isinstance(message, ChatMessage):
                 # Already formatted
