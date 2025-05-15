@@ -213,7 +213,6 @@ class Consumer(BaseModel):
                 finally:
                     job.timestamp = pd.to_datetime(datetime.datetime.now())
                     job.agent_info = self.model_dump()
-                    job.run_info = self.run_info
 
                     await self.output_queue.put(job)
 

@@ -14,8 +14,6 @@ from pydantic import (
 
 from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator
 
-from .types import SessionInfo
-
 
 ##################################
 # A single unit of work, including
@@ -39,12 +37,6 @@ class Job(BaseModel):
         ...,
         description="Where this particular job came from",
     )
-
-    run_info: SessionInfo | None = Field(
-        default=None,
-        description="Information about the context in which this job runs",
-    )
-
     inputs: "AgentInput | None" = Field(
         default=None,
         description="The data the job will process.",
