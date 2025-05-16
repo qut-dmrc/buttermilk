@@ -3,12 +3,9 @@ import uuid
 
 import pytest
 
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    BM,  # Buttermilk global instance and logger
-    get_bm,
-)
-
-bm = get_bm()
+from buttermilk._core import BM, logger
+from buttermilk._core.dmrc import bm
+from buttermilk._core.log import logger  # noqa
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
@@ -19,7 +16,7 @@ bm = bm
 @pytest.fixture(scope="function")
 def logger_new(bm):
     bm.setup_logging()
-    logger = bm.logger
+    logger = logger
     yield logger
 
     logger.info("Tearing test logger_new down.")

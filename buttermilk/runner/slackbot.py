@@ -10,16 +10,12 @@ from autogen_core.models import AssistantMessage, UserMessage
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
+from buttermilk._core import BM, logger
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    BM,
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator  #noqa
 
@@ -164,7 +160,7 @@ async def register_handlers(
             )
             t = asyncio.create_task(
                 start_flow_thread(
-                    bm=bm,
+                    bm=dmrc,
                     context=context,
                     slack_app=slack_app,
                     flow_cfg=flows[flow_id],

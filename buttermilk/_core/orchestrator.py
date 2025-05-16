@@ -29,13 +29,10 @@ from buttermilk._core.config import (  # Configuration models
 )
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.log import logger
 from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
-)
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
 )
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
@@ -44,8 +41,6 @@ from buttermilk.utils.validators import convert_omegaconf_objects
 
 from .config import AgentVariants, DataSourceConfig, SaveInfo  # Core configuration models
 from .types import Record  # Core data types
-
-bm = get_bm()
 
 
 class OrchestratorProtocol(BaseModel):
@@ -182,7 +177,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         """
         logger.info(f"Starting run for orchestrator '{self.name}'.")
 
-        bm = get_bm()  # Get the singleton instance using our new module-level function
+          # Get the singleton instance using our new module-level function
         # Define attributes for logging and tracing.
         op = weave.op(self._run, call_display_name=f"{self.name} {request.name}")
         orchestrator_trace = bm.weave.create_call(op, inputs=request.model_dump(mode="json"),

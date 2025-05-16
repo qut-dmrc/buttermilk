@@ -4,20 +4,20 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from shortuuid import uuid
 
-from buttermilk._core import AgentConfig, TaskProcessingComplete, UIMessage
+from buttermilk._core import (
+    AgentConfig,
+    TaskProcessingComplete,
+    UIMessage,
+    logger,
+)
 from buttermilk._core.agent import AgentTrace, TaskProcessingStarted
 from buttermilk._core.config import RunRequest
 from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
+from buttermilk._core.log import logger
 from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 
 PREVIEW_LENGTH = 200
 

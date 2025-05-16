@@ -1,10 +1,12 @@
 import hydra
 import pytest
+from hydra import compose, initialize
+from omegaconf import OmegaConf
 from pytest import MarkDecorator
 
+from buttermilk._core.bm_init import BM
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
-from buttermilk.bm import BM, initialize_bm, logger  # Buttermilk global instance and logger
 
 # Don't initialize BM here, we'll let the fixture handle it
 from buttermilk.utils.media import download_and_convert
@@ -14,43 +16,47 @@ from buttermilk.utils.utils import read_file
 @pytest.fixture(scope="session", autouse=True)
 def conf():
     """Hydra config fixture."""
-    from hydra import compose, initialize
-
     with initialize(version_base=None, config_path="../conf"):
         cfg = compose(config_name="testing")
     return cfg
 
 
 @pytest.fixture(scope="session", autouse=True)
-def objs():
-    from hydra import compose, initialize
+def bm(conf) -> BM:
+    bm: BM
+    """Buttermilk singleton instance fixture."""
 
-    with initialize(version_base=None, config_path="../conf"):
-        cfg = compose(config_name="testing")
-    # Hydra will automatically instantiate the objects
-    objs = hydra.utils.instantiate(cfg)
-    return objs
+    try:
+        # If Hydra is configured with _target_ and _convert_="object",
+        # cfg might already be an AppConfig instance.
+        if isinstance(conf.bm, BM):
+            bm = conf.bm
+        else:
+            try:
+                bm = hydra.utils.instantiate(conf.bm)
+            except:
+                # Manually convert if cfg is a DictConfig
+                # OmegaConf.to_container resolves everything to basic python types
+                # then Pydantic can parse it.
+                resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
+                bm = BM(**resolved_cfg_dict["bm"])
+
+        from buttermilk._core import DMRC
+        DMRC.bm = bm
+        return bm
+    except Exception as e:
+        print(f"Error during Pydantic model instantiation: {e}")
+        raise
 
 
 @pytest.fixture(scope="session", autouse=True)
-def bm_unitialised(objs):
-    return objs.bm
-
-
-@pytest.fixture(scope="session", autouse=True)
-def bm(conf):
-    """Initialize the BM singleton instance."""
-    return initialize_bm(conf.bm)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def flow(objs):
-    return objs.flows["test"]
+def flow(conf):
+    return conf.flows["test"]
 
 
 @pytest.fixture(scope="session")
 def logger(bm):
-    return bm.logger
+    return logger
 
 
 @pytest.fixture(scope="session")

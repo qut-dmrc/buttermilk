@@ -8,7 +8,6 @@ from autogen_core.models import (
     UserMessage,
 )
 
-from buttermilk._core import AgentInput
 from buttermilk._core.agent import Agent
 from buttermilk.agents.llm import LLMAgent
 

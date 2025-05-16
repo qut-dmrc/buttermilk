@@ -19,12 +19,15 @@ import hydra
 import uvicorn
 from omegaconf import DictConfig
 
+from buttermilk._core import (
+    dmrc as DMRC,  # noqa
+    logger,
+)
 from buttermilk._core.config import FatalError
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 from buttermilk.api.flow import create_app
 from buttermilk.api.job_queue import JobQueueClient
-from buttermilk.bm import logger  # Buttermilk global instance and logger
 
 # We'll initialize bm once configuration is available from Hydra
 from buttermilk.runner.flowrunner import FlowRunner
@@ -96,18 +99,10 @@ def main(conf: DictConfig) -> None:
              attempted before) could improve type safety if cfg structure is stable.
 
     """
-    # Hydra automatically instantiates objects defined in the configuration files (e.g., bm, flows).
-    # and any overrides (like `conf/flows/batch.yaml` when running `python -m buttermilk.runner.cli flows=batch`).
-    from buttermilk.bm import initialize_bm
-
-    # Initialize BM singleton via our new function instead of direct instantiation
-    bm = initialize_bm(conf.bm)
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
-    # bm = BM.model_validate(cfg.bm)
-    # # Create the FlowRunner with the specified UI type
-    # flow_runner:  #
-    # bm: BM = flow_runner.bm  # Access the instantiated Buttermilk core instance.
-
+    bm = hydra.utils.instantiate(conf.bm)
+    bm.setup_instance()
+    DMRC.bm = bm  # Set the Buttermilk instance in DMRC singleton module
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
         case "console":
@@ -122,13 +117,13 @@ def main(conf: DictConfig) -> None:
             )
 
             # Run the flow synchronously
-            bm.logger.info(f"Running flow '{conf.flow}' in console mode...")
+            logger.info(f"Running flow '{conf.flow}' in console mode...")
             asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
-            bm.logger.info(f"Flow '{conf.flow}' finished.")
+            logger.info(f"Flow '{conf.flow}' finished.")
 
         case "batch":
 
-            bm.logger.info("Running batch manager...")
+            logger.info("Running batch manager...")
             from buttermilk.runner.batch_cli import main as batch_main
 
             # We're already in the hydra context, so we can just call the main function
@@ -142,13 +137,13 @@ def main(conf: DictConfig) -> None:
             # This is critical for research integrity where old state might affect results
             max_jobs = conf.get("max_jobs", 1)  # Get max_jobs from config or default to 1
 
-            bm.logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
+            logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
             asyncio.run(run_batch_job(flow_runner=flow_runner, max_jobs=max_jobs))
 
         case "streamlit":
             # Start the Streamlit interface
 
-            bm.logger.info("Starting Streamlit interface...")
+            logger.info("Starting Streamlit interface...")
             try:
                 # This function provides guidance on how to run the app with streamlit CLI
                 from buttermilk.web.streamlit_frontend.app import create_dashboard_app
@@ -156,7 +151,7 @@ def main(conf: DictConfig) -> None:
                 # Run the app
                 asyncio.run(app.run())
             except Exception as e:
-                bm.logger.error(f"Error starting Streamlit interface: {e}")
+                logger.error(f"Error starting Streamlit interface: {e}")
 
         case "api":
 
@@ -167,7 +162,7 @@ def main(conf: DictConfig) -> None:
             #       for larger applications.
 
             # Create the FastAPI app with dependencies
-            bm.logger.info("Attempting to create FastAPI app...")
+            logger.info("Attempting to create FastAPI app...")
             # Create the FastAPI app with the FlowRunner
             app = create_app(
                 bm=bm,
@@ -178,7 +173,7 @@ def main(conf: DictConfig) -> None:
             # This is fragile; a better fix involves awaiting readiness.
             import time
             time.sleep(2)
-            bm.logger.info("Configuring API server...")
+            logger.info("Configuring API server...")
             # Configure Uvicorn server
             config = uvicorn.Config(
                 app=app,
@@ -190,27 +185,27 @@ def main(conf: DictConfig) -> None:
                 workers=1,
             )
 
-            bm.logger.info("Creating server instance...")
+            logger.info("Creating server instance...")
             # Create and run the server
             server = uvicorn.Server(config)
-            bm.logger.info("Starting API server...")
+            logger.info("Starting API server...")
 
             try:
                 server.run()
             except KeyboardInterrupt:
-                bm.logger.info("Shutting down API server...")
+                logger.info("Shutting down API server...")
 
         case "pub/sub":
 
             from buttermilk.runner.batch_cli import main as batch_main
 
-            bm.logger.info("Running in batch mode...")
+            logger.info("Running in batch mode...")
             # We're already in the hydra context, so we can just call the main function
             batch_main(conf)
 
         case "slackbot":
             # Start a Slack bot integration.
-            bm.logger.info("Starting Slackbot...")
+            logger.info("Starting Slackbot...")
 
             # Securely retrieve Slack tokens from the Buttermilk credentials store.
             creds = bm.credentials
@@ -251,7 +246,7 @@ def main(conf: DictConfig) -> None:
                     flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
                 )
-                bm.logger.info("Slack handlers registered. Bot is ready.")
+                logger.info("Slack handlers registered. Bot is ready.")
                 # Keep the event loop running indefinitely for the bot.
                 # TODO: Implement a graceful shutdown mechanism (e.g., catching SIGINT/SIGTERM).
                 while True:
@@ -261,7 +256,7 @@ def main(conf: DictConfig) -> None:
             try:
                 loop.run_until_complete(runloop())
             except KeyboardInterrupt:
-                bm.logger.info("Slackbot shutting down...")
+                logger.info("Slackbot shutting down...")
             finally:
                 # TODO: Add cleanup logic here if needed (e.g., close connections, wait for tasks).
                 loop.close()

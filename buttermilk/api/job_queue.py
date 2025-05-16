@@ -15,12 +15,9 @@ import pydantic
 from google.cloud.pubsub import PublisherClient, SubscriberClient
 from pydantic import BaseModel, PrivateAttr
 
+from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
 from buttermilk.toxicity.tox_data import toxic_record
 
 
@@ -48,8 +45,7 @@ class JobQueueClient(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
-        bm = get_bm()
-
+        from buttermilk._core.dmrc import bm  # noqa
         self._jobs_subscription_path = self._subscriber.subscription_path(
             bm.pubsub.project,
             bm.pubsub.jobs_subscription,

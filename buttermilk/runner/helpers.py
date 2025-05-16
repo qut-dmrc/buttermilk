@@ -5,6 +5,7 @@ import cloudpathlib
 import pandas as pd
 
 from buttermilk._core.config import DataSourceConfig
+from buttermilk._core.log import logger  # noqa
 from buttermilk.utils.flows import col_mapping_hydra_to_local
 from buttermilk.utils.utils import find_key_string_pairs, load_json_flexi
 

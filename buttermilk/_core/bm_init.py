@@ -28,7 +28,6 @@ from typing import (
 import coloredlogs
 import google.cloud.logging  # Don't conflict with standard logging
 import humanfriendly
-import hydra
 import pandas as pd
 import psutil
 import pydantic
@@ -53,12 +52,10 @@ from vertexai import init as aiplatform_init
 from weave.trace.weave_client import WeaveClient
 
 from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
-from buttermilk._core.exceptions import FatalError
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger
-from buttermilk._core.singleton import ConfigRegistry, Singleton  # Import the simplified Singleton and ConfigRegistry
-from buttermilk.utils import get_ip, save
+from buttermilk.utils import save
 from buttermilk.utils.utils import load_json_flexi
 
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
@@ -96,13 +93,15 @@ class SessionInfo(BaseModel):
     platform: str = "local"
     name: str
     job: str
-    run_id: str
+    run_id: str = Field(default_factory=_make_run_id)
     max_concurrency: int = -1
     ip: str | None = Field(default=None)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(...)
     save_dir: str | None = None
     flow_api: str | None = None
+
+    _get_ip_task: asyncio.Task | None = PrivateAttr(default=None)  # Initialize as None
+    _ip: str | None = PrivateAttr(default=None)
 
     model_config = ConfigDict(
         extra="forbid",
@@ -113,7 +112,7 @@ class SessionInfo(BaseModel):
 
 
 # Inherit from BaseModel and the simplified Singleton
-class BM(BaseModel, Singleton):
+class BM(SessionInfo):
     connections: Sequence[str] = Field(default_factory=list)
     secret_provider: CloudProviderCfg = Field(default=None)
     logger_cfg: CloudProviderCfg = Field(default=None)
@@ -121,22 +120,6 @@ class BM(BaseModel, Singleton):
     clouds: list[CloudProviderCfg] = Field(default_factory=list)
     tracing: Tracing | None = Field(default_factory=Tracing)
     datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
-
-    platform: str = "local"
-    name: str
-    job: str
-    max_concurrency: int = -1
-    node_name: str = Field(default_factory=lambda: platform.uname().node)
-    username: str = Field(
-        default_factory=lambda: psutil.Process().username().split("\\")[-1],
-    )
-    save_dir: str | None = None
-    flow_api: str | None = None
-
-    # Use PrivateAttr for run_id as before
-    _run_id: str = PrivateAttr(default_factory=_make_run_id)
-    _get_ip_task: asyncio.Task | None = PrivateAttr(default=None)  # Initialize as None
-    _ip: str | None = PrivateAttr(default=None)
 
     save_dir_base: str = Field(
         default_factory=mkdtemp,
@@ -181,12 +164,17 @@ class BM(BaseModel, Singleton):
             )
         return save_dir_base
 
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+        # Remove the hydra target attribute from the values dictionary
+        values.pop("_target_", None)
+        return values  # Return the dict directly, not a new instance
+
     @pydantic.model_validator(mode="after")
     def set_full_save_dir(self) -> Self:
         # This validator runs *after* BaseModel initialization.
-        # Ensure _run_id is accessible here.
-        run_id_val = self._run_id  # Access the private attribute
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / run_id_val
+        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
         self.save_dir = str(save_dir)
         return self
 
@@ -207,10 +195,6 @@ class BM(BaseModel, Singleton):
 
         return self._weave
 
-    async def get_ip(self):
-        if not self._ip:  # Check the private attribute
-            self._ip = await get_ip()  # Set the private attribute
-
     @property
     def run_info(self) -> SessionInfo:
         # Access private attributes directly
@@ -218,9 +202,7 @@ class BM(BaseModel, Singleton):
             platform=self.platform,
             name=self.name,
             job=self.job,
-            run_id=self._run_id,
             node_name=self.node_name,
-            username=self.username,
             ip=self._ip,
             save_dir=self.save_dir,
             flow_api=self.flow_api,
@@ -232,29 +214,6 @@ class BM(BaseModel, Singleton):
         from google.auth.transport.requests import Request
 
         if self._gcp_credentials_cached is None:
-            # Ensure clouds config is available
-            if not hasattr(self, "clouds") or not self.clouds:
-                # Attempt to get config from registry if available (e.g., in tests)
-                cfg = ConfigRegistry.get_config()
-                if cfg and hasattr(cfg, "bm") and hasattr(cfg.bm, "clouds"):
-                    self.clouds = cfg.bm.clouds  # type: ignore
-                else:
-                    # If still no clouds config, try environment variables or default
-                    billing_project = os.environ.get(
-                        "google_billing_project",
-                        os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
-                    )
-                    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-                    if not billing_project:
-                        self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
-                        billing_project = self._gcp_project
-                    else:
-                        self._gcp_credentials_cached, self._gcp_project = default(
-                            quota_project_id=billing_project,
-                            scopes=scopes,
-                        )
-                    # Return the credentials found
-                    return self._gcp_credentials_cached
 
             # Find GCP cloud config
             gcp_cloud_cfg = next((c for c in self.clouds if c and hasattr(c, "type") and c.type == "gcp"), None)
@@ -272,21 +231,6 @@ class BM(BaseModel, Singleton):
                     quota_project_id=quota_project_id,
                     scopes=scopes,
                 )
-            else:
-                # Fallback to environment variables or default if no GCP cloud config
-                billing_project = os.environ.get(
-                    "google_billing_project",
-                    os.environ.get("GOOGLE_CLOUD_PROJECT", self._gcp_project),
-                )
-                scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-                if not billing_project:
-                    self._gcp_credentials_cached, self._gcp_project = default(scopes=scopes)
-                    billing_project = self._gcp_project
-                else:
-                    self._gcp_credentials_cached, self._gcp_project = default(
-                        quota_project_id=billing_project,
-                        scopes=scopes,
-                    )
 
         # GCP tokens last 60 minutes and need to be refreshed after that
         auth_request = Request()  # Use imported Request
@@ -305,13 +249,15 @@ class BM(BaseModel, Singleton):
         # This method is called *after* the BaseModel initialization is complete
         # and the instance attributes are set according to the config.
 
+        from buttermilk.utils import get_ip
+
         # Initialize IP task asynchronously if needed
         # Check if an event loop is running before creating a task
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 if not hasattr(self, "_get_ip_task") or self._get_ip_task is None:
-                    self._get_ip_task = asyncio.create_task(self.get_ip())
+                    self._get_ip_task = asyncio.create_task(get_ip())
             else:
                 # No event loop running, skip IP task creation
                 pass
@@ -430,7 +376,7 @@ class BM(BaseModel, Singleton):
                 dict(
                     message=f"Saved data to: {result}",
                     uri=result,
-                    run_id=self._run_id,  # Access private attribute
+                    run_id=self.run_id,
                 ),
             )
             return result
@@ -456,7 +402,7 @@ class BM(BaseModel, Singleton):
             root_logger.removeHandler(handler)
 
         # for clarity
-        from ._core.log import logger as bm_logger
+        from .log import logger as bm_logger
 
         console_format = "%(asctime)s %(hostname)s %(name)s %(filename)s:%(lineno)d %(levelname)s %(message)s"
         coloredlogs.install(
@@ -478,7 +424,7 @@ class BM(BaseModel, Singleton):
                     "location": self.logger_cfg.location,  # type: ignore[attr-defined]
                     "namespace": self.name,  # type: ignore[union-attr] # Checked above
                     "job": self.job,  # type: ignore[union-attr] # Checked above
-                    "task_id": self._run_id,  # type: ignore[union-attr] # Checked above # Access private attribute
+                    "task_id": self.run_id,  # type: ignore[union-attr] # Checked above # Access private attribute
                 },
             )
 
@@ -753,94 +699,6 @@ class BM(BaseModel, Singleton):
         except Exception as e:
             logger.error(f"Failed to get BigQuery query results: {e}")
             return False  # Indicate failure
-
-
-# Module-level singleton instance (will be set by initialize_bm)
-_bm_instance: BM | None = None
-# Use the lock from the Singleton base class
-# _bm_lock = threading.Lock()
-
-
-def get_bm() -> BM:
-    """Get the singleton BM instance.
-
-    This function ensures that we always get the same BM instance,
-    no matter where it's imported from.
-
-    Returns:
-        BM: The singleton BM instance
-
-    Raises:
-        RuntimeError: If BM has not been initialized yet.
-
-    """
-    global _bm_instance
-    # Use the lock to ensure thread-safe access
-    with BM._lock:  # Use the lock defined in the Singleton base class
-        # Attempt to get the instance via the class constructor, which uses __new__
-        # This will return the existing instance if it exists, or create a new uninitialized one.
-        potential_instance = BM()
-        if potential_instance._is_base_model_initialized:
-            _bm_instance = potential_instance  # Set the module-level instance if it's initialized
-        else:
-            # If the instance exists but isn't initialized, or doesn't exist, raise error
-            raise RuntimeError("BM singleton has not been initialized. Call initialize_bm() first.")
-
-    return _bm_instance
-
-
-def initialize_bm(cfg: DictConfig) -> BM:
-    """Initialize the BM singleton with the provided configuration.
-
-    This function should be called once at startup, typically from cli.py
-    via hydra instantiation, to set up the BM instance with the proper
-    configuration values.
-
-    Args:
-        cfg (DictConfig): Configuration parameters for BM
-
-    Returns:
-        BM: The initialized singleton BM instance
-
-    Raises:
-        RuntimeError: If BM has already been initialized.
-
-    """
-    global _bm_instance
-    with BM._lock:  # Use the lock defined in the Singleton base class
-        # Get the singleton instance via the class constructor
-        instance = BM()
-
-        if instance._is_base_model_initialized:
-            # If already initialized, raise an error
-            raise RuntimeError("BM singleton has already been initialized.")
-
-        # Store the config in the registry before initialization
-        # This allows properties like _gcp_credentials to potentially access it
-        # if they are called during the BaseModel initialization process.
-        ConfigRegistry.set_config(cfg)
-
-        # Perform the actual Pydantic BaseModel initialization
-        # Use model_dump() to get a dictionary of the config values
-        # Pass the dictionary to the initialization method
-        try:
-            # Convert DictConfig to dict for Pydantic initialization
-            cfg_dict = hydra.utils.to_container(cfg, resolve=True)
-            instance._perform_base_model_initialization(**cfg_dict)
-        except Exception as e:
-            BM._instance = None  # Clear the instance so a subsequent call can try again
-            raise FatalError(f"Failed to initialize BM BaseModel: {e}") from e
-
-        # Now that the BaseModel is initialized, run the setup_instance logic
-        try:
-            instance.setup_instance(cfg)
-        except Exception as e:
-            raise FatalError(f"Failed during BM setup_instance: {e}") from e
-
-        # Set the module-level instance after successful initialization
-        _bm_instance = instance
-
-    return _bm_instance
 
 
 if __name__ == "__main__":

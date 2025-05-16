@@ -1,12 +1,9 @@
 from typing import Any, Protocol
 
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
+from buttermilk._core import logger
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger
 from buttermilk.runner.helpers import prepare_step_df
-bm = get_bm()
 
 
 class FlowRunner(Protocol):

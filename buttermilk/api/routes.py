@@ -6,16 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
+from buttermilk._core import logger
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger
+
 FlowRunner = Any
 
 from buttermilk.api.services.data_service import DataService
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
-
 
 #
 # curl -v 'http://127.0.0.1:8000/api/pull_task' -H 'accept: application/json'
