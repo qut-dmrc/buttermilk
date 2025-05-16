@@ -4,6 +4,12 @@ from hydra import compose, initialize
 from omegaconf import OmegaConf
 from pytest import MarkDecorator
 
+# Use deferred import to avoid circular references
+def get_bm():
+    """Get the BM singleton with delayed import to avoid circular references."""
+    from buttermilk._core.dmrc import get_bm as _get_bm
+    return _get_bm()
+
 from buttermilk._core.bm_init import BM
 from buttermilk._core.llms import CHATMODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
@@ -41,8 +47,8 @@ def bm(conf) -> BM:
                 resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
                 bm = BM(**resolved_cfg_dict["bm"])
 
-        from buttermilk._core import DMRC
-        DMRC.bm = bm
+        from buttermilk._core.dmrc import set_bm
+        set_bm(bm)
         return bm
     except Exception as e:
         print(f"Error during Pydantic model instantiation: {e}")

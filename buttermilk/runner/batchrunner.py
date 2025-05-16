@@ -15,7 +15,6 @@ from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus, BatchMetadata, BatchRequest
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 from buttermilk._core.types import RunRequest

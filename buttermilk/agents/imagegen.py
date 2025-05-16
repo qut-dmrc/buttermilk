@@ -22,6 +22,7 @@ from PIL import Image
 from pydantic import BaseModel, Field, field_validator
 from shortuuid import ShortUUID
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core.image import ImageRecord, read_image
 from buttermilk._core.log import logger
 from buttermilk._core.retry import RetryWrapper

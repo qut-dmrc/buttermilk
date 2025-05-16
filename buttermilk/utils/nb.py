@@ -5,6 +5,7 @@ from typing import Any
 
 # flake8: noqa
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from pathlib import Path
 import json
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ from cmap import Colormap
 from rich.console import Console
 
 from buttermilk._core import BM, logger  # noqa
-from buttermilk._core.dmrc import bm  # noqa
+from buttermilk import buttermilk as bm
 from buttermilk._core.dmrc import bm
 from buttermilk._core.log import logger  # noqa
 console = Console()

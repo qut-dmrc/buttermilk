@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from buttermilk._core import logger
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 
 FlowRunner = Any

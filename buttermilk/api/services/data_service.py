@@ -1,7 +1,6 @@
 from typing import Any, Protocol
 
 from buttermilk._core import logger
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 from buttermilk.runner.helpers import prepare_step_df
 

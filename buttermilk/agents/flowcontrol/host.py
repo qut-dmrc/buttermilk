@@ -195,6 +195,8 @@ class HostAgent(Agent):
             content=f"Confirm next step: {step.role}",
             options=["confirm", "reject"],
         )
+        # This is callback to groupchat, because we're the host agent right now.
+        # Our message goes to the groupchat and then gets picked up by the UI.
         await self.callback_to_groupchat(confirmation_request)
 
     async def _wait_for_user(self, step) -> bool:
@@ -228,7 +230,11 @@ class HostAgent(Agent):
         """Wait until all tasks are completed."""
         try:
             async with self._tasks_condition:
-                logger.info(f"Waiting for pending tasks to complete: {dict(self._pending_tasks_by_agent)}...")
+                if self._pending_tasks_by_agent:
+                    logger.info(f"Waiting for pending tasks to complete: {dict(self._pending_tasks_by_agent)}...")
+                else:
+                    logger.info("No pending tasks yet, but we are expecting some this step. Waiting.")
+
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
@@ -288,7 +294,7 @@ class HostAgent(Agent):
         async for next_step in self._step_generator:
             if not await self.wait_check_last_step_completions():
                 break
-            if self.human_in_loop and not self._wait_for_user(next_step):
+            if self.human_in_loop and not await self._wait_for_user(next_step):
                 continue
 
             await self._execute_step(next_step)

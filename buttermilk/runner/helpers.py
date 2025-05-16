@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 import cloudpathlib
 import pandas as pd
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core.config import DataSourceConfig
 from buttermilk._core.log import logger  # noqa
 from buttermilk.utils.flows import col_mapping_hydra_to_local

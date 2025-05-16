@@ -1,11 +1,13 @@
 import asyncio
 import importlib
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
+from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from buttermilk import logger
 from buttermilk._core import (
@@ -84,7 +86,6 @@ class FlowRunContext(BaseModel):
         """Send a message to a WebSocket connection.
         
         Args:
-            session_id: The session ID
             message: The message to send
 
         """
@@ -92,20 +93,53 @@ class FlowRunContext(BaseModel):
         if not formatted_message:
             logger.debug(f"Dropping message not handled by client: {message}")
             return
+
         try:
             message_type = formatted_message.type
-            formatted_message = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
-            message_data = {"content": formatted_message, "type": message_type}
+            content_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+            message_data_to_send = {"content": content_to_send, "type": message_type}
 
-            await self.websocket.send_json(message_data)
+            @retry(
+                stop=stop_after_attempt(3),  # Try 3 times in total (1 initial + 2 retries)
+                wait=wait_fixed(2),          # Wait 2 seconds between attempts
+                retry=retry_if_exception_type(Exception),  # Retry on any exception during send
+                reraise=True,                # Reraise the last exception if all retries fail
+                before_sleep=before_sleep_log(logger, logging.WARNING),  # Log a warning before retrying
+            )
+            async def _send_with_retry_internal():
+                if not self.websocket:
+                    logger.error(f"WebSocket is None for session {self.session_id} during send attempt.")
+                    # Raise an error to be caught by tenacity or the outer try/except
+                    raise RuntimeError(f"WebSocket is None for session {self.session_id}")
+
+                if self.websocket.client_state != WebSocketState.CONNECTED:
+                    logger.warning(
+                        f"WebSocket not connected (state: {self.websocket.client_state}) for session {self.session_id}. Retrying send.",
+                    )
+                    # Proceed to send; if it fails due to state, tenacity will catch and retry.
+
+                await self.websocket.send_json(message_data_to_send)
+                logger.debug(f"Message sent to UI for session {self.session_id}: {message_type}")
+
+            if not self.websocket:
+                logger.error(f"Cannot send message to UI for session {self.session_id}: WebSocket is None.")
+                # No point in trying to send an error message if websocket is None
+                return
+
+            await _send_with_retry_internal()
+
         except Exception as e:
-            logger.error(f"Error sending message: {e}")
-            try:
-                error_data = ErrorEvent(source="websocket_manager", content=f"Failed to send message: {e!s}")
-                message_data = {"content": error_data.model_dump(), "type": "system_message"}
-                await self.websocket.send_json(message_data)
-            except Exception as e:
-                logger.error(f"Failed to send error message: {e!s}")
+            logger.error(f"Error sending message to UI for session {self.session_id} (final attempt or pre-send issue): {e}")
+            # Attempt to send an error message back to the client if the websocket is still viable
+            if self.websocket and self.websocket.client_state == WebSocketState.CONNECTED:
+                try:
+                    error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
+                    error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
+                    await self.websocket.send_json(error_message_data)
+                except Exception as e_fallback:
+                    logger.error(f"Failed to send error notification to UI for session {self.session_id}: {e_fallback!s}")
+            else:
+                logger.warning(f"Cannot send error notification to UI for session {self.session_id}: WebSocket not available or not connected.")
 
 
 class FlowRunner(BaseModel):

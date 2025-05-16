@@ -15,6 +15,8 @@ from autogen_core.models import (
 from autogen_core.tools import FunctionTool, Tool, ToolSchema
 from pydantic import BaseModel, Field, PrivateAttr
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
+
 # Buttermilk core imports
 from buttermilk._core.agent import Agent  # Base agent and message types
 from buttermilk._core.contract import (
@@ -27,6 +29,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llms import AutoGenWrapper, CreateResult, ModelOutput  # LLM client wrapper and results
+from buttermilk._core.log import logger
 from buttermilk._core.types import Record  # Data record type
 from buttermilk.utils._tools import create_tool_functions  # Tool handling utility
 from buttermilk.utils.json_parser import ChatParser  # JSON parsing utility
@@ -84,8 +87,6 @@ class LLMAgent(Agent):
         if not self._model:
             # TODO: Maybe allow model to be defined at a higher level (e.g., flow level)?
             raise ValueError(f"Agent {self.agent_id}: LLM model name must be provided in agent parameters.")
-        from buttermilk._core.dmrc import bm  # noqa
-        from buttermilk._core.log import logger  # noqa
 
         logger.debug(f"Agent {self.agent_name}: Initializing model client for '{self._model}'.")
         try:

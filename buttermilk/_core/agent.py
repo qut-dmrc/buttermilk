@@ -24,6 +24,7 @@ from pydantic import (
     computed_field,
 )
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core.config import AgentConfig
 
 # Buttermilk core imports
@@ -184,9 +185,6 @@ class Agent(AgentConfig):
         """
         result = None
         logger.debug(f"Agent {self.agent_name} received input via __call__.")
-        from buttermilk._core import BM, logger  # noqa
-        from buttermilk._core.dmrc import bm  # noqa
-        from buttermilk._core.log import logger  # noqa
           # Get the singleton instance using our new module-level function
         # Prepare the final input by merging message data with internal agent state.
         try:

@@ -22,6 +22,14 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+
+# Use deferred import to avoid circular references
+def get_bm():
+    """Get the BM singleton with delayed import to avoid circular references."""
+    from buttermilk._core.dmrc import get_bm as _get_bm
+    return _get_bm()
+
+
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.job import Job
 
@@ -46,8 +54,7 @@ def save(
 
     if not save_dir:
         try:
-
-            save_dir = bm.save_dir
+            save_dir = get_bm().save_dir
         except Exception as e:
             logger.warning(f"Could not find save dir from BM object (maybe not configured or initialised?) Error: {e}, {e.args=}")
 

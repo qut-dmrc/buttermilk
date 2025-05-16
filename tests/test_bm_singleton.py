@@ -7,7 +7,6 @@ import hydra
 import pytest
 
 from buttermilk._core import BM, logger  # noqa
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger  # noqa
 
 
@@ -76,7 +75,7 @@ def test_singleton_between_modules(bm):
     # We'll use a fixture for simplicity
     def second_module_access():
         """Function simulating another module accessing BM."""
-        from buttermilk._core.dmrc import bm  # noqa
+        from buttermilk import buttermilk as bm
         from buttermilk._core.log import logger  # noqa
         return bm.bm
 
