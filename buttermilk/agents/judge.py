@@ -11,7 +11,6 @@ from buttermilk._core import logger
 
 # Buttermilk core imports
 from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
 

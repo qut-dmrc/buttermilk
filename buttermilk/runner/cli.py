@@ -102,7 +102,10 @@ def main(conf: DictConfig) -> None:
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
     bm = hydra.utils.instantiate(conf.bm)
     bm.setup_instance()
-    DMRC.bm = bm  # Set the Buttermilk instance in DMRC singleton module
+
+    # Set the singleton BM instance
+    from buttermilk._core.dmrc import set_bm
+    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
         case "console":

@@ -21,6 +21,8 @@ from pydantic import (
     model_validator,
 )
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
+
 # Buttermilk core imports
 # Agent base class and related types
 from buttermilk._core.config import (  # Configuration models

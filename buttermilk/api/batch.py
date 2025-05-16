@@ -9,7 +9,6 @@ from fastapi import APIRouter, HTTPException, Path, Query
 
 from buttermilk._core import logger
 from buttermilk._core.batch import BatchMetadata, BatchRequest
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 from buttermilk.runner.batchrunner import BatchRunner
 

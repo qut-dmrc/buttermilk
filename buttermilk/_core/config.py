@@ -108,7 +108,7 @@ class SaveInfo(CloudProviderCfg):
     @property
     def bq_schema(self) -> list[SchemaField]:
         if not self._loaded_schema:
-            from buttermilk._core.dmrc import bm  # noqa
+            from buttermilk import buttermilk as bm
             from buttermilk._core.log import logger  # noqa
 
             self._loaded_schema = bm.bq.schema_from_json(self.db_schema)

@@ -10,7 +10,6 @@
 from __future__ import annotations  # Enable postponed annotations
 
 import asyncio
-import base64
 import datetime
 import json
 import logging
@@ -38,9 +37,6 @@ from google.auth.credentials import Credentials as GoogleCredentials
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from omegaconf import DictConfig
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -132,8 +128,6 @@ class BM(SessionInfo):
     )  # Allow None initially
     _weave: WeaveClient | None = PrivateAttr(default=None)  # Initialize as None
 
-    _tracer: trace.Tracer = PrivateAttr()
-
     # Private attributes for caching client instances
     _gcs_log_client_cached: google.cloud.logging.Client | None = PrivateAttr(default=None)
     _gcs_cached: storage.Client | None = PrivateAttr(default=None)
@@ -172,10 +166,32 @@ class BM(SessionInfo):
         return values  # Return the dict directly, not a new instance
 
     @pydantic.model_validator(mode="after")
-    def set_full_save_dir(self) -> Self:
+    def _configure_buttermilk(self) -> Self:
         # This validator runs *after* BaseModel initialization.
         save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
         self.save_dir = str(save_dir)
+
+        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False))
+
+        # Print config to console and save to default save dir
+        print(self.model_dump())
+        try:
+            # Ensure save_dir is set before saving
+            if self.save_dir:
+                self.save(
+                    data=[self.model_dump(), self.run_info.model_dump()],
+                    basename="config",
+                    extension=".json",  # Default extension
+                    save_dir=self.save_dir,
+                )
+            else:
+                logger.warning("save_dir is not set. Skipping saving config.")
+
+        except Exception as e:
+            logger.error(f"Could not save config to default save dir: {e}")
+
+        self.start_fetch_ip_task()
+        self._login_clouds()
         return self
 
     @property
@@ -244,11 +260,7 @@ class BM(SessionInfo):
     def logger(self) -> logging.Logger:
         return logger
 
-    def setup_instance(self, cfg: DictConfig = None) -> None:
-        """Initializes the BM singleton instance after validation."""
-        # This method is called *after* the BaseModel initialization is complete
-        # and the instance attributes are set according to the config.
-
+    def start_fetch_ip_task(self):
         from buttermilk.utils import get_ip
 
         # Initialize IP task asynchronously if needed
@@ -265,100 +277,64 @@ class BM(SessionInfo):
             # No current event loop
             pass
 
-        # Only process clouds if we have them and they're properly initialized
-        if hasattr(self, "clouds") and self.clouds:
-            for cloud in self.clouds:
-                if not cloud or not hasattr(cloud, "type"):
-                    continue  # Skip invalid cloud entries
+    def _login_clouds(self):
+        for cloud in self.clouds:
+            if not cloud or not hasattr(cloud, "type"):
+                continue  # Skip invalid cloud entries
 
-                if cloud.type == "gcp":
-                    # store authentication info - this is now handled in _gcp_credentials property
-                    pass  # Keep this block for clarity if needed later
+            if cloud.type == "gcp":
+                # store authentication info - this is now handled in _gcp_credentials property
+                pass  # Keep this block for clarity if needed later
 
-                if cloud.type == "vertex":
-                    # initialize vertexai
-                    # Ensure project, location, bucket attributes exist before accessing
-                    project = getattr(cloud, "project", None)
-                    location = getattr(cloud, "location", None)
-                    bucket = getattr(cloud, "bucket", None)
-                    if project and location and bucket:
-                        try:
-                            aiplatform_init(
-                                project=project,
-                                location=location,
-                                staging_bucket=bucket,
-                            )
-                        except Exception as e:
-                            logger.warning(f"Failed to initialize Vertex AI: {e}")
-                    else:
-                        logger.warning(
-                            "Skipping Vertex AI initialization due to missing project, location, or bucket in config.",
+            if cloud.type == "vertex":
+                # initialize vertexai
+                # Ensure project, location, bucket attributes exist before accessing
+                project = getattr(cloud, "project", None)
+                location = getattr(cloud, "location", None)
+                bucket = getattr(cloud, "bucket", None)
+                if project and location and bucket:
+                    try:
+                        aiplatform_init(
+                            project=project,
+                            location=location,
+                            staging_bucket=bucket,
                         )
-
-        if self.logger_cfg:
-            # Pass verbose safely using getattr
-            self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False))
-
-            # Print config to console and save to default save dir
-            print(self.model_dump())
-            try:
-                # Ensure save_dir is set before saving
-                if self.save_dir:
-                    self.save(
-                        data=[self.model_dump(), self.run_info.model_dump()],
-                        basename="config",
-                        extension=".json",  # Default extension
-                        save_dir=self.save_dir,
-                    )
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize Vertex AI: {e}")
                 else:
-                    logger.warning("save_dir is not set. Skipping saving config.")
+                    logger.warning(
+                        "Skipping Vertex AI initialization due to missing project, location, or bucket in config.",
+                    )
 
-            except Exception as e:
-                logger.error(f"Could not save config to default save dir: {e}")
+    def setup_instance(self, cfg: DictConfig = None) -> None:
+        """Initializes the BM singleton instance after validation."""
+        # This method is called *after* the BaseModel initialization is complete
+        # and the instance attributes are set according to the config.
 
+    def traceloop(self):
         # Tracing setup (OTEL)
+        from traceloop.sdk import Traceloop
         WANDB_BASE_URL = "https://trace.wandb.ai"
-        OTEL_EXPORTER_OTLP_ENDPOINT = f"{WANDB_BASE_URL}/otel/v1/traces"
-        os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = OTEL_EXPORTER_OTLP_ENDPOINT
-        os.environ["TRACELOOP_BASE_URL"] = OTEL_EXPORTER_OTLP_ENDPOINT
-        # WANDB_API_KEY: get from https://wandb.ai/authorize
-        # Ensure credentials are available before accessing WANDB_API_KEY
-        # Accessing self.credentials will trigger loading if not cached
-        try:
-            creds = self.credentials
-            if creds and "WANDB_API_KEY" in creds and "WANDB_PROJECT" in creds:
-                AUTH = base64.b64encode(f"api:{creds['WANDB_API_KEY']}".encode()).decode()
+        os.environ["TRACELOOP_BASE_URL"] = f"{WANDB_BASE_URL}/otel/v1/traces"
+        Traceloop.init(disable_batch=True)
 
-                OTEL_EXPORTER_OTLP_HEADERS = {
-                    "Authorization": f"Basic {AUTH}",
-                    "project_id": creds["WANDB_PROJECT"],
-                }
+    def google_tracing(self):
+        # Google cloud trace
+        from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
+        from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
+        from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+        from traceloop.sdk import Traceloop
 
-                # Initialize the OpenTelemetry SDK
-                from opentelemetry.sdk import trace as trace_sdk
+        trace_exporter = CloudTraceSpanExporter()
+        metrics_exporter = CloudMonitoringMetricsExporter()
+        logs_exporter = CloudLoggingExporter()
 
-                tracer_provider = trace_sdk.TracerProvider()
-
-                # Configure the OTLP exporter
-                exporter = OTLPSpanExporter(
-                    endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
-                    headers=OTEL_EXPORTER_OTLP_HEADERS,
-                )
-
-                # Add the exporter to the tracer provider
-                tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
-
-                # Set the global tracer provider
-                trace.set_tracer_provider(tracer_provider)
-                self._tracer = trace.get_tracer(__name__)  # Get a tracer instance
-
-                logger.info(
-                    "Tracing setup configured (OTEL). Weave initialization happens on first access.",
-                )
-            else:
-                logger.warning("Wandb credentials missing. OpenTelemetry tracing not fully configured.")
-        except Exception as e:
-            logger.warning(f"Error during OpenTelemetry tracing setup: {e}. Continuing without OTEL tracing.")
+        Traceloop.init(
+            app_name="buttermilk",
+            exporter=trace_exporter,
+            metrics_exporter=metrics_exporter,
+            logging_exporter=logs_exporter,
+            )
 
     def save(self, data, save_dir=None, extension: str | None = None, **kwargs):
         """Failsafe save method."""

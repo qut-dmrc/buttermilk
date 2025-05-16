@@ -148,7 +148,7 @@ def _get_run_info():
         A SessionInfo object with the current run information.
 
     """
-    from buttermilk._core.dmrc import bm  # noqa
+    from buttermilk import buttermilk as bm
 
     return bm.run_info
 

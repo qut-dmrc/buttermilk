@@ -26,6 +26,7 @@ from autogen_core import (
 )
 from pydantic import PrivateAttr
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core import (  # noqa
     BM,
     AllMessages,
@@ -39,7 +40,6 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
 )
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger  # noqa
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.

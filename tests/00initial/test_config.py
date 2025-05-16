@@ -4,7 +4,7 @@ import pytest
 from cloudpathlib import AnyPath
 from omegaconf import DictConfig
 
-from buttermilk._core.dmrc import bm  # noqa
+from buttermilk import buttermilk as bm
 from buttermilk._core.log import logger  # noqa
 
 

@@ -6,7 +6,6 @@ from autogen_core import MessageContext, RoutedAgent, message_handler
 
 from buttermilk._core import logger
 from buttermilk._core.config import AgentConfig as ButtermilkAgentConfig  # Your base Buttermilk agent
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 
 

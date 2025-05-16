@@ -45,17 +45,17 @@ class JobQueueClient(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _setup(self) -> Self:
-        from buttermilk._core.dmrc import bm  # noqa
+        from buttermilk import buttermilk
         self._jobs_subscription_path = self._subscriber.subscription_path(
-            bm.pubsub.project,
-            bm.pubsub.jobs_subscription,
+            buttermilk.pubsub.project,
+            buttermilk.pubsub.jobs_subscription,
         )
         self._status_subscription_path = self._subscriber.subscription_path(
-            bm.pubsub.project,
-            bm.pubsub.status_subscription,
+            buttermilk.pubsub.project,
+            buttermilk.pubsub.status_subscription,
         )
-        self._status_topic_path = self._subscriber.topic_path(bm.pubsub.project, bm.pubsub.status_topic)
-        self._jobs_topic_path = self._subscriber.topic_path(bm.pubsub.project, bm.pubsub.jobs_topic)
+        self._status_topic_path = self._subscriber.topic_path(buttermilk.pubsub.project, buttermilk.pubsub.status_topic)
+        self._jobs_topic_path = self._subscriber.topic_path(buttermilk.pubsub.project, buttermilk.pubsub.jobs_topic)
 
         return self
 

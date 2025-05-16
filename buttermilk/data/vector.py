@@ -21,7 +21,10 @@ from vertexai.language_models import (
     TextEmbeddingModel,
 )
 
-from buttermilk import logger
+from buttermilk import (
+    buttermilk as bm,  # Global Buttermilk instance
+    logger,
+)
 from buttermilk._core.config import DataSouce
 from buttermilk._core.log import logger  # noqa, bm, logger  # no-qa
 

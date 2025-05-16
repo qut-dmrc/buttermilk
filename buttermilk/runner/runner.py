@@ -80,7 +80,6 @@ from tqdm.asyncio import tqdm as atqdm
 
 from buttermilk._core import logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
 from buttermilk.utils.errors import extract_error_info

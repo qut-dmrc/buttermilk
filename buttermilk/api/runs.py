@@ -1,6 +1,7 @@
 
 from buttermilk._core.log import logger  # noqa
 
+from buttermilk import buttermilk as bm  # Global Buttermilk instance
 
 # Get recent Jobs from BQ
 def get_recent_runs(max_n=50):
