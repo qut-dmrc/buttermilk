@@ -23,13 +23,8 @@ from pydantic import BaseModel, Field, field_validator
 from shortuuid import ShortUUID
 
 from buttermilk._core.image import ImageRecord, read_image
+from buttermilk._core.log import logger
 from buttermilk._core.retry import RetryWrapper
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 
 
 class TextToImageClient(RetryWrapper):

@@ -26,7 +26,12 @@ from autogen_core import (
 )
 from pydantic import PrivateAttr
 
-from buttermilk._core import AllMessages, StepRequest
+from buttermilk._core import (  # noqa
+    BM,
+    AllMessages,
+    StepRequest,
+    logger,
+)
 from buttermilk._core.agent import Agent, ProcessingError
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
@@ -34,16 +39,12 @@ from buttermilk._core.contract import (
     FlowEvent,
     FlowMessage,
 )
+from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger  # noqa
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
 from buttermilk.libs.autogen import AutogenAgentAdapter
-
-bm = get_bm()
 
 
 class TerminationHandler(DefaultInterventionHandler):

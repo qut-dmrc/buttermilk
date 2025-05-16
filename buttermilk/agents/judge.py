@@ -7,12 +7,13 @@ from typing import Literal
 # Import Autogen core components needed for type hints and potential interaction (though handled by adapter)
 from pydantic import BaseModel, Field
 
+from buttermilk._core import logger
+
 # Buttermilk core imports
 from buttermilk._core.agent import AgentInput, AgentTrace, buttermilk_handler  # Base types and decorator
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger
 from buttermilk.agents.llm import LLMAgent  # Base class for LLM-powered agents
-from buttermilk.bm import get_bm, logger  # Buttermilk global instance and logger
-
-bm = get_bm()
 
 
 # --- Pydantic Models ---

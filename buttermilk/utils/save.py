@@ -26,7 +26,6 @@ from buttermilk._core.config import SaveInfo
 from buttermilk._core.job import Job
 
 from .._core.log import logger
-from .bq import construct_dict_from_schema
 from .utils import (
     chunks,
     make_serialisable,
@@ -183,6 +182,9 @@ def data_to_export_rows(
     data: pd.DataFrame | Job | dict | list[Mapping[str, Any]],
     schema: list,
 ) -> list[Mapping[Hashable, Any]]:
+
+    from .bq import construct_dict_from_schema
+
     if isinstance(data, pd.DataFrame):
         # deduplicate columns
         data.columns = [

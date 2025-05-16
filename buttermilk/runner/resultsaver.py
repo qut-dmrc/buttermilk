@@ -8,12 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.job import Job
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
+from buttermilk._core.log import logger
 from buttermilk.utils.save import upload_rows
 
 

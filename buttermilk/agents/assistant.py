@@ -13,20 +13,14 @@ from autogen_core.models import ChatCompletionClient  # Import RequestUsage
 from autogen_core.tools import BaseTool
 from pydantic import PrivateAttr
 
+# Restore original bm import
 from buttermilk._core.agent import Agent, AgentInput, AgentTrace
 from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
 )
-
-# Restore original bm import
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
+from buttermilk._core.log import logger
 from buttermilk.utils._tools import create_tool_functions
-
-bm = get_bm()
 
 
 class SimpleAutogenChatWrapper(RoutedAgent):

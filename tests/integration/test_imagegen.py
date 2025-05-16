@@ -33,7 +33,7 @@ async def test_model(client, prompt, bm):
     )
     assert not image.error
     image.image.show()
-    bm.logger.info(f"Saved image from {imagegenerator.model} to {image.uri}")
+    logger.info(f"Saved image from {imagegenerator.model} to {image.uri}")
     assert image
 
 

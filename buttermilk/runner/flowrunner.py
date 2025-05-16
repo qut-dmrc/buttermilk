@@ -8,7 +8,10 @@ from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk import logger
-from buttermilk._core import AgentTrace
+from buttermilk._core import (
+    AgentTrace,
+    logger,  # noqa
+)
 from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import (
@@ -22,12 +25,6 @@ from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 
 
 class FlowRunContext(BaseModel):

@@ -1,3 +1,9 @@
+
+from buttermilk._core import logger
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger  # noqa
+
+
 # Replicate allows us to access llama through a hosted api service
 def replicatellama2(**kwargs):
     options = dict(

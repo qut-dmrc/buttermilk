@@ -13,17 +13,14 @@ from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
+from buttermilk._core import logger
 from buttermilk._core.batch import BatchJobStatus, BatchMetadata, BatchRequest
+from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 from buttermilk.runner.flowrunner import FlowRunner
 from buttermilk.utils.utils import expand_dict
 

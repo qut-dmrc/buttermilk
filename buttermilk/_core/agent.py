@@ -184,8 +184,10 @@ class Agent(AgentConfig):
         """
         result = None
         logger.debug(f"Agent {self.agent_name} received input via __call__.")
-        from buttermilk.bm import get_bm  # Importing here to avoid circular dependency
-        bm = get_bm()  # Get the singleton instance using our new module-level function
+        from buttermilk._core import BM, logger  # noqa
+        from buttermilk._core.dmrc import bm  # noqa
+        from buttermilk._core.log import logger  # noqa
+          # Get the singleton instance using our new module-level function
         # Prepare the final input by merging message data with internal agent state.
         try:
             final_input = await self._add_state_to_input(message)

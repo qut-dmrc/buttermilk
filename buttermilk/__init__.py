@@ -5,7 +5,7 @@ silence_task_logs()
 
 from ._core.defaults import BASE_DIR, BQ_SCHEMA_DIR, COL_PREDICTION, TEMPLATES_PATH
 from ._core.log import logger
-from .bm import BM
+from ._core.bm_init import BM
 
 __all__ = [
     "BASE_DIR",

@@ -20,6 +20,7 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
+from buttermilk._core import logger
 from buttermilk._core.agent import Agent  # Buttermilk base agent and config.
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
@@ -33,12 +34,8 @@ from buttermilk._core.contract import (
     OOBMessages,
     StepRequest,  # Union type for Out-Of-Band control messages.
 )
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger
 
 
 class AutogenAgentAdapter(RoutedAgent):

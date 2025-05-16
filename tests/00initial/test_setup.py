@@ -6,12 +6,9 @@ import google.auth.credentials
 import pytest
 from huggingface_hub import login
 
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    BM,  # Buttermilk global instance and logger
-    get_bm,
-)
-
-bm = get_bm()
+from buttermilk._core import BM, logger
+from buttermilk._core.dmrc import bm
+from buttermilk._core.log import logger  # noqa
 from buttermilk.utils.utils import read_yaml
 
 bm = bm

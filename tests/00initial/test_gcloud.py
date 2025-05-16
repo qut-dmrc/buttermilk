@@ -11,7 +11,7 @@ bm = bm
 
 
 def test_logger_initialised(bm):
-    obj = bm.logger
+    obj = logger
     assert obj is not None
     assert len(obj.handlers) >= 1
 

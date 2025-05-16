@@ -4,12 +4,8 @@ import pytest
 from cloudpathlib import AnyPath
 from omegaconf import DictConfig
 
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    BM,  # Buttermilk global instance and logger
-    get_bm,
-)
-
-bm = get_bm()
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.log import logger  # noqa
 
 
 def test_has_test_info(bm: BM):
@@ -56,7 +52,7 @@ def test_time_to_instantiate():
 # Use relative import for the module under test
 
 @pytest.mark.anyio
-async def test_get_ip_updates_ip(initialize_bm):
+async def test_get_ip_updates_ip(bm):
     """Test that get_ip fetches and updates the _ip attribute."""
     mock_ip_address = "192.168.1.100"
 
@@ -68,27 +64,21 @@ async def test_get_ip_updates_ip(initialize_bm):
         # Avoid including configs that trigger complex setups (like logging, clouds)
         minimal_cfg = DictConfig({"name": "test_app", "job": "test_job"})
 
-        # Initialize the BM singleton
-        initialize_bm(minimal_cfg)
-
-        # Get the singleton instance
-        bm_instance = get_bm()
-
         # Ensure _ip is initially None
-        assert bm_instance._ip is None
+        assert bm._ip is None
 
         # Call the async method
-        await bm_instance.get_ip()
+        await bm.get_ip()
 
         # Assert that the _ip attribute was updated
-        assert bm_instance._ip == mock_ip_address
+        assert bm._ip == mock_ip_address
 
         # Assert that the utility function was called exactly once
         mock_get_ip.assert_called_once()
 
 
 @pytest.mark.anyio
-async def test_get_ip_caches_ip(initialize_bm):
+async def test_get_ip_caches_ip(m):
     """Test that get_ip caches the result and doesn't refetch."""
     mock_ip_address = "10.0.0.50"
 
@@ -99,21 +89,15 @@ async def test_get_ip_caches_ip(initialize_bm):
         # Create a minimal configuration required for BM initialization
         minimal_cfg = DictConfig({"name": "test_app_cache", "job": "test_job_cache"})
 
-        # Initialize the BM singleton
-        initialize_bm(minimal_cfg)
-
-        # Get the singleton instance
-        bm_instance = get_bm()
-
         # Call the async method the first time
-        await bm_instance.get_ip()
+        await bm.get_ip()
 
         # Call the async method a second time
-        await bm_instance.get_ip()
+        await bm.get_ip()
 
         # Assert that the utility function was still called only once
         # This verifies the caching logic (if not self._ip:)
         mock_get_ip.assert_called_once()
 
         # Assert that the _ip attribute is set correctly after calls
-        assert bm_instance._ip == mock_ip_address
+        assert bm._ip == mock_ip_address

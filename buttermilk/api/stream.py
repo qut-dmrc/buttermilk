@@ -10,15 +10,11 @@ from pydantic import (
     Field,
 )
 
+from buttermilk._core import logger
+from buttermilk._core.dmrc import bm  # noqa
 from buttermilk._core.log import logger
 from buttermilk._core.types import Record
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
 from buttermilk.utils.media import download_and_convert
-bm = get_bm()
 
 
 class Job(BaseModel):

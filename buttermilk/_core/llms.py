@@ -261,8 +261,9 @@ class LLMs(BaseModel):
         return Enum("AllModelNames", list(self.connections.keys()))
 
     def get_autogen_chat_client(self, name) -> AutoGenWrapper:
-        from buttermilk.bm import get_bm  # Buttermilk global instance
-        bm = get_bm()
+        from buttermilk._core.dmrc import bm  # noqa
+        from buttermilk._core.log import logger  # noqa
+
         if name in self.autogen_models:
             return self.autogen_models[name]
 

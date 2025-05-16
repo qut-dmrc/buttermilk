@@ -15,6 +15,10 @@ import seaborn as sns
 from cmap import Colormap
 from rich.console import Console
 
+from buttermilk._core import BM, logger  # noqa
+from buttermilk._core.dmrc import bm  # noqa
+from buttermilk._core.dmrc import bm
+from buttermilk._core.log import logger  # noqa
 console = Console()
 print = console.print
 
@@ -37,12 +41,11 @@ def init(job: str, overrides: list[str] = [], path: str = None) -> Any:
     overrides.append(f"job={job}")
 
     with initialize_config_dir(version_base=None, config_dir=path):
-        cfg = compose(config_name="config", overrides=overrides)
+        conf = compose(config_name="config", overrides=overrides)
 
-    objs = hydra.utils.instantiate(cfg)
+    objs = hydra.utils.instantiate(conf)
     
-    bm = objs.bm
-    logger = bm.logger
+    bm_singleton.bm = hydra.utils.instantiate(conf.bm)
     logger.info(
         f"Starting interactive run for {bm.run_info.name} job {bm.run_info.job} in notebook",
     )

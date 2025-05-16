@@ -30,12 +30,6 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.bm import (  # Buttermilk global instance and logger
-    get_bm,  # Buttermilk global instance and logger
-    logger,
-)
-
-bm = get_bm()
 
 
 class MockTerminationHandler:
@@ -136,7 +130,7 @@ class MockOrchestrator(Orchestrator):
             logger.info("Flow terminated by user.")
         except FatalError as e:
             logger.error(f"Fatal error: {e}")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
         finally:
             # Cancel simulation if running
