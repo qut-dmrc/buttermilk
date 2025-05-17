@@ -295,7 +295,7 @@ class HostAgent(Agent):
             if not await self.wait_check_last_step_completions():
                 break
             if self.human_in_loop and not await self._wait_for_user(next_step):
-                continue
+                break
 
             await self._execute_step(next_step)
 

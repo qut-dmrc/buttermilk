@@ -9,7 +9,6 @@ osb:
     - name: search
       _target_: LLMAgent
       num_runs: 1
-      concurrency: 20
       save: ${save}
       parameters: 
         template: osb

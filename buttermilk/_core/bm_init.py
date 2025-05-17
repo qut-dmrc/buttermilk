@@ -76,7 +76,6 @@ class SessionInfo(BaseModel):
     name: str
     job: str
     run_id: str = Field(default_factory=_make_run_id)
-    max_concurrency: int = -1
     ip: str | None = Field(default=None)
     node_name: str = Field(default_factory=lambda: platform.uname().node)
     save_dir: str | None = None

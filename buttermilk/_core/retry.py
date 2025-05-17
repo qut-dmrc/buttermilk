@@ -32,12 +32,10 @@ from buttermilk._core.log import logger
 
 
 class RetryWrapper(BaseModel):
-    """Wraps a client and adds rate limiting via a semaphore
-    plus robust retry logic for handling API failures.
+    """Wraps a client and adds robust retry logic for handling API failures.
 
     Args:
         client: The object to wrap
-        concurrency: Maximum number of concurrent calls allowed
         cooldown_seconds: Time to wait between calls
         max_retries: Maximum number of retry attempts for failed API calls
         min_wait_seconds: Minimum wait time between retries (exponential backoff)
@@ -47,28 +45,13 @@ class RetryWrapper(BaseModel):
     """
 
     client: Any
-    concurrency: int = 4
     cooldown_seconds: float = 0.5
     max_retries: int = 3
     min_wait_seconds: float = 5.0
     max_wait_seconds: float = 60.0
     jitter_seconds: float = 5.0
 
-    semaphore: asyncio.Semaphore = Field(default=None)
-
     model_config = {"arbitrary_types_allowed": True}
-
-    @model_validator(mode="after")
-    def _create_semaphore(self) -> Self:
-        """Create a semaphore for rate limiting."""
-        # This works because the wrapper is used to wrap singleton
-        # clients, so the semaphore is created once and shared
-        # by a single instance for each client. It is not a global
-        # semaphore, so it won't affect other clients.
-        self.semaphore = asyncio.Semaphore(
-            self.concurrency,
-        )
-        return self
 
     def _get_retry_config(self) -> dict:
         """Get the retry configuration for tenacity."""
@@ -114,14 +97,13 @@ class RetryWrapper(BaseModel):
     ) -> Any:
         """Execute a function with retry logic."""
         try:
-            async with self.semaphore:
-                async for attempt in AsyncRetrying(**self._get_retry_config()):
-                    with attempt:
-                        # Execute the function
-                        result = await func(*args, **kwargs)
-                        # Add a small delay on success to prevent rate limiting
-                        await asyncio.sleep(self.cooldown_seconds)
-                        return result
+            async for attempt in AsyncRetrying(**self._get_retry_config()):
+                with attempt:
+                    # Execute the function
+                    result = await func(*args, **kwargs)
+                    # Add a small delay on success to prevent rate limiting
+                    await asyncio.sleep(self.cooldown_seconds)
+                    return result
         except RetryError as e:
             logger.error(f"All retry attempts failed: {e!s}")
             # Re-raise the last exception

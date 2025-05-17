@@ -79,10 +79,6 @@ class CloudManager:
             # Store project ID for other clients to use
             self._gcp_project = project
 
-            # Refresh token if needed
-            if hasattr(credentials, "refresh"):
-                credentials.refresh(Request())
-
             return credentials
         except Exception as e:
             raise RuntimeError(f"Failed to obtain GCP credentials: {e}") from e
