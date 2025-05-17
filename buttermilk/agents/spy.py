@@ -4,6 +4,7 @@ from autogen_core import (
     message_handler,  # Decorator to register methods as message handlers.
 )
 
+from buttermilk._core import logger
 from buttermilk._core.agent import ProcessingError
 from buttermilk._core.config import SaveInfo
 from buttermilk._core.contract import AgentTrace, ErrorEvent

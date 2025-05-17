@@ -96,8 +96,7 @@ class FlowRunContext(BaseModel):
 
         try:
             message_type = formatted_message.type
-            content_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
-            message_data_to_send = {"content": content_to_send, "type": message_type}
+            message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
             @retry(
                 stop=stop_after_attempt(3),  # Try 3 times in total (1 initial + 2 retries)

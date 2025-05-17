@@ -4,8 +4,7 @@ import pytest
 from cloudpathlib import AnyPath
 from omegaconf import DictConfig
 
-from buttermilk import buttermilk as bm
-from buttermilk._core.log import logger  # noqa
+from buttermilk._core import BM
 
 
 def test_has_test_info(bm: BM):
@@ -20,12 +19,12 @@ def test_config_llms(bm: BM):
     assert models
 
 
-def test_save_dir(bm):
+def test_save_dir(bm: BM):
     assert "runs/buttermilk/testing/" in bm.save_dir
     assert AnyPath(bm.save_dir)
 
 
-def test_singleton(bm):
+def test_singleton(bm: BM):
     obj1 = bm
     obj2 = bm
 

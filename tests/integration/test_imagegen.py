@@ -5,8 +5,6 @@ from buttermilk.agents.imagegen import (
     ImageClients,
 )
 
-bm = bm
-
 prompts = [
     (
         "cat",
@@ -23,7 +21,7 @@ prompts = [
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
 @pytest.mark.parametrize("client", ImageClients)
-async def test_model(client, prompt, bm):
+async def test_model(client, prompt):
     negative_prompt = "dog"
     imagegenerator = client()
     image = await imagegenerator.generate(

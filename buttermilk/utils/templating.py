@@ -65,8 +65,6 @@ class KeyValueCollector(BaseModel):
     each list is the output of an agent in a step.
     """
 
-    _data: dict[str, Any] = PrivateAttr(default_factory=dict)
-
     def _resolve_mappings(self, mappings: dict[Any, Any], data: Mapping) -> dict[str, Any]:
         """Resolve all variable mappings to their values"""
 

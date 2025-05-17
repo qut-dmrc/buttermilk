@@ -33,8 +33,7 @@ messages = [
     (
         "error",
         AgentInput(
-            prompt="Check out https://example.com",
-            inputs={},
+            inputs=dict(prompt="Check out https://example.com"),
         ),
     ),
     (
