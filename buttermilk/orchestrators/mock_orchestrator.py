@@ -780,19 +780,18 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(mock_record)
             await asyncio.sleep(0.5) # Simulate fetch delay
 
-        if request and request.record_ids:
-             logger.info(f"Simulating fetching initial records: {request.record_ids}")
-             for rec_id in request.record_ids:
-                 mock_record = self._generate_record(
-                     record_id=rec_id,
-                     content=f"Mock content for record {rec_id}.",
-                     metadata={
-                         "source": "simulated_fetch_list",
-                         "request_params": request.parameters,
-                         "flow_name": request.flow,
-                     }
-                 )
-                 await self._publish_message(mock_record)
+        if request and request.record_id:
+             logger.info(f"Simulating fetching initial records: {request.record_id}")
+             mock_record = self._generate_record(
+                 record_id=request.record_id,
+                 content=f"Mock content for record {request.record_id}.",
+                 metadata={
+                     "source": "simulated_fetch_list",
+                     "request_params": request.parameters,
+                     "flow_name": request.flow,
+                 }
+             )
+             await self._publish_message(mock_record)
                  await asyncio.sleep(0.3) # Simulate fetch delay for each record
 
     def make_publish_callback(self) -> Callable:

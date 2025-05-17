@@ -24,7 +24,7 @@ from autogen_core import (
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
 )
-from pydantic import PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core import (  # noqa
@@ -39,6 +39,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     FlowEvent,
     FlowMessage,
+    ManagerMessage,
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger  # noqa
@@ -46,22 +47,22 @@ from buttermilk._core.orchestrator import Orchestrator  # Base class for orchest
 from buttermilk._core.types import RunRequest
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
-class InterruptHandler(DefaultInterventionHandler):
-    def __init__(self) -> None:
-        self._termination_value: Termination | None = None
+class InterruptHandler(BaseModel):
+    """A simple handler for managing interrupts in the flow."""
+    interrupt: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
 
     async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
-        if isinstance(message, Termination):
-            self._termination_value = message
+        if isinstance(message, ManagerMessage):
+            if message.interrupt:
+                # Pause the flow
+                logger.info(f"Manager interrupt message received: {message}")
+                self.interrupt.set()
+            else:
+                # Resume the flow
+                logger.info(f"Manager resume message received: {message}")
+                self.interrupt.clear()
         return message
 
-    @property
-    def termination_value(self) -> Termination | None:
-        return self._termination_value
-
-    @property
-    def has_terminated(self) -> bool:
-        return self._termination_value is not None
 class TerminationHandler(DefaultInterventionHandler):
     def __init__(self) -> None:
         self._termination_value: StepRequest | None = None
@@ -113,13 +114,14 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=lambda: DefaultTopicId(type=f"{bm.name}-{bm.job}-{shortuuid.uuid()[:8]}"),
     )
 
-    async def _setup(self, request: RunRequest) -> TerminationHandler:
+    async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
         logger.info(msg)
 
         termination_handler = TerminationHandler()
-        self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[termination_handler])
+        interrupt_handler = InterruptHandler()
+        self._runtime = SingleThreadedAgentRuntime(intervention_handlers=[termination_handler, interrupt_handler])
 
         # Start the Autogen runtime's processing loop in the background.
         self._runtime.start()
@@ -139,7 +141,7 @@ class AutogenOrchestrator(Orchestrator):
         # Start up the host agent
         await self._runtime.publish_message(ConductorRequest(inputs=request.model_dump(), participants=self._participants), topic_id=DefaultTopicId(type=CONDUCTOR))
 
-        return termination_handler
+        return termination_handler, interrupt_handler
 
     async def _register_agents(self, params: RunRequest) -> None:
         """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
@@ -295,7 +297,7 @@ class AutogenOrchestrator(Orchestrator):
         """
         try:
             # 1. Setup the runtime and agents
-            termination_handler = await self._setup(request)
+            termination_handler, interrupt_handler = await self._setup(request)
 
             # 2. Load initial data if provided
             if request:
@@ -311,7 +313,13 @@ class AutogenOrchestrator(Orchestrator):
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
                         break
+                    elif interrupt_handler.interrupt.is_set():
+                        logger.info("Flow is paused. Waiting for resume...")
+                        await interrupt_handler.interrupt.wait()
+                        logger.info("Flow resumed.")
                     await asyncio.sleep(0.1)
+
+
 
                 except ProcessingError as e:
                     # Non-fatal error - let the host agent decide how to recover
