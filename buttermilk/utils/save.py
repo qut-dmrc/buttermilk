@@ -31,7 +31,6 @@ def get_bm():
 
 
 from buttermilk._core.config import SaveInfo
-from buttermilk._core.job import Job
 
 from .._core.log import logger
 from .utils import (
@@ -186,7 +185,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri, **kwargs) -> str:
 
 
 def data_to_export_rows(
-    data: pd.DataFrame | Job | dict | list[Mapping[str, Any]],
+    data: pd.DataFrame | dict | list[Mapping[str, Any]],  # Removed Job type hint
     schema: list,
 ) -> list[Mapping[Hashable, Any]]:
 

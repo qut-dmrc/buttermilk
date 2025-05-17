@@ -1,12 +1,11 @@
 import pytest
 
 from buttermilk._core import BM, logger
-from buttermilk._core.dmrc import bm
 from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
 from buttermilk._core.log import logger  # noqa
-from buttermilk._core.types import MediaObj, Record
-
-bm = bm
+from buttermilk._core.types import MediaObj, Record, RunRequest # Import RunRequest
+from buttermilk.agents.llm import LLMAgent as LC
+from buttermilk.runner.flowrunner import Flow # Import Flow
 
 
 def param_model(request):
@@ -34,14 +33,15 @@ def framer():
 async def test_frames_text(framer, text_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
-    job = Job(
-        source="testing",
-        flow_id="testflow",
-        record=text_record,
+    run_request = RunRequest(  # Replaced Job with RunRequest
+        ui_type="testing",  # Mapped source to ui_type
+        flow="testflow",  # Mapped flow_id to flow
+        records=[text_record],  # Mapped record to records list
         run_info=bm.run_info,
+        session_id="test_session",  # Added required session_id
     )
 
-    async for result in flow.run_flows(job=job):
+    async for result in flow.run_flows(run_request=run_request): # Pass run_request
         assert result
         assert isinstance(result.record, Record)
         assert not result.error
@@ -52,13 +52,14 @@ async def test_frames_text(framer, text_record, bm: BM, model):
 async def test_frames_article(framer, news_record, bm: BM, model):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
-    job = Job(
-        source="testing",
-        flow_id="testflow",
-        record=news_record,
+    run_request = RunRequest(  # Replaced Job with RunRequest
+        ui_type="testing",  # Mapped source to ui_type
+        flow="testflow",  # Mapped flow_id to flow
+        records=[news_record],  # Mapped record to records list
         run_info=bm.run_info,
+        session_id="test_session",  # Added required session_id
     )
-    async for result in flow.run_flows(job=job):
+    async for result in flow.run_flows(run_request=run_request): # Pass run_request
         assert result
         assert isinstance(result.record, Record)
         assert not result.error
@@ -70,9 +71,9 @@ async def test_framing_video(framer, model, bm, link_to_video_gcp):
     framer.parameters["model"] = model
     flow = Flow(source="testing", steps=[framer])
 
-    record = Record(data=link_to_video_gcp)
-    job = Job(source="testing", flow_id="testflow", record=record, run_info=bm.run_info)
-    async for result in flow.run_flows(job=job):
+    record = Record(content="", data=link_to_video_gcp) # Added content field
+    run_request = RunRequest(ui_type="testing", source="testing", flow="testflow", records=[record], run_info=bm.run_info, session_id="test_session")  # Added ui_type, Replaced Job with RunRequest and mapped args
+    async for result in flow.run_flows(run_request=run_request):  # Pass run_request
         assert result
         assert isinstance(result.record, Record)
         assert not result.error

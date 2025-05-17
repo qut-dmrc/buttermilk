@@ -42,7 +42,7 @@ from transformers import (
 )
 
 from buttermilk import logger
-from buttermilk._core.job import Job
+from buttermilk._core.contract import AgentInput, AgentTrace  # Import AgentInput and AgentTrace
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from .types import EvalRecord, Score
@@ -103,20 +103,35 @@ class ToxicityModel(BaseModel):
         if self.client is None:
             raise NotImplementedError
 
-    def run(self, job: Job) -> Job:
-        response = self.moderate(content=job.record.content, record_id=job.record.record_id)
+    def run(self, message: AgentInput) -> AgentTrace:  # Changed parameter name/type and return type
+        # Assuming the AgentInput contains at least one record
+        if not message.records:
+            raise ValueError("AgentInput must contain at least one record for ToxicityModel.")
+
+        # Process the first record in the input message
+        record = message.records[0]
+
+        response = self.moderate(content=record.content, record_id=record.record_id)  # Access content and record_id from Record
         if not isinstance(response, EvalRecord):
-            raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {job}")
+            raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {message}")
 
-        # add identifying info in
-        response.model = self.model
-        response.process = self.process_chain
-        response.standard = self.standard
-        response.record_id = job.record.record_id
+        # add identifying info in (already done in add_output_info)
+        # response.model = self.model
+        # response.process = self.process_chain
+        # response.standard = self.standard
+        # response.record_id = record.record_id # Already set in add_output_info
 
-        output = job.model_copy()
-        output.outputs = response
-        return output
+        # Create an AgentTrace object to return the results
+        trace = AgentTrace(
+            agent_id=self.agent_id,
+            session_id=self.session_id,  # session_id is required for AgentTrace
+            agent_info=self._cfg,  # agent_info is required for AgentTrace
+            inputs=message,  # Include the original input message
+            outputs=response,  # Store the EvalRecord in outputs
+            # Add other relevant metadata if needed
+        )
+
+        return trace  # Return the AgentTrace object
 
     @trace
     def __call__(self, prompt: str, **kwargs) -> EvalRecord:

@@ -24,6 +24,13 @@ def test_bm_instance(bm):
     assert bm.name == "development"
 
 
+def test_instantiate_hydra(conf):
+    """I'm not sure whether this should work."""
+    bm = hydra.utils.instantiate(conf.bm)
+    assert bm is not None, "BM instance should not be None"
+    assert bm.job == "testing", "BM instance job should be 'testing'"
+
+
 def test_initialize_bm(conf):
     """Initialize BM with the provided configuration."""
     # Initialize BM with the test configuration

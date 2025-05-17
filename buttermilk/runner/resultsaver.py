@@ -14,8 +14,8 @@ def get_bm():
     return _get_bm()
 
 
+from buttermilk._core.contract import AgentTrace  # Import AgentTrace
 from buttermilk._core.exceptions import FatalError
-from buttermilk._core.job import Job
 from buttermilk._core.log import logger
 from buttermilk.utils.save import upload_rows
 
@@ -28,7 +28,7 @@ from buttermilk.utils.save import upload_rows
 class ResultsCollector(BaseModel):
     """A simple collector that receives results from a queue and collates them."""
 
-    results: asyncio.Queue[Job] = Field(default_factory=asyncio.Queue)
+    results: asyncio.Queue[AgentTrace] = Field(default_factory=asyncio.Queue)  # Replaced Job with AgentTrace
     shutdown: bool = False
     n_results: int = 0
     to_save: list = []
@@ -73,11 +73,10 @@ class ResultsCollector(BaseModel):
             self.shutdown = True
             self.save_with_trace()  # Save any remaining results in the batch
 
-    # Turn a Job with results into a record dict to save
-    def process(self, response: Job) -> dict[str, Any]:
-        if isinstance(response, Job):
-            return response.model_dump()
-        return response
+    # Process a result (expected to be AgentTrace) into a record dict to save
+    def process(self, response: AgentTrace) -> dict[str, Any]:  # Replaced Job with AgentTrace
+        # Assuming the response is an AgentTrace, dump it
+        return response.model_dump()
 
     @trace
     def save_with_trace(self, **kwargs):
@@ -107,11 +106,9 @@ class ResultSaver(ResultsCollector):
     dataset: str
     dest_schema: Any
 
-    # Turn a Job with results into a record dict to save
-    def process(self, response: Job) -> dict[str, Any]:
-        # Here we use the data field as the source of data to upload in each row
-        if not isinstance(response, Job):
-            raise ValueError(f"Expected a Job to save, got: {type(response)} for: {response}")
+    # Process a result (expected to be AgentTrace) into a record dict to save
+    def process(self, response: AgentTrace) -> dict[str, Any]:  # Replaced Job with AgentTrace
+        # Assuming the response is an AgentTrace, dump it
         output = response.model_dump()
         try:
             # move metadata to the record id

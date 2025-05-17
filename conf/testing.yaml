@@ -4,7 +4,7 @@ defaults:
   - flows: test
   - _self_
 
-name: development
+name: buttermilk
 job: testing
 ui: console
 
