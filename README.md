@@ -129,4 +129,5 @@ Project info:
 - all configuration uses Hydra, with files in `conf/`. Main config is `testing.yaml`.
 - Main entry point is `cli.py`, using RunRequest() for the job and FlowRunner() for the executor. 
 - Python command is `uv run python`. Dependencies managed by `uv`.
+- Test command is `uv run python -m pytest`
 ```
