@@ -1,0 +1,17 @@
+# @package run.flows.mock
+defaults:
+  - _self_
+
+agents:
+  host:
+    role: HOST
+    name: "🎯 Sequencer"
+    agent_obj: MockOrchestrator
+    human_in_loop: true
+
+orchestrator: buttermilk.orchestrators.mock_orchestrator.MockOrchestrator
+description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
+parameters:
+  criteria:
+    - trans_simplified
+    - cte

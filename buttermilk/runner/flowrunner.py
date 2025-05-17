@@ -176,7 +176,7 @@ class FlowRunner(BaseModel):
             self.sessions[session_id] = FlowRunContext(session_id=session_id, websocket=websocket)
         elif websocket is not None:
             # Replace the existing WebSocket connection
-            logger.info(f"Updating WebSocket for existing session {session_id}")
+            logger.info(f"Updating WebSocket for existing session {session_id} ({websocket.client_state})")
             self.sessions[session_id].websocket = websocket
         return self.sessions[session_id]
 

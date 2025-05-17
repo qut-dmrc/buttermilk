@@ -1,4 +1,4 @@
-# @package flows.simple
+# @package run.flows.simple
 defaults:
   - /data: tja_train 
   - /agents:
@@ -10,7 +10,7 @@ defaults:
   - _self_
 
 
-orchestrator: buttermilk.orchestrators.mock_orchestrator.MockOrchestrator
+orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
   criteria:

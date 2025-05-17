@@ -26,12 +26,20 @@ from buttermilk._core.contract import (
     ToolOutput,
     UIMessage,
 )
+from buttermilk._core.log import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator
 from buttermilk._core.types import RunRequest
+from buttermilk.agents.differences import Differences
+from buttermilk.agents.evaluators.scorer import QualScoreCRA
+from buttermilk.agents.ui.console import QualResults
 from buttermilk.api.services.message_service import MessageService
 
 
+from buttermilk._core.contract import FlowEvent, TaskProcessingStarted, TaskProcessingComplete
+from buttermilk._core.types import Record
+from buttermilk.agents.judge import JudgeReasons
+from buttermilk.agents.differences import Differences, Divergence, Position, Expert
 class MockTerminationHandler:
     """Simplified termination handler that allows simulation control"""
 
@@ -67,6 +75,8 @@ class MockOrchestrator(Orchestrator):
     _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
     _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
     _topic_type: str = PrivateAttr(default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}")
+
+    _agent_ids: list[str] = PrivateAttr(default_factory=lambda: [f"{shortuuid.uuid()[-6:]}" for _ in range(5)])
 
     async def _setup(self, request: RunRequest) -> None:
         """Setup the mock orchestrator environment"""
@@ -105,7 +115,7 @@ class MockOrchestrator(Orchestrator):
         """Override run to generate fake messages instead of using real agents"""
         try:
             # Setup the mock environment
-            await self._setup(request or RunRequest(flow="mock_flow"))
+            await self._setup(request or RunRequest(flow="mock_flow", ui_type="web"))
 
             # Set callback on request if provided
             if request and hasattr(request, "callback_to_ui") and request.callback_to_ui:
@@ -149,15 +159,19 @@ class MockOrchestrator(Orchestrator):
         """Generate random messages of various types periodically"""
         try:
             while True:
-                # Choose a message type randomly
-                message_generator = random.choice([
-                    self._generate_agent_trace,
-                    self._generate_progress_update,
-                    self._generate_error_event,
-                    self._generate_ui_message,
-                    self._generate_tool_output,
-                    self._generate_record,
-                ])
+                # Choose a message type randomly with weights
+                message_generators = [
+                    (self._generate_agent_trace, 3),       # Higher weight for agent traces
+                    (self._generate_progress_update, 2),   # Medium weight for progress updates
+                    (self._generate_error_event, 1),       # Lower weight for errors
+                    (self._generate_ui_message, 2),        # Medium weight for UI messages
+                    (self._generate_tool_output, 2),       # Medium weight for tool outputs
+                    (self._generate_record, 3),            # Higher weight for records
+                ]
+                
+                # Weighted random selection
+                generators, weights = zip(*message_generators)
+                message_generator = random.choices(generators, weights=weights, k=1)[0]
 
                 # Generate and publish the message
                 message = message_generator()
@@ -172,7 +186,22 @@ class MockOrchestrator(Orchestrator):
     async def _simulate_flow(self):
         """Simulate a structured flow with sequential messages"""
         try:
-            # Step 1: Start the flow
+            # Step 1: Start the flow with a FlowEvent
+            start_event = FlowEvent(
+                content="Flow xyz started"
+            )
+            await self._publish_message(start_event)
+            await asyncio.sleep(0.5)
+            
+            # Publish a TaskProcessingStarted event
+            task_start = TaskProcessingStarted(
+                agent_id=random.choice(self._agent_ids),
+                role="JUDGE"
+            )
+            await self._publish_message(task_start)
+            await asyncio.sleep(0.5)
+            
+            # Continue with typical progress update
             start_msg = self._generate_progress_update(
                 source="ORCHESTRATOR",
                 role="CONDUCTOR",
@@ -213,7 +242,7 @@ class MockOrchestrator(Orchestrator):
                 await asyncio.sleep(0.8)
 
             research_result = self._generate_agent_trace(
-                agent_id="RESEARCHER",
+                agent_id=random.choice(self._agent_ids),
                 outputs="Collected 5 research papers and 3 dataset references",
                 metadata={"data_sources": 8, "processing_time": "2.3s"},
             )
@@ -240,33 +269,67 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(tool_output)
             await asyncio.sleep(0.8)
 
-            # Add an analysis record with processed data
-            analysis_record = self._generate_record(
-                record_id="data-analysis-summary",
-                content="## Analysis Results\n\n- Market growth trend: 12.5% increase over 6 months\n- User engagement: 35% higher on new platform\n- Conversion rate: Improved from 3.2% to 4.8%\n\nThese metrics suggest the new strategy is performing above expectations.",
-                metadata={
-                    "source": "data_processing_engine",
-                    "analysis_id": f"analysis-{shortuuid.uuid()[:6]}",
-                    "confidence": 0.92,
-                    "charts_available": True,
-                    "categories": ["market_analysis", "user_metrics", "performance"],
-                },
+            # Use a QualResults instance in the analyst output
+            qual_results = QualResults(
+                assessments=[
+                    QualScoreCRA(correct=True, feedback="Document contains comprehensive research with strong methodological approach"),
+                    QualScoreCRA(correct=True, feedback="Data visualization effectively communicates key trends"),
+                    QualScoreCRA(correct=True, feedback="Statistical analysis is thorough and appropriate for the dataset")
+                ],
+                assessed_agent_id=random.choice(self._agent_ids),
+                assessed_call_id=random.choice(self._agent_ids),
             )
-            await self._publish_message(analysis_record)
-            await asyncio.sleep(0.8)
-
+            
             analysis_result = self._generate_agent_trace(
-                agent_id="ANALYST",
-                outputs="Data analysis reveals strong correlation between variables A and B",
+                agent_id=random.choice(self._agent_ids),
+                outputs=qual_results,
                 metadata={"confidence": 0.87, "model": "claude-3"},
             )
             await self._publish_message(analysis_result)
             await asyncio.sleep(1)
 
-            # Step 4: User interaction
-            user_request = self._generate_ui_message(
+            # Add critic analysis with Differences output
+            differences = Differences(
+                conclusion="Revise the document to address these points before finalization",
+                divergences=[Divergence(topic="Methodology",positions=[
+                    Position(experts=[random.choice(self._agent_ids) for _ in range(3)], position="The conclusion section could be strengthened with additional examples")
+                    Position(experts=[random.choice(self._agent_ids) for _ in range(3)], position="Some statistical methods might benefit from more detailed explanation"),
+                    Position(experts=[random.choice(self._agent_ids) for _ in range(3)],position="Consider addressing alternative interpretations of the findings")
+                ])],
+            )
+            
+            critic_result = self._generate_agent_trace(
+                agent_id="CRITIC",
+                outputs=differences,
+                metadata={"analysis_depth": "detailed", "model": "gpt-4"},
+            )
+            await self._publish_message(critic_result)
+            await asyncio.sleep(1)
+
+            # Add judge evaluation with JudgeReasons
+            judge_reasons = JudgeReasons(
+                conclusion="The content adheres to guidelines with minor concerns about citation formatting.",
+                prediction=False,  # Does not violate policy
+                uncertainty="low",
+                reasons=[
+                    "Content is factually accurate and well-supported",
+                    "No harmful, misleading, or inappropriate material detected",
+                    "Citation style is inconsistent but all sources are properly credited"
+                ]
+            )
+            
+            judge_result = self._generate_agent_trace(
+                agent_id="JUDGE",
+                outputs=judge_reasons,
+                metadata={"evaluation_criteria": "academic_standards", "model": "claude-3"},
+            )
+            await self._publish_message(judge_result)
+            await asyncio.sleep(1)
+
+            # Step 4: User interaction with UIMessage
+            user_request = UIMessage(
                 content="Should I proceed with the detailed analysis or generate a summary?",
-                options=["Detailed analysis", "Generate summary"],
+                options=["Detailed analysis", "Generate summary", "Request revisions"],
             )
             await self._publish_message(user_request)
             await asyncio.sleep(2)
@@ -292,32 +355,13 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(final_result)
             await asyncio.sleep(0.8)
 
-            # Add a final summary record
-            final_record = self._generate_record(
-                record_id="final-recommendations",
-                content="# Executive Summary\n\nBased on our comprehensive analysis, we recommend the following strategic actions:\n\n1. **Implement Strategy X** - Focus on expanding market reach through targeted campaigns\n2. **Modify Approach Y** - Revise the user onboarding process to improve retention\n3. **Consider Alternative Z** - Explore new partnership opportunities in emerging markets\n\nExpected outcomes include 18% growth in Q2 and improved user satisfaction metrics.",
-                metadata={
-                    "source": "final_analysis",
-                    "report_type": "executive_summary",
-                    "priority": "high",
-                    "implementation_timeline": "Q2 2025",
-                    "stakeholders": ["executive_team", "product_management", "marketing"],
-                },
+            # Add a TaskProcessingComplete event
+            task_complete = TaskProcessingComplete(
+                agent_id=random.choice(self._agent_ids), role="ASSISTANT",
             )
-            await self._publish_message(final_record)
-            await asyncio.sleep(0.8)
+            await self._publish_message(task_complete)
+            await asyncio.sleep(0.5)
 
-            # Step 6: Completion
-            completion = self._generate_progress_update(
-                source="ORCHESTRATOR",
-                role="CONDUCTOR",
-                step_name="flow_completion",
-                status="completed",
-                message="Workflow completed successfully",
-                total_steps=5,
-                current_step=5,
-            )
-            await self._publish_message(completion)
 
             # Signal termination after simulation is complete
             if self._termination_handler:
@@ -327,55 +371,89 @@ class MockOrchestrator(Orchestrator):
             logger.debug("Flow simulation cancelled")
             raise
 
-    def make_publish_callback(self) -> Callable:
-        """Creates an asynchronous callback function for the UI to use.
-
-        Returns:
-            An async callback function that takes a message and publishes it.
-
-        """
-        async def publish_callback(message) -> None:
-            # Just forward to our _publish_message method
-            await self._publish_message(message)
-
-        return publish_callback
-
-    async def _publish_message(self, message):
-        """Publish a message directly to the websocket if available"""
-        # Log the message
-        formatted_message = MessageService.format_message_for_client(message)
-        if formatted_message is None:
-            logger.warning(f"Message not formatted: {message}")
-            return
-        log_content = str(formatted_message.preview)
-        if len(log_content) > 100:
-            log_content = log_content[:97] + "..."
-        logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
-
-        # Send directly to websocket if we have a client_websocket
-        if self._client_websocket:
-            try:
-                await self._client_websocket(formatted_message)
-            except Exception as e:
-                logger.error(f"Error sending to websocket: {e}")
-
-    # --- Mock Message Generator Methods ---
-
-    def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None) -> AgentTrace:
+    def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None, parent_call_id=None, tool_code=None) -> AgentTrace:
         """Generate a fake agent trace"""
+        from buttermilk._core.log import logger  # Import logger locally if needed
+        from buttermilk._core.contract import AgentInput, AgentTrace, AgentConfig
+        from buttermilk._core.types import Record # Import Record if used in outputs
+        from buttermilk.agents.judge import JudgeReasons # Import JudgeReasons if used in outputs
+        from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA # Corrected import and added QualScoreCRA
+        from buttermilk.agents.differences import Differences, Divergence, Position, Expert # Corrected import and added nested models
+
         if agent_id is None:
             agent_types = ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC"]
             agent_id = random.choice(agent_types)
 
         if outputs is None:
-            outputs_list = [
-                "I've analyzed the data and found several key insights...",
-                "The model performance indicates a 87% accuracy rate...",
-                "Based on the document analysis, the main themes are...",
-                "The search results show 15 relevant articles on this topic...",
-                "I've generated a comprehensive response to the query...",
-            ]
-            outputs = [random.choice(outputs_list)]
+            # Use actual structured message types for outputs
+            if agent_id == "JUDGE":
+                outputs = JudgeReasons(
+                    conclusion="The content appears to comply with policies with minor concerns.",
+                    prediction=random.choice([True, False]),
+                    uncertainty=random.choice(["low", "medium", "high"]),
+                    reasons=[
+                        "The content doesn't contain explicit harmful instructions",
+                        "No obvious hate speech or discriminatory language was detected",
+                        "The text remains within appropriate boundaries for general audiences"
+                    ]
+                )
+            elif agent_id == "ANALYST":
+                # QualResults requires assessed_agent_id, assessed_call_id, and assessments (list of QualScoreCRA)
+                outputs = QualResults(
+                    assessed_agent_id=random.choice(["ASSISTANT", "RESEARCHER"]), # Mock the agent being assessed
+                    assessed_call_id=str(uuid.uuid4()), # Mock the call ID being assessed
+                    assessments=[
+                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 1 assessment."),
+                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 2 assessment."),
+                        QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 3 assessment."),
+                    ],
+                    # score and summary are computed properties, no need to set here
+                )
+            elif agent_id == "CRITIC":
+                # Differences requires conclusion and divergences (list of Divergence)
+                # Divergence requires topic and positions (list of Position)
+                # Position requires experts (list of Expert) and position (string)
+                # Expert requires name and answer_id
+                outputs = Differences(
+                    conclusion="Overall, there are some notable differences in the expert opinions.",
+                    divergences=[
+                        Divergence(
+                            topic="Key Findings Interpretation",
+                            positions=[
+                                Position(
+                                    experts=[Expert(name="Expert A", answer_id=str(uuid.uuid4()))],
+                                    position="Interpretation focuses on positive trends."
+                                ),
+                                Position(
+                                    experts=[Expert(name="Expert B", answer_id=str(uuid.uuid4())), Expert(name="Expert C", answer_id=str(uuid.uuid4()))],
+                                    position="Interpretation highlights potential risks."
+                                ),
+                            ]
+                        ),
+                        Divergence(
+                            topic="Methodology Validity",
+                            positions=[
+                                Position(
+                                    experts=[Expert(name="Expert A", answer_id=str(uuid.uuid4())), Expert(name="Expert B", answer_id=str(uuid.uuid4()))],
+                                    position="Methodology is considered sound."
+                                ),
+                                Position(
+                                    experts=[Expert(name="Expert C", answer_id=str(uuid.uuid4()))],
+                                    position="Concerns raised about sample size."
+                                ),
+                            ]
+                        ),
+                    ]
+                )
+            else:
+                outputs_list = [
+                    "I've analyzed the data and found several key insights...",
+                    "The model performance indicates a 87% accuracy rate...",
+                    "Based on the document analysis, the main themes are...",
+                    "The search results show 15 relevant articles on this topic...",
+                    "I've generated a comprehensive response to the query...",
+                ]
+                outputs = random.choice(outputs_list)
 
         if metadata is None:
             metadata = {
@@ -384,15 +462,19 @@ class MockOrchestrator(Orchestrator):
                 "model": random.choice(["gpt-4", "claude-3", "gemini-pro", "llama-3"]),
             }
 
-        # Create an empty AgentInput for the trace
+        # Create an empty AgentInput for the trace (or populate with mock data if needed)
         agent_input = AgentInput()
 
         # Create a proper AgentConfig instance
         agent_info = AgentConfig(
-            agent_id=agent_id, agent_name=agent_id,
+            agent_id=agent_id,
             description=f"{agent_id} agent for processing tasks",
-            parameters={},
+            parameters={}, # Add mock parameters if needed
         )
+
+        # Optionally generate parent_call_id and tool_code
+        generated_parent_call_id = parent_call_id if parent_call_id is not None else (str(uuid.uuid4()) if random.random() < 0.3 else None) # 30% chance of having a parent
+        generated_tool_code = tool_code if tool_code is not None else ("print('hello world')" if random.random() < 0.1 else None) # 10% chance of having tool code
 
         return AgentTrace(
             agent_id=agent_id,
@@ -403,12 +485,86 @@ class MockOrchestrator(Orchestrator):
             agent_info=agent_info,
             session_id=self.trace_id,
             inputs=agent_input,
+            parent_call_id=generated_parent_call_id,
+            tool_code=generated_tool_code,
         )
 
     def _generate_progress_update(self, source=None, role=None, step_name=None,
                                 status=None, message=None, total_steps=None,
-                                current_step=None) -> TaskProgressUpdate:
-        """Generate a fake progress update"""
+                                current_step=None) -> TaskProgressUpdate | FlowEvent | TaskProcessingComplete |TaskProcessingStarted:
+        """Generate a fake progress update or flow event"""
+        from buttermilk._core.contract import FlowEvent, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate
+
+        # Sometimes generate flow events instead of progress updates
+        if random.choice([True, False, False]):  # 1/3 chance for flow events
+            event_types = [TaskProcessingStarted, TaskProcessingComplete, FlowEvent]
+            event_class = random.choice(event_types)
+
+            if event_class == TaskProcessingStarted:
+                # TaskProcessingStarted requires agent_id, role, task_index
+                return TaskProcessingStarted(
+                    agent_id=source if source else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    role=role if role else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    task_index=random.randint(0, 5), # Mock task index
+                    # task_id and flow_id are not part of TaskProcessingStarted based on contract.py
+                    # inputs and timestamp are not part of TaskProcessingStarted based on contract.py
+                )
+            elif event_class == TaskProcessingComplete:
+                # TaskProcessingComplete requires agent_id, role, task_index, more_tasks_remain, is_error
+                return TaskProcessingComplete(
+                    agent_id=source if source else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    role=role if role else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    task_index=random.randint(0, 5), # Mock task index
+                    more_tasks_remain=random.choice([True, False]),
+                    is_error=random.choice([True, False]),
+                    # task_id, flow_id, result, and timestamp are not part of TaskProcessingComplete based on contract.py
+                )
+            else:  # FlowEvent
+                # FlowEvent requires source and content
+                event_type = random.choice(["flow_started", "flow_completed", "agent_selected", "error_occurred"])
+                
+                generated_source = source if source else "ORCHESTRATOR" # Default source for FlowEvent
+                generated_content = f"Flow event: {event_type}" # Default content
+
+                details = {} # Details are not a required parameter for FlowEvent
+
+                # Adding details to content for better mock representation
+                if event_type == "flow_started":
+                    details.update({
+                        "flow_name": "mock_flow",
+                        "parameters": {"initial_param": random.choice(["A", "B", "C"])}
+                    })
+                    generated_content = f"Flow started: {details.get('flow_name')}"
+                elif event_type == "flow_completed":
+                    details.update({
+                        "summary": "Mock flow completed successfully.",
+                        "duration_ms": random.randint(1000, 10000)
+                    })
+                    generated_content = f"Flow completed. Summary: {details.get('summary')}"
+                elif event_type == "agent_selected":
+                    details.update({
+                        "agent_id": random.choice(["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC"]),
+                        "task_description": "Processing a mock task."
+                    })
+                    generated_content = f"Agent selected: {details.get('agent_id')} for task: {details.get('task_description')}"
+                elif event_type == "error_occurred":
+                    details.update({
+                        "error_message": "A simulated error occurred.",
+                        "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"])
+                    })
+                    generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
+
+                # Note: FlowEvent in contract.py only has 'source' and 'content'.
+                # The 'details' dictionary was used in the previous attempt but is not part of the model.
+                # I will include the details information within the 'content' string for better mock data.
+                
+                return FlowEvent(
+                    source=generated_source,
+                    content=generated_content,
+                    # timestamp is not part of FlowEvent based on contract.py
+                )
+
+        # Otherwise generate a regular progress update
         if source is None:
             roles = ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC"]
             source = random.choice(roles)
@@ -440,6 +596,7 @@ class MockOrchestrator(Orchestrator):
             ]
             message = random.choice(messages)
 
+        # TaskProgressUpdate requires source, role, step_name, status, message, total_steps, current_step, timestamp, waiting_on
         return TaskProgressUpdate(
             source=source,
             role=role,
@@ -449,31 +606,13 @@ class MockOrchestrator(Orchestrator):
             total_steps=total_steps,
             current_step=current_step,
             timestamp=datetime.now(UTC),
-        )
-
-    def _generate_error_event(self, source=None, content=None) -> ErrorEvent:
-        """Generate a fake error event"""
-        if source is None:
-            sources = ["orchestrator", "agent", "llm_service", "database", "file_system"]
-            source = random.choice(sources)
-
-        if content is None:
-            errors = [
-                "Connection to LLM service timed out",
-                "Failed to parse JSON response",
-                "Agent execution exceeded time limit",
-                "Invalid configuration detected",
-                "Resource limit exceeded",
-            ]
-            content = random.choice(errors)
-
-        return ErrorEvent(
-            source=source,
-            content=content,
+            waiting_on={}, # Mock empty waiting_on for simplicity
         )
 
     def _generate_ui_message(self, content=None, options=None) -> UIMessage:
-        """Generate a fake manager request"""
+        """Generate a fake UI message"""
+        from buttermilk._core.contract import UIMessage
+
         if content is None:
             questions = [
                 "How should I proceed with this analysis?",
@@ -490,31 +629,12 @@ class MockOrchestrator(Orchestrator):
                 num_options = random.randint(2, 4)
                 options = [f"Option {i + 1}" for i in range(num_options)]
 
+        # UIMessage requires content, options, show_continue, allow_free_text, message_id
+        # response and response_timestamp are not part of UIMessage based on contract.py
+
         return UIMessage(
             content=content,
             options=options,
-        )
-
-    def _generate_tool_output(self, function_name=None, content=None) -> ToolOutput:
-        """Generate a fake tool output"""
-        if function_name is None:
-            tools = ["search_web", "analyze_document", "fetch_data", "generate_image", "summarize_text"]
-            function_name = random.choice(tools)
-
-        if content is None:
-            outputs = [
-                "Retrieved 5 relevant documents from the search",
-                "Analysis complete. Found 12 key entities and 3 main topics.",
-                "Data fetched successfully: 256 records processed",
-                "Image generated with parameters: style=realistic, subject=landscape",
-                "Summary created with 150 words covering the main points",
-            ]
-            content = random.choice(outputs)
-
-        return ToolOutput(
-            name=function_name,
-            content=content,
-            call_id=str(uuid.uuid4()),
         )
 
     def _generate_record(self, record_id=None, content=None, metadata=None) -> Any:
@@ -555,36 +675,158 @@ class MockOrchestrator(Orchestrator):
             ]
             metadata["title"] = random.choice(titles)
 
+        # Record requires record_id, content, metadata, mime, update_type, session_id
+        # parent_record_id, tool_code, agent_id, and call_id are not part of Record based on contract.py
+
         return Record(
             record_id=record_id,
             content=content,
             metadata=metadata,
-            mime="text/plain",
+            mime=random.choice(["text/plain", "text/markdown", "text/html", "application/json"]),
+            update_type="create", # Assuming 'create' for mock records
+            session_id=self.trace_id,
+            # parent_record_id=generated_parent_record_id, # Removed
+            # tool_code=generated_tool_code, # Removed
+            # agent_id=generated_agent_id, # Removed
+            # call_id=generated_call_id, # Removed
+        )
+
+    def _generate_tool_output(self, function_name=None, content=None, metadata=None) -> ToolOutput:
+        """Generate a fake tool output message"""
+        from buttermilk._core.contract import ToolOutput
+
+        if function_name is None:
+            function_name = random.choice(["search_web", "analyze_document", "generate_report", "summarize_text"])
+
+        if content is None:
+            content_options = [
+                f"Tool '{function_name}' executed successfully.",
+                "Output from tool: Found 10 relevant results.",
+                "Analysis tool completed with no errors.",
+                "Report generated and saved.",
+            ]
+            content = random.choice(content_options)
+
+        if metadata is None:
+            metadata = {
+                "execution_time_ms": random.randint(100, 2000),
+                "status": random.choice(["success", "partial_success"]),
+            }
+            if metadata["status"] == "partial_success":
+                 metadata["warning"] = "Some data sources were unreachable."
+
+        # ToolOutput requires function_name, content, call_id
+        # results, messages, args, timestamp, agent_id are not part of ToolOutput based on contract.py
+        # metadata is not part of ToolOutput based on contract.py
+
+        return ToolOutput(
+            function_name=function_name,
+            content=content,
+            call_id=str(uuid.uuid4()), # Generate a mock call_id
+            # results=None, # Removed
+            # messages=[], # Removed
+            # args={}, # Removed
+            # timestamp=datetime.now(UTC), # Removed
+            # agent_id=generated_agent_id, # Removed
+            # metadata=metadata, # Removed
         )
 
 
-async def start_mock_orchestrator(flow_name="mock_flow", record_id="sample-record"):
-    """Start a mock orchestrator for testing"""
-    from buttermilk._core.types import RunRequest
+    def _generate_error_event(self, error_type=None, message=None, details=None) -> ErrorEvent:
+        """Generate a fake error event message"""
+        from buttermilk._core.contract import ErrorEvent
 
-    # Create a basic run request
-    request = RunRequest(ui_type="web", callback_to_ui=None,
-        flow=flow_name,
-        record_id=record_id,
-        parameters={"criteria": ["test"]},
-    )
+        if error_type is None:
+            error_type = random.choice(["ValueError", "RuntimeError", "TimeoutError", "APIError"])
 
-    # Create and run the mock orchestrator
-    orchestrator = MockOrchestrator(
-        name=flow_name,
-        random_generation=False,  # Follow fixed flow for testing
-        message_interval=2.0,
-        orchestrator="mock",
-    )
+        if message is None:
+            messages = [
+                f"An error occurred during {random.choice(['data processing', 'API call', 'analysis'])}.",
+                f"Failed to complete task due to {error_type}.",
+                "Unexpected error encountered.",
+            ]
+            message = random.choice(messages)
 
-    await orchestrator.run(request)
+        # ErrorEvent requires source and content
+        # error_type, details, timestamp, agent_id, call_id are not part of ErrorEvent based on contract.py
 
+        generated_source = random.choice(["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"])
+        generated_content = f"ERROR: {error_type} - {message}" # Combine type and message into content
 
-if __name__ == "__main__":
-    print("Starting Buttermilk Mock Orchestrator...")
-    asyncio.run(start_mock_orchestrator())
+        return ErrorEvent(
+            source=generated_source,
+            content=generated_content,
+            # error_type=error_type, # Removed
+            # details=details, # Removed
+            # timestamp=datetime.now(UTC), # Removed
+            # agent_id=generated_agent_id, # Removed
+            # call_id=generated_call_id, # Removed
+        )
+
+    async def _fetch_initial_records(self, request: RunRequest):
+        """Simulate fetching initial records based on the run request."""
+        if request and request.record_id:
+            logger.info(f"Simulating fetching initial record: {request.record_id}")
+            # Generate a mock record based on the requested ID
+            mock_record = self._generate_record(
+                record_id=request.record_id,
+                content=f"Mock content for record {request.record_id}. This is a simulated document.",
+                metadata={
+                    "source": "simulated_fetch",
+                    "request_params": request.parameters,
+                    "flow_name": request.flow,
+                }
+            )
+            await self._publish_message(mock_record)
+            await asyncio.sleep(0.5) # Simulate fetch delay
+
+        if request and request.record_ids:
+             logger.info(f"Simulating fetching initial records: {request.record_ids}")
+             for rec_id in request.record_ids:
+                 mock_record = self._generate_record(
+                     record_id=rec_id,
+                     content=f"Mock content for record {rec_id}.",
+                     metadata={
+                         "source": "simulated_fetch_list",
+                         "request_params": request.parameters,
+                         "flow_name": request.flow,
+                     }
+                 )
+                 await self._publish_message(mock_record)
+                 await asyncio.sleep(0.3) # Simulate fetch delay for each record
+
+    def make_publish_callback(self) -> Callable:
+        """Creates an asynchronous callback function for the UI to use.
+
+        Returns:
+            An async callback function that takes a message and publishes it.
+
+        """
+        async def publish_callback(message) -> None:
+            # Just forward to our _publish_message method
+            await self._publish_message(message)
+
+        return publish_callback
+
+    async def _publish_message(self, message):
+        """Publish a message directly to the websocket if available"""
+        # Log the message
+        formatted_message = MessageService.format_message_for_client(message)
+        if formatted_message is None:
+            logger.warning(f"Message not formatted: {message}")
+            return
+        log_content = str(formatted_message.preview)
+        if len(log_content) > 100:
+            log_content = log_content[:97] + "..."
+        logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
+
+        # Send directly to websocket if we have a client_websocket
+        if self._client_websocket:
+            try:
+                await self._client_websocket(formatted_message)
+            except Exception as e:
+                logger.error(f"Error sending to websocket: {e}")
+
+    # --- Mock Message Generator Methods ---
+
+    # _generate_agent_trace, _generate_progress_update, _generate_ui_message, _generate_record, _generate_tool_output, _generate_error_event are defined above
