@@ -2,17 +2,25 @@ import pytest
 
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import SaveInfo
+from buttermilk._core.contract import AgentInput # Import AgentInput
 from buttermilk.agents.sheetexporter import GSheetExporter
 
 
 @pytest.fixture
-def flow() -> Agent:
+def flow() -> GSheetExporter: # Changed type hint to GSheetExporter
     return GSheetExporter(
-        save=SaveInfo(
-            type="gsheets",
-            sheet_name="testing_gsheet_export",
-            sheet_id=None,
-        ),
+        session_id="test_session", # Required by Agent
+        role="EXPORTER", # Required by AgentConfig
+        parameters={ # Pass agent-specific config in parameters
+            "save": { # SaveInfo config goes inside parameters
+                "type": "gsheets",
+                "sheet_name": "testing_gsheet_export", # Added colon
+                "sheet_id": None,
+                "db_schema": "some_schema.json", # Added colon
+            },
+            # Add other parameters if needed by GSheetExporter
+        }
+        # Add other required AgentConfig fields if any (like description)
     )
 
 
@@ -45,11 +53,8 @@ export_config = {
 
 
 @pytest.mark.anyio
-async def test_gsheet_exporter(flow: Agent):
-    job = Job(
-        job_id="job_id",
-        source="testing",
-        flow_id=flow.id,
+async def test_gsheet_exporter(flow: GSheetExporter): # Changed type hint to GSheetExporter
+    agent_input = AgentInput( # Replaced Job with AgentInput
         parameters={
             "sheet_name": "evals",
             "title": "Trans Guidelines Judger",
@@ -68,7 +73,8 @@ async def test_gsheet_exporter(flow: Agent):
             "differences": "eval.analysis",
             "model": "eval.model",
         },
+        # Removed session_id from AgentInput
     )
-    result = await flow.process_job(job=job)
+    result = await flow.process_job(message=agent_input) # Pass agent_input
 
     assert result.outputs["sheet_url"]

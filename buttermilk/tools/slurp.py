@@ -16,7 +16,8 @@
 
 import httpx
 
-from buttermilk._core.agent import SingleAgent
+from buttermilk._core.agent import SingleAgent  # Import SingleAgent
+from buttermilk._core.contract import AgentInput, AgentTrace  # Import AgentInput and AgentTrace
 
 
 class Slurp(SingleAgent):
@@ -47,23 +48,33 @@ class Slurp(SingleAgent):
 
     #         return h
 
-    async def process_job(
+    async def process_job(  # Consider renaming this method to 'process' to align with Agent base class
         self,
-        job: Job,
+        message: AgentInput,  # Changed parameter name and type
         **kwargs,
-    ) -> Job:
-        url = job.inputs["url"]
-        job.outputs = []  # this doesn't actually work.
+    ) -> AgentTrace:  # Changed return type
+        url = message.inputs["url"]  # Access inputs from message
+        outputs_list = []  # Use a local list to collect outputs
         async with httpx.AsyncClient() as client:
             while url:
-                response = await client.get(url, parameters=job.parameters)
+                response = await client.get(url, parameters=message.parameters)  # Access parameters from message
                 response.raise_for_status()  # Raise an exception for bad status codes
 
                 data = response.json()
-                job.outputs.append(data["data"])
+                outputs_list.append(data.get("data"))  # Append data to the list, handle missing key
 
                 # Check for pagination information
                 paging = data.get("paging")
                 url = paging.get("next") if paging else None
 
-        return job
+        # Create an AgentTrace object to return the results
+        trace = AgentTrace(
+            agent_id=self.agent_id,
+            session_id=self.session_id,  # session_id is required for AgentTrace
+            agent_info=self._cfg,  # agent_info is required for AgentTrace
+            inputs=message,  # Include the original input message
+            outputs=outputs_list,  # Store the collected outputs
+            # Add other relevant metadata if needed
+        )
+
+        return trace  # Return the AgentTrace object

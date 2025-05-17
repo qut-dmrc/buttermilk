@@ -193,7 +193,7 @@ class FlowRunner(BaseModel):
         raise FatalError("Need to create the sssion object first")
         if request:
             # Run the task with a fresh orchestrator
-            logger.info(f"Running task from queue: {request.flow} (Job ID: {request.job_id})")
+            logger.info(f"Running task from queue: {request.flow} (Task ID: {request.job_id})")  # Updated message
             await self.run_flow(request, wait_for_completion=True)
         else:
             logger.debug("No tasks available in the queue")

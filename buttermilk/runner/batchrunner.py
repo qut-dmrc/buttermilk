@@ -202,7 +202,7 @@ class BatchRunner(BaseModel):
             if job_def and job_def.record_id == record_id:
                 return result
 
-        raise ValueError(f"Job for record '{record_id}' in batch '{batch_id}' not found")
+        raise ValueError(f"Task for record '{record_id}' in batch '{batch_id}' not found")  # Updated message
 
     async def cancel_batch(self, batch_id: str) -> BatchMetadata:
         """Cancel a batch job.

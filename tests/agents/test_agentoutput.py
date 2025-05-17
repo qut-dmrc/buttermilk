@@ -2,6 +2,10 @@
 import pytest
 from pydantic import ValidationError
 
+# Buttermilk core imports
+from buttermilk._core.config import AgentConfig
+from buttermilk._core.contract import AgentInput
+
 # --- Test Data ---
 
 SAMPLE_REASONS_DATA = {
@@ -15,43 +19,48 @@ SAMPLE_REASONS_DATA = {
 
 try:
     from buttermilk._core.contract import AgentTrace as ActualAgentTrace
-    from buttermilk.agents.judge import AgentReasons as ActualAgentReasons
+
+    # Correct the import name from AgentReasons to JudgeReasons
+    from buttermilk.agents.judge import JudgeReasons as ActualJudgeReasons
 
     ACTUAL_MODELS_AVAILABLE = True
 except ImportError:
     ACTUAL_MODELS_AVAILABLE = False
     ActualAgentTrace = None  # Define as None if import fails
-    ActualAgentReasons = None  # Define as None if import fails
+    ActualJudgeReasons = None  # Define as None if import fails
 
 
 # Use pytest.mark.skipif to skip these tests if the actual models can't be imported
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
-def test_actual_agent_reasons_direct_dump():
-    """Verify ACTUAL AgentReasons dumps correctly on its own."""
+def test_actual_judge_reasons_direct_dump():
+    """Verify ACTUAL JudgeReasons dumps correctly on its own."""
     try:
-        reasons_obj = ActualAgentReasons(**SAMPLE_REASONS_DATA)
+        reasons_obj = ActualJudgeReasons(**SAMPLE_REASONS_DATA)
         dumped_reasons = reasons_obj.model_dump()
         assert dumped_reasons == SAMPLE_REASONS_DATA
     except ValidationError as e:
-        pytest.fail(f"ActualAgentReasons validation failed: {e}")
+        pytest.fail(f"ActualJudgeReasons validation failed: {e}")
 
 
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
-def test_actual_agent_output_full_dump_includes_nested_outputs():
+def test_actual_agent_trace_full_dump_includes_nested_outputs():
     """Test the ACTUAL AgentTrace full dump to see if it includes nested outputs.
     This directly tests the problematic scenario with your real code.
     """
     try:
-        reasons_obj = ActualAgentReasons(**SAMPLE_REASONS_DATA)
+        reasons_obj = ActualJudgeReasons(**SAMPLE_REASONS_DATA)
     except ValidationError as e:
-        pytest.fail(f"ActualAgentReasons validation failed during instantiation: {e}")
+        pytest.fail(f"ActualJudgeReasons validation failed during instantiation: {e}")
 
-    # Instantiate ActualAgentTrace - provide minimal required fields if any
-    # Adjust instantiation based on ActualAgentTrace's actual fields/defaults
+    # Create a minimal AgentConfig for testing
+    minimal_agent_config = AgentConfig(role="TEST")
+
+    # Instantiate ActualAgentTrace - provide minimal required fields
     output_obj = ActualAgentTrace(
-        agent_info="test",
+        agent_info=minimal_agent_config,
+        session_id="test_session",
         call_id="actual_test_id",
-        # Add other necessary fields for ActualAgentTrace if they lack defaults
+        inputs=AgentInput(),  # Add the required inputs field
     )
     output_obj.outputs = reasons_obj  # Assign the nested actual model
 
@@ -68,10 +77,16 @@ def test_actual_agent_output_full_dump_includes_nested_outputs():
 
 
 @pytest.mark.skipif(not ACTUAL_MODELS_AVAILABLE, reason="Actual implementation models not found")
-def test_actual_agent_output_full_dump_with_default_outputs():
+def test_actual_agent_trace_full_dump_with_default_outputs():
     """Test dumping the actual AgentTrace when 'outputs' is the default."""
+    # Create a minimal AgentConfig for testing
+    minimal_agent_config = AgentConfig(role="TEST")
+
     output_obj = ActualAgentTrace(
-        agent_id="test",
+        agent_info=minimal_agent_config,
+        session_id="test_session",
+        agent_id="test",  # agent_id is part of AgentOutput base class
+        inputs=AgentInput(),  # Add the required inputs field
     )  # Instantiate with defaults
 
     full_dump = output_obj.model_dump()

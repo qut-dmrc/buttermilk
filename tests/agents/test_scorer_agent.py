@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch  # Import patch
 
 import pytest
+import weave # Import weave for type hints and potential use
 
 # Global Buttermilk instance (for mocking weave)
 # Autogen types (optional, for context if needed)
@@ -8,12 +9,11 @@ import pytest
 # Buttermilk core types
 from buttermilk._core.contract import AgentInput, AgentTrace
 from buttermilk._core.types import Record
+from buttermilk._core.config import AgentConfig # Import AgentConfig
 
 # Agent classes and models being tested/used
 from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore, QualScoreCRA
-from buttermilk.agents.judge import AgentReasons  # Judge output model
-
-bm = bm
+from buttermilk.agents.judge import JudgeReasons  # Judge output model
 
 
 # Mock weave globally for all tests in this module
@@ -39,7 +39,15 @@ class TestLLMScorerListen:
     def mock_scorer(self) -> LLMScorer:
         """Fixture to create an LLMScorer instance with mocked _process and _extract_vars."""
         parameters = {"model": "mock_model_name", "template": "score"}
-        scorer = LLMScorer(role="scorer", name="Test Scorer", description="A scorer for testing", parameters=parameters)
+        # Instantiate LLMScorer with AgentConfig fields and session_id
+        scorer = LLMScorer(
+            role="SCORER",
+            description="A scorer for testing",
+            parameters=parameters,
+            session_id="test_session_id", # Add the required session_id
+            # Add other required AgentConfig fields if any
+        )
+        # Mock _process and _extract_vars methods
         scorer._process = AsyncMock(name="_process")
         scorer._extract_vars = AsyncMock(name="_extract_vars")
         # Initialization might be needed if _listen relies on initialized state
@@ -54,13 +62,16 @@ class TestLLMScorerListen:
     @pytest.fixture
     def judge_output_valid(self, ground_truth_record: Record) -> AgentTrace:
         """Fixture for a valid AgentTrace from a Judge agent."""
-        judge_reasons = AgentReasons(conclusion="Judge conclusion", prediction=True, reasons=["Judge reason 1"], confidence="medium")
+        judge_reasons = JudgeReasons(conclusion="Judge conclusion", prediction=True, reasons=["Judge reason 1"], uncertainty="medium")  # Use JudgeReasons and correct field name
         # Ensure records format matches what _listen might expect if checking directly
         # Often list of lists: [[record1], [record2]] or just list: [record1, record2]
         # Using list[Record] based on documentation, adjust if needed.
+        # Create a minimal AgentConfig for the judge agent info
+        judge_agent_config = AgentConfig(role="JUDGE")
         return AgentTrace(
-            agent_info="judge-abc",
-            role="judge",
+            agent_info=judge_agent_config, # Use AgentConfig object
+            session_id="test_session_id", # Add required session_id
+            inputs=AgentInput(), # Add required inputs
             outputs=judge_reasons,
             records=[ground_truth_record],  # Pass record directly in a list
             tracing={"weave": "mock_trace_id"},  # Include weave trace ID
@@ -169,7 +180,7 @@ class TestLLMScorerListen:
         """Test that _listen skips scoring if ground truth ('expected') is not found."""
         mock_weave_obj, mock_apply_scorer_func = mock_global_weave
         mock_public_callback = AsyncMock()
-        judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
+        judge_reasons = JudgeReasons(conclusion="c", prediction=True, reasons=["r"], uncertainty="high")  # Use JudgeReasons and correct field name
         # Create record without 'ground_truth' in data
         record_no_gt = Record(content="Some content", data={"other": "info"})
         judge_output_msg = AgentTrace(
@@ -190,7 +201,7 @@ class TestLLMScorerListen:
         """Test that _listen skips scoring via weave if no trace ID is found."""
         mock_weave_obj, mock_apply_scorer_func = mock_global_weave
         mock_public_callback = AsyncMock()
-        judge_reasons = AgentReasons(conclusion="c", prediction=True, reasons=["r"], confidence="high")
+        judge_reasons = JudgeReasons(conclusion="c", prediction=True, reasons=["r"], uncertainty="high")  # Use JudgeReasons and correct field name
         # Message *without* tracing info
         judge_output_msg = AgentTrace(agent_info="judge-abc", role="judge", outputs=judge_reasons, records=[ground_truth_record])
         # Mock extract_vars to return ground truth (so it doesn't skip for that reason)

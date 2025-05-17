@@ -82,6 +82,8 @@ from buttermilk._core import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
+from buttermilk._core.types import RunRequest  # Import RunRequest
+from buttermilk.runner.resultsaver import ResultsCollector  # Import ResultsCollector
 from buttermilk.utils.errors import extract_error_info
 from buttermilk.utils.utils import load_json_flexi
 
@@ -116,15 +118,15 @@ class Consumer(BaseModel):
         done (bool): Flag to indicate whether the worker has finished or not.
 
     Methods:
-        process(record: Job) -> AsyncGenerator[Job, None]: Process the data (to be implemented by subclasses). This method may add recursive tasks by yielding additional records to be processed by another step.
+        process(record: RunRequest) -> AsyncGenerator[RunRequest, None]: Process the data (to be implemented by subclasses). This method may add recursive tasks by yielding additional records to be processed by another step. # Replaced Job with RunRequest
         run(self) -> None: Run the worker asynchronously until finished or told to stop.
 
     """
 
     agent: str | None = ""  # This is model, or client, or whatever is used to get the result
     step_name: str  # This is the step in the process that includes this particular task
-    input_queue: Queue[Job] = Field(default_factory=Queue)
-    output_queue: Queue[Job] = None
+    input_queue: Queue[RunRequest] = Field(default_factory=Queue)  # Replaced Job with RunRequest
+    output_queue: Queue[RunRequest] = None  # Replaced Job with RunRequest
     task_num: int | None = None
     run_info: Agent
     init_vars: dict = {}  # Vars to use when initialising the client
@@ -228,7 +230,7 @@ class Consumer(BaseModel):
             )
 
     @abstractmethod
-    async def process(self, *, job: Job) -> AsyncGenerator[Job, Any]:
+    async def process(self, *, job: RunRequest) -> AsyncGenerator[RunRequest, Any]:  # Replaced Job with RunRequest
         """Abstract method for data processing.
 
         This method MUST be implemented by subclasses. It should take a data record,
@@ -288,7 +290,7 @@ class TaskDistributor(BaseModel):
 
         self._consumers[consumer.agent] = consumer
 
-    def add_job(self, task_name: str, job: Job):
+    def add_job(self, task_name: str, job: RunRequest):  # Replaced Job with RunRequest
         """Add a task to the corresponding queue."""
         self._consumers[task_name].input_queue.put_nowait(job)
         self.total_tasks += 1

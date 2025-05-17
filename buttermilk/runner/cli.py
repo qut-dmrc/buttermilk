@@ -19,11 +19,13 @@ import hydra
 import uvicorn
 from omegaconf import DictConfig
 
+from buttermilk import BM
 from buttermilk._core import (
     dmrc as DMRC,  # noqa
     logger,
 )
 from buttermilk._core.config import FatalError
+from buttermilk._core.contract import OmegaConf
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 from buttermilk.api.flow import create_app
@@ -99,9 +101,9 @@ def main(conf: DictConfig) -> None:
              attempted before) could improve type safety if cfg structure is stable.
 
     """
+    resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
+    bm = BM(**resolved_cfg_dict["bm"])
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
-    bm = hydra.utils.instantiate(conf.bm)
-    bm.setup_instance()
 
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
