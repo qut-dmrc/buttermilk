@@ -13,4 +13,5 @@ run:
   ui: web
   human_in_loop: true
   save: ${save}
-  flows: ${flows}
+  flows: {}
+  

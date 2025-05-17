@@ -1,4 +1,4 @@
-# @package flows.judger
+# @package run.flows.judger
 # COMMENTED OUT # @package _global_
 defaults:
   - /data: tja_train

@@ -46,7 +46,22 @@ from buttermilk._core.orchestrator import Orchestrator  # Base class for orchest
 from buttermilk._core.types import RunRequest
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
+class InterruptHandler(DefaultInterventionHandler):
+    def __init__(self) -> None:
+        self._termination_value: Termination | None = None
 
+    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
+        if isinstance(message, Termination):
+            self._termination_value = message
+        return message
+
+    @property
+    def termination_value(self) -> Termination | None:
+        return self._termination_value
+
+    @property
+    def has_terminated(self) -> bool:
+        return self._termination_value is not None
 class TerminationHandler(DefaultInterventionHandler):
     def __init__(self) -> None:
         self._termination_value: StepRequest | None = None

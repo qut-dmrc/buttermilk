@@ -39,7 +39,7 @@ class DifferencesOutput(Differences):
         divergences_str = "\n\n".join(
             f"### Divergence: {divergence.topic}\n"
             + "\n".join(
-                f"\t- {position} ({', '.join([f'{expert.name} ({expert.answer_id})' for expert in experts])})"
+                f"\t- {position} ({', '.join([f'{expert}' for expert in experts])})"
                 for experts, position in divergence.positions
             )
             for divergence in self.divergences

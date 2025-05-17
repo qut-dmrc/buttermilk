@@ -1,4 +1,4 @@
-# @package flows.zot
+# @package run.flows.zot
 defaults:
   - _self_
   - /data: zot
