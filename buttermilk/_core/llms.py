@@ -271,9 +271,6 @@ class LLMs(BaseModel):
     def get_autogen_chat_client(self, name) -> AutoGenWrapper:
         from buttermilk._core.log import logger  # noqa
 
-        if name in self.autogen_models:
-            return self.autogen_models[name]
-
         client: ChatCompletionClient = None
 
         client_params = {}
@@ -312,14 +309,9 @@ class LLMs(BaseModel):
         else:
             client = OpenAIChatCompletionClient(**client_params)
 
-        # Store for next time so that we only maintain one client
-        self.autogen_models[name] = AutoGenWrapper(client=client, model_info=client_params["model_info"])
-
-        return self.autogen_models[name]
+        return AutoGenWrapper(client=client, model_info=client_params["model_info"]) # RETURN A NEW INSTANCE
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:
-        if __name in self.autogen_models:
-            return self.autogen_models[__name]
         if __name not in self.connections:
             raise AttributeError
         return self.get_autogen_chat_client(__name)

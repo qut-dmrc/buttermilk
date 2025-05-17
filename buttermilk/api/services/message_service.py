@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field
 from shortuuid import uuid
 
 from buttermilk._core import (
@@ -24,9 +24,9 @@ PREVIEW_LENGTH = 200
 
 class ChatMessage(BaseModel):
     """Chat message model"""
-
+    
     type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
-    message_id: str | None = Field(default_factory=lambda: uuid())
+    message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
@@ -50,9 +50,6 @@ class MessageService:
         try:
             if message is None:
                 return None
-            call_id = getattr(message, "call_id", None)
-            preview = getattr(message, "preview", None)
-            agent_info = getattr(message, "agent_info", None)
             if isinstance(message, AgentTrace):
                 if message.outputs:
                     # Send the unwrapped message instead of the AgentTrace object
@@ -86,8 +83,11 @@ class MessageService:
                 logger.warning(f"Unknown message type: {type(message)}")
                 return None
 
+            message_id = getattr(message, "call_id", uuid())
+            preview = getattr(message, "preview", None)
+            agent_info = getattr(message, "agent_info", None)
             # Repackage
-            output = ChatMessage(message_id=call_id,
+            output = ChatMessage(message_id=message_id,
                 type=message_type,
                 preview=preview,
                 outputs=message,

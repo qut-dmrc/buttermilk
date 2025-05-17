@@ -2,10 +2,11 @@
 against predefined criteria.
 """
 
+import random
 from typing import Literal
 
 # Import Autogen core components needed for type hints and potential interaction (though handled by adapter)
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from buttermilk._core import logger
 
@@ -47,6 +48,12 @@ class JudgeReasons(Reasons):
         ...,
         description="The scope for reasonable minds to differ on this conclusion.",
     )
+
+    @computed_field
+    @property
+    def preview(self) -> str:
+        """Returns a short preview of the evaluation."""
+        return f"∴ {self.conclusion} | {random.choice('☢️☣️💀⛔🚫') if self.prediction else random.choice('🧹✨💯')} | ⚠: {self.uncertainty[0].upper()}"
 
     def __str__(self):
         """Returns a nicely formatted MarkDown representation of the evaluation."""
