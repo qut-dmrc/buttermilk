@@ -84,7 +84,7 @@ class TestFlowVariableRouter:
             "job": "job_id",
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # Should return a list of all judges' answers
         assert isinstance(result["judge_answer"], list)
@@ -105,7 +105,7 @@ class TestFlowVariableRouter:
             "full_judge": "judge",
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # Should return the lists of outputs
         assert isinstance(result["full_judge"], list)
@@ -123,7 +123,7 @@ class TestFlowVariableRouter:
             "first_score": "judge.scores[0].name",
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # Should return values from all judge outputs
         assert isinstance(result["judge_metadata_version"], list)
@@ -146,7 +146,7 @@ class TestFlowVariableRouter:
             },
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # Should include scores from both judges
         assert isinstance(result["analysis"]["score_summary"], list)
@@ -170,7 +170,7 @@ class TestFlowVariableRouter:
             ],
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # First element should be a list of all judge answers
         assert isinstance(result["combined_answers"][0], list)
@@ -191,7 +191,7 @@ class TestFlowVariableRouter:
             ],
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         assert len(result["complex_data"]) == 3
         # First element should be a list of judge answers
@@ -213,7 +213,7 @@ class TestFlowVariableRouter:
             "first_section": "draft.sections[0]",
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         # Should have high scores from both judges
         assert isinstance(result["high_scores"], list)
@@ -236,7 +236,7 @@ class TestFlowVariableRouter:
             "valid_field": "judge.answer",
         }
 
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
 
         assert result["missing_step"] is None
         assert result["missing_field"] is None
@@ -257,7 +257,7 @@ class TestFlowVariableRouter:
             "field1_value": "special.field1",
         }
 
-        result = router._resolve_mappings(mappings)
+        result = router._resolve_mappings(mappings, router._data)
 
         # Should return the field from the second output since the first doesn't have it
         assert result["field2_value"] == ["value2"]
@@ -285,7 +285,7 @@ class TestFlowVariableRouter:
             "quality_scores": "judge.scores[?name=='quality'].score",
         }
 
-        result = router._resolve_mappings(mappings)
+        result = router._resolve_mappings(mappings, router._data)
 
         # Should have scores from both judge outputs flattened into a single list
         assert isinstance(result["all_scores"], list)
@@ -302,7 +302,7 @@ class TestFlowVariableRouter:
 
     def test_score_agg(self, sample_data):
         mappings = {"draft": "judge.scores[].score"}
-        result = sample_data._resolve_mappings(mappings)
+        result = sample_data._resolve_mappings(mappings, sample_data._data)
         assert set(result["draft"]) == {0.9, 0.7, 0.85, 0.95}
 
 
@@ -345,7 +345,7 @@ class TestFlowVariableRouterSpecialCases:
             "answers": "judge",  # Should return the full judge list
         }
 
-        result = router_with_records._resolve_mappings(mappings)
+        result = router_with_records._resolve_mappings(mappings, router_with_records._data)
 
         # Check content extracts fulltext from all records
         assert "content" in result
@@ -382,7 +382,7 @@ class TestFlowVariableRouterSpecialCases:
             "valid_field": "record.fulltext",
         }
 
-        result = router._resolve_mappings(mappings)
+        result = router._resolve_mappings(mappings, router._data)
 
         # Empty step should not be present
         assert "empty_result" not in result
@@ -408,7 +408,7 @@ class TestFlowVariableRouterSpecialCases:
             ],
         }
 
-        result = router_with_records._resolve_mappings(mappings)
+        result = router_with_records._resolve_mappings(mappings, router_with_records._data)
 
         # Check nested structure
         assert "analysis" in result
@@ -446,7 +446,7 @@ def test_placeholder_integration():
         "record_id": "record.id",
     }
 
-    result = router._resolve_mappings(mappings)
+    result = router._resolve_mappings(mappings, router._data)
 
     assert result["step_value"] == ["step1 data"]
     assert result["context_value"] == ["Context value"]

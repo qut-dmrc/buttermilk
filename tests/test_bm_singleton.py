@@ -7,6 +7,7 @@ import hydra
 import pytest
 
 from buttermilk._core import BM, logger  # noqa
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger  # noqa
 
 
@@ -33,9 +34,9 @@ def test_initialize_bm(conf):
 
 def test_singleton_instance(bm, conf):
     """Test that all ways of accessing BM return the same instance."""
-    from buttermilk._core import DMRC
     from buttermilk._core.log import logger  # noqa
-    bm_direct = DMRC.bm
+    import buttermilk.buttermilk.bm
+    bm_direct = buttermilk.buttermilk.bm
     bm_init = hydra.utils.instantiate(conf.bm)
     assert bm_init is not None, "BM instance should not be None"
     assert bm_init.job == "testing", "BM instance job should be 'testing'"
@@ -60,7 +61,7 @@ def test_singleton_with_kwargs_update_fails(conf, bm):
     assert bm.job == "testing", "Initial job should be 'testing'"
 
     # Creating a new instance should fail
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(FatalError) as excinfo:
         bm_updated = BM(**{**conf.bm, "job": "new_job"})
         assert bm_updated.job == "new_job"
 

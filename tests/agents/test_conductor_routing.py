@@ -13,7 +13,7 @@ from buttermilk._core.contract import (
     StepRequest,
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
-from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.flowcontrol.llmhost import LLMHostAgent
 
 pytestmark = pytest.mark.anyio
@@ -32,8 +32,8 @@ class TestConductorRouting:
         """Test Sequencer._handle_events calls _get_next_step for ConductorRequest."""
         # Arrange: Create a Sequencer instance with mocked dependencies
         # Patch __init__ to avoid dependencies, then add mocks manually
-        with patch.object(Sequencer, "__init__", return_value=None):
-            sequencer = Sequencer()
+        with patch.object(HostAgent, "__init__", return_value=None):
+            sequencer = HostAgent()
             # Mock methods called by _handle_events
             sequencer._get_next_step = AsyncMock(name="_get_next_step")
             sequencer._check_completions = AsyncMock(name="_check_completions")
