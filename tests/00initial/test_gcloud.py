@@ -7,8 +7,6 @@ from shortuuid import uuid
 from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
-bm = bm
-
 
 def test_logger_initialised(bm):
     obj = logger

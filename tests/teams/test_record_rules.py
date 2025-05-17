@@ -34,7 +34,7 @@ def record_agent_cfg(
                     template="judge",
                     formatting="json_rules",
                     criteria="criteria_ordinary",
-                ),
+                ),session_id="test_session",
             )
         case "Owl":
             return LLMAgent(
@@ -46,6 +46,7 @@ def record_agent_cfg(
                     template="owl",
                     watch="ambiguity",
                 ),
+                ),session_id="test_session",
             )
         case _:
             raise ValueError(f"Unknown agent type: {request.param}")

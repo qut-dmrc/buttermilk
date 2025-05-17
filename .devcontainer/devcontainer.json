@@ -1,17 +1,13 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
-	"name": "prosocialdev",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	// "image": "us-central1-docker.pkg.dev/prosocial-443205/reg/prosocialbase:latest",
-    "image": "mcr.microsoft.com/devcontainers/base:debian",
-    "dockerComposeFile": "docker-compose.yml",
-    "service": "prosocialdev",
+    "name": "buttermilk",
+    "image": "us-central1-docker.pkg.dev/prosocial-443205/reg/prosocialdev:latest",
     "workspaceFolder": "/src/buttermilk",
-    "shutdownAction": "stopCompose",
     "remoteUser": "debian",
     "runArgs": [
-        "--network=host"
+        "--network=host",
+        "--add-host=host.docker.internal:host-gateway"
     ], 
     "containerEnv": {
     },
@@ -42,13 +38,11 @@
                 }
             }
         }
-    }
-
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-
+    },
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+    "forwardPorts": [
+        8000
+    ],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "pip3 install --user -r requirements.txt",
