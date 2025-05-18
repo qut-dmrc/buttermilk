@@ -129,14 +129,14 @@ class TracingDetails(BaseModel):
                 call = weave.get_current_call()
                 if call and hasattr(call, "ref") and hasattr(call.ref, "id"):
                     return call.ref.id
-                logger.debug("Weave call or ref.id not found.")
+                logger.info("Weave call or ref.id not found.")
                 return ""
             except ImportError:
                 logger.warning("Weave library not installed. Cannot capture Weave trace ID.")
                 return ""
             except Exception as e:
                 # Catch errors if called outside a Weave context or other issues.
-                logger.debug(f"Unable to get weave call ID: {e}")
+                logger.warning(f"Unable to get weave call ID: {e}")
                 return ""
         return value  # Return provided value if exists
 
