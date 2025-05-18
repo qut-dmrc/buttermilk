@@ -1,9 +1,11 @@
 import asyncio
 import importlib
 import logging
+import random
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import shortuuid
 from fastapi import WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,10 +25,13 @@ from buttermilk._core.contract import (
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
+from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.message_service import MessageService
+from buttermilk.utils.utils import expand_dict
 
 
 class FlowRunContext(BaseModel):
@@ -308,3 +313,55 @@ class FlowRunner(BaseModel):
                 # Clean up after completion if we were waiting
                 await self._cleanup_flow_context(_session)
         return
+
+    async def create_batch(self, flow_name, max_records: int | None) -> list[RunRequest]:
+        """Create a new batch job from the given request.
+        
+        Args:
+            batch_request: The batch configuration
+            
+        Returns:
+            The created batch metadata
+            
+        Raises:
+            ValueError: If the flow doesn't exist or record extraction fails
+
+        """
+        # Extract record IDs from the flow's data source
+        record_ids = await DataService.get_records_for_flow(flow_name=flow_name, flow_runner=self)
+        logger.info(f"Extracted {len(record_ids)} record IDs for flow '{flow_name}'")
+
+        # Create multiple iterations by multiplying the parameters
+        iteration_values = expand_dict(self.flows[flow_name].parameters) or [{}]
+        logger.debug(f"Expanded {len(self.flows[flow_name].parameters)} parameters for batch into {len(iteration_values)} variants")
+
+        # Shuffle records
+        random.shuffle(record_ids)
+        logger.debug(f"Shuffled {len(record_ids)} record IDs")
+
+        batch_id = str(shortuuid.uuid())
+
+        # Create run requests for each record and parameter combination
+        job_definitions = []
+
+        # Apply iteration values
+        for iteration_params in iteration_values:
+            for i, record in enumerate(record_ids):
+                job = RunRequest(ui_type="batch",
+                    batch_id=batch_id,
+                    flow=flow_name,
+                    record_id=record["record_id"],
+                    parameters=iteration_params, callback_to_ui=None,
+                )
+                job_definitions.append(job)
+                logger.debug(f"Created run request: {job.model_dump_json()}")
+
+                # Apply max_records limit if specified
+                if max_records is not None and max_records > 0 and i >= max_records:
+                    break
+
+        if max_records is not None and max_records > 0:
+            logger.info(f"Limited to {max_records} record IDs, returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
+        else:
+            logger.info(f"Returning {len(iteration_values)} iterations for {len(job_definitions)} jobs total.")
+        return job_definitions

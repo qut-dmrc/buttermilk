@@ -16,7 +16,7 @@ orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "tox"
 description: Applies toxicity criteria
 parameters:
-  human_in_loop: ${human_in_loop}
+  human_in_loop: ${run.human_in_loop}
   criteria:
     - criteria_ordinary
     - criteria_gelber

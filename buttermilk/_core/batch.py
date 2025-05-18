@@ -29,31 +29,6 @@ class BatchErrorPolicy(str, Enum):
     CONTINUE = "continue"  # Continue processing other jobs if one fails
     STOP = "stop"  # Stop the entire batch if any job fails
 
-
-class BatchRequest(BaseModel):
-    """Request to create a new batch job."""
-
-    command: Literal["create", "list", "status"] = Field(default="create", description="Command to execute")
-    flow: str = Field(..., description="The name of the flow to execute for all records in the batch")
-    shuffle: bool = Field(default=True, description="Whether to shuffle record IDs before processing")
-    max_records: int | None = Field(default=None, description="Maximum number of records to process (None for all)")
-    concurrency: int = Field(default=1, description="Number of jobs to process concurrently")
-    error_policy: BatchErrorPolicy | Literal["stop", "continue"] = Field(default=BatchErrorPolicy.CONTINUE, description="How to handle job failures")
-    parameters: dict[str, Any] = Field(default_factory=dict, description="Additional parameters to pass to each flow run")
-    interactive: bool = Field(default=False, description="Whether this batch requires interactive input")
-    wait: bool = Field(default=True, description="Whether to wait for batch completion")
-    model_config = ConfigDict(
-        extra="forbid",  # Disallow extra fields for strict input validation
-    )
-
-    @pydantic.field_validator("error_policy")
-    @classmethod
-    def _select_policy(cls, value) -> BatchErrorPolicy:
-        if isinstance(value, str) and value.lower() == "stop":
-            return BatchErrorPolicy.STOP
-        return value
-
-
 class BatchMetadata(BaseModel):
     """Metadata for a batch job."""
 

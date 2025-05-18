@@ -68,8 +68,13 @@ class JobQueueClient(BaseModel):
 
     async def pull_single_task(self) -> RunRequest | None:
         """Pull a single task from Pub/Sub and process it."""
+        response = None
         try:
             response = self._subscriber.pull(subscription=self._jobs_subscription_path, max_messages=1)
+            ack_id = response.received_messages[0].ack_id
+            self._subscriber.acknowledge(subscription=self._jobs_subscription_path, ack_ids=[ack_id])
+            logger.debug(f"Acknowledged message with ack_id: {ack_id}")
+
             if response.received_messages:
                 message = response.received_messages[0]
                 request = await self._make_run_request(message)

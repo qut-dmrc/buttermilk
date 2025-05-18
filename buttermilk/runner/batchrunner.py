@@ -7,21 +7,17 @@ This module contains the BatchRunner class, which is responsible for:
 """
 
 import asyncio
-import random
 from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk._core import logger
-from buttermilk._core.batch import BatchJobStatus, BatchMetadata, BatchRequest
-from buttermilk._core.exceptions import FatalError
+from buttermilk._core.batch import BatchJobStatus, BatchMetadata
 from buttermilk._core.log import logger
 from buttermilk._core.types import RunRequest
 from buttermilk.api.job_queue import JobQueueClient
-from buttermilk.api.services.data_service import DataService
 from buttermilk.runner.flowrunner import FlowRunner
-from buttermilk.utils.utils import expand_dict
 
 
 class BatchRunner(BaseModel):
@@ -55,84 +51,6 @@ class BatchRunner(BaseModel):
                 logger.info("Initialized job queue client")
             except Exception as e:
                 logger.warning(f"Failed to create job queue client: {e}. Jobs will be processed locally.")
-
-    async def create_batch(self, batch_request: BatchRequest) -> BatchMetadata:
-        """Create a new batch job from the given request.
-        
-        Args:
-            batch_request: The batch configuration
-            
-        Returns:
-            The created batch metadata
-            
-        Raises:
-            ValueError: If the flow doesn't exist or record extraction fails
-
-        """
-        # Extract record IDs from the flow's data source
-        try:
-            # Use our helper class to get the record IDs
-            record_ids = await DataService.get_records_for_flow(flow_name=batch_request.flow, flow_runner=self.flow_runner)
-            logger.info(f"Extracted {len(record_ids)} record IDs for flow '{batch_request.flow}'")
-        except Exception as e:
-            logger.error(f"Failed to extract record IDs for flow '{batch_request.flow}': {e}")
-            raise ValueError(f"Failed to extract record IDs: {e}")
-
-        # Iterate batch parameters when asked (otherwise uses flow defaults configured on the runner)
-        iteration_values = expand_dict(batch_request.parameters) or [{}]
-
-        # Shuffle if requested
-        if batch_request.shuffle:
-            random.shuffle(record_ids)
-            logger.debug(f"Shuffled {len(record_ids)} record IDs")
-
-        # Apply max_records limit if specified
-        if batch_request.max_records is not None:
-            record_ids = record_ids[:batch_request.max_records]
-            logger.debug(f"Limited to {len(record_ids)} record IDs (max_records={batch_request.max_records})")
-
-        # Create batch metadata
-        batch_metadata = BatchMetadata(
-            flow=batch_request.flow,
-            total_jobs=len(record_ids),
-            parameters=batch_request.parameters,
-            interactive=batch_request.interactive,
-        )
-
-        # Create job definitions and publish to queue if available
-        job_definitions = []
-        published_to_queue = False
-
-        # Check if we can use the job queue
-        use_queue = self.job_queue is not None
-
-        # Apply iteration values
-        for iteration_params in iteration_values:
-            for record in record_ids:
-                job = RunRequest(ui_type="batch",
-                    batch_id=batch_metadata.id,
-                    flow=batch_request.flow,
-                    record_id=record["record_id"],
-                    parameters=iteration_params, callback_to_ui=None,
-                )
-                job_definitions.append(job)
-
-                # Publish to queue if available
-                if use_queue and self.job_queue is not None:
-                    try:
-                        self.job_queue.publish_job(job)
-                        published_to_queue = True
-                    except Exception as e:
-                        msg = f"Failed to publish job to queue: {e}"
-                        use_queue = False  # Fall back to local processing
-                        raise FatalError(msg) from e
-
-        # Store batch metadata
-        self._active_batches[batch_metadata.id] = batch_metadata
-
-        logger.info(f"Created batch '{batch_metadata.id}' with {len(job_definitions)} jobs using params {batch_request.parameters} (published to queue: {published_to_queue})")
-
-        return batch_metadata
 
     async def get_batch_status(self, batch_id: str) -> BatchMetadata:
         """Get status information for a batch.
