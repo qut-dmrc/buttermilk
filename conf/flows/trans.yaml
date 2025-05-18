@@ -18,4 +18,4 @@ orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "TJA"
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
-  human_in_loop: ${human_in_loop} 
+  human_in_loop: ${run.human_in_loop} 

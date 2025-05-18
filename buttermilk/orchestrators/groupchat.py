@@ -24,7 +24,7 @@ from autogen_core import (
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
 )
-from pydantic import BaseModel, Field, PrivateAttr,ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core import (  # noqa
@@ -47,10 +47,13 @@ from buttermilk._core.orchestrator import Orchestrator  # Base class for orchest
 from buttermilk._core.types import RunRequest
 from buttermilk.libs.autogen import AutogenAgentAdapter
 
+
 class InterruptHandler(BaseModel):
     """A simple handler for managing interrupts in the flow."""
+
     interrupt: asyncio.Event = Field(default_factory=asyncio.Event)
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
     async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
         if isinstance(message, ManagerMessage):
             if message.interrupt:
@@ -62,7 +65,6 @@ class InterruptHandler(BaseModel):
                 logger.info(f"Manager resume message received: {message}")
                 self.interrupt.clear()
         return message
-    
 
 
 class TerminationHandler(DefaultInterventionHandler):
@@ -145,7 +147,7 @@ class AutogenOrchestrator(Orchestrator):
 
         return termination_handler, interrupt_handler
 
-    async def _register_agents(self, params: RunRequest) -> None:
+    async def _register_agents(self, params: RunRequest) -> None: 
         """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
 
         Iterates through the `self.agents` configuration, creating AutogenAgentAdapter
@@ -299,7 +301,11 @@ class AutogenOrchestrator(Orchestrator):
         """
         try:
             # 1. Setup the runtime and agents
-            termination_handler, interrupt_handler = await self._setup(request)
+            try:
+                termination_handler, interrupt_handler = await self._setup(request)
+            except Exception as e:
+                logger.error(f"Error during setup: {e}")
+                raise FatalError from e
 
             # 2. Load initial data if provided
             if request:
@@ -315,13 +321,11 @@ class AutogenOrchestrator(Orchestrator):
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
                         break
-                    elif interrupt_handler.interrupt.is_set():
+                    if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
                         await interrupt_handler.interrupt.wait()
                         logger.info("Flow resumed.")
                     await asyncio.sleep(0.1)
-
-
 
                 except ProcessingError as e:
                     # Non-fatal error - let the host agent decide how to recover

@@ -39,6 +39,23 @@ from buttermilk.runner.slackbot import register_handlers
 asyncio.get_event_loop().slow_callback_duration = 120
 
 
+async def create_batch(flow_runner: FlowRunner, flow: str, max_records: int | None = None) -> None:
+    """Create a new batch job."""
+    try:
+        # Create the batch
+        batch = await flow_runner.create_batch(flow, max_records)
+
+        # Enqueue the batch for processing
+        job_queue = JobQueueClient()
+
+        for request in batch:
+            job_queue.publish_job(request)
+
+    except Exception as e:
+        msg = f"Failed to publish job to queue: {e}"
+        raise FatalError(msg) from e
+
+
 async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
     """Pull and run jobs from the queue, ensuring fresh state for each job.
     
@@ -66,6 +83,9 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
                     # Only raise an error if we didn't process any jobs
                     raise FatalError("No run request found in the queue.")
                 break  # No more jobs to process
+
+            ui = CLIUserAgent(session_id=uuid4().hex)
+            run_request.callback_to_ui = ui.callback_to_ui
 
             logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
             try:
@@ -128,11 +148,9 @@ def main(conf: DictConfig) -> None:
 
         case "batch":
 
+            logger.info("Creating batch jobs...")
+            asyncio.run(create_batch(flow_runner=flow_runner, flow=conf.get("flow"), max_records=conf.get("max_records", None)))
             logger.info("Running batch manager...")
-            from buttermilk.runner.batch_cli import main as batch_main
-
-            # We're already in the hydra context, so we can just call the main function
-            batch_main(conf)
 
         case "batch_run":
             # Run batch jobs from the queue
@@ -141,6 +159,7 @@ def main(conf: DictConfig) -> None:
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
             max_jobs = conf.get("max_jobs", 1)  # Get max_jobs from config or default to 1
+            ui = CLIUserAgent(session_id=uuid4().hex)
 
             logger.info(f"Running in batch mode with max_jobs={max_jobs}...")
             asyncio.run(run_batch_job(flow_runner=flow_runner, max_jobs=max_jobs))

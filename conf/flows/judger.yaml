@@ -14,4 +14,4 @@ defaults:
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "Judge"
 parameters:
-  human_in_loop: ${human_in_loop}
+  human_in_loop: ${run.human_in_loop}

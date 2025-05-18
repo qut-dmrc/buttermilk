@@ -3,7 +3,7 @@ host:
   name: "🎯 Assistant"
   description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
   agent_obj: LLMHostAgent
-  human_in_loop: ${human_in_loop}
+  human_in_loop: ${run.human_in_loop}
   parameters:
     template: researchassistant
     model: ${llms.host}

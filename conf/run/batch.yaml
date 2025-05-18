@@ -1,48 +1,18 @@
 # @package _global_
 # Batch execution configuration
-
 defaults:
-  - local
+  - /local
   - _self_
-  - /flows/criteria@run.batch.parameters.criteria: 
-    - trans 
-  # ... other defaults
 
-name: bm_api
+name: bm_batch
 job: flows
+
+max_records: 5
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
-  save: ${save}
   mode: batch
-  ui: batch
+  ui: console
   human_in_loop: false
-
-  # Batch-specific configuration
-  batch:
-    # Command to execute (create, list, status, cancel)
-    command: create
-    
-    # Whether to shuffle record IDs
-    shuffle: true
-    
-    # Maximum number of records to process (null for all)
-    max_records: null
-    
-    # Number of jobs to process concurrently
-    concurrency: 5
-    
-    # How to handle job failures (continue, stop)
-    error_policy: continue
-    
-    # Whether to wait for batch completion
-    wait: false
-    
-    # Whether the batch requires interactive input
-    interactive: false
-    
-    # Additional parameters to pass to each flow run
-    parameters: {}
-    
-    # Batch ID (required for status and cancel commands)
-    # batch_id: null
+  save: ${save}
+  flows: {}

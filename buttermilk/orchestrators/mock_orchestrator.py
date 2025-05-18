@@ -16,30 +16,28 @@ from typing import Any
 import shortuuid
 from pydantic import Field, PrivateAttr
 
-from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import (
     AgentInput,
     AgentTrace,
     ErrorEvent,
+    FlowEvent,
     ManagerMessage,
+    TaskProcessingComplete,
+    TaskProcessingStarted,
     TaskProgressUpdate,
-    ToolOutput,
     UIMessage,
 )
-from buttermilk._core.log import logger
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.log import logger
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk._core.types import RunRequest
-from buttermilk.agents.differences import Differences
+from buttermilk._core.types import Record, RunRequest
+from buttermilk.agents.differences import Differences, Divergence, Expert, Position
 from buttermilk.agents.evaluators.scorer import QualScoreCRA
+from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.ui.console import QualResults
 from buttermilk.api.services.message_service import MessageService
+from buttermilk.orchestrators.groupchat import InterruptHandler
 
-
-from buttermilk._core.contract import FlowEvent, TaskProcessingStarted, TaskProcessingComplete
-from buttermilk._core.types import Record
-from buttermilk.agents.judge import JudgeReasons
-from buttermilk.agents.differences import Differences, Divergence, Position, Expert
 
 class MockTerminationHandler:
     """Simplified termination handler that allows simulation control"""
@@ -73,11 +71,12 @@ class MockOrchestrator(Orchestrator):
 
     # Private state
     _termination_handler: MockTerminationHandler | None = PrivateAttr(default_factory=lambda: None)
+    _interrupt_handler: InterruptHandler
     _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
     _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
     _topic_type: str = PrivateAttr(default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}")
 
-    _agent_ids: list[str] = PrivateAttr(default_factory=lambda: [f"agent-{i+1}" for i in range(5)]) # Use simpler, consistent IDs
+    _agent_ids: list[str] = PrivateAttr(default_factory=lambda: [f"agent-{i + 1}" for i in range(5)])  # Use simpler, consistent IDs
 
     async def _setup(self, request: RunRequest) -> None:
         """Setup the mock orchestrator environment"""
@@ -86,6 +85,7 @@ class MockOrchestrator(Orchestrator):
 
         # Create our custom termination handler
         self._termination_handler = MockTerminationHandler()
+        self._interrupt_handler = InterruptHandler()
 
         # Set up simplified participants dict
         self._participants = {
@@ -135,6 +135,9 @@ class MockOrchestrator(Orchestrator):
                 if self._termination_handler and self._termination_handler.has_terminated:
                     logger.info("Termination message received.")
                     break
+                if self._interrupt_handler and self._interrupt_handler.interrupt.is_set():
+                    logger.info("Interrupt pushed.")
+                    await self._interrupt_handler.interrupt.wait()
                 await asyncio.sleep(0.1)
 
         except KeyboardInterrupt:
@@ -162,16 +165,15 @@ class MockOrchestrator(Orchestrator):
             while True:
                 # Choose a message type randomly with weights
                 message_generators = [
-                    (self._generate_agent_trace, 3),       # Higher weight for agent traces
-                    (self._generate_progress_update, 2),   # Medium weight for progress updates
+                    (self._generate_agent_trace, 4),       # Higher weight for agent traces
+                    (self._generate_progress_update, 4),   # Medium weight for progress updates
                     (self._generate_error_event, 1),       # Lower weight for errors
-                    (self._generate_ui_message, 2),        # Medium weight for UI messages
-                    (self._generate_tool_output, 2),       # Medium weight for tool outputs
-                    (self._generate_record, 3),            # Higher weight for records
+                    (self._generate_ui_message, 4),        # Medium weight for UI messages
+                    (self._generate_record, 1),            # Lower weight for records
                 ]
-                
+
                 # Weighted random selection
-                generators, weights = zip(*message_generators)
+                generators, weights = zip(*message_generators, strict=False)
                 message_generator = random.choices(generators, weights=weights, k=1)[0]
 
                 # Generate and publish the message
@@ -189,19 +191,19 @@ class MockOrchestrator(Orchestrator):
         try:
             # Step 1: Start the flow with a FlowEvent
             start_event = FlowEvent(
-                content="Flow xyz started"
+                content="Flow xyz started",
             )
             await self._publish_message(start_event)
             await asyncio.sleep(0.5)
-            
+
             # Publish a TaskProcessingStarted event
             task_start = TaskProcessingStarted(
                 agent_id=random.choice(self._agent_ids),
-                role="JUDGE"
+                role="JUDGE",
             )
             await self._publish_message(task_start)
             await asyncio.sleep(0.5)
-            
+
             # Continue with typical progress update
             start_msg = self._generate_progress_update(
                 source="ORCHESTRATOR",
@@ -263,26 +265,19 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(progress)
             await asyncio.sleep(1.5)
 
-            tool_output = self._generate_tool_output(
-                function_name="analyze_dataset",
-                content="Analysis complete: found 3 key trends in the data",
-            )
-            await self._publish_message(tool_output)
-            await asyncio.sleep(0.8)
-
             # Use a QualResults instance in the analyst output
             qual_results = QualResults(
                 assessments=[
                     QualScoreCRA(correct=True, feedback="Document contains comprehensive research with strong methodological approach"),
                     QualScoreCRA(correct=True, feedback="Data visualization effectively communicates key trends"),
-                    QualScoreCRA(correct=True, feedback="Statistical analysis is thorough and appropriate for the dataset")
+                    QualScoreCRA(correct=True, feedback="Statistical analysis is thorough and appropriate for the dataset"),
                 ],
-                assessed_agent_id=random.choice(self._agent_ids), # Use agent_ids list
-                assessed_call_id=str(uuid.uuid4()), # Keep mock call ID
+                assessed_agent_id=random.choice(self._agent_ids),  # Use agent_ids list
+                assessed_call_id=str(uuid.uuid4()),  # Keep mock call ID
             )
-            
+
             analysis_result = self._generate_agent_trace(
-                agent_id=random.choice(self._agent_ids), # Use agent_ids list
+                agent_id=random.choice(self._agent_ids),  # Use agent_ids list
                 outputs=qual_results,
                 metadata={"confidence": 0.87, "model": "claude-3"},
             )
@@ -297,15 +292,15 @@ class MockOrchestrator(Orchestrator):
 
             differences = Differences(
                 conclusion="Revise the document to address these points before finalization",
-                divergences=[Divergence(topic="Methodology",positions=[
+                divergences=[Divergence(topic="Methodology", positions=[
                     Position(experts=experts_pos1, position="The conclusion section could be strengthened with additional examples"),
                     Position(experts=experts_pos2, position="Some statistical methods might benefit from more detailed explanation"),
-                    Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings")
+                    Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings"),
                 ])],
             )
-            
+
             critic_result = self._generate_agent_trace(
-                agent_id=random.choice(self._agent_ids), # Use agent_ids list
+                agent_id=random.choice(self._agent_ids),  # Use agent_ids list
                 outputs=differences,
                 metadata={"analysis_depth": "detailed", "model": "gpt-4"},
             )
@@ -315,17 +310,17 @@ class MockOrchestrator(Orchestrator):
             # Add judge evaluation with JudgeReasons
             judge_reasons = JudgeReasons(
                 conclusion="The content adheres to guidelines with minor concerns about citation formatting.",
-                prediction=random.choice([True, False]), # Randomize prediction
-                uncertainty=random.choice(["low", "medium", "high"]), # Randomize uncertainty
+                prediction=random.choice([True, False]),  # Randomize prediction
+                uncertainty=random.choice(["low", "medium", "high"]),  # Randomize uncertainty
                 reasons=[
                     "Content is factually accurate and well-supported",
                     "No harmful, misleading, or inappropriate material detected",
-                    "Citation style is inconsistent but all sources are properly credited"
-                ]
+                    "Citation style is inconsistent but all sources are properly credited",
+                ],
             )
-            
+
             judge_result = self._generate_agent_trace(
-                agent_id=random.choice(self._agent_ids), # Use agent_ids list
+                agent_id=random.choice(self._agent_ids),  # Use agent_ids list
                 outputs=judge_reasons,
                 metadata={"evaluation_criteria": "academic_standards", "model": "claude-3"},
             )
@@ -368,7 +363,6 @@ class MockOrchestrator(Orchestrator):
             await self._publish_message(task_complete)
             await asyncio.sleep(0.5)
 
-
             # Signal termination after simulation is complete
             if self._termination_handler:
                 self._termination_handler.request_termination()
@@ -383,16 +377,21 @@ class MockOrchestrator(Orchestrator):
         """Generate a fake Expert object using a consistent agent_id."""
         # Use the aliased ExpertType from buttermilk._core.types
         agent_id = random.choice(self._agent_ids)
-        return Expert(name=f"Expert {agent_id}", answer_id=agent_id) # Use agent_id for answer_id for consistency
+        return Expert(name=f"Expert {agent_id}", answer_id=agent_id)  # Use agent_id for answer_id for consistency
 
     def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None, parent_call_id=None, tool_code=None) -> AgentTrace:
         """Generate a fake agent trace"""
-        from buttermilk._core.log import logger  # Import logger locally if needed
-        from buttermilk._core.contract import AgentInput, AgentTrace, AgentConfig
-        from buttermilk._core.types import Record # Import Record if used in outputs
-        from buttermilk.agents.judge import JudgeReasons # Import JudgeReasons if used in outputs
-        from buttermilk.agents.evaluators.scorer import QualResults, QualScoreCRA # Corrected import and added QualScoreCRA
-        from buttermilk.agents.differences import Differences, Divergence, Position, Expert # Corrected import and added nested models
+        from buttermilk._core.contract import AgentConfig, AgentTrace
+        from buttermilk.agents.differences import (  # Corrected import and added nested models
+            Differences,
+            Divergence,
+            Position,
+        )
+        from buttermilk.agents.evaluators.scorer import (  # Corrected import and added QualScoreCRA
+            QualResults,
+            QualScoreCRA,
+        )
+        from buttermilk.agents.judge import JudgeReasons  # Import JudgeReasons if used in outputs
 
         if agent_id is None:
             agent_types = ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC"]
@@ -408,14 +407,14 @@ class MockOrchestrator(Orchestrator):
                     reasons=[
                         "The content doesn't contain explicit harmful instructions",
                         "No obvious hate speech or discriminatory language was detected",
-                        "The text remains within appropriate boundaries for general audiences"
-                    ]
+                        "The text remains within appropriate boundaries for general audiences",
+                    ],
                 )
             elif agent_id == "ANALYST":
                 # QualResults requires assessed_agent_id, assessed_call_id, and assessments (list of QualScoreCRA)
                 outputs = QualResults(
-                    assessed_agent_id=random.choice(self._agent_ids), # Use agent_ids list
-                    assessed_call_id=str(uuid.uuid4()), # Mock the call ID being assessed
+                    assessed_agent_id=random.choice(self._agent_ids),  # Use agent_ids list
+                    assessed_call_id=str(uuid.uuid4()),  # Mock the call ID being assessed
                     assessments=[
                         QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 1 assessment."),
                         QualScoreCRA(correct=random.choice([True, False]), feedback="Criterion 2 assessment."),
@@ -441,28 +440,28 @@ class MockOrchestrator(Orchestrator):
                             positions=[
                                 Position(
                                     experts=experts_pos1,
-                                    position="Interpretation focuses on positive trends."
+                                    position="Interpretation focuses on positive trends.",
                                 ),
                                 Position(
                                     experts=experts_pos2,
-                                    position="Interpretation highlights potential risks."
+                                    position="Interpretation highlights potential risks.",
                                 ),
-                            ]
+                            ],
                         ),
                         Divergence(
                             topic="Methodology Validity",
                             positions=[
                                 Position(
                                     experts=experts_pos3,
-                                    position="Methodology is considered sound."
+                                    position="Methodology is considered sound.",
                                 ),
                                 Position(
-                                    experts=[self._generate_expert()], # Single expert position
-                                    position="Concerns raised about sample size."
+                                    experts=[self._generate_expert()],  # Single expert position
+                                    position="Concerns raised about sample size.",
                                 ),
-                            ]
+                            ],
                         ),
-                    ]
+                    ],
                 )
             else:
                 outputs_list = [
@@ -488,12 +487,8 @@ class MockOrchestrator(Orchestrator):
         agent_info = AgentConfig(
             agent_id=agent_id,
             description=f"{agent_id} agent for processing tasks",
-            parameters={}, # Add mock parameters if needed
+            parameters={},  # Add mock parameters if needed
         )
-
-        # Optionally generate parent_call_id and tool_code
-        generated_parent_call_id = parent_call_id if parent_call_id is not None else (str(uuid.uuid4()) if random.random() < 0.3 else None) # 30% chance of having a parent
-        generated_tool_code = tool_code if tool_code is not None else ("print('hello world')" if random.random() < 0.1 else None) # 10% chance of having tool code
 
         return AgentTrace(
             agent_id=agent_id,
@@ -504,14 +499,19 @@ class MockOrchestrator(Orchestrator):
             agent_info=agent_info,
             session_id=self.trace_id,
             inputs=agent_input,
-            parent_call_id=generated_parent_call_id,
+            parent_call_id=parent_call_id,
         )
 
     def _generate_progress_update(self, source=None, role=None, step_name=None,
                                 status=None, message=None, total_steps=None,
-                                current_step=None) -> TaskProgressUpdate | FlowEvent | TaskProcessingComplete |TaskProcessingStarted:
+                                current_step=None) -> TaskProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
         """Generate a fake progress update or flow event"""
-        from buttermilk._core.contract import FlowEvent, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate
+        from buttermilk._core.contract import (
+            FlowEvent,
+            TaskProcessingComplete,
+            TaskProcessingStarted,
+            TaskProgressUpdate,
+        )
 
         # Sometimes generate flow events instead of progress updates
         if random.choice([True, False, False]):  # 1/3 chance for flow events
@@ -521,66 +521,66 @@ class MockOrchestrator(Orchestrator):
             if event_class == TaskProcessingStarted:
                 # TaskProcessingStarted requires agent_id, role, task_index
                 return TaskProcessingStarted(
-                    agent_id=source if source else random.choice(self._agent_ids), # Use agent_ids list
-                    role=role if role else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
-                    task_index=random.randint(0, 5), # Mock task index
+                    agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+                    role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    task_index=random.randint(0, 5),  # Mock task index
                     # task_id and flow_id are not part of TaskProcessingStarted based on contract.py
                     # inputs and timestamp are not part of TaskProcessingStarted based on contract.py
                 )
-            elif event_class == TaskProcessingComplete:
+            if event_class == TaskProcessingComplete:
                 # TaskProcessingComplete requires agent_id, role, task_index, more_tasks_remain, is_error
                 return TaskProcessingComplete(
-                    agent_id=source if source else random.choice(self._agent_ids), # Use agent_ids list
-                    role=role if role else random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
-                    task_index=random.randint(0, 5), # Mock task index
+                    agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+                    role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
+                    task_index=random.randint(0, 5),  # Mock task index
                     more_tasks_remain=random.choice([True, False]),
                     is_error=random.choice([True, False]),
                     # task_id, flow_id, result, and timestamp are not part of TaskProcessingComplete based on contract.py
                 )
-            else:  # FlowEvent
-                # FlowEvent requires source and content
-                event_type = random.choice(["flow_started", "flow_completed", "agent_selected", "error_occurred"])
-                
-                generated_source = source if source else "ORCHESTRATOR" # Default source for FlowEvent
-                generated_content = f"Flow event: {event_type}" # Default content
+            # FlowEvent
+            # FlowEvent requires source and content
+            event_type = random.choice(["flow_started", "flow_completed", "agent_selected", "error_occurred"])
 
-                details = {} # Details are not a required parameter for FlowEvent
+            generated_source = source or "ORCHESTRATOR"  # Default source for FlowEvent
+            generated_content = f"Flow event: {event_type}"  # Default content
 
-                # Adding details to content for better mock representation
-                if event_type == "flow_started":
-                    details.update({
-                        "flow_name": "mock_flow",
-                        "parameters": {"initial_param": random.choice(["A", "B", "C"])}
-                    })
-                    generated_content = f"Flow started: {details.get('flow_name')}"
-                elif event_type == "flow_completed":
-                    details.update({
-                        "summary": "Mock flow completed successfully.",
-                        "duration_ms": random.randint(1000, 10000)
-                    })
-                    generated_content = f"Flow completed. Summary: {details.get('summary')}"
-                elif event_type == "agent_selected":
-                    details.update({
-                        "agent_id": random.choice(self._agent_ids), # Use agent_ids list
-                        "task_description": "Processing a mock task."
-                    })
-                    generated_content = f"Agent selected: {details.get('agent_id')} for task: {details.get('task_description')}"
-                elif event_type == "error_occurred":
-                    details.update({
-                        "error_message": "A simulated error occurred.",
-                        "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"])
-                    })
-                    generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
+            details = {}  # Details are not a required parameter for FlowEvent
 
-                # Note: FlowEvent in contract.py only has 'source' and 'content'.
-                # The 'details' dictionary was used in the previous attempt but is not part of the model.
-                # I will include the details information within the 'content' string for better mock data.
-                
-                return FlowEvent(
-                    source=generated_source,
-                    content=generated_content,
-                    # timestamp is not part of FlowEvent based on contract.py
-                )
+            # Adding details to content for better mock representation
+            if event_type == "flow_started":
+                details.update({
+                    "flow_name": "mock_flow",
+                    "parameters": {"initial_param": random.choice(["A", "B", "C"])},
+                })
+                generated_content = f"Flow started: {details.get('flow_name')}"
+            elif event_type == "flow_completed":
+                details.update({
+                    "summary": "Mock flow completed successfully.",
+                    "duration_ms": random.randint(1000, 10000),
+                })
+                generated_content = f"Flow completed. Summary: {details.get('summary')}"
+            elif event_type == "agent_selected":
+                details.update({
+                    "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
+                    "task_description": "Processing a mock task.",
+                })
+                generated_content = f"Agent selected: {details.get('agent_id')} for task: {details.get('task_description')}"
+            elif event_type == "error_occurred":
+                details.update({
+                    "error_message": "A simulated error occurred.",
+                    "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
+                })
+                generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
+
+            # Note: FlowEvent in contract.py only has 'source' and 'content'.
+            # The 'details' dictionary was used in the previous attempt but is not part of the model.
+            # I will include the details information within the 'content' string for better mock data.
+
+            return FlowEvent(
+                source=generated_source,
+                content=generated_content,
+                # timestamp is not part of FlowEvent based on contract.py
+            )
 
         # Otherwise generate a regular progress update
         if source is None:
@@ -624,7 +624,7 @@ class MockOrchestrator(Orchestrator):
             total_steps=total_steps,
             current_step=current_step,
             timestamp=datetime.now(UTC),
-            waiting_on={}, # Mock empty waiting_on for simplicity
+            waiting_on={},  # Mock empty waiting_on for simplicity
         )
 
     def _generate_ui_message(self, content=None, options=None) -> UIMessage:
@@ -658,7 +658,6 @@ class MockOrchestrator(Orchestrator):
     def _generate_record(self, record_id=None, content=None, metadata=None) -> Any:
         """Generate a fake record message"""
         # Import Record locally to avoid circular imports
-        from buttermilk._core.types import Record
 
         if record_id is None:
             record_id = f"record-{shortuuid.uuid()[:8]}"
@@ -703,7 +702,6 @@ class MockOrchestrator(Orchestrator):
             mime=random.choice(["text/plain", "text/markdown", "text/html", "application/json"]),
         )
 
-
     def _generate_error_event(self, error_type=None, message=None, details=None) -> ErrorEvent:
         """Generate a fake error event message"""
         from buttermilk._core.contract import ErrorEvent
@@ -723,16 +721,11 @@ class MockOrchestrator(Orchestrator):
         # error_type, details, timestamp, agent_id, call_id are not part of ErrorEvent based on contract.py
 
         generated_source = random.choice(["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"])
-        generated_content = f"ERROR: {error_type} - {message}" # Combine type and message into content
+        generated_content = f"ERROR: {error_type} - {message}"  # Combine type and message into content
 
         return ErrorEvent(
             source=generated_source,
             content=generated_content,
-            # error_type=error_type, # Removed
-            # details=details, # Removed
-            # timestamp=datetime.now(UTC), # Removed
-            # agent_id=generated_agent_id, # Removed
-            # call_id=generated_call_id, # Removed
         )
 
     async def _fetch_initial_records(self, request: RunRequest):
@@ -747,10 +740,10 @@ class MockOrchestrator(Orchestrator):
                     "source": "simulated_fetch",
                     "request_params": request.parameters,
                     "flow_name": request.flow,
-                }
+                },
             )
             await self._publish_message(mock_record)
-            await asyncio.sleep(0.5) # Simulate fetch delay
+            await asyncio.sleep(0.5)  # Simulate fetch delay
 
         if request and request.record_id:
             logger.info(f"Simulating fetching initial records: {request.record_id}")
@@ -761,10 +754,10 @@ class MockOrchestrator(Orchestrator):
                     "source": "simulated_fetch_list",
                     "request_params": request.parameters,
                     "flow_name": request.flow,
-                }
+                },
             )
             await self._publish_message(mock_record)
-            await asyncio.sleep(0.3) # Simulate fetch delay for each record
+            await asyncio.sleep(0.3)  # Simulate fetch delay for each record
 
     def make_publish_callback(self) -> Callable:
         """Creates an asynchronous callback function for the UI to use.
@@ -774,7 +767,10 @@ class MockOrchestrator(Orchestrator):
 
         """
         async def publish_callback(message) -> None:
-            # Just forward to our _publish_message method
+            # Trigger the interrupt and exit handlers
+            await self._interrupt_handler.on_publish(message, message_context=None)
+            await self._termination_handler.on_publish(message, message_context=None)
+            # And otherwise forward to our _publish_message method
             await self._publish_message(message)
 
         return publish_callback
@@ -789,7 +785,7 @@ class MockOrchestrator(Orchestrator):
         log_content = str(formatted_message.preview)
         if len(log_content) > 100:
             log_content = log_content[:97] + "..."
-        logger.debug(f"Mock message: {message.__class__.__name__} - {log_content}")
+        logger.info(f"Mock message: {message.__class__.__name__} - {log_content}")
 
         # Send directly to websocket if we have a client_websocket
         if self._client_websocket:
