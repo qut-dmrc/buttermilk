@@ -36,23 +36,7 @@ from buttermilk.agents.evaluators.scorer import QualScoreCRA
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.ui.console import QualResults
 from buttermilk.api.services.message_service import MessageService
-from buttermilk.orchestrators.groupchat import InterruptHandler
-
-
-class MockTerminationHandler:
-    """Simplified termination handler that allows simulation control"""
-
-    def __init__(self) -> None:
-        self._should_terminate = False
-        self._termination_value = None
-
-    def request_termination(self):
-        """Signal that the simulation should terminate"""
-        self._should_terminate = True
-
-    @property
-    def has_terminated(self) -> bool:
-        return self._termination_value is not None or self._should_terminate
+from buttermilk.orchestrators.groupchat import InterruptHandler, TerminationHandler
 
 
 class MockOrchestrator(Orchestrator):
@@ -70,7 +54,7 @@ class MockOrchestrator(Orchestrator):
     message_interval: float = Field(default=2.0, description="Seconds between random message generation")
 
     # Private state
-    _termination_handler: MockTerminationHandler | None = PrivateAttr(default_factory=lambda: None)
+    _termination_handler: TerminationHandler | None = PrivateAttr(default_factory=lambda: None)
     _interrupt_handler: InterruptHandler
     _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
     _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
@@ -84,7 +68,7 @@ class MockOrchestrator(Orchestrator):
         logger.info(msg)
 
         # Create our custom termination handler
-        self._termination_handler = MockTerminationHandler()
+        self._termination_handler = TerminationHandler()
         self._interrupt_handler = InterruptHandler()
 
         # Set up simplified participants dict
