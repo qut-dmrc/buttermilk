@@ -433,6 +433,7 @@ class ManagerMessage(FlowMessage):
     interrupt: bool = Field(
         default=False, description="If True, signals the user wants to pause for conductor review of feedback.",
     )
+    human_in_loop: bool | None = Field(default=None, description="If True, indicates the user is actively involved in the process.")
     content: str | None = Field(default=None, description="Free-text feedback or instructions provided by the user.")
     selection: str | None = Field(
         default=None, description="The option selected by the user (e.g., a specific variant ID).",

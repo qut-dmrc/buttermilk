@@ -98,7 +98,11 @@ class HostAgent(Agent):
         elif isinstance(message, ManagerMessage):
             logger.info(f"Host {self.agent_name} received user input: {message}")
             self._user_confirmation = message
-            self._user_confirmation_received.set()
+            if message.confirm:
+                self._user_confirmation_received.set()
+            if message.human_in_loop is not None:
+                logger.info(f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})")
+                self.human_in_loop = message.human_in_loop
             content = getattr(message, "content", getattr(message, "params", None))
             if content and not str(content).startswith(COMMAND_SYMBOL):
                 content_to_log = str(content)[:TRUNCATE_LEN]

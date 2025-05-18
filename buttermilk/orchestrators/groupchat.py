@@ -79,6 +79,10 @@ class TerminationHandler(DefaultInterventionHandler):
                 self._termination_value = message
         return message
 
+    def request_termination(self):
+        """Signal that the flow should terminate"""
+        self._termination_value = StepRequest(role="END", content="Termination requested")
+
     @property
     def termination_value(self) -> StepRequest | None:
         return self._termination_value
@@ -147,7 +151,7 @@ class AutogenOrchestrator(Orchestrator):
 
         return termination_handler, interrupt_handler
 
-    async def _register_agents(self, params: RunRequest) -> None: 
+    async def _register_agents(self, params: RunRequest) -> None:
         """Registers Buttermilk agents (via Adapters) with the Autogen runtime.
 
         Iterates through the `self.agents` configuration, creating AutogenAgentAdapter
