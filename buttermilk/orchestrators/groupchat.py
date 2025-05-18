@@ -24,7 +24,7 @@ from autogen_core import (
     TopicId,  # Abstract base class for topic identifiers.
     TypeSubscription,  # Defines a subscription based on message type and agent type.
 )
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr,ConfigDict
 
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
 from buttermilk._core import (  # noqa
@@ -49,8 +49,8 @@ from buttermilk.libs.autogen import AutogenAgentAdapter
 
 class InterruptHandler(BaseModel):
     """A simple handler for managing interrupts in the flow."""
-    interrupt: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
-
+    interrupt: asyncio.Event = Field(default_factory=asyncio.Event)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
         if isinstance(message, ManagerMessage):
             if message.interrupt:
@@ -62,6 +62,8 @@ class InterruptHandler(BaseModel):
                 logger.info(f"Manager resume message received: {message}")
                 self.interrupt.clear()
         return message
+    
+
 
 class TerminationHandler(DefaultInterventionHandler):
     def __init__(self) -> None:
