@@ -314,7 +314,7 @@ class HostAgent(Agent):
         if not last_step_successful:
             msg = f"Host {self.agent_id} failed to complete all tasks: {dict(self._pending_tasks_by_agent)}"
             logger.error(msg)
-            await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+            # await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             return False
         return True
 
