@@ -221,6 +221,8 @@ class LLMAgent(Agent):
             output.tracing_link = call.ui_url
             # replace call id in our trace with Weave call id
             output.call_id = call.id or output.call_id
+        else:
+            logger.warning(f"Agent {self.agent_name}: No Weave call context found. Tracing link not set.")
 
         # 1. Handle structured output validation first (if schema is defined)
         if schema:

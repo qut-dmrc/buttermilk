@@ -428,9 +428,9 @@ class ManagerMessage(FlowMessage):
     Communicates user decisions like confirmation, feedback, or selections.
     """
 
-    confirm: bool = Field(default=False, description="Indicates user confirmation (True) or rejection (False).")
-    halt: bool = Field(default=False, description="If True, signals the user wants to stop the entire flow.")
-    interrupt: bool = Field(
+    confirm: bool | None = Field(default=False, description="Indicates user confirmation (True) or rejection (False).")
+    halt: bool | None = Field(default=False, description="If True, signals the user wants to stop the entire flow.")
+    interrupt: bool | None = Field(
         default=False, description="If True, signals the user wants to pause for conductor review of feedback.",
     )
     human_in_loop: bool | None = Field(default=None, description="If True, indicates the user is actively involved in the process.")

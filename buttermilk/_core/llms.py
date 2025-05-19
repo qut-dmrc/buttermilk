@@ -34,7 +34,6 @@ def get_bm():
 
 from buttermilk._core.contract import ToolOutput
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.log import logger
 
 from .retry import RetryWrapper
 
@@ -178,7 +177,6 @@ class AutoGenWrapper(RetryWrapper):
                 raise ProcessingError("Unexpected tool response from LLM", create_result.content)
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
-            logger.warning(error_msg)
             raise ProcessingError(error_msg)
         return create_result
 
@@ -309,7 +307,7 @@ class LLMs(BaseModel):
         else:
             client = OpenAIChatCompletionClient(**client_params)
 
-        return AutoGenWrapper(client=client, model_info=client_params["model_info"]) # RETURN A NEW INSTANCE
+        return AutoGenWrapper(client=client, model_info=client_params["model_info"])  # RETURN A NEW INSTANCE
 
     def __getattr__(self, __name: str) -> AutoGenWrapper:
         if __name not in self.connections:

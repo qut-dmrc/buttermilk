@@ -120,7 +120,6 @@ class MockOrchestrator(Orchestrator):
                     logger.info("Termination message received.")
                     break
                 if self._interrupt_handler and self._interrupt_handler.interrupt.is_set():
-                    logger.info("Interrupt pushed.")
                     await self._interrupt_handler.interrupt.wait()
                 await asyncio.sleep(0.1)
 

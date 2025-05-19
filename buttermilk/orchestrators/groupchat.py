@@ -60,7 +60,7 @@ class InterruptHandler(BaseModel):
                 # Pause the flow
                 logger.info(f"Manager interrupt message received: {message}")
                 self.interrupt.set()
-            else:
+            elif self.interrupt.is_set():
                 # Resume the flow
                 logger.info(f"Manager resume message received: {message}")
                 self.interrupt.clear()
@@ -327,7 +327,8 @@ class AutogenOrchestrator(Orchestrator):
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
-                        await interrupt_handler.interrupt.wait()
+                        while interrupt_handler.interrupt.is_set():
+                            await asyncio.sleep(0.5)
                         logger.info("Flow resumed.")
                     await asyncio.sleep(0.1)
 
