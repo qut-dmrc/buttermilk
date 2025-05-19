@@ -1,11 +1,12 @@
 import datetime
 from typing import Any, Literal
 
-from pydantic import UUID4, BaseModel, Field
+from pydantic import BaseModel, Field
 from shortuuid import uuid
 
 from buttermilk._core import (
     AgentConfig,
+    StepRequest,
     TaskProcessingComplete,
     UIMessage,
     logger,
@@ -24,7 +25,7 @@ PREVIEW_LENGTH = 200
 
 class ChatMessage(BaseModel):
     """Chat message model"""
-    
+
     type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
@@ -50,14 +51,6 @@ class MessageService:
         try:
             if message is None:
                 return None
-            if isinstance(message, AgentTrace):
-                if message.outputs:
-                    # Send the unwrapped message instead of the AgentTrace object
-                    agent_info = message.agent_info
-                    message = message.outputs
-                else:
-                    logger.warning(f"AgentTrace object with no outputs: {message}")
-                    return None
 
             if isinstance(message, ChatMessage):
                 # Already formatted
@@ -65,6 +58,21 @@ class MessageService:
             if isinstance(message, ManagerMessage):
                 # Message from UI to chat; don't send back to UI
                 return None
+            if isinstance(message, StepRequest):
+                # Internal message; don't send back to UI
+                return None
+
+            agent_info = getattr(message, "agent_info", None)
+            message_id = getattr(message, "call_id", uuid())
+            preview = getattr(message, "preview", None)
+
+            if isinstance(message, AgentTrace):
+                if message.outputs:
+                    # Send the unwrapped message instead of the AgentTrace object
+                    message = message.outputs
+                else:
+                    logger.warning(f"AgentTrace object with no outputs: {message}")
+                    return None
 
             message_type = None
             if isinstance(message, Record):
@@ -83,9 +91,6 @@ class MessageService:
                 logger.warning(f"Unknown message type: {type(message)}")
                 return None
 
-            message_id = getattr(message, "call_id", uuid())
-            preview = getattr(message, "preview", None)
-            agent_info = getattr(message, "agent_info", None)
             # Repackage
             output = ChatMessage(message_id=message_id,
                 type=message_type,
@@ -138,6 +143,9 @@ class MessageService:
                     return TaskProcessingComplete(**data)
                 case "TaskProcessingStarted":
                     return TaskProcessingStarted(**data)
+                case _:
+                    logger.warning(f"Unknown message type received on websocket: {message_type}")
+                    return None
             return None
         except Exception as e:
             logger.error(f"Error processing message: {e}")

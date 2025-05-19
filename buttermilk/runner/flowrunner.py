@@ -280,6 +280,9 @@ class FlowRunner(BaseModel):
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
 
+        # set a high max callback duration when dealing with LLMs
+        asyncio.get_event_loop().slow_callback_duration = 120
+
         # Type safety: The orchestrator will be an Orchestrator instance at runtime,
         # even though the flows dict is typed with the more general OrchestratorProtocol
         if run_request.session_id not in self.sessions:
