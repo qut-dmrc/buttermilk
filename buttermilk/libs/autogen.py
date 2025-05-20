@@ -203,7 +203,7 @@ class AutogenAgentAdapter(RoutedAgent):
         try:
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
-                response = await self.agent(message=message,
+                response = await self.agent.invoke(message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
                 public_callback=self._make_publish_callback(topic_id=self.topic_id),  # Callback for default topic
@@ -255,7 +255,7 @@ class AutogenAgentAdapter(RoutedAgent):
         try:
             # Delegate the actual work to the wrapped Buttermilk agent's __call__ method.
             # Pass the cancellation token from Autogen context.
-            output = await self.agent(
+            output = await self.agent.invoke(
                 message=message,
                 cancellation_token=ctx.cancellation_token,
                 # Provide callbacks for the agent to publish messages back if needed during execution.

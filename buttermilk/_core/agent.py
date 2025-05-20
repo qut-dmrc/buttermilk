@@ -6,7 +6,6 @@ from abc import abstractmethod
 from collections.abc import Awaitable, Callable
 from functools import wraps  # Import wraps for decorator
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 import weave  # For tracing
 
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
-from langfuse.decorators import langfuse_context
 from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
     Field,
@@ -162,41 +160,32 @@ class Agent(AgentConfig):
     async def __call__(
         self,
         message: AgentInput,
-        public_callback: Callable[[Any], Awaitable[None]],
-        message_callback: Callable[[Any], Awaitable[None]],
-        cancellation_token: CancellationToken | None = None,
         **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
-    ) -> AgentTrace:
-        """Primary entry point for agent execution, called by the orchestrator/adapter.
+    ) -> AgentOutput:
+        """Primary execution method for the agent with standard inputs and outputs.
+        Handles tracing as well as the core agent logic.
+        entry point for agent execution, called by the orchestrator/adapter.
 
         Handles preparing input with agent state, tracing via Weave, calling the
         subclass's core `_process` logic, and returning the result.
 
         Args:
             message: The input message triggering the execution.
-            cancellation_token: Token to signal cancellation.
             **kwargs: Additional keyword arguments (e.g., callbacks from adapter).
 
         Returns:
-            Either an AgentTrace for standard agent results, 
-            or a direct message type (StepRequest, UIMessage, ManagerMessage)
-            for flow control agents, or an ErrorEvent if there were errors.
+            AgentOutput type.
+
+        Raises:
+            ProcessingError: If an error occurs during execution.
 
         """
         result = None
         logger.debug(f"Agent {self.agent_name} received input via __call__.")
-          # Get the singleton instance using our new module-level function
-        # Prepare the final input by merging message data with internal agent state.
-        try:
-            final_input = await self._add_state_to_input(message)
-        except Exception as e:
-            logger.error(f"Agent {self.agent_name}: Error preparing input state: {e}")
-            error_output = ErrorEvent(source=self.agent_id, content=f"Failed to prepare input state: {e}")
-            return error_output
 
         # --- Tracing ---
 
-        trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **final_input.parameters, **final_input.metadata, **self.parameters}
+        trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **message.parameters, **message.metadata, **self.parameters}
 
         # Get the trace context if necessary
         parent_call: Call | WeaveObject = weave.get_current_call()
@@ -206,62 +195,71 @@ class Agent(AgentConfig):
             except:
                 pass
         child_call = None
-        is_error = False
 
-        await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
+        op = weave.op(self._process, call_display_name=self.agent_name)
 
         # --- Execute Core Logic ---
         try:
-            op = weave.op(self._process, call_display_name=self.agent_name)
-            inputs = dict(message=final_input, cancellation_token=cancellation_token,
-                public_callback=public_callback,  # Callback provided by adapter
-                message_callback=message_callback,  # Callback provided by adapter
-                **kwargs)
-
-            child_call = bm.weave.create_call(op, inputs=final_input.model_dump(mode="json"),
+            child_call = bm.weave.create_call(op, inputs=message.model_dump(mode="json"),
                                               parent=parent_call, display_name=self.agent_name, attributes=trace_params)
 
             parent_call._children.append(child_call)  # Nest this call for tracing
-            result = await self._process(**inputs)
-
-        except Exception as e:
-            # Catch unexpected errors during _process.
-            error_msg = f"Agent {self.agent_name} error during _process: {e}"
-            logger.error(error_msg)
-            result = ErrorEvent(source=self.agent_name, content=error_msg)
-            is_error = True
+            result = await self._process(message=message)
+            result.call_id = child_call.id
+            return result
 
         finally:
             if child_call:
                 # Mark the child call as complete, regardless of success or failure.
                 bm.weave.finish_call(child_call, output=result, op=op)
-                call_id = child_call.id
-            else:
-                call_id = uuid4().hex
-            # Publish status update: Task Complete (including error if error)
-            await public_callback(
-                TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
-            )
-            # Create the trace here with required values
-            trace = AgentTrace(call_id=call_id, session_id=self.session_id, agent_id=self.agent_id,
-                agent_info=self._cfg,
-                inputs=final_input, parent_call_id=message.parent_call_id,
-            )
-            trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
-            # Send a full trace off to another agent to save to the database
-            await public_callback(trace)
+    async def invoke(
+        self,
+        message: AgentInput,
+        public_callback: Callable[[Any], Awaitable[None]],
+        message_callback: Callable[[Any], Awaitable[None]],
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
+    ) -> AgentTrace:
+        """Prepare input, call agent, and determine what to do with the result."""
+        is_error = False
 
-            # --- Langfuse tracing ---
-            langfuse_context.update_current_observation(name=self.agent_name, input=trace.inputs, output=trace.outputs, metadata=trace.metadata, model=self._cfg.parameters.get("model"))
+        # Prepare the final input by merging message data with internal agent state.
+        try:
+            final_input = await self._add_state_to_input(message)
+        except Exception as e:
+            raise ProcessingError(f"Agent {self.agent_name}: Error preparing input state: {e}")
+
+        # Publish status update: Task Processing Started
+        await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
+
+        try:
+            result = await self.__call__(message=message)
+        except Exception as e:
+            logger.error(f"Agent {self.agent_name} error during __call__: {e}")
+            result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
+            is_error = True
+
+        # Publish status update: Task Complete (including error if error)
+        await public_callback(
+            TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
+        )
+
+        # Create the trace here with required values
+        trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
+            agent_info=self._cfg,
+            inputs=final_input, parent_call_id=message.parent_call_id,
+        )
+        trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
         logger.debug(f"Agent {self.agent_name} {self.agent_name} finished task {message}.")
+
+        # Publish the trace to the public callback
+        await public_callback(trace)
         return trace
 
     @abstractmethod
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
-        public_callback: Callable | None = None,  # Callback provided by adapter
-        message_callback: Callable | None = None,  # Callback provided by adapter,
+    async def _process(self, *, message: AgentInput,
         **kwargs) -> AgentOutput:
         """Abstract method for core agent logic. Subclasses MUST implement this.
 
@@ -275,7 +273,6 @@ class Agent(AgentConfig):
 
         Args:
             message: The fully prepared input message.
-            cancellation_token: Token to monitor for cancellation requests.
             **kwargs: Additional arguments passed from `__call__`.
 
         Returns:

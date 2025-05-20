@@ -26,7 +26,7 @@ PREVIEW_LENGTH = 200
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "qual_results", "differences", "judge_reasons"] = Field(..., description="Type of message")
+    type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "assessments", "differences", "judge_reasons"] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
@@ -80,7 +80,7 @@ class MessageService:
             elif isinstance(message, JudgeReasons):
                 message_type = "judge_reasons"
             elif isinstance(message, QualResults):
-                message_type = "qual_results"
+                message_type = "assessments"
             elif isinstance(message, Differences):
                 message_type = "differences"
             elif isinstance(message, UIMessage):

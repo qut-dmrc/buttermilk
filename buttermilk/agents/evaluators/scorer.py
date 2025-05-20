@@ -10,9 +10,10 @@ from pydantic import BaseModel, Field, computed_field
 from buttermilk import logger
 from buttermilk._core.contract import (
     AgentInput,
+    AgentOutput,
     AgentTrace,
     GroupchatMessageTypes,  # Type hint union for listen
-    )
+)
 from buttermilk._core.message_data import extract_message_data
 from buttermilk.agents.judge import JudgeReasons  # Input model type (likely from Judge agent)
 from buttermilk.agents.llm import LLMAgent  # Base class
@@ -124,25 +125,36 @@ class LLMScorer(LLMAgent):
         # Create an AgentInput with minimal state
         scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=extracted.pop("records"), inputs=extracted)
 
-        # Define the scoring function (our own __call__ method)
-        score_fn = self.__call__
+        # Define the scoring function (our own invoke method)
+        score_fn = self.invoke
 
         # Call the LLMScorer._process method with the prepared input.
-        score_output: AgentTrace = await score_fn(
+        await score_fn(
             message=scorer_agent_input,
             public_callback=public_callback,
             message_callback=message_callback,
         )
 
-        # Add the inputs to the trace output object
-        score_output.inputs = scorer_agent_input
+    async def _process(
+        self,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,  # Allows for additional context/callbacks from caller (e.g., adapter)
+    ) -> AgentOutput:
+        """Override the parent's invoke method to convert output."""
+        score_output = await super()._process(
+            message=message,
+            cancellation_token=cancellation_token,
+            **kwargs,
+        )
 
         # Process the score for logging
-        if score_output and not score_output.is_error and isinstance(score_output.outputs, QualScore):
+        if score_output and isinstance(score_output.outputs, QualScore):
             score = QualResults(
                 assessments=score_output.outputs.assessments,
-                assessed_agent_id=message.agent_info.agent_id,
-                assessed_call_id=message.call_id,
+                assessed_agent_id=message.inputs["answers"][0]["agent_id"],
+                assessed_call_id=message.inputs["answers"][0]["answer_id"],
             )
             # replace the outputs object
             score_output.outputs = score
+        return score_output

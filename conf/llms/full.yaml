@@ -13,8 +13,6 @@ judgers:
   - gpt41
   - gpt41mini
   - gpt41nano
-  - sonnet
-  - llama32_90b
   - llama4maverick
 
 synthesisers:
