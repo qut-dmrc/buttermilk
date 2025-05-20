@@ -230,8 +230,7 @@ class HostAgent(Agent):
             except TimeoutError:
                 logger.warning(f"{self.agent_name} hit timeout waiting for manager response after 60 seconds.")
                 continue
-            else:
-                # Check user's decision
+
             if self._user_confirmation and getattr(self._user_confirmation, "confirm", False):
                 logger.info(f"User confirmed step: {step.role}")
                 return True
@@ -281,7 +280,7 @@ class HostAgent(Agent):
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
-                # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where 
+                # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
@@ -354,10 +353,12 @@ class HostAgent(Agent):
             # Wait for tasks from the *previous* step to complete before starting the *next* step
             if not await self.wait_check_last_step_completions():
                 # If the wait failed (timeout or error), stop the flow
-                break
+                # break
+                pass
             if self.human_in_loop and not await self._wait_for_user(next_step):
                 # If user rejected or timed out, stop the flow
-                break
+                continue
+                # break
 
             # Execute the current step
             await self._execute_step(next_step)

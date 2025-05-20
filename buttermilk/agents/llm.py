@@ -238,11 +238,11 @@ class LLMAgent(Agent):
                 except Exception as e:
                     # Log schema validation/parsing error
                     parse_error = f"Error parsing LLM response into {schema.__name__}: {e}"
-                    raise ProcessingError(f"Agent {self.agent_id}: {parse_error}")
+                    raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
             else:
                 # Content is not string and not pre-parsed object, schema validation fails.
                 parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
-                raise ProcessingError(f"Agent {self.agent_id}: {parse_error}")
+                raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
 
         # 2. Store the result in output.outputs
         if parsed_object is not None:

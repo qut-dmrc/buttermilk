@@ -32,6 +32,7 @@ from buttermilk._core.config import (  # Configuration models
 from buttermilk._core.contract import FlowMessage
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.log import logger
+from buttermilk._core.message_data import clean_empty_values
 from buttermilk._core.types import (
     Record,  # Data types
     RunRequest,
@@ -182,7 +183,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Get the singleton instance using our new module-level function
         # Define attributes for logging and tracing.
         op = weave.op(self._run, call_display_name=f"{self.name} {request.name}")
-        orchestrator_trace = bm.weave.create_call(op, inputs=request.model_dump(mode="json"),
+        orchestrator_trace = bm.weave.create_call(op, inputs=clean_empty_values(request.model_dump(mode="json")),
                                                     display_name=f"{self.orchestrator} {self.name}",
                                                     attributes=request.tracing_attributes)
         self.trace_id = orchestrator_trace.trace_id

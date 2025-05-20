@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any, Self
+from typing import Any
 
 import requests
 import urllib3
@@ -17,7 +17,7 @@ from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
 )
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
 from tenacity import (
     AsyncRetrying,
     RetryError,

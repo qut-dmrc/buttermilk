@@ -408,10 +408,11 @@ class AgentVariants(AgentConfig):
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
-                        raise  # Re-raise by default
+                        logger.error(msg:=f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
+                        raise FatalError(msg) from e  # Re-raise by default
 
         if not generated_configs:  # Check if list is empty
-            raise FatalError(f"Could not create any agent variant configs for {self.role} {self.agent_name}")
+            logger.error(msg := f"Could not create any agent variant configs for {self.role} {self.agent_name}")
+            raise FatalError(msg)
 
         return generated_configs

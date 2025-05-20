@@ -24,6 +24,8 @@ from autogen_openaiext_client import GeminiChatCompletionClient
 from langfuse.openai import openai  # OpenAI integration # noqa
 from pydantic import BaseModel, ConfigDict, Field
 
+from .log import logger
+
 
 # Use a function for deferred import to avoid circular references
 def get_bm():
@@ -170,13 +172,17 @@ class AutoGenWrapper(RetryWrapper):
                 extra_create_args=kwargs,
             )
             if not create_result.content:
-                raise ProcessingError("Empty response from LLM")
+                logger.error(error_msg := "Empty response from LLM")
+                raise ProcessingError(error_msg)
             if isinstance(create_result.content, str) and not create_result.content.strip():
-                raise ProcessingError("Empty response from LLM")
+                logger.error(error_msg := "Empty response from LLM")
+                raise ProcessingError(error_msg)
             if isinstance(create_result.content, list) and not all(isinstance(item, FunctionCall) for item in create_result.content):
-                raise ProcessingError("Unexpected tool response from LLM", create_result.content)
+                logger.error(error_msg := "Unexpected tool response from LLM")
+                raise ProcessingError(error_msg, create_result.content)
         except Exception as e:
             error_msg = f"Error during LLM call: {e}"
+            logger.error(error_msg)
             raise ProcessingError(error_msg)
         return create_result
 

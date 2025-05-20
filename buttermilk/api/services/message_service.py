@@ -19,6 +19,7 @@ from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
+from buttermilk.agents.rag.ragzot import ResearchResult
 
 PREVIEW_LENGTH = 200
 
@@ -83,6 +84,8 @@ class MessageService:
                 message_type = "assessments"
             elif isinstance(message, Differences):
                 message_type = "differences"
+            elif isinstance(message, ResearchResult):
+                message_type = "research_result"
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
             elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):

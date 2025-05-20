@@ -25,10 +25,8 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk.utils.validators import (  # Pydantic validators
-    convert_omegaconf_objects,
-    make_list_validator,
-)
+from buttermilk.utils.utils import clean_empty_values
+from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator  # Pydantic validators
 
 from .config import AgentConfig
 from .log import logger
@@ -351,6 +349,12 @@ class AgentTrace(FlowMessage, AgentOutput):
         exclude_none=True,
     )  # type: ignore
 
+    def model_dump(self, *args, **kwargs) -> dict[str, Any]:
+        """Override model_dump to exclude empty collections."""
+        raw_dump = super().model_dump(*args, **kwargs)
+        # Apply the cleaning function to the result
+        return clean_empty_values(raw_dump)
+
     @computed_field
     @property
     def object_type(self) -> str:
@@ -364,33 +368,6 @@ class AgentTrace(FlowMessage, AgentOutput):
 
     def __str__(self) -> str:
         return self.content
-
-    def model_dump(self, **kwargs):
-        """Override model_dump to exclude empty collections."""
-        exclude_keys = set(kwargs.get("exclude", set()))
-
-        # Find keys with empty values
-        for key, value in self.__dict__.items():
-            if isinstance(value, (list, dict, set)) and len(value) == 0:
-                exclude_keys.add(key)
-
-        # Update exclude with our extended set
-        kwargs["exclude"] = exclude_keys
-        return super().model_dump(**kwargs)
-
-    def model_dump_json(self, **kwargs):
-        """Override model_dump_json to exclude empty collections."""
-        return super().model_dump_json(**kwargs, exclude_none=True, exclude_unset=True)
-
-    # def model_dump(self, **kwargs):
-    #     """Custom serialization to handle Pydantic models and OmegaConf objects recursively."""
-    #     data = super().model_dump(**kwargs)
-
-    #     # Handle Pydantic models in 'outputs'
-    #     if isinstance(self.outputs, BaseModel):
-    #         data["outputs"] = self.outputs.model_dump()
-
-    #     return data
 
 
 # --- Manager / Conductor / UI Interaction Messages ---
