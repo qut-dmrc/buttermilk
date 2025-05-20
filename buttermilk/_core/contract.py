@@ -40,6 +40,7 @@ from .types import Record  # Core data types
 class FlowEvent(BaseModel):
     """Base model for simple event messages within the flow (potentially OOB)."""
 
+    call_id: str = Field(default=uuid.uuid4().hex, description="Unique identifier for the event.")
     source: str = Field(default="server", description="Identifier of the message source (e.g., agent ID).")
     content: str = Field(..., description="The main content of the event message.")
 

@@ -8,8 +8,10 @@ from autogen_core import CancellationToken
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
+from buttermilk._core import StepRequest
+from buttermilk._core.agent import ManagerMessage
 from buttermilk._core.constants import END, MANAGER
-from buttermilk._core.contract import GroupchatMessageTypes
+from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 

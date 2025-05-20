@@ -1,7 +1,6 @@
 """Defines the LLMAgent, a base class for Buttermilk agents that interact with Language Models.
 """
 
-from collections.abc import Callable
 from typing import Any, Self  # Added Type for Pydantic model hinting
 
 import pydantic
@@ -266,20 +265,17 @@ class LLMAgent(Agent):
 
         return output
 
-    # This is the primary method subclasses should call in their handlers.
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None,
-        public_callback: Callable | None = None,  # Callback provided by adapter
-        message_callback: Callable | None = None,  # Callback provided by adapter,
-        **kwargs) -> AgentOutput:
-        """Core processing logic: fills template, calls LLM, makes AgentTrace.
+    # This is the primary method subclasses should override.
+    async def _process(self, *, message: AgentInput,
+        cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+        """Core processing logic: fills template, calls LLM, makes AgentOutput.
 
         Args:
             message: The input message containing data, context, parameters.
-            cancellation_token: Token to signal cancellation.
             **kwargs: Additional arguments (currently unused but allows flexibility).
 
         Returns:
-            An AgentTrace message with the LLM response and metadata.
+            An AgentOutput message with the LLM response and metadata.
 
         Raises:
             ProcessingError: If template filling fails and `fail_on_unfilled_parameters` is True.
@@ -292,7 +288,7 @@ class LLMAgent(Agent):
             llm_messages = await self._fill_template(
                 task_params=message.parameters, inputs=message.inputs, context=message.context, records=message.records,
             )
-        except ProcessingError as template_error:
+        except Exception as template_error:
             # Log template errors clearly as they prevent LLM call
             msg = f"Agent {self.agent_id}: Critical error during template processing: {template_error}"
             logger.error(msg)
@@ -318,17 +314,11 @@ class LLMAgent(Agent):
         except Exception as llm_error:
             # Catch errors during the actual LLM call
             msg = f"Agent {self.agent_id}: Error during LLM call to '{self._model}': {llm_error}"
-            logger.error(msg)
-            error_output = ErrorEvent(source=self.agent_id, content=msg)
-            # Wrap in AgentOutput
-            return AgentOutput(agent_id=self.agent_id,
-                metadata={"error": True},
-                outputs=error_output,
-            )
-            # Depending on severity, might want to raise
-            # raise ProcessingError(f"LLM call failed for agent {self.id}") from llm_error
+            raise ProcessingError(msg) from llm_error
 
         # 3. Create the standardized AgentTrace
+        # TODO: Fix. this is dumb, we make a trace object just to process the output
+        # and put the output into the more primitive AgentOutput object
         trace = self.make_trace(
             chat_result=llm_result,
             inputs=message,  # Pass AgentInput
