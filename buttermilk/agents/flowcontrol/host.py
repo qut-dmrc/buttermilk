@@ -236,7 +236,7 @@ class HostAgent(Agent):
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
-                    logger.info(f"Waiting for pending tasks to complete: {dict(self._pending_tasks_by_agent)}...")
+                    logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
                 else:
                     logger.info("No pending tasks yet, but we are expecting some this step. Waiting.")
 
@@ -315,7 +315,7 @@ class HostAgent(Agent):
         if not last_step_successful:
             msg = f"Host {self.agent_id} failed to complete all tasks: {dict(self._pending_tasks_by_agent)}"
             logger.error(msg)
-            # await self.callback_to_groupchat(StepRequest(role=END, content=msg))
+            await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             return False
         return True
 
