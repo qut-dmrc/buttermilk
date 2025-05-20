@@ -217,7 +217,7 @@ class Record(BaseModel):
         populate_by_name=True,
         exclude_unset=True,
         exclude_none=True,
-        exclude=["title", "text", "images"],
+        exclude=["title", "images"],
         positional_args=True,
     )  # type: ignore
 
