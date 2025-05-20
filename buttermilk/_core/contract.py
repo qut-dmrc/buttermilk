@@ -450,17 +450,14 @@ class TaskProgressUpdate(FlowMessage):
     """
 
     source: str = Field(..., description="The agent ID that is sending the progress update")
-    role: str = Field(..., description="The role associated with this task")
     step_name: str = Field(..., description="Name of the current step")
     status: str = Field(..., description="Current status (e.g., 'started', 'in_progress', 'completed', 'error')")
     message: str = Field(default="", description="Human-readable message explaining the current progress")
-    total_steps: int = Field(default=0, description="Total number of steps in the workflow")
-    current_step: int = Field(default=0, description="Current step number")
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     waiting_on: dict[str, Any] = Field(default={}, description="Agents with outstanding tasks")
 
     def __str__(self) -> str:
-        status = f"[{self.status.upper()}] {self.message} ({self.current_step:.0%})"
+        status = f"[{self.status.upper()}] {self.message}"
         if self.waiting_on:
             waiting_on_str = ", ".join([f"{k}: {v}" for k, v in self.waiting_on.items()])
             status += f" - Waiting on: {waiting_on_str}"

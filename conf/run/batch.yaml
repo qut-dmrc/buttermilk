@@ -7,7 +7,7 @@ defaults:
 name: bm_batch
 job: flows
 
-max_records: 5
+max_records: -1
 
 run:
   _target_: buttermilk.runner.flowrunner.FlowRunner
