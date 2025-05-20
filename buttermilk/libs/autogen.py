@@ -203,6 +203,7 @@ class AutogenAgentAdapter(RoutedAgent):
         try:
             if isinstance(message, StepRequest) and message.role == self.agent.role:
                 # Call agent's main execution method
+                # StepRequest is a subclass of AgentInput, so we can use it directly.
                 response = await self.agent.invoke(message=message,
                     cancellation_token=ctx.cancellation_token,
                     source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID

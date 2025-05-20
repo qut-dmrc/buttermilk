@@ -226,8 +226,9 @@ class HostAgent(Agent):
                     return True
                 logger.info(f"User rejected step: {step.role}")
                 return False
-
-        logger.error("User did not respond in time.")
+        msg = "User did not respond to confirm step in time. Ending flow."
+        logger.error(msg)
+        await self.callback_to_groupchat(StepRequest(role=END, content=msg))
         return False
 
     async def _wait_for_all_tasks_complete(self) -> bool:
