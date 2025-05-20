@@ -283,6 +283,8 @@ class LLMAgent(Agent):
 
         """
         logger.debug(f"Agent {self.agent_name} starting _process.")
+        if not isinstance(message, AgentInput):
+            raise ProcessingError(f"Agent {self.agent_id}: _process called with non-AgentInput message: {type(message)}")
         try:
             # 1. Prepare messages for the LLM using the template
             llm_messages = await self._fill_template(

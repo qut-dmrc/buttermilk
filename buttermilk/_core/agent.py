@@ -234,7 +234,7 @@ class Agent(AgentConfig):
         await public_callback(TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0))
 
         try:
-            result = await self.__call__(message=message)
+            result = await self.__call__(message=final_input)
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e}")
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
@@ -248,7 +248,7 @@ class Agent(AgentConfig):
         # Create the trace here with required values
         trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
             agent_info=self._cfg,
-            inputs=final_input, parent_call_id=message.parent_call_id,
+            inputs=final_input, parent_call_id=final_input.parent_call_id,
         )
         trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
@@ -310,6 +310,8 @@ class Agent(AgentConfig):
 
         if isinstance(message, Record):
             self._records.append(message)
+        elif isinstance(message, (AgentOutput, AgentTrace)) and isinstance(message.outputs, Record):
+            self._records.append(message.outputs)
         else:
             # Extract data from the message using the utility function
             extracted = extract_message_data(
