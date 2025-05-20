@@ -28,7 +28,7 @@ from buttermilk._core.cloud import CloudManager
 from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
-from buttermilk._core.log import logger
+from buttermilk._core.log import ContextFilter, logger
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.utils.lazy_loading import cached_property
 from buttermilk.utils import save
@@ -330,7 +330,9 @@ class BM(SessionInfo):
             root_logger.removeHandler(handler)
 
         # Set up console logging
-        console_format = "%(asctime)s %(hostname)s %(name)s %(filename)s:%(lineno)d %(levelname)s %(message)s"
+        context_filter = ContextFilter()
+        logger.addFilter(context_filter)
+        console_format = "%(asctime)s %(hostname)s %(name)s [%(session_id)s:%(agent_id)s] %(filename)s:%(lineno)d %(levelname)s %(message)s"
         coloredlogs.install(
             logger=logger,
             fmt=console_format,
@@ -358,6 +360,9 @@ class BM(SessionInfo):
             # Get log client from cloud manager
             from google.cloud.logging_v2.handlers import CloudLoggingHandler
 
+            # session_id and agent_id are added to the LogRecord by ContextFilter.
+            # The CloudLoggingHandler is expected to automatically pick up these extra fields
+            # and include them in the structured log entry sent to Google Cloud Logging.
             cloudHandler = CloudLoggingHandler(
                 client=self.cloud_manager.gcs_log_client(self.logger_cfg),
                 resource=resource,
