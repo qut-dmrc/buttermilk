@@ -11,10 +11,16 @@ from buttermilk._core import (
     UIMessage,
     logger,
 )
-from buttermilk._core.agent import AgentTrace, TaskProcessingStarted
 from buttermilk._core.config import RunRequest
-from buttermilk._core.contract import FlowEvent, FlowMessage, ManagerMessage
-from buttermilk._core.log import logger
+from buttermilk._core.contract import (
+    AgentTrace,
+    ErrorEvent,
+    FlowEvent,
+    FlowMessage,
+    ManagerMessage,
+    TaskProcessingStarted,
+    TaskProgressUpdate,
+)
 from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
@@ -27,24 +33,39 @@ PREVIEW_LENGTH = 200
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal["chat_message", "record", "ui_message", "manager_response", "system_message", "user_message", "assessments", "differences", "judge_reasons"] = Field(..., description="Type of message")
+    type: Literal[
+        "chat_message",
+        "record",
+        "ui_message",
+        "manager_response",
+        "system_message",
+        "system_update",
+        "system_error",
+        "user_message",
+        "assessments",
+        "differences",
+        "judge_reasons",
+    ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
     timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
     agent_info: AgentConfig | None = Field(None, description="Agent information")
+    tracing_link: str | None = Field(None, description="Link to the tracing information")
 
 
 class MessageService:
     """Service for handling message processing with Pydantic objects directly"""
 
     @staticmethod
-    def format_message_for_client(message: AgentTrace | ChatMessage | Record | FlowEvent | FlowMessage) -> None | ChatMessage:
+    def format_message_for_client(
+        message: AgentTrace | ChatMessage | Record | FlowEvent | FlowMessage,
+    ) -> None | ChatMessage:
         """Format and pass the message to the client
-        
+
         Args:
             message: The message to format (Pydantic object)
-            
+
         Returns:
             dict[str, Any] | None: The serialized message or None if not serializable
 
@@ -66,6 +87,7 @@ class MessageService:
             agent_info = getattr(message, "agent_info", None)
             message_id = getattr(message, "call_id", uuid())
             preview = getattr(message, "preview", None)
+            tracing_link = getattr(message, "tracing_link", None)
 
             if isinstance(message, AgentTrace):
                 if message.outputs:
@@ -88,6 +110,10 @@ class MessageService:
                 message_type = "research_result"
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
+            elif isinstance(message, TaskProgressUpdate):
+                message_type = "system_update"
+            elif isinstance(message, ErrorEvent):
+                message_type = "system_error"
             elif isinstance(message, (FlowEvent, TaskProcessingComplete, TaskProcessingStarted)):
                 return None
             else:
@@ -95,11 +121,13 @@ class MessageService:
                 return None
 
             # Repackage
-            output = ChatMessage(message_id=message_id,
+            output = ChatMessage(
+                message_id=message_id,
                 type=message_type,
                 preview=preview,
                 outputs=message,
                 agent_info=agent_info,
+                tracing_link=tracing_link,
                 timestamp=datetime.datetime.now(),
             )
             return output
@@ -110,9 +138,11 @@ class MessageService:
         return None
 
     @staticmethod
-    async def process_message_from_ui(data: dict[str, Any]) -> FlowEvent | RunRequest | FlowMessage | TaskProcessingStarted | TaskProcessingComplete | None:
+    async def process_message_from_ui(
+        data: dict[str, Any],
+    ) -> FlowEvent | RunRequest | FlowMessage | TaskProcessingStarted | TaskProcessingComplete | None:
         """Process a message from a WebSocket connection.
-        
+
         Args:
             session_id: The session ID
             message: The message to process
@@ -126,7 +156,8 @@ class MessageService:
 
             match message_type:
                 case "run_flow":
-                    run_request = RunRequest(ui_type="web",
+                    run_request = RunRequest(
+                        ui_type="web",
                         flow=data.pop("flow"),
                         record_id=data.pop("record_id", None),
                         parameters=data,
@@ -134,9 +165,11 @@ class MessageService:
                     return run_request
                 case "pull_task":
                     from buttermilk.api.job_queue import JobQueueClient
+
                     return await JobQueueClient().pull_single_task()
                 case "pull_tox":
                     from buttermilk.api.job_queue import JobQueueClient
+
                     return await JobQueueClient().pull_tox_example()
                 case "ui_message":
                     return UIMessage(**data)
