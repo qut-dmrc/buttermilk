@@ -32,6 +32,7 @@ from buttermilk._core.contract import (
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.evaluators.scorer import QualResults, QualScore  # Specific format for scores
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
+from buttermilk.agents.rag.ragzot import ResearchResult
 from buttermilk.agents.ui.generic import UIAgent  # Base class for UI agents
 
 # Initialize a global console instance with JSON highlighting
@@ -48,7 +49,7 @@ FormattableMessages = Union[
     Record,
     QualScore,
     JudgeReasons,
-    FlowMessage,
+    FlowMessage, ResearchResult,
 ]
 # TODO: Add other relevant FlowMessage subtypes if needed for formatting.
 

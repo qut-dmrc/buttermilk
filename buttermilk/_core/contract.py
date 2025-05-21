@@ -11,8 +11,6 @@ from collections.abc import Mapping
 from typing import Any, Union
 
 import numpy as np
-import shortuuid  # For generating unique IDs
-import weave
 
 # Import Autogen types used as base or components
 from autogen_core.models import FunctionExecutionResult, LLMMessage
@@ -278,20 +276,6 @@ class AgentOutput(BaseModel):
 
         return ""
 
-    @field_validator("call_id", mode="before")
-    @classmethod
-    def _ensure_call_id(cls, v: str) -> str:
-        """Look up call id if available."""
-        if not v:
-            # --- Weave Tracing ---
-            # Get the current Weave call context if available.
-            call = weave.get_current_call()
-            if call and call.id:
-                v = call.id
-        if not v:
-            v = str(shortuuid.uuid())
-        return v
-
     def __str__(self) -> str:
         return self.content
 
@@ -420,7 +404,7 @@ class ManagerMessage(FlowMessage):
 
 
 # --- Task Progress Message ---
-class TaskProgressUpdate(FlowMessage):
+class FlowProgressUpdate(FlowMessage):
     """A message sent to provide information about the progress of a task or step in the workflow.
 
     This is primarily used to update the UI about the workflow's progress.
@@ -506,7 +490,7 @@ class HeartBeat(BaseModel):
 # Convenience types for type hinting.
 
 # Out-Of-Band (OOB) messages: Control, status, or other events outside the main agent-to-agent data flow.
-OOBMessages = Union[UIMessage, TaskProcessingComplete, TaskProcessingStarted, TaskProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
+OOBMessages = Union[UIMessage, TaskProcessingComplete, TaskProcessingStarted, FlowProgressUpdate, ConductorRequest, ErrorEvent, StepRequest, ProceedToNextTaskSignal, HeartBeat]
 
 # Group Chat messages: Standard outputs shared among participating agents.
 GroupchatMessageTypes = Union[

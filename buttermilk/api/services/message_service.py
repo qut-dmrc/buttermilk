@@ -17,9 +17,9 @@ from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
     FlowMessage,
+    FlowProgressUpdate,
     ManagerMessage,
     TaskProcessingStarted,
-    TaskProgressUpdate,
 )
 from buttermilk._core.types import Record
 from buttermilk.agents.differences import Differences
@@ -43,6 +43,7 @@ class ChatMessage(BaseModel):
         "system_error",
         "user_message",
         "assessments",
+        "research_result",
         "differences",
         "judge_reasons",
     ] = Field(..., description="Type of message")
@@ -110,7 +111,7 @@ class MessageService:
                 message_type = "research_result"
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
-            elif isinstance(message, TaskProgressUpdate):
+            elif isinstance(message, FlowProgressUpdate):
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
                 message_type = "system_error"

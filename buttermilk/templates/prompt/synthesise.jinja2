@@ -53,6 +53,10 @@ Your response should be written for an external audience. Do not mention our int
 {# Loop through each provided draft answer. #}
 {% for answer in answers %}
 <BEGIN {{answer.agent_name}} DRAFT ANSWER #{{answer.answer_id[-4:]}}>
+{%- if not answer.error -%}
 {{ answer.result }}
+{%- else -%}
+ERROR: {{ answer.error }}
+{%- endif -%}
 <END DRAFT ANSWER>
 {% endfor %}

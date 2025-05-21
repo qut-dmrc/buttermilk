@@ -178,13 +178,14 @@ class Orchestrator(OrchestratorProtocol, ABC):
                      or parameters for the flow.
 
         """
-        logger.info(f"Starting run for orchestrator '{self.name}'.")
+        display_name = f"{self.__repr_name__()} {self.name} {request.name}"
+        logger.info(f"Starting run for orchestrator flow {display_name}.")
 
         # Get the singleton instance using our new module-level function
         # Define attributes for logging and tracing.
-        op = weave.op(self._run, call_display_name=f"{self.name} {request.name}")
+        op = weave.op(self._run, call_display_name=display_name)
         orchestrator_trace = bm.weave.create_call(op, inputs=clean_empty_values(request.model_dump(mode="json")),
-                                                    display_name=f"{self.orchestrator} {self.name}",
+                                                    display_name=display_name,
                                                     attributes=request.tracing_attributes)
         self.trace_id = orchestrator_trace.trace_id
         try:

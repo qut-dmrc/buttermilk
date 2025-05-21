@@ -21,10 +21,10 @@ from buttermilk._core.contract import (
     AgentTrace,
     ErrorEvent,
     FlowEvent,
+    FlowProgressUpdate,
     ManagerMessage,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    TaskProgressUpdate,
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
@@ -487,13 +487,13 @@ class MockOrchestrator(Orchestrator):
 
     def _generate_progress_update(self, source=None, role=None, step_name=None,
                                 status=None, message=None, total_steps=None,
-                                current_step=None) -> TaskProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
+                                current_step=None) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (
             FlowEvent,
+            FlowProgressUpdate,
             TaskProcessingComplete,
             TaskProcessingStarted,
-            TaskProgressUpdate,
         )
 
         # Sometimes generate flow events instead of progress updates
@@ -598,7 +598,7 @@ class MockOrchestrator(Orchestrator):
             message = random.choice(messages)
 
         # TaskProgressUpdate requires source, role, step_name, status, message, total_steps, current_step, timestamp, waiting_on
-        return TaskProgressUpdate(
+        return FlowProgressUpdate(
             source=source,
             role=role,
             step_name=step_name,

@@ -1,6 +1,7 @@
+import buttermilk._core.dmrc as DMRC
+
 from .bm_init import BM as BM
 from .config import AgentConfig as AgentConfig, AgentVariants as AgentVariants
-import buttermilk._core.dmrc as DMRC
 from .contract import (
     AgentInput as AgentInput,
     AgentTrace as AgentTrace,

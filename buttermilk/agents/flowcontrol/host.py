@@ -16,13 +16,13 @@ from buttermilk._core.contract import (
     AgentTrace,
     ConductorRequest,
     ErrorEvent,
+    FlowProgressUpdate,
     GroupchatMessageTypes,
     ManagerMessage,
     OOBMessages,
     StepRequest,
     TaskProcessingComplete,
     TaskProcessingStarted,
-    TaskProgressUpdate,  # Import the new message type
     UIMessage,
 )
 from buttermilk._core.exceptions import FatalError
@@ -69,6 +69,7 @@ class HostAgent(Agent):
     _user_confirmation: ManagerMessage | None = PrivateAttr(default=None)
     _user_confirmation_received: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _user_feedback: list[str] = PrivateAttr(default_factory=list)
+    _progress_reporter_task: asyncio.Task | None = PrivateAttr(default=None)
 
     async def initialize(
         self, callback_to_groupchat, **kwargs: Any,
@@ -109,7 +110,7 @@ class HostAgent(Agent):
                 # store in user feedback separately as well
                 self._user_feedback.append(content)
         # Do not log TaskProgressUpdate messages to history
-        elif isinstance(message, TaskProgressUpdate):
+        elif isinstance(message, FlowProgressUpdate):
              logger.debug(f"Host {self.agent_name} received TaskProgressUpdate (not logged to history): {self._pending_tasks_by_agent}")
              return  # Do not proceed to log
         if content_to_log:
@@ -185,7 +186,7 @@ class HostAgent(Agent):
             self._conductor_task = asyncio.create_task(self._run_flow(message=message))
 
         # Ignore TaskProgressUpdate messages received by the host itself
-        elif isinstance(message, TaskProgressUpdate):
+        elif isinstance(message, FlowProgressUpdate):
              logger.debug(f"Host {self.agent_name} received its own TaskProgressUpdate message. Ignoring.")
              # Do nothing with progress updates received by the host
 
@@ -248,31 +249,42 @@ class HostAgent(Agent):
                 await asyncio.sleep(interval)
                 async with self._tasks_condition:
                     if self._pending_tasks_by_agent:
-                        progress_message = TaskProgressUpdate(source=self.agent_id,
+                        progress_message = FlowProgressUpdate(source=self.agent_id,
                                                               status="pending",
                                                               step_name=self._current_step,
                             waiting_on=dict(self._pending_tasks_by_agent),
                             message="Current pending tasks",
                         )
-                        logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.waiting_on}")
-                        await self.callback_to_groupchat(progress_message)
                     else:
-                        # If no tasks are pending, no need to report progress
-                        pass  # logger.debug("No pending tasks to report.")
+                         progress_message = FlowProgressUpdate(source=self.agent_id,
+                            status="idle",
+                            step_name=self._current_step,
+                            waiting_on=dict(),
+                            message="Flow currently idle",
+                        )
+                    logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
+                    await self.callback_to_groupchat(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
         except Exception as e:
             logger.exception(f"Error in progress reporting task: {e}")
+        finally:
+            # Send one last update before exiting
+            progress_message = FlowProgressUpdate(source=self.agent_id,
+                                                    status="finished",
+                                                    step_name=END,
+                waiting_on=dict(),
+                message="Flow finished",
+            )
+            logger.debug(f"Host {self.agent_name} sending final progress update.")
+            await self.callback_to_groupchat(progress_message)
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed, reporting progress periodically."""
-        progress_reporter_task = None
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
-                # Start the periodic progress reporter task
-                progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
@@ -297,14 +309,6 @@ class HostAgent(Agent):
             logger.exception(f"Unexpected error during task completion wait: {e}")
             self._step_starting.clear()  # Reset on error too
             return False  # Indicate failure due to error
-        finally:
-            # Ensure the progress reporter task is cancelled when the wait finishes or times out
-            if progress_reporter_task:
-                progress_reporter_task.cancel()
-                try:
-                    await progress_reporter_task  # Await cancellation
-                except asyncio.CancelledError:
-                    pass  # Expected
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute.
@@ -341,6 +345,9 @@ class HostAgent(Agent):
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
 
+        # Start the periodic progress reporter task
+        self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+
         # Initialize generator now that participants are known
         self._step_generator = self._sequence()
         logger.info(f"Host participants initialized to: {list(self._participants.keys())}")
@@ -361,6 +368,27 @@ class HostAgent(Agent):
 
         # --- Sequence finished ---
         logger.info(f"Host {self.agent_name} flow execution finished.")
+
+    async def _shutdown(self) -> None:
+        """Shutdown the agent and clean up resources."""
+        if self._conductor_task:
+            self._conductor_task.cancel()
+            try:
+                await self._conductor_task
+            except asyncio.CancelledError:
+                logger.debug("Conductor task cancelled.")
+        if self._step_generator:
+            await self._step_generator.aclose()
+        if self._tasks_condition:
+            await self._tasks_condition.release()
+            # Ensure the progress reporter task is cancelled when the wait finishes or times out
+            if self._progress_reporter_task:
+                self._progress_reporter_task.cancel()
+                try:
+                    await self._progress_reporter_task  # Await cancellation
+                except asyncio.CancelledError:
+                    pass  # Expected
+        logger.info(f"Host {self.agent_name} shutdown complete.")
 
     async def wait_check_last_step_completions(self) -> bool:
         """Wait for tasks from the previous step to complete."""
