@@ -237,8 +237,8 @@ class LLMAgent(Agent):
                     logger.debug(f"Agent {self.agent_name}: Successfully parsed content into schema {schema.__name__}.")
                 except Exception as e:
                     # Log schema validation/parsing error
-                    parse_error = f"Error parsing LLM response into {schema.__name__}: {e}"
-                    raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
+                    parse_error = f"Error parsing LLM response into {schema.__name__}: {e}."
+                    logger.warning(f"Agent {self.agent_name}: {parse_error}")
             else:
                 # Content is not string and not pre-parsed object, schema validation fails.
                 parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
@@ -253,11 +253,15 @@ class LLMAgent(Agent):
             try:
                 output.outputs = self._json_parser.parse(chat_result.content)
                 logger.debug(f"Agent {self.agent_name}: Successfully parsed content as generic JSON.")
-            except Exception as json_e:
-                # If generic JSON parsing also fails, store raw content
-                raise ProcessingError(f"Failed to parse LLM response as JSON: {json_e}.")
+            except ProcessingError:
+                # If generic JSON parsing also fails, treat as a chat message
+                if isinstance(chat_result, AssistantMessage):
+                    # If the content is already an AssistantMessage, use it directly
+                    output.outputs = chat_result
+                else:
+                    output.outputs = AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id)
         elif chat_result.content is not None:
-            # Content is not None, not string - store as is.
+            # Content is not None, not string - raise.
             raise ProcessingError(f"Agent {self.agent_id}: LLM response content is not a string ({type(chat_result.content)}).")
         else:
             # Content is None

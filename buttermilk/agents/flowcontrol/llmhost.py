@@ -106,3 +106,8 @@ class LLMHostAgent(LLMAgent, HostAgent):
 
             # With user feedback, call the LLM to get the next step
             result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))
+
+            if result:
+                # If the result is not None, we have a response from the LLM
+                # Send the result to the group chat
+                await self.callback_to_groupchat(result)

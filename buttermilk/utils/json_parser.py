@@ -1,27 +1,18 @@
 from json import JSONDecodeError
-from typing import Any, Literal
+from typing import Any
 
 import json_repair
 import regex as re
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from buttermilk.utils.utils import load_json_flexi
 
+from .._core.exceptions import ProcessingError
 from .._core.log import logger
 
 
 class ChatParser(BaseModel):
-    """A safe JSON parser. If all else fails, return the original string as a dictionary with the key 'response'"""
-
-    # Error handling options:
-    # - raise: raise an error if the JSON is invalid
-    # - warn: log a warning if the JSON is invalid
-    # - ignore: ignore the error and return the original string in a dictionary with the key 'response' (default)
-
-    on_error: Literal["raise", "warn", "ignore"] = Field(
-        default="warn",
-        description="Error handling options: raise, warn, or ignore",
-    )
+    """A JSON parser. Try to clean up the input if necessary."""
 
     def parse(self, text: str) -> Any:
         """Parse the output of an LLM call to a JSON object.
@@ -52,11 +43,7 @@ class ChatParser(BaseModel):
                 output = json_repair.loads(json_str)
 
         except JSONDecodeError as e:
-            if self.on_error == "raise":
-                logger.error(f"Unable to decode JSON in result: {text}")
-                raise e
-            logger.warning(f"Unable to decode JSON in result: {text}")
-            return dict(response=text, error="Unable to decode JSON in result")
+            raise ProcessingError from e
 
         if not isinstance(output, dict):
             logger.warning(f"Unable to decode JSON in result: {text}")

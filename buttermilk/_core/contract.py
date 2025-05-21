@@ -383,6 +383,10 @@ class UIMessage(FlowMessage):
         default=None,
         description="If list[str], presents options to the user. If bool, implies simple yes/no.",
     )
+    thought: str | None = Field(
+        default=None,
+        description="The reasoning text for the completion if available. Used for reasoning model and additional text content besides function calls.",
+    )
 
 
 class ManagerMessage(FlowMessage):

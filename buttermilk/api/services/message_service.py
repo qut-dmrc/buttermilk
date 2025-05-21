@@ -21,7 +21,7 @@ from buttermilk._core.contract import (
     ManagerMessage,
     TaskProcessingStarted,
 )
-from buttermilk._core.types import Record
+from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.evaluators.scorer import QualResults
 from buttermilk.agents.judge import JudgeReasons
@@ -111,6 +111,10 @@ class MessageService:
                 message_type = "research_result"
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
+            elif isinstance(message, AssistantMessage):
+                # Convert to UIMessage
+                message_type = "ui_message"
+                message = UIMessage(content=str(message.content), thought=message.thought)
             elif isinstance(message, FlowProgressUpdate):
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
