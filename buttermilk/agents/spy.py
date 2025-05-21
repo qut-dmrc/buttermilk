@@ -33,7 +33,6 @@ class SpyAgent(RoutedAgent):
                 if message.inputs and message.inputs.records:
                     for record in message.inputs.records:
                         if hasattr(record, "text") and hasattr(record, "content"):
-                            logger.warning(f"Record has both 'text' and 'content' fields: {record}")
                             # This shouldn't happen because the pydantic model excludes text.
                             # But for some reason it does, so we need to handle it.
                             message.inputs.records = [x.model_dump(exclude="text") for x in message.inputs.records]

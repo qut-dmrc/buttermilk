@@ -21,7 +21,6 @@ from autogen_ext.models.openai._transformation.registry import (
     _find_model_family,
 )
 from autogen_openaiext_client import GeminiChatCompletionClient
-from langfuse.openai import openai  # OpenAI integration # noqa
 from pydantic import BaseModel, ConfigDict, Field
 
 from .log import logger
@@ -158,9 +157,6 @@ class AutoGenWrapper(RetryWrapper):
             # Don't use json_output if we're calling tools
             if tools:
                 json_output = False
-
-            # # --- Langfuse tracing ---
-            # langfuse_context.update_current_observation(input=messages)
 
             # Use the retry logic
             create_result = await self._execute_with_retry(

@@ -271,12 +271,8 @@ class HostAgent(Agent):
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
-                    # Start the periodic progress reporter task
-                    progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
-                else:
-                    logger.info("No pending tasks yet, but we are expecting some this step. Waiting.")
-                    # Still start the reporter, it will only send messages if tasks appear
-                    progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+                # Start the periodic progress reporter task
+                progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.

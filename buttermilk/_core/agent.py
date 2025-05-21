@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
-from langfuse.openai import openai  # OpenAI integration  # noqa
 from pydantic import (
     Field,
     PrivateAttr,
