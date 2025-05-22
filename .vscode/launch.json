@@ -143,7 +143,7 @@
         "-Xdev"
       ],
       "justMyCode": true,
-      "args": [
+      "args": ["run=lv"
       ],
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal"
