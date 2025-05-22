@@ -62,6 +62,7 @@ class AutogenAgentAdapter(RoutedAgent):
         agent: Agent | None = None,  # Optional pre-instantiated Buttermilk agent.
         agent_cls: type[Agent] | None = None,  # Optional Buttermilk agent class.
         agent_cfg: AgentConfig | None = None,  # Optional config if instantiating from class.
+        registration_callback: Callable[[str, Agent], None] | None = None,
     ) -> None:
         """Initializes the AutogenAgentAdapter.
 
@@ -82,11 +83,15 @@ class AutogenAgentAdapter(RoutedAgent):
             # Use the provided agent instance.
             self.agent = agent
             logger.debug(f"Adapter initialized with pre-instantiated agent: {self.agent.agent_name} ({type(self.agent).__name__})")
+            if registration_callback:
+                registration_callback(self.agent.agent_id, self.agent)
         elif agent_cls and agent_cfg:
             # Instantiate the agent using the provided class and config.
             try:
                 self.agent = agent_cls(**agent_cfg)
                 logger.debug(f"Adapter instantiated agent: {self.agent.agent_name} ({agent_cls.__name__})")
+                if registration_callback:
+                    registration_callback(self.agent.agent_id, self.agent)
             except Exception as e:
                 logger.error(f"Failed to instantiate agent {agent_cls.__name__} with config {agent_cfg}: {e}")
                 raise ValueError(f"Failed to instantiate agent {agent_cls.__name__}") from e

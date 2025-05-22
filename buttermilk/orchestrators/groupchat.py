@@ -31,9 +31,10 @@ from buttermilk._core import (  # noqa
     BM,
     AllMessages,
     StepRequest,
-    logger,
+    # logger, # logger is imported below
 )
 from buttermilk._core.agent import Agent, ProcessingError
+from buttermilk._core.config import AgentConfig
 from buttermilk._core.constants import CONDUCTOR, MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
@@ -115,12 +116,19 @@ class AutogenOrchestrator(Orchestrator):
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
     _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
     _participants: dict[str, str] = PrivateAttr()
+    _agent_registry: dict[str, Agent] = PrivateAttr(default_factory=dict)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
     _topic: TopicId = PrivateAttr(
         default_factory=lambda: DefaultTopicId(type=f"{bm.name}-{bm.job}-{shortuuid.uuid()[:8]}"),
     )
+
+    def _register_buttermilk_agent_instance(self, agent_id: str, agent_instance: Agent) -> None:
+        if agent_id in self._agent_registry:
+            logger.warning(f"Agent with ID '{agent_id}' already exists in the registry. Overwriting.")
+        self._agent_registry[agent_id] = agent_instance
+        logger.info(f"Registered Buttermilk agent instance '{agent_instance.agent_name}' with ID '{agent_id}' to orchestrator registry.")
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
@@ -177,11 +185,18 @@ class AutogenOrchestrator(Orchestrator):
                     # It captures loop variables (variant_config, agent_cls, self._topic.type)
                     # to ensure the correct configuration is used when the factory is called.
 
-                    def agent_factory(cfg=config_with_session, cls=agent_cls, topic_type=self._topic.type):
+                    def agent_factory(
+                        orchestrator_ref, # New parameter for self
+                        cfg=config_with_session,
+                        cls=agent_cls,
+                        topic_type=self._topic.type
+                    ):
+                        # The adapter will need to accept 'registration_callback'
                         return AutogenAgentAdapter(
                             agent_cfg=cfg,
                             agent_cls=cls,
-                            topic_type=topic_type,  # Pass the main topic type
+                            topic_type=topic_type,
+                            registration_callback=orchestrator_ref._register_buttermilk_agent_instance # Pass the method
                         )
 
                     # Register the adapter factory with the runtime.
@@ -189,7 +204,9 @@ class AutogenOrchestrator(Orchestrator):
                     agent_type: AgentType = await AutogenAgentAdapter.register(
                         runtime=self._runtime,
                         type=variant_config.agent_id,  # Use the specific variant ID for registration
-                        factory=agent_factory,
+                        factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls, t_type=self._topic.type: agent_factory(
+                            orch, cfg=v_cfg, cls=a_cls, topic_type=t_type
+                        ),
                     )
                 else:
                     # Register the adapter factory with the runtime.
@@ -366,3 +383,27 @@ class AutogenOrchestrator(Orchestrator):
             )
 
         return publish_callback
+
+    def get_agent_config(self, agent_id: str) -> AgentConfig | None:
+        '''
+        Retrieves the AgentConfig for a given agent_id from the registry.
+
+        Args:
+            agent_id: The ID of the agent to retrieve.
+
+        Returns:
+            The AgentConfig of the agent if found, otherwise None.
+        '''
+        agent_instance = self._agent_registry.get(agent_id)
+        if agent_instance:
+            # The Agent class inherits from AgentConfig.
+            # We can construct a clean AgentConfig from the instance.
+            agent_config_fields = set(AgentConfig.model_fields.keys())
+            config_data = {
+                field: getattr(agent_instance, field)
+                for field in agent_config_fields
+                if hasattr(agent_instance, field)
+            }
+            return AgentConfig(**config_data)
+        logger.info(f"Agent with ID '{agent_id}' not found in the orchestrator's agent registry.")
+        return None
