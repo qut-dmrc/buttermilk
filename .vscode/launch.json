@@ -133,24 +133,20 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "streamlit",
+      "name": "lv",
       "type": "debugpy",
       "request": "launch",
-      "module": "streamlit",
+      "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "pythonArgs": [
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "args": ["run", "buttermilk/web/interface.py",
-        "hydra.verbose=false",
-        "flows=[trans]",
-        "+run=streamlit",
-        "llms=lite",
-        "name=bmdevelopment",
-        "job=api",
-        //"+record_id=${input:query}" // Will prompt for query
+      "justMyCode": true,
+      "args": [
       ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
     },
     {
       "name": "fastapi web ui",

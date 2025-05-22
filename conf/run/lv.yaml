@@ -1,0 +1,51 @@
+# @package _global_
+
+name: "lvtest"
+job: "testing"
+
+run:
+  _target_: buttermilk.runner.flowrunner.FlowRunner
+  save:
+  mode: console
+  ui: console
+  human_in_loop: true
+
+flows:
+  orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+  description: lv
+  parameters:
+    human_in_loop: true
+    criteria: criteria_vaw
+  agents:
+    judge:
+      role: judge
+      description: Expert analysts, particularly suited to assess content with subject matter expertise. Call on them first to provide an initial assessment of the content provided. They will bring their own criteria and assess a record in its entirety. They are expensive, and they will not respond to directions -- they know their job and they do it well. So you should only ask them to judge a piece of content once, and don't ask follow up questions of them.
+      agent_obj: Judge
+      name_components: ["⚖️", "role", "model", "criteria", "unique_identifier"]
+      num_runs: 1
+      parameters:
+        template: judge
+      variants:
+        model: ${llms.judgers}
+      inputs:
+        records: "FETCH||.records[]||*.records[]"
+  observers:
+    fetch:
+      role: FETCH
+      name: "🔍 fetch record"
+      agent_obj: FetchAgent
+      description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
+      data: ${...data}
+      inputs:
+        prompt: "prompt||content"
+    host:
+      role: HOST
+      name: "🎯 Assistant"
+      description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
+      agent_obj: LLMHostAgent
+      human_in_loop: ${run.human_in_loop}
+      parameters:
+        template: researchassistant
+        model: ${llms.host}
+        task: Assign an agent to the task. Repeat.
+      inputs: {}
