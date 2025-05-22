@@ -41,6 +41,7 @@ class UIAgent(Agent):
             **kwargs: Additional parameters specific to the UI implementation
 
         """
+        super().initialize(**kwargs)
         logger.debug(f"Initializing {self.__class__.__name__}")
 
         # Store the callback to groupchat for later use

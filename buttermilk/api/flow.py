@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
 
 from buttermilk._core import BM, logger
+from buttermilk._core.context import session_id_var
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
 
@@ -156,6 +157,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
 
         task = None
         # Listen for messages from the client
+
+        token = session_id_var.set(session_id)
         async for run_request in session.monitor_ui():
             try:
                 await asyncio.sleep(0.1)
@@ -172,6 +175,8 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
                 break
             except Exception as e:
                 logger.error(f"Error receiving/processing client message for {session_id}: {e}")
+            finally:
+                session_id_var.reset(token)
 
         if task:
             await task

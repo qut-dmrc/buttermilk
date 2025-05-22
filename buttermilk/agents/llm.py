@@ -97,7 +97,7 @@ class LLMAgent(Agent):
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
         """Loads and prepares tools defined in the agent configuration."""
-        # `self.tools` is likely inherited or populated by AgentConfig based on Hydra config.
+        # `self.tools` is populated by AgentConfig based on Hydra config.
         if self.tools:
             logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.

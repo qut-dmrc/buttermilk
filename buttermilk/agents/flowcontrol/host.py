@@ -75,7 +75,9 @@ class HostAgent(Agent):
         self, callback_to_groupchat, **kwargs: Any,
     ) -> None:
         """Initialize the agent."""
+        super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
+
 
     async def _listen(
         self,
@@ -344,6 +346,9 @@ class HostAgent(Agent):
             # Send an END message with the error
             await self.callback_to_groupchat(StepRequest(role=END, content=msg))
             raise FatalError(msg)
+
+        # Rerun initialization to set up the group chat
+        await self.initialize(callback_to_groupchat=self.callback_to_groupchat)
 
         # Start the periodic progress reporter task
         self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())

@@ -13,6 +13,7 @@ from buttermilk._core.constants import END, MANAGER
 from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
+from buttermilk.utils._tools import create_tool_functions
 
 TRUNCATE_LEN = 1000
 
@@ -64,6 +65,31 @@ class LLMHostAgent(LLMAgent, HostAgent):
         description="Maximum time to wait for agent responses in seconds",
     )
 
+    async def _initialize(self, callback_to_groupchat: Any) -> None:
+        await super()._initialize(callback_to_groupchat=callback_to_groupchat)
+
+        # Assemble our list of participants as tools
+        participant_names = list(self._participants.keys())
+        # Define the enum type dynamically
+        RoleEnumType = StrEnum("RoleEnumType", {name: name for name in participant_names})
+
+        async def _call_on_agent(role: RoleEnumType, prompt: str) -> None:
+            """Call on another agent to perform an action."""
+            # Create a new message for the agent
+            choice = StepRequest(role=role, inputs={"prompt": prompt})
+            # Send the message to the agent
+            await self.callback_to_groupchat(choice)
+
+        tool = FunctionTool(
+            func=_call_on_agent,
+            description="Call on another agent to perform an action.",
+        )
+        self._tools_list = []
+        if self.tools:
+            # reinitialize the tools list
+            self._tools_list = create_tool_functions(self.tools)
+        self._tools_list.append(tool)
+
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute."""
         # First, say hello to the user
@@ -101,30 +127,6 @@ class LLMHostAgent(LLMAgent, HostAgent):
         )
         if isinstance(message, ManagerMessage):
             # If the message is from the manager, we need to process it
-
-            # Assemble our list of participants as tools
-            participant_names = list(self._participants.keys())
-            # Define the enum type dynamically
-            RoleEnumType = StrEnum("RoleEnumType", {name: name for name in participant_names})
-
-            async def _call_on_agent(role: str, prompt: str) -> None:
-                """Call on another agent to perform an action."""
-                # Create a new message for the agent
-                choice = StepRequest(role=role, inputs={"prompt": prompt})
-                # Send the message to the agent
-                await self.callback_to_groupchat(choice)
-
-            tool = FunctionTool(
-                func=_call_on_agent,
-                description="Call on another agent to perform an action.",
-            )
-            tool._signature = tool._signature.replace(
-                parameters={
-                    "role": RoleEnumType,
-                    "prompt": str,
-                },
-            )
-            self.tools_list = [tool]
 
             # With user feedback, call the LLM to get the next step
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)

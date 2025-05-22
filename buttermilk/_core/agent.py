@@ -41,7 +41,7 @@ from buttermilk._core.log import logger  # Buttermilk logger instance
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import Record  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
-
+from buttermilk._core.context import agent_id_var
 # --- Buttermilk Handler Decorator ---
 
 
@@ -133,8 +133,9 @@ class Agent(AgentConfig):
         Subclasses can override this to perform setup tasks (e.g., loading models, connecting to services).
         """
         logger.debug(f"Agent {self.agent_name}: Base initialize.")
-        # Default implementation does nothing.
-
+        # Set the agent ID in the context variable for tracing
+        agent_id_var.set(self.agent_id)
+        
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
         """Reset the agent's internal state to its initial condition.
         Called by the orchestrator, e.g., between different runs using the same agent instance.

@@ -153,6 +153,7 @@ class SlackUIAgent(UIAgent):
 
     async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
         """Initialize the interface and register handlers"""
+        super().initialize(session_id=session_id, **kwargs)
         self.callback_to_groupchat = callback_to_groupchat
 
         _active_thread_registry[self.context.thread_ts] = self

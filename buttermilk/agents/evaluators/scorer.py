@@ -122,8 +122,16 @@ class LLMScorer(LLMAgent):
             input_mappings=self.inputs,
         )
 
+        # Ignore messages that don't have ground truth in the input record
+        record = extracted.pop("records", [])
+        if not record or not isinstance(record, list) or not record[0].ground_truth:
+            logger.debug(f"Scorer {self.agent_name} received message from agent {source} without ground truth.")
+            return
+        # Extract the first record
+        record = record[0]
+
         # Create an AgentInput with minimal state
-        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=extracted.pop("records"), inputs=extracted)
+        scorer_agent_input = AgentInput(parent_call_id=message.call_id, records=[record], inputs=extracted)
 
         # Define the scoring function (our own invoke method)
         score_fn = self.invoke

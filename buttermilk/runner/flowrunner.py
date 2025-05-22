@@ -18,6 +18,7 @@ from buttermilk._core import (
 )
 from buttermilk._core.agent import ErrorEvent
 from buttermilk._core.config import SaveInfo
+from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
     FlowEvent,
@@ -279,7 +280,7 @@ class FlowRunner(BaseModel):
         """
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
-
+        
         # set a high max callback duration when dealing with LLMs
         asyncio.get_event_loop().slow_callback_duration = 120
 
@@ -288,7 +289,7 @@ class FlowRunner(BaseModel):
         if run_request.session_id not in self.sessions:
             # Create a new session if it doesn't exist
             self.sessions[run_request.session_id] = FlowRunContext(session_id=run_request.session_id)
-
+        set_logging_context(run_request.session_id)
         _session = self.sessions[run_request.session_id]
         _session.flow_name = run_request.flow
         _session.orchestrator = fresh_orchestrator

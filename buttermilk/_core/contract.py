@@ -23,6 +23,7 @@ from pydantic import (
     field_validator,
 )
 
+from buttermilk._core.context import session_id_var
 from buttermilk.utils.utils import clean_empty_values
 from buttermilk.utils.validators import convert_omegaconf_objects, make_list_validator  # Pydantic validators
 
@@ -291,7 +292,7 @@ class AgentTrace(FlowMessage, AgentOutput):
 
     run_info: Any = Field(default_factory=_get_run_info)
     agent_info: AgentConfig = Field(..., description="Configuration info from the agent (required)")
-    session_id: str = Field(..., description="Unique identifier for client session")
+    session_id: str = Field(default_factory=session_id_var.get, description="Unique identifier for client session")
 
     # Tracing information and call metadata.
     parent_call_id: str | None = Field(default=None)
