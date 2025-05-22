@@ -40,6 +40,7 @@ class FlowEvent(BaseModel):
     call_id: str = Field(default=uuid.uuid4().hex, description="Unique identifier for the event.")
     source: str = Field(default="server", description="Identifier of the message source (e.g., agent ID).")
     content: str = Field(..., description="The main content of the event message.")
+    agent_info: AgentConfig = Field(default=None, description="Configuration info from the agent if applicable.")
 
     def __str__(self) -> str:
         return self.content
@@ -48,6 +49,22 @@ class FlowEvent(BaseModel):
     @property
     def is_error(self) -> bool:
         return False
+
+    @field_validator("agent_info", mode="before")
+    @classmethod
+    def _validate_agent_info(cls, value) -> AgentConfig | None:
+        if not value:
+            # Attempt to get the agent info from the current session context.
+            # get_agent_info = agent_id_var.get()
+            # if get_agent_info:
+                # TODO: We maintain a registry of sessions by session_id somewhere. Let's find
+                # a way to maintain a registry of agents by agent_id in that registry, and
+                # use it to automatically populate the agent_info field here and in other
+                # relevant classes.
+                # This will help us avoid having to pass agent_info around in the message
+                # and make it easier to access agent-specific information.
+            return AgentConfig(**value)
+        return value
 
 
 class ErrorEvent(FlowEvent):

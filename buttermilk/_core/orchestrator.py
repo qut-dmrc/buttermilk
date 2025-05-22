@@ -178,7 +178,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                      or parameters for the flow.
 
         """
-        display_name = f"{self.__repr_name__()} {self.name} {request.name}"
+        display_name = f"{self.name} {request.name}"
         logger.info(f"Starting run for orchestrator flow {display_name}.")
 
         # Get the singleton instance using our new module-level function

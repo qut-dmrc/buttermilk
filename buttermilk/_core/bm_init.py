@@ -332,7 +332,10 @@ class BM(SessionInfo):
         # Set up console logging
         context_filter = ContextFilter()
         logger.addFilter(context_filter)
-        console_format = "%(asctime)s %(hostname)s %(name)s [%(session_id)s:%(agent_id)s] %(filename)s:%(lineno)d %(levelname)s %(message)s"
+        # Original format: "%(asctime)s %(hostname)s %(name)s [%(session_id)s:%(agent_id)s] %(filename)s:%(lineno)d %(levelname)s %(message)s"
+        # Shorter: Timestamp [short_context] LEVEL filename: Message
+        console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
+
         coloredlogs.install(
             logger=logger,
             fmt=console_format,

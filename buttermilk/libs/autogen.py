@@ -175,7 +175,7 @@ class AutogenAgentAdapter(RoutedAgent):
                 source=str(ctx.sender).split("/", maxsplit=1)[0] or "unknown",  # Extract sender ID
             )
         except Exception as e:
-            msg = f"Error during agent {self.agent.agent_id} listening to group chat message: {e}"
+            msg = f"Error listening to chat message: {e}"
             logger.error(msg, exc_info=False)
             await public_callback(ErrorEvent(source=self.agent.agent_id, content=msg))
 

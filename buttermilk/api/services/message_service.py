@@ -112,7 +112,6 @@ class MessageService:
             elif isinstance(message, UIMessage):
                 message_type = "ui_message"
             elif isinstance(message, AssistantMessage):
-                # Convert to UIMessage
                 message_type = "chat_message"
                 preview = str(message.content)[:PREVIEW_LENGTH]
             elif isinstance(message, FlowProgressUpdate):
@@ -123,7 +122,7 @@ class MessageService:
                 return None
             else:
                 logger.warning(f"Unknown message type: {type(message)}")
-                return None
+                message_type = "chat_message"
 
             # Repackage
             output = ChatMessage(
