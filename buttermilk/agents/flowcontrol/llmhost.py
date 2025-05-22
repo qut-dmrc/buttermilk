@@ -1,4 +1,3 @@
-
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from enum import StrEnum
@@ -16,6 +15,19 @@ from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 
 TRUNCATE_LEN = 1000
+
+
+class CallOnAgentArgs(BaseModel):
+    """Arguments for the _call_on_agent tool."""
+
+    role: str = Field(
+        ...,
+        description="The role of the agent to call on. This should be one of the available participant roles.",
+    )
+    prompt: str = Field(
+        ...,
+        description="The prompt to send to the agent.",
+    )
 
 
 class CallOnAgent(BaseModel):
@@ -91,11 +103,11 @@ class LLMHostAgent(LLMAgent, HostAgent):
             # If the message is from the manager, we need to process it
 
             # Assemble our list of participants as tools
-
             participant_names = list(self._participants.keys())
+            # Define the enum type dynamically
             RoleEnumType = StrEnum("RoleEnumType", {name: name for name in participant_names})
 
-            async def _call_on_agent(role: RoleEnumType, prompt: str) -> None:
+            async def _call_on_agent(role: str, prompt: str) -> None:
                 """Call on another agent to perform an action."""
                 # Create a new message for the agent
                 choice = StepRequest(role=role, inputs={"prompt": prompt})
@@ -107,15 +119,12 @@ class LLMHostAgent(LLMAgent, HostAgent):
                 description="Call on another agent to perform an action.",
             )
             tool._signature = tool._signature.replace(
-                parameters=tool._signature.parameters | {
+                parameters={
                     "role": RoleEnumType,
                     "prompt": str,
                 },
             )
             self.tools_list = [tool]
-            
-            # Use the Pydantic model as the args_schema for the FunctionTool
-            self._tools_list = [FunctionTool(_call_on_agent, description="Call on another agent to perform an action.", args_schema=CallOnAgentArgs)]
 
             # With user feedback, call the LLM to get the next step
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)

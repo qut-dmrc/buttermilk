@@ -103,7 +103,17 @@ class FetchAgent(FetchRecord, Agent):
             record_id = message.inputs.get("record_id")
             if uri or record_id:
                 result = await self.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
-
+        elif isinstance(message, GroupchatMessageTypes):
+            # Check if the message is a command
+            match = self._pat.search(message.content)
+            if match:
+                # Extract the record_id or URL from the message
+                record_id = match.group(1)
+                uri = match.group(2)
+                if uri:
+                    result = await self.fetch(uri=uri)
+                elif record_id:
+                    result = await self.fetch(record_id=record_id)
         if result and isinstance(result, Record):
             output = AgentOutput(agent_id=self.agent_id,
                 outputs=result,

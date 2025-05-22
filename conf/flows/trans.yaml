@@ -11,6 +11,7 @@ defaults:
     - spy
     - owl
     - scorer
+    - fetch
     - host/sequencer
   - criteria@parameters.criteria: trans
   

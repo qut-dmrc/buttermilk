@@ -5,4 +5,4 @@ fetch:
   description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
   data: ${...data}
   inputs:
-    prompt: prompt
+    prompt: 'prompt||content'
