@@ -185,12 +185,11 @@
       "justMyCode": true,
       "args": [
         "hydra.verbose=false",
-        "+flows=[panel]",
-        "flow=panel",
+        "+flows=[trans]",
+        "+flow=trans",
         "record_id=NCAA_transgender_athletes",
         "+run=console",
         "llms=lite",
-        "++name=panel",
         //"+record_id=${input:query}" // Will prompt for query
       ],
       "envFile": "${workspaceFolder}/.env",

@@ -156,7 +156,7 @@ def extract_main_content_bs(html: bytes | str) -> str:
             "nav",
             "iframe",
             "aside",
-        ]
+        ],
     ):
         element.decompose()
 

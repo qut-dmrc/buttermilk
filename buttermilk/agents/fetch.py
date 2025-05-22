@@ -114,6 +114,9 @@ class FetchAgent(FetchRecord, Agent):
                     result = await self.fetch(uri=uri)
                 elif record_id:
                     result = await self.fetch(record_id=record_id)
+            elif uri := extract_url(message.content):
+                result = await self.fetch(uri=uri)
+
         if result and isinstance(result, Record):
             output = AgentOutput(agent_id=self.agent_id,
                 outputs=result,

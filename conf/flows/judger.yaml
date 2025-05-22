@@ -6,8 +6,6 @@ defaults:
   - /agents:
       - judge
   - /agents@observers:
-      - scorer
-      - spy
       - host/sequencer
   - criteria@parameters.criteria: trans
 
