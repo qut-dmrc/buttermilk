@@ -183,7 +183,6 @@ class Agent(AgentConfig):
         logger.debug(f"Agent {self.agent_name} received input via __call__.")
 
         # --- Tracing ---
-
         trace_params = {"name": self.agent_name, "model": self._cfg.parameters.get("model"), **message.parameters, **message.metadata, **self.parameters}
 
         # Get the trace context if necessary
@@ -205,7 +204,7 @@ class Agent(AgentConfig):
             parent_call._children.append(child_call)  # Nest this call for tracing
             result = await self._process(message=message)
             result.call_id = child_call.id
-            return result
+            result.tracing_link = child_call.ui_url
 
         finally:
             if child_call:
@@ -246,7 +245,7 @@ class Agent(AgentConfig):
 
         # Create the trace here with required values
         trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
-            agent_info=self._cfg,
+            agent_info=self._cfg, tracing_link=result.tracing_link,
             inputs=final_input, parent_call_id=final_input.parent_call_id,
         )
         trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available

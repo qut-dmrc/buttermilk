@@ -171,7 +171,7 @@ class ToolConfig(BaseModel):
         """Create function definitions for this tool."""
         raise NotImplementedError
 
-    async def _run(self, **kwargs) -> list[Any] | None:
+    async def fetch(self, **kwargs) -> list[Any] | None:
         raise NotImplementedError
 
 
@@ -408,7 +408,7 @@ class AgentVariants(AgentConfig):
                         agent_config_instance = AgentConfig(**cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(msg:=f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
+                        logger.error(msg := f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
                         raise FatalError(msg) from e  # Re-raise by default
 
         if not generated_configs:  # Check if list is empty

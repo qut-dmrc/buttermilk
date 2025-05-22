@@ -97,7 +97,7 @@ class RagZot(LLMAgent, ToolConfig):
         search_tool = FunctionTool(
             name="search",
             description=self.description,
-            func=self._run,
+            func=self.fetch,
             strict=False,
         )
 
@@ -116,7 +116,7 @@ class RagZot(LLMAgent, ToolConfig):
     def config(self) -> list[FunctionCall | Tool | ToolSchema | FunctionTool]:
         return self._tools_list
 
-    async def _run(self, queries: list[str]) -> list[ToolOutput]:
+    async def fetch(self, queries: list[str]) -> list[ToolOutput]:
         """Execute multiple search queries concurrently and return all results."""
         if not queries or not self._vectorstore:
             raise ValueError("No queries provided or vector store not initialized.")

@@ -4,7 +4,6 @@
 from typing import Any, Self  # Added Type for Pydantic model hinting
 
 import pydantic
-import weave
 
 # Import Autogen components used for type hints and LLM interaction
 from autogen_core import CancellationToken, FunctionCall
@@ -17,12 +16,10 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import buttermilk as bm  # Global Buttermilk instance
 
 # Buttermilk core imports
-from buttermilk._core.agent import Agent  # Base agent and message types
+from buttermilk._core.agent import Agent, UserMessage  # Base agent and message types
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
-    AgentTrace,
-    # TODO: Review necessary contract types for this base class
     ErrorEvent,
     LLMMessage,  # Type hint for message lists
 )
@@ -33,6 +30,7 @@ from buttermilk._core.types import Record  # Data record type
 from buttermilk.utils._tools import create_tool_functions  # Tool handling utility
 from buttermilk.utils.json_parser import ChatParser  # JSON parsing utility
 from buttermilk.utils.templating import (
+    SystemMessage,
     _parse_prompty,  # Prompty parsing utility
     load_template,  # Template loading utility
     make_messages,  # Message list creation utility
@@ -179,96 +177,6 @@ class LLMAgent(Agent):
         logger.debug(f"Agent {self.agent_name}: Template '{template_name}' rendered into {len(messages)} messages.")
         return messages
 
-    def make_trace(
-        self,
-        chat_result: CreateResult,  # Raw result from the LLM client wrapper.
-        inputs: AgentInput,  # Original AgentInput that triggered this call.
-        messages: list[LLMMessage] = [],  # Messages sent to the LLM.
-        schema: type[BaseModel] | None = None,  # Optional Pydantic schema for validation.
-    ) -> AgentTrace:
-        """Constructs a standardized AgentTrace message from the LLM response.
-
-        Parses the LLM content, attempts validation against the schema if provided,
-        and populates the AgentTrace fields.
-
-        Args:
-            chat_result: The CreateResult object from `AutoGenWrapper.call_chat`.
-            inputs: The original AgentInput that triggered this call.
-            messages: The list of messages sent to the LLM.
-            prompt: The original prompt text from the AgentInput.
-            schema: The Pydantic model to validate the LLM output against (_output_model).
-
-        Returns:
-            An AgentTrace message containing the processed results and metadata.
-
-        """
-        output = AgentTrace(agent_id=self.agent_id, session_id=self.session_id,
-            agent_info=self._cfg,  # Include agent information
-            inputs=inputs,
-            messages=messages,  # Messages sent to LLM
-            # Store LLM usage info (tokens, cost) and other metadata from CreateResult.
-            # Exclude raw content and object type which are handled below.
-            metadata=chat_result.model_dump(exclude={"content", "object"}),
-        )
-
-        parsed_object = None
-        parse_error = None
-
-        # Get tracing link
-        call = weave.get_current_call()
-        if call and hasattr(call, "ui_url"):
-            output.tracing_link = call.ui_url
-            # replace call id in our trace with Weave call id
-            output.call_id = call.id or output.call_id
-        else:
-            logger.warning(f"Agent {self.agent_name}: No Weave call context found. Tracing link not set.")
-
-        # 1. Handle structured output validation first (if schema is defined)
-        if schema:
-            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
-                # If client already parsed into the correct schema object
-                parsed_object = chat_result.object
-            elif isinstance(chat_result.content, str):
-                # If content is a string, try to parse/validate it against the schema
-                logger.debug(f"Agent {self.agent_name}: Attempting to parse LLM content into schema {schema.__name__}.")
-                try:
-                    # Use Pydantic's model_validate_json for robust parsing from JSON string.
-                    parsed_object = schema.model_validate_json(chat_result.content)
-                    logger.debug(f"Agent {self.agent_name}: Successfully parsed content into schema {schema.__name__}.")
-                except Exception as e:
-                    # Log schema validation/parsing error
-                    parse_error = f"Error parsing LLM response into {schema.__name__}: {e}."
-                    logger.warning(f"Agent {self.agent_name}: {parse_error}")
-            else:
-                # Content is not string and not pre-parsed object, schema validation fails.
-                parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
-                raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
-
-        # 2. Store the result in output.outputs
-        if parsed_object is not None:
-            output.outputs = parsed_object  # Store the validated Pydantic object
-        elif isinstance(chat_result.content, str):
-            # If no schema or schema validation failed, try parsing as generic JSON
-            logger.debug(f"Agent {self.agent_name}: Attempting generic JSON parsing of LLM content.")
-            try:
-                output.outputs = self._json_parser.parse(chat_result.content)
-                logger.debug(f"Agent {self.agent_name}: Successfully parsed content as generic JSON.")
-            except ProcessingError:
-                # If generic JSON parsing also fails, treat as a chat message
-                if isinstance(chat_result, AssistantMessage):
-                    # If the content is already an AssistantMessage, use it directly
-                    output.outputs = chat_result
-                else:
-                    output.outputs = AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id)
-        elif chat_result.content is not None:
-            # Content is not None, not string - raise.
-            raise ProcessingError(f"Agent {self.agent_id}: LLM response content is not a string ({type(chat_result.content)}).")
-        else:
-            # Content is None
-            raise ProcessingError(f"Agent {self.agent_id}: LLM response content is None.")
-
-        return output
-
     # This is the primary method subclasses should override.
     async def _process(self, *, message: AgentInput,
         cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
@@ -282,7 +190,7 @@ class LLMAgent(Agent):
             An AgentOutput message with the LLM response and metadata.
 
         Raises:
-            ProcessingError: If template filling fails and `fail_on_unfilled_parameters` is True.
+            ProcessingError: If template filling fails.
             Exception: If the LLM call itself fails unexpectedly.
 
         """
@@ -309,35 +217,69 @@ class LLMAgent(Agent):
         # 2. Call the LLM
         logger.debug(f"Agent {self.agent_name}: Sending {len(llm_messages)} messages to model '{self._model}'.")
         try:
-            llm_result: CreateResult = await self._model_client.call_chat(
+            chat_result: CreateResult = await self._model_client.call_chat(
                 messages=llm_messages,
                 tools_list=self._tools_list,
                 cancellation_token=cancellation_token,
                 schema=self._output_model,  # Pass expected schema to client if supported
             )
-            llm_messages.append(AssistantMessage(content=llm_result.content, thought=llm_result.thought, source=self.agent_id))
-            logger.debug(f"Agent {self.agent_name}: Received response from model '{self._model}'. Finish reason: {llm_result.finish_reason}")
+            llm_messages.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
+            logger.debug(f"Agent {self.agent_name}: Received response from model '{self._model}'. Finish reason: {chat_result.finish_reason}")
         except Exception as llm_error:
             # Catch errors during the actual LLM call
             msg = f"Agent {self.agent_id}: Error during LLM call to '{self._model}': {llm_error}"
             raise ProcessingError(msg) from llm_error
 
-        # 3. Create the standardized AgentTrace
-        # TODO: Fix. this is dumb, we make a trace object just to process the output
-        # and put the output into the more primitive AgentOutput object
-        trace = self.make_trace(
-            chat_result=llm_result,
-            inputs=message,  # Pass AgentInput
-            messages=llm_messages,  # Pass messages sent
-            schema=self._output_model,  # Pass schema used for validation attempt
-        )
-        # Add agent role/name for context in logs/outputs
-        trace.metadata.update({"role": self.role, "name": self.agent_name})
+        # 3. Parse the LLM response and create an AgentOutput
+        parsed_object = None
+        if schema := self._output_model:
+            if isinstance(chat_result, ModelOutput) and isinstance(chat_result.object, schema):
+                # If client already parsed into the correct schema object
+                parsed_object = chat_result.object
+            elif isinstance(chat_result.content, str):
+                # If content is a string, try to parse/validate it against the schema
+                logger.debug(f"Agent {self.agent_name}: Attempting to parse LLM content into schema {schema.__name__}.")
+                try:
+                    # Use Pydantic's model_validate_json for robust parsing from JSON string.
+                    parsed_object = schema.model_validate_json(chat_result.content)
+                    logger.debug(f"Agent {self.agent_name}: Successfully parsed content into schema {schema.__name__}.")
+                except Exception as e:
+                    # Log schema validation/parsing error
+                    parse_error = f"Error parsing LLM response into {schema.__name__}: {e}."
+                    logger.debug(f"Agent {self.agent_name}: {parse_error}")
+            else:
+                # Content is not string and not pre-parsed object, schema validation fails.
+                parse_error = f"LLM response content type ({type(chat_result.content)}) is incompatible with schema {schema.__name__}."
+                raise ProcessingError(f"Agent {self.agent_name}: {parse_error}")
 
-        # 4. Wrap the trace in an AgentOutput
+        if parsed_object is None:
+            if isinstance(chat_result.content, str):
+                # If no schema or schema validation failed, try parsing as generic JSON
+                logger.debug(f"Agent {self.agent_name}: Attempting generic JSON parsing of LLM content.")
+                try:
+                    parsed_object = self._json_parser.parse(chat_result.content)
+                    logger.debug(f"Agent {self.agent_name}: Successfully parsed content as generic JSON.")
+                except ProcessingError:
+                    # If generic JSON parsing also fails, treat as a chat message
+                    if isinstance(chat_result, (AssistantMessage, SystemMessage, UserMessage)):
+                        # If the content is already an AssistantMessage, use it directly
+                        parsed_object = chat_result
+                    else:
+                        outputs = AssistantMessage(content=chat_result.content,
+                                                   thought=chat_result.thought,
+                                                   source=self.agent_id)
+            else:
+                # Content is not parseable
+                raise ProcessingError(f"Agent {self.agent_id} was unable to parse LLM response content of type: ({type(chat_result.content)}).")
+
+        # Add agent role/name for context in logs/outputs
+        metadata = chat_result.model_dump(exclude={"content", "object"})
+        metadata.update({"role": self.role, "name": self.agent_name})
+
+        # Return an AgentOutput
         response = AgentOutput(agent_id=self.agent_id,
-            metadata=trace.metadata,
-            outputs=trace.outputs,
+            metadata=metadata,
+            outputs=parsed_object,
         )
 
         logger.debug(f"Agent {self.agent_name} finished _process.")

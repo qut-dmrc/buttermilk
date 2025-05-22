@@ -13,13 +13,8 @@ from buttermilk._core.config import ToolConfig
 from buttermilk._core.constants import COMMAND_SYMBOL
 from buttermilk._core.contract import (
     AgentInput,
-    AgentTrace,
     ErrorEvent,
     GroupchatMessageTypes,
-    ManagerMessage,
-    StepRequest,
-    ToolOutput,
-    UIMessage,
 )
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
@@ -43,15 +38,15 @@ class FetchRecord(ToolConfig):
         if not self._fns:
             self._fns = [
                 FunctionTool(
-                    self._run,
+                    self.fetch,
                     description=self.description,
-                    name=self.role,
+                    name="FetchRecord",
                     strict=False,
                 ),
             ]
         return self._fns
 
-    async def _run(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> Record | ErrorEvent:  # type: ignore
+    async def fetch(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> Record | ErrorEvent:  # type: ignore
         """Entry point when running as a tool."""
         record = None
         if prompt and not record_id and not uri:
@@ -61,6 +56,7 @@ class FetchRecord(ToolConfig):
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
         result = None
         if record_id:
+            # This breaks now because the code was moved to Orchestrator
             record = await self._get_record_dataset(record_id)
             if record:
                 # Ensure metadata exists and add provenance
@@ -106,7 +102,7 @@ class FetchAgent(FetchRecord, Agent):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                result = await self._run(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
+                result = await self.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
 
         if result and isinstance(result, Record):
             output = AgentOutput(agent_id=self.agent_id,
@@ -115,13 +111,14 @@ class FetchAgent(FetchRecord, Agent):
             )
             await public_callback(output)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentTrace | StepRequest | UIMessage | ManagerMessage | ToolOutput | ErrorEvent:
+    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ErrorEvent:
+        """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
         if isinstance(message, AgentInput):
             uri = message.inputs.get("uri")
             record_id = message.inputs.get("record_id")
             if uri or record_id:
-                result = await self._run(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
+                result = await self.fetch(record_id=record_id, uri=uri, prompt=message.inputs.get("prompt"))
 
         if result:
             return result
