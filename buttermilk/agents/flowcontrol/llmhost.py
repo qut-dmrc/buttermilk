@@ -102,7 +102,20 @@ class LLMHostAgent(LLMAgent, HostAgent):
                 # Send the message to the agent
                 await self.callback_to_groupchat(choice)
 
-            self._tools_list = [FunctionTool(_call_on_agent, description="Call on another agent to perform an action.")]
+            tool = FunctionTool(
+                func=_call_on_agent,
+                description="Call on another agent to perform an action.",
+            )
+            tool._signature = tool._signature.replace(
+                parameters=tool._signature.parameters | {
+                    "role": RoleEnumType,
+                    "prompt": str,
+                },
+            )
+            self.tools_list = [tool]
+            
+            # Use the Pydantic model as the args_schema for the FunctionTool
+            self._tools_list = [FunctionTool(_call_on_agent, description="Call on another agent to perform an action.", args_schema=CallOnAgentArgs)]
 
             # With user feedback, call the LLM to get the next step
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
