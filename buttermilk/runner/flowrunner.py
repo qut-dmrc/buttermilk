@@ -105,7 +105,7 @@ class FlowRunContext(BaseModel):
             message_data_to_send = formatted_message.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
             @retry(
-                stop=stop_after_attempt(3),  # Try 3 times in total (1 initial + 2 retries)
+                stop=stop_after_attempt(30),  # Try 30 times in total (1 initial + 29 retries)
                 wait=wait_fixed(2),          # Wait 2 seconds between attempts
                 retry=retry_if_exception_type(Exception),  # Retry on any exception during send
                 reraise=True,                # Reraise the last exception if all retries fail
@@ -280,7 +280,7 @@ class FlowRunner(BaseModel):
         """
         # Create a fresh orchestrator instance
         fresh_orchestrator = self._create_fresh_orchestrator(run_request.flow)
-        
+
         # set a high max callback duration when dealing with LLMs
         asyncio.get_event_loop().slow_callback_duration = 120
 

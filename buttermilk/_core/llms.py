@@ -135,7 +135,7 @@ class AutoGenWrapper(RetryWrapper):
         schema: type[BaseModel] | None = None,
         cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> CreateResult | list[ToolOutput]:
+    ) -> CreateResult:
         """Rate-limited version of the underlying client's create method with retries"""
         try:
             is_valid_schema_type = (

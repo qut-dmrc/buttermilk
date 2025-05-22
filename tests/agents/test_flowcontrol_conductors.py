@@ -53,7 +53,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     assert isinstance(result1.outputs, StepRequest)
     assert result1.outputs.role == "AGENT1"
     assert sequencer._participants == conductor_request.inputs.get("participants")
-    assert sequencer._current_step_name == "AGENT1"
+    assert sequencer._current_step == "AGENT1"
     assert not sequencer._step_completion_event.is_set()  # Should be cleared for next step
 
     # Act again for second step (simulate previous step completing)
@@ -64,7 +64,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     assert isinstance(result2, AgentTrace)
     assert isinstance(result2.outputs, StepRequest)
     assert result2.outputs.role == "AGENT2"
-    assert sequencer._current_step_name == "AGENT2"
+    assert sequencer._current_step == "AGENT2"
 
     # Act again for END step
     sequencer._step_completion_event.set()
@@ -74,7 +74,7 @@ async def test_sequencer_get_next_step(conductor_request: ConductorRequest):
     assert isinstance(result3, AgentTrace)
     assert isinstance(result3.outputs, StepRequest)
     assert result3.outputs.role == END
-    assert sequencer._current_step_name == END
+    assert sequencer._current_step == END
 
 
 # --- LLMHostAgent Tests ---
@@ -91,7 +91,7 @@ def mock_llm_host_agent() -> LLMHostAgent:
         agent._process = AsyncMock(name="_process")
         agent._check_completions = AsyncMock(name="_check_completions")
         agent._step_completion_event = asyncio.Event()
-        agent._current_step_name = "previous_step"
+        agent._current_step = "previous_step"
         # Add other necessary attributes if needed by _get_next_step
         agent.parameters = {}  # Mock parameters dict
         agent._records = []
@@ -126,7 +126,7 @@ async def test_llm_host_agent_get_next_step_calls_process(mock_llm_host_agent: L
     # LLMHostAgent._get_next_step should return the output from _process
     assert result_output == mock_output_from_process
     # Verify completion tracking reset (assuming _process output is valid StepRequest)
-    assert mock_llm_host_agent._current_step_name == "NEXT_AGENT"
+    assert mock_llm_host_agent._current_step == "NEXT_AGENT"
     assert not mock_llm_host_agent._step_completion_event.is_set()
 
 
@@ -162,7 +162,7 @@ async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LL
     assert isinstance(result3.outputs, StepRequest)
     assert result3.outputs.role == "OTHER_AGENT"
     # Verify current step is updated
-    assert mock_llm_host_agent._current_step_name == "OTHER_AGENT"
+    assert mock_llm_host_agent._current_step == "OTHER_AGENT"
 
 
 # Removed redundant _handle_events tests (covered in test_conductor_routing.py)

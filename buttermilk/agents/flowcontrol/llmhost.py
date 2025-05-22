@@ -9,8 +9,9 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from buttermilk._core import StepRequest
 from buttermilk._core.agent import ManagerMessage
-from buttermilk._core.constants import END, MANAGER
+from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
+from buttermilk._core.log import logger
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 from buttermilk.utils._tools import create_tool_functions
@@ -77,6 +78,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
             """Call on another agent to perform an action."""
             # Create a new message for the agent
             choice = StepRequest(role=role, inputs={"prompt": prompt})
+            logger.info(f"Host {self.agent_name} calling on agent: {role} with prompt: {prompt}")
             # Send the message to the agent
             await self.callback_to_groupchat(choice)
 
@@ -127,6 +129,9 @@ class LLMHostAgent(LLMAgent, HostAgent):
         )
         if isinstance(message, ManagerMessage):
             # If the message is from the manager, we need to process it
+            # Unless it's a command for another agent or something
+            if message.content and str(message.content).startswith(COMMAND_SYMBOL):
+                return
 
             # With user feedback, call the LLM to get the next step
             result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)

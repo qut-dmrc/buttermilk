@@ -4,6 +4,7 @@ defaults:
   - /data: tja_train 
   - _self_ 
   - /agents:
+    - fetch
     - judge
     - synth
     - differences
@@ -11,7 +12,6 @@ defaults:
     - spy
     - owl
     - scorer
-    - fetch
     - host/selector
   - criteria@parameters.criteria: trans
   
@@ -19,4 +19,4 @@ orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "TJA"
 description: Applies criteria from advocacy and journalism organisations for high quality reporting on trans issues.
 parameters:
-  human_in_loop: ${run.human_in_loop} 
+  human_in_loop: true

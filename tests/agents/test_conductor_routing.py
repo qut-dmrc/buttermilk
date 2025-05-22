@@ -37,8 +37,8 @@ class TestConductorRouting:
             # Mock methods called by _handle_events
             sequencer._get_next_step = AsyncMock(name="_get_next_step")
             sequencer._check_completions = AsyncMock(name="_check_completions")
-            # Add necessary attributes if _handle_events reads them (e.g., _current_step_name)
-            sequencer._current_step_name = "some_step"
+            # Add necessary attributes if _handle_events reads them (e.g., _current_step)
+            sequencer._current_step = "some_step"
 
         # Act: Call the method under test
         await sequencer._handle_events(conductor_request)
@@ -54,7 +54,7 @@ class TestConductorRouting:
             host = LLMHostAgent()
             host._get_next_step = AsyncMock(name="_get_next_step")
             host._check_completions = AsyncMock(name="_check_completions")  # If LLMHostAgent uses it
-            host._current_step_name = "some_step"  # Add needed attributes
+            host._current_step = "some_step"  # Add needed attributes
 
         # Act
         await host._handle_events(conductor_request)
@@ -71,7 +71,7 @@ class TestConductorRouting:
             # Explorer inherits from LLMHostAgent, mock same methods
             explorer._get_next_step = AsyncMock(name="_get_next_step")
             explorer._check_completions = AsyncMock(name="_check_completions")  # If inherited/used
-            explorer._current_step_name = "some_step"  # Add needed attributes
+            explorer._current_step = "some_step"  # Add needed attributes
 
         # Act
         await explorer._handle_events(conductor_request)

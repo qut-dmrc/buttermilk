@@ -8,6 +8,7 @@ from buttermilk._core.constants import WAIT
 from buttermilk._core.contract import (
     AgentInput,
     AgentOutput,
+    AgentTrace,
     ConductorRequest,
     StepRequest,
 )
@@ -206,7 +207,7 @@ class ExplorerHost(LLMHostAgent):
             self._exploration_path.append(execution_id)
         self._exploration_results[execution_id] = {
             "id": output.call_id,
-            "role": self._current_step_name or "unknown",  # Use current step name if available
+            "role": self._current_step or "unknown",  # Use current step name if available
             "inputs": getattr(output, "inputs", {}),
             "outputs": getattr(output, "outputs", getattr(output, "contents", "")),
             "is_error": getattr(output, "is_error", False),

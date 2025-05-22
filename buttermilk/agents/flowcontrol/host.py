@@ -78,7 +78,6 @@ class HostAgent(Agent):
         super().initialize(**kwargs)
         self.callback_to_groupchat = callback_to_groupchat
 
-
     async def _listen(
         self,
         message: GroupchatMessageTypes,
@@ -103,7 +102,7 @@ class HostAgent(Agent):
             self._user_confirmation = message
             if message.confirm:
                 self._user_confirmation_received.set()
-            if message.human_in_loop is not None:
+            if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
                 logger.info(f"Host {self.agent_name} received user request to set human in the loop to {message.human_in_loop} (was {self.human_in_loop})")
                 self.human_in_loop = message.human_in_loop
             content = getattr(message, "content", getattr(message, "params", None))
@@ -260,7 +259,7 @@ class HostAgent(Agent):
                     else:
                          progress_message = FlowProgressUpdate(source=self.agent_id,
                             status="idle",
-                            step_name=self._current_step,
+                            step_name="IDLE",
                             waiting_on=dict(),
                             message="Flow currently idle",
                         )
