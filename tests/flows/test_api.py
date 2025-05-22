@@ -3,11 +3,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from buttermilk.api.flow import FlowRequest, app
+from buttermilk.api.flow import RunRequest, create_app
 
 
 @pytest.fixture(scope="session")
 def client():
+    app = create_app()
     return TestClient(app)
 
 
@@ -21,7 +22,7 @@ def flow_request_data():
         "uri": None,
         "media_b64": None,
     }
-    req = FlowRequest(**req_cfg)
+    req = RunRequest(**req_cfg)
     return req.model_dump()
 
 
@@ -30,7 +31,7 @@ def test_api_request_simple(
     client,
 ):
     resolved_req_cfg = {k: v() if callable(v) else v for k, v in flow_request_data.items()}
-    flow_request = FlowRequest(**resolved_req_cfg)
+    flow_request = RunRequest(**resolved_req_cfg)
     response = client.post("/flow/simple", json=flow_request.model_dump(mode="json"))
     assert response.status_code == 200
     json_response = response.json()

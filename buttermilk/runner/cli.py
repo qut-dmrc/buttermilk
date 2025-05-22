@@ -33,7 +33,6 @@ from buttermilk.api.job_queue import JobQueueClient
 
 # We'll initialize bm once configuration is available from Hydra
 from buttermilk.runner.flowrunner import FlowRunner
-from buttermilk.runner.slackbot import register_handlers
 
 
 async def create_batch(flow_runner: FlowRunner, flow: str, max_records: int | None = None) -> None:
@@ -81,7 +80,7 @@ async def run_batch_job(flow_runner: FlowRunner, max_jobs: int = 1) -> None:
                     raise FatalError("No run request found in the queue.")
                 break  # No more jobs to process
 
-            ui = CLIUserAgent(session_id=uuid4().hex)
+            ui = CLIUserAgent()
             run_request.callback_to_ui = ui.callback_to_ui
 
             logger.info(f"Processing batch job {jobs_processed + 1}/{max_jobs}: {run_request.flow} (Job ID: {run_request.job_id})")
@@ -125,16 +124,17 @@ def main(conf: DictConfig) -> None:
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
     set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
         case "console":
-            ui = CLIUserAgent(session_id=uuid4().hex)
+            ui = CLIUserAgent()
             # Prepare the RunRequest with command-line parameters
             run_request = RunRequest(ui_type=conf.ui,
                 flow=conf.get("flow"),
                 record_id=conf.get("record_id", ""),
                 prompt=conf.get("prompt", ""),
-                uri=conf.get("uri", ""), session_id=ui.session_id,
+                uri=conf.get("uri", ""),
                 callback_to_ui=ui.callback_to_ui,
             )
 
@@ -262,6 +262,7 @@ def main(conf: DictConfig) -> None:
                 """Registers handlers and keeps the main loop running for the Slack bot."""
                 # Register the specific Buttermilk command/event handlers with the Bolt app.
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
+                from buttermilk.runner.slackbot import register_handlers
                 await register_handlers(
                     slack_app=slack_app,
                     flows=flow_runner.flows,

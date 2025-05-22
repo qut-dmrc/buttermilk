@@ -118,11 +118,11 @@ class FetchAgent(FetchRecord, Agent):
                 result = await self.fetch(uri=uri)
 
         if result and isinstance(result, Record):
-            output = AgentOutput(agent_id=self.agent_id,
-                outputs=result,
-                metadata=result.metadata,
-            )
-            await public_callback(output)
+            # output = AgentOutput(agent_id=self.agent_id,
+            #     outputs=result,
+            #     metadata=result.metadata,
+            # )
+            await public_callback(result)
 
     async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput | ErrorEvent:
         """Process the message and return an AgentOutput or ErrorEvent."""

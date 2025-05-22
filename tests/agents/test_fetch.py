@@ -39,8 +39,8 @@ messages = [
     (
         "missing",
         AgentInput(
-            prompt="Get `#record123`",
-            inputs={"step": "testing"},
+
+            inputs={"step": "testing", "prompt": "Get `#record123`"},
         ),
     ),
 ]
@@ -51,7 +51,7 @@ class TestFetch:
 
     @pytest.fixture
     def fetch(self):
-        return FetchRecord(id="test_fetch", name="fetch", description="test only")
+        return FetchRecord(description="test only")
 
     @pytest.mark.anyio
     async def test_load_data(self, fetch):

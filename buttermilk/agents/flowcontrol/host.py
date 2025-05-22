@@ -58,7 +58,7 @@ class HostAgent(Agent):
     )
     _current_step: str = PrivateAttr(default="")
     max_user_confirmation_time: int = Field(
-        default=240,
+        default=1220,
         description="Maximum time to wait for agent responses in seconds",
     )
     human_in_loop: bool = Field(

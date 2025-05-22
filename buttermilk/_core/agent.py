@@ -16,7 +16,6 @@ from autogen_core import CancellationToken
 from autogen_core.model_context import ChatCompletionContext, UnboundedChatCompletionContext
 from autogen_core.models import AssistantMessage, UserMessage
 from pydantic import (
-    Field,
     PrivateAttr,
     computed_field,
 )
@@ -92,10 +91,6 @@ class Agent(AgentConfig):
     interface and state management logic. Subclasses must implement the
     `_process` method for their primary logic.
     """
-
-    session_id: str = Field(...,
-        description="A unique session id for this specific flow execution.",
-    )
 
     # --- Internal State ---
     _records: list[Record] = PrivateAttr(default_factory=list)  # Stores data records relevant to the agent.
@@ -236,7 +231,7 @@ class Agent(AgentConfig):
             result = await self.__call__(message=final_input)
 
             # Create the trace here with required values
-            trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
+            trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
                 agent_info=self._cfg, tracing_link=result.tracing_link,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
             )
@@ -245,7 +240,7 @@ class Agent(AgentConfig):
             logger.error(f"Agent {self.agent_name} error during __call__: {e}")
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
             is_error = True
-            trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
+            trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
                 agent_info=self._cfg,
                 inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result,
             )

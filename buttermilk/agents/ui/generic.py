@@ -33,17 +33,15 @@ class UIAgent(Agent):
     _input_task: asyncio.Task | None = PrivateAttr(default=None)
     _trace_this = False  # Controls whether this agent's messages are traced
 
-    async def initialize(self, session_id: str, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the UI agent with necessary callbacks and session info.
         
         Args:
-            session_id: Unique identifier for this UI session
             callback_to_groupchat: Callback function to send messages back to the group chat
             **kwargs: Additional parameters specific to the UI implementation
 
         """
-        self.session_id = session_id
-        logger.debug(f"Initializing {self.__class__.__name__} with session_id={self.session_id}")
+        logger.debug(f"Initializing {self.__class__.__name__}")
 
         # Store the callback to groupchat for later use
         self.callback_to_groupchat = callback_to_groupchat

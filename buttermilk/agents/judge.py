@@ -115,14 +115,6 @@ class Judge(LLMAgent):
         # This method handles template rendering, API calls, retries, and parsing into _output_model.
         response = await self._process(message=message)
 
-        # Create a new AgentTrace from the response
-        trace = AgentTrace(agent_id=self.agent_id, session_id=self.session_id,
-            agent_info=self._cfg,
-            inputs=message,
-            outputs=response.outputs,
-            metadata=response.metadata,
-        )
-
         return trace
 
     # Note: Other handlers (like _listen, _handle_events) can be added here if the Judge

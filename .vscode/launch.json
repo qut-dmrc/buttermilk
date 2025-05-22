@@ -153,29 +153,6 @@
       ],
     },
     {
-      "name": "fastapi web ui",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "buttermilk.runner.cli",
-      "cwd": "${workspaceFolder}",
-      "pythonArgs": [
-        "-Xfrozen_modules=off",
-        "-Xdev"
-      ],
-      "args": [
-        "hydra.verbose=false",
-        "+flows=trans",
-        "+run=api",
-        "llms=lite",
-        "name=bmdevelopment",
-        "job=api",
-        //"+record_id=${input:query}" // Will prompt for query
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": false,
-      "console": "integratedTerminal"
-    },
-    {
       "name": "cli interactive",
       "type": "debugpy",
       "request": "launch",
@@ -184,11 +161,7 @@
       "pythonArgs": ["-Xfrozen_modules=off", "-Xdev"],
       "justMyCode": true,
       "args": [
-        "hydra.verbose=false",
-        "+flows=[trans]",
-        "+flow=trans",
-        "record_id=NCAA_transgender_athletes",
-        "+run=console",
+        "+run=lv",
         "llms=lite",
         //"+record_id=${input:query}" // Will prompt for query
       ],

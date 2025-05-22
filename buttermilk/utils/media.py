@@ -68,9 +68,9 @@ async def download_and_convert(
         doc = extract_main_content(
             html=html or obj,
         )
+        content = "\n".join(doc.pop("paragraphs", []))
         # Add additional metadata to the record
-        content = metadata.pop("plain_text")
-        metadata.update(doc)
+        metadata.update({k: doc.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc.get(k)})
 
     elif b64:
         rec = read_image(data=b64)

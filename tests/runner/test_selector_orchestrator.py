@@ -6,9 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from buttermilk._core.contract import WAIT, AgentInput, AgentTrace, ConductorRequest, StepRequest
+from buttermilk._core.contract import AgentInput, AgentTrace, ConductorRequest, StepRequest
 from buttermilk._core.types import RunRequest
-from buttermilk.runner.selector import Selector
 
 
 @pytest.fixture

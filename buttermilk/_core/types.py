@@ -172,9 +172,6 @@ class Record(BaseModel):
         default="text/plain",
     )
 
-    def __str__(self) -> str:
-        return self.text
-
     @computed_field
     @property
     def images(self) -> list[Image] | None:
@@ -186,9 +183,7 @@ class Record(BaseModel):
             return images
         return None
 
-    @computed_field
-    @property
-    def text(self) -> str:
+    def as_markdown(self) -> str:
         """Combines metadata and text content into a single string.
 
         Excludes ground truth and component labels.
@@ -257,7 +252,7 @@ class Record(BaseModel):
     def as_message(self, role: Literal["user", "assistant"] = "user") -> UserMessage | AssistantMessage:
         if role == "assistant":
             # Assistant message content should likely be string representation
-            return AssistantMessage(content=self.text, source=self.record_id)
+            return AssistantMessage(content=self.as_markdown, source=self.record_id)
 
         # Ensure content matches UserMessage expected type (str | List[str | Image])
         message_content: str | list[str | Image]

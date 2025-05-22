@@ -174,7 +174,7 @@ class AssistantAgentWrapper(Agent):
             error=[error_msg] if error_msg else [],
         )
 
-    async def initialize(self, session_id: str, **kwargs) -> None:
+    async def initialize(self, **kwargs) -> None:
         """Initialize the agent (called by AutogenAgentAdapter)."""
         # Initialization logic is handled in the pydantic validator `init_assistant_agent`
         logger.debug(f"Agent {self.role} initialized.")

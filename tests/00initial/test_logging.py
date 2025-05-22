@@ -3,23 +3,19 @@ import uuid
 
 import pytest
 
-from buttermilk._core import BM, logger
-from buttermilk._core.dmrc import bm
-from buttermilk._core.log import logger  # noqa
+from buttermilk._core import BM
 
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
-
-bm = bm
 
 
 @pytest.fixture(scope="function")
 def logger_new(bm):
     bm.setup_logging()
-    logger = logger
-    yield logger
+    bm_logger = bm_logger
+    yield bm_logger
 
-    logger.info("Tearing test logger_new down.")
+    bm_logger.info("Tearing test logger_new down.")
 
 
 def test_error(capsys, logger_new):
@@ -41,7 +37,7 @@ async def test_warning(capsys, logger_new, bm: BM):
     await asyncio.sleep(5)
     from google.cloud.logging_v2 import DESCENDING
 
-    entries = bm.gcs_log_client.list_entries(
+    entries = bm.cloud_manager.gcs_log_client.list_entries(
         order_by=DESCENDING,
         max_results=100,
     )
@@ -61,7 +57,7 @@ def test_debug(capsys, logger_new):
 
 @pytest.fixture
 def cloud_logging_client_gcs(bm: BM):
-    return bm.gcs_log_client
+    return bm.cloud_manager.gcs_log_client
 
 
 def test_info(capsys, cloud_logging_client_gcs, logger_new):
