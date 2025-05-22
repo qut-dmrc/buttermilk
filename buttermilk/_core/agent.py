@@ -206,6 +206,7 @@ class Agent(AgentConfig):
             result.call_id = child_call.id
             result.tracing_link = child_call.ui_url
 
+            return result
         finally:
             if child_call:
                 # Mark the child call as complete, regardless of success or failure.
@@ -233,22 +234,26 @@ class Agent(AgentConfig):
 
         try:
             result = await self.__call__(message=final_input)
+
+            # Create the trace here with required values
+            trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
+                agent_info=self._cfg, tracing_link=result.tracing_link,
+                inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result.outputs,
+            )
+
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e}")
             result = ErrorEvent(source=self.agent_name, content=f"Failed to call agent: {e}")
             is_error = True
+            trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
+                agent_info=self._cfg,
+                inputs=final_input, parent_call_id=final_input.parent_call_id, outputs=result,
+            )
 
         # Publish status update: Task Complete (including error if error)
         await public_callback(
             TaskProcessingComplete(agent_id=self.agent_id, role=self.role, task_index=0, more_tasks_remain=False, is_error=is_error),
         )
-
-        # Create the trace here with required values
-        trace = AgentTrace(call_id=result.call_id, session_id=self.session_id, agent_id=self.agent_id,
-            agent_info=self._cfg, tracing_link=result.tracing_link,
-            inputs=final_input, parent_call_id=final_input.parent_call_id,
-        )
-        trace.outputs = getattr(result, "outputs", None)  # Extract outputs if available
 
         logger.debug(f"Agent {self.agent_name} {self.agent_name} finished task {message}.")
 

@@ -265,7 +265,7 @@ class LLMAgent(Agent):
                         # If the content is already an AssistantMessage, use it directly
                         parsed_object = chat_result
                     else:
-                        outputs = AssistantMessage(content=chat_result.content,
+                        parsed_object = AssistantMessage(content=chat_result.content,
                                                    thought=chat_result.thought,
                                                    source=self.agent_id)
             else:

@@ -113,8 +113,8 @@ class MessageService:
                 message_type = "ui_message"
             elif isinstance(message, AssistantMessage):
                 # Convert to UIMessage
-                message_type = "ui_message"
-                message = UIMessage(content=str(message.content), thought=message.thought)
+                message_type = "chat_message"
+                preview = str(message.content)[:PREVIEW_LENGTH]
             elif isinstance(message, FlowProgressUpdate):
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
