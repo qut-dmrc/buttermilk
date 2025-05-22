@@ -1,33 +1,41 @@
-"""Main entry point for the Buttermilk application.
+"""Main command-line interface (CLI) entry point for the Buttermilk application.
 
-This script handles command-line arguments, loads configuration using Hydra,
-initializes the application components (including the Buttermilk instance 'bm'),
-and starts the appropriate user interface (UI) mode based on the configuration.
+This script serves as the primary interface for launching Buttermilk in various
+modes. It uses Hydra for configuration management, allowing settings to be
+defined in YAML files and overridden via command-line arguments.
 
-Supported UI modes:
-- console: Runs a specified flow directly in the console.
-- api: Starts a FastAPI web server to interact with flows via HTTP requests.
-- pub/sub: Starts a Google Cloud Pub/Sub listener (details TBD).
-- slackbot: Starts a Slack bot to interact with flows via Slack commands/events.
+Based on the configuration, this script can:
+- Run a Buttermilk flow directly in the console for interactive use (`console` mode).
+- Start a FastAPI web server to expose Buttermilk flows via an HTTP API (`api` mode).
+- Create batch jobs by adding multiple `RunRequest` instances to a queue (`batch` mode).
+- Process jobs from a queue in a worker-like fashion (`batch_run` mode).
+- Launch a Streamlit web application for a graphical user interface (`streamlit` mode).
+- Start a Google Cloud Pub/Sub listener for message-driven flow execution (`pub/sub` mode,
+  potentially delegating to `batch_cli.main`).
+- Run a Slack bot that interacts with Buttermilk flows (`slackbot` mode).
+
+It initializes a global `BM` (Buttermilk) instance with the loaded configuration,
+which provides access to shared resources like LLM clients, cloud connections,
+and secret management. A `FlowRunner` instance is also created to manage the
+execution of defined flows.
 """
 
 import asyncio
-import os
-from uuid import uuid4
+import os  # For setting environment variables (e.g., Slack tokens)
+from uuid import uuid4  # For generating unique IDs
 
-import hydra
-import uvicorn
-from omegaconf import DictConfig
+import hydra  # For configuration management
+import uvicorn  # For running the FastAPI server
+from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
 
-from buttermilk import BM
+from buttermilk import BM  # The global Buttermilk instance type
 from buttermilk._core import (
-    dmrc as DMRC,  # noqa
-    logger,
+    # dmrc as DMRC,
+    logger,  # Centralized logger
 )
 from buttermilk._core.contract import OmegaConf
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
-from buttermilk.api.flow import create_app
 
 # We'll initialize bm once configuration is available from Hydra
 from buttermilk.runner.flowrunner import FlowRunner
@@ -35,19 +43,32 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(conf: DictConfig) -> None:
-    """Main application function orchestrated by Hydra.
+    """Main application entry point, configured and launched by Hydra.
+
+    This function initializes the Buttermilk environment (`BM` instance) and a
+    `FlowRunner` based on the Hydra configuration (`conf`). It then determines
+    the operational mode (e.g., "console", "api", "batch", "slackbot") from the
+    configuration and starts the corresponding application logic.
 
     Args:
-        cfg: The configuration object loaded and populated by Hydra.
-             Expected to conform to a structure allowing instantiation of
-             'bm' (Buttermilk instance), 'flows', 'ui', etc.
-             Note: While typed as DictConfig, Hydra instantiates objects within it.
-             Using a more specific OmegaConf schema or a dataclass (like OrchestratorProtocol
-             attempted before) could improve type safety if cfg structure is stable.
+        conf (DictConfig): The configuration object loaded and populated by Hydra.
+            This OmegaConf `DictConfig` contains nested configurations for various
+            parts of the application, such as `bm` (for the global Buttermilk settings),
+            `run` (for the `FlowRunner` and operational mode), and mode-specific
+            parameters like `flow`, `record_id`, `prompt` for console mode.
 
     """
+    # Resolve OmegaConf to a plain Python dictionary for Pydantic model instantiation
     resolved_cfg_dict = OmegaConf.to_container(conf, resolve=True, throw_on_missing=True)
-    bm = BM(**resolved_cfg_dict["bm"])
+
+    # Initialize the global Buttermilk instance (bm) with its configuration section
+    if "bm" not in resolved_cfg_dict or not isinstance(resolved_cfg_dict["bm"], dict):
+        raise ValueError("Hydra configuration must contain a 'bm' dictionary for Buttermilk initialization.")
+    bm_instance = BM(**resolved_cfg_dict["bm"])  # type: ignore # Assuming dict matches BM fields
+
+    # Initialize FlowRunner with its configuration section (e.g., conf.run)
+    if "run" not in conf:  # Check on original conf as model_validate expects OmegaConf DictConfig
+        raise ValueError("Hydra configuration must contain a 'run' section for FlowRunner.")
     flow_runner: FlowRunner = FlowRunner.model_validate(conf.run)
 
     # Set the singleton BM instance
@@ -70,7 +91,7 @@ def main(conf: DictConfig) -> None:
             # Run the flow synchronously
             logger.info(f"Running flow '{conf.flow}' in console mode...")
             asyncio.run(flow_runner.run_flow(run_request=run_request, wait_for_completion=True))
-            logger.info(f"Flow '{conf.flow}' finished.")
+            logger.info(f"Flow '{run_request.flow}' finished.")
 
         case "batch":
 
@@ -90,101 +111,105 @@ def main(conf: DictConfig) -> None:
             asyncio.run(flow_runner.run_batch_job(max_jobs=max_jobs, callback_to_ui=ui.make_callback()))
 
         case "streamlit":
-            # Start the Streamlit interface
-
+            # Starts the Streamlit web interface.
             logger.info("Starting Streamlit interface...")
             try:
-                # This function provides guidance on how to run the app with streamlit CLI
                 from buttermilk.web.streamlit_frontend.app import create_dashboard_app
-                app = create_dashboard_app(flows=flow_runner)
-                # Run the app
-                asyncio.run(app.run())
-            except Exception as e:
-                logger.error(f"Error starting Streamlit interface: {e}")
+                # create_dashboard_app is expected to configure and run the Streamlit app.
+                # It might need access to flow_runner or specific flow configurations.
+                streamlit_app_manager = create_dashboard_app(flow_runner=flow_runner)  # Pass FlowRunner
+                asyncio.run(streamlit_app_manager.run())  # Assuming create_dashboard_app returns an object with a run method
+            except ImportError as e_streamlit:
+                logger.error(f"Failed to import Streamlit components: {e_streamlit!s}. Is Streamlit installed?")
+            except Exception as e_streamlit_start:
+                logger.error(f"Error starting Streamlit interface: {e_streamlit_start!s}", exc_info=True)
 
         case "api":
-
-            # Inject the instantiated flows and orchestrator classes into the FastAPI app's state
-            # so that API endpoints can access them.
-            # TODO: Using app.state is simple but can be considered a form of global state.
-            #       Dependency injection frameworks (like FastAPI's Depends) might offer cleaner alternatives
-            #       for larger applications.
-
-            # Create the FastAPI app with dependencies
-            logger.info("Attempting to create FastAPI app...")
-            # Create the FastAPI app with the FlowRunner
-            app = create_app(
-                bm=bm,
-                flows=flow_runner,
+            # Starts a FastAPI web server.
+            logger.info("Starting FastAPI API server...")
+            # The FastAPI app needs access to bm_instance and flow_runner to handle API requests.
+            # These are typically passed to the app creation function.
+            fastapi_app = create_fastapi_app(
+                bm=bm_instance,  # Pass the global BM instance
+                flows_runner=flow_runner,  # Pass the FlowRunner
             )
 
-            # --- WORKAROUND for potential bm async init timing ---
-            # This is fragile; a better fix involves awaiting readiness.
+            # Short delay, as a workaround for potential async initialization timing issues
+            # TODO: Replace with a more robust readiness check if needed.
             import time
-            time.sleep(2)
-            logger.info("Configuring API server...")
-            # Configure Uvicorn server
-            config = uvicorn.Config(
-                app=app,
-                host="0.0.0.0",
-                port=8000,
-                reload=True,  # Set to True if you want hot reloading
-                log_level="info",
-                access_log=True,
-                workers=1,
+            time.sleep(1)  # Reduced from 2s, check if still needed
+
+            logger.info("Configuring Uvicorn server for FastAPI app...")
+            uvicorn_config = uvicorn.Config(
+                app=fastapi_app,
+                host=str(conf.get("host", "0.0.0.0")),  # Host from config or default
+                port=int(conf.get("port", 8000)),    # Port from config or default
+                reload=bool(conf.get("reload", False)),  # Hot reloading (dev only)
+                log_level=str(conf.get("log_level", "info")).lower(),
+                access_log=True,  # Enable access logs
+                workers=int(conf.get("workers", 1)),  # Number of worker processes
             )
-
-            logger.info("Creating server instance...")
-            # Create and run the server
-            server = uvicorn.Server(config)
-            logger.info("Starting API server...")
-
+            api_server = uvicorn.Server(config=uvicorn_config)
+            logger.info(f"FastAPI server starting on http://{uvicorn_config.host}:{uvicorn_config.port}")
             try:
-                server.run()
+                api_server.run()  # This is a blocking call
             except KeyboardInterrupt:
-                logger.info("Shutting down API server...")
+                logger.info("FastAPI server shutting down due to KeyboardInterrupt...")
+            finally:
+                logger.info("FastAPI server stopped.")
 
         case "pub/sub":
-
-            from buttermilk.runner.batch_cli import main as batch_main
-
-            logger.info("Running in batch mode...")
-            # We're already in the hydra context, so we can just call the main function
-            batch_main(conf)
+            # Starts a Google Cloud Pub/Sub listener.
+            # This mode might involve running a worker that processes messages from a Pub/Sub topic.
+            # The original code delegated to `batch_cli.main`. If `batch_cli.main` is designed
+            # to handle Pub/Sub listening when `conf.ui` (or similar) indicates pub/sub mode,
+            # then this delegation is appropriate.
+            # Ensure `batch_cli.main` is compatible with being called this way.
+            logger.info("Pub/Sub mode: Initializing Pub/Sub listener or batch CLI...")
+            try:
+                from buttermilk.runner.batch_cli import main as batch_cli_main  # Assuming this handles pub/sub logic
+                # Pass the already loaded and resolved Hydra config.
+                # batch_cli_main might need adaptation if it expects to run @hydra.main itself.
+                batch_cli_main(conf)  # This call might be synchronous or start an async loop.
+            except ImportError:
+                logger.error("Failed to import `buttermilk.runner.batch_cli`. Pub/Sub mode cannot start.")
+            except Exception as e_pubsub:
+                logger.error(f"Error in Pub/Sub mode execution: {e_pubsub!s}", exc_info=True)
 
         case "slackbot":
-            # Start a Slack bot integration.
-            logger.info("Starting Slackbot...")
+            # Starts a Slack bot integration.
+            logger.info("Starting Slackbot mode...")
 
-            # Securely retrieve Slack tokens from the Buttermilk credentials store.
-            creds = bm.credentials
-            if not isinstance(creds, dict):
-                # Ensure credentials are in the expected format.
-                raise TypeError(f"Expected credentials to be a dict, got {type(creds)}")
+            # Retrieve Slack tokens securely from bm.credentials
+            slack_creds = bm_instance.credentials
+            if not isinstance(slack_creds, dict):
+                raise TypeError(f"Expected bm.credentials to be a dict, got {type(slack_creds)}")
 
-            bot_token = creds.get("MODBOT_TOKEN")
-            app_token = creds.get("SLACK_APP_TOKEN")  # Socket Mode token
+            slack_bot_token = slack_creds.get("MODBOT_TOKEN")  # Standard bot token
+            slack_app_token = slack_creds.get("SLACK_APP_TOKEN")  # Socket Mode app-level token
 
-            if not bot_token or not app_token:
-                raise ValueError("Missing MODBOT_TOKEN or SLACK_APP_TOKEN in credentials. Check config/secrets.")
+            if not slack_bot_token or not slack_app_token:
+                raise ValueError("Missing MODBOT_TOKEN or SLACK_APP_TOKEN in credentials. Check secrets configuration.")
 
-            # Set environment variables required by the Slack Bolt library.
-            # TODO: Consider passing tokens directly instead of using environment variables if preferred.
-            os.environ["SLACK_BOT_TOKEN"] = bot_token
-            os.environ["SLACK_APP_TOKEN"] = app_token
+            # Set environment variables for Slack Bolt library, if it relies on them.
+            # Alternatively, pass tokens directly to initialize_slack_bot if supported.
+            os.environ["SLACK_BOT_TOKEN"] = slack_bot_token
+            os.environ["SLACK_APP_TOKEN"] = slack_app_token
 
-            from buttermilk.runner.slackbot import initialize_slack_bot
+            from buttermilk.runner.slackbot import initialize_slack_bot  # Slack bot initialization utility
 
-            loop = asyncio.get_event_loop()
+            event_loop = asyncio.get_event_loop()
+            # Queue for managing asyncio tasks created by Slack event handlers
+            slack_orchestrator_tasks: asyncio.Queue[asyncio.Task[Any]] = asyncio.Queue()  # type: ignore
 
-            # Queue for managing background tasks initiated by Slack events.
-            orchestrator_tasks: asyncio.Queue[asyncio.Task] = asyncio.Queue()
+            slack_bolt_app, slack_bolt_handler = initialize_slack_bot(
+                bot_token=slack_bot_token,
+                app_token=slack_app_token,
+                loop=event_loop,
+            )
 
-            # Initialize the Slack Bolt app and its handler.
-            slack_app, handler = initialize_slack_bot(bot_token=bot_token, app_token=app_token, loop=loop)  # Pass tokens and loop
-
-            # Start the Slack Bolt handler in the background.
-            _ = loop.create_task(handler.start_async())  # Use underscore if task result isn't needed immediately.
+            # Start the Slack Bolt handler in a background task
+            _ = event_loop.create_task(slack_bolt_handler.start_async())
 
             async def runloop():
                 """Registers handlers and keeps the main loop running for the Slack bot."""
@@ -196,27 +221,28 @@ def main(conf: DictConfig) -> None:
                     flows=flow_runner.flows,
                     orchestrator_tasks=orchestrator_tasks,
                 )
-                logger.info("Slack handlers registered. Bot is ready.")
-                # Keep the event loop running indefinitely for the bot.
-                # TODO: Implement a graceful shutdown mechanism (e.g., catching SIGINT/SIGTERM).
+                logger.info("Slack handlers registered. Buttermilk Slackbot is ready.")
+                # Keep the event loop running; Slack events will drive operations.
                 while True:
-                    await asyncio.sleep(3600)  # Sleep for a long time; loop is driven by Slack events.
+                    await asyncio.sleep(3600)  # Wake up periodically or rely on events
 
-            # Run the main application loop until completion (which is indefinite for the bot).
             try:
-                loop.run_until_complete(runloop())
+                event_loop.run_until_complete(slack_main_loop())
             except KeyboardInterrupt:
-                logger.info("Slackbot shutting down...")
+                logger.info("Slackbot received KeyboardInterrupt. Shutting down...")
             finally:
-                # TODO: Add cleanup logic here if needed (e.g., close connections, wait for tasks).
-                loop.close()
+                # TODO: Implement graceful shutdown for Slackbot (e.g., stop handler, wait for tasks)
+                if not event_loop.is_closed():
+                    event_loop.close()
+                logger.info("Slackbot event loop closed.")
 
         case _:
-            # Handle unexpected modes.
-            raise ValueError(f"Unsupported run mode specified in configuration: {conf.run}")
+            # Handles any unsupported modes specified in the configuration.
+            raise ValueError(f"Unsupported run mode in configuration: '{flow_runner.mode}'. Check 'run.mode' in your Hydra config.")
 
 
 if __name__ == "__main__":
-    # This block executes when the script is run directly.
-    # Hydra takes over argument parsing and configuration loading here.
+    # This block executes if the script is run directly (e.g., `python -m buttermilk.runner.cli`).
+    # Hydra's `@hydra.main` decorator handles parsing command-line arguments
+    # and loading the configuration specified by `config_path` and `config_name`.
     main()

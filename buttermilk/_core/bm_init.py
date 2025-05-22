@@ -1,330 +1,578 @@
-"""Buttermilk initialization and resource management.
+"""Buttermilk initialization and core resource management.
 
-This module provides the main singleton (BM) that serves as the central access point for
-all Buttermilk resources such as LLMs, cloud providers, and configuration.
+This module provides the main `BM` class, often used as a singleton instance
+(conventionally named `bm`), which serves as the central access point for
+all Buttermilk resources. These resources include Language Model (LLM) clients,
+cloud provider connections (like Google Cloud Storage, BigQuery), secret
+management, query execution, and overall configuration management for a
+Buttermilk execution session.
 
-BM implements a clean singleton pattern that allows for easy access to resources from
-anywhere in the codebase while maintaining proper initialization and configuration.
+The `BM` class handles the initialization of these components based on provided
+configuration (typically loaded via Hydra) and offers a unified interface for
+accessing them throughout the application. It also manages session-specific
+information like run IDs and save directories.
+
+Key functionalities:
+-   Centralized access to configured LLM clients (`bm.llms`).
+-   Management of cloud provider connections (`bm.gcs`, `bm.bq`).
+-   Access to secrets via a configured secret provider (`bm.secret_manager`).
+-   Execution of SQL queries (`bm.query_runner`).
+-   Setup and management of logging, including optional cloud logging.
+-   Handling of session information (`bm.run_info`) and standardized saving of artifacts.
+-   Integration with Weave for tracing (`bm.weave`).
 """
 
-from __future__ import annotations  # Enable postponed annotations
+from __future__ import annotations  # Enable postponed annotations for type hinting
 
 import asyncio
 import datetime
 import logging
-import platform
+import platform  # For system information like node name
 from pathlib import Path
-from tempfile import mkdtemp
+from tempfile import mkdtemp  # For creating temporary directories
 from typing import Any
 
-import psutil
-import pydantic
-import shortuuid
-from cloudpathlib import AnyPath, CloudPath
-from pydantic import BaseModel, Field, PrivateAttr
-from rich import print
+import psutil  # For system utilities like getting username
+import pydantic  # Pydantic core
+import shortuuid  # For generating short, unique IDs
+from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
+from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
+from rich import print  # For rich console output
 
-from buttermilk._core.cloud import CloudManager
-from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing
-from buttermilk._core.keys import SecretsManager
-from buttermilk._core.llms import LLMs
-from buttermilk._core.log import ContextFilter, logger
-from buttermilk._core.query import QueryRunner
-from buttermilk._core.utils.lazy_loading import cached_property
-from buttermilk.utils import save
+from buttermilk._core.cloud import CloudManager  # Manages cloud provider connections
+from buttermilk._core.config import CloudProviderCfg, DataSourceConfig, Tracing  # Config models
+from buttermilk._core.keys import SecretsManager  # Manages secrets
+from buttermilk._core.llms import LLMs  # Manages LLM clients
+from buttermilk._core.log import ContextFilter, logger  # Centralized logger instance
+from buttermilk._core.query import QueryRunner  # For running SQL queries
+from buttermilk._core.utils.lazy_loading import cached_property  # Utility for lazy loading
+from buttermilk.utils import save  # Utility for saving data
 
-# Constants
+# Constants for configuration keys
 CONFIG_CACHE_PATH = ".cache/buttermilk/models.json"
+"""Path to the cache file for LLM model configurations."""
 _MODELS_CFG_KEY = "models_secret"
+"""Key used to retrieve LLM model configurations from the secret manager."""
 _SHARED_CREDENTIALS_KEY = "credentials_secret"
+"""Key used to retrieve shared system credentials from the secret manager."""
 
-# Global run ID for all BM instances
+# Global variable to store the run ID, ensuring it's generated once per execution.
 _global_run_id = ""
 
 
 def _make_run_id() -> str:
-    """Generate a unique run ID for the current execution.
-    
-    The ID includes timestamp, machine info, and a random component to ensure uniqueness.
-    
+    """Generates a unique run ID for the current execution session.
+
+    The ID is constructed using the current UTC timestamp, a short UUID,
+    the machine's node name, and the current username. This aims to create
+    a globally unique and informative identifier for each run.
+    If a global run ID has already been generated for the current session,
+    it returns the existing one.
+
     Returns:
-        A unique string identifier for this run
+        str: A unique string identifier for this execution run.
 
     """
     global _global_run_id
-    if _global_run_id:
+    if _global_run_id:  # Return existing ID if already generated
         return _global_run_id
 
-    # Create a unique identifier for this run
     node_name = platform.uname().node
     username = psutil.Process().username()
-    # get rid of windows domain if present
+    # Strip domain from username if present (e.g., "DOMAIN\user" -> "user")
     username = str.split(username, "\\")[-1]
 
-    # The ISO 8601 format has too many special characters for a filename, so we'll use a simpler format
+    # Format timestamp for use in filenames (simplified ISO 8601)
     run_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
     run_id = f"{run_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
-    _global_run_id = run_id
+    _global_run_id = run_id  # Cache the generated ID globally
     return run_id
 
 
 class SessionInfo(BaseModel):
-    """Information about the current execution session."""
+    """Pydantic model holding information about the current execution session.
 
-    platform: str = "local"
-    name: str
-    job: str
-    run_id: str = Field(default_factory=_make_run_id)
-    ip: str | None = Field(default=None)
-    node_name: str = Field(default_factory=lambda: platform.uname().node)
-    save_dir: str | None = None
-    flow_api: str | None = None
+    This data is often used for logging, organizing outputs, and tracking runs.
 
-    _get_ip_task: asyncio.Task | None = PrivateAttr(default=None)
+    Attributes:
+        platform (str): The platform where the session is running (e.g., "local",
+            "gcp_vm", "azure_container"). Defaults to "local".
+        name (str): A user-defined name for the current session or project.
+        job (str): A user-defined name for the specific job or task being run.
+        run_id (str): A unique identifier for this specific execution run.
+            Defaults to a value generated by `_make_run_id()`.
+        ip (str | None): The IP address of the machine running the session.
+            Fetched asynchronously and may be None initially.
+        node_name (str): The network name of the machine. Defaults to
+            `platform.uname().node`.
+        save_dir (str | None): The primary directory path where outputs for this
+            session should be saved.
+        flow_api (str | None): URL or identifier for a flow API, if applicable.
+        _get_ip_task (asyncio.Task | None): Private attribute for the asyncio task
+            that fetches the IP address.
+        _ip (str | None): Private attribute storing the fetched IP address.
+        Config (class): Pydantic model configuration.
+            - `arbitrary_types_allowed`: True.
+            - `json_encoders`: Custom JSON encoder for `datetime.datetime`.
+
+    """
+
+    platform: str = Field(default="local", description="Platform where the session is running (e.g., 'local', 'gcp').")
+    name: str = Field(..., description="User-defined name for the current session or project.")
+    job: str = Field(..., description="User-defined name for the specific job or task.")
+    run_id: str = Field(default_factory=_make_run_id, description="Unique identifier for this execution run.")
+    ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
+    node_name: str = Field(default_factory=lambda: platform.uname().node, description="Network name of the machine.")
+    save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
+    flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
+
+    _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
     _ip: str | None = PrivateAttr(default=None)
 
     class Config:
+        """Pydantic model configuration for SessionInfo."""
+
         arbitrary_types_allowed = True
         json_encoders = {
-            datetime.datetime: lambda v: v.isoformat(),
+            datetime.datetime: lambda v: v.isoformat(),  # Use ISO format for datetime
         }
 
 
 class BM(SessionInfo):
-    """Central singleton for Buttermilk providing access to all resources.
-    
-    BM serves as a gateway to all major components such as cloud clients,
-    LLM connections, and configuration. It handles initialization of these
-    components and provides a unified interface for accessing them.
-    
-    Typical usage:
+    """Central singleton-like class for Buttermilk, providing access to all resources.
+
+    `BM` (often instantiated as `bm`) serves as the primary gateway to Buttermilk's
+    major components, including cloud clients (GCS, BigQuery), LLM connections,
+    configuration settings, and secret management. It handles the initialization
+    of these components based on a provided configuration (typically loaded by Hydra)
+    and offers a unified, simplified interface for accessing them from anywhere
+    in the application code.
+
+    It inherits from `SessionInfo` to also carry context about the current
+    execution session.
+
+    Typical Usage:
     ```python
-    from buttermilk._core.dmrc import get_bm
-    
-    # Access client
-    bm = get_bm()
-    
-    # Use a cloud client
-    result = bm.gcs.list_blobs("my-bucket")
-    
-    # Use an LLM
-    response = bm.llms.gpt41.create(messages=[...])
+    from buttermilk._core.dmrc import get_bm # Function to get/create the BM instance
+
+    bm = get_bm() # Get the initialized BM instance
+
+    # Access cloud storage
+    bm.gcs.upload_from_filename(...)
+
+    # Interact with an LLM
+    response = bm.llms.my_chat_model.create(messages=[...])
+
+    # Access secrets
+    api_key = bm.secret_manager.get_secret("my_api_key_name")
     ```
+
+    Attributes:
+        connections (list[str]): List of connection names (e.g., for LLMs, databases).
+            (Purpose might need further clarification based on usage).
+        secret_provider (CloudProviderCfg | None): Configuration for the secret
+            provider (e.g., GCP Secret Manager, Azure Key Vault).
+        logger_cfg (CloudProviderCfg | None): Configuration for cloud-based logging
+            (e.g., GCP Logging).
+        pubsub (CloudProviderCfg | None): Configuration for a Pub/Sub system, if used.
+        clouds (list[CloudProviderCfg]): List of configurations for different cloud
+            providers to be initialized (e.g., GCP, Azure).
+        tracing (Tracing | None): Configuration for tracing (e.g., Langfuse, Weave).
+        datasets (dict[str, DataSourceConfig]): A dictionary of predefined data source
+            configurations accessible via the `BM` instance.
+        save_dir_base (str): The base directory under which session-specific save
+            directories will be created. Defaults to a new temporary directory.
+        _cloud_manager (CloudManager | None): Private attribute for the `CloudManager` instance.
+        _secret_manager (SecretsManager | None): Private attribute for the `SecretsManager` instance.
+        _llms_instance (LLMs | None): Private attribute for the `LLMs` manager instance.
+        _query_runner (QueryRunner | None): Private attribute for the `QueryRunner` instance.
+        _credentials_cached (dict[str, str] | None): Private cache for shared system credentials.
+
     """
 
-    connections: list[str] = Field(default_factory=list)
-    secret_provider: CloudProviderCfg | None = Field(default=None)
-    logger_cfg: CloudProviderCfg | None = Field(default=None)
-    pubsub: CloudProviderCfg | None = Field(default=None)
-    clouds: list[CloudProviderCfg] = Field(default_factory=list)
-    tracing: Tracing | None = Field(default_factory=Tracing)
-    datasets: dict[str, DataSourceConfig] = Field(default_factory=dict)
-
+    connections: list[str] = Field(
+        default_factory=list,
+        description="List of connection names (purpose may vary depending on context, e.g., active LLM connections).",
+    )
+    secret_provider: CloudProviderCfg | None = Field(
+        default=None,
+        description="Configuration for the secret provider (e.g., GCP Secret Manager, Azure Key Vault).",
+    )
+    logger_cfg: CloudProviderCfg | None = Field(
+        default=None,
+        description="Configuration for cloud-based logging (e.g., GCP Logging).",
+    )
+    pubsub: CloudProviderCfg | None = Field(
+        default=None,
+        description="Configuration for a Publish/Subscribe system, if used.",
+    )
+    clouds: list[CloudProviderCfg] = Field(
+        default_factory=list,
+        description="List of configurations for different cloud providers to initialize (e.g., GCP, Azure).",
+    )
+    tracing: Tracing | None = Field(
+        default_factory=Tracing,  # Default to Tracing() which might have enabled=False
+        description="Configuration for tracing system integration (e.g., Langfuse, Weave).",
+    )
+    datasets: dict[str, DataSourceConfig] = Field(
+        default_factory=dict,
+        description="Dictionary of predefined data source configurations.",
+    )
     save_dir_base: str = Field(
-        default_factory=mkdtemp,
+        default_factory=mkdtemp,  # Creates a new temporary directory by default
         validate_default=True,
-    )  # Default to temp dir
+        description="Base directory for saving session-specific outputs. Defaults to a new temporary directory.",
+    )
 
-    # Private attributes for delegation to specialized classes
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
     _secret_manager: SecretsManager | None = PrivateAttr(default=None)
     _llms_instance: LLMs | None = PrivateAttr(default=None)
     _query_runner: QueryRunner | None = PrivateAttr(default=None)
     _credentials_cached: dict[str, str] | None = PrivateAttr(default=None)
 
-    # --- Property Validators ---
+    @pydantic.field_validator("save_dir_base", mode="before")
+    @classmethod
+    def get_save_dir(cls, save_dir_base: Any) -> str:
+        """Validates and normalizes the `save_dir_base` path.
 
-    @pydantic.validator("save_dir_base", pre=True)
-    def get_save_dir(cls, save_dir_base) -> str:
-        """Validate and normalize save directory path."""
+        Converts `Path` or `CloudPath` objects to their string representations
+        (POSIX path or URI).
+
+        Args:
+            save_dir_base: The input value for `save_dir_base`.
+
+        Returns:
+            str: The validated and normalized string representation of the path.
+
+        Raises:
+            ValueError: If `save_dir_base` is not a string, `Path`, or `CloudPath`.
+
+        """
         if isinstance(save_dir_base, str):
-            pass
-        elif isinstance(save_dir_base, Path):
-            save_dir_base = save_dir_base.as_posix()
-        elif isinstance(save_dir_base, CloudPath):
-            save_dir_base = save_dir_base.as_uri()
-        else:
-            raise ValueError(
-                f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
-            )
-        return save_dir_base
+            return save_dir_base
+        if isinstance(save_dir_base, Path):
+            return save_dir_base.as_posix()
+        if isinstance(save_dir_base, CloudPath):
+            return save_dir_base.as_uri()
+        raise ValueError(
+            f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
+        )
 
-    @pydantic.root_validator(pre=True)
+    @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
     @classmethod
     def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Remove hydra target attribute from values."""
-        values.pop("_target_", None)
+        """Removes the `_target_` attribute commonly added by Hydra from input values.
+
+        This is a pre-validation step to clean up configuration data before
+        it's parsed by Pydantic.
+
+        Args:
+            values: The dictionary of raw input values for the model.
+
+        Returns:
+            dict[str, Any]: The `values` dictionary with `_target_` removed, if present.
+
+        """
+        values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
     def __init__(self, **data: Any) -> None:
-        """Initialize BM with configuration and set up resources."""
+        """Initializes the BM instance with provided configuration data.
+
+        After standard Pydantic model initialization, it calls `_post_init_setup`
+        to perform further setup tasks like logging, directory creation, and
+        cloud logins.
+
+        Args:
+            **data: Keyword arguments representing the configuration fields for
+                `BM` and its parent `SessionInfo`.
+
+        """
         super().__init__(**data)
         self._post_init_setup()
 
     def _post_init_setup(self) -> None:
-        """Perform post-initialization setup."""
-        # Set up save directory
-        save_dir = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
-        self.save_dir = str(save_dir)
+        """Performs setup tasks immediately after Pydantic model initialization.
 
-        # Set up logging
-        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False))
+        This includes:
+        - Constructing the full `save_dir` path based on `save_dir_base` and session info.
+        - Setting up logging (console and potentially cloud logging).
+        - Saving the initial configuration to a JSON file in `save_dir`.
+        - Starting an asynchronous task to fetch the machine's IP address.
+        - Logging into configured cloud providers.
+        """
+        # Construct full save directory path
+        save_dir_path = AnyPath(self.save_dir_base) / self.name / self.job / self.run_id
+        self.save_dir = str(save_dir_path)  # Store as string
 
-        # Print config to console and save to default save dir
-        print(self.dict())
+        self.setup_logging(verbose=getattr(self.logger_cfg, "verbose", False) if self.logger_cfg else False)
+
+        # Print current config to console and save it
+        print("Initialized Buttermilk (bm) with configuration:")  # Use rich print
+        print(self.model_dump(exclude_none=True))  # Exclude None for cleaner output
         try:
-            # Ensure save_dir is set before saving
             if self.save_dir:
-                self.save(
-                    data=[self.dict(), self.run_info.dict()],
-                    basename="config",
+                # Data to save: BM config and run_info
+                config_data_to_save = [
+                    self.model_dump(exclude_none=True),  # Current BM instance config
+                    self.run_info.model_dump(exclude_none=True),  # Current run_info
+                ]
+                self.save(  # Use the instance's save method
+                    data=config_data_to_save,
+                    basename="initial_bm_config",  # More descriptive basename
                     extension=".json",
-                    save_dir=self.save_dir,
+                    # save_dir is implicitly self.save_dir if not provided to self.save
                 )
-            else:
-                logger.warning("save_dir is not set. Skipping saving config.")
+            else:  # Should not happen if save_dir_base defaults to mkdtemp
+                logger.warning("BM.save_dir is not set. Skipping saving initial config.")
         except Exception as e:
-            logger.error(f"Could not save config to default save dir: {e}")
+            logger.error(f"Could not save initial BM config to default save directory: {e!s}")
 
-        # Start async operations
-        self.start_fetch_ip_task()
-
-        # Initialize cloud connections
-        self._login_clouds()
-
-    # --- Delegation Properties ---
+        self.start_fetch_ip_task()  # Start task to get IP address
+        self._login_clouds()  # Login to configured cloud providers
 
     @cached_property
     def cloud_manager(self) -> CloudManager:
-        """Get the cloud manager instance."""
+        """Provides access to the `CloudManager` instance.
+
+        The `CloudManager` handles interactions with various configured cloud
+        providers (e.g., GCP, Azure). It's instantiated on first access.
+
+        Returns:
+            CloudManager: The initialized `CloudManager` instance.
+
+        """
         if self._cloud_manager is None:
             self._cloud_manager = CloudManager(clouds=self.clouds)
         return self._cloud_manager
 
     @cached_property
     def secret_manager(self) -> SecretsManager:
-        """Get the secret manager instance."""
+        """Provides access to the `SecretsManager` instance.
+
+        The `SecretsManager` is responsible for retrieving secrets (like API keys)
+        from a configured backend (e.g., GCP Secret Manager, Azure Key Vault).
+        It's instantiated on first access using `self.secret_provider` config.
+
+        Returns:
+            SecretsManager: The initialized `SecretsManager` instance.
+
+        Raises:
+            RuntimeError: If `secret_provider` configuration is missing.
+
+        """
         if self._secret_manager is None:
             if not self.secret_provider:
-                raise RuntimeError("Secret provider configuration is missing.")
-            self._secret_manager = SecretsManager(**self.secret_provider.dict())
+                raise RuntimeError("BM.secret_provider configuration is missing, cannot initialize SecretsManager.")
+            # Pass the model directly, SecretsManager will handle unpacking if needed
+            self._secret_manager = SecretsManager(**self.secret_provider.model_dump())
         return self._secret_manager
 
     @cached_property
     def llms(self) -> LLMs:
-        """Get the LLMs manager instance."""
+        """Provides access to the `LLMs` manager instance.
+
+        The `LLMs` manager handles configurations and clients for different
+        Language Models. It attempts to load LLM connection configurations first
+        from a local cache (`CONFIG_CACHE_PATH`), then from the secret manager
+        if the cache is not found or fails to load. Loaded configurations are
+        cached locally for subsequent runs if fetched from secrets.
+
+        Returns:
+            LLMs: The initialized `LLMs` manager instance.
+
+        Raises:
+            RuntimeError: If loading LLM connections from both cache and secrets fails.
+            TypeError: If the loaded LLM connections data is not a dictionary.
+
+        """
         if self._llms_instance is None:
-            connections = None
-            try:
-                # Try to load from cache file first
-                cache_path = Path(CONFIG_CACHE_PATH)
-                if cache_path.exists():
+            connections_data: dict[str, Any] | None = None
+            cache_path = Path(CONFIG_CACHE_PATH)
+
+            # Try to load from local cache file first
+            if cache_path.exists() and cache_path.is_file():
+                try:
                     from buttermilk.utils.utils import load_json_flexi
-                    connections = load_json_flexi(cache_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+                    connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
+                    if not isinstance(connections_data, dict):  # Validate type from cache
+                        logger.warning(f"LLM connections cache at {cache_path} is not a dict, found {type(connections_data)}. Will try secrets.")
+                        connections_data = None
+                    else:
+                        logger.info(f"Loaded LLM connections from cache: {cache_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load LLM connections from cache {cache_path}: {e!s}. Will try secrets.")
+                    connections_data = None  # Ensure it's None if cache load fails
 
             # If not loaded from cache, get from secret manager
-            if not connections:
+            if connections_data is None:
                 try:
-                    connections = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
+                    connections_data = self.secret_manager.get_secret(cfg_key=_MODELS_CFG_KEY)
+                    if not isinstance(connections_data, dict):  # Validate type from secrets
+                        raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
+                    logger.info(f"Loaded LLM connections from secret manager (key: '{_MODELS_CFG_KEY}').")
 
-                    # Cache for next time
+                    # Try to cache the connections for next time
                     try:
-                        cache_path = Path(CONFIG_CACHE_PATH)
                         cache_path.parent.mkdir(parents=True, exist_ok=True)
                         import json
-                        cache_path.write_text(json.dumps(connections), encoding="utf-8")
+                        cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
+                        logger.info(f"Cached LLM connections to: {cache_path}")
                     except Exception as e:
-                        logger.warning(f"Could not cache LLM connections: {e}")
+                        logger.warning(f"Could not cache LLM connections after fetching from secrets: {e!s}")
                 except Exception as e:
-                    logger.error(f"Failed to load LLM connections: {e}")
-                    raise RuntimeError("Failed to load LLM connections") from e
+                    logger.error(f"Failed to load LLM connections from secret manager: {e!s}")
+                    raise RuntimeError("Failed to load LLM connections from both cache and secrets.") from e
 
-            # Ensure connections is a dictionary
-            if not isinstance(connections, dict):
-                raise TypeError(f"LLM connections is not a dict: {type(connections)}")
-
-            self._llms_instance = LLMs(connections=connections)
-
+            self._llms_instance = LLMs(connections=connections_data)
         return self._llms_instance
 
     @cached_property
     def query_runner(self) -> QueryRunner:
-        """Get the query runner instance."""
+        """Provides access to the `QueryRunner` instance.
+
+        The `QueryRunner` is used for executing SQL queries, primarily against
+        Google BigQuery, using the `bm.bq` client. Instantiated on first access.
+
+        Returns:
+            QueryRunner: The initialized `QueryRunner` instance.
+
+        """
         if self._query_runner is None:
-            self._query_runner = QueryRunner(bq_client=self.bq)
+            self._query_runner = QueryRunner(bq_client=self.bq)  # Delegates bq client access
         return self._query_runner
 
     @property
     def run_info(self) -> SessionInfo:
-        """Get information about the current session."""
+        """Provides a `SessionInfo` object representing the current execution session.
+
+        This is a snapshot of the session-specific details managed by the `BM` instance.
+
+        Returns:
+            SessionInfo: An object containing current session information.
+
+        """
+        # Ensure _ip is fetched if the task has completed
+        fetched_ip = self._ip
+        if self._get_ip_task and self._get_ip_task.done():
+            try:
+                fetched_ip = self._get_ip_task.result()
+            except Exception:  # Catch potential exceptions from the task
+                logger.warning("Failed to get IP address from async task result.")
+
         return SessionInfo(
             platform=self.platform,
             name=self.name,
             job=self.job,
+            run_id=self.run_id,  # run_id is from BM instance itself
             node_name=self.node_name,
-            ip=self._ip,
+            ip=fetched_ip,  # Use potentially updated IP
             save_dir=self.save_dir,
             flow_api=self.flow_api,
         )
 
-    # --- Delegated Properties for Cloud Clients ---
-
     @property
-    def gcp_credentials(self):
-        """Get GCP credentials from cloud manager."""
+    def gcp_credentials(self) -> Any:  # Type hint could be more specific if known (e.g., google.auth.credentials.Credentials)
+        """Provides access to Google Cloud Platform (GCP) credentials.
+
+        Delegates to `self.cloud_manager.gcp_credentials`.
+
+        Returns:
+            Any: The GCP credentials object.
+
+        """
         return self.cloud_manager.gcp_credentials
 
     @property
-    def gcs(self):
-        """Get Google Cloud Storage client."""
+    def gcs(self) -> Any:  # Type hint could be storage.Client
+        """Provides access to the Google Cloud Storage (GCS) client.
+
+        Delegates to `self.cloud_manager.gcs`.
+
+        Returns:
+            Any: The GCS client instance.
+
+        """
         return self.cloud_manager.gcs
 
     @property
-    def bq(self):
-        """Get BigQuery client."""
+    def bq(self) -> Any:  # Type hint could be bigquery.Client
+        """Provides access to the Google BigQuery client.
+
+        Delegates to `self.cloud_manager.bq`.
+
+        Returns:
+            Any: The BigQuery client instance.
+
+        """
         return self.cloud_manager.bq
 
     @property
-    def weave(self):
-        """Get Weights & Biases weave client for tracing."""
-        import weave
-        collection = f"{self.name}-{self.job}"
-        return weave.init(collection)
+    def weave(self) -> Any:  # Type hint could be weave.weave_types.WeaveClient
+        """Provides access to the Weights & Biases Weave client for tracing.
+
+        Initializes Weave with a collection name derived from `self.name` (flow name)
+        and `self.job` (job name).
+
+        Returns:
+            Any: The initialized Weave client instance.
+
+        """
+        import weave  # Ensure weave is imported
+        collection_name = f"{self.name}-{self.job}"  # Construct collection name
+        return weave.init(collection_name)  # Initialize and return client
 
     @property
     def credentials(self) -> dict[str, str]:
-        """Get all system credentials."""
+        """Retrieves and caches shared system credentials from the secret manager.
+
+        Fetches credentials using `_SHARED_CREDENTIALS_KEY` on first access.
+
+        Returns:
+            dict[str, str]: A dictionary of shared credentials.
+
+        Raises:
+            TypeError: If the credentials retrieved from the secret manager
+                are not a dictionary.
+
+        """
         if self._credentials_cached is None:
             creds = self.secret_manager.get_secret(cfg_key=_SHARED_CREDENTIALS_KEY)
             if not isinstance(creds, dict):
-                raise TypeError(f"Expected credentials to be a dict, got {type(creds)}")
+                raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
             self._credentials_cached = creds
         return self._credentials_cached
 
-    # --- Core Methods ---
-
     def setup_logging(self, verbose: bool = False) -> None:
-        """Set up logging for Buttermilk.
-        
+        """Sets up logging for the Buttermilk application.
+
+        Configures console logging (with colors via `coloredlogs`) and optionally
+        Google Cloud Logging if `self.logger_cfg` is set up for GCP.
+        Sets logging levels for Buttermilk's logger and other loggers.
+
         Args:
-            verbose: Whether to enable debug logging
+            verbose (bool): If True, sets Buttermilk logger level to DEBUG and
+                enables asyncio debug mode. Otherwise, sets to INFO.
+                Defaults to False.
+        
+        Raises:
+            RuntimeError: If GCP logger is configured but essential attributes
+                like 'project' or 'location' are missing in `self.logger_cfg`.
 
         """
         import sys
 
-        import coloredlogs
+        import coloredlogs  # For colored console output
 
-        # Validate logger config if GCP logging is enabled
+        # Validate GCP logger configuration if enabled
         if self.logger_cfg and self.logger_cfg.type == "gcp":
-            if not hasattr(self.logger_cfg, "project"):
-                raise RuntimeError("GCP logger config missing 'project' attribute")
-            if not hasattr(self.logger_cfg, "location"):
-                raise RuntimeError("GCP logger config missing 'location' attribute")
+            if not hasattr(self.logger_cfg, "project") or not self.logger_cfg.project:
+                raise RuntimeError("GCP logger configuration (logger_cfg.project) is missing or empty.")
+            if not hasattr(self.logger_cfg, "location") or not self.logger_cfg.location:
+                raise RuntimeError("GCP logger configuration (logger_cfg.location) is missing or empty.")
 
-        # Clear existing handlers from root logger
+        # Clear existing handlers from the root logger to avoid duplicate logs
         root_logger = logging.getLogger()
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
@@ -337,31 +585,31 @@ class BM(SessionInfo):
         console_format = "%(asctime)s [%(short_context)s] %(levelname)s %(filename)s:%(lineno)d %(message)s"
 
         coloredlogs.install(
-            logger=logger,
+            logger=logger,  # Target Buttermilk's main logger
             fmt=console_format,
-            isatty=True,
-            stream=sys.stderr,
+            isatty=True,  # Enable colors if output is a TTY
+            stream=sys.stderr,  # Log to stderr
             level=logging.DEBUG if verbose else logging.INFO,
         )
 
-        # Set up cloud logging if configured
-        resource = None
+        # Configure Google Cloud Logging if specified
+        cloud_logging_resource = None
         if self.logger_cfg and self.logger_cfg.type == "gcp":
-            from google.cloud import logging as gcp_logging
+            from google.cloud import logging as gcp_logging  # GCP Logging library
+            from google.cloud.logging_v2.handlers import CloudLoggingHandler
 
-            resource = gcp_logging.Resource(
-                type="generic_task",
+            cloud_logging_resource = gcp_logging.Resource(
+                type="generic_task",  # Recommended type for general tasks
                 labels={
-                    "project_id": getattr(self.logger_cfg, "project", ""),
-                    "location": getattr(self.logger_cfg, "location", ""),
-                    "namespace": self.name,
-                    "job": self.job,
-                    "task_id": self.run_id,
+                    "project_id": getattr(self.logger_cfg, "project", "unknown-project"),
+                    "location": getattr(self.logger_cfg, "location", "unknown-location"),
+                    "namespace": self.name,  # Flow name
+                    "job": self.job,       # Job name
+                    "task_id": self.run_id,  # Unique run ID
                 },
             )
 
             # Get log client from cloud manager
-            from google.cloud.logging_v2.handlers import CloudLoggingHandler
 
             # session_id and agent_id are added to the LogRecord by ContextFilter.
             # The CloudLoggingHandler is expected to automatically pick up these extra fields
@@ -375,137 +623,174 @@ class BM(SessionInfo):
             cloudHandler.setLevel(logging.INFO)  # Cloud logs at INFO level, not DEBUG
             logger.addHandler(cloudHandler)
 
-        # Set default logging levels
+        # Set default logging levels for other loggers to WARNING to reduce noise
         root_logger.setLevel(logging.WARNING)
-        for logger_str in list(logging.Logger.manager.loggerDict.keys()):
-            try:
-                if isinstance(logging.Logger.manager.loggerDict[logger_str], logging.Logger):
-                    logging.getLogger(logger_str).setLevel(logging.WARNING)
-            except Exception:
-                pass
+        for logger_name in list(logging.Logger.manager.loggerDict.keys()):
+            # Check if it's a Logger instance to avoid issues with placeholders
+            if isinstance(logging.Logger.manager.loggerDict[logger_name], logging.Logger):
+                logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-        # Set Buttermilk logger level based on verbose flag
-        if verbose:
-            logger.setLevel(logging.DEBUG)
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.set_debug(True)
-            except RuntimeError:
-                pass  # No event loop
-        else:
-            logger.setLevel(logging.INFO)
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.set_debug(False)
-            except RuntimeError:
-                pass  # No event loop
-
-        # Log initialization
-        message = f"Logging set up for: {self.run_info}. Ready. Save dir: {self.save_dir}"
-        if resource:
-            message = f"{message} {resource}"
-
-        logger.info(
-            message,
-            extra=dict(run=self.run_info.dict() if self.run_info else {}),
-        )
-
-        # Log version info
+        # Set Buttermilk's own logger level based on verbosity
+        logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+        # Configure asyncio debug mode based on verbosity
         try:
-            from importlib.metadata import version
-            logger.debug(f"Buttermilk version is: {version('buttermilk')}")
-        except Exception:
+            current_loop = asyncio.get_event_loop()
+            if current_loop.is_running():
+                current_loop.set_debug(verbose)
+        except RuntimeError:  # No event loop running
             pass
 
-    def start_fetch_ip_task(self) -> None:
-        """Start an async task to fetch the client's IP address."""
-        from buttermilk.utils import get_ip
+        # Log initialization message
+        log_init_message = f"Logging set up for run: {self.run_info}. Save directory: {self.save_dir}"
+        if cloud_logging_resource:  # Add resource info if cloud logging is active
+            log_init_message = f"{log_init_message} | Cloud Logging Resource: {cloud_logging_resource.labels}"
 
-        # Initialize IP task asynchronously if needed
+        logger.info(log_init_message, extra={"run_details": self.run_info.model_dump(exclude_none=True)})
+
+        # Log Buttermilk version if available
+        try:
+            from importlib.metadata import version
+            bm_version = version("buttermilk")  # Assumes package is named 'buttermilk'
+            logger.debug(f"Buttermilk version: {bm_version}")
+        except Exception:  # importlib.metadata.PackageNotFoundError or other issues
+            logger.debug("Could not determine Buttermilk version.")
+
+    def start_fetch_ip_task(self) -> None:
+        """Starts an asynchronous task to fetch the machine's external IP address.
+
+        The IP address is stored in `self._ip` upon completion. This task is
+        initiated if an event loop is running and the task hasn't been started already.
+        """
+        from buttermilk.utils import get_ip  # Utility function to get IP
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                if not hasattr(self, "_get_ip_task") or self._get_ip_task is None:
-                    self._get_ip_task = asyncio.create_task(get_ip())
-            else:
-                # No event loop running, skip IP task creation
-                pass
-        except RuntimeError:
-            # No current event loop
-            pass
+                # Start task only if it hasn't been started or is already done
+                if not hasattr(self, "_get_ip_task") or \
+                   self._get_ip_task is None or \
+                   self._get_ip_task.done():
+
+                    async def _fetch_and_set_ip():
+                        self._ip = await get_ip()
+                        logger.debug(f"Fetched IP address: {self._ip}")
+
+                    self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
+            # else: No event loop running, cannot start async task
+        except RuntimeError:  # No current event loop
+            logger.debug("No running event loop, skipping async IP fetch task.")
 
     def _login_clouds(self) -> None:
-        """Initialize cloud provider connections."""
-        self.cloud_manager.login_clouds()
+        """Initializes connections to configured cloud providers and sets up tracing.
 
-        # Set up tracing if configured
+        Delegates to `self.cloud_manager.login_clouds()` for cloud provider logins.
+        If tracing is enabled in `self.tracing`, it then calls
+        `self.cloud_manager.setup_tracing()`.
+        """
+        self.cloud_manager.login_clouds()  # Perform logins
+
+        # Set up tracing if configured and enabled
         if self.tracing and self.tracing.enabled:
             self.cloud_manager.setup_tracing(self.tracing)
 
     def save(
         self,
-        data,
+        data: Any,
         save_dir: str | AnyPath | None = None,
         extension: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> str | None:
-        """Save data to a file with standardized naming.
-        
+        """Saves provided data to a file with standardized naming and location.
+
+        The actual saving logic is delegated to `buttermilk.utils.save.save`.
+        If `save_dir` is not provided, `self.save_dir` (the session's default
+        save directory) is used. If that's also not set, a temporary directory
+        is created.
+
         Args:
-            data: The data to save
-            save_dir: Directory to save to (defaults to self.save_dir)
-            extension: File extension to use (defaults to .json)
-            **kwargs: Additional arguments to pass to save function
-            
+            data: The data to be saved (e.g., dict, list, string).
+            save_dir: Optional directory to save the file in. Defaults to
+                `self.save_dir`.
+            extension: Optional file extension (e.g., ".json", ".txt").
+                Defaults to ".json".
+            **kwargs: Additional keyword arguments to pass to the underlying
+                `buttermilk.utils.save.save` function.
+
         Returns:
-            Path to the saved file, or None if save failed
+            str | None: The full path to the saved file as a string, or `None`
+            if the save operation failed.
 
         """
-        effective_save_dir = save_dir or self.save_dir
+        effective_save_dir_str: str
+        if save_dir:
+            effective_save_dir_str = str(save_dir)
+        elif self.save_dir:
+            effective_save_dir_str = self.save_dir
+        else:
+            # Fallback to a temporary directory if no save_dir is configured
+            effective_save_dir_str = mkdtemp()
+            logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
 
-        # If we still don't have a save_dir, create a temp directory
-        if not effective_save_dir:
-            import tempfile
-            effective_save_dir = tempfile.mkdtemp()
-            logger.warning(f"No save_dir specified, using temp directory: {effective_save_dir}")
-        # Provide default extension if None
-        effective_extension = extension if extension is not None else ".json"
+        # Ensure extension starts with a dot if provided, otherwise default to .json
+        effective_extension = extension or ".json"
+        if not effective_extension.startswith("."):
+            effective_extension = "." + effective_extension
 
         try:
-            result = save.save(
+            # Call the utility save function
+            saved_file_path = save.save(
                 data=data,
-                save_dir=effective_save_dir,  # Use our processed directory
+                save_dir=AnyPath(effective_save_dir_str),  # Convert to AnyPath for utility
                 extension=effective_extension,
                 **kwargs,
             )
-            logger.info(
-                dict(
-                    message=f"Saved data to: {result}",
-                    uri=result,
-                    run_id=self.run_id,
-                ),
+            logger.info(  # Log as a dictionary for structured logging if supported
+                {
+                    "message": f"Successfully saved data to: {saved_file_path}",
+                    "uri": str(saved_file_path),  # Ensure URI is a string
+                    "run_id": self.run_id,  # Include run_id for context
+                },
             )
-            return result
+            return str(saved_file_path)  # Return path as string
         except Exception as e:
-            logger.error(f"Failed to save data to {save_dir}: {e}")
+            logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
             return None  # Indicate save failure
 
     def run_query(
         self,
-        sql,
-        destination=None,
-        overwrite=False,
-        do_not_return_results=False,
-        save_to_gcs=False,
-        return_df=True,
-    ) -> Any:
-        """Run a BigQuery SQL query.
-        
-        This is a delegation to the QueryRunner's run_query method.
-        
-        See QueryRunner.run_query for full documentation.
+        sql: str,
+        destination: str | None = None,
+        overwrite: bool = False,
+        do_not_return_results: bool = False,
+        save_to_gcs: bool = False,
+        return_df: bool = True,
+    ) -> Any:  # Return type can be pd.DataFrame, None, or other based on params
+        """Runs a BigQuery SQL query using the configured `QueryRunner`.
+
+        This method is a convenience wrapper that delegates to
+        `self.query_runner.run_query`. Refer to `QueryRunner.run_query`
+        for detailed documentation of parameters and behavior. The `save_dir`
+        for any local saves will be `self.save_dir`.
+
+        Args:
+            sql (str): The SQL query to execute.
+            destination (str | None): Optional BigQuery table ID (project.dataset.table)
+                to save query results to. Defaults to None.
+            overwrite (bool): If True, overwrites the destination table if it exists.
+                Defaults to False.
+            do_not_return_results (bool): If True, does not attempt to fetch results
+                into memory (e.g., if results are large and saved to a table).
+                Defaults to False.
+            save_to_gcs (bool): If True, saves results to Google Cloud Storage
+                instead of a BigQuery table (destination might specify GCS path).
+                Defaults to False.
+            return_df (bool): If True (and `do_not_return_results` is False),
+                returns results as a Pandas DataFrame. Defaults to True.
+
+        Returns:
+            Any: Typically a Pandas DataFrame if `return_df` is True and results
+            are fetched. Can be None or other types depending on parameters.
+
         """
         return self.query_runner.run_query(
             sql=sql,
@@ -513,6 +798,6 @@ class BM(SessionInfo):
             overwrite=overwrite,
             do_not_return_results=do_not_return_results,
             save_to_gcs=save_to_gcs,
-            save_dir=self.save_dir,
+            save_dir=self.save_dir,  # Pass BM's default save directory
             return_df=return_df,
         )

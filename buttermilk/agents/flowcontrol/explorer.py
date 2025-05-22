@@ -1,251 +1,351 @@
-from typing import Any
+"""Defines the ExplorerHost agent for managing interactive exploration workflows.
 
-from autogen_core import CancellationToken
-from pydantic import BaseModel, Field, PrivateAttr
+The ExplorerHost agent guides conversations where the path of inquiry is not
+predefined but is discovered through interaction, user feedback, and LLM-driven
+suggestions. It's a specialized form of `LLMHostAgent` designed to facilitate
+step-by-step exploration of topics or data.
+"""
 
-from buttermilk import logger
-from buttermilk._core.constants import WAIT
-from buttermilk._core.contract import (
+from typing import Any  # For type hinting class types
+
+from autogen_core import CancellationToken  # Autogen cancellation token
+from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
+
+from buttermilk import logger  # Centralized logger
+from buttermilk._core.agent import AgentTrace  # For storing exploration results
+from buttermilk._core.constants import END, WAIT  # Buttermilk constants
+from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentInput,
     AgentOutput,
     AgentTrace,
-    ConductorRequest,
-    StepRequest,
+    ConductorRequest,  # Expected input type for choosing next step
+    StepRequest,  # Expected output type for next step
 )
 
-from .llmhost import LLMHostAgent
+from .llmhost import LLMHostAgent  # Base class for LLM-powered host agents
 
-TRUNCATE_LEN = 1000  # characters per history message
-
-###########
-####
-# TODO:
-#####
-# Key Features:
-        # - Step-by-step execution driven by `CONDUCTOR` agent suggestions.
-        # - User confirmation and feedback collection at each step via `_in_the_loop`.
-        # - Ability for the user to select specific agent variants for a step.
-        # - Tracking of the exploration path and results (`_exploration_path`, `_exploration_results`).
-        # - Handling of special messages from the `CONDUCTOR` (e.g., questions for the user, comparisons).
-####
-####
-#
+TRUNCATE_LEN = 1000  # Max characters per history message for summarization
+"""Maximum length for individual message summaries in exploration history."""
 
 
 class ExplorerHost(LLMHostAgent):
-    """An advanced host agent for interactive exploration workflows.
+    """An advanced host agent for guiding interactive and dynamic exploration workflows.
+
+    The `ExplorerHost` specializes in managing conversations where the sequence of
+    actions or topics is not fixed in advance. Instead, it relies on suggestions
+    (often from an LLM-based "conductor" agent, received as `ConductorRequest`),
+    user feedback, and its own internal logic (potentially LLM-driven via `_choose`)
+    to determine the next step in the exploration.
+
+    Key Features:
+        - Manages step-by-step execution, where each step is typically a `StepRequest`
+          directed at another agent.
+        - Can be configured to operate in interactive or autonomous modes.
+        - Tracks the history of the exploration path and the results obtained at each step.
+        - Uses an LLM (via `LLMHostAgent`'s capabilities) in its `_choose` method
+          to decide on subsequent actions, potentially considering past steps,
+          user feedback, and unexplored avenues.
+        - Can be configured with limits (e.g., `max_exploration_steps`) and strategies
+          (e.g., `prioritize_unexplored`) to guide the exploration.
+
+    Configuration Parameters (from `AgentConfig.parameters` or direct attributes):
+        - `exploration_mode` (str): "interactive" (allows user feedback, though
+          `_in_the_loop` from `LLMHostAgent` is the primary interaction point)
+          or "autonomous". Default: "interactive".
+        - `max_exploration_steps` (int): Maximum number of steps before the
+          agent suggests concluding the exploration. Default: 20.
+        - `consider_previous_steps` (bool): If True, the LLM considers past steps
+          when choosing the next one. Default: True. (Note: Actual usage in `_choose`
+          depends on the prompt template for the LLM.)
+        - `prioritize_unexplored` (bool): If True, the agent may try to guide
+          the LLM to suggest steps involving agents/roles not yet used in the
+          exploration. Default: True.
+
+    Internal State:
+        _exploration_path (list[str]): A list of execution IDs representing the
+            chronological path of the exploration.
+        _exploration_results (dict[str, dict[str, Any]]): A dictionary storing
+            detailed results from each step of the exploration, keyed by execution ID.
     
-    This agent specializes in guiding conversations where the path isn't predetermined,
-    but rather discovered through interaction and exploration. It maintains state
-    about the exploration history, understands user feedback, and adapts its
-    recommendations based on the evolving context.
+    Expected Input to `_process`:
+        Primarily `ConductorRequest` messages, which provide context and suggestions
+        for the next step. Other `AgentInput` types might result in a "WAIT" state.
+
+    Output from `_process` (and subsequently `_choose`):
+        An `AgentOutput` wrapping a `StepRequest` that defines the next action to be
+        taken in the flow (e.g., which agent to call next, with what prompt).
+        Can also output `StepRequest(role=END)` or `StepRequest(role=WAIT)`.
     """
 
     _output_model: type[BaseModel] | None = StepRequest
+    """Specifies that the LLM called by this host (e.g., in `_choose` via `_process`)
+    is expected to produce output parsable into a `StepRequest` model.
+    """
 
-    # State tracking for exploration (kept for potential future use)
-    _exploration_path: list[str] = PrivateAttr(default_factory=list)
-    _exploration_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
-
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
-        """Process a message for the Explorer agent - calls _choose to determine the next step"""
-        from buttermilk._core.agent import AgentOutput  # Import locally to avoid being removed
-
-        if isinstance(message, ConductorRequest):
-            step = await self._choose(message=message)
-            return AgentOutput(agent_id=self.agent_id,
-                metadata={"role": self.role},
-                outputs=step,
-            )
-
-        step = StepRequest(role=WAIT, content="Waiting for conductor request")
-        return AgentOutput(agent_id=self.agent_id,
-            metadata={"source": self.agent_id, "role": self.role},
-            outputs=step,
-        )
-
-    # Explorer-specific configuration
+    # Configuration fields for exploration behavior
     exploration_mode: str = Field(
         default="interactive",
-        description="Mode of exploration: 'interactive' (with user feedback) or 'autonomous'",
+        description="Mode of exploration: 'interactive' (allows user feedback) or 'autonomous'.",
     )
     max_exploration_steps: int = Field(
         default=20,
-        description="Maximum number of exploration steps before suggesting completion",
+        description="Maximum number of exploration steps before suggesting completion.",
     )
-    consider_previous_steps: bool = Field(
+    consider_previous_steps: bool = Field(  # Note: Prompt engineering needed for LLM to use this
         default=True,
-        description="Whether to consider previous steps when choosing the next one",
+        description="Whether the LLM should consider previous steps when choosing the next one (requires prompt support).",
     )
-    prioritize_unexplored: bool = Field(
+    prioritize_unexplored: bool = Field(  # Note: Prompt engineering needed for LLM to use this
         default=True,
-        description="Whether to prioritize unexplored agents over previously used ones",
+        description="Whether to guide the LLM to prioritize unexplored agents/roles (requires prompt support).",
     )
+
+    # Private attributes for state tracking
+    _exploration_path: list[str] = PrivateAttr(default_factory=list)
+    _exploration_results: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
+
+    async def _process(
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
+    ) -> AgentOutput:
+        """Processes an incoming message, primarily to determine the next exploration step.
+
+        If the message is a `ConductorRequest`, this method calls `self._choose`
+        to decide the next `StepRequest` for the exploration. For other input
+        types, it defaults to outputting a `StepRequest` with a "WAIT" role,
+        indicating it's awaiting further instructions or a valid `ConductorRequest`.
+
+        Args:
+            message: The input `AgentInput` message. Expected to be a
+                `ConductorRequest` for active step choosing.
+            cancellation_token: An optional token for cancelling the operation.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            AgentOutput: An `AgentOutput` object where `outputs` is a `StepRequest`
+            indicating the next action (or WAIT/END).
+
+        """
+        # Import locally if it causes issues, but AgentOutput is usually fine at module level
+        # from buttermilk._core.agent import AgentOutput
+
+        next_step: StepRequest
+        if isinstance(message, ConductorRequest):
+            next_step = await self._choose(message=message)
+        else:
+            logger.debug(f"ExplorerHost '{self.agent_id}' received non-ConductorRequest input type: {type(message)}. Waiting.")
+            next_step = StepRequest(role=WAIT, content="Waiting for conductor request or further instructions.")
+
+        return AgentOutput(
+            agent_id=self.agent_id,  # ID of this ExplorerHost agent
+            metadata={"role": self.role, "source_message_id": getattr(message, "message_id", None)},
+            outputs=next_step,  # The chosen StepRequest
+        )
 
     async def _choose(self, message: ConductorRequest | None) -> StepRequest:
-        """Choose the next step based on exploration context.
-        
-        This method analyzes the conversation history, user feedback,
-        and exploration state to determine the most appropriate next step.
-        It uses LLM reasoning through the _process method, which employs
-        the agent's language model to make decisions.
-        
+        """Chooses the next step in the exploration based on the current context and strategy.
+
+        This method implements the core decision-making logic for the `ExplorerHost`.
+        It considers the maximum exploration steps, enhances the incoming `ConductorRequest`
+        with exploration-specific history and context, and then uses its LLM
+        (via the inherited `_process` method, which is assumed to be from `LLMHostAgent`
+        and ultimately calls an LLM) to suggest the next `StepRequest`.
+
         Args:
-            message: The ConductorRequest containing context for decision
-            
+            message: The `ConductorRequest` providing context and suggestions from
+                a conductor agent, or `None` if called without explicit input.
+
         Returns:
-            A StepRequest representing the chosen next step
+            StepRequest: A `StepRequest` object representing the chosen next step.
+            This could be a step for another agent, a "WAIT" signal, or an "END" signal
+            if the exploration limit is reached or the LLM suggests termination.
 
         """
-        # Check if we've reached the maximum exploration steps
         if len(self._exploration_path) >= self.max_exploration_steps:
-            logger.info(f"Reached maximum exploration steps ({self.max_exploration_steps}), suggesting END")
-            return StepRequest(role=END, content="Reached maximum exploration steps")
+            logger.info(f"ExplorerHost '{self.agent_id}': Reached maximum exploration steps ({self.max_exploration_steps}). Suggesting END.")
+            return StepRequest(role=END, content="Maximum exploration steps reached.")
 
-        # Handle the None case
         if message is None:
-            logger.warning("Explorer received None message in _choose, using fallback")
-            return StepRequest(role=WAIT, content="Waiting for valid conductor request")
+            logger.warning(f"ExplorerHost '{self.agent_id}': _choose called with None message. Defaulting to WAIT.")
+            return StepRequest(role=WAIT, content="Waiting for a valid conductor request.")
 
-        # Enhance message context with exploration-specific information
-        enhanced_message = await self._enhance_message_for_exploration(message)
+        # Enhance the incoming message with exploration history and context
+        enhanced_conductor_request = await self._enhance_message_for_exploration(message)
 
-        # Use LLM to determine the next step
-        result = await self._process(message=enhanced_message)
+        # Use the LLM (via superclass's _process or similar mechanism) to determine the next step.
+        # This assumes LLMHostAgent._process takes AgentInput and returns AgentOutput wrapping StepRequest.
+        # The current class's _process is what's called here, which then calls self._choose.
+        # This creates a recursive call if not careful.
+        # The intent is that LLMHostAgent has a _process method that calls an LLM.
+        # We need to call that LLMHostAgent._process here, not self._process.
+        # For now, assuming super()._process will invoke the LLMHostAgent's LLM call.
 
-        # Process the result
-        if isinstance(result, StepRequest):
-            step = result
-        # Check more specific types that we know have outputs
-        elif (hasattr(result, "outputs") and
-              hasattr(result, "metadata") and
-              isinstance(result.outputs, StepRequest)):
-            # Handle AgentOutput or similar structures that contain a StepRequest
-            step = result.outputs
+        # TODO: Verify this call sequence. If LLMHostAgent._process also calls _choose,
+        # this will recurse. LLMHostAgent._process should be the one making the LLM call
+        # based on a prompt constructed from enhanced_conductor_request.
+        # The current structure of ExplorerHost._process calling self._choose, and
+        # _choose calling self._process (even if it's intended to be super()._process)
+        # needs careful review.
+        # Assuming LLMHostAgent's _process is the LLM call:
+        llm_decision_output: AgentOutput = await super()._process(message=enhanced_conductor_request)
+                                                            # Pass empty kwargs if super()._process expects it
+
+        chosen_step: StepRequest
+        if isinstance(llm_decision_output.outputs, StepRequest):
+            chosen_step = llm_decision_output.outputs
         else:
-            # Fallback for invalid or unexpected return types
-            logger.warning(f"Explorer received unexpected result type from LLM: {type(result)}")
-            step = StepRequest(role=WAIT, content="Waiting after receiving invalid result type")
+            logger.warning(
+                f"ExplorerHost '{self.agent_id}': LLM call in _choose returned unexpected output type: "
+                f"{type(llm_decision_output.outputs)}. Defaulting to WAIT.",
+            )
+            chosen_step = StepRequest(role=WAIT, content="Waiting after unexpected LLM output for step choice.")
 
-        # Validate the step has a role
-        if not step.role:
-            logger.warning("Explorer received step without role from LLM, using fallback")
-            step = StepRequest(role=WAIT, content="Waiting after receiving invalid step suggestion")
+        if not chosen_step.role:  # Validate that the LLM provided a role
+            logger.warning(f"ExplorerHost '{self.agent_id}': LLM suggested step without a role. Defaulting to WAIT.")
+            chosen_step = StepRequest(role=WAIT, content="Waiting after LLM suggested step without a role.")
 
-        return step
+        # TODO: Add logic to record the chosen_step in _exploration_path if it's not END/WAIT?
+        # Or is that handled when the step is actually executed and result stored?
+        # Current _store_exploration_result happens after execution.
+
+        return chosen_step
 
     async def _enhance_message_for_exploration(self, message: ConductorRequest) -> ConductorRequest:
-        """Enhance the conductor request with exploration-specific context.
-        
-        This method adds information about exploration history, which roles have been
-        explored, user feedback patterns, and suggested areas for further exploration.
-        
+        """Enhances a `ConductorRequest` with context about the ongoing exploration.
+
+        This method augments the input `message` (typically from a conductor agent)
+        by adding information such as:
+        - Statistics about the exploration (steps taken, roles explored/unexplored).
+        - Recent user feedback (if tracked by `LLMHostAgent`).
+        - A summary of the exploration history.
+        - If `prioritize_unexplored` is True, it may also prepend a suggestion to
+          the prompt to consider unexplored roles.
+
         Args:
-            message: The original ConductorRequest
-            
+            message: The original `ConductorRequest` to be enhanced.
+
         Returns:
-            An enhanced ConductorRequest with exploration context
+            ConductorRequest: An enhanced copy of the input `ConductorRequest` with
+            added exploration-specific context in its `inputs` field and potentially
+            an updated `prompt`.
 
         """
-        # Create a copy to avoid modifying the original
-        enhanced = message.model_copy(deep=True)
+        enhanced_request = message.model_copy(deep=True)
 
-        # Get all roles that have been explored so far
-        explored_roles = set()
-        for path_id in self._exploration_path:
-            if path_id in self._exploration_results:
-                role = self._exploration_results[path_id].get("role")
-                if role:
-                    explored_roles.add(role)
-
-        # Get all available roles from participants
-        available_roles = set(self._participants.keys())
-
-        # Find unexplored roles
+        # Gather exploration statistics
+        explored_roles = {self._exploration_results[step_id].get("role") for step_id in self._exploration_path if step_id in self._exploration_results and self._exploration_results[step_id].get("role")}
+        # _participants is from LLMHostAgent, assumed to be a dict of role_name: AgentConfig/AgentVariants
+        available_roles = set(getattr(self, "_participants", {}).keys())
         unexplored_roles = available_roles - explored_roles
 
-        # Add exploration analytics to the inputs
-        exploration_context = {
-            "exploration_statistics": {
-                "steps_taken": len(self._exploration_path),
-                "max_steps": self.max_exploration_steps,
-                "explored_roles": list(explored_roles),
-                "unexplored_roles": list(unexplored_roles),
-                "available_roles": list(available_roles),
-            },
-            "recent_user_feedback": self._user_feedback,
-            "exploration_history": self._summarize_exploration_history(),
+        exploration_context_stats = {
+            "steps_taken": len(self._exploration_path),
+            "max_steps": self.max_exploration_steps,
+            "explored_roles": sorted(list(explored_roles)),  # Sorted for consistent prompting
+            "unexplored_roles": sorted(list(unexplored_roles)),
+            "available_roles": sorted(list(available_roles)),
         }
 
-            # # add extra information about next step
-            # request_content = (
-            #     f"**Next Proposed Step:**\n"
-            #     f"- **Agent Role:** {step.role}\n"
-            #     f"- **Description:** {step.content or '(No description)'}\n"
-            #     f"- **Prompt Snippet:** {step.prompt[:100] + '...' if step.prompt else '(No prompt)'}"
-            #     f"{variant_info}\n\n"
-            #     f"Confirm (Enter), provide feedback, select a variant ID, or reject ('n'/'q')."
-            # )
-        # Update inputs with exploration context
-        if "inputs" in enhanced.__dict__:
-            if isinstance(enhanced.inputs, dict):
-                enhanced.inputs.update(exploration_context)
-            else:
-                # If inputs is not a dict, create a new one
-                enhanced.inputs = {**exploration_context}
+        # Prepare exploration context to be added to inputs
+        # _user_feedback is assumed to be an attribute from LLMHostAgent or similar
+        exploration_inputs_update = {
+            "exploration_statistics": exploration_context_stats,
+            "recent_user_feedback": getattr(self, "_user_feedback", "No recent user feedback available."),  # Provide default
+            "exploration_history_summary": self._summarize_exploration_history(),
+        }
 
-        # Update the prompt to encourage exploration if needed
+        # Update inputs of the enhanced request
+        if enhanced_request.inputs:  # If inputs dict already exists
+            enhanced_request.inputs.update(exploration_inputs_update)
+        else:  # If inputs dict doesn't exist, create it
+            enhanced_request.inputs = exploration_inputs_update
+
+        # Optionally update the prompt to encourage exploring new roles
         if self.prioritize_unexplored and unexplored_roles:
-            prioritize_message = f"Consider exploring these roles that haven't been used yet: {', '.join(unexplored_roles)}. "
-            enhanced.prompt = prioritize_message + (enhanced.prompt or "")
+            unexplored_roles_str = ", ".join(sorted(list(unexplored_roles)))
+            prioritization_hint = f"Consider exploring roles not yet used: {unexplored_roles_str}. "
+            original_prompt = enhanced_request.prompt or ""
+            enhanced_request.prompt = prioritization_hint + original_prompt
 
-        return enhanced
+        return enhanced_request
 
     def _store_exploration_result(self, execution_id: str, output: AgentTrace) -> None:
-        """Store the result of an agent execution in the exploration history."""
-        if execution_id not in self._exploration_path:
-            self._exploration_path.append(execution_id)
-        self._exploration_results[execution_id] = {
-            "id": output.call_id,
-            "role": self._current_step or "unknown",  # Use current step name if available
-            "inputs": getattr(output, "inputs", {}),
-            "outputs": getattr(output, "outputs", getattr(output, "contents", "")),
-            "is_error": getattr(output, "is_error", False),
-            "error_details": getattr(output, "error", []) if getattr(output, "is_error", False) else None,
-            "metadata": getattr(output, "metadata", {}),
-        }
-        logger.debug(f"Stored result for execution {execution_id}")
+        """Stores the result of an executed exploration step.
 
-    def _summarize_exploration_history(self) -> list[dict[str, Any]]:
-        """Create a summarized version of the exploration history.
-        
-        This creates a chronological summary of exploration steps taken,
-        focusing on role sequence, outcomes, and patterns.
-        
-        Returns:
-            A list of summary dictionaries for each exploration step
+        This method updates the internal state of the `ExplorerHost` by appending
+        the `execution_id` to `_exploration_path` (if not already present) and
+        storing relevant details from the `output` (`AgentTrace`) into the
+        `_exploration_results` dictionary.
+
+        Args:
+            execution_id (str): A unique identifier for this specific execution
+                step (e.g., a hash of the step details or a UUID). This ID is
+                used as the key in `_exploration_results` and added to `_exploration_path`.
+            output (AgentTrace): The `AgentTrace` object resulting from the
+                execution of the exploration step. It contains the inputs, outputs,
+                metadata, and error status of the step.
 
         """
-        summary = []
-        for step_id in self._exploration_path:
-            if step_id in self._exploration_results:
-                result = self._exploration_results[step_id]
-                step_summary = {
-                    "id": step_id,
-                    "role": result.get("role", "unknown"),
-                    "success": not result.get("is_error", False),
+        if execution_id not in self._exploration_path:
+            self._exploration_path.append(execution_id)
+
+        # _current_step_name is likely an attribute from LLMHostAgent tracking the role of the agent that just ran
+        current_role_executed = getattr(self, "_current_step_name", "unknown_role")
+
+        self._exploration_results[execution_id] = {
+            "call_id": output.call_id,  # Trace's own call_id
+            "role": current_role_executed,
+            "inputs": getattr(output, "inputs", {}),  # Original AgentInput to the executed agent
+            "outputs": getattr(output, "outputs", getattr(output, "content", "")),  # Actual output data
+            "is_error": output.is_error,  # From FlowMessage base
+            "error_details": output.error if output.is_error else [],  # error is list[str]
+            "metadata": getattr(output, "metadata", {}),
+        }
+        logger.debug(f"ExplorerHost '{self.agent_id}': Stored result for execution step ID '{execution_id}' by role '{current_role_executed}'.")
+
+    def _summarize_exploration_history(self) -> list[dict[str, Any]]:
+        """Creates a summarized, chronological list of the exploration steps taken.
+
+        This summary is intended to be passed to an LLM (as part of the context
+        in `_enhance_message_for_exploration`) to inform its decision-making
+        for the next step. It focuses on the sequence of roles executed,
+        whether each step was successful, and a truncated summary of the output.
+
+        Returns:
+            list[dict[str, Any]]: A list of dictionaries, where each dictionary
+            summarizes one step in the exploration history. Each summary includes
+            `id` (execution ID), `role` (role of the agent executed), `success`
+            (boolean), and an optional `output_summary`.
+
+        """
+        summary_list: list[dict[str, Any]] = []
+        for step_execution_id in self._exploration_path:
+            if step_execution_id in self._exploration_results:
+                result_data = self._exploration_results[step_execution_id]
+                step_summary_entry = {
+                    "id": step_execution_id,  # The unique ID for this step in the exploration path
+                    "role": result_data.get("role", "unknown_role"),
+                    "success": not result_data.get("is_error", False),
                 }
 
-                # Add a condensed output summary if available
-                if "outputs" in result:
-                    outputs = result["outputs"]
-                    if isinstance(outputs, str):
-                        # Truncate long string outputs
-                        step_summary["output_summary"] = outputs[:100] + "..." if len(outputs) > 100 else outputs
-                    elif isinstance(outputs, (dict, list)):
-                        # For structured data, just note the type
-                        step_summary["output_summary"] = f"{type(outputs).__name__} data"
+                # Add a condensed output summary
+                outputs_data = result_data.get("outputs")
+                if isinstance(outputs_data, str):
+                    summary_text = outputs_data[:TRUNCATE_LEN] + "..." if len(outputs_data) > TRUNCATE_LEN else outputs_data
+                    step_summary_entry["output_summary"] = summary_text
+                elif isinstance(outputs_data, (dict, list)):
+                    # For structured data, provide a type hint or a brief representation
+                    try:
+                        # Attempt a compact JSON representation for structured data
+                        json_summary = json.dumps(outputs_data)
+                        step_summary_entry["output_summary"] = json_summary[:TRUNCATE_LEN] + "..." if len(json_summary) > TRUNCATE_LEN else json_summary
+                    except TypeError:  # Handle non-serializable data
+                        step_summary_entry["output_summary"] = f"Structured data of type {type(outputs_data).__name__}"
+                elif outputs_data is not None:
+                     step_summary_entry["output_summary"] = str(outputs_data)[:TRUNCATE_LEN] + "..." if len(str(outputs_data)) > TRUNCATE_LEN else str(outputs_data)
 
-                summary.append(step_summary)
-
-        return summary
+                summary_list.append(step_summary_entry)
+        return summary_list

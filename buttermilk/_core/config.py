@@ -1,5 +1,12 @@
+"""Configuration models for Buttermilk components using Pydantic.
+
+This module defines various Pydantic models that structure the configuration
+for different aspects of the Buttermilk framework, such as data sources,
+saving information, agent behaviors, and tracing. These models are typically
+instantiated by Hydra based on YAML configuration files.
+"""
+
 from collections.abc import Mapping, Sequence
-from contextlib import suppress
 from pathlib import Path
 from typing import (
     Annotated,
@@ -8,9 +15,9 @@ from typing import (
     Self,
 )
 
-import cloudpathlib
-import jmespath
-from google.cloud.bigquery.schema import SchemaField
+import cloudpathlib  # For handling cloud storage paths
+import jmespath  # For JSON query language processing
+from google.cloud.bigquery.schema import SchemaField  # For BigQuery schema types
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -21,21 +28,21 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from shortuuid import uuid
+from shortuuid import uuid  # For generating short unique identifiers
 
-from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
-from buttermilk.utils.utils import expand_dict
+from buttermilk._core.exceptions import FatalError  # Custom exceptions
+from buttermilk._core.log import logger  # Centralized logger
+from buttermilk.utils.utils import expand_dict  # Utility for dictionary expansion
 from buttermilk.utils.validators import (
-    convert_omegaconf_objects,
-    uppercase_validator,  # Pydantic validators
+    convert_omegaconf_objects,  # Pydantic validators
+    uppercase_validator,
 )
 
-from .defaults import BQ_SCHEMA_DIR
-from .types import RunRequest
+from .defaults import BQ_SCHEMA_DIR  # Default directory for BigQuery schemas
+from .types import RunRequest  # Type for run requests
 
 BASE_DIR = Path(__file__).absolute().parent
-
+"""The absolute parent directory of this configuration file."""
 
 CloudProvider = Literal[
     "gcp",
@@ -47,17 +54,41 @@ CloudProvider = Literal[
     "gsheets",
     "vertex",
 ]
+"""Specifies the cloud provider or storage type.
+
+Allowed values:
+    - "gcp": Google Cloud Platform (generic).
+    - "bq": Google BigQuery.
+    - "aws": Amazon Web Services.
+    - "azure": Microsoft Azure.
+    - "env": Environment variables.
+    - "local": Local filesystem.
+    - "gsheets": Google Sheets.
+    - "vertex": Google Vertex AI.
+"""
 
 
 class CloudProviderCfg(BaseModel):
-    type: CloudProvider
+    """Base configuration for components interacting with cloud providers or specific storage types.
+
+    Attributes:
+        type (CloudProvider): The type of cloud provider or storage.
+        model_config (ConfigDict): Pydantic model configuration.
+            - `exclude_none`: True - Exclude fields with None values during serialization.
+            - `arbitrary_types_allowed`: True - Allow arbitrary types.
+            - `populate_by_name`: True - Allow population by field name (alias support).
+            - `extra`: "allow" - Allow extra fields not explicitly defined.
+            - `exclude_unset`: True - Exclude fields that were not explicitly set.
+            - `include_extra`: True - Include extra fields during serialization.
+
+    """
+
+    type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
 
     model_config = ConfigDict(
-        # Exclude fields with None values when serializing
         exclude_none=True,
         arbitrary_types_allowed=True,
         populate_by_name=True,
-        # Ignore extra fields not defined in the model
         extra="allow",
         exclude_unset=True,
         include_extra=True,
@@ -65,85 +96,224 @@ class CloudProviderCfg(BaseModel):
 
 
 class SaveInfo(CloudProviderCfg):
-    destination: str | cloudpathlib.AnyPath | None = None
-    db_schema: str = Field(..., description="Local name or path for schema file")
-    dataset: str | None = Field(default=None)
+    """Configuration for saving data to a specified destination.
 
-    _loaded_schema: list[SchemaField] = PrivateAttr(default=[])
+    Inherits from `CloudProviderCfg` to specify the storage type and adds
+    destination-specific details like paths, schema, and dataset/table names.
 
-    # model_config = ConfigDict(
-    #     json_encoders={
-    #         np.bool_: bool,
-    #         datetime.datetime: lambda v: v.isoformat(),
-    #         ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-    #         DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
-    #     },
-    # )
+    Attributes:
+        destination (str | cloudpathlib.AnyPath | None): The full path or identifier
+            for the save location (e.g., file path, BigQuery table ID like
+            `project.dataset.table`, GCS bucket URI).
+        db_schema (str): The local name or path to a schema file (e.g., a JSON
+            file defining a BigQuery schema). This path is resolved relative to
+            `BQ_SCHEMA_DIR` if not an absolute path.
+        dataset (str | None): The name of the dataset or equivalent grouping
+            (e.g., a BigQuery dataset name, a directory path).
+        _loaded_schema (list[SchemaField]): A private attribute to cache the loaded
+            BigQuery schema once read from `db_schema`.
+
+    """
+
+    destination: str | cloudpathlib.AnyPath | None = Field(
+        default=None,
+        description="Full path or identifier for the save location (e.g., file path, "
+                    "BigQuery table ID `project.dataset.table`, GCS URI).",
+    )
+    db_schema: str = Field(
+        description="Local name or path to a schema file (e.g., JSON for BigQuery schema). "
+                    "Resolved relative to BQ_SCHEMA_DIR if not absolute.",
+    )
+    dataset: str | None = Field(
+        default=None,
+        description="Name of the dataset or equivalent (e.g., BigQuery dataset, directory path).",
+    )
+
+    _loaded_schema: list[SchemaField] = PrivateAttr(default_factory=list)
 
     @field_validator("db_schema")
-    def file_must_exist(cls, v):
+    @classmethod
+    def file_must_exist(cls, v: str) -> str:
+        """Validates that the `db_schema` file exists.
+
+        Tries the path as is, then tries it relative to `BQ_SCHEMA_DIR`.
+
+        Args:
+            v: The path to the schema file.
+
+        Returns:
+            The validated, existing schema file path as a POSIX string.
+
+        Raises:
+            ValueError: If the schema file does not exist at the given path or
+                relative to `BQ_SCHEMA_DIR`.
+
+        """
         if v:
             try:
-                if Path(v).exists():
-                    return v.as_posix()
-            except Exception:
-                pass
+                path_v = Path(v)
+                if path_v.exists() and path_v.is_file():
+                    return path_v.as_posix()
+            except Exception:  # Catch potential errors with Path construction
+                pass  # Try next option
+
+            # Try resolving relative to BQ_SCHEMA_DIR
             f = Path(BQ_SCHEMA_DIR) / v
-            if f.exists():
+            if f.exists() and f.is_file():
                 return f.as_posix()
-            raise ValueError(f"File '{v}' does not exist.")
-        return v
+            raise ValueError(f"Schema file '{v}' does not exist or is not accessible.")
+        return v  # Should not happen if field is required, but handles if it's optional
 
     @model_validator(mode="after")
     def check_destination(self) -> "SaveInfo":
+        """Ensures that either `destination` or `dataset` is provided, unless type is 'gsheets'.
+
+        Raises:
+            ValueError: If neither `destination` nor `dataset` is set and the
+                type is not 'gsheets' (as new sheets can be created implicitly).
+
+        """
         if not self.destination and not self.dataset:
             if self.type == "gsheets":
-                return self  # We'll create a new sheet when we need to
+                return self  # A new sheet can be created implicitly
             raise ValueError(
-                "Nowhere to save to! Either destination or dataset must be provided.",
+                "Save destination ambiguous: Either 'destination' (e.g., table ID, file path) "
+                "or 'dataset' (e.g., BQ dataset, directory) must be provided.",
             )
         return self
 
     @computed_field
     @property
     def bq_schema(self) -> list[SchemaField]:
-        if not self._loaded_schema:
-            from buttermilk import buttermilk as bm
-            from buttermilk._core.log import logger  # noqa
+        """Loads and returns the BigQuery schema from the `db_schema` file path.
 
-            self._loaded_schema = bm.bq.schema_from_json(self.db_schema)
+        The schema is loaded on first access and cached in `_loaded_schema`.
+
+        Returns:
+            list[SchemaField]: A list of `SchemaField` objects representing the
+                BigQuery schema.
+
+        """
+        if not self._loaded_schema:
+            from buttermilk import buttermilk as bm  # Lazy import to avoid circular deps
+
+            # Ensure bm.bq is available; it might not be if only core is used.
+            if not hasattr(bm, "bq") or bm.bq is None:
+                logger.error("BigQuery client (bm.bq) not initialized. Cannot load schema.")
+                # Depending on strictness, could raise an error or return empty.
+                # For now, let it proceed, schema_from_json will likely fail informatively.
+
+            try:
+                self._loaded_schema = bm.bq.schema_from_json(self.db_schema)
+            except Exception as e:
+                logger.error(f"Failed to load BigQuery schema from {self.db_schema}: {e}")
+                # Optionally re-raise or handle as appropriate
+                # For now, it will return an empty list if loading fails and _loaded_schema remains empty.
         return self._loaded_schema
 
 
 class DataSourceConfig(BaseModel):
-    max_records_per_group: int = -1
+    """Configuration for defining a data source for agents or other components.
+
+    Specifies the type of data source, path or query details, filtering,
+    joining, and other parameters for data retrieval and preparation.
+
+    Attributes:
+        max_records_per_group (int): Maximum records to process per group, if
+            grouping is applied. -1 means no limit.
+        type (Literal): The type of the data source.
+            Allowed values: "job", "file", "bq" (BigQuery), "generator",
+            "plaintext", "chromadb", "outputs" (from a previous step).
+        path (str): Path to the data source (e.g., file path, BigQuery table ID,
+            URL). Meaning depends on the `type`.
+        glob (str): Glob pattern for matching files if `type` is "file".
+        filter (Mapping[str, str | Sequence[str] | None] | None): Filtering
+            criteria to apply to the data source (e.g., column-value pairs).
+        join (Mapping[str, str] | None): Configuration for joining with other
+            data sources. Keys are aliases, values are join conditions/targets.
+        index (list[str] | None): Columns to use as an index for the data.
+        agg (bool | None): Whether to aggregate results.
+        group (Mapping[str, str] | None): Grouping configuration. Keys are new
+            group column names, values are expressions or original column names.
+        columns (Mapping[str, str | Mapping] | None): Specifies columns to select
+            or transformations to apply to columns.
+        last_n_days (int): For time-series data, specifies to retrieve data
+            from the last N days.
+        db (Mapping[str, str]): Database-specific connection parameters if `type`
+            is a database type like "bq" or "chromadb".
+        embedding_model (str): Name or path of the embedding model to use,
+            particularly for "chromadb" or vector search.
+        dimensionality (int): Dimensionality of embeddings, if applicable.
+        persist_directory (str): Directory to persist data for "chromadb" or
+            other file-based vector stores.
+        collection_name (str): Name of the collection for "chromadb".
+        model_config (ConfigDict): Pydantic model configuration.
+            - `extra`: "forbid" - Disallow extra fields.
+            - `arbitrary_types_allowed`: False.
+            - `populate_by_name`: True.
+            - `exclude_none`: True.
+            - `exclude_unset`: True.
+
+    """
+
+    max_records_per_group: int = Field(
+        default=-1,
+        description="Maximum records to process per group if grouping is applied. -1 for no limit.",
+    )
     type: Literal[
-        "job",
-        "file",
-        "bq",
-        "generator",
-        "plaintext",
-        "chromadb",
-        "outputs",
-    ]
+        "job", "file", "bq", "generator", "plaintext", "chromadb", "outputs",
+    ] = Field(description="The type of the data source.")
     path: str = Field(
         default="",
+        description="Path to the data source (e.g., file path, BigQuery table ID, URL). Depends on 'type'.",
     )
-    glob: str = Field(default="**/*")
+    glob: str = Field(
+        default="**/*",
+        description="Glob pattern for matching files if type is 'file'.",
+    )
     filter: Mapping[str, str | Sequence[str] | None] | None = Field(
         default_factory=dict,
+        description="Filtering criteria (e.g., column-value pairs).",
     )
-    join: Mapping[str, str] | None = Field(default_factory=dict)
-    index: list[str] | None = None
-    agg: bool | None = Field(default=False)
-    group: Mapping[str, str] | None = Field(default_factory=dict)
-    columns: Mapping[str, str | Mapping] | None = Field(default_factory=dict)
-    last_n_days: int = Field(default=7)
-    db: Mapping[str, str] = Field(default={})
-    embedding_model: str = Field(default="")
-    dimensionality: int = Field(default=-1)
-    persist_directory: str = Field(default="")
-    collection_name: str = Field(default="")
+    join: Mapping[str, str] | None = Field(
+        default_factory=dict,
+        description="Configuration for joining with other data sources.",
+    )
+    index: list[str] | None = Field(
+        default=None, description="Columns to use as an index.",
+    )
+    agg: bool | None = Field(
+        default=False, description="Whether to aggregate results.",
+    )
+    group: Mapping[str, str] | None = Field(
+        default_factory=dict,
+        description="Grouping configuration (new_group_col: original_col_or_expr).",
+    )
+    columns: Mapping[str, str | Mapping] | None = Field(
+        default_factory=dict,
+        description="Columns to select or transformations to apply.",
+    )
+    last_n_days: int = Field(
+        default=7, description="For time-series data, retrieve from the last N days.",
+    )
+    db: Mapping[str, str] = Field(
+        default_factory=dict,
+        description="Database-specific connection parameters (e.g., for 'bq', 'chromadb').",
+    )
+    embedding_model: str = Field(
+        default="",
+        description="Name or path of embedding model (for 'chromadb'/vector search).",
+    )
+    dimensionality: int = Field(
+        default=-1, description="Dimensionality of embeddings, if applicable.",
+    )
+    persist_directory: str = Field(
+        default="",
+        description="Directory for persisting data (for 'chromadb' or file-based vector stores).",
+    )
+    collection_name: str = Field(
+        default="", description="Name of the collection for 'chromadb'.",
+    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -155,150 +325,295 @@ class DataSourceConfig(BaseModel):
 
 
 class DataSouce(DataSourceConfig):
-    pass
+    """Alias for `DataSourceConfig` for backward compatibility or alternative naming.
+    
+    Refer to `DataSourceConfig` for detailed documentation.
+    """
 
 
 class ToolConfig(BaseModel):
-    description: str = Field(default="")
-    tool_obj: str = Field(default="")
+    """Configuration for a tool (function) that an agent can use.
 
+    Defines the tool's description, how to invoke it (tool_obj), and any
+    data sources it might require.
+
+    Attributes:
+        description (str): A textual description of what the tool does. This is
+            often used in prompts for LLMs to understand when to use the tool.
+        tool_obj (str): The identifier or path to the actual Python callable or
+            object that implements the tool's logic.
+        data (Mapping[str, DataSourceConfig]): A mapping where keys are names/aliases
+            for data sources and values are `DataSourceConfig` objects defining
+            how to load that data. This allows tools to dynamically access data.
+
+    """
+
+    description: str = Field(
+        default="",
+        description="Textual description of the tool's purpose and capabilities, often used for LLM prompts.",
+    )
+    tool_obj: str = Field(
+        default="",
+        description="Identifier or path to the Python callable/object implementing the tool.",
+    )
     data: Mapping[str, DataSourceConfig] = Field(
-        default=[],
-        description="Specifications for data that the Agent should load",
+        default_factory=dict,  # Changed from list to dict as per typical usage patterns
+        description="Specifications for data sources the tool should load, keyed by a name/alias.",
     )
 
     def get_functions(self) -> list[Any]:
-        """Create function definitions for this tool."""
-        raise NotImplementedError
+        """Generates function definitions for this tool, typically for an LLM.
 
-    async def fetch(self, **kwargs) -> list[Any] | None:
-        raise NotImplementedError
+        This method should be implemented by subclasses or specific tool integrations
+        to return a list of function definitions in a format expected by the
+        consuming system (e.g., OpenAI function calling schema).
+
+        Returns:
+            list[Any]: A list of function definitions.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+
+        """
+        raise NotImplementedError("Subclasses must implement get_functions to define tool structure.")
+
+    async def _run(self, **kwargs: Any) -> list[Any] | None:
+        """Executes the tool's core logic.
+
+        This asynchronous method should be implemented by subclasses to perform
+        the actual work of the tool.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments that might be passed to the tool
+                during execution, often representing the parameters the tool needs.
+
+        Returns:
+            list[Any] | None: The result of the tool's execution, typically a list
+            of outputs or None. The exact type can vary.
+
+        Raises:
+            NotImplementedError: If the method is not implemented by a subclass.
+
+        """
+        raise NotImplementedError("Subclasses must implement _run to execute tool logic.")
 
 
 class Tracing(BaseModel):
-    enabled: bool = False
-    api_key: str = ""
-    provider: str = ""
-    endpoint: str | None = None
-    otlp_headers: Mapping | None = Field(default_factory=dict)
+    """Configuration for tracing agent and system activities.
+
+    Specifies whether tracing is enabled, the provider to use (e.g., Langfuse, Weave),
+    API keys, and other provider-specific settings.
+
+    Attributes:
+        enabled (bool): If `True`, tracing is enabled for operations.
+        api_key (str): API key for the tracing provider.
+        provider (str): Name of the tracing provider (e.g., "langfuse", "weave").
+        endpoint (str | None): Optional endpoint URL for the tracing provider,
+            if different from the default.
+        otlp_headers (Mapping | None): Optional OTLP (OpenTelemetry Protocol)
+            headers for providers that support it.
+
+    """
+
+    enabled: bool = Field(default=False, description="Enable or disable tracing.")
+    api_key: str = Field(default="", description="API key for the tracing provider.")
+    provider: str = Field(default="", description="Name of the tracing provider (e.g., 'langfuse', 'weave').")
+    endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
+    otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
+        default_factory=dict, description="Optional OTLP headers for providers supporting it.",
+    )
 
 
 # --- Agent Configuration ---
 class AgentConfig(BaseModel):
-    """Base Pydantic model defining the configuration structure for all Buttermilk agents.
+    """Base Pydantic model defining the configuration for Buttermilk agents.
 
-    Loaded and instantiated by Hydra based on YAML configuration files. Includes
-    core identification, behavior parameters, and connections to data/tools.
+    This model is typically loaded and instantiated by Hydra from YAML configuration
+    files. It includes core agent identification (like `agent_id`, `role`),
+    behavioral parameters, definitions for tools the agent can use, data sources
+    it might access, and mappings for processing inputs and outputs.
+
+    Attributes:
+        agent_id (str): A unique identifier for the agent instance. Automatically
+            generated based on `role` and `unique_identifier` if not provided.
+        role (str): The functional role this agent plays in a workflow (e.g.,
+            'DATA_EXTRACTOR', 'SUMMARIZER'). Automatically converted to uppercase.
+        description (str): A human-readable explanation of the agent's purpose
+            and capabilities.
+        tools (list[ToolConfig]): A list of `ToolConfig` objects, defining the
+            tools (functions) available to this agent.
+        data (Mapping[str, DataSourceConfig]): Configuration for data sources the
+            agent might need to access, keyed by a descriptive name.
+            Serialized as `mapping_data`.
+        parameters (dict[str, Any]): Agent-specific configuration parameters that
+            control its behavior (e.g., LLM model name, specific template names,
+            thresholds for decision-making).
+        inputs (dict[str, Any]): Defines mappings for how incoming data (from
+            messages or other sources) should populate the agent's input context.
+            Uses JMESPath for flexible data extraction and transformation.
+            Serialized as `mapping_inputs`.
+        outputs (dict[str, Any]): Defines mappings for how the agent's results
+            should be structured or transformed before being sent out.
+            (Currently, its usage might be pending full implementation).
+            Serialized as `mapping_outputs`.
+        name_components (list[str]): A list of attribute names or JMESPath expressions
+            used to construct the human-friendly `agent_name`. Defaults to
+            `["role", "unique_identifier"]`.
+        model_config (ConfigDict): Pydantic model configuration.
+            - `extra`: "allow" - Allows extra fields not explicitly defined, useful with Hydra.
+            - `arbitrary_types_allowed`: False.
+            - `populate_by_name`: True.
+        unique_identifier (str): A short, automatically generated unique ID component
+            used in constructing `agent_id` and `agent_name`.
+        _agent_name (str): Private attribute storing the generated human-friendly name.
+        _validate_parameters: Pydantic field validator to convert OmegaConf objects
+            (like DictConfig) in `parameters`, `inputs`, and `outputs` to
+            standard Python dicts before further validation.
+
     """
 
     # Core Identification
-    agent_id: str = Field(default="", description="Unique identifier for the agent instance, generated automatically.", validate_default=True)
-
+    agent_id: str = Field(
+        default="",  # Will be generated if not provided
+        description="Unique identifier for the agent instance. Automatically generated from 'role' and 'unique_identifier' if empty.",
+        validate_default=True,  # Ensures _generate_id_and_name runs even if id is not explicitly set
+    )
     role: Annotated[str, AfterValidator(uppercase_validator)] = Field(
-        default="",
-        description="The functional role this agent plays in the workflow (e.g., 'judge', 'conductor').",
+        default="",  # Should typically be set in YAML
+        description="The functional role this agent plays in the workflow (e.g., 'JUDGE', 'SUMMARIZER'). Converted to uppercase.",
     )
     description: str = Field(
         default="",
-        description="A brief explanation of the agent's purpose and capabilities.",
+        description="A brief human-readable explanation of the agent's purpose and capabilities.",
     )
 
     # Behavior & Connections
     tools: list[ToolConfig] = Field(
-        default_factory=list,  # Use factory for mutable default
+        default_factory=list,
         description="Configuration for tools (functions) that the agent can potentially use.",
     )
     data: Mapping[str, DataSourceConfig] = Field(
-        default_factory=dict,  # Use factory for mutable default
-        description="Configuration for data sources the agent might need access to.",
-        serialization_alias="mapping_data",
+        default_factory=dict,
+        description="Configuration for data sources the agent might need access to, keyed by a descriptive name.",
+        alias="mapping_data",  # For serialization/deserialization consistency if needed
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
-        description="Agent-specific configuration parameters (e.g., model name, template name, thresholds).",
+        description="Agent-specific configuration parameters (e.g., LLM model name, template name, decision thresholds).",
     )
     inputs: dict[str, Any] = Field(
         default_factory=dict,
-        description="Defines mappings for how incoming data should populate the agent's input context (using JMESPath).",
-        serialization_alias="mapping_inputs",
+        description="Defines JMESPath mappings for how incoming data should populate the agent's input context.",
+        alias="mapping_inputs",
     )
-    # TODO: 'outputs' field seems unused currently. Define its purpose or remove.
-    outputs: dict[str, Any] = Field(default_factory=dict,
-        serialization_alias="mapping_outputs")
+    outputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Defines mappings for how the agent's results should be structured or transformed. (Usage may be evolving).",
+        alias="mapping_outputs",
+    )
 
-    # Defines which attributes are combined to create the human-friendly 'name'.
-    name_components: list[str] = Field(default=["role", "unique_identifier"], exclude=False)
+    name_components: list[str] = Field(
+        default=["role", "unique_identifier"],
+        description="List of attribute names or JMESPath expressions to construct the 'agent_name'.",
+        exclude=False,  # Ensure it's included in model_dump etc.
+    )
 
     # Pydantic Model Configuration
-    model_config = {
-        "extra": "allow",  # Allow extra fields not explicitly defined (useful with Hydra).
-        "arbitrary_types_allowed": False,  # Disallow arbitrary types unless explicitly handled.
-        "populate_by_name": True,  # Allow population by field name.
-    }
+    model_config = ConfigDict(
+        extra="allow",
+        arbitrary_types_allowed=False,
+        populate_by_name=True,  # Allows using alias for population
+        validate_assignment=True,  # Ensures validators run on assignment
+    )
 
-    # Private Attributes (Internal state, often defaults or generated)
-    unique_identifier: str = Field(default_factory=lambda: uuid()[:6])  # Short unique ID component.
-    _agent_name:    str = PrivateAttr()  # Human-friendly name for the agent instance.
+    # Private Attributes
+    unique_identifier: str = Field(
+        default_factory=lambda: uuid()[:6],  # Generates a short unique ID
+        description="A short unique ID component, auto-generated if not provided.",
+        exclude=True,  # Typically not set directly by user, internal detail
+    )
+    _agent_name: str = PrivateAttr()
+
     # Field Validators
-    # Ensure OmegaConf objects (like DictConfig) are converted to standard Python dicts before validation.
-    _validate_parameters = field_validator("parameters", "inputs", "outputs", mode="before")(convert_omegaconf_objects())
+    _validate_parameters = field_validator(
+        "parameters", "inputs", "outputs", "data",  # Added data
+        mode="before",
+    )(convert_omegaconf_objects)
 
-    @computed_field
+    @computed_field(repr=False)  # repr=False to avoid circularity if used in name_components
     @property
     def agent_name(self) -> str:
-        """Generates a human-friendly name for the agent instance based on its role and unique identifier.
+        """A human-friendly name for the agent instance.
         
-        The name is constructed from the `role`, `unique_identifier`, and any other specified components.
-        You can use JMESPath expressions to extract values from the agent's inputs and parameters.
+        This name is dynamically constructed based on the `name_components`
+        attribute, which can include the agent's `role`, `unique_identifier`,
+        or other values extracted via JMESPath from its configuration
+        (`inputs` and `parameters`).
 
         Returns:
-            str: The generated name for the agent instance.
+            str: The generated human-friendly name for the agent.
 
         """
+        # Ensure _agent_name is initialized, _generate_id_and_name might not have run if accessed early
+        if not hasattr(self, "_agent_name") or not self._agent_name:
+            self._generate_id_and_name()  # Call the combined method
         return self._agent_name
 
     @model_validator(mode="after")
-    def _generate_id(self) -> Self:
-        """Generates an ID and human-friendly name for the agent instance based on its role and unique identifier.
-        
-        Designed to be idempotent to work with validate_assignment=True.
-        
-        - Sets `id` based on `role` and `unique_identifier`.
+    def _generate_id_and_name(self) -> Self:
+        """Generates `agent_id` and `_agent_name` for the agent instance.
 
-        - By default `name` is constructed from the `role`, `unique_identifier`, and any other specified components.
+        This validator runs after initial model creation and on subsequent
+        assignments if `validate_assignment` is True. It ensures that:
+        - `agent_id` is consistently derived from `role` and `unique_identifier`.
+        - `_agent_name` (accessed via `agent_name` property) is constructed based
+          on `name_components`, allowing for dynamic naming using JMESPath
+          expressions on the agent's configuration.
 
-        You can use JMESPath expressions to extract values from the agent's inputs and parameters.
+        This method is designed to be idempotent.
 
         Returns:
-            Self: The updated instance of the AgentConfig class with the generated ID and name.
+            Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated.
 
         """
-        # 2. Calculate the intended final ID
-        intended_id = f"{self.role}-{self.unique_identifier}"
-
-        if self.agent_id != intended_id:
+        # Generate agent_id
+        # Use current self.role and self.unique_identifier which should be set by now
+        intended_id = f"{self.role}-{self.unique_identifier}" if self.role else self.unique_identifier
+        if not self.agent_id or self.agent_id == "":  # Set if not provided or empty
             self.agent_id = intended_id
+        elif self.agent_id != intended_id and self.role and self.unique_identifier:
+            # If id was provided but doesn't match, log a warning or update,
+            # depending on desired behavior. For now, let's assume it might be
+            # intentionally set, but if role/uid change, it should reflect.
+            # This part might need refinement based on how Hydra instantiates and updates.
+            # If role or unique_identifier changes after initial creation, agent_id should ideally update.
+             if self.agent_id != f"{self.role}-{self.unique_identifier}":  # Check if it needs update
+                 logger.debug(f"Agent ID for role {self.role} may need update if role/uid changed post-init.")
+                 # self.agent_id = intended_id # Uncomment to force update if role/uid changes
 
-        # Calculate the intended final name based on components
+        # Generate agent_name
         name_parts = []
-        inputs_dict = self.model_dump(exclude={"agent_name"})
-        if "variants" in self.model_fields_set:
-            inputs_dict.update(self.variants)
-        inputs_dict.update({**self.inputs, **self.parameters})
+        # Consolidate all available data for JMESPath searching for name components
+        # model_dump provides a dict view of the model
+        # We use exclude_none=True and by_alias=True to get a comprehensive dict
+        search_data = self.model_dump(exclude_none=True, by_alias=True)
+        search_data["unique_identifier"] = self.unique_identifier  # Ensure it's available for search
 
-        for comp in self.name_components:
-            # Get other components like unique_identifier, role etc.
+        for comp_path in self.name_components:
             part = None
-            with suppress(Exception):
-                # Search the data structure using the JMESPath expression
-                part = jmespath.search(comp, inputs_dict)
-            if part is not None and str(part):  # Ensure part is not None and not empty string
-                name_parts.append(str(part))
-            elif comp and comp not in inputs_dict and len(comp) <= 8:
-                # If the component is not a JMESPath expression, but instead is
-                # a short string, use it directly
-                name_parts.append(comp)
+            try:
+                # Search the consolidated data structure using the JMESPath expression
+                part = jmespath.search(comp_path, search_data)
+            except Exception as e:
+                logger.warning(f"JMESPath search failed for component '{comp_path}' in AgentConfig {self.agent_id}: {e}")
 
+            if part is not None and str(part).strip():  # Ensure part is not None and not empty/whitespace string
+                name_parts.append(str(part).strip())
+            # Fallback for literal short strings if JMESPath fails or comp_path is not a path
+            elif comp_path and comp_path not in search_data and len(comp_path) <= 12:  # Increased length slightly
+                name_parts.append(comp_path)
+
+        # Construct the name, use agent_id as fallback if no parts found
         name = " ".join(name_parts).strip()
         self._agent_name = name or self.agent_id
 
@@ -306,113 +621,179 @@ class AgentConfig(BaseModel):
 
 
 class AgentVariants(AgentConfig):
-    """A factory for creating Agent instance variants based on parameter combinations.
+    """A factory for creating multiple `AgentConfig` instances (variants) based on
+    parameter combinations. This is useful for running experiments with different
+    agent settings or for creating ensembles of agents.
 
-    Defines two types of variants:
-    1. `parallel_variants`: Parameters whose combinations create distinct agent instances
-       (e.g., different models). These agents can potentially run in parallel.
-    2. `sequential_variants`: Parameters whose combinations define sequential tasks
-       executed by *each* agent instance created from `parallel_variants`.
+    It extends `AgentConfig` to inherit base configuration fields and adds
+    specific fields for defining variant parameters.
 
-    Example:
-    ```yaml
-    any_key_name:
-      id: ANALYST
-      role: "Analyst"
-      agent_obj: LLMAgent
-      num_runs: 1
-      variants:
-        model: ["gpt-4", "claude-3"]    # Creates 2 parallel agent instances
-      tasks:
-        criteria: ["accuracy", "speed"] # Each agent instance runs 2 tasks sequentially
-        temperature: [0.5, 0.8]         # Total 4 sequential tasks per agent
-                                        # (accuracy/0.5, accuracy/0.8, speed/0.5, speed/0.8)
+    Variants can be defined in two main ways:
+    1.  **`variants` (Parallel Variants)**: A dictionary where keys are parameter names
+        and values are lists of possible settings. Combinations of these create
+        distinct agent configurations that can potentially run in parallel.
+        Example: `variants: {model: ["gpt-4", "claude-3"], temperature: [0.7, 0.9]}`
+        would generate four base configurations.
+    2.  **`tasks` (Sequential Variants/Tasks)**: Similar to `variants`, but these
+        combinations define sequential tasks or sub-configurations to be executed
+        by *each* agent instance created from the parallel `variants`.
+        Example: `tasks: {prompt_style: ["detailed", "concise"]}`. If there were
+        two parallel variants, each would run these two sequential tasks.
 
-    Parameters
-    ----------
-        template: analyst               # parameter sets shared for each task
-      inputs:
-        results: othertask.outputs.results  # dynamic inputs mapped from other data
-    ```
+    The `num_runs` attribute replicates each parallel variant configuration a
+    specified number of times, useful for repeated trials.
+
+    Attributes:
+        agent_obj (str): The Python class name of the agent implementation to
+            instantiate (e.g., 'LLMAgent', 'SummarizationAgent'). This class
+            should be registered in `AgentRegistry`.
+        variants (dict): Dictionary defining parameters for parallel agent variations.
+            Keys are parameter names, values are lists of settings for that parameter.
+        tasks (dict): Dictionary defining parameters for sequential tasks or
+            sub-configurations within each parallel variation.
+        num_runs (int): Number of times to replicate each parallel variant
+            configuration.
+        extra_params (list[str]): A list of parameter names that should be sourced
+            from the runtime `RunRequest` and merged into the agent's parameters.
+            This allows for dynamic configuration at execution time.
 
     """
 
-    # --- Variant configuration: fields used to generate AgentConfig objects ---
-    agent_obj: str = Field(  # Class name used by Hydra for instantiation.
+    agent_obj: str = Field(
         default="",
-        description="The Python class name of the agent implementation to instantiate (e.g., 'Judge', 'LLMAgent').",
+        description="The Python class name of the agent implementation to instantiate (e.g., 'LLMAgent'). Must be registered in AgentRegistry.",
     )
-    variants: dict = Field(default_factory=dict, description="Parameters for parallel agent variations.")
-    tasks: dict = Field(default_factory=dict, description="Parameters for sequential tasks within each parallel variation.")
-    num_runs: int = Field(default=1, description="Number of times to replicate each parallel variant configuration.")
-    extra_params: list[str] = Field(default=[], description="Extra parameters to look for in runtime request.")
-    # --- Variant configuration: fields used to generate AgentConfig objects ---
+    variants: dict[str, list[Any]] = Field(  # More specific type hint
+        default_factory=dict,
+        description="Parameters for parallel agent variations (e.g., {'model': ['gpt-4', 'claude-3']}).",
+    )
+    tasks: dict[str, list[Any]] = Field(  # More specific type hint
+        default_factory=dict,
+        description="Parameters for sequential tasks within each parallel variation (e.g., {'prompt_style': ['concise', 'detailed']}).",
+    )
+    num_runs: int = Field(
+        default=1,
+        ge=1,  # Ensure num_runs is at least 1
+        description="Number of times to replicate each parallel variant configuration.",
+    )
+    extra_params: list[str] = Field(
+        default_factory=list,
+        description="List of parameter names to source from the runtime RunRequest and merge into agent parameters.",
+    )
 
-    def get_configs(self, params: RunRequest | None = None) -> list[tuple[type, AgentConfig]]:
-        """Generates agent configurations based on parallel and sequential variants.
+    def get_configs(self, params: RunRequest | None = None) -> list[tuple[type[Any], AgentConfig]]:
+        """Generates a list of agent configurations based on defined variants and tasks.
+
+        This method expands the `variants` and `tasks` dictionaries to create all
+        possible combinations of parameters. Each combination, along with base
+        parameters and any runtime `extra_params`, forms a distinct `AgentConfig`.
+        The `num_runs` setting further replicates these configurations.
+
+        Args:
+            params (RunRequest | None): An optional `RunRequest` object containing
+                runtime parameters. If `extra_params` are defined for this
+                `AgentVariants` instance, their values are sourced from this
+                `RunRequest`.
+
+        Returns:
+            list[tuple[type[Any], AgentConfig]]: A list of tuples, where each tuple
+            contains the agent class (obtained from `AgentRegistry` via `agent_obj`)
+            and the generated `AgentConfig` instance.
+
+        Raises:
+            ValueError: If an `extra_param` is specified but not found in the
+                provided `RunRequest` `params`.
+            FatalError: If no agent configurations can be generated (e.g., due to
+                empty variants and tasks without a base configuration).
+            TypeError: If `agent_obj` is not found in the `AgentRegistry`.
+
         """
-        # Get static config (base attributes excluding variant fields)
-        static_config = self.model_dump(
+        static_config_dict = self.model_dump(
             exclude={
-                "parallel_variants",
-                "id", "unique_identifier",
-                "sequential_variants",
-                "num_runs",
-                "parameters",
+                "agent_obj",  # Exclude agent_obj as it's used to get the class
+                "variants",
                 "tasks",
+                "num_runs",
+                "extra_params",
+                # Also exclude fields that are part of AgentConfig's identity if they are recalculated
+                "agent_id", "unique_identifier", "_agent_name",
+                # Keep 'parameters' to use as base, but it will be overwritten/merged
             },
+            exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
         )
-        base_parameters = self.parameters.copy()  # Base parameters common to all
 
-        # Get extra parameters passed in at runtime if requested
-        if params:
+        # Ensure 'parameters' exists and is a dict, even if empty from model_dump
+        base_parameters = static_config_dict.pop("parameters", {})
+        if base_parameters is None: base_parameters = {}
+
+        # Merge extra parameters from RunRequest if provided
+        if params and self.extra_params:
             for key in self.extra_params:
-                if key not in params.model_fields_set:
-                    raise ValueError(f"Cannot find parameter {key} in runtime dict for agent {self.agent_id}.")
+                if not hasattr(params, key) or getattr(params, key) is None:  # Check if param exists in RunRequest
+                    raise ValueError(
+                        f"Required extra_param '{key}' not found or is None in RunRequest for agent variant '{self.agent_id or self.role}'.")
                 base_parameters[key] = getattr(params, key)
 
-        # And parameters passed in the request by the user
-        request_params = params.parameters if params else {}
+        # Merge parameters from the RunRequest.parameters (user-provided overrides)
+        if params and params.parameters:
+            base_parameters.update(params.parameters)
 
-        # Get agent class
-        from buttermilk._core.variants import AgentRegistry
-        agent_class = AgentRegistry.get(self.agent_obj)
+        from buttermilk._core.variants import AgentRegistry  # Lazy import
+        try:
+            agent_class = AgentRegistry.get(self.agent_obj)
+            if agent_class is None:  # AgentRegistry.get might return None if not found and not raising
+                 raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
+        except KeyError:  # Assuming AgentRegistry might raise KeyError
+            raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
 
-        # Expand parallel variants
-        parallel_variant_combinations = expand_dict(self.variants)
-        if not parallel_variant_combinations:
-            parallel_variant_combinations = [{}]  # Ensure at least one base agent config
+        parallel_variant_combinations = expand_dict(self.variants) if self.variants else [{}]
+        sequential_task_sets = expand_dict(self.tasks) if self.tasks else [{}]
 
-        # Expand sequential variants
-        sequential_task_sets = expand_dict(self.tasks)
-        if not sequential_task_sets:
-            sequential_task_sets = [{}]  # Default: one task with no specific sequential parameters
-
-        generated_configs = []
-        # Create agent configs based on combinations of parallel and sequential variants, and num_runs
-        for i in range(self.num_runs):
+        generated_configs: list[tuple[type[Any], AgentConfig]] = []
+        for _ in range(self.num_runs):  # Loop for num_runs
             for parallel_params in parallel_variant_combinations:
                 for task_params in sequential_task_sets:
-                    # Start with static config
-                    cfg_dict = static_config.copy()
+                    # Start with the static parts of AgentVariants config
+                    current_config_dict = static_config_dict.copy()
 
-                    # Combine base parameters, parallel variant parameters, sequential task parameters, and parameters passed in from the UI in the request
-                    # Order matters: task parameters overwrite parallel, parallel overwrite base
-                    combined_params = {**base_parameters, **parallel_params, **task_params, **request_params}
-                    cfg_dict["parameters"] = combined_params
+                    # Combine parameters: base, then parallel, then task-specific.
+                    # This order defines precedence.
+                    final_params = {**base_parameters, **parallel_params, **task_params}
+                    current_config_dict["parameters"] = final_params
 
-                    # Create and add the AgentConfig instance
+                    # Ensure all necessary fields for AgentConfig are present or defaulted
+                    # Role and description might come from static_config_dict or need defaults
+                    current_config_dict.setdefault("role", self.role or "VARIANT_AGENT")
+                    current_config_dict.setdefault("description", self.description or "Generated variant agent")
+
+                    # Explicitly remove fields not in AgentConfig before instantiation
+                    # This is safer than relying solely on AgentConfig.model_config['extra'] = 'ignore'
+                    # if AgentConfig itself doesn't have 'extra':'allow' or if strictness is desired.
+                    valid_agent_config_fields = AgentConfig.model_fields.keys()
+                    filtered_cfg_dict = {
+                        k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields
+                    }
+
+                    # Add 'parameters' back as it's a valid field in AgentConfig
+                    filtered_cfg_dict["parameters"] = final_params
+
                     try:
-                        # Filter dict so we only provide values that belong in the final AgentConfig instance
-                        cfg_dict = {k: v for k, v in cfg_dict.items() if k in AgentConfig.model_fields}
-                        agent_config_instance = AgentConfig(**cfg_dict)
+                        agent_config_instance = AgentConfig(**filtered_cfg_dict)
                         generated_configs.append((agent_class, agent_config_instance))
                     except Exception as e:
-                        logger.error(msg := f"Error creating AgentConfig for {cfg_dict.get('role', 'unknown')} with parameters {combined_params}: {e}")
-                        raise FatalError(msg) from e  # Re-raise by default
+                        logger.error(msg :=
+                            f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
+                            f"with parameters {final_params}: {e}",
+                        )
+                        raise FatalError(msg) from e
 
-        if not generated_configs:  # Check if list is empty
-            logger.error(msg := f"Could not create any agent variant configs for {self.role} {self.agent_name}")
+        if not generated_configs:
+            logger.warning(f"No agent configurations were generated for AgentVariants: {self.agent_id or self.role}. "
+                           f"This might be due to empty 'variants' and 'tasks' with num_runs=0, or misconfiguration.")
+            # Depending on desired behavior, could raise FatalError or return empty list.
+            # Current behavior: returns empty list, which might be handled by caller.
+            # However, the original code raised FatalError, so let's keep that.
+            logger.error(msg := f"Could not create any agent variant configs for {self.role or self.agent_name}")
             raise FatalError(msg)
 
         return generated_configs

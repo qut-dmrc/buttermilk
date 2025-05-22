@@ -1,19 +1,29 @@
-"""Defines the LLMAgent, a base class for Buttermilk agents that interact with Language Models.
+"""Defines `LLMAgent`, a base class for Buttermilk agents that interact with Language Models.
+
+This module provides the core `LLMAgent` class, which extends the base `Agent`
+to include functionalities specific to LLM interactions. These include:
+-   Initializing an LLM client based on configuration.
+-   Loading and managing tools (functions) that the LLM can call.
+-   Rendering prompt templates (supporting Jinja2 and Prompty formats).
+-   Executing calls to the LLM API.
+-   Parsing the LLM's response, with optional validation against a Pydantic schema
+    if structured output is expected.
+-   Constructing standardized `AgentTrace` messages to record the interaction.
 """
 
-from typing import Any, Self  # Added Type for Pydantic model hinting
+from typing import Any, Self  # For type hinting, Type for Pydantic model hinting
 
-import pydantic
+import pydantic  # Pydantic core
 
 # Import Autogen components used for type hints and LLM interaction
-from autogen_core import CancellationToken, FunctionCall
-from autogen_core.models import (
+from autogen_core import CancellationToken, FunctionCall  # Autogen core types
+from autogen_core.models import (  # Autogen message and model types
     AssistantMessage,
 )
-from autogen_core.tools import FunctionTool, Tool, ToolSchema
-from pydantic import BaseModel, Field, PrivateAttr
+from autogen_core.tools import FunctionTool, Tool, ToolSchema  # Autogen tool types
+from pydantic import BaseModel, Field, PrivateAttr  # Pydantic components
 
-from buttermilk import buttermilk as bm  # Global Buttermilk instance
+from buttermilk import buttermilk as bm  # Global Buttermilk instance for framework access
 
 # Buttermilk core imports
 from buttermilk._core.agent import Agent, UserMessage  # Base agent and message types
@@ -40,19 +50,24 @@ from buttermilk.utils.templating import (
 class LLMAgent(Agent):
     """Base class for Buttermilk agents that interact with Large Language Models (LLMs).
 
-    Handles common tasks such as:
-    - Initializing the LLM client based on configuration.
-    - Loading and processing tools.
-    - Rendering prompt templates (Jinja2/Prompty).
-    - Calling the LLM API.
-    - Parsing the LLM response, optionally validating against a Pydantic schema.
-    - Constructing standardized AgentTrace messages.
+    This class provides a foundational structure for agents that need to communicate
+    with LLMs. It handles common tasks such as initializing the LLM client,
+    loading and preparing tools for the LLM to use, rendering prompt templates
+    (supporting Jinja2 and Prompty formats through utilities), making calls to
+    the LLM API (via an `AutoGenWrapper`), and parsing the LLM's response.
+    It can also validate structured JSON output from the LLM against a specified
+    Pydantic model.
 
     Subclasses typically need to:
-    - Define `_output_model` if structured output is expected.
-    - Implement specific message handlers (e.g., using `@buttermilk_handler`)
-      that call the `_process` method.
-    - Provide agent-specific configuration (template, model, parameters, tools) via Hydra.
+    -   Define the `_output_model` class attribute if they expect structured output
+        from the LLM that should be parsed into a specific Pydantic model.
+    -   Implement specific message handlers (e.g., methods decorated with
+        `@buttermilk_handler`) that prepare an `AgentInput` and then call the
+        `self.invoke()` method (which in turn calls `self._process()`) to interact
+        with the LLM.
+    -   Provide agent-specific configuration (like the LLM model name, prompt
+        template name, operational parameters, and tool definitions) through
+        Hydra configuration files, which are mapped to `AgentConfig`.
 
     Attributes:
         fail_on_unfilled_parameters: If True, raise error if template vars aren't filled.
@@ -63,13 +78,13 @@ class LLMAgent(Agent):
 
     """
 
-    # Configuration Fields (set via Hydra/Pydantic)
-    fail_on_unfilled_parameters: bool = Field(default=True, description="If True, raise ProcessingError if template parameters are missing.")
+    fail_on_unfilled_parameters: bool = Field(
+        default=True,
+        description="If True, raises ProcessingError if prompt template parameters are missing. Otherwise, warns and proceeds.",
+    )
 
-    # Private Attributes (managed internally)
     _tools_list: list[FunctionCall | Tool | ToolSchema | FunctionTool] = PrivateAttr(default_factory=list)
-    _model: str = PrivateAttr(default="")  # Populated by init_model validator
-    # name_components is inherited from Agent, used for generating agent ID/name.
+    _model: str = PrivateAttr(default="")
     _json_parser: ChatParser = PrivateAttr(default_factory=ChatParser)
     # Subclasses should override this if they expect specific structured output
     _output_model: type[BaseModel] | None = PrivateAttr(default=None)
@@ -87,86 +102,109 @@ class LLMAgent(Agent):
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
-        """Loads and prepares tools defined in the agent configuration."""
+        """Loads and prepares tools defined in the agent configuration.
+
+        This Pydantic validator runs after the agent model is created.
+        It checks `self.tools` (an `AgentConfig` field, typically populated from
+        Hydra configuration) and uses `create_tool_functions` to convert these
+        tool definitions into a list of Autogen-compatible tool objects
+        (e.g., `FunctionTool`). The result is stored in `self._tools_list`.
+
+        Returns:
+            Self: The agent instance with `_tools_list` populated.
+
+        """
         # `self.tools` is populated by AgentConfig based on Hydra config.
         if self.tools:
             logger.debug(f"Agent {self.agent_name}: Loading tools: {list(self.tools.keys())}")
             # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
             self._tools_list = create_tool_functions(self.tools)
         else:
-            logger.debug(f"Agent {self.agent_name}: No tools configured.")
+            logger.debug(f"Agent '{self.agent_name}': No tools configured.")
             self._tools_list = []
         return self
 
     async def _fill_template(
         self,
-        task_params: dict[str, Any],  # Parameters specific to the current task/request.
-        inputs: dict[str, Any],  # Input data provided in the AgentInput message.
-        context: list[LLMMessage] = [],  # Conversation history.
-        records: list[Record] = [],  # Associated data records.
-    ) -> list[LLMMessage]:  # Changed return type hint
-        """Renders the agent's prompt template (Jinja2/Prompty) with provided data.
+        task_params: dict[str, Any],
+        inputs: dict[str, Any],
+        context: list[LLMMessage] | None = None,  # Made context optional
+        records: list[Record] | None = None,   # Made records optional
+    ) -> list[LLMMessage]:
+        """Renders the agent's prompt template (e.g., Jinja2/Prompty) with provided data.
+
+        This method constructs the list of messages to be sent to the LLM.
+        It determines the correct prompt template to use based on `self.parameters`,
+        `task_params` (from `AgentInput.parameters`), or `inputs` (from `AgentInput.inputs`).
+        It then renders this template, injecting `inputs` as direct template
+        variables, and `context` and `records` into specific placeholders within
+        the template structure (if using Prompty format).
 
         Args:
-            task_params: Parameters from the incoming AgentInput message.
-            inputs: 'inputs' dictionary from the AgentInput message.
-            context: Conversation history (list of LLMMessage).
-            records: List of data records.
+            task_params: Parameters specific to the current task/request, typically
+                from `AgentInput.parameters`. These can override agent defaults.
+            inputs: Input data provided in the `AgentInput.inputs` dictionary. These
+                are made available as variables during template rendering.
+            context: Optional. Conversation history as a list of `LLMMessage` objects.
+                Used to fill context placeholders in the prompt. Defaults to empty list.
+            records: Optional. List of `Record` objects associated with the current task.
+                Used to fill record placeholders in the prompt. Defaults to empty list.
 
         Returns:
-            A list of messages (LLMMessage, typically SystemMessage, UserMessage)
-            ready to be sent to the LLM.
+            list[LLMMessage]: A list of `LLMMessage` objects (e.g., `SystemMessage`,
+            `UserMessage`, `AssistantMessage`) ready to be sent to the LLM.
 
         Raises:
-            ProcessingError: If no template is defined or if `fail_on_unfilled_parameters`
-                             is True and template variables are missing.
+            ProcessingError: If no prompt template name is defined in the configuration,
+                if the template parsing fails, or if `fail_on_unfilled_parameters`
+                is True and required template variables are missing from `inputs`.
 
         """
-        # Determine the template name from parameters (task-specific, agent default, or input override).
+        # Ensure context and records are lists if None
+        current_context = context or []
+        current_records = records or []
+
         template_name = self.parameters.get("template", task_params.get("template", inputs.get("template")))
-        if not template_name:
-            raise ProcessingError(f"Agent {self.agent_id}: No template name provided in parameters or inputs.")
-        logger.debug(f"Agent {self.agent_name}: Using template '{template_name}'.")
+        if not template_name or not isinstance(template_name, str):
+            raise ProcessingError(f"Agent '{self.agent_id}': No valid template name provided in parameters or inputs.")
+        logger.debug(f"Agent '{self.agent_name}': Using prompt template '{template_name}'.")
 
-        # Combine agent default parameters and task-specific parameters. Task parameters override defaults.
-        combined_params = {**self.parameters, **task_params}
+        combined_params = {**(self.parameters or {}), **(task_params or {})}
 
-        # Render the Jinja2 template. `load_template` handles finding and rendering.
-        # It takes parameters needed *by the template loading/finding logic itself*
-        # and the `untrusted_inputs` which are directly available for filling placeholders.
-        rendered_template, unfilled_vars = load_template(
+        rendered_template_str, unfilled_vars = load_template(
             template=template_name,
-            parameters=combined_params,  # parameters for template source logic (e.g., finding criteria file)
-            untrusted_inputs=inputs,  # Vars directly available to Jinja {{ }}
+            parameters=combined_params,
+            untrusted_inputs=inputs,
         )
 
-        # Parse the rendered content as a Prompty file to extract message structure.
         try:
-            prompty_structure = _parse_prompty(rendered_template)
+            prompty_structure = _parse_prompty(rendered_template_str)
         except Exception as e:
-            logger.error(f"Agent {self.agent_name}: Failed to parse rendered template '{template_name}' as Prompty: {e}")
-            raise ProcessingError(f"Failed to parse template '{template_name}'") from e
+            logger.error(f"Agent '{self.agent_name}': Failed to parse rendered template '{template_name}' as Prompty: {e!s}")
+            raise ProcessingError(f"Failed to parse template '{template_name}' for agent '{self.agent_id}'") from e
 
-        # Convert the Prompty structure into a list of Autogen message objects (System, User, etc.).
-        # `make_messages` injects context and records into appropriate placeholders.
         try:
-            messages: list[LLMMessage] = make_messages(local_template=prompty_structure, context=context, records=records)
+            llm_messages: list[LLMMessage] = make_messages(
+                local_template=prompty_structure, context=current_context, records=current_records,
+            )
         except Exception as e:
-            logger.error(f"Agent {self.agent_name}: Failed to create messages from Prompty structure for template '{template_name}': {e}")
-            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
+            logger.error(f"Agent '{self.agent_name}': Failed to create messages from Prompty structure for template '{template_name}': {e!s}")
+            raise ProcessingError(f"Failed to create messages from template '{template_name}' for agent '{self.agent_id}'") from e
 
-        # Check for any variables that were expected by the template but not provided in `inputs`.
-        # Ignore 'records' and 'context' as they are handled separately by `make_messages`.
-        missing_vars = set(unfilled_vars) - {"records", "context"}
-        if missing_vars:
-            err = f"Agent {self.agent_id} template '{template_name}' has unfilled parameters: {', '.join(missing_vars)}"
+        # Identify missing variables, excluding 'records' and 'context' which are handled by make_messages
+        missing_vars_in_template = set(unfilled_vars) - {"records", "context"}
+        if missing_vars_in_template:
+            err_msg = (
+                f"Agent '{self.agent_id}' template '{template_name}' has unfilled parameters: "
+                f"{', '.join(sorted(list(missing_vars_in_template)))}"
+            )
             if self.fail_on_unfilled_parameters:
-                logger.error(err)
-                raise ProcessingError(err)
-            logger.warning(err + ". Proceeding anyway.")
+                logger.error(err_msg)
+                raise ProcessingError(err_msg)
+            logger.warning(f"{err_msg}. Proceeding as fail_on_unfilled_parameters is False.")
 
-        logger.debug(f"Agent {self.agent_name}: Template '{template_name}' rendered into {len(messages)} messages.")
-        return messages
+        logger.debug(f"Agent '{self.agent_name}': Template '{template_name}' rendered into {len(llm_messages)} messages for LLM.")
+        return llm_messages
 
     # This is the primary method subclasses should override.
     async def _process(self, *, message: AgentInput,
@@ -174,39 +212,54 @@ class LLMAgent(Agent):
         """Core processing logic: fills template, calls LLM, makes AgentOutput.
 
         Args:
-            message: The input message containing data, context, parameters.
-            **kwargs: Additional arguments (currently unused but allows flexibility).
+            message: The `AgentInput` message containing data, context, and
+                parameters for this processing step.
+            cancellation_token: Optional. A token to signal cancellation of the
+                LLM call or other async operations.
+            **kwargs: Additional keyword arguments (currently not explicitly used but
+                provides flexibility for future extensions or subclass overrides).
 
         Returns:
-            An AgentOutput message with the LLM response and metadata.
+            AgentOutput: An `AgentOutput` message. The `outputs` attribute will
+            contain the processed LLM response (either a string, a parsed Pydantic
+            model if `_output_model` was used, or a generic JSON structure).
+            The `metadata` attribute will include information from the LLM call
+            (e.g., token usage) and details about the agent.
 
         Raises:
+        <<<<<<< HEAD
             ProcessingError: If template filling fails.
             Exception: If the LLM call itself fails unexpectedly.
 
-        """
-        logger.debug(f"Agent {self.agent_name} starting _process.")
-        if not isinstance(message, AgentInput):
-            raise ProcessingError(f"Agent {self.agent_id}: _process called with non-AgentInput message: {type(message)}")
-        try:
-            # 1. Prepare messages for the LLM using the template
-            llm_messages = await self._fill_template(
-                task_params=message.parameters, inputs=message.inputs, context=message.context, records=message.records,
-            )
-        except Exception as template_error:
-            # Log template errors clearly as they prevent LLM call
-            msg = f"Agent {self.agent_id}: Critical error during template processing: {template_error}"
-            logger.error(msg)
-            # Create an error output
-            error_output = ErrorEvent(source=self.agent_id, content=msg)
-            # Wrap in AgentOutput
-            return AgentOutput(agent_id=self.agent_id,
-                metadata={"error": True},
-                outputs=error_output,
-            )
+        =======
+            ProcessingError: If template filling fails and `fail_on_unfilled_parameters`
+                is True, or if the LLM call itself fails after retries, or if
+                parsing/validation of the LLM response fails critically.
+            FatalError: If the LLM client fails to initialize (caught in `init_model`).
+        >>>>>>> d9f9326 (Docs: Comprehensive documentation update (Autumn 2024))
 
-        # 2. Call the LLM
-        logger.debug(f"Agent {self.agent_name}: Sending {len(llm_messages)} messages to model '{self._model}'.")
+        """
+        logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
+        if not isinstance(message, AgentInput):  # Should be guaranteed by type hint, but defensive
+            raise ProcessingError(f"Agent '{self.agent_id}': _process called with non-AgentInput message type: {type(message)}")
+
+        try:
+            llm_messages_to_send = await self._fill_template(
+                task_params=message.parameters or {},  # Ensure dict
+                inputs=message.inputs or {},       # Ensure dict
+                context=message.context,
+                records=message.records,
+            )
+        except ProcessingError as template_fill_error:  # Catch specific ProcessingError from _fill_template
+            logger.error(f"Agent '{self.agent_id}': Critical error during prompt template processing: {template_fill_error!s}")
+            error_event = ErrorEvent(source=self.agent_id, content=str(template_fill_error))
+            return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "TemplateError"}, outputs=error_event)
+        except Exception as e:  # Catch any other unexpected error during templating
+            logger.error(f"Agent '{self.agent_id}': Unexpected critical error during template processing: {e!s}", exc_info=True)
+            error_event = ErrorEvent(source=self.agent_id, content=f"Unexpected template error: {e!s}")
+            return AgentOutput(agent_id=self.agent_id, metadata={"error": True, "error_type": "UnexpectedTemplateError"}, outputs=error_event)
+
+        logger.debug(f"Agent '{self.agent_name}': Sending {len(llm_messages_to_send)} messages to LLM '{self._model}'.")
         try:
             # Get the appropriate AutoGenWrapper instance from the global `bm.llms` manager.
             model_client = bm.llms.get_autogen_chat_client(self._model)
@@ -214,7 +267,7 @@ class LLMAgent(Agent):
                 messages=llm_messages,
                 tools_list=self._tools_list,
                 cancellation_token=cancellation_token,
-                schema=self._output_model,  # Pass expected schema to client if supported
+                schema=self._output_model,  # Pass expected Pydantic schema for structured output
             )
             llm_messages.append(AssistantMessage(content=chat_result.content, thought=chat_result.thought, source=self.agent_id))
             logger.debug(f"Agent {self.agent_name}: Received response from model '{self._model}'. Finish reason: {chat_result.finish_reason}")
@@ -279,10 +332,20 @@ class LLMAgent(Agent):
         return response
 
     async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        """Resets agent state (e.g., task index, last input)."""
-        # Inherited from Agent, can be extended by subclasses if they have more state.
-        await super().on_reset(cancellation_token)
-        # TODO: Review if _current_task_index and _last_input are used consistently or needed here.
-        # self._current_task_index = 0
-        # self._last_input = None
-        logger.debug(f"LLMAgent {self.agent_name} state reset.")
+        """Resets any LLM-specific state for the agent.
+
+        Calls the `super().on_reset()` from the base `Agent` class to clear
+        common state like records, model context, and data. Subclasses of
+        `LLMAgent` can override this to add further reset logic specific to
+        their needs (e.g., clearing LLM-specific caches or stateful tool instances).
+
+        Args:
+            cancellation_token: An optional `CancellationToken` to signal if
+                the reset operation should be aborted.
+
+        """
+        await super().on_reset(cancellation_token=cancellation_token)
+        # Add any LLMAgent-specific state reset here if needed in the future.
+        # For example, if LLMAgent maintained a specific type of conversation history
+        # or cached LLM responses that need clearing beyond what base Agent.on_reset does.
+        logger.debug(f"LLMAgent '{self.agent_name}' state reset (invoked super().on_reset).")
