@@ -105,7 +105,7 @@ class LLMHostAgent(LLMAgent, HostAgent):
             self._tools_list = [FunctionTool(_call_on_agent, description="Call on another agent to perform an action.")]
 
             # With user feedback, call the LLM to get the next step
-            result = await self._process(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}))
+            result = await self.invoke(message=AgentInput(inputs={"user_feedback": self._user_feedback, "participants": self._participants}), public_callback=public_callback, message_callback=message_callback, cancellation_token=cancellation_token, **kwargs)
 
             if result:
                 # If the result is not None, we have a response from the LLM
