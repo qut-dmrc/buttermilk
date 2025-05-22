@@ -24,52 +24,71 @@ and verify and compare results.
 
 The "pipeline" we are building is documented and versioned. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
-## Flows and jobs
-We think of predictions not as individual runs of links on chains,
-but instead as inherently stochastic insights into problems that
-are not always well-defined, by agents with varying capabilities.
+## Core Concepts
 
-Accordingly, Buttermilk's Flows provide a methodology for repeatedly
-querying agents about a dataset from multiple perspectives over
-multiple time periods. We sample from prior answers to inform
-current predictions, adjusting for randomness and specificity.
+Buttermilk is built around a few core concepts that help structure your research and data processing:
 
-* A **Flow** is a predefined pipeline consisting of one or more steps
-to process data and pass it on.
+*   **Flows**: Represent a complete research or data processing pipeline, outlining a series of steps (Jobs) to achieve a specific outcome.
+*   **Jobs**: The basic unit of work, containing all information for an Agent to process a single piece of data (a Record).
+*   **Records**: Represent individual pieces of data, designed to be immutable and carry rich metadata.
+*   **Agents**: Specialized components that perform specific tasks, such as interacting with AI models or collecting data.
+*   **Orchestrators**: Manage and execute Flows, coordinating Agents and data movement.
+*   **Configuration (Hydra)**: Buttermilk uses Hydra for flexible and organized management of settings.
 
-* A **Job** is the basic unit of work containing all information required
-to run one record through one step of processing. Jobs are designed to 
-include all the information necessary to run and trace a single
-atomic step of work. They can be run basically anywhere, and saving a job
-to a database or to disk provides all information required to understand
-and reproduce a single result.
-
-* A **Dataset** contains many **Record** objects, each with a unique 
-`record_id`. Records are immutable and may include text and binary data 
-as well as adequate metadata.
-
+For a detailed explanation of these concepts, please see **[docs/concepts.md](docs/concepts.md)**.
 
 ## Usage
 
-So far, we have a few standard pieces that set sensible defaults to make it easy for HASS scholars to use, store, assess, compare, and reproduce complicated AI workflows in their research.
+Buttermilk provides several components and features to facilitate HASS research:
 
-Working right now:
+Currently available:
 
-* Multimodal support for current-generation foundation models (Gemini, Claude, Llama, GPT) and plug-in support for basically any other analysis tool API.
-* A prompt templating system that allows you to evaluate, improve, and reuse components. These will ideally become a collection of versioned prompts that have been carefully evaluated, and come with test cases to monitor if they start to break.
-* Standard cloud logging, flexible data storage, secure project and individual credentials (Azure KeyVault or Google Secrets), built-in database storage (BigQuery), tracing (Promptflow or Langchain).
-* An API and CLI that integrates each modular component and orchestrates complex workflows, including parallel runs and multi-step workflows.
-* Use the same code to run locally, on a remote GPU, or in Azure/Google Compute [and AWS llambda, I guess, but not yet].
+*   Multimodal support for current-generation foundation models (Gemini, Claude, Llama, GPT) and plug-in support for other analysis tool APIs.
+*   A prompt templating system for evaluating, improving, and reusing prompt components.
+*   Standard cloud logging, flexible data storage options, secure credential management (e.g., Azure KeyVault, Google Secrets), built-in database storage (e.g., BigQuery), and tracing capabilities (e.g., Promptflow, Langchain).
+*   An API and CLI for integrating components and orchestrating complex workflows.
+*   Support for running code locally, on remote GPUs, or in cloud compute environments (Azure/Google Compute, with AWS Lambda planned).
 
-Next:
+Future Development:
 
-* Some tutorial workbooks showing a full walkthrough of an entire pipeline research run.
-* A pub/sub distributed queue system and an interface to add batch runs
-* A web interface and notebooks with good examples of how to assess, track, and compare performance on individual examples and aggregated runs.
+*   Tutorial workbooks demonstrating complete research pipeline examples.
+*   A distributed queue system (e.g., pub/sub) for managing batch runs.
+*   A web interface and example notebooks for assessing, tracking, and comparing performance.
 
-## Very early stages!
+## Contributing and Current Status
 
-We would love your help! Contact [nic](mailto:n.suzor@qut.edu.au) to discuss what you'd like to see, help us plan, or how to contribute!
+Buttermilk is actively under development. We welcome contributions and feedback! If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au) to discuss ideas, planning, or how to contribute.
+
+For more details on core concepts, see **[docs/concepts.md](docs/concepts.md)**.
+For developer-focused information on code structure, see **[buttermilk/core_structure.md](buttermilk/core_structure.md)**.
+
+## Contributing to Documentation
+
+We warmly welcome contributions to improve Buttermilk's documentation! Clear, concise, and up-to-date documentation is crucial for helping HASS scholars and developers effectively use and contribute to the project.
+
+### Documentation Style
+
+*   **Docstrings (Python Code)**: Please follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) for all docstrings within the Python code. This includes clear descriptions of modules, classes, functions, methods, arguments, and return values.
+*   **Markdown Files (e.g., README.md, docs/*.md)**: Aim for clarity, conciseness, and accuracy. Use standard Markdown formatting. Ensure that examples are easy to follow and reproduce.
+*   **General Principles**:
+    *   Write for the target audience (HASS scholars, developers).
+    *   Be explicit and avoid jargon where possible, or explain it clearly.
+    *   Keep documentation consistent with the current state of the codebase.
+
+### Keeping Documentation Up-to-Date
+
+As features are added or modified, please ensure that corresponding documentation is also updated. This includes:
+*   Updating module, class, and function docstrings.
+*   Revising relevant sections in `README.md` or other documentation files in the `docs/` directory.
+*   Ensuring examples and command-line usage instructions are still accurate.
+
+### Process for Documentation Changes
+
+*   **Identify Areas for Improvement**: This could be missing information, unclear explanations, outdated instructions, or typos.
+*   **Make Your Changes**: Edit the relevant files. For new concepts or substantial additions, consider discussing them in an issue first.
+*   **Submit Changes**: Documentation changes should be submitted via Pull Requests (PRs) to the main repository. Please clearly describe the documentation changes made in your PR description.
+
+We appreciate your help in making Buttermilk more accessible and understandable!
 
 ## Development
 

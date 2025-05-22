@@ -1,5 +1,9 @@
 # Buttermilk Core Structure
 
+**Note for Readers:** This document provides a developer-focused overview of the recommended organization for core Buttermilk objects, primarily aimed at managing code dependencies and ensuring a maintainable structure. It outlines how different components like Agents, Orchestrators, and Configuration objects are organized at a code level.
+
+For a higher-level, conceptual understanding of what these components are and how they function within Buttermilk from a user's perspective, please refer to **[../../docs/concepts.md](../../docs/concepts.md)**.
+
 This document outlines the recommended organization for core objects in Buttermilk to avoid circular dependencies while maintaining logical structure.
 
 ## Overview
