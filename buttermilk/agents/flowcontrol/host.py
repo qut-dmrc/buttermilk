@@ -168,10 +168,10 @@ class HostAgent(Agent):
         message: GroupchatMessageTypes,
         *,
         cancellation_token: CancellationToken,  # Standard arg
-        source: str = "",                   # Standard arg
+        source: str = "",  # Standard arg
         public_callback: Callable[[Any], Awaitable[None]],  # Standard arg
         message_callback: Callable[[Any], Awaitable[None]],  # Standard arg
-        **kwargs: Any,                      # Standard arg
+        **kwargs: Any,  # Standard arg
     ) -> None:
         """Listens to messages from the group chat and updates internal state.
 
@@ -203,13 +203,17 @@ class HostAgent(Agent):
             content_to_log = str(message.content)[:TRUNCATE_LEN]
             msg_type = AssistantMessage  # Traces are typically from other agents (assistants)
         elif isinstance(message, ManagerMessage):
-            logger.info(f"Host '{self.agent_name}' received user input: {message.model_dump_json(indent=2, exclude_none=True)}")
+            logger.info(
+                f"Host '{self.agent_name}' received user input: {message.model_dump_json(indent=2, exclude_none=True)}",
+            )
             self._user_confirmation = message
             if message.confirm:
                 self._user_confirmation_received.set()  # Signal that confirmation was received
 
             if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
-                logger.info(f"Host '{self.agent_name}': User request to set human_in_loop to {message.human_in_loop} (was {self.human_in_loop})")
+                logger.info(
+                    f"Host '{self.agent_name}': User request to set human_in_loop to {message.human_in_loop} (was {self.human_in_loop})",
+                )
                 self.human_in_loop = message.human_in_loop
 
             # Get content for logging, preferring 'content' then 'params'
@@ -217,20 +221,28 @@ class HostAgent(Agent):
             if loggable_content is None and message.params:
                 loggable_content = str(message.params)  # Stringify params if content is None
 
-            if loggable_content and isinstance(loggable_content, str) and not loggable_content.startswith(COMMAND_SYMBOL):
+            if (
+                loggable_content
+                and isinstance(loggable_content, str)
+                and not loggable_content.startswith(COMMAND_SYMBOL)
+            ):
                 content_to_log = loggable_content[:TRUNCATE_LEN]
                 self._user_feedback.append(loggable_content)  # Store full feedback
 
         elif isinstance(message, FlowProgressUpdate):
-             logger.debug(f"Host '{self.agent_name}': Received TaskProgressUpdate from '{source}'. Pending tasks: {dict(self._pending_tasks_by_agent)}. Not logging to history.")
-             return  # Do not log TaskProgressUpdate to conversation history
+            logger.debug(
+                f"Host '{self.agent_name}': Received TaskProgressUpdate from '{source}'. Pending tasks: {dict(self._pending_tasks_by_agent)}. Not logging to history.",
+            )
+            return  # Do not log TaskProgressUpdate to conversation history
 
         if content_to_log:
             # Add to internal model context for LLM decision making if HostAgent uses an LLM
             await self._model_context.add_message(msg_type(content=content_to_log, source=source))
             logger.debug(f"Host '{self.agent_name}': Logged message from '{source}' to internal context.")
         else:
-            logger.debug(f"Host '{self.agent_name}': No loggable content from message type {type(message)} from '{source}'.")
+            logger.debug(
+                f"Host '{self.agent_name}': No loggable content from message type {type(message)} from '{source}'.",
+            )
 
     async def _handle_events(
         self,
@@ -279,14 +291,16 @@ class HostAgent(Agent):
 
                     if self._pending_tasks_by_agent[agent_id_completed] <= 0:
                         if self._pending_tasks_by_agent[agent_id_completed] < 0:
-                             logger.warning(f"{log_msg_prefix} Task count for agent went negative. This may indicate an issue.")
+                            logger.warning(
+                                f"{log_msg_prefix} Task count for agent went negative. This may indicate an issue.",
+                            )
                         del self._pending_tasks_by_agent[agent_id_completed]
                         logger.debug(f"{log_msg_prefix} Agent has no more pending tasks.")
                     else:
-                         logger.debug(
+                        logger.debug(
                             f"{log_msg_prefix} Agent has {self._pending_tasks_by_agent[agent_id_completed]} remaining tasks. "
                             f"(Task index: {message.task_index}, More tasks: {message.more_tasks_remain}, Error: {message.is_error})",
-                         )
+                        )
 
                     # If all tasks across all agents are now complete, notify waiters.
                     if not self._pending_tasks_by_agent:
@@ -312,7 +326,9 @@ class HostAgent(Agent):
         elif isinstance(message, ConductorRequest):
             # Logic to start or manage the main flow execution task
             if self._conductor_task and not self._conductor_task.done():
-                logger.warning(f"Host '{self.agent_name}': Received ConductorRequest but a flow task is already running. Ignoring new request.")
+                logger.warning(
+                    f"Host '{self.agent_name}': Received ConductorRequest but a flow task is already running. Ignoring new request.",
+                )
                 return None  # Or handle as an error/queue if appropriate
 
             logger.info(f"Host '{self.agent_name}': Received ConductorRequest, starting new flow execution task.")
@@ -320,8 +336,10 @@ class HostAgent(Agent):
             # Consider adding error handling for the task itself, e.g., self._conductor_task.add_done_callback(...)
 
         elif isinstance(message, FlowProgressUpdate):
-             logger.debug(f"Host '{self.agent_name}': Received its own TaskProgressUpdate. This is for external observers. Ignoring.")
-             # The HostAgent itself doesn't act on these, they are for external monitoring.
+            logger.debug(
+                f"Host '{self.agent_name}': Received its own TaskProgressUpdate. This is for external observers. Ignoring.",
+            )
+            # The HostAgent itself doesn't act on these, they are for external monitoring.
 
         return None  # Default for OOB messages not producing a direct response
 
@@ -340,13 +358,17 @@ class HostAgent(Agent):
 
         """
         if not self.callback_to_groupchat:
-            logger.error(f"Host '{self.agent_name}': Cannot request user confirmation, callback_to_groupchat is not set.")
+            logger.error(
+                f"Host '{self.agent_name}': Cannot request user confirmation, callback_to_groupchat is not set.",
+            )
             return
 
         self._user_confirmation_received.clear()  # Reset the event for new confirmation
         self._user_confirmation = None  # Clear previous confirmation message
 
-        confirmation_prompt = f"Confirm next step: Execute step for role '{step.role}'. Description: '{step.content or 'N/A'}'"
+        confirmation_prompt = (
+            f"Confirm next step: Execute step for role '{step.role}'. Description: '{step.content or 'N/A'}'"
+        )
         ui_message_request = UIMessage(
             content=confirmation_prompt,
             options=["confirm", "reject"],  # Example options, could be True for simple Yes/No
@@ -409,20 +431,24 @@ class HostAgent(Agent):
                 await asyncio.sleep(interval)
                 async with self._tasks_condition:  # Ensure thread-safe access to pending tasks
                     if self._pending_tasks_by_agent:
-                        progress_message = FlowProgressUpdate(source=self.agent_id,
-                                                              status="pending",
-                                                              step_name=self._current_step,
+                        progress_message = FlowProgressUpdate(
+                            source=self.agent_id,
+                            status="pending",
+                            step_name=self._current_step,
                             waiting_on=dict(self._pending_tasks_by_agent),
                             message="Current pending tasks",
                         )
                     else:
-                         progress_message = FlowProgressUpdate(source=self.agent_id,
+                        progress_message = FlowProgressUpdate(
+                            source=self.agent_id,
                             status="idle",
                             step_name="IDLE",
                             waiting_on=dict(),
                             message="Flow currently idle",
                         )
-                    logger.debug(f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}")
+                    logger.debug(
+                        f"Host {self.agent_name} sending progress update: {progress_message.status} {progress_message.waiting_on}",
+                    )
                     await self.callback_to_groupchat(progress_message)
         except asyncio.CancelledError:
             logger.debug("Progress reporting task cancelled.")
@@ -430,9 +456,10 @@ class HostAgent(Agent):
             logger.exception(f"Error in progress reporting task: {e}")
         finally:
             # Send one last update before exiting
-            progress_message = FlowProgressUpdate(source=self.agent_id,
-                                                    status="finished",
-                                                    step_name=END,
+            progress_message = FlowProgressUpdate(
+                source=self.agent_id,
+                status="finished",
+                step_name=END,
                 waiting_on=dict(),
                 message="Flow finished",
             )
@@ -464,7 +491,9 @@ class HostAgent(Agent):
         try:
             async with self._tasks_condition:
                 if self._pending_tasks_by_agent:
-                    logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
+                    logger.info(
+                        f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...",
+                    )
                     # Start the periodic progress reporter task
                     asyncio.create_task(self._report_progress_periodically())
                 else:
@@ -498,7 +527,7 @@ class HostAgent(Agent):
             return False  # Indicate failure due to error
 
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
-        """Generates a sequence of `StepRequest` objects, one for each participant role.
+        """Generate a sequence of `StepRequest` objects, one for each participant role.
 
         This default implementation iterates through the roles defined in
         `self._participants` (which should be populated from a `ConductorRequest`)
@@ -525,7 +554,7 @@ class HostAgent(Agent):
         yield StepRequest(role=END, content="All participant roles in the default sequence have been processed.")
 
     async def _run_flow(self, message: ConductorRequest) -> None:
-        """Executes the main flow logic based on a sequence of steps.
+        """Execute the main flow logic based on a sequence of steps.
 
         This method is typically started as an asyncio task when the `HostAgent`
         receives a `ConductorRequest`. It initializes the participant list from
@@ -585,7 +614,9 @@ class HostAgent(Agent):
         logger.info(f"Host '{self.agent_name}': Flow execution loop finished.")
         # Final check for any outstanding tasks if loop finished due to reasons other than explicit END step from generator
         if not await self.wait_check_last_step_completions():
-             logger.error(f"Host '{self.agent_name}': Outstanding tasks remaining after flow loop completion. This may indicate an issue.")
+            logger.error(
+                f"Host '{self.agent_name}': Outstanding tasks remaining after flow loop completion. This may indicate an issue.",
+            )
         logger.info(f"Host '{self.agent_name}': _run_flow completed.")
 
     async def _shutdown(self) -> None:
@@ -631,7 +662,7 @@ class HostAgent(Agent):
         logger.info(f"Host {self.agent_name} shutdown complete.")
 
     async def wait_check_last_step_completions(self) -> bool:
-        """Waits for all tasks initiated in the previous step to complete and checks success.
+        """Wait for all tasks initiated in the previous step to complete and checks success.
 
         Calls `_wait_for_all_tasks_complete` to pause until all pending agent tasks
         are done. If the wait is successful (returns True), it clears the
@@ -654,12 +685,14 @@ class HostAgent(Agent):
         # If successful, clear the pending tasks dictionary for the next step.
         # This should be done under the condition lock to ensure atomicity with checks in _wait_for_all_tasks_complete.
         async with self._tasks_condition:
-             self._pending_tasks_by_agent.clear()
-        logger.info(f"Host '{self.agent_id}': All tasks for the previous step completed successfully. Pending tasks cleared.")
+            self._pending_tasks_by_agent.clear()
+        logger.info(
+            f"Host '{self.agent_id}': All tasks for the previous step completed successfully. Pending tasks cleared.",
+        )
         return True
 
     async def _execute_step(self, step: StepRequest) -> None:
-        """Executes a single step in the flow by sending the `StepRequest` to the group chat.
+        """Execute a single step in the flow by sending the `StepRequest` to the group chat.
 
         This method updates `self._current_step` with the role from the `step`.
         - If the `step.role` is `WAIT`, it introduces an asyncio sleep.
@@ -676,7 +709,9 @@ class HostAgent(Agent):
             during initialization to send messages.
 
         """
-        logger.info(f"Host '{self.agent_id}': Executing step for role '{step.role}'. Content: '{step.content[:100]}...'")
+        logger.info(
+            f"Host '{self.agent_id}': Executing step for role '{step.role}'. Content: '{step.content[:100]}...'",
+        )
         self._current_step = step.role  # Update current step being processed
 
         if not self.callback_to_groupchat:
@@ -689,7 +724,9 @@ class HostAgent(Agent):
             logger.info(f"Host '{self.agent_id}': Received WAIT step. Waiting for {wait_duration} seconds.")
             await asyncio.sleep(wait_duration)
         elif step.role == END:
-            logger.info(f"Host '{self.agent_id}': Received END step. Signaling flow completion. Final content: '{step.content}'")
+            logger.info(
+                f"Host '{self.agent_id}': Received END step. Signaling flow completion. Final content: '{step.content}'",
+            )
             await self.callback_to_groupchat(step)  # Send the END signal
         else:
             # For regular steps targeting a participant
@@ -700,7 +737,9 @@ class HostAgent(Agent):
                 self._step_starting.set()
                 logger.debug(f"Host '{self.agent_id}': Set _step_starting event for role '{step.role}'.")
             else:
-                 logger.warning(f"Host '{self.agent_id}': Executing step for role '{step.role}' which is not in the known participants list: {list(self._participants.keys())}.")
+                logger.warning(
+                    f"Host '{self.agent_id}': Executing step for role '{step.role}' which is not in the known participants list: {list(self._participants.keys())}.",
+                )
 
             await self.callback_to_groupchat(step)  # Dispatch the step to the group/channel
 
@@ -711,7 +750,7 @@ class HostAgent(Agent):
         cancellation_token: CancellationToken | None = None,  # Standard arg
         **kwargs: Any,  # Standard arg
     ) -> AgentOutput:
-        """Handles direct invocations of the HostAgent.
+        """Handle direct invocations of the HostAgent.
 
         As a non-LLM agent focused on flow control, the `HostAgent` typically
         does not perform complex processing on direct `AgentInput` messages via

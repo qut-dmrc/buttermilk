@@ -56,7 +56,7 @@
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
-      "justMyCode": true,
+      "justMyCode": false,
       "args": [
         "+run=api",
         "flows=[mock,trans,simple,z,tox,judger]",

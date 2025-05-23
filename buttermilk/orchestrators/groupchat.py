@@ -186,17 +186,17 @@ class AutogenOrchestrator(Orchestrator):
                     # to ensure the correct configuration is used when the factory is called.
 
                     def agent_factory(
-                        orchestrator_ref, # New parameter for self
-                        cfg=config_with_session,
-                        cls=agent_cls,
-                        topic_type=self._topic.type
+                        orchestrator_ref,  # New parameter for self
+                        cfg: dict = config_with_session,
+                        cls: type[Agent] = agent_cls,
+                        topic_type: str = self._topic.type,
                     ):
                         # The adapter will need to accept 'registration_callback'
                         return AutogenAgentAdapter(
                             agent_cfg=cfg,
                             agent_cls=cls,
                             topic_type=topic_type,
-                            registration_callback=orchestrator_ref._register_buttermilk_agent_instance # Pass the method
+                            registration_callback=orchestrator_ref._register_buttermilk_agent_instance,  # Pass the method
                         )
 
                     # Register the adapter factory with the runtime.
@@ -205,7 +205,7 @@ class AutogenOrchestrator(Orchestrator):
                         runtime=self._runtime,
                         type=variant_config.agent_id,  # Use the specific variant ID for registration
                         factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls, t_type=self._topic.type: agent_factory(
-                            orch, cfg=v_cfg, cls=a_cls, topic_type=t_type
+                            orch, cfg=v_cfg, cls=a_cls, topic_type=t_type,
                         ),
                     )
                 else:
@@ -385,14 +385,14 @@ class AutogenOrchestrator(Orchestrator):
         return publish_callback
 
     def get_agent_config(self, agent_id: str) -> AgentConfig | None:
-        """
-        Retrieves the AgentConfig for a given agent_id from the registry.
+        """Retrieves the AgentConfig for a given agent_id from the registry.
 
         Args:
             agent_id: The ID of the agent to retrieve.
 
         Returns:
             The AgentConfig of the agent if found, otherwise None.
+
         """
         agent_instance = self._agent_registry.get(agent_id)
         if agent_instance:

@@ -561,11 +561,12 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="after")
     def _generate_id_and_name(self) -> Self:
-        """Generates `agent_id` and `_agent_name` for the agent instance.
+        """Generates/updates `agent_id` and `_agent_name` for the agent instance.
 
         This validator runs after initial model creation and on subsequent
         assignments if `validate_assignment` is True. It ensures that:
         - `agent_id` is consistently derived from `role` and `unique_identifier`.
+          If `agent_id` is provided but differs, it will be updated to the canonical derived ID.
         - `_agent_name` (accessed via `agent_name` property) is constructed based
           on `name_components`, allowing for dynamic naming using JMESPath
           expressions on the agent's configuration.
@@ -573,55 +574,73 @@ class AgentConfig(BaseModel):
         This method is designed to be idempotent.
 
         Returns:
-            Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated.
+            Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated/updated.
 
         """
-        # Generate agent_id
-        # Use current self.role and self.unique_identifier which should be set by now
-        intended_id = f"{self.role}-{self.unique_identifier}" if self.role else self.unique_identifier
-        if not self.agent_id or self.agent_id == "":  # Set if not provided or empty
-            self.agent_id = intended_id
-        elif self.agent_id != intended_id and self.role and self.unique_identifier:
-            # If id was provided but doesn't match, log a warning or update,
-            # depending on desired behavior. For now, let's assume it might be
-            # intentionally set, but if role/uid change, it should reflect.
-            # This part might need refinement based on how Hydra instantiates and updates.
-            # If role or unique_identifier changes after initial creation, agent_id should ideally update.
-             if self.agent_id != f"{self.role}-{self.unique_identifier}":  # Check if it needs update
-                 logger.debug(f"Agent ID for role {self.role} may need update if role/uid changed post-init.")
-                 # self.agent_id = intended_id # Uncomment to force update if role/uid changes
+        # Part 1: Generate/Update agent_id
+        current_role = self.role
+        current_unique_id = self.unique_identifier
 
-        # Generate agent_name
+        intended_agent_id = f"{current_role}-{current_unique_id}" if current_role else current_unique_id
+
+        if self.agent_id != intended_agent_id:
+            if self.agent_id and self.agent_id != "":
+                logger.debug(
+                    f"Agent ID for role '{current_role}' (uid: {current_unique_id}) is being updated. "
+                    f"Old/Provided ID: '{self.agent_id}', New Canonical ID: '{intended_agent_id}'. ",
+                )
+            object.__setattr__(self, "agent_id", intended_agent_id)  # Use object.__setattr__ to bypass Pydantic validation cycle here
+
+        # Part 2: Generate agent_name
         name_parts = []
-        # Consolidate all available data for JMESPath searching for name components
-        # model_dump provides a dict view of the model
-        # We use exclude_none=True and by_alias=True to get a comprehensive dict
-        search_data = self.model_dump(exclude_none=True, by_alias=True)
-        search_data["unique_identifier"] = self.unique_identifier  # Ensure it's available for search
+
+        # Construct the context for JMESPath search manually to avoid recursion.
+        # This context should contain fields that name_components might refer to,
+        # respecting aliases and excluding None values.
+        context_for_jmespath = {}
+        for f_name, f_info in self.model_fields.items():
+            if f_name == "agent_name":  # Skip the computed field itself
+                continue
+            # Skip private attributes that are not part of the intended naming context
+            if f_name.startswith("_") and f_name != "_agent_name":  # Example, adjust if other private attrs are needed
+                continue
+
+            if hasattr(self, f_name):
+                value = getattr(self, f_name)
+                if value is not None:  # Mimic exclude_none=True
+                    key_for_jmespath = f_info.alias or f_name
+                    context_for_jmespath[key_for_jmespath] = value
+
+        # Explicitly add/ensure 'unique_identifier' and the canonical 'agent_id' are in the context.
+        # 'unique_identifier' might be Field(exclude=True) and 'agent_id' was just set.
+        context_for_jmespath["unique_identifier"] = self.unique_identifier
+        context_for_jmespath["agent_id"] = self.agent_id  # Use the canonical agent_id
 
         for comp_path in self.name_components:
             part = None
             try:
-                # Search the consolidated data structure using the JMESPath expression
-                part = jmespath.search(comp_path, search_data)
-            except Exception as e:
-                logger.warning(f"JMESPath search failed for component '{comp_path}' in AgentConfig {self.agent_id}: {e}")
+                part = jmespath.search(comp_path, context_for_jmespath)
+            except Exception:
+                part = None
 
-            if part is not None and str(part).strip():  # Ensure part is not None and not empty/whitespace string
+            if part is not None and str(part).strip():
                 name_parts.append(str(part).strip())
-            # Fallback for literal short strings if JMESPath fails or comp_path is not a path
-            elif comp_path and comp_path not in search_data and len(comp_path) <= 12:  # Increased length slightly
+            # Fallback for literal short strings if JMESPath fails/not applicable
+            # and comp_path itself is not a key that yielded a value from context_for_jmespath
+            elif part is None and comp_path and comp_path not in context_for_jmespath and len(comp_path) <= 16:
                 name_parts.append(comp_path)
 
-        # Construct the name, use agent_id as fallback if no parts found
-        name = " ".join(name_parts).strip()
-        self._agent_name = name or self.agent_id
+        name = " ".join(filter(None, name_parts)).strip()  # Filter None before join
+        # Use object.__setattr__ for private attributes to avoid triggering validators if not desired
+        object.__setattr__(self, "_agent_name", name or self.agent_id)  # Fallback to the canonical agent_id
 
         return self
 
 
 class AgentVariants(AgentConfig):
-    """A factory for creating multiple `AgentConfig` instances (variants) based on
+    """A factory for creating multiple `AgentConfig` instances (variants).
+     
+    based on
     parameter combinations. This is useful for running experiments with different
     agent settings or for creating ensembles of agents.
 

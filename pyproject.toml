@@ -171,6 +171,7 @@ ignore = [
     "RET503",  # Multiple returns 
     "E501",    # Line too long 
     "TRY003", 
+    "D401",     # First line of docstring must be in imperative mood
     "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
 ]

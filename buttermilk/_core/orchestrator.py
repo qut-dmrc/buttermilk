@@ -290,7 +290,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             # For now, it's logged, and the trace will be finalized.
         finally:
             # Ensure the Weave call is marked as finished, regardless of success or failure.
-            bm.weave.finish_call(orchestrator_trace, op=op_ref)
+            bm.weave.finish_call(orchestrator_trace, op=op)
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:

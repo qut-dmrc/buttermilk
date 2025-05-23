@@ -616,7 +616,7 @@ class BM(SessionInfo):
             # and include them in the structured log entry sent to Google Cloud Logging.
             cloudHandler = CloudLoggingHandler(
                 client=self.cloud_manager.gcs_log_client(self.logger_cfg),
-                resource=resource,
+                resource=cloud_logging_resource,
                 name=self.name,
                 labels=self.dict(include={"run_id", "name", "job", "platform"}),
             )

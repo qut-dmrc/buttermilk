@@ -13,7 +13,7 @@ import io  # For in-memory binary streams (BytesIO)
 import json
 import pickle  # For serializing Python objects
 import tempfile  # For creating temporary files/directories
-from collections.abc import Hashable, Mapping  # For type hinting
+from collections.abc import Callable, Hashable, Mapping  # For type hinting
 from pathlib import Path  # For local path manipulation
 from typing import Any
 
@@ -34,7 +34,7 @@ from tenacity import (  # Retry library components
 
 
 # Use deferred import to avoid circular references if this module is imported early
-def get_bm() -> Any: # Return type should be 'BM' from bm_init.py if type hint is resolvable
+def get_bm() -> Any:  # Return type should be 'BM' from bm_init.py if type hint is resolvable
     """Gets the Buttermilk global singleton instance (`bm`) with a delayed import.
 
     This helps avoid circular dependencies that can occur if `bm` is imported
@@ -42,6 +42,7 @@ def get_bm() -> Any: # Return type should be 'BM' from bm_init.py if type hint i
 
     Returns:
         Any: The Buttermilk global instance (`bm`).
+
     """
     from buttermilk._core.bm_init import get_bm as _get_bm  # Actual import of get_bm
     return _get_bm()
@@ -105,6 +106,7 @@ def save(
     Raises:
         OSError: If all attempted save methods fail.
         TypeError: If data types are incompatible with chosen save methods.
+
     """
     # from .utils import reset_index_and_dedup_columns # Already imported at module level
 
@@ -113,24 +115,24 @@ def save(
         final_save_dir_str = str(save_dir)
     elif isinstance(save_dir, str) and save_dir:
         final_save_dir_str = save_dir
-    else: # save_dir is empty or not a path type
+    else:  # save_dir is empty or not a path type
         try:
             bm_instance = get_bm()
             final_save_dir_str = bm_instance.save_dir
-            if not final_save_dir_str: # If bm.save_dir is also None or empty
+            if not final_save_dir_str:  # If bm.save_dir is also None or empty
                 logger.warning("`save_dir` not provided and `bm.save_dir` is not set. Saving might default to temporary or current dir.")
         except Exception as e:
             logger.warning(f"Could not find default save_dir from BM object (bm.save_dir). Error: {e!s}. Saving might default to temporary or current dir.")
 
     # Prepare data: Ensure DataFrame index is serializable if it's a DataFrame
     if isinstance(data, pd.DataFrame):
-        if not (len(data.index.names) == 1 and data.index.name is None): # Not a simple RangeIndex
+        if not (len(data.index.names) == 1 and data.index.name is None):  # Not a simple RangeIndex
             data = reset_index_and_dedup_columns(data)
 
     # Attempt 1: Upload to BigQuery if schema and dataset are provided
     if "schema" in parameters and "dataset" in parameters:
         try:
-            destination_table = upload_rows(rows=data, **parameters) # Pass all params
+            destination_table = upload_rows(rows=data, **parameters)  # Pass all params
             logger.info(f"Successfully uploaded data to BigQuery table: {destination_table}.")
             return destination_table
         except Exception as e:
@@ -139,9 +141,9 @@ def save(
 
     # Determine final URI for file-based saving
     final_uri_str: str | None = None
-    if uri: # If a full URI is explicitly provided
+    if uri:  # If a full URI is explicitly provided
         final_uri_str = str(uri)
-    elif final_save_dir_str: # Construct URI from save_dir, basename, extension
+    elif final_save_dir_str:  # Construct URI from save_dir, basename, extension
         try:
             # Convert string path to AnyPath for consistent handling
             base_path = AnyPath(final_save_dir_str)
@@ -154,22 +156,22 @@ def save(
                 dot_extension = extension if extension.startswith(".") else "." + extension
                 target_path = target_path.with_suffix(dot_extension)
             final_uri_str = str(target_path)
-        except InvalidPrefixError: # If save_dir was a local path string not convertible to CloudPath directly
-             logger.warning(f"Interpreting save_dir '{final_save_dir_str}' as local path due to CloudPath InvalidPrefixError.")
-             # Fallback to local Path logic if CloudPath parsing fails for local-like strings
-             base_path_local = Path(final_save_dir_str)
-             file_id_local = parameters.get("uuid", shortuuid.uuid())
-             effective_basename_local = "_".join(filter(None, [basename, file_id_local])) or f"data_{file_id_local}"
-             target_path_local = base_path_local / effective_basename_local
-             if extension:
+        except InvalidPrefixError:  # If save_dir was a local path string not convertible to CloudPath directly
+            logger.warning(f"Interpreting save_dir '{final_save_dir_str}' as local path due to CloudPath InvalidPrefixError.")
+            # Fallback to local Path logic if CloudPath parsing fails for local-like strings
+            base_path_local = Path(final_save_dir_str)
+            file_id_local = parameters.get("uuid", shortuuid.uuid())
+            effective_basename_local = "_".join(filter(None, [basename, file_id_local])) or f"data_{file_id_local}"
+            target_path_local = base_path_local / effective_basename_local
+            if extension:
                 dot_extension_local = extension if extension.startswith(".") else "." + extension
                 target_path_local = target_path_local.with_suffix(dot_extension_local)
-             final_uri_str = str(target_path_local)
+            final_uri_str = str(target_path_local)
 
-        except Exception as e: # Catch other path construction errors
+        except Exception as e:  # Catch other path construction errors
             logger.warning(
                 f"Error constructing save URI from save_dir='{final_save_dir_str}', basename='{basename}'. Error: {e!s}. Parameters: {parameters}",
-                exc_info=True
+                exc_info=True,
             )
             # final_uri_str remains None, will try fallback saving to temp dir
 
@@ -177,47 +179,47 @@ def save(
     # These are ordered from more specific/cloud-preferred to general/local fallbacks.
     file_upload_methods: list[Callable[..., str | None]] = []
 
-    if final_uri_str and AnyPath(final_uri_str).is_cloud: # Prioritize cloud methods if URI is cloud
+    if final_uri_str and isinstance(final_uri_str, CloudPath):  # Prioritize cloud methods if URI is cloud
         if isinstance(data, pd.DataFrame):
             # Add DataFrame-specific cloud upload first if applicable
-            file_upload_methods.append(lambda **kwargs_lambda: upload_dataframe_json(data=data, uri=final_uri_str, **kwargs_lambda.get("kwargs_for_upload",{}))) # type: ignore
+            file_upload_methods.append(lambda **kwargs_lambda: upload_dataframe_json(data=data, uri=final_uri_str, **kwargs_lambda.get("kwargs_for_upload", {})))  # type: ignore
         file_upload_methods.extend([
             upload_json,  # Tries to serialize to JSON and upload as text
-            upload_binary, # Tries to upload as binary (e.g., for pickled data if serialized to bytes)
+            upload_binary,  # Tries to upload as binary (e.g., for pickled data if serialized to bytes)
         ])
 
     # Fallback to local disk saving methods
     file_upload_methods.extend([
-        dump_to_disk, # Saves as JSON locally
+        dump_to_disk,  # Saves as JSON locally
         dump_pickle,  # Saves as pickle locally
     ])
 
     # Try each method until one succeeds
     for method_func in file_upload_methods:
         try:
-            logger.debug(f"Attempting to save data using method: {method_func.__name__} to path/URI: '{final_uri_str if final_uri_str else 'temporary_path'}'.")
+            logger.debug(f"Attempting to save data using method: {method_func.__name__} to path/URI: '{final_uri_str or 'temporary_path'}'.")
             # Prepare arguments for the save method
             method_args = {
                 "data": data,
-                "uri": final_uri_str, # Pass URI if available (for cloud methods)
-                "save_dir": final_save_dir_str or tempfile.gettempdir(), # save_dir for local methods
-                "extension": extension or ( ".json" if method_func in [upload_json, dump_to_disk] else ".pkl" if method_func == dump_pickle else ".bin"), # Sensible default extension
-                **parameters.get("kwargs_for_upload", {}) # Pass through extra kwargs if any
+                "uri": final_uri_str,  # Pass URI if available (for cloud methods)
+                "save_dir": final_save_dir_str or tempfile.gettempdir(),  # save_dir for local methods
+                "extension": extension or (".json" if method_func in [upload_json, dump_to_disk] else ".pkl" if method_func == dump_pickle else ".bin"),  # Sensible default extension
+                **parameters.get("kwargs_for_upload", {}),  # Pass through extra kwargs if any
             }
             # Filter out None args that the method might not expect (like uri for dump_to_disk)
             # This needs to be more nuanced based on each method's signature.
             # For simplicity, assuming methods can handle None for uri/save_dir if not applicable.
 
-            destination_path = method_func(**method_args) # type: ignore # Call with prepared args
-            if destination_path: # If method returns a path (success)
+            destination_path = method_func(**method_args)  # type: ignore # Call with prepared args
+            if destination_path:  # If method returns a path (success)
                 logger.info(f"Successfully saved data using {method_func.__name__} to: {destination_path}.")
                 return str(destination_path)
-        except (GoogleAPICallError, ClientError) as e_cloud: # Specific cloud errors
+        except (GoogleAPICallError, ClientError) as e_cloud:  # Specific cloud errors
             logger.warning(f"Cloud save error using {method_func.__name__} for '{final_uri_str}': {e_cloud!s}. Trying next method.")
-        except TypeError as e_type: # Catch TypeErrors from methods not expecting certain data types
+        except TypeError as e_type:  # Catch TypeErrors from methods not expecting certain data types
             logger.warning(f"Type error using {method_func.__name__} (data type: {type(data)}): {e_type!s}. Trying next method.")
-        except Exception as e_general: # Catch other errors
-            logger.warning(f"Failed to save data using {method_func.__name__}: {e_general!s}", exc_info=True) # Log with stack trace for debugging
+        except Exception as e_general:  # Catch other errors
+            logger.warning(f"Failed to save data using {method_func.__name__}: {e_general!s}", exc_info=True)  # Log with stack trace for debugging
 
     # If all methods fail
     err_msg = f"Critical failure: Unable to save data using any available method. Tried: {[m.__name__ for m in file_upload_methods]}."
@@ -251,6 +253,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         TypeError: If `data` is not a Pandas DataFrame.
         google.api_core.exceptions.GoogleAPICallError: For GCS API errors after retries.
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
+
     """
     if not isinstance(data, pd.DataFrame):
         raise TypeError("Input `data` must be a Pandas DataFrame for upload_dataframe_json.")
@@ -262,22 +265,22 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         try:
             gcs_client = storage.Client()
             blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs_client)
-            blob.upload_from_string("".encode("utf-8"), content_type="application/jsonl") # Empty NDJSON
+            blob.upload_from_string(b"", content_type="application/jsonl")  # Empty NDJSON
             logger.info(f"Uploaded empty DataFrame placeholder to {uri}.")
             return uri
         except Exception as e:
             logger.warning(f"Failed to upload empty DataFrame placeholder to {uri}: {e!s}")
-            return uri # Return URI even if empty placeholder fails, as data was empty
+            return uri  # Return URI even if empty placeholder fails, as data was empty
 
     # Ensure unique column names; reset index if it's complex
     if any(data.columns.duplicated()):
-        data = reset_index_and_dedup_columns(data) # Assumes this handles multi-index too
+        data = reset_index_and_dedup_columns(data)  # Assumes this handles multi-index too
 
     try:
         gcs_client = storage.Client()
         # Serialize DataFrame to newline-delimited JSON string
         rows_dict = data.to_dict(orient="records")
-        scrubbed_rows = scrub_serializable(rows_dict) # Ensure all data is JSON serializable
+        scrubbed_rows = scrub_serializable(rows_dict)  # Ensure all data is JSON serializable
 
         json_data_str = "\n".join([json.dumps(row) for row in scrubbed_rows])
         json_data_bytes = json_data_str.encode("utf-8")
@@ -289,10 +292,10 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
             blob.upload_from_file(file_obj=buffer, content_type="application/jsonl")
         logger.info(f"Successfully uploaded DataFrame as NDJSON to GCS: {uri}")
         return uri
-    except Exception as e_bytesio: # Fallback to pandas direct GCS upload if BytesIO fails
+    except Exception as e_bytesio:  # Fallback to pandas direct GCS upload if BytesIO fails
         logger.warning(
             f"Error saving DataFrame to {uri} using in-memory BytesIO method: {e_bytesio!s}. "
-            "Falling back to pandas `to_json` with GCSFS."
+            "Falling back to pandas `to_json` with GCSFS.",
         )
         try:
             # Pandas to_json can write directly to GCS if gcsfs is installed
@@ -301,12 +304,12 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
             return uri
         except Exception as e_pandas:
             logger.error(f"Pandas to_json fallback also failed for {uri}: {e_pandas!s}", exc_info=True)
-            raise # Re-raise the pandas error if fallback also fails
+            raise  # Re-raise the pandas error if fallback also fails
 
 
 def data_to_export_rows(
     data: pd.DataFrame | dict[str, Any] | list[Mapping[str, Any]] | BaseModel,
-    schema: list[bigquery.SchemaField], # Expecting BigQuery SchemaField objects
+    schema: list[bigquery.SchemaField],  # Expecting BigQuery SchemaField objects
 ) -> list[Mapping[Hashable, Any]]:
     """Converts various data types into a list of dictionaries suitable for BigQuery row insertion.
 
@@ -328,25 +331,26 @@ def data_to_export_rows(
     Returns:
         list[Mapping[Hashable, Any]]: A list of dictionaries, where each dictionary
         represents a row ready for BigQuery insertion.
+
     """
     from .bq import construct_dict_from_schema  # Deferred import
 
-    bq_rows: list[Mapping[str, Any]] | Mapping[str,Any] # Adjusted type hint
+    bq_rows: list[Mapping[str, Any]] | Mapping[str, Any]  # Adjusted type hint
 
     if isinstance(data, pd.DataFrame):
         # Deduplicate columns if necessary
         if any(data.columns.duplicated()):
-             data.columns = [ # type: ignore
+             data.columns = [  # type: ignore
                 x[1] if x[1] not in data.columns[: x[0]] else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}"
                 for x in enumerate(data.columns)
             ]
         bq_rows = data.to_dict(orient="records")
-    elif isinstance(data, BaseModel): # Check for Pydantic BaseModel
-        bq_rows = [data.model_dump(mode="json")] # Use model_dump for Pydantic v2
-    elif isinstance(data, dict): # Single dictionary row
+    elif isinstance(data, BaseModel):  # Check for Pydantic BaseModel
+        bq_rows = [data.model_dump(mode="json")]  # Use model_dump for Pydantic v2
+    elif isinstance(data, dict):  # Single dictionary row
         bq_rows = [data.copy()]
-    elif isinstance(data, list) and all(isinstance(i, dict) for i in data): # List of dictionaries
-        bq_rows = [d.copy() for d in data] # Create copies of dicts
+    elif isinstance(data, list) and all(isinstance(i, dict) for i in data):  # List of dictionaries
+        bq_rows = [d.copy() for d in data]  # Create copies of dicts
     else:
         raise TypeError(f"Unsupported data type for data_to_export_rows: {type(data)}. "
                         "Expected DataFrame, Pydantic BaseModel, dict, or list of dicts.")
@@ -360,9 +364,9 @@ def data_to_export_rows(
         raise TypeError(f"Schema must be a list of bigquery.SchemaField objects. Got: {type(schema)}")
 
     transformed_rows = [construct_dict_from_schema(schema, row) for row in rows_as_list]
-    serializable_rows = make_serialisable(transformed_rows) # make_serialisable should return list
+    serializable_rows = make_serialisable(transformed_rows)  # make_serialisable should return list
 
-    return serializable_rows # type: ignore # Final type should be list[Mapping[Hashable, Any]]
+    return serializable_rows  # type: ignore # Final type should be list[Mapping[Hashable, Any]]
 
 
 async def upload_rows_async(
@@ -370,7 +374,7 @@ async def upload_rows_async(
     *,
     schema: list[bigquery.SchemaField] | str | None = None,
     dataset: str | None = None,
-    save_dest: SaveInfo | None = None
+    save_dest: SaveInfo | None = None,
 ) -> str | None:
     """Uploads rows to a Google BigQuery table asynchronously.
 
@@ -400,6 +404,7 @@ async def upload_rows_async(
         OSError: If there are errors during BigQuery table operations (getting table,
             inserting rows).
         TypeError: If schema format is incorrect.
+
     """
     final_schema = schema or (save_dest.bq_schema if save_dest else None)
     final_dataset = dataset or (save_dest.dataset if save_dest else None)
@@ -413,13 +418,12 @@ async def upload_rows_async(
     # Resolve schema if it's a path string
     if isinstance(final_schema, str):
         try:
-            final_schema = bq_client.schema_from_json(final_schema) # This is a sync call
+            final_schema = bq_client.schema_from_json(final_schema)  # This is a sync call
         except Exception as e:
             raise TypeError(f"Failed to load schema from JSON path '{final_schema}': {e!s}") from e
 
     if not (isinstance(final_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in final_schema)):
         raise TypeError(f"Resolved schema is not a list of bigquery.SchemaField. Type: {type(final_schema)}")
-
 
     # data_to_export_rows can be CPU-bound, consider executor if it's very heavy for large data.
     # For now, assuming it's acceptable to run in the current thread before dispatching BQ I/O.
@@ -435,25 +439,25 @@ async def upload_rows_async(
         err_msg = (f"Unable to get BigQuery table '{final_dataset}' for async upload. "
                    f"It may not exist or there are permission issues. Error: {e!s}")
         logger.error(err_msg)
-        raise OSError(err_msg) from e # Re-raise as OSError for consistency with sync version
+        raise OSError(err_msg) from e  # Re-raise as OSError for consistency with sync version
 
     logger.debug(f"Inserting {len(bq_prepared_rows)} rows asynchronously to BigQuery table {final_dataset}.")
 
     insertion_tasks = []
     # bq_client.insert_rows is a blocking I/O call, run each chunk insertion in an executor thread
-    for row_chunk in chunks(bq_prepared_rows, 100): # Default chunk size of 100
+    for row_chunk in chunks(bq_prepared_rows, 100):  # Default chunk size of 100
         insertion_tasks.append(
-            loop.run_in_executor(None, bq_client.insert_rows, table_ref, row_chunk, final_schema)
+            loop.run_in_executor(None, bq_client.insert_rows, table_ref, row_chunk, final_schema),
         )
 
-    insertion_results = await asyncio.gather(*insertion_tasks) # Gather results from all chunk insertions
-    all_errors = [error for sublist_errors in insertion_results for error in sublist_errors if sublist_errors] # Flatten and filter
+    insertion_results = await asyncio.gather(*insertion_tasks)  # Gather results from all chunk insertions
+    all_errors = [error for sublist_errors in insertion_results for error in sublist_errors if sublist_errors]  # Flatten and filter
 
     if not all_errors:
         logger.info(f"Successfully pushed {len(bq_prepared_rows)} rows asynchronously to BigQuery table {final_dataset}.")
     else:
         # Log detailed errors if possible, summarize for exception
-        error_summary = str(all_errors)[:1000] # Limit error string length
+        error_summary = str(all_errors)[:1000]  # Limit error string length
         logger.error(f"Errors during async BigQuery upload to {final_dataset}: {all_errors}")
         raise OSError(f"Google BigQuery returned errors during async upload to {final_dataset}: {error_summary}")
 
@@ -466,8 +470,8 @@ def upload_rows(
     schema: list[bigquery.SchemaField] | str | None = None,
     dataset: str | None = None,
     save_dest: SaveInfo | None = None,
-    create_if_not_exists: bool = False, # Parameter not used in current implementation
-    **parameters: Any # Catch-all for other params, not used directly here
+    create_if_not_exists: bool = False,  # Parameter not used in current implementation
+    **parameters: Any,  # Catch-all for other params, not used directly here
 ) -> str | None:
     """Uploads rows to a Google BigQuery table synchronously.
 
@@ -494,6 +498,7 @@ def upload_rows(
         AssertionError: If schema or dataset cannot be resolved.
         OSError: If BigQuery operations fail (e.g., table not found, insertion errors).
         TypeError: If schema format is incorrect.
+
     """
     # Resolve schema and dataset, preferring direct args, then from save_dest
     final_schema = schema or (save_dest.bq_schema if save_dest else None)
@@ -503,7 +508,7 @@ def upload_rows(
 
     bq_client = bigquery.Client()  # Uses application default credentials
 
-    if isinstance(final_schema, str): # If schema is a path, load it
+    if isinstance(final_schema, str):  # If schema is a path, load it
         try:
             final_schema = bq_client.schema_from_json(final_schema)
         except Exception as e:
@@ -516,10 +521,10 @@ def upload_rows(
 
     if not bq_prepared_rows:
         logger.warning(f"No rows to upload to BigQuery table {final_dataset} after preparation.")
-        return None # Nothing to upload
+        return None  # Nothing to upload
 
     try:
-        table_ref = bq_client.get_table(final_dataset) # Check if table exists
+        table_ref = bq_client.get_table(final_dataset)  # Check if table exists
     except Exception as e:
         # TODO: Implement create_if_not_exists if flag is True
         # if create_if_not_exists:
@@ -536,7 +541,7 @@ def upload_rows(
     logger.debug(f"Inserting {len(bq_prepared_rows)} rows into BigQuery table {final_dataset}.")
 
     all_errors = []
-    for row_chunk in chunks(bq_prepared_rows, 100): # Process in chunks of 100 rows
+    for row_chunk in chunks(bq_prepared_rows, 100):  # Process in chunks of 100 rows
         chunk_errors = bq_client.insert_rows(table_ref, row_chunk, selected_fields=final_schema)
         if chunk_errors:
             all_errors.extend(chunk_errors)
@@ -544,7 +549,7 @@ def upload_rows(
     if not all_errors:
         logger.info(f"Successfully pushed {len(bq_prepared_rows)} rows to BigQuery table {final_dataset}.")
     else:
-        error_summary = str(all_errors)[:1000] # Limit error string length for logging
+        error_summary = str(all_errors)[:1000]  # Limit error string length for logging
         logger.error(f"Errors during BigQuery upload to {final_dataset}: {all_errors}")
         raise OSError(f"Google BigQuery returned errors during upload to {final_dataset}: {error_summary}")
 
@@ -573,6 +578,7 @@ def upload_binary(data: bytes | io.BufferedIOBase, *, uri: str) -> str:
         AssertionError: If `data` is None.
         google.api_core.exceptions.GoogleAPICallError: For GCS API errors after retries.
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
+
     """
     assert data is not None, "Data for upload_binary cannot be None."
     gcs_client = storage.Client()
@@ -581,10 +587,10 @@ def upload_binary(data: bytes | io.BufferedIOBase, *, uri: str) -> str:
     # Create a Blob object from the GCS URI
     blob = google.cloud.storage.blob.Blob.from_string(uri=uri, client=gcs_client)
 
-    if isinstance(data, io.BufferedIOBase): # If data is already a file-like object
-        data.seek(0) # Ensure reading from the beginning
+    if isinstance(data, io.BufferedIOBase):  # If data is already a file-like object
+        data.seek(0)  # Ensure reading from the beginning
         blob.upload_from_file(file_obj=data)
-    elif isinstance(data, bytes): # If data is raw bytes
+    elif isinstance(data, bytes):  # If data is raw bytes
         with io.BytesIO(data) as buffer:
             blob.upload_from_file(file_obj=buffer)
     else:
@@ -609,22 +615,23 @@ def dump_to_disk(data: Any, *, save_dir: str, extension: str = ".json", **kwargs
 
     Returns:
         str: The full path to the saved temporary file.
+
     """
-    Path(save_dir).mkdir(parents=True, exist_ok=True) # Ensure directory exists
+    Path(save_dir).mkdir(parents=True, exist_ok=True)  # Ensure directory exists
     # Use NamedTemporaryFile to get a unique filename and manage it safely
     with tempfile.NamedTemporaryFile(
-        delete=False, # Keep the file after closing for the caller to use
+        delete=False,  # Keep the file after closing for the caller to use
         dir=save_dir,
-        mode="w", # Write in text mode
+        mode="w",  # Write in text mode
         suffix=extension,
-        encoding="utf-8" # Specify encoding
+        encoding="utf-8",  # Specify encoding
     ) as out_file:
         if isinstance(data, pd.DataFrame):
             data.to_json(out_file, orient="records", lines=True, date_format="iso")
         else:
             # Ensure data is JSON serializable before dumping
             try:
-                json.dump(scrub_serializable(data), out_file, indent=kwargs.get("indent")) # Use scrub_serializable
+                json.dump(scrub_serializable(data), out_file, indent=kwargs.get("indent"))  # Use scrub_serializable
             except TypeError as e:
                 logger.error(f"Data is not JSON serializable for dump_to_disk: {e!s}. Data type: {type(data)}", exc_info=True)
                 # Fallback or re-raise, depending on desired behavior. For now, log and continue.
@@ -649,12 +656,13 @@ def dump_pickle(data: Any, *, save_dir: str, extension: str = ".pickle", **kwarg
 
     Returns:
         str: The full path to the saved pickled file.
+
     """
     Path(save_dir).mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        delete=False, # Keep the file
+        delete=False,  # Keep the file
         dir=save_dir,
-        mode="wb", # Write in binary mode for pickle
+        mode="wb",  # Write in binary mode for pickle
         suffix=extension,
     ) as out_file:
         pickle.dump(data, out_file)
@@ -672,12 +680,13 @@ def read_pickle(filename: str | GSPath) -> Any:
 
     Returns:
         Any: The unpickled Python object.
+
     """
     path_to_read: AnyPath
     if isinstance(filename, str):
         # Determine if it's a GCS path string or local path string
-        path_to_read = AnyPath(filename) # AnyPath handles gs:// or local
-    elif isinstance(filename, GSPath): # Already a GSPath
+        path_to_read = AnyPath(filename)  # AnyPath handles gs:// or local
+    elif isinstance(filename, GSPath):  # Already a GSPath
         path_to_read = filename
     else:
         raise TypeError(f"Unsupported filename type for read_pickle: {type(filename)}. Expected str or GSPath.")
@@ -712,6 +721,7 @@ def upload_text(data: str, *, uri: str, **kwargs: Any) -> str:
     Raises:
         google.api_core.exceptions.GoogleAPICallError: For GCS API errors after retries.
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
+
     """
     gcs_client = storage.Client()
     logger.debug(f"Uploading text data to GCS URI: {uri}.")
@@ -741,19 +751,20 @@ def upload_json(data: Any, *, uri: str, **kwargs: Any) -> str:
 
     Returns:
         str: The GCS URI where the JSON data was uploaded.
+
     """
     rows_to_serialize: list[Any]
     if isinstance(data, pd.DataFrame):
         rows_to_serialize = data.to_dict(orient="records")
     elif isinstance(data, list) and all(isinstance(i, dict) for i in data):
         rows_to_serialize = data
-    elif isinstance(data, dict): # Single dictionary
+    elif isinstance(data, dict):  # Single dictionary
         rows_to_serialize = [data]
-    else: # Attempt to serialize other types if possible, might fail if not list/dict like
+    else:  # Attempt to serialize other types if possible, might fail if not list/dict like
         logger.warning(f"Data for upload_json is not a DataFrame, list of dicts, or dict (type: {type(data)}). Attempting direct serialization.")
-        rows_to_serialize = data # Will be scrubbed next
+        rows_to_serialize = data  # Will be scrubbed next
 
-    scrubbed_rows = scrub_serializable(rows_to_serialize) # Ensure serializability
+    scrubbed_rows = scrub_serializable(rows_to_serialize)  # Ensure serializability
 
     # Convert to newline-delimited JSON string
     # If scrubbed_rows is not a list (e.g., a single dict was passed and scrubbed), wrap it for join

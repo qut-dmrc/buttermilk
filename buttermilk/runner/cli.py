@@ -35,8 +35,7 @@ from buttermilk._core import (
 )
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
-
-# We'll initialize bm once configuration is available from Hydra
+from buttermilk.api.flow import create_app as create_fastapi_app
 from buttermilk.runner.flowrunner import FlowRunner
 
 
@@ -72,7 +71,7 @@ def main(conf: DictConfig) -> None:
 
     # Set the singleton BM instance
     from buttermilk._core.dmrc import set_bm
-    set_bm(bm)  # Set the Buttermilk instance using the singleton pattern
+    set_bm(bm_instance)  # Set the Buttermilk instance using the singleton pattern
 
     # Branch execution based on the configured UI mode.
     match flow_runner.mode:
@@ -130,7 +129,7 @@ def main(conf: DictConfig) -> None:
             # These are typically passed to the app creation function.
             fastapi_app = create_fastapi_app(
                 bm=bm_instance,  # Pass the global BM instance
-                flows_runner=flow_runner,  # Pass the FlowRunner
+                flows=flow_runner,  # Pass the FlowRunner
             )
 
             # Short delay, as a workaround for potential async initialization timing issues

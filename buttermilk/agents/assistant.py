@@ -25,7 +25,7 @@ from autogen_core.tools import BaseTool  # Autogen base tool type
 from pydantic import PrivateAttr  # For Pydantic private attributes
 
 # Import the global Buttermilk instance getter
-from buttermilk._core.bm_init import get_bm  # Changed from dmrc.get_bm to bm_init.get_bm based on file structure
+from buttermilk._core.dmrc import get_bm  # Changed from dmrc.get_bm to bm_init.get_bm based on file structure
 
 bm = get_bm()  # Get the global Buttermilk instance
 

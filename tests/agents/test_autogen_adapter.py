@@ -10,9 +10,8 @@ from autogen_core import MessageContext
 # Buttermilk core types
 from buttermilk._core.agent import Agent
 from buttermilk._core.config import AgentConfig
+from buttermilk._core.constants import END, WAIT
 from buttermilk._core.contract import (
-    END,  # Import END constant
-    WAIT,  # Import WAIT constant
     AgentInput,
     AgentTrace,
     ConductorRequest,
@@ -22,6 +21,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk.agents.flowcontrol.explorer import ExplorerHost
 from buttermilk.agents.flowcontrol.host import LLMHostAgent
+from buttermilk.agents.flowcontrol.sequencer import Sequencer
 
 # The class under test
 from buttermilk.libs.autogen import AutogenAgentAdapter
@@ -112,7 +112,7 @@ class TestAutogenAgentAdapter:
                 agent_cls=ExplorerHost,
                 agent_cfg=explorer_config,
             )
-            await adapter.agent.initialize(callback_to_groupchat=AsyncMock())  # Initialize agent
+            await adapter.agent.initialize()  # Initialize agent
 
         assert isinstance(adapter.agent, ExplorerHost)
         assert adapter.agent.role == "explorer"

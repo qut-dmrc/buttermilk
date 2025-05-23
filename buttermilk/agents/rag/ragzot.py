@@ -16,6 +16,7 @@ from autogen_core import FunctionCall  # Autogen type for function calls
 from autogen_core.models._types import UserMessage  # Autogen UserMessage type
 from autogen_core.tools import FunctionTool  # Autogen FunctionTool for LLM tools
 from chromadb import Collection  # ChromaDB Collection type
+from pydantic import Field, PrivateAttr  # Pydantic for data validation and private attributes
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.config import ToolConfig  # Base ToolConfig
@@ -63,10 +64,10 @@ class RefResult(pydantic.BaseModel):
     document_id: str = Field(..., description="Unique ID of the parent document (e.g., Zotero item key).")
     document_title: str | None = Field(default=None, description="Title of the parent document.")
     doi_or_url: str | None = Field(default=None, description="DOI or URL of the parent document.")
-    _extra_zotero_data: str = Field(default="", description="Additional raw Zotero metadata (usage may vary).")  # Added default
+    _extra_zotero_data: str = PrivateAttr()  # (description="Additional raw Zotero metadata (usage may vary).")
 
     def __str__(self) -> str:
-        """Returns a formatted string representation of the reference result.
+        """Return a formatted string representation of the reference result.
 
         Includes title, document ID, DOI/URL, chunk index, citation, and full text.
 
@@ -82,7 +83,7 @@ class RefResult(pydantic.BaseModel):
         )
 
     def as_message(self, source: str = "search_result") -> UserMessage:
-        """Converts this reference result into an Autogen `UserMessage`.
+        """Convert this reference result into an Autogen `UserMessage`.
 
         The content of the message is the string representation of this `RefResult`.
 
@@ -98,7 +99,7 @@ class RefResult(pydantic.BaseModel):
 
     @classmethod
     def from_chroma(cls, results: dict[str, list[list[Any]]], index: int) -> "RefResult":
-        """Creates a `RefResult` instance from ChromaDB query results.
+        """Create a `RefResult` instance from ChromaDB query results.
 
         Assumes `results` is a dictionary as returned by `collection.query()`,
         containing keys like "ids", "metadatas", "documents", where each value
@@ -255,7 +256,7 @@ class RagZot(LLMAgent, ToolConfig):
 
     @pydantic.model_validator(mode="after")
     def _load_tools(self) -> Self:
-        """Initializes ChromaDB connection and sets up the search tool.
+        """Initialize ChromaDB connection and sets up the search tool.
 
         This Pydantic validator runs after the model is created. It iterates
         through `self.data` configurations to find one of `type: "chromadb"`,
@@ -315,7 +316,7 @@ class RagZot(LLMAgent, ToolConfig):
         return self
 
     def get_functions(self) -> list[FunctionTool]:  # More specific return type
-        """Returns the list of Autogen `FunctionTool` definitions for this agent.
+        """Return the list of Autogen `FunctionTool` definitions for this agent.
 
         This method is typically used when the agent's tools need to be registered
         with another system or LLM that understands the Autogen tool format.
@@ -342,7 +343,7 @@ class RagZot(LLMAgent, ToolConfig):
         return self._tools_list
 
     async def fetch(self, queries: list[str]) -> list[ToolOutput]:  # This is the tool's callable method
-        """Executes one or more search queries against the ChromaDB vector store concurrently.
+        """Execute one or more search queries against the ChromaDB vector store concurrently.
 
         This method is registered as a tool function (e.g., for an LLM to call).
         It takes a list of query strings, runs them in parallel against the
@@ -380,7 +381,7 @@ class RagZot(LLMAgent, ToolConfig):
         return tool_outputs
 
     async def _query_db(self, query: str) -> ToolOutput:
-        """Performs a single query against the ChromaDB vector store and formats results.
+        """Perform a single query against the ChromaDB vector store and formats results.
 
         Queries the `self._vectorstore` for `query`. Processes the raw ChromaDB
         results into a list of `RefResult` Pydantic models. If `self.no_duplicates`

@@ -111,7 +111,7 @@ class AutogenAgentAdapter(RoutedAgent):
         logger.debug(f"Scheduled initialization for agent {self.agent.agent_name} with callback.")
 
     def _make_publish_callback(self, topic_id: TopicId | None = None) -> Callable[[FlowMessage], Awaitable[None]]:
-        """Creates an asynchronous callback function that the wrapped Buttermilk agent can use
+        """Create an asynchronous callback function that the wrapped Buttermilk agent can use
         to publish messages back into the Autogen system via this adapter.
 
         This is crucial for agents (like UI agents or managers) that need to send messages
@@ -156,7 +156,7 @@ class AutogenAgentAdapter(RoutedAgent):
         message: GroupchatMessageTypes,  # Handles messages intended for general group chat consumption.
         ctx: MessageContext,
     ) -> None:
-        """Handles broadcast/group chat messages by delegating to the agent's `_listen` method.
+        """Handle broadcast/group chat messages by delegating to the agent's `_listen` method.
 
         This allows agents to react to general messages published on the topic, even if not
         directly addressed to them. Typically used for information sharing or awareness.
