@@ -6,19 +6,19 @@ group chat or message bus, capture `AgentTrace` messages produced by other agent
 and persist them using an asynchronous data uploader.
 """
 
-from typing import Any # For type hinting
+from typing import Any  # For type hinting
 
-from autogen_core import ( # Autogen core components
+from autogen_core import (  # Autogen core components
     MessageContext,
     RoutedAgent,
     message_handler,  # Decorator to register methods as message handlers.
 )
 
-from buttermilk._core import logger # Buttermilk's centralized logger
-from buttermilk._core.agent import ProcessingError # Buttermilk custom exception
-from buttermilk._core.config import SaveInfo # Configuration model for saving data
-from buttermilk._core.contract import AgentTrace, ErrorEvent # Buttermilk message contracts
-from buttermilk.utils.uploader import AsyncDataUploader # Utility for asynchronous data upload
+from buttermilk._core import logger  # Buttermilk's centralized logger
+from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
+from buttermilk._core.config import SaveInfo  # Configuration model for saving data
+from buttermilk._core.contract import AgentTrace, ErrorEvent  # Buttermilk message contracts
+from buttermilk.utils.uploader import AsyncDataUploader  # Utility for asynchronous data upload
 
 BATCH_SIZE = 10
 """Default buffer size for the `AsyncDataUploader` before flushing data."""
@@ -41,13 +41,14 @@ class SpyAgent(RoutedAgent):
         description (str): A description for the agent, set during initialization.
                            Defaults to "Save results to BQ" in the original code,
                            but could be made more generic.
+
     """
 
     def __init__(
         self,
-        name: str = "spy_agent", # Added name parameter for RoutedAgent
-        save_dest: SaveInfo, 
-        description: str = "Passively listens and saves AgentTrace messages from a group chat.", # More descriptive default
+        name: str = "spy_agent",  # Added name parameter for RoutedAgent
+        save_dest: SaveInfo | None = None,
+        description: str = "Passively listens and saves AgentTrace messages from a group chat.",  # More descriptive default
         **kwargs: Any,
     ) -> None:
         """Initializes the SpyAgent.
@@ -60,6 +61,7 @@ class SpyAgent(RoutedAgent):
             description (str): A human-readable description of the agent's purpose.
             **kwargs: Additional keyword arguments passed to the `RoutedAgent`
                 superclass constructor.
+
         """
         # Call super().__init__ with a name and other relevant RoutedAgent parameters.
         # The original `super().__init__(description="Save results to BQ")` only passes description.
@@ -68,9 +70,8 @@ class SpyAgent(RoutedAgent):
         self.manager = AsyncDataUploader(buffer_size=BATCH_SIZE, save_dest=save_dest)
         logger.info(f"SpyAgent '{self.name}' initialized. Will save data to destination type: {save_dest.type}, details: {save_dest.destination or save_dest.dataset}")
 
-
-    @message_handler # Autogen decorator to register this method as a handler
-    async def agent_output_handler(self, message: Any, ctx: MessageContext) -> ErrorEvent | None: # Changed to Any to handle type check first
+    @message_handler  # Autogen decorator to register this method as a handler
+    async def agent_output_handler(self, message: Any, ctx: MessageContext) -> ErrorEvent | None:  # Changed to Any to handle type check first
         """Message handler that captures `AgentTrace` messages and saves them.
 
         This method is decorated with `@message_handler`, making it the entry point
@@ -105,11 +106,12 @@ class SpyAgent(RoutedAgent):
         Raises:
             ProcessingError: If an incompatible message type (not `AgentTrace`)
                 is received.
+
         """
         if isinstance(message, AgentTrace):
-            if message.outputs: # Only process traces that have actual output content
+            if message.outputs:  # Only process traces that have actual output content
                 logger.debug(f"SpyAgent '{self.name}' received AgentTrace from source '{message.agent_id}' on topic '{ctx.topic_id}'.")
-                
+
                 # Data cleaning: Ensure records do not have both 'text' and 'content' fields.
                 # This addresses a specific data structure issue observed.
                 if message.inputs and message.inputs.records:
@@ -129,7 +131,7 @@ class SpyAgent(RoutedAgent):
             error_content = f"SpyAgent '{self.name}' received an incompatible message type: {type(message).__name__} on topic '{ctx.topic_id}'. Expected AgentTrace."
             logger.error(error_content)
             # Try to publish an ErrorEvent back to the source topic if possible
-            if hasattr(self, "publish_message") and callable(self.publish_message): # Check if publish_message exists (from RoutedAgent)
+            if hasattr(self, "publish_message") and callable(self.publish_message):  # Check if publish_message exists (from RoutedAgent)
                 # self.id might be from a Pydantic model or a specific attribute.
                 # RoutedAgent has a 'name' attribute. Let's use that.
                 error_event = ErrorEvent(source=self.name, content=error_content)
@@ -137,8 +139,8 @@ class SpyAgent(RoutedAgent):
                     await self.publish_message(error_event, topic_id=ctx.topic_id)
                 except Exception as pub_e:
                     logger.error(f"SpyAgent '{self.name}': Failed to publish ErrorEvent: {pub_e!s}")
-            
+
             # Raise a ProcessingError to signal failure for this message
             raise ProcessingError(error_content)
-        
-        return None # SpyAgent typically doesn't reply directly in the flow
+
+        return None  # SpyAgent typically doesn't reply directly in the flow

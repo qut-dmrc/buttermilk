@@ -5,7 +5,7 @@ It uses its own Language Model to decide which participant agent to call upon ne
 based on the conversation history and user feedback. It dynamically creates tools
 representing the available participant agents for its LLM to choose from.
 """
-from collections.abc import AsyncGenerator, Callable  # For type hinting
+from collections.abc import AsyncGenerator, Awaitable, Callable  # For type hinting
 from enum import StrEnum  # For creating string-based Enums for dynamic tool generation
 from typing import Any  # For type hinting
 

@@ -17,7 +17,7 @@ The agent can also interact with a human user via a "MANAGER" interface if
 
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Callable  # For type hinting
+from collections.abc import AsyncGenerator, Awaitable, Callable  # For type hinting
 from typing import Any  # For type hinting
 
 from autogen_core import CancellationToken  # Autogen cancellation token

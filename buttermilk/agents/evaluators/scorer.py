@@ -7,8 +7,11 @@ models (`QualScoreCRA`, `QualScore`, `QualResults`) to structure the scoring
 criteria, individual assessments, and the overall scoring output.
 """
 
-from collections.abc import Callable  # For typing callables
-from typing import Any  # For type hinting and class types
+from collections.abc import (
+    Awaitable,  # For type hinting and class types
+    Callable,  # For typing callables
+)
+from typing import Any
 
 from autogen_core import CancellationToken  # Autogen cancellation token
 from pydantic import BaseModel, Field, computed_field  # Pydantic components
