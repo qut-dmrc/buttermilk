@@ -4,7 +4,8 @@ import pytest
 from autogen_core import DefaultTopicId, SingleThreadedAgentRuntime, TypeSubscription
 
 from buttermilk._core.config import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentTrace
+from buttermilk._core.contract import AgentInput, AgentTrace, ErrorEvent
+from buttermilk._core.exceptions import ProcessingError # Added ProcessingError
 from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchRecord
 
@@ -31,16 +32,15 @@ messages = [
         ),
     ),
     (
-        "error",
+        ProcessingError, # Expect ProcessingError for failed URI fetch
         AgentInput(
-            inputs=dict(prompt="Check out https://example.com"),
+            inputs=dict(prompt="Check out https://example.com"), # This URI will be mocked to fail
         ),
     ),
     (
-        "missing",
+        ProcessingError, # Expect ProcessingError for failed record_id fetch
         AgentInput(
-
-            inputs={"step": "testing", "prompt": "Get `#record123`"},
+            inputs={"step": "testing", "prompt": "Get `#record123`"}, # This ID will be mocked to fail
         ),
     ),
 ]
@@ -241,6 +241,44 @@ class TestFetch:
             assert isinstance(result, AgentTrace)
 
     @pytest.mark.anyio
+    @patch("buttermilk.utils.media.download_and_convert")
+    async def test_fetch_nonexistent_uri_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
+        """Test fetch raises ProcessingError when a URI is not found."""
+        mock_download_and_convert.return_value = None
+        
+        uri_to_test = "http://example.com/nonexistentpage"
+        with pytest.raises(ProcessingError, match=f"Record not found for URI: {uri_to_test}"):
+            await fetch.fetch(uri=uri_to_test)
+        
+        mock_download_and_convert.assert_called_once_with(uri=uri_to_test)
+
+    @pytest.mark.anyio
+    @patch("buttermilk.utils.media.download_and_convert")
+    async def test_fetch_specific_url_raises_processing_error(self, mock_download_and_convert, fetch: FetchRecord):
+        """Test fetch raises ProcessingError for a specific URI when not found."""
+        mock_download_and_convert.return_value = None
+        
+        specific_uri = "https://www.abc.net.au/religion/catherine-llewellyn-gender-affirming-healthcare-for-trans-youth"
+        with pytest.raises(ProcessingError, match=f"Record not found for URI: {specific_uri}"):
+            await fetch.fetch(uri=specific_uri)
+            
+        mock_download_and_convert.assert_called_once_with(uri=specific_uri)
+
+    @pytest.mark.anyio
+    async def test_fetch_nonexistent_id_raises_processing_error(self, fetch: FetchRecord):
+        """Test fetch raises ProcessingError when a record ID is not found."""
+        record_id_to_test = "nonexistent_id_123"
+
+        async def mock_async_get_record_dataset(*args, **kwargs):
+            # Simulate _get_record_dataset not finding the record
+            return None
+
+        with patch.object(fetch, "_get_record_dataset", new=mock_async_get_record_dataset) as patched_get_record_dataset:
+            with pytest.raises(ProcessingError, match=f"Record not found for ID: {record_id_to_test}"):
+                await fetch.fetch(record_id=record_id_to_test)
+            patched_get_record_dataset.assert_called_once() # Verify it was called
+
+    @pytest.mark.anyio
     @pytest.mark.parametrize(
         argvalues=NEWS_RECORDS,
         argnames=["id", "uri", "expected_mimetype", "expected_size"],
@@ -275,21 +313,75 @@ def fetch_agent_cfg() -> AgentConfig:
 async def test_run_record_agent(
     fetch_agent_cfg: AgentConfig,
     expected,
-    agent_input,
+    agent_input: AgentInput,
 ):
     runtime = SingleThreadedAgentRuntime()
-    agent_id = await FetchRecord.register(runtime, DefaultTopicId().type, lambda: FetchRecord(**fetch_agent_cfg.model_dump()))
-    await runtime.add_subscription(
-        TypeSubscription(
-            topic_type=DefaultTopicId().type,
-            agent_type=agent_id.type,
-        ),
-    )
-    runtime.start()
 
-    result = await runtime.send_message(
-        agent_input,
-        await runtime.get("default"),
-    )
-    await runtime.stop_when_idle()
-    assert result == expected
+    # Mock for download_and_convert to simulate fetch failure for specific URIs
+    async def mock_download_and_convert_conditional(uri: str, **kwargs):
+        if uri == "https://example.com":
+            return None  # Simulate fetch failure for this URI
+        # Fallback for other URIs:
+        mock_r = MagicMock(spec=Record)
+        mock_r.uri = uri
+        mock_r.text = f"Mock content for {uri}"
+        mock_r.fulltext = f"Mock content for {uri}"
+        return mock_r
+
+    # Mock for _get_record_dataset to simulate fetch failure for specific record IDs
+    async def mock_get_record_dataset_conditional(record_id_to_lookup: str, **kwargs):
+        if record_id_to_lookup == "record123": # Corresponds to "Get `#record123`"
+            return None # Simulate fetch failure for this ID
+        # Fallback for other record_ids:
+        mock_r = MagicMock(spec=Record)
+        mock_r.record_id = record_id_to_lookup
+        mock_r.text = f"Mock content for {record_id_to_lookup}"
+        mock_r.fulltext = f"Mock content for {record_id_to_lookup}"
+        return mock_r
+
+    with patch("buttermilk.utils.media.download_and_convert", side_effect=mock_download_and_convert_conditional) as mock_d_and_c, \
+         patch.object(FetchRecord, "_get_record_dataset", side_effect=mock_get_record_dataset_conditional) as mock_get_rec_dataset:
+
+        agent_id = await FetchRecord.register(
+            runtime, DefaultTopicId().type, lambda: FetchRecord(**fetch_agent_cfg.model_dump())
+        )
+        await runtime.add_subscription(
+            TypeSubscription(
+                topic_type=DefaultTopicId().type,
+                agent_type=agent_id.type,
+            ),
+        )
+        runtime.start()
+
+        if expected is ProcessingError:
+            # Determine the expected error message based on the input prompt
+            prompt_str = agent_input.inputs.get("prompt", "")
+            expected_match = ""
+            if "https://example.com" in prompt_str:
+                expected_match = "Record not found for URI: https://example.com"
+            elif "Get `#record123`" in prompt_str:
+                expected_match = "Record not found for ID: record123"
+            
+            with pytest.raises(ProcessingError, match=expected_match):
+                await runtime.send_message(
+                    agent_input,
+                    await runtime.get("default"),  # topic
+                )
+            
+            # Verify mocks were called if applicable
+            if "https://example.com" in prompt_str:
+                mock_d_and_c.assert_any_call(uri="https://example.com")
+            elif "Get `#record123`" in prompt_str:
+                # The prompt "Get `#record123`" will be parsed by fetch,
+                # and `record_id` will become "record123" (after stripping `#` and ``).
+                # The `fetch` method itself extracts "record123" from the prompt.
+                mock_get_rec_dataset.assert_any_call("record123")
+        else:
+            result = await runtime.send_message(
+                agent_input,
+                await runtime.get("default"),  # topic
+            )
+            await runtime.stop_when_idle()
+            assert result == expected
+            
+    await runtime.stop_when_idle() # Ensure runtime is stopped in all cases

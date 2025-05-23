@@ -17,6 +17,7 @@ from buttermilk._core.contract import (
     GroupchatMessageTypes,
     ManagerMessage,
 )
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record
 from buttermilk.runner.helpers import prepare_step_df
 from buttermilk.utils.media import download_and_convert
@@ -47,17 +48,24 @@ class FetchRecord(ToolConfig):
             ]
         return self._fns
 
-    async def fetch(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> Record | ErrorEvent:  # type: ignore
+    async def fetch(self, record_id: str | None = None, uri: str | None = None, prompt: str | None = None) -> Record:  # type: ignore
         """Entry point when running as a tool."""
-        record = None
+        # Determine original lookup type for error messaging, before uri might be set from prompt
+        original_uri = uri
+        original_record_id = record_id
+
         if prompt and not record_id and not uri:
             if not (uri := extract_url(prompt)):
                 # Try to get by record_id (remove bang! first)
                 record_id = prompt.strip().strip(COMMAND_SYMBOL)
+            else: # uri was extracted from prompt
+                original_uri = uri # update original_uri to reflect that it came from prompt
+                original_record_id = None # ensure original_record_id is None if uri is from prompt
+
         assert (record_id or uri) and not (record_id and uri), "You must provide EITHER record_id OR uri."
-        result = None
+
+        record: Record | None = None
         if record_id:
-            # This breaks now because the code was moved to Orchestrator
             record = await self._get_record_dataset(record_id)
             if record:
                 # Ensure metadata exists and add provenance
@@ -66,7 +74,10 @@ class FetchRecord(ToolConfig):
                 record.metadata["fetch_source_id"] = record_id
                 record.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
                 return record
-        else:  # uri case
+            else:
+                # Use original_record_id for the error message if record_id was from prompt
+                raise ProcessingError(f"Record not found for ID: {original_record_id or record_id}")
+        elif uri:  # uri case
             record = await download_and_convert(uri)
             if record:  # Check if download_and_convert succeeded
                 # Ensure metadata exists and add provenance
@@ -75,9 +86,22 @@ class FetchRecord(ToolConfig):
                 record.metadata["fetch_source_uri"] = uri
                 record.metadata["fetch_timestamp_utc"] = datetime.now(UTC).isoformat()
                 return record
-
-        # Return an ErrorEvent
-        return ErrorEvent(source="fetch tool", content="No result found")
+            else:
+                # Use original_uri for the error message
+                raise ProcessingError(f"Record not found for URI: {original_uri or uri}")
+        
+        # This part should ideally not be reached due to the assertion and logic above.
+        # If it is, it means neither record_id nor uri led to a record or an error for not finding one.
+        # However, the logic above ensures that if a record is not found, an error is raised.
+        # If record is None here, it means neither record_id nor uri was set, which contradicts the assertion.
+        # For safety, though, if we somehow end up here without a record:
+        if original_uri:
+             raise ProcessingError(f"Record not found for URI: {original_uri}")
+        elif original_record_id:
+             raise ProcessingError(f"Record not found for ID: {original_record_id}")
+        else:
+            # Fallback if prompt didn't yield URI or ID.
+            raise ProcessingError("Record not found, and no URI or ID was effectively specified for the fetch attempt.")
 
 
 class FetchAgent(FetchRecord, Agent):
