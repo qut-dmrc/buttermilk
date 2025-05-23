@@ -41,7 +41,7 @@ class CallOnAgentArgs(BaseModel):
 
 class CallOnAgentArgs(BaseModel):
     """A Pydantic model representing a structured request for the LLMHostAgent's LLM.
-    
+
     When the `LLMHostAgent` uses its own LLM to decide the next step, it expects
     the LLM to generate output that can be parsed into this model. This model
     indicates which participant agent (`role`) should be called next and with
@@ -68,7 +68,7 @@ class CallOnAgentArgs(BaseModel):
 
 class CallOnAgent(BaseModel):
     """A Pydantic model representing a structured request for the LLMHostAgent's LLM.
-    
+
     When the `LLMHostAgent` uses its own LLM to decide the next step, it expects
     the LLM to generate output that can be parsed into this model. This model
     indicates which participant agent (`role`) should be called next and with

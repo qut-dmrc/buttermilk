@@ -152,7 +152,7 @@ class Differentiator(LLMAgent):
         Produces an `AgentTrace` where `agent_trace.outputs` is an instance of
         `Differences` (or `DifferencesOutput`), providing a structured breakdown
         of the analysis.
-    
+
     Attributes:
         _output_model (Type[BaseModel] | None): Specifies that this agent expects
             its LLM output to be parsable into the `Differences` model.

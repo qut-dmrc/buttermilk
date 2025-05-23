@@ -67,7 +67,7 @@ def construct_dict_from_schema(
     Returns:
         dict[str, Any]: A new dictionary with keys and values conforming to the
         provided BigQuery schema.
-    
+
     Raises:
         ValueError: If data type conversion fails for a specific field (e.g.,
             cannot convert a string to a number for an INTEGER field if the string
@@ -130,7 +130,7 @@ def construct_dict_from_schema(
             transformed_dict[key] = transformed_array_items
 
         # Handle nested fields (STRUCT/RECORD) for non-repeated fields
-        elif field_type_upper == "RECORD" or field_type_upper == "STRUCT": # Both are valid type names
+        elif field_type_upper in {"RECORD", "STRUCT"}: # Both are valid type names
             nested_schema_fields = field_schema.get("fields")
             if isinstance(value, dict) and nested_schema_fields:
                 transformed_dict[key] = construct_dict_from_schema(nested_schema_fields, value, remove_extra_fields)
@@ -282,7 +282,7 @@ class TableWriter(BaseModel):
         Returns:
             list[bigquery.SchemaField] | Any: The loaded schema as a list of `SchemaField`
             objects, or the original value if not a string path.
-        
+
         Raises:
             TypeError: If `v` is a string path but schema loading fails.
         """
@@ -296,7 +296,7 @@ class TableWriter(BaseModel):
     @model_validator(mode="after") # Changed from field_validator for table_path to model_validator
     def construct_table_path(cls, values: Any) -> Any: # Changed to model_validator signature
         """Constructs the `table_path` from component IDs if not explicitly provided.
-        
+
         Also populates `project_id`, `dataset_id`, `table_id` if `destination`
         (project.dataset.table) is given and they are missing.
 
@@ -377,7 +377,7 @@ class TableWriter(BaseModel):
             chunks. Returns `None` if no rows were provided after preparation.
             (Note: The original returned Sequence[bool], this is changed to match
             BigQuery client's `insert_rows` error reporting style more closely).
-        
+
         Raises:
             TypeError: If `self.bq_schema` is set but is not a list of `SchemaField`.
         """
@@ -446,7 +446,7 @@ class TableWriter(BaseModel):
         # serialized into its specific protobuf message type first.
         # Given no explicit proto schema definition here for rows, it's likely JSON mode.
 
-        proto_rows_payload = ProtoRows() # Create an empty ProtoRows
+        ProtoRows() # Create an empty ProtoRows
         # Add serialized rows (assuming JSON compatible dicts which client serializes)
         # This part is tricky as ProtoRows expects serialized protobuf bytes.
         # If using JSON stream, the client might abstract this.
@@ -468,7 +468,7 @@ class TableWriter(BaseModel):
         # Each request contains a batch of rows.
 
         all_response_errors: list[Any] = []
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
 
         # The `append_rows` method of `BigQueryWriteAsyncClient` is an asynchronous generator
         # that itself takes an iterable/generator of `AppendRowsRequest` objects.

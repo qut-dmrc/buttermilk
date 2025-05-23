@@ -52,7 +52,7 @@ class KeyValueCollector(BaseModel):
 
     def update(self, incoming: dict[str, Any]) -> None:
         """Updates the collector with key-value pairs from an incoming dictionary.
-        
+
         Calls `self.add` for each item, ensuring values are appended to lists.
 
         Args:
@@ -82,7 +82,7 @@ class KeyValueCollector(BaseModel):
 
     def set(self, key: str, value: Any) -> None:
         """Sets or replaces the value for a given key.
-        
+
         The value is stored as a list containing the single new value,
         overwriting any previous values for that key.
         Skips setting if the value is None, an empty list, an empty dict, or the string "None".
@@ -91,7 +91,7 @@ class KeyValueCollector(BaseModel):
             key (str): The key whose value is to be set.
             value (Any): The new value for the key.
         """
-        if value is not None and value != [] and value != {} and value != "None":
+        if value is not None and value not in ([], {}, "None"):
             self._data[key] = [value] # Store as a list with one item
 
     def get_dict(self) -> dict[str, list[Any]]: # Return type updated
@@ -203,7 +203,7 @@ class KeyValueCollector(BaseModel):
                 if resolved_value is not None: resolved[target_key] = resolved_value
 
         # Remove keys where value is None, or an empty dict/list
-        return {k: v for k, v in resolved.items() if v is not None and v != {} and v != []}
+        return {k: v for k, v in resolved.items() if v is not None and v not in ({}, [])}
 
     def _resolve_simple_path(self, path: str, data: Mapping[str, Any]) -> Any:
         """Resolves a single JMESPath expression against the provided data. (DEPRECATED or under review)

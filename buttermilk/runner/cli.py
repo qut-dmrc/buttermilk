@@ -199,7 +199,7 @@ def main(conf: DictConfig) -> None:
 
             event_loop = asyncio.get_event_loop()
             # Queue for managing asyncio tasks created by Slack event handlers
-            slack_orchestrator_tasks: asyncio.Queue[asyncio.Task[Any]] = asyncio.Queue()  # type: ignore
+            asyncio.Queue()  # type: ignore
 
             slack_bolt_app, slack_bolt_handler = initialize_slack_bot(
                 bot_token=slack_bot_token,

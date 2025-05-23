@@ -106,17 +106,6 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
         )
 
     # Set up CORS
-    origins = [
-        "http://localhost:5000",  # Frontend running on localhost:5000
-        "http://127.0.0.1:5000",
-        "http://127.0.0.1:5173",  # Frontend running on localhost:5173
-        "http://localhost:5173",
-        "http://localhost:8000",  # Allow requests from localhost:8000
-        "http://127.0.0.1:8000",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://automod.cc",  # Allow requests from your domain
-    ]
 
     app.add_middleware(
         CORSMiddleware,
@@ -139,7 +128,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     @flow_data_router.websocket("/ws/{session_id}")
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
         """WebSocket endpoint for client communication with the WebUIAgent.
-        
+
         Args:
             websocket: WebSocket connection
             session_id: Unique identifier for this client session
@@ -187,7 +176,7 @@ def create_app(bm: BM, flows: FlowRunner) -> FastAPI:
     @app.get("/api/session")
     async def create_session():
         """Generates a unique session ID for new web clients.
-        
+
         Returns:
             Dict with new session ID
 

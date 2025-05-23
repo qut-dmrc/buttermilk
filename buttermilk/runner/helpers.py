@@ -108,7 +108,7 @@ def load_jobs(data_cfg: DataSourceConfig) -> pd.DataFrame:
                 comparison_string_object = f'JSON_QUERY({field[0]}, "$.{field[1]}")'
             else:
                 comparison_string = field[0]
-            if condition == [] or condition == ["NOTNULL"]:
+            if condition in ([], ["NOTNULL"]):
                 # Where we're testing a JSON array or record, we need to use JSON_QUERY instead of JSON_VALUE (for strings)
                 sql += f" AND {comparison_string_object} IS NOT NULL "
             elif not condition or condition == "NOTNULL":

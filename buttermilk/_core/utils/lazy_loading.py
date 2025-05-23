@@ -9,13 +9,13 @@ T = TypeVar("T")
 def cached_property(initialize_func: Callable[[Any], T]) -> property:
     """
     Decorator for creating a property with lazy initialization and caching.
-    
+
     This creates a property that initializes its value on first access and
     caches it for subsequent accesses.
-    
+
     Args:
         initialize_func: The function to call to initialize the value
-            
+
     Returns:
         A property that lazily initializes and caches the value
     """
@@ -42,15 +42,15 @@ def refreshable_cached_property(
 ) -> property:
     """
     Decorator for creating a property with lazy initialization, caching, and refresh capability.
-    
+
     This builds on cached_property but adds the ability to refresh the cached value
     based on a condition function.
-    
+
     Args:
         initialize_func: The function to call to initialize the value
         should_refresh: Optional function that takes the instance and current value
                         and returns True if the value should be refreshed
-            
+
     Returns:
         A property that lazily initializes, caches, and refreshes the value as needed
     """

@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
 class LLMConfig(BaseModel):
     """Configuration for a specific Language Model (LLM).
-    
+
     Defines the connection details, model object to instantiate, API type,
     API key, custom base URL, model-specific information, and any additional
     configurations required by the LLM client.
@@ -109,9 +109,9 @@ class LLMConfig(BaseModel):
 
 class MLPlatformTypes(Enum):
     """Enumeration of supported Machine Learning platform types.
-    
+
     Used to categorize LLM providers or services.
-    
+
     Attributes:
         openai: OpenAI platform.
         google_genai: Google Generative AI platform (e.g., Gemini API).
@@ -575,7 +575,7 @@ class LLMs(BaseModel):
         if api_type == "azure":
             client_params["azure_endpoint"] = client_params.pop("base_url", None)  # Rename field for Azure client
             client = AzureOpenAIChatCompletionClient(**client_params)
-        elif api_type == "google" or api_type == "google_genai":  # Assuming "google" might mean Gemini API
+        elif api_type in {"google", "google_genai"}:  # Assuming "google" might mean Gemini API
             # For GeminiChatCompletionClient, specific setup might be needed.
             # Current Autogen might use OpenAIChatCompletionClient as a wrapper for some non-OpenAI models if configured.
             # This part needs to align with how GeminiChatCompletionClient is expected to be used.
@@ -583,7 +583,7 @@ class LLMs(BaseModel):
             # client = GeminiChatCompletionClient(**client_params)
             # Or if it's accessed via OpenAIChatCompletionClient with specific base_url/api_type:
             client = OpenAIChatCompletionClient(**client_params)
-        elif api_type == "vertex" or api_type == "google_vertexai":
+        elif api_type in {"vertex", "google_vertexai"}:
             # Vertex AI often uses application default credentials or specific service account keys.
             # API key might be a token for Vertex.
             bm_instance = get_bm()  # Get Buttermilk global instance

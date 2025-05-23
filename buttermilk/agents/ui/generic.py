@@ -21,7 +21,7 @@ from buttermilk._core.contract import AgentInput, AgentOutput, OOBMessages
 
 class UIAgent(Agent):
     """Base class for all UI implementations.
-    
+
     This class defines the common interface that all UI implementations must adhere to.
     It handles the basic initialization and resource management for UI agents.
     """
@@ -35,7 +35,7 @@ class UIAgent(Agent):
 
     async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
         """Initialize the UI agent with necessary callbacks and session info.
-        
+
         Args:
             callback_to_groupchat: Callback function to send messages back to the group chat
             **kwargs: Additional parameters specific to the UI implementation
@@ -59,17 +59,17 @@ class UIAgent(Agent):
         **kwargs,
     ) -> AgentOutput:
         """Process inputs from the orchestrator and interact with the UI.
-        
+
         Args:
             message: The input to process
             cancellation_token: Token for cancelling the operation
             public_callback: Callback for publishing messages to public topics
             message_callback: Callback for publishing messages to specific topics
             **kwargs: Additional parameters
-            
+
         Returns:
             The processing result
-            
+
         This method must be implemented by concrete UI classes.
 
         """
@@ -86,7 +86,7 @@ class UIAgent(Agent):
         **kwargs,
     ) -> OOBMessages | None:
         """Process out-of-band control messages.
-        
+
         Args:
             message: The control message to process
             cancellation_token: Token for cancelling the operation
@@ -94,10 +94,10 @@ class UIAgent(Agent):
             message_callback: Callback for publishing messages to specific topics
             source: Identifier of the message sender
             **kwargs: Additional parameters
-            
+
         Returns:
             Optional response to the control message
-            
+
         UI agents typically need to listen to control messages to update the UI.
 
         """
@@ -116,7 +116,7 @@ class UIAgent(Agent):
         **kwargs: Any,
     ) -> None:
         """Handles messages from other agents in the group chat.
-        
+
         Args:
             message: The message to process
             cancellation_token: Token for cancelling the operation
@@ -124,7 +124,7 @@ class UIAgent(Agent):
             public_callback: Callback for publishing messages to public topics
             message_callback: Callback for publishing messages to specific topics
             **kwargs: Additional parameters
-        
+
         UI agents typically implement this to display messages to the user interface.
 
         """
@@ -132,7 +132,7 @@ class UIAgent(Agent):
 
     async def cleanup(self) -> None:
         """Clean up resources when the agent is no longer needed.
-        
+
         This method should be implemented by concrete UI classes to properly
         release any resources like open connections, background tasks, etc.
         """
@@ -148,7 +148,7 @@ class UIAgent(Agent):
 
     def make_callback(self) -> Callable[..., Awaitable[None]]:
         """Create a callback function for the UI agent.
-        
+
         This method is a placeholder and should be implemented by concrete UI classes
         to provide the actual callback logic.
 

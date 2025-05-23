@@ -184,7 +184,7 @@ async def test_error_handling_during_flush(save_info):
     uploader = AsyncDataUploader(buffer_size=2, save_dest=save_info)
 
     # Mock upload_rows_async to raise an exception
-    with patch("buttermilk.utils.save.upload_rows_async", AsyncMock(side_effect=Exception("Upload failed"))) as mock_upload:
+    with patch("buttermilk.utils.save.upload_rows_async", AsyncMock(side_effect=Exception("Upload failed"))):
         with patch("buttermilk.utils.uploader.logger", MagicMock()) as mock_logger:
             # Add items and trigger flush
             await uploader.add(sample_outputs[0])

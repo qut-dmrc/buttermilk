@@ -555,7 +555,7 @@ class BM(SessionInfo):
             verbose (bool): If True, sets Buttermilk logger level to DEBUG and
                 enables asyncio debug mode. Otherwise, sets to INFO.
                 Defaults to False.
-        
+
         Raises:
             RuntimeError: If GCP logger is configured but essential attributes
                 like 'project' or 'location' are missing in `self.logger_cfg`.

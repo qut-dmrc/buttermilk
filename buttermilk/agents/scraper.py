@@ -93,7 +93,7 @@ class WebScraperRequests(Agent):
 
     def add_cookies(self, cookies: dict[str, str] | None = None) -> None:
         """Adds cookies to the current requests session.
-        
+
         Note:
             This method is not implemented in the base class and should be
             overridden by subclasses if cookie management is needed for the
@@ -101,7 +101,7 @@ class WebScraperRequests(Agent):
 
         Args:
             cookies (dict[str, str] | None): A dictionary of cookies to add.
-        
+
         Raises:
             NotImplementedError: Always, as this method must be overridden.
         """
@@ -186,7 +186,7 @@ class WebScraperRequests(Agent):
 
         Returns:
             requests.Response: The response object from the HTTP GET request.
-        
+
         Raises:
             requests.exceptions.HTTPError: If the response status code is 4xx or 5xx
                 after all retry attempts.
@@ -392,7 +392,7 @@ class WebScraperSelenium(WebScraperRequests):
 
         Returns:
             int: The total number of records processed (including recursive calls).
-        
+
         Note:
             This is a synchronous method. For use in an asyncio environment
             (like Buttermilk agents often are), this would block the event loop.
@@ -463,7 +463,7 @@ class WebScraperSelenium(WebScraperRequests):
         Returns:
             WebDriver | None: The newly created Selenium WebDriver instance, or `None`
             if creation fails (e.g., `new_webdriver` is not defined or raises an error).
-        
+
         Note:
             This method relies on an external `new_webdriver()` function that must be
             available in the scope where this class is used.
@@ -619,7 +619,7 @@ class WebScraperSelenium(WebScraperRequests):
             list[Any]: A list containing the extracted data (attribute values or text content)
                        from all found elements. Returns an empty list if no elements match
                        the XPath or if extraction fails for all found elements.
-        
+
         Note:
             This method relies on `selenium.webdriver.common.by.By` and
             `selenium.common.exceptions.NoSuchElementException` being available
@@ -826,7 +826,7 @@ class WebScraperSelenium(WebScraperRequests):
             dict[str, Any]: The updated `record` dictionary, containing extracted
             data under keys defined by the `extract` method, or an "error" key
             if processing failed after retries.
-        
+
         Raises:
             WebDriverException: If WebDriver operations fail after all retry attempts
                 (or other non-retried Selenium exceptions).
@@ -952,7 +952,7 @@ class WebScraperSelenium(WebScraperRequests):
         """Processes a list of `Record` objects, typically by scraping their URLs.
 
         This method shuffles the input `records` list (to potentially vary scrape
-        order) and then calls `self.run` to process them. 
+        order) and then calls `self.run` to process them.
         It assumes `self.run` is adapted to handle a list of `Record` objects
         or that `Record` objects are converted to dictionaries if `self.run` expects that.
 

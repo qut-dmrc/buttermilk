@@ -41,7 +41,6 @@ def test_time_to_instantiate():
     import time
 
     start = time.time()
-    obj = bm
     end = time.time()
     time_taken = end - start
     print(f"Time taken: {time_taken:.2f} seconds")
@@ -61,7 +60,7 @@ async def test_get_ip_updates_ip(bm):
 
         # Create a minimal configuration required for BM initialization
         # Avoid including configs that trigger complex setups (like logging, clouds)
-        minimal_cfg = DictConfig({"name": "test_app", "job": "test_job"})
+        DictConfig({"name": "test_app", "job": "test_job"})
 
         # Ensure _ip is initially None
         assert bm._ip is None
@@ -86,7 +85,7 @@ async def test_get_ip_caches_ip(m):
         mock_get_ip.return_value = mock_ip_address
 
         # Create a minimal configuration required for BM initialization
-        minimal_cfg = DictConfig({"name": "test_app_cache", "job": "test_job_cache"})
+        DictConfig({"name": "test_app_cache", "job": "test_job_cache"})
 
         # Call the async method the first time
         await bm.get_ip()

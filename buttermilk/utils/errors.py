@@ -68,7 +68,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             if e.args and "filter" in e.args[0]:
                 error_dict.update({"error": "Prompt blocked by LLM"})
 
-        elif isinstance(e, HTTPError) and (e.code == 400 or e.code == 429):
+        elif isinstance(e, HTTPError) and (e.code in {400, 429}):
             raise RateLimit(*e.args)
 
     except Exception as secondary_error:

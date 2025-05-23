@@ -156,7 +156,6 @@ async def import_parquet_files_to_chroma(
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg) -> None:
     objs = hydra.utils.instantiate(cfg)
-    bm_instance = objs.bm
     vectoriser: ChromaDBEmbeddings = objs.vectoriser
 
     # Run the import with customized settings

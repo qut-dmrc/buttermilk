@@ -71,7 +71,7 @@ class FetchRecord(ToolConfig):
 
     async def load_data(self) -> None:
         """Loads and prepares data sources defined in `self.data`.
-        
+
         Populates the `self._data_sources` attribute with processed datasets,
         typically Pandas DataFrames, making them available for querying by `record_id`.
         This method is usually called before the tool needs to access internal datasets.
@@ -97,11 +97,11 @@ class FetchRecord(ToolConfig):
             # If FetchRecord is used purely as ToolConfig, 'role' might not be standard.
             # Assuming 'name' or a dedicated tool_name field might be more appropriate from ToolConfig.
             # For now, using self.role, assuming it's set appropriately in the config.
-            tool_name = getattr(self, "role", "fetch_record_tool")  # Fallback name
+            getattr(self, "role", "fetch_record_tool")  # Fallback name
             if not self.description:  # Ensure description is set for the tool
-                tool_description = "Fetches a record by its ID from a dataset or by its URI."
+                pass
             else:
-                tool_description = self.description
+                pass
 
             self._fns = [
                 FunctionTool(
@@ -137,7 +137,7 @@ class FetchRecord(ToolConfig):
         Returns:
             Record | ErrorEvent: The fetched (and potentially converted) `Record` object
             if successful, or an `ErrorEvent` if no record could be found or fetched.
-        
+
         Raises:
             AssertionError: If it cannot resolve to either a `record_id` or a `uri`,
                             or if both are somehow provided.

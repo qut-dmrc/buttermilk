@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mock Orchestrator for testing Buttermilk frontend components.
 
-This extends the base Orchestrator class and simulates agent behavior by generating 
+This extends the base Orchestrator class and simulates agent behavior by generating
 fake messages of all types. It can be used for frontend testing without requiring
 actual agent execution.
 """
@@ -41,7 +41,7 @@ from buttermilk.orchestrators.groupchat import InterruptHandler, TerminationHand
 
 class MockOrchestrator(Orchestrator):
     """Mock version of Orchestrator that generates simulated agent messages.
-    
+
     This orchestrator bypasses the actual agent processing and instead generates
     fake messages that mimic a real orchestrator run. It's useful for frontend
     testing without needing the actual LLM calls or data processing.

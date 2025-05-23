@@ -157,7 +157,7 @@ async def register_handlers(
                     "user_id": context.user_id,
                 },
             )
-            t = asyncio.create_task(
+            asyncio.create_task(
                 start_flow_thread(
                     bm=dmrc,
                     context=context,
@@ -216,7 +216,7 @@ async def read_thread_history(
             if message.get("text", "").startswith("<@") or message.get("text", "").startswith("!"):
                 # ignore directed messages
                 continue
-            user = message.get("user", "Unknown")
+            message.get("user", "Unknown")
             text = message.get("text", "")
             if message.get("subtype") == "bot_message":
                 history.append(AssistantMessage(content=text, source="slack-thread"))

@@ -181,7 +181,7 @@ class Judge(LLMAgent):
         message: AgentInput,
     ) -> AgentTrace:
         """Handles an `AgentInput` request to evaluate content using the Judge agent's LLM.
-        
+
         This method is intended to be the primary entry point when the `Judge`
         agent is invoked to perform an evaluation, particularly within systems
         that use the `@buttermilk_handler` for message routing (e.g., when
@@ -224,7 +224,7 @@ class Judge(LLMAgent):
 
         # Delegate the core LLM call and output parsing to the parent LLMAgent's _process method.
         # This method handles template rendering, API calls, retries, and parsing into _output_model.
-        response = await self._process(message=message)
+        await self._process(message=message)
 
         return trace
 

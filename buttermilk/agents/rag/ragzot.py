@@ -114,7 +114,7 @@ class RefResult(pydantic.BaseModel):
         Returns:
             RefResult: An instance of `RefResult` populated with data from the
             ChromaDB results at the specified index.
-        
+
         Raises:
             IndexError: If `index` is out of bounds for the items in `results`.
             KeyError: If expected keys ("ids", "metadatas", "documents") are missing
@@ -401,7 +401,7 @@ class RagZot(LLMAgent, ToolConfig):
                 - `args`: A dictionary containing the original `query`.
                 - `messages`: A list of Autogen `UserMessage` objects, each created from a `RefResult`.
                 - `is_error`: False, as errors here would typically raise exceptions.
-        
+
         Note:
             Token limit checking for `self._model_client.client.remaining_tokens`
             might be fragile if `_model_client` or its `client` attribute isn't

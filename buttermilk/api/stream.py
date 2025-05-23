@@ -16,12 +16,12 @@ async def flow_stream(
     return_json=True,
 ) -> AsyncGenerator[str, None]:
     """Stream a flow execution.
-    
+
     Args:
         flow: Flow to execute
         run_request: The request object (expected to be RunRequest) # Updated description
         return_json: Whether to return JSON or objects
-        
+
     Returns:
         AsyncGenerator yielding results
 

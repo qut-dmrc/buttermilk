@@ -162,7 +162,6 @@ async def test_get_host_conductor_message(orchestrator):
     # Set up for recursive call to return a proper step after handling message
     mock_step = StepRequest(role="test_agent", description="test step", prompt="test prompt")
     # Create a proper dict output that will correctly convert to a StepRequest
-    mock_step_dict = {"role": "test_agent", "description": "test step", "prompt": "test prompt"}
 
     # Make the response more explicit to avoid role "error" issue
     mock_follow_up = AgentTrace(

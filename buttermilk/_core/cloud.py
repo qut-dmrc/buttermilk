@@ -18,7 +18,7 @@ class CloudManager:
 
     def __init__(self, clouds: list[CloudProviderCfg]) -> None:
         """Initialize the cloud manager with cloud configuration.
-        
+
         Args:
             clouds: List of cloud provider configurations
 
@@ -50,10 +50,10 @@ class CloudManager:
     @refreshable_cached_property
     def gcp_credentials(self) -> GoogleCredentials:
         """Get Google Cloud Platform credentials.
-        
+
         Returns:
             Authenticated Google credentials
-            
+
         Raises:
             RuntimeError: If credentials cannot be obtained
 
@@ -85,10 +85,10 @@ class CloudManager:
     @cached_property
     def gcs(self) -> storage.Client:
         """Get Google Cloud Storage client instance.
-        
+
         Returns:
             Authenticated GCS client
-            
+
         Raises:
             RuntimeError: If client initialization fails
 
@@ -108,10 +108,10 @@ class CloudManager:
     @cached_property
     def bq(self) -> bigquery.Client:
         """Get Google BigQuery client instance.
-        
+
         Returns:
             Authenticated BigQuery client
-            
+
         Raises:
             RuntimeError: If client initialization fails
 
@@ -130,13 +130,13 @@ class CloudManager:
 
     def gcs_log_client(self, logger_cfg: CloudProviderCfg) -> CloudLoggingClient:
         """Get Google Cloud Logging client instance.
-        
+
         Args:
             logger_cfg: Logger configuration with project information
-            
+
         Returns:
             Authenticated Cloud Logging client
-            
+
         Raises:
             RuntimeError: If client initialization fails
 
@@ -191,7 +191,7 @@ class CloudManager:
 
     def setup_tracing(self, tracing_cfg: Any | None = None) -> None:
         """Set up cloud tracing if configured.
-        
+
         Args:
             tracing_cfg: Tracing configuration
 

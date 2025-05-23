@@ -67,7 +67,7 @@ def test_singleton_with_kwargs_update_fails(conf, bm):
     assert bm.job == "testing", "Initial job should be 'testing'"
 
     # Creating a new instance should fail
-    with pytest.raises(FatalError) as excinfo:
+    with pytest.raises(FatalError):
         # Attempt to instantiate BM directly after it's already set
         # This should raise FatalError due to the singleton pattern
         BM(**{**conf.bm, "job": "new_job"})

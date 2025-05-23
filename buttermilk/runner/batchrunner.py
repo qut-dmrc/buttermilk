@@ -2,7 +2,7 @@
 
 This module contains the BatchRunner class, which is responsible for:
 - Creating batch jobs from flow configurations
-- Extracting and shuffling record IDs 
+- Extracting and shuffling record IDs
 - Managing job execution and tracking via Google Pub/Sub
 """
 
@@ -21,7 +21,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 class BatchRunner(BaseModel):
     """Service for managing batch job execution.
-    
+
     BatchRunner is responsible for:
     - Creating batch jobs from flow configurations
     - Extracting and shuffling record IDs
@@ -53,13 +53,13 @@ class BatchRunner(BaseModel):
 
     async def get_batch_status(self, batch_id: str) -> BatchMetadata:
         """Get status information for a batch.
-        
+
         Args:
             batch_id: The ID of the batch to check
-            
+
         Returns:
             The batch metadata
-            
+
         Raises:
             ValueError: If batch_id is not found
 
@@ -71,13 +71,13 @@ class BatchRunner(BaseModel):
 
     async def get_batch_jobs(self, batch_id: str) -> list[RunRequest]:
         """Get job definitions for a batch.
-        
+
         Args:
             batch_id: The ID of the batch
-            
+
         Returns:
             List of job definitions
-            
+
         Raises:
             ValueError: If batch_id is not found
 
@@ -99,14 +99,14 @@ class BatchRunner(BaseModel):
 
     async def get_job_result(self, batch_id: str, record_id: str) -> dict[str, Any]:
         """Get the result of a specific job.
-        
+
         Args:
             batch_id: The ID of the batch
             record_id: The record ID of the job
-            
+
         Returns:
             The job result data
-            
+
         Raises:
             ValueError: If batch or job not found
 
@@ -123,13 +123,13 @@ class BatchRunner(BaseModel):
 
     async def cancel_batch(self, batch_id: str) -> BatchMetadata:
         """Cancel a batch job.
-        
+
         Args:
             batch_id: The ID of the batch to cancel
-            
+
         Returns:
             The updated batch metadata
-            
+
         Raises:
             ValueError: If batch_id is not found
 

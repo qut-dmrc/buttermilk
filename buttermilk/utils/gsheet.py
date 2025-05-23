@@ -65,7 +65,7 @@ class GSheet(BaseModel):
 
         Returns:
             googleapiclient.discovery.Resource: An initialized Google Sheets API client resource.
-        
+
         Raises:
             google.auth.exceptions.DefaultCredentialsError: If ADC are not found or invalid.
         """
@@ -92,7 +92,7 @@ class GSheet(BaseModel):
 
         Returns:
             gspread.Client: An authorized `gspread` client.
-        
+
         Raises:
             google.auth.exceptions.DefaultCredentialsError: If ADC are not found or invalid.
         """

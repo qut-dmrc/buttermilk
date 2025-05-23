@@ -27,10 +27,6 @@ async def test_flow_data_source(flow):
 
 async def test_gsheet_exporter(flow: Agent):
     run_request = RunRequest(flow=TEST_FLOW_ID, ui_type="testing", session_id="test_session")  # Replaced Job with RunRequest and mapped args
-    output_map = {
-        "sheet_url": "outputs.sheet_url",
-        "sheet_id": "outputs.sheet_id",
-    }
 
     # Mock the flow's run_flows method to return a mock AgentTrace with outputs
     class MockAgentTrace:

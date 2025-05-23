@@ -120,7 +120,7 @@ async def test_record_update():
     )
     record.update_from(result)
     assert record.category == "test"
-    assert record.prediction == True
+    assert record.prediction
     assert record.result == 0.9
     assert record.labels == ["test_label"]
     assert record.reasons == ["test_reason"]

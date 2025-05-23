@@ -177,7 +177,7 @@ class TextToImageClient(RetryWrapper):
         **kwargs: Any,
     ) -> ImageRecord:
         """Abstract method for generating an image based on text.
-        
+
         Subclasses must implement this method to provide the specific logic for
         interacting with their respective image generation APIs. The implementation
         should return an `ImageRecord` containing the generated PIL Image and
@@ -433,7 +433,7 @@ class SD3(TextToImageClient):
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
-        
+
         Raises:
             KeyError: If `STABILITY_AI_KEY` environment variable is not set.
         """
@@ -551,7 +551,7 @@ class SDXL(TextToImageClient):
 
         Returns:
             ImageRecord: An `ImageRecord` with the refined image and metadata.
-        
+
         Raises:
             KeyError: If `HUGGINGFACEHUB_API_TOKEN` is not set.
             RuntimeError: If client initialization fails or image generation/refinement fails.
@@ -640,7 +640,7 @@ class SDXLReplicate(TextToImageClient):
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
-        
+
         Raises:
             RuntimeError: If Replicate API call fails or returns unexpected data.
         """
@@ -719,7 +719,7 @@ class SD(TextToImageClient):
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
-        
+
         Raises:
             RuntimeError: If Replicate API call fails or returns unexpected data.
         """
@@ -797,7 +797,7 @@ class DALLE(TextToImageClient):
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
-        
+
         Raises:
             KeyError: If `OPENAI_API_KEY` is not in `bm.credentials`.
             RuntimeError: If the OpenAI API call fails or returns unexpected data.
@@ -914,7 +914,7 @@ class BatchImageGenerator(BaseModel):
 
         Returns:
             CloudPath | Path: The validated and resolved save path.
-        
+
         Raises:
             ValueError: If `v` is not a string, Path, or CloudPath.
             RuntimeError: If `bm.save_dir` is not available when `v` is None.

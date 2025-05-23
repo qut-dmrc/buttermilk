@@ -73,7 +73,7 @@ async def test_sequencer_round_robin():
     assert third_agent in expected_sequence, f"Third agent '{third_agent}' should be in {expected_sequence}"
 
     # The third agent should be different from the first two
-    assert third_agent != first_agent and third_agent != second_agent, f"Round-robin failed: Third agent '{third_agent}' matches previous"
+    assert third_agent not in (first_agent, second_agent), f"Round-robin failed: Third agent '{third_agent}' matches previous"
 
     # Get the fourth step - should be END after one cycle
     step4_response = await agent._get_next_step(message=request)  # Pass as 'message' kwarg

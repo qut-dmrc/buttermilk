@@ -84,7 +84,7 @@ def buttermilk_handler(message_types: type):
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             """Async wrapper to preserve function signature and await the original method.
-            
+
             Args:
                 *args: Positional arguments passed to the original method.
                 **kwargs: Keyword arguments passed to the original method.
@@ -348,7 +348,6 @@ class Agent(AgentConfig, ABC):
 
         """
         is_error = False
-        processed_result: AgentOutput | ErrorEvent | None = None
 
         try:
             final_input = await self._add_state_to_input(message)
@@ -370,7 +369,7 @@ class Agent(AgentConfig, ABC):
 
         except Exception as e:
             logger.error(f"Agent {self.agent_name} error during __call__: {e!s}")
-            processed_result = ErrorEvent(source=self.agent_name, content=f"Agent failed during execution: {e!s}")
+            ErrorEvent(source=self.agent_name, content=f"Agent failed during execution: {e!s}")
             is_error = True
             trace = AgentTrace(call_id=result.call_id, agent_id=self.agent_id,
                 agent_info=self._cfg,
@@ -494,7 +493,7 @@ class Agent(AgentConfig, ABC):
             # Add other extracted data to self._data
             found_keys = []
             for key, value in extracted.items():
-                if value is not None and value != [] and value != {}:  # Ensure value is meaningful
+                if value is not None and value not in ([], {}):  # Ensure value is meaningful
                     self._data.add(key, value)
                     found_keys.append(key)
             if found_keys:
@@ -648,7 +647,7 @@ class Agent(AgentConfig, ABC):
                     # Retrieve data from self._data; KeyValueCollector stores values in lists
                     data_values = self._data.get(key, [])
                     # Filter out empty/None values from the list
-                    meaningful_values = [v for v in data_values if v is not None and v != [] and v != {}]
+                    meaningful_values = [v for v in data_values if v is not None and v not in ([], {})]
                     if meaningful_values:
                         # If only one meaningful value, unwrap it from the list, else keep as list
                         extracted_data[key] = meaningful_values[0] if len(meaningful_values) == 1 else meaningful_values

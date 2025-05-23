@@ -119,7 +119,7 @@ class CLIUserAgent(UIAgent):
         try:
             # Add specific identifiers if available
             agent_id = getattr(message, "agent_id", "unknown")
-            role = getattr(message, "role", None)
+            getattr(message, "role", None)
             header = f"## Message from {agent_id}"
 
             output_lines.append(header)
@@ -127,7 +127,7 @@ class CLIUserAgent(UIAgent):
             # --- Specific Type Formatting ---
             if isinstance(message, (AgentTrace)):
                 outputs = getattr(message, "outputs", None)
-                inputs = getattr(message, "inputs", None)  # Original inputs triggering this output
+                getattr(message, "inputs", None)  # Original inputs triggering this output
                 metadata = getattr(message, "metadata", {})
 
                 # Display specific structured outputs

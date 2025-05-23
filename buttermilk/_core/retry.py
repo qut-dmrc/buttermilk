@@ -211,7 +211,7 @@ class RetryWrapper(BaseModel):
         Returns:
             Any: The attribute value from the wrapped client, or raises an
                  AttributeError if not found on either the wrapper or the client.
-        
+
         Raises:
             AttributeError: If the attribute `name` is not found on the `RetryWrapper`
                             itself (for its own defined attributes/methods) or on the

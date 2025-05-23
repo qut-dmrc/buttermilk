@@ -940,7 +940,7 @@ class ToxicChat(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        API_URL = "https://api-inference.huggingface.co/models/lmsys/toxicchat-t5-large-v1.0"
+        pass
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)

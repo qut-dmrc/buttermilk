@@ -87,14 +87,14 @@ def extract_message_data(
 
                 # Clean up search_result: remove None or empty sequences/mappings from list results
                 if isinstance(search_result, Sequence) and not isinstance(search_result, str):
-                    cleaned_sequence = [item for item in search_result if item is not None and item != [] and item != {}]
+                    cleaned_sequence = [item for item in search_result if item is not None and item not in ([], {})]
                     if not cleaned_sequence: # If list becomes empty after cleaning
                         search_result = None # Treat as no result
                     else:
                         search_result = cleaned_sequence
 
                 # Store if JMESPath found something meaningful (not None, not an empty list/dict after cleaning)
-                if search_result is not None and search_result != [] and search_result != {}:
+                if search_result is not None and search_result not in ([], {}):
                     extracted_data[target_key] = search_result
                 else:
                     logger.debug(f"JMESPath expression '{jmespath_expr}' for key '{target_key}' yielded no meaningful result.")

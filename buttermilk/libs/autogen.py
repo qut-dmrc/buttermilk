@@ -201,7 +201,7 @@ class AutogenAgentAdapter(RoutedAgent):
             ctx: The Autogen message context.
 
         Returns:
-            
+
         """
         response: AllMessages | None = None
 

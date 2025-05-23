@@ -164,7 +164,7 @@ async def test_download_missing_data_fields(zot_downloader, tmp_path, mocker):
             # Missing title, DOI, url
         },
     }
-    expected_file_path = tmp_path / "TESTKEY5.pdf"
+    tmp_path / "TESTKEY5.pdf"
 
     # Expect it to fail during InputDocument creation if title is required
     # or handle missing metadata gracefully. Based on InputDocument definition,

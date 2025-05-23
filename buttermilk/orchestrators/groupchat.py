@@ -303,7 +303,7 @@ class AutogenOrchestrator(Orchestrator):
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
-        
+
         This version delegates most of the substantive flow control to the
         host (CONDUCTOR) agent. The orchestrator now acts mainly as a message
         bus between agents, handling only the technical aspects of execution:
@@ -312,7 +312,7 @@ class AutogenOrchestrator(Orchestrator):
         3. Getting step suggestions from the host agent
         4. Getting user confirmation if needed
         5. Executing the steps by sending messages
-        
+
         All decisions about what steps to take, pacing, and agent coordination
         are delegated to the host agent.
 

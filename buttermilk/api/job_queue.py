@@ -23,7 +23,7 @@ from buttermilk.toxicity.tox_data import toxic_record
 
 class JobQueueClient(BaseModel):
     """Client for interacting with the Google Pub/Sub job queue.
-    
+
     This class provides methods for:
     - Publishing job requests to the queue
     - Publishing job status updates
@@ -110,10 +110,10 @@ class JobQueueClient(BaseModel):
 
     def publish_job(self, job: RunRequest) -> str:
         """Publish a job request to the queue.
-        
+
         Args:
             job: The job definition to publish
-            
+
         Returns:
             The published message ID
 
@@ -133,13 +133,13 @@ class JobQueueClient(BaseModel):
                               status: BatchJobStatus,
                               error: str | None = None) -> str:
         """Publish a task status update.
-        
+
         Args:
             batch_id: The batch ID
             record_id: The record ID for the job
             status: The current job status
             error: Optional error message if the job failed
-            
+
         Returns:
             The published message ID
 

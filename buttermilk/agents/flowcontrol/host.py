@@ -441,7 +441,7 @@ class HostAgent(Agent):
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed, reporting progress periodically.
-        
+
         This method uses an `asyncio.Condition` (`_tasks_condition`) to wait.
         The condition is met when `_step_starting` event is not set (signifying
         the current step's tasks have been dispatched and potentially started) AND
@@ -453,7 +453,7 @@ class HostAgent(Agent):
         Returns:
             bool: `True` if all tasks completed within `self.max_wait_time`,
                   `False` if the wait timed out or an unexpected error occurred.
-        
+
         Note:
             The predicate `lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent`
             implies that `_step_starting` must be cleared by some other part of the
@@ -466,11 +466,11 @@ class HostAgent(Agent):
                 if self._pending_tasks_by_agent:
                     logger.info(f"Waiting for pending tasks to complete from: {list(self._pending_tasks_by_agent.keys())}...")
                     # Start the periodic progress reporter task
-                    progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+                    asyncio.create_task(self._report_progress_periodically())
                 else:
                     logger.info("No pending tasks yet, but we are expecting some this step. Waiting.")
                     # Still start the reporter, it will only send messages if tasks appear
-                    progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+                    asyncio.create_task(self._report_progress_periodically())
 
                 # wait_for releases the lock, waits for notification and predicate, then reacquires
                 # The predicate checks if _step_starting is clear AND _pending_tasks_by_agent is empty.
@@ -670,7 +670,7 @@ class HostAgent(Agent):
 
         Args:
             step (StepRequest): The `StepRequest` object defining the step to execute.
-        
+
         Note:
             This method relies on `self.callback_to_groupchat` being properly set
             during initialization to send messages.

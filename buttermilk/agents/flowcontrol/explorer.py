@@ -66,7 +66,7 @@ class ExplorerHost(LLMHostAgent):
             chronological path of the exploration.
         _exploration_results (dict[str, dict[str, Any]]): A dictionary storing
             detailed results from each step of the exploration, keyed by execution ID.
-    
+
     Expected Input to `_process`:
         Primarily `ConductorRequest` messages, which provide context and suggestions
         for the next step. Other `AgentInput` types might result in a "WAIT" state.

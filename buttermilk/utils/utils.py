@@ -523,10 +523,10 @@ def pydantic_to_dict(obj):  # -> dict[str, Any] | dict[Any, dict[str, Any] | dic
 def clean_empty_values(data):
     """Recursively removes keys with empty values from a nested dictionary structure.
     Empty values are: None, empty strings, empty lists, and empty dictionaries.
-    
+
     Args:
         data: Dictionary, list, or other value to clean
-        
+
     Returns:
         The cleaned data structure (modifies dictionaries in-place)
 

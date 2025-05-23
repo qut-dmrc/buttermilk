@@ -174,7 +174,7 @@ class QueryRunner(BaseModel):
                   would process. None if estimation fails.
                 - `estimated_cost_usd` (float | None): The estimated cost in USD.
                   None if estimation fails.
-        
+
         Raises:
             RuntimeError: If the BigQuery client fails to perform the dry run
                 or if cost estimation encounters an unexpected error. This behavior

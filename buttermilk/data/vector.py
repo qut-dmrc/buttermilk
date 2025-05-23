@@ -746,7 +746,6 @@ class DocProcessor(BaseModel):
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg) -> None:
     objs = hydra.utils.instantiate(cfg)
-    bm_instance: BM = objs.bm
     vectoriser: ChromaDBEmbeddings = objs.vectoriser
     input_docs_source = objs.input_docs
     preprocessor_instance = objs.preprocessor
@@ -761,8 +760,6 @@ def main(cfg) -> None:
 
     async def run_pipeline():
         logger.info("Starting data processing pipeline...")
-        total_saved_docs = 0
-        total_upserted_docs = 0
 
         # 1. Source Documents
         doc_iterator = input_docs_source.get_all_records(start=objs.start_from)

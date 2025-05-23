@@ -46,7 +46,7 @@ class Describer(LLMAgent):
         `outputs` field. This description is also used to update the `alt_text`
         attribute of the processed `Record`. If processing is skipped or fails,
         it might return the original job data or an `ErrorEvent`.
-    
+
     Attributes:
         template (str | None): The default prompt template name to use if not
             otherwise specified in parameters. Defaults to "describe".

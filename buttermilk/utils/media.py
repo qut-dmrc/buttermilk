@@ -82,7 +82,7 @@ async def download_and_convert(
         Record | None: A `Record` object containing the processed content, metadata,
         detected MIME type, and source URI (if applicable). Returns `None` if no
         input data (`obj`, `uri`, `b64`, `text`, `html`, `filepath`) is provided.
-    
+
     Raises:
         Various exceptions from underlying download or file reading functions if
         they fail (e.g., network errors, file not found).
@@ -143,7 +143,7 @@ async def download_and_convert(
         html_content_to_parse = html or str(obj)
         # Extract main content and metadata from HTML
         doc_metadata = extract_main_content(html=html_content_to_parse)
-        content = "\n".join(doc_metadata.pop("paragraphs", []))
+        "\n".join(doc_metadata.pop("paragraphs", []))
         # Add additional metadata to the record
         metadata.update({k: doc_metadata.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc_metadata.get(k)})
 
@@ -201,7 +201,7 @@ def get_news_record_from_uri(uri: str) -> Record:
         Record: A `Record` object populated with the extracted article information.
                 The `record.content` will be a list of `MediaObj` instances,
                 each representing a paragraph of the article text.
-    
+
     Raises:
         newspaper.article.ArticleException: If `newspaper3k` fails to download or parse the article.
         ImportError: If `newspaper3k` library is not installed.

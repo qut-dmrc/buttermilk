@@ -50,7 +50,7 @@ class Aegis(LlamaGuardTox):
     options: ClassVar[dict] = {}
 
     def init_client(self):
-        config = PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
+        PeftConfig.from_pretrained("nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0")
         self.tokenizer = AutoTokenizer.from_pretrained(
             "meta-llama/LlamaGuard-7b",
             revision="3e764390d6b39028ddea5b20603c89476107b41e",

@@ -87,7 +87,7 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
 @pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_scorer(model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using __call__."""
-    agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name})
+    LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name})
     # await agent.initialize()  # Ensure agent is initialized
 
     # response = await agent(message=request_paris)  # Use __call__

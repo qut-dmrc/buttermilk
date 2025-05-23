@@ -98,7 +98,6 @@ class SlackUIAgent(UIAgent):
     ) -> None:
         """Ask for user input from the UI."""
         if isinstance(message, UIMessage):
-            extra_blocks = []
             if isinstance(message, UIMessage) and message.options is not None:
                 if isinstance(message.options, bool):
                     # If there are binary options, display buttons

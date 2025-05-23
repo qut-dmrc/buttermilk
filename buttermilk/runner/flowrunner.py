@@ -90,7 +90,7 @@ class FlowRunContext(BaseModel):
 
     async def send_message_to_ui(self, message: AgentTrace | UIMessage | Record | FlowEvent | FlowMessage) -> None:
         """Send a message to a WebSocket connection.
-        
+
         Args:
             message: The message to send
 
@@ -149,7 +149,7 @@ class FlowRunContext(BaseModel):
 
 class FlowRunner(BaseModel):
     """Centralized service for running flows across different entry points.
-    
+
     Handles orchestrator instantiation and execution in a consistent way, regardless
     of whether the flow is started from CLI, API, Slackbot, or Pub/Sub.
     """
@@ -166,7 +166,7 @@ class FlowRunner(BaseModel):
 
     def get_websocket_session(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
         """Get or create a session for the given session ID.
-        
+
         Args:
             session_id: Unique identifier for the session
             websocket: WebSocket connection for this session
@@ -206,14 +206,14 @@ class FlowRunner(BaseModel):
 
     def _create_fresh_orchestrator(self, flow_name: str) -> OrchestratorProtocol:
         """Create a completely fresh orchestrator instance.
-        
+
         Args:
             flow_name: The name of the flow to create an orchestrator for
             session_id: The session ID for the flow
 
         Returns:
             A new orchestrator instance with fresh state
-            
+
         Raises:
             ValueError: If flow_name doesn't exist in flows
 
@@ -237,7 +237,7 @@ class FlowRunner(BaseModel):
 
     async def _cleanup_flow_context(self, context: FlowRunContext) -> None:
         """Clean up resources associated with a flow run.
-        
+
         Args:
             context: The flow run context to clean up
 
@@ -261,7 +261,7 @@ class FlowRunner(BaseModel):
                       wait_for_completion: bool = False,
                       **kwargs) -> None:
         """Run a flow based on its configuration and a request.
-        
+
         Args:
             run_request: The request containing input parameters
             wait_for_completion: If True, await the flow's completion before returning.
@@ -269,11 +269,11 @@ class FlowRunner(BaseModel):
                                  task and return immediately.
             history: Optional conversation history (for chat-based interfaces)
             **kwargs: Additional keyword arguments for orchestrator instantiation
-            
+
         Returns:
             If wait_for_completion is True, returns the result of the orchestrator run.
             If wait_for_completion is False, returns a callback function.
-        
+
         Raises:
             ValueError: If orchestrator isn't specified or unknown
 
@@ -305,7 +305,7 @@ class FlowRunner(BaseModel):
         try:
             if wait_for_completion:
                 # Wait for the task
-                result = await _session.flow_task
+                await _session.flow_task
                 _session.status = "completed"
                 return
         except Exception as e:
@@ -320,13 +320,13 @@ class FlowRunner(BaseModel):
 
     async def create_batch(self, flow_name, max_records: int | None) -> list[RunRequest]:
         """Create a new batch job from the given request.
-        
+
         Args:
             batch_request: The batch configuration
-            
+
         Returns:
             The created batch metadata
-            
+
         Raises:
             ValueError: If the flow doesn't exist or record extraction fails
 
@@ -386,10 +386,10 @@ class FlowRunner(BaseModel):
 
     async def run_batch_job(self, callback_to_ui: Callable, max_jobs: int = 1, wait_for_completion: bool = True) -> None:
         """Pull and run jobs from the queue, ensuring fresh state for each job.
-        
+
         Args:
             max_jobs: Maximum number of jobs to process in this batch run
-            
+
         Raises:
             FatalError: If no run requests are found in the queue
             Exception: If there's an error running a job

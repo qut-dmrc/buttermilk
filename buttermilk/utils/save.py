@@ -36,7 +36,7 @@ from tenacity import (  # Retry library components
 # Use deferred import to avoid circular references if this module is imported early
 def get_bm() -> Any: # Return type should be 'BM' from bm_init.py if type hint is resolvable
     """Gets the Buttermilk global singleton instance (`bm`) with a delayed import.
-    
+
     This helps avoid circular dependencies that can occur if `bm` is imported
     at the module level by many utility files.
 

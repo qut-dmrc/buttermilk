@@ -213,11 +213,6 @@ def variant_factory():
 
 def test_parameter_overwriting(base_variant_config):
     """Test that parallel variants overwrite base parameters."""
-    config_data = {
-        **base_variant_config,
-        "parameters": {"base_param": "original", "model": "base_model"},
-        "parallel_variants": {"model": ["override_model"]},
-    }
     configs = variant_factory.get_configs()
 
     assert len(configs) == 1

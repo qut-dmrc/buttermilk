@@ -1,6 +1,6 @@
 """Integration tests for individual agent processes.
 
-This module provides utilities and test cases to run full examples of individual agent processes 
+This module provides utilities and test cases to run full examples of individual agent processes
 in isolation, ensuring they work as expected and identifying common failure patterns.
 """
 
@@ -113,7 +113,7 @@ class TestScorerAgent:
         )
 
         # Create a callback for testing
-        callback = AsyncMock()
+        AsyncMock()
 
         # Override the agent's public callback to test it
         scorer_test.adapter.agent._listen = AsyncMock(wraps=scorer_test.adapter.agent._listen)
@@ -128,7 +128,7 @@ class TestScorerAgent:
 @pytest.mark.anyio
 class TestDifferentiatorAgent:
     """Integration tests for the differentiator agent.
-    
+
     This specifically tests the agent with regard to the BaseModel __private_attributes__
     error seen in the logs.
     """

@@ -10,7 +10,6 @@ async def test_multimodal_question(
     llm: LLMClient,
     multimodal_record: Record,
 ):
-    messages = []
     # messages.append(("user", "Hi, can you please summarise this content for me?"))
     # messages.append(
     #     multimodal_record.as_langchain_message(
@@ -26,8 +25,8 @@ async def test_multimodal_question(
 
 @pytest.mark.parametrize("model", MULTIMODAL_MODELS)
 def test_multimodal_input_b64_image(llms: LLMs, model, image_bytes):
-    llm = llms[model]
-    message = Record(
+    llms[model]
+    Record(
         data=[
             MediaObj(mime="image/jpg", content=image_bytes),
             "Hi, can you tell me what this is?",

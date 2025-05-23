@@ -42,7 +42,7 @@ from buttermilk.utils._tools import create_tool_functions  # Utility for creatin
 
 class SimpleAutogenChatWrapper(RoutedAgent):
     """A simple example wrapper for an Autogen RoutedAgent.
-    
+
     This class is primarily for illustrative purposes, showing a basic structure
     for how one might wrap an Autogen agent. It is not directly used by the
     main `AssistantAgentWrapper` but could serve as a starting point for simpler,
@@ -117,7 +117,7 @@ class AssistantAgentWrapper(Agent):
     Output:
         - Aims to produce an `AgentTrace` containing the LLM's response or tool outputs.
         - Can return an `ErrorEvent` if processing fails.
-    
+
     Private Attributes:
         _assistant_agent (AssistantAgent): The underlying Autogen AssistantAgent instance.
         _model_client (ChatCompletionClient): The Autogen chat completion client used by
@@ -236,7 +236,7 @@ class AssistantAgentWrapper(Agent):
             - `ErrorEvent` if an error occurred during processing.
             - `None` if the message type is ignored or if processing is skipped
               (e.g., due to the `NotImplementedError` in message translation).
-        
+
         Raises:
             NotImplementedError: Currently raised because the message translation logic
                 from `AgentInput` to Autogen's `BaseChatMessage` list is not fully implemented.
@@ -387,7 +387,7 @@ class AssistantAgentWrapper(Agent):
 
     async def initialize(self, **kwargs) -> None:
         """Initializes the agent. Called by `AutogenAgentAdapter` if used, or by Buttermilk's lifecycle.
-        
+
         The core initialization of the underlying `AssistantAgent` (like setting up
         the LLM client, tools, and system message) is performed in the
         `init_assistant_agent` Pydantic model validator, which runs when the

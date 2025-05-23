@@ -149,9 +149,9 @@ async def test_llm_host_agent_avoid_self_or_manager_call(mock_llm_host_agent: LL
     mock_llm_host_agent._step_completion_event.set()  # Start ready
 
     # Act & Assert 1: First call to _get_next_step -> _process returns HOST -> _get_next_step calls _process again
-    result1 = await mock_llm_host_agent._get_next_step(message=conductor_request)
+    await mock_llm_host_agent._get_next_step(message=conductor_request)
     # Act & Assert 2: Second call to _process returns MANAGER -> _get_next_step calls _process again
-    result2 = await mock_llm_host_agent._get_next_step(message=conductor_request)
+    await mock_llm_host_agent._get_next_step(message=conductor_request)
     # Act & Assert 3: Third call to _process returns OTHER_AGENT -> _get_next_step returns this one
     result3 = await mock_llm_host_agent._get_next_step(message=conductor_request)
 

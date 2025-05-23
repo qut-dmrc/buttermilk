@@ -326,7 +326,7 @@ class DataSourceConfig(BaseModel):
 
 class DataSouce(DataSourceConfig):
     """Alias for `DataSourceConfig` for backward compatibility or alternative naming.
-    
+
     Refer to `DataSourceConfig` for detailed documentation.
     """
 
@@ -544,7 +544,7 @@ class AgentConfig(BaseModel):
     @property
     def agent_name(self) -> str:
         """A human-friendly name for the agent instance.
-        
+
         This name is dynamically constructed based on the `name_components`
         attribute, which can include the agent's `role`, `unique_identifier`,
         or other values extracted via JMESPath from its configuration
