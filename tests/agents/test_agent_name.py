@@ -9,7 +9,7 @@ from buttermilk._core.agent import Agent
 async def test_agent_name_generation():
     """Test that agent_name is generated correctly based on name_components."""
     # Sample data
-    inputs_data = {"records": "FETCH||.records[]||*.records[]", "template": "judge", "model": "gemini25pro", "criteria": "trans_factored"}
+    inputs_data = {"records": "FETCH.outputs[]||*.records[]", "template": "judge", "model": "gemini25pro", "criteria": "trans_factored"}
     name_components = ["⚖️", "role", "model", "criteria", "unique_identifier"]
 
     # Mock AgentConfig and Agent

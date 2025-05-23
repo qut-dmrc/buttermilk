@@ -31,7 +31,7 @@ flows:
       variants:
         model: ${llms.judgers}
       inputs:
-        records: "FETCH||.records[]||*.records[]"
+        records: "FETCH.outputs||*.records[]"
   observers:
     fetch:
       role: FETCH
