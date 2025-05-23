@@ -24,12 +24,10 @@ from buttermilk._core import (
     dmrc as DMRC,  # noqa
     logger,
 )
-from buttermilk._core.config import FatalError
 from buttermilk._core.contract import OmegaConf
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
 from buttermilk.api.flow import create_app
-from buttermilk.api.job_queue import JobQueueClient
 
 # We'll initialize bm once configuration is available from Hydra
 from buttermilk.runner.flowrunner import FlowRunner
@@ -77,8 +75,7 @@ def main(conf: DictConfig) -> None:
         case "batch":
 
             logger.info("Creating batch jobs...")
-            asyncio.run(flow_runner.create_batch(flow=conf.get("flow"), max_records=conf.get("max_records", None)))
-            logger.info("Running batch manager...")
+            asyncio.run(flow_runner.create_batch(flow_name=conf.get("flow"), max_records=conf.get("max_records", None)))
 
         case "batch_run":
             # Run batch jobs from the queue
