@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from buttermilk._core import StepRequest
 from buttermilk._core.agent import ManagerMessage
-from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
+from buttermilk._core.constants import COMMAND_SYMBOL, MANAGER
 from buttermilk._core.contract import AgentInput, GroupchatMessageTypes
 from buttermilk._core.log import logger
 from buttermilk.agents.flowcontrol.host import HostAgent
@@ -104,9 +104,6 @@ class LLMHostAgent(LLMAgent, HostAgent):
             await asyncio.sleep(5)
             continue
 
-        # This will never be reached, but is here for completeness
-        yield StepRequest(role=END, content="End of sequence")
-
     async def _listen(
         self,
         message: GroupchatMessageTypes,
@@ -138,5 +135,13 @@ class LLMHostAgent(LLMAgent, HostAgent):
 
             if result:
                 # If the result is not None, we have a response from the LLM
-                # Send the result to the group chat
-                await self.callback_to_groupchat(result)
+                # Check if the result is a CallOnAgent object -- and convert it to StepRequest
+                if isinstance(result, CallOnAgent):
+                    # Create a new message for the agent
+                    choice = StepRequest(role=result.role, inputs={"prompt": result.prompt})
+                    logger.info(f"Host {self.agent_name} calling on agent: {result.role} with prompt: {result.prompt}")
+                    # Send the message to the agent
+                    await self.callback_to_groupchat(choice)
+                else:
+                    # If the result is not a CallOnAgent object, we can just send it to the group chat
+                    await self.callback_to_groupchat(result)

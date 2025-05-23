@@ -124,7 +124,7 @@ class LLMScorer(LLMAgent):
 
         # Ignore messages that don't have ground truth in the input record
         record = extracted.pop("records", [])
-        if not record or not isinstance(record, list) or not record[0].ground_truth:
+        if not record or not isinstance(record, list) or not record[0] or "ground_truth" not in record[0]:
             logger.debug(f"Scorer {self.agent_name} received message from agent {source} without ground truth.")
             return
         # Extract the first record
